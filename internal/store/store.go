@@ -177,7 +177,7 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 // SearchLexical ranks by trigram similarity with a substring-match floor
 // (trigram alone misses short Japanese terms), verified entries boosted.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
-	where, args := f.buildWhere()
+	where, args := f.buildWhere("")
 	args = append(args, query)
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
@@ -199,11 +199,12 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 
 // SearchVector ranks by cosine distance against stored embeddings.
 func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit int) ([]domain.SearchHit, error) {
-	where, args := f.buildWhere()
+	// Columns must be qualified: knowledge_embedding shares type/id/updated_at.
+	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeCols+`, 1 - (e.embedding <=> $%d::vector) AS score
-		FROM knowledge k JOIN knowledge_embedding e USING (type, id)
+		SELECT `+qualifyCols("k")+`, 1 - (e.embedding <=> $%d::vector) AS score
+		FROM knowledge k JOIN knowledge_embedding e ON k.type = e.type AND k.id = e.id
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, len(args), where, len(args), limit)
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -237,20 +238,22 @@ func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	return h, nil
 }
 
-func (f Filter) buildWhere() (string, []any) {
-	conds := []string{"deleted_at IS NULL"}
+// buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
+// for joined queries and may be empty.
+func (f Filter) buildWhere(prefix string) (string, []any) {
+	conds := []string{prefix + "deleted_at IS NULL"}
 	var args []any
 	if len(f.Types) > 0 {
 		args = append(args, f.Types)
-		conds = append(conds, fmt.Sprintf("type = ANY($%d)", len(args)))
+		conds = append(conds, fmt.Sprintf("%stype = ANY($%d)", prefix, len(args)))
 	}
 	if len(f.Statuses) > 0 {
 		args = append(args, f.Statuses)
-		conds = append(conds, fmt.Sprintf("status = ANY($%d)", len(args)))
+		conds = append(conds, fmt.Sprintf("%sstatus = ANY($%d)", prefix, len(args)))
 	}
 	if len(f.Tags) > 0 {
 		args = append(args, f.Tags)
-		conds = append(conds, fmt.Sprintf("tags && $%d", len(args)))
+		conds = append(conds, fmt.Sprintf("%stags && $%d", prefix, len(args)))
 	}
 	return strings.Join(conds, " AND "), args
 }
@@ -330,6 +333,15 @@ func marshalJSONFields(k *domain.Knowledge) (links, attrs []byte, err error) {
 		return nil, nil, err
 	}
 	return links, attrs, nil
+}
+
+// qualifyCols prefixes every column in knowledgeCols with a table alias.
+func qualifyCols(alias string) string {
+	cols := strings.Split(knowledgeCols, ",")
+	for i, c := range cols {
+		cols[i] = alias + "." + strings.TrimSpace(c)
+	}
+	return strings.Join(cols, ", ")
 }
 
 // encodeVector renders a pgvector literal like "[0.1,0.2]".
