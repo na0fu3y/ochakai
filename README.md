@@ -85,7 +85,9 @@ see [api/openapi.yaml](api/openapi.yaml) and the sample in
 
 On Cloud Run + Cloud SQL (the recommended initial setup), grant the service
 account `roles/aiplatform.user` to enable embeddings — no keys to manage.
-pgvector is required only when embeddings are enabled.
+pgvector is required only when embeddings are enabled. A complete,
+cost-minimized walkthrough (~$10/month) lives in
+[deploy/cloudrun/README.md](deploy/cloudrun/README.md).
 
 ## Supply chain
 
