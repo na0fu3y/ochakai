@@ -1,0 +1,73 @@
+<!doctype html>
+<!-- Minimal sample UI for the ochakai REST API (api/openapi.yaml).
+     Serve from anywhere and point it at your ochakai instance; this is a
+     starting point for building your own UI, not a product. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ochakai</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; }
+  input, select, button { font: inherit; padding: .4rem .6rem; }
+  #q { width: 24rem; max-width: 60vw; }
+  .hit { border: 1px solid #ccc; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; }
+  .meta { color: #666; font-size: .85rem; }
+  .badge { border-radius: 999px; padding: .05rem .6rem; font-size: .75rem; border: 1px solid #999; }
+  .verified { background: #e6f4ea; border-color: #34a853; }
+  pre { background: #f6f6f6; padding: .6rem; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>ochakai</h1>
+<p>
+  <input id="base" value="http://localhost:8080" size="24" title="ochakai base URL">
+  <input id="token" placeholder="bearer token (optional)" size="24">
+</p>
+<p>
+  <input id="q" placeholder="search knowledge…">
+  <select id="type">
+    <option value="">all types</option>
+    <option>metric</option><option>query</option><option>insight</option>
+    <option>term</option><option>table</option>
+  </select>
+  <button onclick="search()">Search</button>
+</p>
+<div id="results"></div>
+<script>
+async function api(path) {
+  const base = document.getElementById('base').value.replace(/\/$/, '');
+  const token = document.getElementById('token').value;
+  const res = await fetch(base + path, {
+    headers: token ? { Authorization: 'Bearer ' + token } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function search() {
+  const q = encodeURIComponent(document.getElementById('q').value);
+  const type = document.getElementById('type').value;
+  const out = document.getElementById('results');
+  out.textContent = 'searching…';
+  try {
+    const { hits } = await api(`/api/v1/knowledge?q=${q}${type ? '&type=' + type : ''}`);
+    out.innerHTML = '';
+    if (!hits.length) { out.textContent = 'no results'; return; }
+    for (const h of hits) {
+      const div = document.createElement('div');
+      div.className = 'hit';
+      const badge = `<span class="badge ${h.status === 'verified' ? 'verified' : ''}">${h.status}</span>`;
+      div.innerHTML = `<strong>${esc(h.title)}</strong> ${badge}
+        <div class="meta">ochakai://${h.type}/${h.id} · by ${h.created_by.kind}:${esc(h.created_by.name)}</div>
+        <div>${esc(h.description || '')}</div>` +
+        (h.attrs && h.attrs.sql ? `<pre>${esc(h.attrs.sql)}</pre>` : '') +
+        (h.body ? `<pre>${esc(h.body)}</pre>` : '');
+      out.appendChild(div);
+    }
+  } catch (e) { out.textContent = 'error: ' + e.message; }
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>

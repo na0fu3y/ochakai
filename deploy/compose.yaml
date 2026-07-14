@@ -1,0 +1,33 @@
+# Local / non-GCP deployment: ochakai needs only PostgreSQL.
+# The pgvector image is plain PostgreSQL + the vector extension; embeddings
+# stay disabled unless OCHAKAI_EMBEDDING_PROVIDER is set.
+services:
+  ochakai:
+    image: ghcr.io/na0fu3y/ochakai:latest
+    build:
+      context: ..
+    ports:
+      - "8080:8080"
+    environment:
+      OCHAKAI_DATABASE_URL: postgres://ochakai:ochakai@db:5432/ochakai?sslmode=disable
+      # OCHAKAI_CLIENTS: "some-secret-token=agent:claude-code,another-token=human:alice"
+      # OCHAKAI_EMBEDDING_PROVIDER: vertex
+      # OCHAKAI_VERTEX_PROJECT: my-gcp-project
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ochakai
+      POSTGRES_PASSWORD: ochakai
+      POSTGRES_DB: ochakai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ochakai"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+volumes:
+  pgdata:

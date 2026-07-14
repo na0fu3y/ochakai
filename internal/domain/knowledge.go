@@ -1,0 +1,97 @@
+// Package domain defines the knowledge model shared by the store, MCP
+// server, and REST API. See docs/design/0001-architecture.md §3.
+package domain
+
+import (
+	"fmt"
+	"regexp"
+	"time"
+)
+
+// Type is the kind of a knowledge entry.
+type Type string
+
+const (
+	TypeMetric  Type = "metric"  // semantic metric definition (Apache Ossie)
+	TypeQuery   Type = "query"   // golden query: question + verified SQL
+	TypeInsight Type = "insight" // how to read a metric: baselines, caveats
+	TypeTerm    Type = "term"    // glossary term
+	TypeTable   Type = "table"   // table catalog entry
+)
+
+// Types lists all valid knowledge types.
+var Types = []Type{TypeMetric, TypeQuery, TypeInsight, TypeTerm, TypeTable}
+
+func ValidType(t Type) bool {
+	for _, v := range Types {
+		if t == v {
+			return true
+		}
+	}
+	return false
+}
+
+// Status is the verification status of a knowledge entry.
+type Status string
+
+const (
+	StatusDraft      Status = "draft"
+	StatusVerified   Status = "verified"
+	StatusDeprecated Status = "deprecated"
+)
+
+func ValidStatus(s Status) bool {
+	return s == StatusDraft || s == StatusVerified || s == StatusDeprecated
+}
+
+// Actor identifies who created or verified a knowledge entry.
+type Actor struct {
+	Kind string `json:"kind"` // "human" | "agent"
+	Name string `json:"name"`
+}
+
+const (
+	ActorHuman = "human"
+	ActorAgent = "agent"
+)
+
+// Link is a typed edge to another knowledge entry, e.g. {rel: measures,
+// target: "table/orders"}.
+type Link struct {
+	Rel    string `json:"rel"`
+	Target string `json:"target"` // "<type>/<id>"
+}
+
+// Knowledge is the common envelope for all knowledge types. Type-specific
+// structured attributes live in Attrs; prose lives in Body (markdown).
+// The envelope maps 1:1 to an OKF document (YAML frontmatter + markdown).
+type Knowledge struct {
+	Type        Type           `json:"type"`
+	ID          string         `json:"id"` // slug, unique within type
+	Title       string         `json:"title"`
+	Description string         `json:"description,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	Status      Status         `json:"status"`
+	CreatedBy   Actor          `json:"created_by"`
+	VerifiedBy  *Actor         `json:"verified_by,omitempty"`
+	VerifiedAt  *time.Time     `json:"verified_at,omitempty"`
+	Links       []Link         `json:"links,omitempty"`
+	Attrs       map[string]any `json:"attrs,omitempty"`
+	Body        string         `json:"body,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// URI returns the canonical reference, e.g. "ochakai://metric/revenue".
+func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type, k.ID) }
+
+var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,127}$`)
+
+// ValidID reports whether id is a valid knowledge slug.
+func ValidID(id string) bool { return slugRe.MatchString(id) }
+
+// SearchHit is one search result with its ranking score.
+type SearchHit struct {
+	Knowledge
+	Score float64 `json:"score"`
+}

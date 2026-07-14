@@ -1,0 +1,351 @@
+// Package store persists knowledge in PostgreSQL, the only runtime
+// dependency of ochakai.
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
+)
+
+var ErrNotFound = errors.New("knowledge not found")
+var ErrAlreadyExists = errors.New("knowledge already exists")
+
+type Store struct {
+	pool *pgxpool.Pool
+}
+
+func New(ctx context.Context, databaseURL string) (*Store, error) {
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
+	}
+	return &Store{pool: pool}, nil
+}
+
+func (s *Store) Close() { s.pool.Close() }
+
+// Filter narrows search and list operations.
+type Filter struct {
+	Types    []domain.Type
+	Statuses []domain.Status
+	Tags     []string
+}
+
+const knowledgeCols = `type, id, title, description, tags, status,
+	created_by_kind, created_by_name, verified_by_kind, verified_by_name, verified_at,
+	links, attrs, body, created_at, updated_at`
+
+func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
+	var k domain.Knowledge
+	var verifiedKind, verifiedName *string
+	var links, attrs []byte
+	err := row.Scan(&k.Type, &k.ID, &k.Title, &k.Description, &k.Tags, &k.Status,
+		&k.CreatedBy.Kind, &k.CreatedBy.Name, &verifiedKind, &verifiedName, &k.VerifiedAt,
+		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt)
+	if err != nil {
+		return k, err
+	}
+	if verifiedKind != nil && verifiedName != nil {
+		k.VerifiedBy = &domain.Actor{Kind: *verifiedKind, Name: *verifiedName}
+	}
+	if err := json.Unmarshal(links, &k.Links); err != nil {
+		return k, err
+	}
+	if err := json.Unmarshal(attrs, &k.Attrs); err != nil {
+		return k, err
+	}
+	return k, nil
+}
+
+func (s *Store) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE type = $1 AND id = $2 AND deleted_at IS NULL`, typ, id)
+	if err != nil {
+		return nil, err
+	}
+	k, err := pgx.CollectExactlyOneRow(rows, scanKnowledge)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
+func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
+	now := time.Now().UTC()
+	k.CreatedAt, k.UpdatedAt = now, now
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		links, attrs, err := marshalJSONFields(k)
+		if err != nil {
+			return err
+		}
+		var verifiedKind, verifiedName *string
+		if k.VerifiedBy != nil {
+			verifiedKind, verifiedName = &k.VerifiedBy.Kind, &k.VerifiedBy.Name
+		}
+		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+			ON CONFLICT (type, id) DO NOTHING`,
+			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status,
+			k.CreatedBy.Kind, k.CreatedBy.Name, verifiedKind, verifiedName, k.VerifiedAt,
+			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrAlreadyExists
+		}
+		return s.addRevision(ctx, tx, k, "create", k.CreatedBy)
+	})
+}
+
+func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor) error {
+	k.UpdatedAt = time.Now().UTC()
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		links, attrs, err := marshalJSONFields(k)
+		if err != nil {
+			return err
+		}
+		var verifiedKind, verifiedName *string
+		if k.VerifiedBy != nil {
+			verifiedKind, verifiedName = &k.VerifiedBy.Kind, &k.VerifiedBy.Name
+		}
+		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
+			title=$3, description=$4, tags=$5, status=$6,
+			verified_by_kind=$7, verified_by_name=$8, verified_at=$9,
+			links=$10, attrs=$11, body=$12, updated_at=$13
+			WHERE type=$1 AND id=$2 AND deleted_at IS NULL`,
+			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status,
+			verifiedKind, verifiedName, k.VerifiedAt,
+			links, attrs, k.Body, k.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return s.addRevision(ctx, tx, k, "update", actor)
+	})
+}
+
+// SoftDelete hides an entry from reads while keeping full history.
+func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, actor domain.Actor) error {
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		k, err := s.Get(ctx, typ, id)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE knowledge SET deleted_at = now(), updated_at = now() WHERE type=$1 AND id=$2`, typ, id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM knowledge_embedding WHERE type=$1 AND id=$2`, typ, id); err != nil {
+			if !isUndefinedTable(err) {
+				return err
+			}
+		}
+		return s.addRevision(ctx, tx, k, "delete", actor)
+	})
+}
+
+func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
+	snapshot, err := json.Marshal(k)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (type, id, rev, change, changed_by_kind, changed_by_name, snapshot)
+		VALUES ($1, $2, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE type=$1 AND id=$2), $3, $4, $5, $6)`,
+		k.Type, k.ID, change, actor.Kind, actor.Name, snapshot)
+	return err
+}
+
+// SearchLexical ranks by trigram similarity with a substring-match floor
+// (trigram alone misses short Japanese terms), verified entries boosted.
+func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
+	where, args := f.buildWhere()
+	args = append(args, query)
+	q := fmt.Sprintf(`
+		SELECT `+knowledgeCols+`, score FROM (
+			SELECT *, similarity(title || ' ' || description || ' ' || array_to_string(tags, ' ') || ' ' || body, $%d)
+				+ CASE WHEN title || ' ' || description || ' ' || body ILIKE '%%' || $%d || '%%' THEN 0.3 ELSE 0 END
+				+ CASE WHEN status = 'verified' THEN 0.05 ELSE 0 END AS score
+			FROM knowledge WHERE %s
+		) ranked
+		WHERE score > 0.05
+		ORDER BY score DESC LIMIT %d`, len(args), len(args), where, limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
+		return scanHit(row)
+	})
+}
+
+// SearchVector ranks by cosine distance against stored embeddings.
+func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit int) ([]domain.SearchHit, error) {
+	where, args := f.buildWhere()
+	args = append(args, encodeVector(vec))
+	q := fmt.Sprintf(`
+		SELECT `+knowledgeCols+`, 1 - (e.embedding <=> $%d::vector) AS score
+		FROM knowledge k JOIN knowledge_embedding e USING (type, id)
+		WHERE %s
+		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, len(args), where, len(args), limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
+		return scanHit(row)
+	})
+}
+
+func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
+	var h domain.SearchHit
+	var verifiedKind, verifiedName *string
+	var links, attrs []byte
+	err := row.Scan(&h.Type, &h.ID, &h.Title, &h.Description, &h.Tags, &h.Status,
+		&h.CreatedBy.Kind, &h.CreatedBy.Name, &verifiedKind, &verifiedName, &h.VerifiedAt,
+		&links, &attrs, &h.Body, &h.CreatedAt, &h.UpdatedAt, &h.Score)
+	if err != nil {
+		return h, err
+	}
+	if verifiedKind != nil && verifiedName != nil {
+		h.VerifiedBy = &domain.Actor{Kind: *verifiedKind, Name: *verifiedName}
+	}
+	if err := json.Unmarshal(links, &h.Links); err != nil {
+		return h, err
+	}
+	if err := json.Unmarshal(attrs, &h.Attrs); err != nil {
+		return h, err
+	}
+	return h, nil
+}
+
+func (f Filter) buildWhere() (string, []any) {
+	conds := []string{"deleted_at IS NULL"}
+	var args []any
+	if len(f.Types) > 0 {
+		args = append(args, f.Types)
+		conds = append(conds, fmt.Sprintf("type = ANY($%d)", len(args)))
+	}
+	if len(f.Statuses) > 0 {
+		args = append(args, f.Statuses)
+		conds = append(conds, fmt.Sprintf("status = ANY($%d)", len(args)))
+	}
+	if len(f.Tags) > 0 {
+		args = append(args, f.Tags)
+		conds = append(conds, fmt.Sprintf("tags && $%d", len(args)))
+	}
+	return strings.Join(conds, " AND "), args
+}
+
+// ListAll returns every non-deleted entry, ordered by type then id.
+// Used by the OKF exporter.
+func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE deleted_at IS NULL ORDER BY type, id`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
+}
+
+// UpsertEmbedding stores the document embedding for a knowledge entry.
+func (s *Store) UpsertEmbedding(ctx context.Context, typ domain.Type, id, model string, vec []float32) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (type, id, model, embedding, updated_at)
+		VALUES ($1, $2, $3, $4::vector, now())
+		ON CONFLICT (type, id) DO UPDATE SET model = $3, embedding = $4::vector, updated_at = now()`,
+		typ, id, model, encodeVector(vec))
+	return err
+}
+
+func (s *Store) UpsertSemanticModel(ctx context.Context, name string, spec map[string]any) error {
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO semantic_model (name, spec, updated_at) VALUES ($1, $2, now())
+		ON CONFLICT (name) DO UPDATE SET spec = $2, updated_at = now()`, name, specJSON)
+	return err
+}
+
+func (s *Store) GetSemanticModel(ctx context.Context, name string) (map[string]any, error) {
+	var spec []byte
+	err := s.pool.QueryRow(ctx, `SELECT spec FROM semantic_model WHERE name = $1`, name).Scan(&spec)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(spec, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func marshalJSONFields(k *domain.Knowledge) (links, attrs []byte, err error) {
+	if k.Tags == nil {
+		k.Tags = []string{}
+	}
+	if k.Links == nil {
+		k.Links = []domain.Link{}
+	}
+	if k.Attrs == nil {
+		k.Attrs = map[string]any{}
+	}
+	if links, err = json.Marshal(k.Links); err != nil {
+		return nil, nil, err
+	}
+	if attrs, err = json.Marshal(k.Attrs); err != nil {
+		return nil, nil, err
+	}
+	return links, attrs, nil
+}
+
+// encodeVector renders a pgvector literal like "[0.1,0.2]".
+func encodeVector(vec []float32) string {
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, v := range vec {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, "%g", v)
+	}
+	b.WriteByte(']')
+	return b.String()
+}
+
+func isUndefinedTable(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "42P01")
+}
