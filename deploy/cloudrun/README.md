@@ -100,14 +100,16 @@ gcloud run deploy ochakai \
   --set-env-vars="^@^OCHAKAI_CLIENTS=$AGENT_TOKEN=agent:claude-code,$HUMAN_TOKEN=human:$(whoami)"
 
 export OCHAKAI_URL=$(gcloud run services describe ochakai --region=$REGION --format='value(status.url)')
-curl $OCHAKAI_URL/healthz
+curl $OCHAKAI_URL/health
 ```
 
 Notes:
 
 - `^@^` changes the env-var delimiter so `OCHAKAI_CLIENTS` may contain commas.
 - `--allow-unauthenticated` exposes the service publicly, protected by
-  ochakai's bearer tokens; every endpoint except `/healthz` requires one.
+  ochakai's bearer tokens; every endpoint except `/health` requires one.
+  Use `/health`, not `/healthz`: Google Frontends intercept `/healthz` on
+  `run.app` URLs and return their own 404 without ever reaching the app.
   For private networking, drop the flag and front it with IAM/IAP instead.
 - Container port defaults are fine: ochakai honors Cloud Run's `PORT`.
 - Environment variables are visible to project viewers in the console.
@@ -128,8 +130,11 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/aiplatform.user
 
 gcloud run services update ochakai --region=$REGION \
-  --set-env-vars=OCHAKAI_EMBEDDING_PROVIDER=vertex,OCHAKAI_VERTEX_PROJECT=$PROJECT_ID
+  --update-env-vars=OCHAKAI_EMBEDDING_PROVIDER=vertex,OCHAKAI_VERTEX_PROJECT=$PROJECT_ID
 ```
+
+Use `--update-env-vars`, not `--set-env-vars`: the latter **replaces** all
+environment variables and would wipe `OCHAKAI_DATABASE_URL`.
 
 On the next start, ochakai creates the pgvector table and embeds new and
 updated knowledge with `gemini-embedding-001`. Search becomes hybrid
@@ -187,13 +192,18 @@ curl -H "Authorization: Bearer $AGENT_TOKEN" -X POST "$OCHAKAI_URL/api/v1/compil
   Google ID tokens (Cloud Run accepts the app's bearer token in
   `Authorization` and the Google ID token in `X-Serverless-Authorization`
   simultaneously).
-- **Every request to the `run.app` URL returns Google's HTML 404 even
-  though the service is Ready** (no request logs appear): the data plane
-  is being blocked upstream of your service — typically a VPC Service
-  Controls perimeter or another org-level control. Service/project
-  settings (ingress, IAM, org policies visible at project level) will all
-  look correct. Check Security → VPC Service Controls with an org admin,
-  or deploy to a project outside the perimeter.
+- **`run.app` returns Google's HTML 404 ("That's an error") even though
+  the service is Ready**: before suspecting infrastructure, test a real
+  application endpoint (e.g. `/api/v1/knowledge?q=x` with a token) and
+  check request logs. Two Google Frontend behaviors conspire to make a
+  healthy service look dead:
+  1. `/healthz` is intercepted by Google Frontends on `run.app` and 404s
+     without ever reaching the container (and without request logs). Use
+     `/health`.
+  2. Application-level 404 responses are dressed up as Google's branded
+     404 page, so an unhandled path looks like a routing failure.
+  A genuinely unknown service URL returns a much shorter 404 page
+  (~272 bytes vs ~1.5 KB) — comparing `content-length` tells them apart.
 
 ## 7. Teardown
 

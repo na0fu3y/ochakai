@@ -106,10 +106,15 @@ func serve(log *slog.Logger) error {
 	defer svc.Store.Close()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	// /health is the canonical health endpoint. /healthz is kept for local
+	// use but is unreachable behind Google Frontends (Cloud Run's run.app
+	// intercepts the path and returns its own 404) — discovered the hard way.
+	health := func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
-	})
+	}
+	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("GET /healthz", health)
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
 	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
 
