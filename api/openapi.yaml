@@ -1,0 +1,245 @@
+openapi: 3.1.0
+info:
+  title: ochakai REST API
+  description: >
+    ochakai is a context provider for data agents: metric definitions,
+    verified golden queries, interpretation knowledge, glossary terms, and
+    table catalog entries in one knowledge base. The REST API mirrors the
+    MCP tools so users can build their own web UIs. ochakai executes no SQL
+    and uses no LLM.
+  version: 0.1.0
+  license:
+    name: MIT
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/knowledge:
+    get:
+      operationId: searchKnowledge
+      summary: Search knowledge (trigram, plus hybrid vector search when configured)
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: array, items: { $ref: "#/components/schemas/Type" } }
+          explode: true
+        - name: status
+          in: query
+          schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
+          explode: true
+        - name: tag
+          in: query
+          schema: { type: array, items: { type: string } }
+          explode: true
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, maximum: 50 }
+      responses:
+        "200":
+          description: Scored hits, verified entries boosted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hits:
+                    type: array
+                    items: { $ref: "#/components/schemas/SearchHit" }
+    post:
+      operationId: createKnowledge
+      summary: Create a knowledge entry
+      description: >
+        Agent clients create drafts; setting status=verified requires an
+        actor kind allowed by OCHAKAI_VERIFY_ACTORS (human by default).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Knowledge" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/knowledge/{type}/{id}:
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/Type" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getKnowledge
+      summary: Get one knowledge entry
+      responses:
+        "200":
+          description: The entry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: updateKnowledge
+      summary: Update a knowledge entry (full replacement; revisions retained)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Knowledge" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteKnowledge
+      summary: Soft-delete a knowledge entry (history retained)
+      responses:
+        "204": { description: Deleted. }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/export:
+    get:
+      operationId: exportOKF
+      summary: Export the knowledge base as an OKF bundle
+      description: >
+        Streams a tar.gz of the whole knowledge base in Open Knowledge
+        Format (markdown + YAML frontmatter, one concept per entry, with
+        index.md files). Your knowledge is yours.
+      responses:
+        "200":
+          description: OKF bundle.
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+  /api/v1/compile:
+    post:
+      operationId: compileSQL
+      summary: Deterministically compile metrics into SQL
+      description: >
+        Compiles from the imported Ossie semantic model. ochakai never
+        executes the SQL and never guesses: requests outside the supported
+        subset (single fact + star joins) return 422 with a reason. Any
+        verified golden queries about the metrics are returned alongside and
+        should be preferred when they answer the question.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompileRequest" }
+      responses:
+        "200":
+          description: Compiled SQL.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompileResult" }
+        "422": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Static token from OCHAKAI_CLIENTS. Absent when auth is disabled (dev).
+  responses:
+    Error:
+      description: Error.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+  schemas:
+    Type:
+      type: string
+      enum: [metric, query, insight, term, table]
+    Status:
+      type: string
+      enum: [draft, verified, deprecated]
+    Actor:
+      type: object
+      properties:
+        kind: { type: string, enum: [human, agent] }
+        name: { type: string }
+    Link:
+      type: object
+      properties:
+        rel: { type: string }
+        target: { type: string, description: "<type>/<id>" }
+    Knowledge:
+      type: object
+      required: [type, id, title]
+      properties:
+        type: { $ref: "#/components/schemas/Type" }
+        id: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,127}$" }
+        title: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        status: { $ref: "#/components/schemas/Status" }
+        created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
+        verified_by: { $ref: "#/components/schemas/Actor", readOnly: true }
+        verified_at: { type: string, format: date-time, readOnly: true }
+        links: { type: array, items: { $ref: "#/components/schemas/Link" } }
+        attrs:
+          type: object
+          description: Type-specific structured attributes (e.g. question/sql for query, model/expression for metric).
+        body: { type: string, description: Markdown body. }
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+    SearchHit:
+      allOf:
+        - $ref: "#/components/schemas/Knowledge"
+        - type: object
+          properties:
+            score: { type: number }
+    CompileRequest:
+      type: object
+      required: [metrics]
+      properties:
+        model:
+          type: string
+          description: Semantic model name; optional when the first metric's knowledge entry links to its model.
+        metrics: { type: array, items: { type: string }, minItems: 1 }
+        dimensions:
+          type: array
+          items: { type: string, description: "dataset.field" }
+        filters:
+          type: array
+          items:
+            type: object
+            required: [field, op, value]
+            properties:
+              field: { type: string, description: "dataset.field" }
+              op: { type: string, enum: ["=", "!=", ">", ">=", "<", "<=", "in", "not_in"] }
+              value: {}
+        time_grain:
+          type: object
+          required: [field, grain]
+          properties:
+            field: { type: string, description: "dataset.field (time column)" }
+            grain: { type: string, enum: [day, week, month, quarter, year] }
+        dialect: { type: string, enum: [bigquery, ansi], default: bigquery }
+        limit: { type: integer }
+    CompileResult:
+      type: object
+      properties:
+        sql: { type: string }
+        dialect: { type: string }
+        datasets_used: { type: array, items: { type: string } }
+        notes: { type: array, items: { type: string } }
+        verified_queries:
+          type: array
+          description: Verified golden queries about the requested metrics; prefer these when applicable.
+          items: { $ref: "#/components/schemas/SearchHit" }

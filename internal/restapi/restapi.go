@@ -1,0 +1,171 @@
+// Package restapi serves /api/v1 so users can build their own web UIs
+// (a sample lives in examples/webui). It mirrors the MCP tools; the spec
+// is committed at api/openapi.yaml.
+package restapi
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/na0fu3y/ochakai/internal/compiler"
+	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/httpauth"
+	"github.com/na0fu3y/ochakai/internal/okf"
+	"github.com/na0fu3y/ochakai/internal/service"
+	"github.com/na0fu3y/ochakai/internal/store"
+)
+
+func Handler(svc *service.Service) http.Handler {
+	mux := http.NewServeMux()
+
+	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&limit=...
+	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		hits, err := svc.Search(r.Context(), q.Get("q"), store.Filter{
+			Types:    toTypes(q["type"]),
+			Statuses: toStatuses(q["status"]),
+			Tags:     q["tag"],
+		}, limit)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
+	})
+
+	mux.HandleFunc("POST /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
+		var k domain.Knowledge
+		if !readJSON(w, r, &k) {
+			return
+		}
+		created, err := svc.Create(r.Context(), &k, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, created)
+	})
+
+	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		k, err := svc.Get(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, k)
+	})
+
+	mux.HandleFunc("PUT /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var k domain.Knowledge
+		if !readJSON(w, r, &k) {
+			return
+		}
+		k.Type = domain.Type(r.PathValue("type"))
+		k.ID = r.PathValue("id")
+		updated, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+	})
+
+	mux.HandleFunc("DELETE /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		err := svc.Delete(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// GET /api/v1/export — the whole knowledge base as an OKF bundle
+	// (tar.gz of markdown + YAML frontmatter). Your knowledge is yours.
+	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
+		entries, err := svc.Store.ListAll(r.Context())
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		files, err := okf.Bundle(entries)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
+		if err := okf.WriteTarGz(w, files, time.Now()); err != nil {
+			// Headers already sent; nothing to do but log via server.
+			return
+		}
+	})
+
+	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {
+		var req service.CompileRequest
+		if !readJSON(w, r, &req) {
+			return
+		}
+		res, err := svc.Compile(r.Context(), req)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+
+	return mux
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
+	if err := dec.Decode(v); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return false
+	}
+	return true
+}
+
+func writeError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	var compileErr *compiler.Error
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, store.ErrAlreadyExists):
+		status = http.StatusConflict
+	case errors.Is(err, service.ErrForbidden):
+		status = http.StatusForbidden
+	case errors.As(err, &compileErr):
+		status = http.StatusUnprocessableEntity
+	case strings.Contains(err.Error(), "invalid"):
+		status = http.StatusBadRequest
+	}
+	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+func toTypes(ss []string) []domain.Type {
+	out := make([]domain.Type, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, domain.Type(s))
+	}
+	return out
+}
+
+func toStatuses(ss []string) []domain.Status {
+	out := make([]domain.Status, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, domain.Status(s))
+	}
+	return out
+}
