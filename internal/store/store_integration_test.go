@@ -19,7 +19,7 @@ func TestIntegration(t *testing.T) {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	s, err := New(ctx, dbURL)
+	s, err := New(ctx, dbURL, false)
 	if err != nil {
 		t.Fatal(err)
 	}
