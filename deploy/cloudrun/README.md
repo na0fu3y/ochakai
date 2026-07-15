@@ -221,29 +221,55 @@ curl -H "Authorization: Bearer $AGENT_TOKEN" -X POST "$OCHAKAI_URL/api/v1/compil
   -d '{"metrics":["revenue"],"dimensions":["customers.region"],"dialect":"bigquery"}'
 ```
 
-## 5b. Host the sample web UI (separately, by design)
+## 5b. Deploy the sample web UI (separate service, by design)
 
 The sample UI ([examples/webui](../../examples/webui)) is **not** part of
-the container image — ochakai keeps its serving surface minimal. Host the
-single HTML file anywhere (any static host, or locally), then allow that
-origin to call the REST API from a browser:
+the ochakai image — the core keeps its serving surface minimal. It ships
+as its own tiny service: a static page plus a reverse proxy that attaches
+this service's identity token (`X-Serverless-Authorization`) to API
+calls, so **ochakai stays organization-restricted (§3b)** while the UI is
+reachable from any machine. The client's `Authorization` header (the
+ochakai token choosing the actor) passes through untouched.
+
+```sh
+# build & push (from the repository root)
+docker build --platform linux/amd64 -f examples/webui/Dockerfile \
+  -t $REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1 .
+docker push $REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1
+
+# dedicated identity, allowed to invoke ochakai only
+gcloud iam service-accounts create ochakai-webui
+gcloud run services add-iam-policy-binding ochakai --region=$REGION \
+  --member=serviceAccount:ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
+  --role=roles/run.invoker
+
+gcloud run deploy ochakai-webui \
+  --image=$REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1 \
+  --region=$REGION --allow-unauthenticated \
+  --service-account=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
+  --min-instances=0 --max-instances=1 --cpu=1 --memory=256Mi \
+  --set-env-vars=OCHAKAI_URL=$OCHAKAI_URL
+```
+
+Open the webui service URL from any machine, paste a client token, and
+search. The UI and API are same-origin through the proxy, so no CORS
+setup is needed. Note the trade-off: the webui itself is public here
+(token-gated only) — anyone reaching it can attempt API calls, so treat
+it like the public-endpoint variant of §3. To require Google login in
+the browser too, put IAP in front of the webui service, or wait for
+first-class MCP OAuth (issue #5).
+
+Alternatively, host `index.html` on any static host (no container) and
+allow its origin to call the REST API directly from the browser:
 
 ```sh
 gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_CORS_ORIGINS=http://localhost:8000
-
-# serve the UI locally
-python3 -m http.server 8000 -d examples/webui
+  --update-env-vars=OCHAKAI_CORS_ORIGINS=https://your-ui.example
 ```
 
-Open http://localhost:8000, set the base URL to your ochakai endpoint,
-and paste a client token. On an organization-restricted deployment
-(§3b), set the base URL to the Cloud Run proxy (`http://localhost:8787`)
-instead — the CORS origin is still the UI's own origin
-(`http://localhost:8000`).
-
-CORS is off unless `OCHAKAI_CORS_ORIGINS` is set, and origins are matched
-exactly — no wildcards.
+CORS is off unless `OCHAKAI_CORS_ORIGINS` is set, origins match exactly
+(no wildcards), and this path requires the browser to reach ochakai
+itself — combine with §3b's proxy on restricted deployments.
 
 ## 6. Troubleshooting in security-hardened organizations
 
