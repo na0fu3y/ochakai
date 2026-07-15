@@ -29,8 +29,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
 			"verified golden queries, interpretation knowledge (how to read a metric), " +
 			"glossary terms, and table catalog entries. It executes no SQL and uses no LLM. " +
-			"Prefer verified knowledge; write learnings back with create_knowledge (they start as drafts " +
-			"until a human verifies them). Knowledge is co-owned by humans and agents.",
+			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
+			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
+			"you have actually validated — who verified is always recorded. " +
+			"Knowledge is co-owned by humans and agents.",
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -61,7 +63,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "create_knowledge",
 		Description: "Create a knowledge entry. Write back what you learned: metric caveats, verified answers, " +
-			"glossary terms. Agent-created entries start as drafts; a human promotes them to verified.",
+			"glossary terms. Entries default to draft; your identity is recorded as created_by.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -73,7 +75,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "update_knowledge",
 		Description: "Update a knowledge entry (full replacement of title/description/tags/status/links/attrs/body). " +
-			"Every change is kept as a revision. Setting status=verified requires a human client by default.",
+			"Every change is kept as a revision. Setting status=verified records you as verified_by — " +
+			"do it only for knowledge you have actually validated.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {

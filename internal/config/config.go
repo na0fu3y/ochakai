@@ -17,17 +17,31 @@ type Client struct {
 	Actor domain.Actor
 }
 
+// AuthMode selects how requests are mapped to an actor. ochakai has no
+// authorization: whoever reaches the service can read and write, and the
+// actor is recorded as provenance (design doc 0002).
+type AuthMode string
+
+const (
+	// AuthClients resolves actors from static bearer tokens
+	// (OCHAKAI_CLIENTS). Fallback for non-Cloud-Run deployments; with no
+	// clients configured, requests act as human/anonymous (development).
+	AuthClients AuthMode = "clients"
+	// AuthCloudRunIAM resolves actors from the Google-verified ID token
+	// that Cloud Run forwards after its IAM check. Tokenless operation;
+	// REQUIRES the service to be non-public (IAM enforced).
+	AuthCloudRunIAM AuthMode = "cloudrun-iam"
+)
+
 type Config struct {
 	// Addr is the listen address. Cloud Run's PORT is honored when set.
 	Addr string
 	// DatabaseURL is the PostgreSQL connection string (required).
 	DatabaseURL string
-	// Clients maps bearer tokens to actors. Empty means auth is disabled
-	// and every request acts as human/anonymous (local development only).
+	// AuthMode selects actor resolution (default: clients).
+	AuthMode AuthMode
+	// Clients maps bearer tokens to actors (clients mode only).
 	Clients []Client
-	// VerifyActorKinds lists actor kinds allowed to set status=verified.
-	// Default: human only.
-	VerifyActorKinds []string
 	// CORSOrigins is the exact-match allowlist of origins permitted to call
 	// the REST API from a browser (for separately hosted web UIs). Empty
 	// (the default) emits no CORS headers at all.
@@ -49,10 +63,10 @@ type EmbeddingConfig struct {
 
 func FromEnv() (*Config, error) {
 	cfg := &Config{
-		Addr:             ":" + envOr("PORT", "8080"),
-		DatabaseURL:      firstEnv("OCHAKAI_DATABASE_URL", "DATABASE_URL"),
-		VerifyActorKinds: splitList(envOr("OCHAKAI_VERIFY_ACTORS", domain.ActorHuman)),
-		CORSOrigins:      splitList(os.Getenv("OCHAKAI_CORS_ORIGINS")),
+		Addr:        ":" + envOr("PORT", "8080"),
+		DatabaseURL: firstEnv("OCHAKAI_DATABASE_URL", "DATABASE_URL"),
+		AuthMode:    AuthMode(envOr("OCHAKAI_AUTH", string(AuthClients))),
+		CORSOrigins: splitList(os.Getenv("OCHAKAI_CORS_ORIGINS")),
 	}
 	if addr := os.Getenv("OCHAKAI_ADDR"); addr != "" {
 		cfg.Addr = addr
@@ -61,11 +75,20 @@ func FromEnv() (*Config, error) {
 		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL (or DATABASE_URL) is required")
 	}
 
-	clients, err := parseClients(os.Getenv("OCHAKAI_CLIENTS"))
-	if err != nil {
-		return nil, err
+	switch cfg.AuthMode {
+	case AuthClients:
+		clients, err := parseClients(os.Getenv("OCHAKAI_CLIENTS"))
+		if err != nil {
+			return nil, err
+		}
+		cfg.Clients = clients
+	case AuthCloudRunIAM:
+		if os.Getenv("OCHAKAI_CLIENTS") != "" {
+			return nil, fmt.Errorf("OCHAKAI_CLIENTS is ignored when OCHAKAI_AUTH=cloudrun-iam; unset it to avoid a false sense of security")
+		}
+	default:
+		return nil, fmt.Errorf("unknown OCHAKAI_AUTH %q (supported: clients, cloudrun-iam)", cfg.AuthMode)
 	}
-	cfg.Clients = clients
 
 	switch provider := os.Getenv("OCHAKAI_EMBEDDING_PROVIDER"); provider {
 	case "":
@@ -111,15 +134,6 @@ func parseClients(s string) ([]Client, error) {
 		clients = append(clients, Client{Token: token, Actor: domain.Actor{Kind: kind, Name: name}})
 	}
 	return clients, nil
-}
-
-func (c *Config) CanVerify(actor domain.Actor) bool {
-	for _, kind := range c.VerifyActorKinds {
-		if actor.Kind == kind {
-			return true
-		}
-	}
-	return false
 }
 
 func envOr(key, fallback string) string {

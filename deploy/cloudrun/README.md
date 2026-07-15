@@ -150,6 +150,24 @@ Server-to-server callers instead send the Google ID token in
 `X-Serverless-Authorization` (Cloud Run strips it before your app sees
 it), keeping `Authorization` free for the ochakai token.
 
+**Going tokenless (recommended once restricted):** ochakai can resolve
+the actor directly from the Cloud-Run-verified caller identity instead of
+bearer tokens — people become `human:<email>`, service accounts (like the
+sample webui) become `agent:<sa-email>`:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_AUTH=cloudrun-iam --remove-env-vars=OCHAKAI_CLIENTS
+
+claude mcp add --transport http ochakai http://localhost:8787/mcp  # no headers at all
+```
+
+There is nothing to issue, rotate, or revoke, and provenance records the
+actual caller. ochakai performs no authorization — whoever can reach the
+service reads and writes, and every change records who made it.
+**Never enable `cloudrun-iam` on a public (`allUsers`) service**: there
+the identity headers are unverified.
+
 This setup never needs an `allUsers` grant, so it is compatible with —
 and a good reason to keep — the Domain Restricted Sharing org policy
 (`iam.allowedPolicyMemberDomains`).
