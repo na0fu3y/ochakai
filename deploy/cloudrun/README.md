@@ -39,8 +39,11 @@ gcloud artifacts repositories create ghcr \
   --remote-docker-repo=https://ghcr.io \
   --location=$REGION
 
-export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.2.0
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.2.1
 ```
+
+(Check [releases](https://github.com/na0fu3y/ochakai/releases) for the
+latest tag; §3 requires 0.2.1 or later.)
 
 ## 2. Create the database (cheapest viable instance)
 
@@ -326,7 +329,40 @@ proxy.
   (`gcloud projects get-iam-policy ... --filter=bindings.members:ochakai-run@`)
   and redeploy.
 
-## 7. Teardown
+## 7. Upgrading an existing deployment
+
+Point the service at the new tag — that's normally everything. Database
+migrations are embedded in the binary, tracked in `schema_migrations`,
+and run automatically at startup:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --image=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:<new-tag>
+```
+
+The Artifact Registry remote repository fetches new tags from GHCR on
+demand; verify what you got with
+`gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<new-tag> -R na0fu3y/ochakai`.
+Rolling back Cloud Run traffic to a previous revision does **not** roll
+back database migrations; migrations are additive, so older binaries keep
+working against a newer schema.
+
+Version notes:
+
+- **→ 0.2.0**: the verified-promotion restriction is gone
+  (`OCHAKAI_VERIFY_ACTORS` is ignored) — anyone who can reach ochakai may
+  set `status=verified`, recorded in `verified_by`. Existing token
+  (`OCHAKAI_CLIENTS`) deployments keep working unchanged. To adopt
+  tokenless auth, apply §3's `--no-allow-unauthenticated` + IAM invoker +
+  `OCHAKAI_AUTH=cloudrun-iam` and remove `OCHAKAI_CLIENTS`.
+- **→ 0.2.1**: to adopt passwordless database auth, run §3's identity
+  steps (dedicated SA, IAM database user, grants) against your existing
+  instance — `cloudsql.iam_authentication=on` can be enabled with
+  `gcloud sql instances patch` (brief restart) — then update the service
+  with `--service-account`, `OCHAKAI_DB_IAM_AUTH=true`, and the
+  password-free `OCHAKAI_DATABASE_URL`.
+
+## 8. Teardown
 
 ```sh
 gcloud run services delete ochakai --region=$REGION --quiet
