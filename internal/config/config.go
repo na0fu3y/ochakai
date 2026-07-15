@@ -28,6 +28,10 @@ type Config struct {
 	// VerifyActorKinds lists actor kinds allowed to set status=verified.
 	// Default: human only.
 	VerifyActorKinds []string
+	// CORSOrigins is the exact-match allowlist of origins permitted to call
+	// the REST API from a browser (for separately hosted web UIs). Empty
+	// (the default) emits no CORS headers at all.
+	CORSOrigins []string
 
 	// Embedding is nil when semantic search is disabled (the default).
 	Embedding *EmbeddingConfig
@@ -48,6 +52,7 @@ func FromEnv() (*Config, error) {
 		Addr:             ":" + envOr("PORT", "8080"),
 		DatabaseURL:      firstEnv("OCHAKAI_DATABASE_URL", "DATABASE_URL"),
 		VerifyActorKinds: splitList(envOr("OCHAKAI_VERIFY_ACTORS", domain.ActorHuman)),
+		CORSOrigins:      splitList(os.Getenv("OCHAKAI_CORS_ORIGINS")),
 	}
 	if addr := os.Getenv("OCHAKAI_ADDR"); addr != "" {
 		cfg.Addr = addr

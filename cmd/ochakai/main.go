@@ -116,7 +116,7 @@ func serve(log *slog.Logger) error {
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /healthz", health)
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
-	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
+	mux.Handle("/api/v1/", httpauth.CORS(cfg.CORSOrigins, httpauth.Middleware(cfg, restapi.Handler(svc))))
 
 	server := &http.Server{
 		Addr:              cfg.Addr,
