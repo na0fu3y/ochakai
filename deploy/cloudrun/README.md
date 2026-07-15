@@ -116,6 +116,44 @@ Notes:
   For production, store `OCHAKAI_DATABASE_URL` and `OCHAKAI_CLIENTS` in
   Secret Manager and use `--set-secrets` instead of `--set-env-vars`.
 
+## 3b. Recommended: restrict access to your organization
+
+`--allow-unauthenticated` leaves the URL reachable by anyone (protected
+only by ochakai's bearer tokens). To make the service unreachable from
+outside your Google Workspace / Cloud Identity organization, use Cloud Run
+IAM as a second, network-level layer:
+
+```sh
+gcloud run services remove-iam-policy-binding ochakai --region=$REGION \
+  --member=allUsers --role=roles/run.invoker
+gcloud run services add-iam-policy-binding ochakai --region=$REGION \
+  --member=domain:your-org.example --role=roles/run.invoker
+```
+
+Auth becomes two-layer: Cloud Run IAM decides **who can reach** the
+service (org members only; anonymous requests get Google's 401 without
+ever hitting the container), and `OCHAKAI_CLIENTS` decides **which actor**
+(human/agent) they act as for provenance.
+
+Clients with static headers (Claude Code MCP, curl) go through the
+[Cloud Run proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy),
+which handles the Google identity layer transparently and passes your
+`Authorization` header (the ochakai token) through untouched:
+
+```sh
+gcloud run services proxy ochakai --region=$REGION --port=8787
+claude mcp add --transport http ochakai http://localhost:8787/mcp \
+  --header "Authorization: Bearer $AGENT_TOKEN"
+```
+
+Server-to-server callers instead send the Google ID token in
+`X-Serverless-Authorization` (Cloud Run strips it before your app sees
+it), keeping `Authorization` free for the ochakai token.
+
+This setup never needs an `allUsers` grant, so it is compatible with —
+and a good reason to keep — the Domain Restricted Sharing org policy
+(`iam.allowedPolicyMemberDomains`).
+
 ## 4. Optional: enable hybrid semantic search (Vertex AI)
 
 Embeddings are off by default (trigram-only search, no external calls).
