@@ -72,7 +72,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	st, err := store.New(ctx, cfg.DatabaseURL, cfg.DBIAMAuth)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -53,10 +53,13 @@ gcloud sql instances create ochakai \
   --storage-size=10 \
   --storage-type=SSD \
   --no-storage-auto-increase \
-  --no-backup
+  --no-backup \
+  --database-flags=cloudsql.iam_authentication=on
 
 gcloud sql databases create ochakai --instance=ochakai
 
+# admin user for local import/maintenance only — its password never
+# reaches Cloud Run (the service itself connects passwordless, §3)
 export DB_PASSWORD=$(openssl rand -hex 24)
 gcloud sql users create ochakai --instance=ochakai --password=$DB_PASSWORD
 ```
@@ -70,33 +73,53 @@ Notes:
   run `CREATE EXTENSION` (pg_trgm, and vector if you enable embeddings)
   during its automatic migration.
 
-## 3. Deploy Cloud Run (organization-restricted, tokenless)
+## 3. Deploy Cloud Run (dedicated identity, passwordless, org-restricted)
 
-Grant the Cloud Run service account access to Cloud SQL. In projects
-created since 2024 the default compute service account has no roles, so
-this step is required (the container exits at startup with
-`cloudsql.instances.get ... NOT_AUTHORIZED` without it):
+Create a dedicated service account for ochakai and let it log in to the
+database with **IAM database authentication** — the connection password is
+a short-lived IAM token fetched at connect time, so **no database password
+exists anywhere in the deployment**:
 
 ```sh
-export SERVICE_ACCOUNT=$(gcloud projects describe $PROJECT_ID \
-  --format='value(projectNumber)')-compute@developer.gserviceaccount.com
+gcloud iam service-accounts create ochakai-run --display-name="ochakai service"
+export SERVICE_ACCOUNT=ochakai-run@$PROJECT_ID.iam.gserviceaccount.com
+
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/cloudsql.client
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/cloudsql.instanceUser
+
+# database principal for the service account (note: no .gserviceaccount.com)
+export DB_SA_USER=ochakai-run@$PROJECT_ID.iam
+gcloud sql users create $DB_SA_USER --instance=ochakai --type=cloud_iam_service_account
 ```
 
-Deploy privately with `OCHAKAI_AUTH=cloudrun-iam`, then allow your
-organization to invoke it:
+Grant the service account database privileges (one-time, as the admin
+user — e.g. through §5's temporary authorized network):
+
+```sql
+GRANT cloudsqlsuperuser TO "ochakai-run@<PROJECT_ID>.iam";  -- CREATE EXTENSION in migrations
+GRANT ochakai TO "ochakai-run@<PROJECT_ID>.iam";            -- share admin-owned objects
+```
+
+Tip: run §5's import once **before the first deploy** — it creates the
+schema as the admin user, so both identities can work with it.
+
+Deploy privately with the dedicated identity, `OCHAKAI_AUTH=cloudrun-iam`
+(tokenless clients), and `OCHAKAI_DB_IAM_AUTH` (passwordless database),
+then allow your organization to invoke it:
 
 ```sh
 gcloud run deploy ochakai \
   --image=$IMAGE \
   --region=$REGION \
+  --service-account=$SERVICE_ACCOUNT \
   --no-allow-unauthenticated \
   --min-instances=0 --max-instances=1 \
   --cpu=1 --memory=512Mi \
   --add-cloudsql-instances=$PROJECT_ID:$REGION:ochakai \
-  --set-env-vars="OCHAKAI_AUTH=cloudrun-iam" \
-  --set-env-vars="OCHAKAI_DATABASE_URL=postgres:///ochakai?host=/cloudsql/$PROJECT_ID:$REGION:ochakai&user=ochakai&password=$DB_PASSWORD"
+  --set-env-vars="OCHAKAI_AUTH=cloudrun-iam,OCHAKAI_DB_IAM_AUTH=true" \
+  --set-env-vars="OCHAKAI_DATABASE_URL=postgres:///ochakai?host=/cloudsql/$PROJECT_ID:$REGION:ochakai&user=$DB_SA_USER"
 
 gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=domain:your-org.example --role=roles/run.invoker
@@ -119,9 +142,13 @@ How this works:
 - No `allUsers` grant is needed anywhere, so this is compatible with —
   and a good reason to keep — the Domain Restricted Sharing org policy
   (`iam.allowedPolicyMemberDomains`).
-- Environment variables are visible to project viewers in the console.
-  For production, put `OCHAKAI_DATABASE_URL` in Secret Manager and use
-  `--set-secrets`.
+- With `OCHAKAI_DB_IAM_AUTH` the `OCHAKAI_DATABASE_URL` contains no
+  password, so there is nothing secret in the environment variables.
+  (If you use password auth instead, put the URL in Secret Manager with
+  `--set-secrets`.)
+- The whole deployment is **secret-zero**: clients bring Google
+  identities, ochakai brings its service-account identity to the
+  database, and nothing needs to be issued, stored, or rotated.
 
 Verify through the
 [Cloud Run proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy)
@@ -162,7 +189,7 @@ Enabling them uses the Cloud Run service identity via ADC — no API keys.
 gcloud services enable aiplatform.googleapis.com
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/aiplatform.user
+  --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/aiplatform.user   # ochakai-run SA from §3
 
 gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_EMBEDDING_PROVIDER=vertex,OCHAKAI_VERTEX_PROJECT=$PROJECT_ID

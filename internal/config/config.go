@@ -38,6 +38,10 @@ type Config struct {
 	Addr string
 	// DatabaseURL is the PostgreSQL connection string (required).
 	DatabaseURL string
+	// DBIAMAuth enables Cloud SQL IAM database authentication: the
+	// connection password is a short-lived access token fetched from the
+	// GCE metadata server, so no database password exists anywhere.
+	DBIAMAuth bool
 	// AuthMode selects actor resolution (default: clients).
 	AuthMode AuthMode
 	// Clients maps bearer tokens to actors (clients mode only).
@@ -66,6 +70,7 @@ func FromEnv() (*Config, error) {
 		Addr:        ":" + envOr("PORT", "8080"),
 		DatabaseURL: firstEnv("OCHAKAI_DATABASE_URL", "DATABASE_URL"),
 		AuthMode:    AuthMode(envOr("OCHAKAI_AUTH", string(AuthClients))),
+		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
 		CORSOrigins: splitList(os.Getenv("OCHAKAI_CORS_ORIGINS")),
 	}
 	if addr := os.Getenv("OCHAKAI_ADDR"); addr != "" {

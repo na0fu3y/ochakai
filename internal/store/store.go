@@ -23,8 +23,25 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-func New(ctx context.Context, databaseURL string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if iamAuth {
+		// Cloud SQL IAM database authentication: the password of every
+		// new connection is a fresh short-lived access token.
+		tokens := &metadataTokenSource{}
+		cfg.BeforeConnect = func(ctx context.Context, cc *pgx.ConnConfig) error {
+			tok, err := tokens.password(ctx)
+			if err != nil {
+				return err
+			}
+			cc.Password = tok
+			return nil
+		}
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
