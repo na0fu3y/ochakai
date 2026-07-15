@@ -72,9 +72,9 @@ Notes:
 - Instance creation takes 10–15 minutes.
 - `--no-backup` keeps the example cheap; enable backups for anything you
   care about (`gcloud sql instances patch ochakai --backup`).
-- Users created through Cloud SQL get `cloudsqlsuperuser`, so ochakai can
-  run `CREATE EXTENSION` (pg_trgm, and vector if you enable embeddings)
-  during its automatic migration.
+- Users created through the Cloud SQL API (like this admin user) are
+  members of `cloudsqlsuperuser` and can create extensions. The runtime
+  service account deliberately gets neither (§3).
 
 ## 3. Deploy Cloud Run (dedicated identity, passwordless, org-restricted)
 
@@ -97,12 +97,23 @@ export DB_SA_USER=ochakai-run@$PROJECT_ID.iam
 gcloud sql users create $DB_SA_USER --instance=ochakai --type=cloud_iam_service_account
 ```
 
-Grant the service account database privileges (one-time, as the admin
-user — e.g. through §5's temporary authorized network):
+Set up the database for the service account (one-time, as the admin
+user — e.g. through §5's temporary authorized network). Extensions are
+pre-created here so the runtime never needs elevated rights: ochakai's
+startup migration only ever hits the privilege-free
+`CREATE EXTENSION IF NOT EXISTS` skip path. Everything else is explicit
+object grants — **no `cloudsqlsuperuser`, no role membership** for the
+runtime identity:
 
 ```sql
-GRANT cloudsqlsuperuser TO "ochakai-run@<PROJECT_ID>.iam";  -- CREATE EXTENSION in migrations
-GRANT ochakai TO "ochakai-run@<PROJECT_ID>.iam";            -- share admin-owned objects
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS vector;   -- for §4; Cloud SQL's pgvector is not
+                                         -- a trusted extension, hence admin-created
+GRANT USAGE, CREATE ON SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
+GRANT ALL ON ALL TABLES IN SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<PROJECT_ID>.iam";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
 ```
 
 Tip: run §5's import once **before the first deploy** — it creates the
