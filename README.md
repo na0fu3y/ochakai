@@ -46,6 +46,12 @@ claude mcp add --transport http ochakai http://localhost:8080/mcp \
   --header "Authorization: Bearer <token>"
 ```
 
+Opening this repository in Claude Code connects automatically via the
+committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
+proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
+`localhost:8787`. On tokenless `cloudrun-iam` deployments no header is
+needed at all.
+
 ## MCP tools
 
 | Tool | Description |
