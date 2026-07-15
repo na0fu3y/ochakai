@@ -320,6 +320,11 @@ proxy.
   (~272 bytes vs ~1.5 KB) — comparing `content-length` tells them apart.
 - **Container exits with `cloudsql.instances.get ... NOT_AUTHORIZED`**:
   the service account is missing `roles/cloudsql.client` (§3, first step).
+- **Cloud SQL socket `connection refused` right after creating the
+  service account**: IAM grants on a freshly created service account can
+  take a minute to propagate. Verify the roles landed
+  (`gcloud projects get-iam-policy ... --filter=bindings.members:ochakai-run@`)
+  and redeploy.
 
 ## 7. Teardown
 
