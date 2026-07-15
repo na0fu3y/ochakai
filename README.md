@@ -78,6 +78,7 @@ see [api/openapi.yaml](api/openapi.yaml) and the sample in
 | `OCHAKAI_DATABASE_URL` | PostgreSQL connection string (required; `DATABASE_URL` also works) |
 | `OCHAKAI_CLIENTS` | Bearer tokens: `token=agent:claude-code,token2=human:alice`. Empty disables auth (dev only) |
 | `OCHAKAI_VERIFY_ACTORS` | Actor kinds allowed to set `status=verified` (default `human`) |
+| `OCHAKAI_CORS_ORIGINS` | Exact-match origin allowlist for browser access to the REST API (for separately hosted web UIs). Default: no CORS headers |
 | `OCHAKAI_EMBEDDING_PROVIDER` | `vertex` enables hybrid semantic search (default: off, trigram-only) |
 | `OCHAKAI_VERTEX_PROJECT` / `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` | Vertex AI settings (defaults: `us-central1`, `gemini-embedding-001`). Auth is ADC — no API keys |
 | `OCHAKAI_EMBEDDING_DIM` | Embedding dimensionality (default 768) |

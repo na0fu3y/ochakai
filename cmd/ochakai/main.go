@@ -26,8 +26,6 @@ import (
 	"github.com/na0fu3y/ochakai/internal/restapi"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
-
-	"github.com/na0fu3y/ochakai/examples/webui"
 )
 
 // version is stamped by -ldflags at release; "dev" otherwise.
@@ -117,17 +115,8 @@ func serve(log *slog.Logger) error {
 	}
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /healthz", health)
-	// Sample web UI (examples/webui), served same-origin so its REST calls
-	// need no CORS. The page is static; the API it calls stays token-authed.
-	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(webui.Index)
-	})
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/ui", http.StatusFound)
-	})
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
-	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
+	mux.Handle("/api/v1/", httpauth.CORS(cfg.CORSOrigins, httpauth.Middleware(cfg, restapi.Handler(svc))))
 
 	server := &http.Server{
 		Addr:              cfg.Addr,

@@ -221,6 +221,30 @@ curl -H "Authorization: Bearer $AGENT_TOKEN" -X POST "$OCHAKAI_URL/api/v1/compil
   -d '{"metrics":["revenue"],"dimensions":["customers.region"],"dialect":"bigquery"}'
 ```
 
+## 5b. Host the sample web UI (separately, by design)
+
+The sample UI ([examples/webui](../../examples/webui)) is **not** part of
+the container image — ochakai keeps its serving surface minimal. Host the
+single HTML file anywhere (any static host, or locally), then allow that
+origin to call the REST API from a browser:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_CORS_ORIGINS=http://localhost:8000
+
+# serve the UI locally
+python3 -m http.server 8000 -d examples/webui
+```
+
+Open http://localhost:8000, set the base URL to your ochakai endpoint,
+and paste a client token. On an organization-restricted deployment
+(§3b), set the base URL to the Cloud Run proxy (`http://localhost:8787`)
+instead — the CORS origin is still the UI's own origin
+(`http://localhost:8000`).
+
+CORS is off unless `OCHAKAI_CORS_ORIGINS` is set, and origins are matched
+exactly — no wildcards.
+
 ## 6. Troubleshooting in security-hardened organizations
 
 - **`allUsers` binding fails with "do not belong to a permitted customer"**:
