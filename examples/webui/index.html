@@ -21,7 +21,7 @@
 <body>
 <h1>ochakai</h1>
 <p>
-  <input id="base" size="24" title="ochakai base URL">
+  <input id="base" value="http://localhost:8080" size="24" title="ochakai base URL">
   <input id="token" placeholder="bearer token (optional)" size="24">
 </p>
 <p>
@@ -68,10 +68,6 @@ async function search() {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
-// Same-origin default when served from ochakai itself (/ui); fall back to
-// localhost for file:// use.
-document.getElementById('base').value =
-  location.protocol.startsWith('http') ? location.origin : 'http://localhost:8080';
 </script>
 </body>
 </html>
