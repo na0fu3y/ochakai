@@ -19,10 +19,6 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// ErrForbidden is returned when the acting client may not perform the
-// operation (e.g. an agent promoting knowledge to verified).
-var ErrForbidden = errors.New("forbidden")
-
 type Service struct {
 	Store    *store.Store
 	Embedder embed.Embedder // nil when semantic search is disabled
@@ -43,9 +39,7 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 	if k.Status == "" {
 		k.Status = domain.StatusDraft
 	}
-	if err := s.applyVerification(k, nil, actor); err != nil {
-		return nil, err
-	}
+	s.applyVerification(k, nil, actor)
 	k.CreatedBy = actor
 	if err := s.Store.Create(ctx, k); err != nil {
 		return nil, err
@@ -68,9 +62,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	k.CreatedBy = old.CreatedBy
 	k.CreatedAt = old.CreatedAt
 	k.VerifiedBy, k.VerifiedAt = old.VerifiedBy, old.VerifiedAt
-	if err := s.applyVerification(k, old, actor); err != nil {
-		return nil, err
-	}
+	s.applyVerification(k, old, actor)
 	if err := s.Store.Update(ctx, k, actor); err != nil {
 		return nil, err
 	}
@@ -82,22 +74,18 @@ func (s *Service) Delete(ctx context.Context, typ domain.Type, id string, actor 
 	return s.Store.SoftDelete(ctx, typ, id, actor)
 }
 
-// applyVerification enforces the promotion policy: only configured actor
-// kinds (human by default) may set status=verified.
-func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, actor domain.Actor) error {
+// applyVerification stamps verification provenance. There is no promotion
+// restriction (design doc 0002): anyone who can reach ochakai may verify,
+// and verified_by records who did — trust is judged from provenance.
+func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, actor domain.Actor) {
 	wasVerified := old != nil && old.Status == domain.StatusVerified
 	if k.Status == domain.StatusVerified && !wasVerified {
-		if !s.Config.CanVerify(actor) {
-			return fmt.Errorf("%w: actor kind %q may not set status=verified (allowed: %s); leave as draft and ask a human to verify",
-				ErrForbidden, actor.Kind, strings.Join(s.Config.VerifyActorKinds, ", "))
-		}
 		now := time.Now().UTC()
 		k.VerifiedBy, k.VerifiedAt = &actor, &now
 	}
 	if k.Status != domain.StatusVerified {
 		k.VerifiedBy, k.VerifiedAt = nil, nil
 	}
-	return nil
 }
 
 func validate(k *domain.Knowledge) error {

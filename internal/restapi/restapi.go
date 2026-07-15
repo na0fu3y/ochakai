@@ -144,8 +144,6 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, store.ErrAlreadyExists):
 		status = http.StatusConflict
-	case errors.Is(err, service.ErrForbidden):
-		status = http.StatusForbidden
 	case errors.As(err, &compileErr):
 		status = http.StatusUnprocessableEntity
 	case strings.Contains(err.Error(), "invalid"):

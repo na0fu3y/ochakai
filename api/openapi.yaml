@@ -53,8 +53,9 @@ paths:
       operationId: createKnowledge
       summary: Create a knowledge entry
       description: >
-        Agent clients create drafts; setting status=verified requires an
-        actor kind allowed by OCHAKAI_VERIFY_ACTORS (human by default).
+        Entries default to draft. Anyone who can reach ochakai may set
+        status=verified; verified_by records who did (provenance over
+        authorization).
       requestBody:
         required: true
         content:
