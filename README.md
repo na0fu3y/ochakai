@@ -68,7 +68,8 @@ ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 
 `ochakai use` saves the selection locally (name more servers with
 `--name` and switch by name); `--url` and `OCHAKAI_URL` always override
-it, so scripts and CI stay explicit.
+it, so scripts and CI stay explicit. Tab completion:
+`source <(ochakai completion zsh)` (also bash, fish).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 into your project's CLAUDE.md — it teaches the agent the commands and the

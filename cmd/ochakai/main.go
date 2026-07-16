@@ -114,6 +114,7 @@ Server admin commands (run next to the database):
   export-okf <dir>        write the OKF bundle straight from the database
 
   version                 print the version
+  completion <shell>      print a completion script (zsh, bash, fish)
 
 Run "ochakai <command> -h" for flags and examples.
 `)

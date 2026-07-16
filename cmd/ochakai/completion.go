@@ -1,0 +1,196 @@
+// `ochakai completion <shell>`: print a static completion script. The
+// CLI deliberately has no flag framework (design doc 0004 §8), so the
+// scripts are hand-written; TestCompletionScriptsStayInSync guards
+// against drift from the real commands and flags.
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+func cmdCompletion(_ context.Context, args []string) error {
+	fs := newBareFlagSet(
+		"Usage: ochakai completion <zsh|bash|fish>\n\nPrint a shell completion script. Load it with:\n\n  zsh:   source <(ochakai completion zsh)    # ~/.zshrc, after compinit\n  bash:  source <(ochakai completion bash)   # ~/.bashrc\n  fish:  ochakai completion fish | source    # ~/.config/fish/config.fish",
+		"  ochakai completion zsh > \"${fpath[1]}/_ochakai\"   # or install statically\n")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	scripts := map[string]string{"zsh": zshCompletion, "bash": bashCompletion, "fish": fishCompletion}
+	if len(pos) != 1 || scripts[pos[0]] == "" {
+		fs.Usage()
+		return errReported
+	}
+	fmt.Print(scripts[pos[0]])
+	return nil
+}
+
+// Server names for `ochakai use <Tab>` come from the bare list output
+// (name\turl per line, current marked in column 1-2): cut -c3- | cut -f1.
+
+const zshCompletion = `# zsh completion for ochakai — source <(ochakai completion zsh)
+_ochakai() {
+  local -a commands
+  commands=(
+    'search:search knowledge; verified entries rank higher'
+    'get:print one entry as an OKF document'
+    'create:create an entry from OKF markdown or JSON'
+    'update:replace an entry (kept as a revision)'
+    'delete:soft-delete an entry'
+    'compile:compile metrics into SQL'
+    'export:download the knowledge base as an OKF bundle'
+    'use:pick the server for later commands'
+    'whoami:print target server, identity, and reachability'
+    'completion:print a shell completion script'
+    'serve:start the MCP + REST server'
+    'import-ossie:import an Apache Ossie semantic model'
+    'export-okf:write the OKF bundle straight from the database'
+    'version:print the version'
+    'help:show help'
+  )
+  if (( CURRENT == 2 )); then
+    _describe -t commands 'ochakai command' commands
+    return
+  fi
+  case $words[2] in
+    search)
+      _arguments \
+        '*--type[filter by type]:type:(metric query insight term table)' \
+        '*--status[filter by status]:status:(draft verified deprecated)' \
+        '*--tag[filter by tag]:tag:' \
+        '--limit[max results]:limit:' \
+        '--json[print the raw JSON response]' \
+        '--url[server URL]:url:'
+      ;;
+    get)
+      _arguments '--json[print JSON instead of the OKF document]' '--url[server URL]:url:'
+      ;;
+    create|update)
+      _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
+      ;;
+    delete)
+      _arguments '--url[server URL]:url:'
+      ;;
+    compile)
+      _arguments \
+        '*--metric[metric name]:metric:' \
+        '*--dimension[group-by column as dataset.field]:dimension:' \
+        '*--filter[filter as "dataset.field op value"]:filter:' \
+        '--grain[time grain as dataset.field\:grain]:grain:' \
+        '--model[semantic model name]:model:' \
+        '--dialect[SQL dialect]:dialect:(bigquery ansi)' \
+        '--limit[LIMIT clause]:limit:' \
+        '--json[print the full JSON response]' \
+        '--url[server URL]:url:'
+      ;;
+    export)
+      _arguments '--url[server URL]:url:' '1:directory:_files -/'
+      ;;
+    use)
+      local -a servers
+      servers=(${(f)"$(ochakai use 2>/dev/null | cut -c3- | cut -f1)"})
+      _arguments '--name[name to save the URL under]:name:' "1:server:(${servers[*]})"
+      ;;
+    whoami)
+      _arguments '--json[print JSON]' '--url[server URL]:url:'
+      ;;
+    completion)
+      _arguments '1:shell:(zsh bash fish)'
+      ;;
+    import-ossie)
+      _arguments '1:file:_files'
+      ;;
+    export-okf)
+      _arguments '1:directory:_files -/'
+      ;;
+  esac
+}
+compdef _ochakai ochakai
+`
+
+const bashCompletion = `# bash completion for ochakai — source <(ochakai completion bash)
+_ochakai() {
+  local cur prev cmd opts
+  cur=${COMP_WORDS[COMP_CWORD]}
+  prev=${COMP_WORDS[COMP_CWORD-1]}
+  cmd=${COMP_WORDS[1]}
+
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=($(compgen -W "search get create update delete compile export use whoami completion serve import-ossie export-okf version help" -- "$cur"))
+    return
+  fi
+
+  case $prev in
+    --type|-type) COMPREPLY=($(compgen -W "metric query insight term table" -- "$cur")); return ;;
+    --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated" -- "$cur")); return ;;
+    --dialect|-dialect) COMPREPLY=($(compgen -W "bigquery ansi" -- "$cur")); return ;;
+    -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
+  esac
+
+  case $cmd in
+    search)        opts="--type --status --tag --limit --json --url" ;;
+    get)           opts="--json --url" ;;
+    create|update) opts="-f --json --url" ;;
+    delete)        opts="--url" ;;
+    compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
+    export)        opts="--url" ;;
+    whoami)        opts="--json --url" ;;
+    use)
+      if [[ $cur != -* ]]; then
+        COMPREPLY=($(compgen -W "$(ochakai use 2>/dev/null | cut -c3- | cut -f1)" -- "$cur"))
+        return
+      fi
+      opts="--name" ;;
+    completion)    COMPREPLY=($(compgen -W "zsh bash fish" -- "$cur")); return ;;
+    import-ossie|export-okf) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
+    *)             opts="" ;;
+  esac
+
+  if [[ $cur == -* ]]; then
+    COMPREPLY=($(compgen -W "$opts" -- "$cur"))
+  else
+    compopt -o default 2>/dev/null
+    COMPREPLY=()
+  fi
+}
+complete -F _ochakai ochakai
+`
+
+const fishCompletion = `# fish completion for ochakai — ochakai completion fish | source
+complete -c ochakai -f
+
+complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
+complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
+complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
+complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
+complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
+complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
+complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
+complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
+complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
+complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
+complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
+complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
+complete -c ochakai -n __fish_use_subcommand -a export-okf -d 'write the OKF bundle straight from the database'
+complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
+
+complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export whoami' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search get create update compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l type -x -a 'metric query insight term table' -d 'filter by type'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l status -x -a 'draft verified deprecated' -d 'filter by status'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l tag -x -d 'filter by tag'
+complete -c ochakai -n '__fish_seen_subcommand_from search compile' -l limit -x -d 'max results / LIMIT clause'
+complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l metric -x -d 'metric name'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dimension -x -d 'group-by column as dataset.field'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l filter -x -d 'filter as "dataset.field op value"'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l grain -x -d 'time grain as dataset.field:grain'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l model -x -d 'semantic model name'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dialect -x -a 'bigquery ansi' -d 'SQL dialect'
+complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
+complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
+complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
+complete -c ochakai -n '__fish_seen_subcommand_from export export-okf' -a '(__fish_complete_directories)'
+complete -c ochakai -n '__fish_seen_subcommand_from import-ossie' -F
+`
