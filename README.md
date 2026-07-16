@@ -9,7 +9,9 @@ that revenue = `SUM(price)` — they don't tell you whether 100 is good or bad.
 ochakai keeps metric definitions, verified golden queries, interpretation
 knowledge (how to read a metric), glossary terms, and table catalog entries
 in one knowledge base, shared with Claude Code and other data agents over
-[MCP](https://modelcontextprotocol.io).
+[MCP](https://modelcontextprotocol.io), REST, and a CLI. It is built for
+Google Cloud — Cloud Run + Cloud SQL, secret-zero — and runs locally with
+nothing but Docker.
 
 Principles:
 
@@ -34,7 +36,7 @@ Principles:
   Cloud SQL (optionally Vertex AI) exclusively: Cloud Run IAM decides who
   reaches it, callers are identified by their Google identity, and the
   database authenticates the service account — no tokens, no passwords,
-  nothing to issue or rotate. Local development needs only Docker.
+  nothing to issue or rotate.
 
 ## Quick start
 
