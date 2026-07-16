@@ -18,15 +18,16 @@ import (
 // doc 0004 §4): ADC first (service accounts, metadata server,
 // impersonation — audience-bound tokens; no gcloud binary needed), then
 // the gcloud CLI. User ADC cannot mint audience-bound ID tokens, but
-// Cloud Run IAM accepts gcloud's user ID tokens.
-func tokenSource(ctx context.Context, audience string) (oauth2.TokenSource, error) {
+// Cloud Run IAM accepts gcloud's user ID tokens. The second return is
+// the human-readable auth path, shown by `ochakai whoami`.
+func tokenSource(ctx context.Context, audience string) (oauth2.TokenSource, string, error) {
 	if ts, err := idtoken.NewTokenSource(ctx, audience); err == nil {
-		return ts, nil
+		return ts, "service-account ADC", nil
 	}
 	if _, err := exec.LookPath("gcloud"); err != nil {
-		return nil, fmt.Errorf("no Google credentials for %s: need service-account ADC or the gcloud CLI (run `gcloud auth login`)", audience)
+		return nil, "", fmt.Errorf("no Google credentials for %s: need service-account ADC or the gcloud CLI (run `gcloud auth login`)", audience)
 	}
-	return oauth2.ReuseTokenSource(nil, gcloudSource{}), nil
+	return oauth2.ReuseTokenSource(nil, gcloudSource{}), "gcloud", nil
 }
 
 type gcloudSource struct{}
@@ -58,4 +59,20 @@ func jwtExpiry(tok string) time.Time {
 		}
 	}
 	return time.Now().Add(5 * time.Minute)
+}
+
+// jwtEmail reads the email claim from the (Google-signed, already
+// trusted) token; empty when absent or unparseable.
+func jwtEmail(tok string) string {
+	if parts := strings.Split(tok, "."); len(parts) == 3 {
+		if data, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
+			var claims struct {
+				Email string `json:"email"`
+			}
+			if json.Unmarshal(data, &claims) == nil {
+				return claims.Email
+			}
+		}
+	}
+	return ""
 }

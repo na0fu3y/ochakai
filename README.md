@@ -58,12 +58,17 @@ is needed against Cloud Run.
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 
-export OCHAKAI_URL=http://localhost:8080  # Cloud Run: https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
+ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
+ochakai whoami                     # which server, as whom, reachable?
 ochakai search "revenue" --type metric --status verified
 ochakai get metric/revenue
 ochakai compile --metric revenue --grain orders.created_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ```
+
+`ochakai use` saves the selection locally (name more servers with
+`--name` and switch by name); `--url` and `OCHAKAI_URL` always override
+it, so scripts and CI stay explicit.
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 into your project's CLAUDE.md — it teaches the agent the commands and the
