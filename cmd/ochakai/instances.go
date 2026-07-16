@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -36,8 +37,16 @@ func (c *cliConfig) names() []string {
 	return names
 }
 
-func cliConfigPath() (string, error) {
+func cliConfigPath() (string, error) { return configPathFor(runtime.GOOS) }
+
+// configPathFor resolves the config location the way gh and gcloud do:
+// an explicit $XDG_CONFIG_HOME wins everywhere, Windows falls back to
+// %AppData%, everyone else to ~/.config.
+func configPathFor(goos string) (string, error) {
 	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" && goos == "windows" {
+		dir = os.Getenv("AppData")
+	}
 	if dir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -100,7 +109,7 @@ func defaultURL() string {
 
 func cmdUse(_ context.Context, args []string) error {
 	fs := newBareFlagSet(
-		"Usage: ochakai use [flags] [name | url]\n\nPick the server later client commands talk to, saved to\n~/.config/ochakai/config.json ($XDG_CONFIG_HOME honored).\nWith a URL: save it (named by --name, default its host) and switch.\nWith a name: switch to a saved server. With no argument: list.\n--url and $OCHAKAI_URL always override the saved selection.",
+		"Usage: ochakai use [flags] [name | url]\n\nPick the server later client commands talk to, saved to\n~/.config/ochakai/config.json ($XDG_CONFIG_HOME honored;\n%AppData%\\ochakai on Windows).\nWith a URL: save it (named by --name, default its host) and switch.\nWith a name: switch to a saved server. With no argument: list.\n--url and $OCHAKAI_URL always override the saved selection.",
 		"  ochakai use http://localhost:8080 --name local\n  ochakai use https://ochakai-prod.run.app --name prod\n  ochakai use prod\n")
 	name := fs.String("name", "", "name to save the URL under (default: its host)")
 	pos, err := parseArgs(fs, args)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +46,30 @@ func TestUseSavesSwitchesAndValidates(t *testing.T) {
 	}
 	if err := cmdUse(ctx, []string{"ftp://example.com"}); err == nil {
 		t.Error("non-http scheme accepted")
+	}
+}
+
+func TestConfigPathPerOS(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("AppData", `C:\Users\na0\AppData\Roaming`)
+
+	p, err := configPathFor("windows")
+	if err != nil || !strings.HasPrefix(p, `C:\Users\na0\AppData\Roaming`) {
+		t.Errorf("windows path = %q, %v; want under %%AppData%%", p, err)
+	}
+
+	p, err = configPathFor("darwin")
+	if err != nil || !strings.HasSuffix(p, filepath.Join(".config", "ochakai", "config.json")) {
+		t.Errorf("darwin path = %q, %v; want ~/.config/ochakai/config.json", p, err)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join("/", "tmp", "xdg"))
+	for _, goos := range []string{"windows", "darwin", "linux"} {
+		p, err := configPathFor(goos)
+		want := filepath.Join("/", "tmp", "xdg", "ochakai", "config.json")
+		if err != nil || p != want {
+			t.Errorf("explicit XDG on %s = %q, %v; want %q", goos, p, err, want)
+		}
 	}
 }
 
