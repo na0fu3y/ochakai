@@ -18,6 +18,9 @@ Principles:
 - **Knowledge is co-owned by humans and agents.** Agents are encouraged to
   write learnings back (`create_knowledge`); entries start as drafts and a
   human promotes them to `verified`. Every change is kept as a revision.
+  Proposals that don't make it are kept as `rejected` with the reason
+  (`status_note`) so agents stop re-proposing them, and per-entry usage
+  counts (`/usage`) show whether the write-back loop is actually working.
 - **Your knowledge is yours.** Self-hostable per tenant; export the whole
   knowledge base as an
   [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
@@ -67,7 +70,9 @@ proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 
 The REST API (`/api/v1`) mirrors these tools for building your own web UI —
 see [api/openapi.yaml](api/openapi.yaml) and the sample in
-[examples/webui](examples/webui).
+[examples/webui](examples/webui). To keep golden queries trustworthy over
+time, run them as canaries from your CI:
+[docs/guides/golden-query-canary.md](docs/guides/golden-query-canary.md).
 
 ## Knowledge types
 
@@ -116,7 +121,8 @@ Architecture decisions live in
 [docs/design/0001-architecture.md](docs/design/0001-architecture.md)
 (Japanese), including the survey of prior art: OpenAI's and Meta's in-house
 data agents, Airbnb Minerva, Uber uMetric, Snowflake's Verified Query
-Repository, dbt-mcp, Vanna, and WrenAI.
+Repository, dbt-mcp, Vanna, WrenAI, and the 2026 context-layer landscape
+(OpenMetadata, DataHub, Atlan, warehouse-native semantic layers).
 
 ## License
 

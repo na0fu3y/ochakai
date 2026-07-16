@@ -23,14 +23,30 @@ func Handler(svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
 	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&limit=...
+	// With sort=verified_at, lists by verification age (oldest first)
+	// instead of searching — the feed for golden query canary runs.
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, _ := strconv.Atoi(q.Get("limit"))
-		hits, err := svc.Search(r.Context(), q.Get("q"), store.Filter{
+		f := store.Filter{
 			Types:    toTypes(q["type"]),
 			Statuses: toStatuses(q["status"]),
 			Tags:     q["tag"],
-		}, limit)
+		}
+		if sort := q.Get("sort"); sort != "" {
+			if sort != "verified_at" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid sort (valid: verified_at)"})
+				return
+			}
+			entries, err := svc.ListByVerifiedAt(r.Context(), f, limit)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"hits": entries})
+			return
+		}
+		hits, err := svc.Search(r.Context(), q.Get("q"), f, limit)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -73,6 +89,18 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, updated)
+	})
+
+	// GET /api/v1/knowledge/{type}/{id}/usage — how often the entry was
+	// actually used (search hits, fetches, compiles). The measure of the
+	// write-back loop: draft promotion evidence, staleness signal.
+	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}/usage", func(w http.ResponseWriter, r *http.Request) {
+		u, err := svc.Usage(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, u)
 	})
 
 	mux.HandleFunc("DELETE /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {

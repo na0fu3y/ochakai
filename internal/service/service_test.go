@@ -33,6 +33,47 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 	}
 }
 
+func TestApplyVerificationStampsProvenance(t *testing.T) {
+	svc := &Service{}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
+	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
+
+	verified := &domain.Knowledge{Status: domain.StatusVerified}
+	svc.applyVerification(verified, nil, human)
+	if verified.VerifiedBy == nil || verified.VerifiedAt == nil {
+		t.Fatal("verifying must stamp verified_by/verified_at")
+	}
+	if verified.RejectedBy != nil || verified.RejectedAt != nil {
+		t.Error("verified entry must not carry rejection provenance")
+	}
+
+	rejected := &domain.Knowledge{Status: domain.StatusRejected, StatusNote: "duplicate of revenue-v2"}
+	svc.applyVerification(rejected, verified, human)
+	if rejected.RejectedBy == nil || rejected.RejectedAt == nil {
+		t.Fatal("rejecting must stamp rejected_by/rejected_at")
+	}
+	if rejected.VerifiedBy != nil || rejected.VerifiedAt != nil {
+		t.Error("leaving verified must clear verification provenance")
+	}
+
+	// A later edit that keeps status=rejected must not re-stamp: the
+	// original rejecter stays on record.
+	edited := &domain.Knowledge{Status: domain.StatusRejected,
+		RejectedBy: rejected.RejectedBy, RejectedAt: rejected.RejectedAt}
+	svc.applyVerification(edited, rejected, agent)
+	if edited.RejectedBy.Name != "na0" {
+		t.Errorf("rejected_by re-stamped to %q, want original na0", edited.RejectedBy.Name)
+	}
+
+	// Back to draft clears rejection provenance.
+	redraft := &domain.Knowledge{Status: domain.StatusDraft,
+		RejectedBy: rejected.RejectedBy, RejectedAt: rejected.RejectedAt}
+	svc.applyVerification(redraft, rejected, human)
+	if redraft.RejectedBy != nil || redraft.RejectedAt != nil {
+		t.Error("leaving rejected must clear rejection provenance")
+	}
+}
+
 func TestRRFFuseLimit(t *testing.T) {
 	var list []domain.SearchHit
 	for _, id := range []string{"a", "b", "c", "d"} {

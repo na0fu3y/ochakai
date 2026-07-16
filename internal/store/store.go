@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +22,8 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 
 type Store struct {
 	pool *pgxpool.Pool
+	// lastEventPrune throttles knowledge_event pruning (unix seconds).
+	lastEventPrune atomic.Int64
 }
 
 func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) {
@@ -61,23 +64,24 @@ type Filter struct {
 	Tags     []string
 }
 
-const knowledgeCols = `type, id, title, description, tags, status,
+const knowledgeCols = `type, id, title, description, tags, status, status_note,
 	created_by_kind, created_by_name, verified_by_kind, verified_by_name, verified_at,
+	rejected_by_kind, rejected_by_name, rejected_at,
 	links, attrs, body, created_at, updated_at`
 
 func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
 	var k domain.Knowledge
-	var verifiedKind, verifiedName *string
+	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
 	var links, attrs []byte
-	err := row.Scan(&k.Type, &k.ID, &k.Title, &k.Description, &k.Tags, &k.Status,
+	err := row.Scan(&k.Type, &k.ID, &k.Title, &k.Description, &k.Tags, &k.Status, &k.StatusNote,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &verifiedKind, &verifiedName, &k.VerifiedAt,
+		&rejectedKind, &rejectedName, &k.RejectedAt,
 		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt)
 	if err != nil {
 		return k, err
 	}
-	if verifiedKind != nil && verifiedName != nil {
-		k.VerifiedBy = &domain.Actor{Kind: *verifiedKind, Name: *verifiedName}
-	}
+	k.VerifiedBy = actorFrom(verifiedKind, verifiedName)
+	k.RejectedBy = actorFrom(rejectedKind, rejectedName)
 	if err := json.Unmarshal(links, &k.Links); err != nil {
 		return k, err
 	}
@@ -85,6 +89,21 @@ func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
 		return k, err
 	}
 	return k, nil
+}
+
+func actorFrom(kind, name *string) *domain.Actor {
+	if kind == nil || name == nil {
+		return nil
+	}
+	return &domain.Actor{Kind: *kind, Name: *name}
+}
+
+// actorPtrs splits an optional actor into nullable columns.
+func actorPtrs(a *domain.Actor) (kind, name *string) {
+	if a == nil {
+		return nil, nil
+	}
+	return &a.Kind, &a.Name
 }
 
 func (s *Store) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
@@ -111,15 +130,14 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 		if err != nil {
 			return err
 		}
-		var verifiedKind, verifiedName *string
-		if k.VerifiedBy != nil {
-			verifiedKind, verifiedName = &k.VerifiedBy.Kind, &k.VerifiedBy.Name
-		}
+		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
+		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 			ON CONFLICT (type, id) DO NOTHING`,
-			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status,
+			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status, k.StatusNote,
 			k.CreatedBy.Kind, k.CreatedBy.Name, verifiedKind, verifiedName, k.VerifiedAt,
+			rejectedKind, rejectedName, k.RejectedAt,
 			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt)
 		if err != nil {
 			return err
@@ -138,17 +156,17 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
-		var verifiedKind, verifiedName *string
-		if k.VerifiedBy != nil {
-			verifiedKind, verifiedName = &k.VerifiedBy.Kind, &k.VerifiedBy.Name
-		}
+		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
+		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
-			title=$3, description=$4, tags=$5, status=$6,
-			verified_by_kind=$7, verified_by_name=$8, verified_at=$9,
-			links=$10, attrs=$11, body=$12, updated_at=$13
+			title=$3, description=$4, tags=$5, status=$6, status_note=$7,
+			verified_by_kind=$8, verified_by_name=$9, verified_at=$10,
+			rejected_by_kind=$11, rejected_by_name=$12, rejected_at=$13,
+			links=$14, attrs=$15, body=$16, updated_at=$17
 			WHERE type=$1 AND id=$2 AND deleted_at IS NULL`,
-			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status,
+			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status, k.StatusNote,
 			verifiedKind, verifiedName, k.VerifiedAt,
+			rejectedKind, rejectedName, k.RejectedAt,
 			links, attrs, k.Body, k.UpdatedAt)
 		if err != nil {
 			return err
@@ -235,17 +253,17 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit
 
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
-	var verifiedKind, verifiedName *string
+	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
 	var links, attrs []byte
-	err := row.Scan(&h.Type, &h.ID, &h.Title, &h.Description, &h.Tags, &h.Status,
+	err := row.Scan(&h.Type, &h.ID, &h.Title, &h.Description, &h.Tags, &h.Status, &h.StatusNote,
 		&h.CreatedBy.Kind, &h.CreatedBy.Name, &verifiedKind, &verifiedName, &h.VerifiedAt,
+		&rejectedKind, &rejectedName, &h.RejectedAt,
 		&links, &attrs, &h.Body, &h.CreatedAt, &h.UpdatedAt, &h.Score)
 	if err != nil {
 		return h, err
 	}
-	if verifiedKind != nil && verifiedName != nil {
-		h.VerifiedBy = &domain.Actor{Kind: *verifiedKind, Name: *verifiedName}
-	}
+	h.VerifiedBy = actorFrom(verifiedKind, verifiedName)
+	h.RejectedBy = actorFrom(rejectedKind, rejectedName)
 	if err := json.Unmarshal(links, &h.Links); err != nil {
 		return h, err
 	}
@@ -256,7 +274,10 @@ func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 }
 
 // buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
-// for joined queries and may be empty.
+// for joined queries and may be empty. Without an explicit status filter,
+// rejected entries are excluded: knowledge that was never accepted must not
+// resurface in answers, but remains queryable on request so agents can check
+// whether a proposal was already rejected.
 func (f Filter) buildWhere(prefix string) (string, []any) {
 	conds := []string{prefix + "deleted_at IS NULL"}
 	var args []any
@@ -267,12 +288,28 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 	if len(f.Statuses) > 0 {
 		args = append(args, f.Statuses)
 		conds = append(conds, fmt.Sprintf("%sstatus = ANY($%d)", prefix, len(args)))
+	} else {
+		conds = append(conds, fmt.Sprintf("%sstatus <> 'rejected'", prefix))
 	}
 	if len(f.Tags) > 0 {
 		args = append(args, f.Tags)
 		conds = append(conds, fmt.Sprintf("%stags && $%d", prefix, len(args)))
 	}
 	return strings.Join(conds, " AND "), args
+}
+
+// ListByVerifiedAt returns filtered entries ordered by verification age,
+// oldest first (never-verified entries last). This is the feed for golden
+// query canary runs: "which verified queries have gone longest unchecked".
+func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+	where, args := f.buildWhere("")
+	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+		ORDER BY verified_at ASC NULLS LAST, type, id LIMIT %d`, where, limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
 }
 
 // ListAll returns every non-deleted entry, ordered by type then id.

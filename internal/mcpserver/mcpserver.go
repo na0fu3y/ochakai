@@ -31,14 +31,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"glossary terms, and table catalog entries. It executes no SQL and uses no LLM. " +
 			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
 			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
-			"you have actually validated — who verified is always recorded. " +
-			"Knowledge is co-owned by humans and agents.",
+			"you have actually validated — who verified is always recorded. Knowledge that was " +
+			"reviewed and not accepted is status=rejected (with status_note explaining why); " +
+			"rejected entries are hidden from search unless you filter for them — check before " +
+			"re-proposing similar knowledge. Knowledge is co-owned by humans and agents.",
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "search_knowledge",
 		Description: "Search the knowledge base across all types (metric, query, insight, term, table). " +
-			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits.",
+			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
+			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
+			"to check whether a proposal was already rejected before creating similar knowledge.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		hits, err := svc.Search(ctx, in.Query, store.Filter{
 			Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags,
@@ -63,7 +67,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "create_knowledge",
 		Description: "Create a knowledge entry. Write back what you learned: metric caveats, verified answers, " +
-			"glossary terms. Entries default to draft; your identity is recorded as created_by.",
+			"glossary terms. Entries default to draft; your identity is recorded as created_by. " +
+			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
+			"re-proposing knowledge that was already rejected (status_note records why).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -76,7 +82,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name: "update_knowledge",
 		Description: "Update a knowledge entry (full replacement of title/description/tags/status/links/attrs/body). " +
 			"Every change is kept as a revision. Setting status=verified records you as verified_by — " +
-			"do it only for knowledge you have actually validated.",
+			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
+			"as rejected_by; put the reason in status_note (also useful when deprecating).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -145,6 +152,7 @@ type writeIn struct {
 	Description string         `json:"description,omitempty"`
 	Tags        []string       `json:"tags,omitempty"`
 	Status      string         `json:"status,omitempty"`
+	StatusNote  string         `json:"status_note,omitempty"`
 	Links       []domain.Link  `json:"links,omitempty"`
 	Attrs       map[string]any `json:"attrs,omitempty"`
 	Body        string         `json:"body,omitempty"`
@@ -158,6 +166,7 @@ func (in writeIn) toKnowledge() *domain.Knowledge {
 		Description: in.Description,
 		Tags:        in.Tags,
 		Status:      domain.Status(in.Status),
+		StatusNote:  in.StatusNote,
 		Links:       in.Links,
 		Attrs:       in.Attrs,
 		Body:        in.Body,

@@ -41,9 +41,12 @@ type frontmatter struct {
 	Tags        []string       `yaml:"tags,omitempty"`
 	Timestamp   string         `yaml:"timestamp"`
 	Status      string         `yaml:"status"`
+	StatusNote  string         `yaml:"status_note,omitempty"`
 	CreatedBy   string         `yaml:"created_by"`
 	VerifiedBy  string         `yaml:"verified_by,omitempty"`
 	VerifiedAt  string         `yaml:"verified_at,omitempty"`
+	RejectedBy  string         `yaml:"rejected_by,omitempty"`
+	RejectedAt  string         `yaml:"rejected_at,omitempty"`
 	Attrs       map[string]any `yaml:"attrs,omitempty"`
 }
 
@@ -102,6 +105,7 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Tags:        k.Tags,
 		Timestamp:   k.UpdatedAt.UTC().Format(time.RFC3339),
 		Status:      string(k.Status),
+		StatusNote:  k.StatusNote,
 		CreatedBy:   k.CreatedBy.Kind + ":" + k.CreatedBy.Name,
 		Attrs:       k.Attrs,
 	}
@@ -117,6 +121,12 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	}
 	if k.VerifiedAt != nil {
 		fm.VerifiedAt = k.VerifiedAt.UTC().Format(time.RFC3339)
+	}
+	if k.RejectedBy != nil {
+		fm.RejectedBy = k.RejectedBy.Kind + ":" + k.RejectedBy.Name
+	}
+	if k.RejectedAt != nil {
+		fm.RejectedAt = k.RejectedAt.UTC().Format(time.RFC3339)
 	}
 
 	fmYAML, err := yaml.Marshal(&fm)

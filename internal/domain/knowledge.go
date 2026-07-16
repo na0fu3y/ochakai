@@ -31,17 +31,35 @@ func ValidType(t Type) bool {
 	return false
 }
 
-// Status is the verification status of a knowledge entry.
+// Status is the verification status of a knowledge entry. deprecated means
+// "was correct, no longer recommended"; rejected means "was never accepted"
+// — the record keeps agents from re-proposing the same knowledge.
 type Status string
 
 const (
 	StatusDraft      Status = "draft"
 	StatusVerified   Status = "verified"
 	StatusDeprecated Status = "deprecated"
+	StatusRejected   Status = "rejected"
 )
 
 func ValidStatus(s Status) bool {
-	return s == StatusDraft || s == StatusVerified || s == StatusDeprecated
+	return s == StatusDraft || s == StatusVerified || s == StatusDeprecated || s == StatusRejected
+}
+
+// Usage event kinds recorded per knowledge entry (design doc 0001 §9).
+const (
+	EventSearchHit = "search_hit" // appeared in search results
+	EventFetched   = "fetched"    // fetched individually via get
+	EventCompiled  = "compiled"   // referenced by compile_sql
+)
+
+// Usage aggregates how often a knowledge entry was actually used.
+type Usage struct {
+	SearchHits int64      `json:"search_hits"`
+	Fetches    int64      `json:"fetches"`
+	Compiles   int64      `json:"compiles"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 }
 
 // Actor identifies who created or verified a knowledge entry.
@@ -72,9 +90,12 @@ type Knowledge struct {
 	Description string         `json:"description,omitempty"`
 	Tags        []string       `json:"tags,omitempty"`
 	Status      Status         `json:"status"`
+	StatusNote  string         `json:"status_note,omitempty"` // free-form reason for the current status (why rejected/deprecated)
 	CreatedBy   Actor          `json:"created_by"`
 	VerifiedBy  *Actor         `json:"verified_by,omitempty"`
 	VerifiedAt  *time.Time     `json:"verified_at,omitempty"`
+	RejectedBy  *Actor         `json:"rejected_by,omitempty"`
+	RejectedAt  *time.Time     `json:"rejected_at,omitempty"`
 	Links       []Link         `json:"links,omitempty"`
 	Attrs       map[string]any `json:"attrs,omitempty"`
 	Body        string         `json:"body,omitempty"`

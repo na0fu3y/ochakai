@@ -76,6 +76,33 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 	}
 }
 
+func TestDocumentRejectedProvenance(t *testing.T) {
+	rejectedAt := time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC)
+	k := domain.Knowledge{
+		Type: domain.TypeInsight, ID: "dup-insight",
+		Title: "重複した知見", Status: domain.StatusRejected,
+		StatusNote: "revenue-seasonality と重複",
+		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
+		RejectedBy: &domain.Actor{Kind: "human", Name: "na0"}, RejectedAt: &rejectedAt,
+		UpdatedAt: rejectedAt,
+	}
+	doc, err := Document(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(doc)
+	for _, want := range []string{
+		"status: rejected",
+		"status_note: revenue-seasonality と重複",
+		"rejected_by: human:na0",
+		`rejected_at: "2026-07-16T00:00:00Z"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("document missing %q:\n%s", want, s)
+		}
+	}
+}
+
 func TestDocumentResourceForTable(t *testing.T) {
 	entries := sample()
 	doc, err := Document(&entries[1])
