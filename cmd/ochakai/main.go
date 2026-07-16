@@ -85,7 +85,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 			return nil, nil, err
 		}
 		embedder = v
-		log.Info("semantic search enabled", "provider", cfg.Embedding.Provider, "model", cfg.Embedding.Model, "dim", cfg.Embedding.Dim)
+		log.Info("semantic search enabled", "model", cfg.Embedding.Model, "dim", cfg.Embedding.Dim)
 	} else {
 		log.Info("semantic search disabled; using trigram search only")
 	}
@@ -116,7 +116,7 @@ func serve(log *slog.Logger) error {
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /healthz", health)
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
-	mux.Handle("/api/v1/", httpauth.CORS(cfg.CORSOrigins, httpauth.Middleware(cfg, restapi.Handler(svc))))
+	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
 
 	server := &http.Server{
 		Addr:              cfg.Addr,
@@ -131,7 +131,7 @@ func serve(log *slog.Logger) error {
 	}()
 
 	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
-		"auth", len(cfg.Clients) > 0, "endpoints", []string{"/mcp", "/api/v1", "/healthz"})
+		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

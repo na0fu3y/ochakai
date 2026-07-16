@@ -39,11 +39,11 @@ gcloud artifacts repositories create ghcr \
   --remote-docker-repo=https://ghcr.io \
   --location=$REGION
 
-export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.2.1
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.3.0
 ```
 
 (Check [releases](https://github.com/na0fu3y/ochakai/releases) for the
-latest tag; §3 requires 0.2.1 or later.)
+latest tag; §3 requires 0.3.0 or later.)
 
 ## 2. Create the database (cheapest viable instance)
 
@@ -119,9 +119,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run
 Tip: run §5's import once **before the first deploy** — it creates the
 schema as the admin user, so both identities can work with it.
 
-Deploy privately with the dedicated identity, `OCHAKAI_AUTH=cloudrun-iam`
-(tokenless clients), and `OCHAKAI_DB_IAM_AUTH` (passwordless database),
-then allow your organization to invoke it:
+Deploy privately with the dedicated identity and `OCHAKAI_DB_IAM_AUTH`
+(passwordless database), then allow your organization to invoke it:
 
 ```sh
 gcloud run deploy ochakai \
@@ -132,7 +131,7 @@ gcloud run deploy ochakai \
   --min-instances=0 --max-instances=1 \
   --cpu=1 --memory=512Mi \
   --add-cloudsql-instances=$PROJECT_ID:$REGION:ochakai \
-  --set-env-vars="OCHAKAI_AUTH=cloudrun-iam,OCHAKAI_DB_IAM_AUTH=true" \
+  --set-env-vars="OCHAKAI_DB_IAM_AUTH=true" \
   --set-env-vars="OCHAKAI_DATABASE_URL=postgres:///ochakai?host=/cloudsql/$PROJECT_ID:$REGION:ochakai&user=$DB_SA_USER"
 
 gcloud run services add-iam-policy-binding ochakai --region=$REGION \
@@ -150,9 +149,9 @@ How this works:
 - **ochakai reads the Cloud-Run-verified caller identity for provenance**:
   people are recorded as `human:<email>`, service accounts as
   `agent:<sa-email>`. Nothing to issue, rotate, or revoke.
-- **Never combine `cloudrun-iam` with a public (`allUsers`) service** —
-  there the identity headers are unverified. For a public deployment use
-  the token variant (§3-alt).
+- **Never make the service publicly invokable (`allUsers`)** — the
+  identity headers ochakai reads are only trustworthy behind Cloud Run's
+  IAM check.
 - No `allUsers` grant is needed anywhere, so this is compatible with —
   and a good reason to keep — the Domain Restricted Sharing org policy
   (`iam.allowedPolicyMemberDomains`).
@@ -177,23 +176,6 @@ Note: use `/health`, not `/healthz` — Google Frontends intercept
 `/healthz` on `run.app` URLs and return their own 404 without ever
 reaching the app.
 
-### 3-alt. Public endpoint with bearer tokens
-
-If you cannot use Google identities (mixed IdPs, external partners) or
-must expose a public URL, deploy with `--allow-unauthenticated` and static
-tokens instead. Each token maps to an actor for provenance; whoever holds
-a token acts as that actor, so issue one per client and don't share them:
-
-```sh
-export AGENT_TOKEN=$(openssl rand -hex 24)
-gcloud run deploy ochakai ... --allow-unauthenticated \
-  --set-env-vars="^@^OCHAKAI_CLIENTS=$AGENT_TOKEN=agent:claude-code,$(openssl rand -hex 24)=human:$(whoami)"
-```
-
-(`^@^` changes the env-var delimiter so the value may contain commas.
-Clients then send `Authorization: Bearer <token>`; every endpoint except
-`/health` requires it.)
-
 ## 4. Optional: enable hybrid semantic search (Vertex AI)
 
 Embeddings are off by default (trigram-only search, no external calls).
@@ -206,7 +188,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/aiplatform.user   # ochakai-run SA from §3
 
 gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_EMBEDDING_PROVIDER=vertex,OCHAKAI_VERTEX_PROJECT=$PROJECT_ID
+  --update-env-vars=OCHAKAI_VERTEX_PROJECT=$PROJECT_ID
 ```
 
 Use `--update-env-vars`, not `--set-env-vars`: the latter **replaces** all
@@ -293,32 +275,18 @@ gcloud run deploy ochakai-webui \
   --set-env-vars=OCHAKAI_URL=$OCHAKAI_URL
 ```
 
-Open the webui service URL from any machine and search — no token needed
-on `cloudrun-iam` deployments (leave the token field empty). The UI and
-API are same-origin through the proxy, so no CORS setup is needed. Note
+Open the webui service URL from any machine and search. The UI and API
+are same-origin through the proxy, so nothing else to configure. Note
 the trade-off: the webui itself is public, so anyone who finds its URL
 can read and write through it as the webui's identity. Put IAP in front
 of it if that is not acceptable.
-
-Alternatively, host `index.html` on any static host (no container) and
-allow its origin to call the REST API directly from the browser:
-
-```sh
-gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_CORS_ORIGINS=https://your-ui.example
-```
-
-CORS is off unless `OCHAKAI_CORS_ORIGINS` is set, origins match exactly
-(no wildcards), and this path requires the browser to reach ochakai
-itself — on restricted deployments that means going through the Cloud Run
-proxy.
 
 ## 6. Troubleshooting in security-hardened organizations
 
 - **`allUsers` binding fails with "do not belong to a permitted customer"**:
   the org enforces Domain Restricted Sharing
   (`iam.allowedPolicyMemberDomains`). The recommended §3 setup never needs
-  `allUsers`, so keep the policy on; only §3-alt and the sample webui
+  `allUsers`, so keep the policy on; only the sample webui
   require an exception.
 - **`run.app` returns Google's HTML 404 ("That's an error") even though
   the service is Ready**: before suspecting infrastructure, test a real
@@ -360,18 +328,23 @@ working against a newer schema.
 
 Version notes:
 
-- **→ 0.2.0**: the verified-promotion restriction is gone
-  (`OCHAKAI_VERIFY_ACTORS` is ignored) — anyone who can reach ochakai may
-  set `status=verified`, recorded in `verified_by`. Existing token
-  (`OCHAKAI_CLIENTS`) deployments keep working unchanged. To adopt
-  tokenless auth, apply §3's `--no-allow-unauthenticated` + IAM invoker +
-  `OCHAKAI_AUTH=cloudrun-iam` and remove `OCHAKAI_CLIENTS`.
+- **→ 0.3.0 (breaking)**: ochakai is Google Cloud only (design doc 0003).
+  Bearer-token auth (`OCHAKAI_CLIENTS`), `OCHAKAI_AUTH`, and
+  `OCHAKAI_CORS_ORIGINS` are removed — the service refuses to start if
+  the removed variables are still set, so remove them from the deployment
+  and follow §3 (IAM-restricted + identity headers). Deployments that
+  were public + tokens must switch to `--no-allow-unauthenticated` with
+  IAM invoker grants. `OCHAKAI_EMBEDDING_PROVIDER=vertex` is tolerated
+  but unnecessary: `OCHAKAI_VERTEX_PROJECT` alone enables embeddings.
 - **→ 0.2.1**: to adopt passwordless database auth, run §3's identity
   steps (dedicated SA, IAM database user, grants) against your existing
   instance — `cloudsql.iam_authentication=on` can be enabled with
   `gcloud sql instances patch` (brief restart) — then update the service
   with `--service-account`, `OCHAKAI_DB_IAM_AUTH=true`, and the
   password-free `OCHAKAI_DATABASE_URL`.
+- **→ 0.2.0**: the verified-promotion restriction is gone
+  (`OCHAKAI_VERIFY_ACTORS` is ignored) — anyone who can reach ochakai may
+  set `status=verified`, recorded in `verified_by`.
 
 ## 8. Teardown
 

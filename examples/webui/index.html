@@ -22,7 +22,6 @@
 <h1>ochakai</h1>
 <p>
   <input id="base" size="24" title="ochakai base URL">
-  <input id="token" placeholder="bearer token (optional)" size="24">
 </p>
 <p>
   <input id="q" placeholder="search knowledge…">
@@ -37,10 +36,7 @@
 <script>
 async function api(path) {
   const base = document.getElementById('base').value.replace(/\/$/, '');
-  const token = document.getElementById('token').value;
-  const res = await fetch(base + path, {
-    headers: token ? { Authorization: 'Bearer ' + token } : {},
-  });
+  const res = await fetch(base + path);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

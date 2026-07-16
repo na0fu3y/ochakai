@@ -72,7 +72,7 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 // provider is configured, keeping plain PostgreSQL sufficient by default.
 func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 	if _, err := s.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
-		return fmt.Errorf("pgvector extension is required for semantic search (install it or unset OCHAKAI_EMBEDDING_PROVIDER): %w", err)
+		return fmt.Errorf("pgvector extension is required for semantic search (create it as the admin user, or unset OCHAKAI_VERTEX_PROJECT): %w", err)
 	}
 	// Exact scan is fine at knowledge-base scale (thousands of rows), so no
 	// ANN index; this also keeps dimensions above index limits usable.

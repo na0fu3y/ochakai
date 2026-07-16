@@ -23,7 +23,11 @@ Principles:
   [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
   bundle (`ochakai export-okf <dir>` or `GET /api/v1/export`) — plain
   markdown + YAML frontmatter that lives happily in git.
-- **Minimal to run.** One container image + PostgreSQL. Nothing else.
+- **Google Cloud native, secret-zero.** ochakai targets Cloud Run +
+  Cloud SQL (optionally Vertex AI) exclusively: Cloud Run IAM decides who
+  reaches it, callers are identified by their Google identity, and the
+  database authenticates the service account — no tokens, no passwords,
+  nothing to issue or rotate. Local development needs only Docker.
 
 ## Quick start
 
@@ -39,18 +43,16 @@ go run ./cmd/ochakai import-ossie examples/semantic-model.yaml
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
 
-Connect Claude Code:
+Connect Claude Code — no headers, no tokens:
 
 ```sh
-claude mcp add --transport http ochakai http://localhost:8080/mcp \
-  --header "Authorization: Bearer <token>"
+claude mcp add --transport http ochakai http://localhost:8080/mcp
 ```
 
 Opening this repository in Claude Code connects automatically via the
 committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
 proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
-`localhost:8787`. On tokenless `cloudrun-iam` deployments no header is
-needed at all.
+`localhost:8787`.
 
 ## MCP tools
 
@@ -81,20 +83,19 @@ see [api/openapi.yaml](api/openapi.yaml) and the sample in
 
 | Env var | Description |
 |---|---|
-| `OCHAKAI_DATABASE_URL` | PostgreSQL connection string (required; `DATABASE_URL` also works) |
-| `OCHAKAI_CLIENTS` | Bearer tokens: `token=agent:claude-code,token2=human:alice`. Empty disables auth (dev only) |
-| `OCHAKAI_AUTH` | `clients` (default: bearer tokens) or `cloudrun-iam` (tokenless: actor from the Cloud-Run-verified caller identity; requires a non-public service) |
-| `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the `DATABASE_URL` carries no secret (Cloud Run/GCE only) |
-| `OCHAKAI_CORS_ORIGINS` | Exact-match origin allowlist for browser access to the REST API (for separately hosted web UIs). Default: no CORS headers |
-| `OCHAKAI_EMBEDDING_PROVIDER` | `vertex` enables hybrid semantic search (default: off, trigram-only) |
-| `OCHAKAI_VERTEX_PROJECT` / `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` | Vertex AI settings (defaults: `us-central1`, `gemini-embedding-001`). Auth is ADC — no API keys |
-| `OCHAKAI_EMBEDDING_DIM` | Embedding dimensionality (default 768) |
+| `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required; `DATABASE_URL` also works) |
+| `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the `DATABASE_URL` carries no secret |
+| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only). Auth is ADC — no API keys |
+| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
+| `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
 | `PORT` / `OCHAKAI_ADDR` | Listen address (default `:8080`) |
 
-On Cloud Run + Cloud SQL (the recommended initial setup), grant the service
-account `roles/aiplatform.user` to enable embeddings — no keys to manage.
-pgvector is required only when embeddings are enabled. A complete,
-cost-minimized walkthrough (~$10/month) lives in
+Authentication has no configuration: ochakai reads the caller identity
+that Cloud Run forwards after its IAM check (`human:<email>` for people,
+`agent:<sa-email>` for service accounts) and records it as provenance.
+Reachability is Cloud Run IAM's job; ochakai does no authorization.
+
+The complete, cost-minimized deployment walkthrough (~$10/month) lives in
 [deploy/cloudrun/README.md](deploy/cloudrun/README.md).
 
 ## Supply chain

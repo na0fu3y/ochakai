@@ -2,9 +2,8 @@
 // service. It serves the static UI and reverse-proxies /api/v1 (and /mcp)
 // to the ochakai service, attaching this service's identity token in
 // X-Serverless-Authorization for Cloud Run service-to-service auth. The
-// ochakai deployment can therefore stay IAM-restricted; the client's
-// Authorization header (the ochakai token deciding the actor) passes
-// through untouched.
+// ochakai deployment therefore stays IAM-restricted, and browser users
+// are recorded as this service's identity (agent:<sa-email>).
 //
 // Without OCHAKAI_URL it serves the static UI only (the page then calls
 // whatever base URL the user enters, e.g. a local ochakai).
