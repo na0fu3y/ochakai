@@ -12,8 +12,10 @@ info:
     name: MIT
 servers:
   - url: /
-security:
-  - bearerAuth: []
+# Authentication is Cloud Run IAM (Google identity), handled by the
+# infrastructure before requests reach ochakai — there is no
+# application-level auth scheme. ochakai reads the forwarded identity
+# only to record provenance (design docs 0002/0003).
 paths:
   /api/v1/knowledge:
     get:
@@ -148,11 +150,6 @@ paths:
               schema: { $ref: "#/components/schemas/CompileResult" }
         "422": { $ref: "#/components/responses/Error" }
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      description: Static token from OCHAKAI_CLIENTS. Absent when auth is disabled (dev).
   responses:
     Error:
       description: Error.

@@ -60,7 +60,7 @@ func TestActorFromIDToken(t *testing.T) {
 func TestCloudRunIAMPrefersServerlessHeader(t *testing.T) {
 	// Cloud Run validates only X-Serverless-Authorization when both are
 	// present; trusting Authorization instead would allow impersonation.
-	cfg := &config.Config{AuthMode: config.AuthCloudRunIAM}
+	cfg := &config.Config{}
 	var got domain.Actor
 	h := Middleware(cfg, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		got = Actor(r.Context())
@@ -81,11 +81,27 @@ func TestCloudRunIAMPrefersServerlessHeader(t *testing.T) {
 }
 
 func TestCloudRunIAMRejectsMissingToken(t *testing.T) {
-	cfg := &config.Config{AuthMode: config.AuthCloudRunIAM}
+	cfg := &config.Config{}
 	h := Middleware(cfg, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", w.Code)
+	}
+}
+
+func TestInsecureDevActsAsAnonymous(t *testing.T) {
+	cfg := &config.Config{InsecureDev: true}
+	var got domain.Actor
+	h := Middleware(cfg, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = Actor(r.Context())
+	}))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if got.Kind != domain.ActorHuman || got.Name != "anonymous" {
+		t.Errorf("actor = %+v, want human:anonymous", got)
 	}
 }
