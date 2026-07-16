@@ -1,0 +1,32 @@
+# ochakai — team knowledge base for data work
+
+<!--
+Copy this section into your project's CLAUDE.md. Set OCHAKAI_URL in your
+shell profile (not in the repo): authentication is your gcloud login or
+service-account ADC — there are no tokens to configure.
+
+    export OCHAKAI_URL=https://ochakai-<hash>.run.app
+-->
+
+ochakai holds metric definitions, verified golden queries, interpretation
+knowledge (how to read a metric), glossary terms, and table catalog
+entries. Search it before writing analytics SQL; write learnings back.
+
+- `ochakai search "<question or keyword>" [--type metric|query|insight|term|table] [--status verified]`
+  — one hit per line: score, uri, status, title. Trust `verified` entries;
+  judge `draft` entries by their provenance (`--json` shows `created_by`).
+- `ochakai get <type>/<id>` — full entry as markdown (YAML frontmatter +
+  body). Follow the `# Links` section to related entries.
+- `ochakai compile --metric <name> [--dimension ds.field] [--grain ds.time_field:month] [--filter "ds.field = value"]`
+  — deterministic SQL on stdout. ochakai never executes SQL; run the result
+  with your own warehouse access. **Exit 2** means the request is outside
+  the supported subset: read the reason on stderr and prefer any suggested
+  verified golden queries.
+- `ochakai create -f entry.md` — write a learning back (OKF markdown as
+  printed by `get`, or JSON; see `ochakai create -h`). Entries start as
+  `draft`; your identity is recorded as provenance automatically.
+- `ochakai export <dir>` — snapshot the whole knowledge base as markdown.
+
+When a query you compiled or wrote turns out to be correct and useful,
+save it: `type: query` with `attrs.question` (the natural-language
+question) and `attrs.sql`. A human can promote it to `verified` later.

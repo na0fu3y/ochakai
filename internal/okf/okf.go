@@ -35,6 +35,7 @@ var okfType = map[domain.Type]string{
 // extension keys (consumers must tolerate unknown keys).
 type frontmatter struct {
 	Type        string         `yaml:"type"`
+	ID          string         `yaml:"id,omitempty"`
 	Title       string         `yaml:"title"`
 	Description string         `yaml:"description,omitempty"`
 	Resource    string         `yaml:"resource,omitempty"`
@@ -97,6 +98,7 @@ func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
 		Type:        okfType[k.Type],
+		ID:          k.ID,
 		Title:       k.Title,
 		Description: k.Description,
 		Tags:        k.Tags,

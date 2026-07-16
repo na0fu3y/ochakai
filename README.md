@@ -54,6 +54,27 @@ committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
 proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 `localhost:8787`.
 
+### CLI
+
+Anything with a shell (Claude Code, headless agents, CI) can also skip MCP
+and use the bundled CLI — a thin client of the same REST API
+([design doc 0004](docs/design/0004-cli.md)). It resolves Google ID tokens
+itself, so no proxy process is needed:
+
+```sh
+go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
+
+export OCHAKAI_URL=https://your-service.run.app  # auth = gcloud login / ADC
+ochakai search "revenue" --type metric --status verified
+ochakai get metric/revenue
+ochakai compile --metric revenue --grain orders.created_at:month
+ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
+```
+
+Hosted agents without a shell (claude.ai connectors, Gemini Enterprise
+managed agents, Claude Desktop) keep using MCP. A CLAUDE.md snippet for
+Claude Code lives in [examples/claude-code](examples/claude-code/CLAUDE.md).
+
 ## MCP tools
 
 | Tool | Description |

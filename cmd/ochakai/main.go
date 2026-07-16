@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -40,6 +41,10 @@ func main() {
 		cmd = os.Args[1]
 	}
 
+	if _, ok := clientCommands[cmd]; ok {
+		os.Exit(runClient(cmd, os.Args[2:]))
+	}
+
 	var err error
 	switch cmd {
 	case "serve":
@@ -58,13 +63,40 @@ func main() {
 		}
 	case "version":
 		fmt.Println(version)
+	case "help", "-h", "--help":
+		usage(os.Stdout)
 	default:
-		err = fmt.Errorf("unknown command %q (commands: serve, import-ossie, export-okf, version)", cmd)
+		fmt.Fprintf(os.Stderr, "ochakai: unknown command %q\n\n", cmd)
+		usage(os.Stderr)
+		os.Exit(1)
 	}
 	if err != nil {
 		log.Error("ochakai failed", "command", cmd, "error", err)
 		os.Exit(1)
 	}
+}
+
+func usage(w io.Writer) {
+	fmt.Fprint(w, `ochakai — context provider for data agents
+
+Client commands (talk to a server; --url or $OCHAKAI_URL):
+  search [query]          search knowledge; verified entries rank higher
+  get <type>/<id>         print one entry as an OKF document
+  create [-f file]        create an entry from OKF markdown or JSON
+  update <type>/<id>      replace an entry (every change kept as a revision)
+  delete <type>/<id>      soft-delete an entry (history retained)
+  compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
+  export <dir | ->        download the knowledge base as an OKF bundle
+
+Server admin commands (run next to the database):
+  serve                   start the MCP + REST server (default)
+  import-ossie <file>     import an Apache Ossie semantic model
+  export-okf <dir>        write the OKF bundle straight from the database
+
+  version                 print the version
+
+Run "ochakai <command> -h" for flags and examples.
+`)
 }
 
 func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Config, error) {
