@@ -21,10 +21,19 @@ paths:
     get:
       operationId: searchKnowledge
       summary: Search knowledge (trigram, plus hybrid vector search when configured)
+      description: >
+        Rejected entries are excluded unless the status filter explicitly
+        includes rejected (so agents can check for already-rejected proposals).
+        With sort=verified_at the endpoint lists entries by verification age
+        (oldest first, never-verified last) instead of searching — the feed
+        for golden query canary runs (docs/guides/golden-query-canary.md).
       parameters:
         - name: q
           in: query
           schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [verified_at] }
         - name: type
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Type" } }
@@ -113,6 +122,31 @@ paths:
       responses:
         "204": { description: Deleted. }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/knowledge/{type}/{id}/usage:
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/Type" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getKnowledgeUsage
+      summary: Usage totals for one knowledge entry
+      description: >
+        How often the entry was actually used: appeared in search results,
+        fetched individually, or referenced by compile_sql. The measure of
+        the write-back loop — evidence for promoting drafts, and a staleness
+        signal for verified entries that stopped being used.
+      responses:
+        "200":
+          description: Usage totals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Usage" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/export:
     get:
       operationId: exportOKF
@@ -165,7 +199,11 @@ components:
       enum: [metric, query, insight, term, table]
     Status:
       type: string
-      enum: [draft, verified, deprecated]
+      description: >
+        deprecated means "was correct, no longer recommended"; rejected
+        means "was never accepted" — the record keeps agents from
+        re-proposing the same knowledge.
+      enum: [draft, verified, deprecated, rejected]
     Actor:
       type: object
       properties:
@@ -186,9 +224,14 @@ components:
         description: { type: string }
         tags: { type: array, items: { type: string } }
         status: { $ref: "#/components/schemas/Status" }
+        status_note:
+          type: string
+          description: Free-form reason for the current status (why rejected/deprecated).
         created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         verified_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         verified_at: { type: string, format: date-time, readOnly: true }
+        rejected_by: { $ref: "#/components/schemas/Actor", readOnly: true }
+        rejected_at: { type: string, format: date-time, readOnly: true }
         links: { type: array, items: { $ref: "#/components/schemas/Link" } }
         attrs:
           type: object
@@ -196,6 +239,13 @@ components:
         body: { type: string, description: Markdown body. }
         created_at: { type: string, format: date-time, readOnly: true }
         updated_at: { type: string, format: date-time, readOnly: true }
+    Usage:
+      type: object
+      properties:
+        search_hits: { type: integer, description: Times the entry appeared in search results. }
+        fetches: { type: integer, description: Times the entry was fetched individually. }
+        compiles: { type: integer, description: Times compile_sql referenced the entry. }
+        last_used_at: { type: string, format: date-time }
     SearchHit:
       allOf:
         - $ref: "#/components/schemas/Knowledge"

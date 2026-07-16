@@ -16,6 +16,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
+	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
@@ -29,7 +30,12 @@ type Service struct {
 // --- knowledge CRUD ---
 
 func (s *Service) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
-	return s.Store.Get(ctx, typ, id)
+	k, err := s.Store.Get(ctx, typ, id)
+	if err != nil {
+		return nil, err
+	}
+	s.recordUsage(ctx, domain.EventFetched, []store.EventTarget{{Type: typ, ID: id}})
+	return k, nil
 }
 
 func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
@@ -62,6 +68,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	k.CreatedBy = old.CreatedBy
 	k.CreatedAt = old.CreatedAt
 	k.VerifiedBy, k.VerifiedAt = old.VerifiedBy, old.VerifiedAt
+	k.RejectedBy, k.RejectedAt = old.RejectedBy, old.RejectedAt
 	s.applyVerification(k, old, actor)
 	if err := s.Store.Update(ctx, k, actor); err != nil {
 		return nil, err
@@ -74,17 +81,25 @@ func (s *Service) Delete(ctx context.Context, typ domain.Type, id string, actor 
 	return s.Store.SoftDelete(ctx, typ, id, actor)
 }
 
-// applyVerification stamps verification provenance. There is no promotion
-// restriction (design doc 0002): anyone who can reach ochakai may verify,
-// and verified_by records who did — trust is judged from provenance.
+// applyVerification stamps verification and rejection provenance. There is
+// no promotion restriction (design doc 0002): anyone who can reach ochakai
+// may verify or reject, and verified_by / rejected_by record who did —
+// trust is judged from provenance.
 func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, actor domain.Actor) {
+	now := time.Now().UTC()
 	wasVerified := old != nil && old.Status == domain.StatusVerified
 	if k.Status == domain.StatusVerified && !wasVerified {
-		now := time.Now().UTC()
 		k.VerifiedBy, k.VerifiedAt = &actor, &now
 	}
 	if k.Status != domain.StatusVerified {
 		k.VerifiedBy, k.VerifiedAt = nil, nil
+	}
+	wasRejected := old != nil && old.Status == domain.StatusRejected
+	if k.Status == domain.StatusRejected && !wasRejected {
+		k.RejectedBy, k.RejectedAt = &actor, &now
+	}
+	if k.Status != domain.StatusRejected {
+		k.RejectedBy, k.RejectedAt = nil, nil
 	}
 }
 
@@ -99,7 +114,7 @@ func validate(k *domain.Knowledge) error {
 		return fmt.Errorf("title is required")
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
-		return fmt.Errorf("invalid status %q (valid: draft, verified, deprecated)", k.Status)
+		return fmt.Errorf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
 	}
 	return nil
 }
@@ -109,6 +124,19 @@ func validate(k *domain.Knowledge) error {
 // Search runs trigram search, and when an embedder is configured, fuses it
 // with vector search via reciprocal rank fusion.
 func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	hits, err := s.search(ctx, query, f, limit)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]store.EventTarget, len(hits))
+	for i, h := range hits {
+		targets[i] = store.EventTarget{Type: h.Type, ID: h.ID}
+	}
+	s.recordUsage(ctx, domain.EventSearchHit, targets)
+	return hits, nil
+}
+
+func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
@@ -138,6 +166,35 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	}
 	fused := rrfFuse(limit, lexical, vector)
 	return fused, nil
+}
+
+// ListByVerifiedAt lists entries by verification age, oldest first — the
+// feed for canary runs over verified golden queries (see
+// docs/guides/golden-query-canary.md). Not a search: no usage is recorded.
+func (s *Service) ListByVerifiedAt(ctx context.Context, f store.Filter, limit int) ([]domain.Knowledge, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	return s.Store.ListByVerifiedAt(ctx, f, limit)
+}
+
+// Usage returns usage totals for one entry (404 when the entry is gone).
+func (s *Service) Usage(ctx context.Context, typ domain.Type, id string) (*domain.Usage, error) {
+	if _, err := s.Store.Get(ctx, typ, id); err != nil {
+		return nil, err
+	}
+	return s.Store.Usage(ctx, typ, id)
+}
+
+// recordUsage writes usage events with the acting caller as provenance.
+// Failures are logged, never returned: usage recording must not fail reads.
+func (s *Service) recordUsage(ctx context.Context, event string, targets []store.EventTarget) {
+	if len(targets) == 0 {
+		return
+	}
+	if err := s.Store.RecordEvents(ctx, event, httpauth.Actor(ctx), targets); err != nil {
+		s.Log.Warn("usage recording failed", "event", event, "error", err)
+	}
 }
 
 // rrfFuse merges ranked lists with reciprocal rank fusion (k=60), adding a
@@ -269,5 +326,17 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 		s.Log.Warn("verified query lookup failed", "error", err)
 		hits = nil
 	}
+
+	targets := make([]store.EventTarget, 0, len(req.Metrics)+len(hits))
+	for _, m := range req.Metrics {
+		targets = append(targets, store.EventTarget{Type: domain.TypeMetric, ID: m})
+	}
+	s.recordUsage(ctx, domain.EventCompiled, targets)
+	queryTargets := make([]store.EventTarget, len(hits))
+	for i, h := range hits {
+		queryTargets[i] = store.EventTarget{Type: h.Type, ID: h.ID}
+	}
+	s.recordUsage(ctx, domain.EventSearchHit, queryTargets)
+
 	return &CompileResult{Result: *result, VerifiedQueries: hits}, nil
 }
