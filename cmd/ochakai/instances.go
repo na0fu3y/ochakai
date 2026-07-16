@@ -122,8 +122,9 @@ func cmdUse(_ context.Context, args []string) error {
 	}
 	switch len(pos) {
 	case 0:
+		// Only name\turl lines go to stdout: completion scripts parse it.
 		if len(cfg.Instances) == 0 {
-			fmt.Println("no servers saved; run `ochakai use <url>`")
+			fmt.Fprintln(os.Stderr, "no servers saved; run `ochakai use <url>`")
 			return nil
 		}
 		for _, n := range cfg.names() {

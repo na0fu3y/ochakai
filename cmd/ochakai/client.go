@@ -35,6 +35,8 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"export":  cmdExport,
 	"use":     cmdUse,
 	"whoami":  cmdWhoami,
+
+	"completion": cmdCompletion,
 }
 
 // runClient dispatches a client command and maps errors to exit codes:
