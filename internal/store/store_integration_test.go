@@ -151,3 +151,40 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("oldest verification must come first: %+v", list)
 	}
 }
+
+// SoftDelete must survive a database where semantic search was never
+// enabled: knowledge_embedding does not exist, and the failed DELETE used
+// to abort the surrounding transaction (25P02) before the revision insert.
+func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil { // trigram-only: no embedding table
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `DROP TABLE IF EXISTS knowledge_embedding`); err != nil {
+		t.Fatal(err)
+	}
+
+	k := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-delete-me", Title: "delete me",
+		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
+	}
+	_ = s.SoftDelete(ctx, k.Type, k.ID, k.CreatedBy) // clean rerun
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SoftDelete(ctx, k.Type, k.ID, k.CreatedBy); err != nil {
+		t.Fatalf("SoftDelete without knowledge_embedding: %v", err)
+	}
+	if _, err := s.Get(ctx, k.Type, k.ID); err == nil {
+		t.Error("entry still visible after SoftDelete")
+	}
+}

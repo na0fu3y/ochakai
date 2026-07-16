@@ -189,10 +189,20 @@ func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, acto
 			`UPDATE knowledge SET deleted_at = now(), updated_at = now() WHERE type=$1 AND id=$2`, typ, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM knowledge_embedding WHERE type=$1 AND id=$2`, typ, id); err != nil {
+		// knowledge_embedding only exists once semantic search has been
+		// enabled; a failed statement aborts the whole Postgres transaction,
+		// so tolerate a missing table via a savepoint.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := sp.Exec(ctx, `DELETE FROM knowledge_embedding WHERE type=$1 AND id=$2`, typ, id); err != nil {
+			_ = sp.Rollback(ctx)
 			if !isUndefinedTable(err) {
 				return err
 			}
+		} else if err := sp.Commit(ctx); err != nil {
+			return err
 		}
 		return s.addRevision(ctx, tx, k, "delete", actor)
 	})
