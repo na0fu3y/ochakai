@@ -76,6 +76,46 @@ Notes:
 - Users created through the Cloud SQL API (like this admin user) are
   members of `cloudsqlsuperuser` and can create extensions. The runtime
   service account deliberately gets neither (§3).
+- **About the public IP**: it is not open to the internet. With the
+  authorized-networks list empty (the default; §5's fallback adds an
+  entry only temporarily — always remove it), direct connections are
+  dropped, and the only way in is the Cloud SQL connector — IAM-checked
+  (`cloudsql.instances.connect`) and mTLS'd — followed by database
+  authentication. Keep the list empty and this posture holds. To remove
+  the reachable endpoint entirely, see §2b.
+
+### 2b. Optional hardening: private IP only
+
+For production-like deployments, drop the public IP entirely. Costs
+nothing extra (VPC, private services access, and Cloud Run's Direct VPC
+egress are free); the trade-off is that local admin access (§5's import)
+needs a temporary public IP or a VPC-attached workstation.
+
+One-time per VPC — allocate a peering range and connect it:
+
+```sh
+gcloud services enable servicenetworking.googleapis.com compute.googleapis.com
+gcloud compute addresses create google-managed-services-default \
+  --global --purpose=VPC_PEERING --prefix-length=16 --network=default
+gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com \
+  --ranges=google-managed-services-default --network=default
+```
+
+Then create the instance with `--network=default --no-assign-ip`
+(instead of the defaults above), and add Direct VPC egress to the §3
+deploy so Cloud Run can reach it:
+
+```sh
+gcloud run deploy ochakai ... \
+  --network=default --subnet=default
+```
+
+For §5's import, temporarily attach a public IP and detach it after:
+
+```sh
+gcloud sql instances patch ochakai --assign-ip       # + authorized network, import
+gcloud sql instances patch ochakai --no-assign-ip    # afterwards
+```
 
 ## 3. Deploy Cloud Run (dedicated identity, passwordless, org-restricted)
 
