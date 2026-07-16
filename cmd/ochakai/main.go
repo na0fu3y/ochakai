@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -29,12 +30,25 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// version is stamped by -ldflags at release; "dev" otherwise.
-var version = "dev"
+// version is stamped by -ldflags at release; otherwise it comes from the
+// module version Go records in the binary (`go install …@v0.4.0` →
+// "v0.4.0"), falling back to "dev" for in-tree builds.
+var version = ""
+
+func resolveVersion() string {
+	if version != "" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return "dev"
+}
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	slog.SetDefault(log)
+	version = resolveVersion()
 
 	// No default command: a bare `ochakai` is almost always a CLI user
 	// exploring, not a server operator (the container image passes
