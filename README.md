@@ -46,7 +46,34 @@ go run ./cmd/ochakai import-ossie examples/semantic-model.yaml
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
 
-Connect Claude Code — no headers, no tokens:
+### Connect Claude Code
+
+For Claude Code — and anything else with a shell (headless agents, CI) —
+the recommended interface is the bundled CLI, a thin client of the same
+REST API ([design doc 0004](docs/design/0004-cli.md)): tool schemas don't
+occupy the agent's context (`--help` is read on demand), output composes
+with pipes, and it resolves Google ID tokens itself, so no proxy process
+is needed against Cloud Run.
+
+```sh
+go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
+
+export OCHAKAI_URL=http://localhost:8080  # Cloud Run: https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
+ochakai search "revenue" --type metric --status verified
+ochakai get metric/revenue
+ochakai compile --metric revenue --grain orders.created_at:month
+ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
+```
+
+Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
+into your project's CLAUDE.md — it teaches the agent the commands and the
+write-learnings-back habit.
+
+### MCP
+
+Hosted agents without a shell (claude.ai connectors, Claude Desktop,
+Gemini Enterprise managed agents) connect over MCP, which remains the
+primary interface. Claude Code can use it too:
 
 ```sh
 claude mcp add --transport http ochakai http://localhost:8080/mcp
@@ -56,27 +83,6 @@ Opening this repository in Claude Code connects automatically via the
 committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
 proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 `localhost:8787`.
-
-### CLI
-
-Anything with a shell (Claude Code, headless agents, CI) can also skip MCP
-and use the bundled CLI — a thin client of the same REST API
-([design doc 0004](docs/design/0004-cli.md)). It resolves Google ID tokens
-itself, so no proxy process is needed:
-
-```sh
-go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
-
-export OCHAKAI_URL=https://your-service.run.app  # auth = gcloud login / ADC
-ochakai search "revenue" --type metric --status verified
-ochakai get metric/revenue
-ochakai compile --metric revenue --grain orders.created_at:month
-ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
-```
-
-Hosted agents without a shell (claude.ai connectors, Gemini Enterprise
-managed agents, Claude Desktop) keep using MCP. A CLAUDE.md snippet for
-Claude Code lives in [examples/claude-code](examples/claude-code/CLAUDE.md).
 
 ## MCP tools
 
