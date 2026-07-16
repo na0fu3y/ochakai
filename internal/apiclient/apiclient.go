@@ -24,6 +24,7 @@ type Client struct {
 	base   string // scheme://host, no trailing slash
 	http   *http.Client
 	tokens oauth2.TokenSource // nil for plain-http development servers
+	auth   string             // human-readable auth path, for Identity
 }
 
 // New builds a client for the ochakai server at baseURL. For https URLs a
@@ -34,13 +35,48 @@ func New(ctx context.Context, baseURL string) (*Client, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return nil, fmt.Errorf("invalid server URL %q (want http(s)://host)", baseURL)
 	}
-	c := &Client{base: strings.TrimRight(baseURL, "/"), http: http.DefaultClient}
+	c := &Client{base: strings.TrimRight(baseURL, "/"), http: http.DefaultClient, auth: "plain http, no credentials"}
 	if u.Scheme == "https" {
-		if c.tokens, err = tokenSource(ctx, u.Scheme+"://"+u.Host); err != nil {
+		if c.tokens, c.auth, err = tokenSource(ctx, u.Scheme+"://"+u.Host); err != nil {
 			return nil, err
 		}
 	}
 	return c, nil
+}
+
+// Identity resolves, locally, the identity this client would present:
+// the ID token's email, prefixed the way the server maps actors (design
+// doc 0002) — service accounts to agent:, everyone else to human:.
+// Plain-http development servers see human:anonymous. The server's actor
+// resolution is authoritative; this is the client's best-effort view.
+func (c *Client) Identity() (actor, auth string, err error) {
+	if c.tokens == nil {
+		return "human:anonymous", c.auth, nil
+	}
+	tok, err := c.tokens.Token()
+	if err != nil {
+		return "", c.auth, fmt.Errorf("resolve Google ID token: %w", err)
+	}
+	email := jwtEmail(tok.AccessToken)
+	if email == "" {
+		return "", c.auth, fmt.Errorf("ID token carries no email claim")
+	}
+	prefix := "human:"
+	if strings.HasSuffix(email, ".gserviceaccount.com") {
+		prefix = "agent:"
+	}
+	return prefix + email, c.auth, nil
+}
+
+// Health requests /health with credentials attached: one round trip that
+// proves the URL resolves, the server answers, and — behind Cloud Run —
+// IAM accepts the caller.
+func (c *Client) Health(ctx context.Context) error {
+	resp, err := c.do(ctx, http.MethodGet, "/health", nil, nil)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
 }
 
 // APIError is a non-2xx response from the server. A 422 from compile

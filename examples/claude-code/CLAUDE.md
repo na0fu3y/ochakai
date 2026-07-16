@@ -1,11 +1,15 @@
 # ochakai — team knowledge base for data work
 
 <!--
-Copy this section into your project's CLAUDE.md. Set OCHAKAI_URL in your
-shell profile (not in the repo): authentication is your gcloud login or
-service-account ADC — there are no tokens to configure.
+Copy this section into your project's CLAUDE.md. Point the CLI at your
+server once per machine — authentication is your gcloud login or
+service-account ADC; there are no tokens to configure:
 
-    export OCHAKAI_URL=https://ochakai-<hash>.run.app
+    ochakai use https://ochakai-<hash>.run.app
+
+(Or set OCHAKAI_URL, which takes precedence — handy for CI.)
+`ochakai whoami` shows which server you target, as whom, and whether
+it is reachable.
 -->
 
 ochakai holds metric definitions, verified golden queries, interpretation

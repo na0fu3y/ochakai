@@ -97,7 +97,9 @@ func main() {
 func usage(w io.Writer) {
 	fmt.Fprint(w, `ochakai — context provider for data agents
 
-Client commands (talk to a server; --url or $OCHAKAI_URL):
+Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
+  use [name | url]        pick the server for later commands (saved locally)
+  whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
   get <type>/<id>         print one entry as an OKF document
   create [-f file]        create an entry from OKF markdown or JSON

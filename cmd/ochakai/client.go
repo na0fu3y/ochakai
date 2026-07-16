@@ -33,6 +33,8 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"delete":  cmdDelete,
 	"compile": cmdCompile,
 	"export":  cmdExport,
+	"use":     cmdUse,
+	"whoami":  cmdWhoami,
 }
 
 // runClient dispatches a client command and maps errors to exit codes:
@@ -57,7 +59,7 @@ func runClient(name string, args []string) int {
 // errReported means the FlagSet already printed the problem.
 var errReported = errors.New("usage error")
 
-func newFlagSet(synopsis, examples string) (*flag.FlagSet, *string) {
+func newBareFlagSet(synopsis, examples string) *flag.FlagSet {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "%s\n\nFlags:\n", synopsis)
@@ -66,7 +68,12 @@ func newFlagSet(synopsis, examples string) (*flag.FlagSet, *string) {
 			fmt.Fprintf(fs.Output(), "\nExamples:\n%s", examples)
 		}
 	}
-	url := fs.String("url", os.Getenv("OCHAKAI_URL"), "ochakai server URL (default: $OCHAKAI_URL)")
+	return fs
+}
+
+func newFlagSet(synopsis, examples string) (*flag.FlagSet, *string) {
+	fs := newBareFlagSet(synopsis, examples)
+	url := fs.String("url", defaultURL(), "ochakai server URL (default: $OCHAKAI_URL, else the `ochakai use` selection)")
 	return fs, url
 }
 
@@ -91,7 +98,7 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 
 func newClient(ctx context.Context, url string) (*apiclient.Client, error) {
 	if url == "" {
-		return nil, errors.New("server URL required: pass --url or set OCHAKAI_URL")
+		return nil, errors.New("server URL required: run `ochakai use <url>`, set OCHAKAI_URL, or pass --url")
 	}
 	return apiclient.New(ctx, url)
 }
