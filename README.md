@@ -96,7 +96,9 @@ that Cloud Run forwards after its IAM check (`human:<email>` for people,
 Reachability is Cloud Run IAM's job; ochakai does no authorization.
 
 The complete, cost-minimized deployment walkthrough (~$10/month) lives in
-[deploy/cloudrun/README.md](deploy/cloudrun/README.md).
+[deploy/cloudrun/README.md](deploy/cloudrun/README.md), including a
+security hardening checklist (org-policy guardrails, private IP,
+retiring the last password, and more).
 
 ## Supply chain
 

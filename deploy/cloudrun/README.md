@@ -322,7 +322,86 @@ the trade-off: the webui itself is public, so anyone who finds its URL
 can read and write through it as the webui's identity. Put IAP in front
 of it if that is not acceptable.
 
-## 6. Troubleshooting in security-hardened organizations
+## 6. Security hardening checklist
+
+The default §1–§5 deployment is already secret-zero and least-privilege:
+Cloud Run IAM gates reachability, callers and the database authenticate
+with Google identities (no tokens, no passwords), the runtime service
+account holds only explicit grants, the Cloud SQL authorized-networks
+list stays empty, and images are provenance-attested. The steps below
+raise the bar further; pick what matches your risk profile.
+
+**Guardrails against misconfiguration** (org-policy; needs the Org Policy
+Administrator role). These make the risky states unrepresentable rather
+than merely avoided:
+
+```sh
+# forbid broad authorized networks (e.g. 0.0.0.0/0) on Cloud SQL
+gcloud resource-manager org-policies enable-enforce \
+  sql.restrictAuthorizedNetworks --project=$PROJECT_ID
+# forbid public IPs on Cloud SQL entirely — pair with §2b
+gcloud resource-manager org-policies enable-enforce \
+  sql.restrictPublicIp --project=$PROJECT_ID
+```
+
+Keep Domain Restricted Sharing (`iam.allowedPolicyMemberDomains`) on at
+the org level; nothing in this guide needs `allUsers` except the sample
+webui.
+
+**Remove the reachable database endpoint**: §2b (private IP only).
+
+**Enforce TLS on direct connections** (connector traffic is always
+mTLS; this covers the authorized-network path):
+
+```sh
+gcloud sql instances patch ochakai --ssl-mode=ENCRYPTED_ONLY
+```
+
+**Retire the last password.** The admin user's password is the only
+secret in the whole system, and it too can go: create a personal IAM
+login for maintenance, hand it the same object privileges, and delete
+the password user. Future imports go through
+`cloud-sql-proxy --auto-iam-authn` with your own identity:
+
+```sh
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member=user:you@your-org.example --role=roles/cloudsql.instanceUser
+gcloud sql users create you@your-org.example --instance=ochakai --type=cloud_iam_user
+# as the admin user, repeat §3's GRANT block for "you@your-org.example", then:
+gcloud sql users delete ochakai --instance=ochakai
+```
+
+(URL-encode the `@` as `%40` in connection strings:
+`postgres://you%40your-org.example@localhost:55432/ochakai`.)
+
+**Backups and point-in-time recovery** — the example skips them for
+cost; real knowledge deserves them:
+
+```sh
+gcloud sql instances patch ochakai --backup --enable-point-in-time-recovery
+```
+
+**Google login for webui users**: the sample webui is public by design
+(§5b). Putting IAP in front of it requires org-internal Google login in
+the browser (grant `roles/iap.httpsResourceAccessor` to your domain);
+per-user provenance through the webui additionally needs MCP OAuth
+([issue #5](https://github.com/na0fu3y/ochakai/issues/5)).
+
+**Deploy-time image gating**: releases ship SLSA provenance (§8's
+`gh attestation verify`); Binary Authorization can enforce that check
+automatically on every deploy instead of relying on operator diligence.
+
+**Audit trails**: knowledge changes are fully recorded by ochakai itself
+(`knowledge_revision`, actor per change). For infrastructure-level
+trails, enable Cloud SQL Data Access audit logs in the Console — admin
+activity is logged by default.
+
+Of these, the org-policy guardrails, TLS enforcement, and
+password-retirement steps follow standard Google Cloud procedures but —
+like §2b — have not yet been exercised end-to-end by this guide's
+maintainers; report anything that doesn't work as written.
+
+## 7. Troubleshooting in security-hardened organizations
 
 - **`allUsers` binding fails with "do not belong to a permitted customer"**:
   the org enforces Domain Restricted Sharing
@@ -349,7 +428,7 @@ of it if that is not acceptable.
   (`gcloud projects get-iam-policy ... --filter=bindings.members:ochakai-run@`)
   and redeploy.
 
-## 7. Upgrading an existing deployment
+## 8. Upgrading an existing deployment
 
 Point the service at the new tag — that's normally everything. Database
 migrations are embedded in the binary, tracked in `schema_migrations`,
@@ -387,7 +466,7 @@ Version notes:
   (`OCHAKAI_VERIFY_ACTORS` is ignored) — anyone who can reach ochakai may
   set `status=verified`, recorded in `verified_by`.
 
-## 8. Teardown
+## 9. Teardown
 
 ```sh
 gcloud run services delete ochakai --region=$REGION --quiet
