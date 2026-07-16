@@ -11,8 +11,8 @@ import (
 
 func cmdCompletion(_ context.Context, args []string) error {
 	fs := newBareFlagSet(
-		"Usage: ochakai completion <zsh|bash|fish>\n\nPrint a shell completion script. Load it with:\n\n  zsh:   source <(ochakai completion zsh)    # ~/.zshrc, after compinit\n  bash:  source <(ochakai completion bash)   # ~/.bashrc\n  fish:  ochakai completion fish | source    # ~/.config/fish/config.fish",
-		"  ochakai completion zsh > \"${fpath[1]}/_ochakai\"   # or install statically\n")
+		"Usage: ochakai completion <zsh|bash|fish>\n\nPrint a shell completion script. Load it with:\n\n  zsh:   source <(ochakai completion zsh)    # ~/.zshrc, after compinit\n  bash:  source <(ochakai completion bash)   # ~/.bashrc\n  fish:  ochakai completion fish | source    # ~/.config/fish/config.fish\n\nOr install it as a file the shell picks up by itself (what package\nmanagers do):",
+		"  ochakai completion zsh > \"${fpath[1]}/_ochakai\"\n  ochakai completion fish > ~/.config/fish/completions/ochakai.fish\n")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -29,7 +29,10 @@ func cmdCompletion(_ context.Context, args []string) error {
 // Server names for `ochakai use <Tab>` come from the bare list output
 // (name\turl per line, current marked in column 1-2): cut -c3- | cut -f1.
 
-const zshCompletion = `# zsh completion for ochakai — source <(ochakai completion zsh)
+const zshCompletion = `#compdef ochakai
+# zsh completion for ochakai. Either source <(ochakai completion zsh)
+# in ~/.zshrc, or install it as an fpath file (no sourcing needed):
+#   ochakai completion zsh > "${fpath[1]}/_ochakai"
 _ochakai() {
   local -a commands
   commands=(
@@ -106,7 +109,13 @@ _ochakai() {
       ;;
   esac
 }
-compdef _ochakai ochakai
+# Sourced: register with compdef. Autoloaded from fpath: this file runs
+# as the function body, so call the (re)defined function directly.
+if [ "$funcstack[1]" = "_ochakai" ]; then
+  _ochakai
+else
+  compdef _ochakai ochakai
+fi
 `
 
 const bashCompletion = `# bash completion for ochakai — source <(ochakai completion bash)
