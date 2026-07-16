@@ -24,7 +24,8 @@ at the bottom.
 export PROJECT_ID=<your-project>
 export REGION=us-central1
 gcloud config set project $PROJECT_ID
-gcloud services enable run.googleapis.com sqladmin.googleapis.com artifactregistry.googleapis.com
+gcloud services enable run.googleapis.com sqladmin.googleapis.com \
+  sql-component.googleapis.com artifactregistry.googleapis.com
 ```
 
 Cloud Run cannot pull images from ghcr.io directly, so create an Artifact
