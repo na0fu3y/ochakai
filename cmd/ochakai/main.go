@@ -36,10 +36,14 @@ func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	slog.SetDefault(log)
 
-	cmd := "serve"
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	// No default command: a bare `ochakai` is almost always a CLI user
+	// exploring, not a server operator (the container image passes
+	// `serve` explicitly via CMD).
+	if len(os.Args) < 2 {
+		usage(os.Stdout)
+		return
 	}
+	cmd := os.Args[1]
 
 	if _, ok := clientCommands[cmd]; ok {
 		os.Exit(runClient(cmd, os.Args[2:]))
@@ -89,7 +93,7 @@ Client commands (talk to a server; --url or $OCHAKAI_URL):
   export <dir | ->        download the knowledge base as an OKF bundle
 
 Server admin commands (run next to the database):
-  serve                   start the MCP + REST server (default)
+  serve                   start the MCP + REST server
   import-ossie <file>     import an Apache Ossie semantic model
   export-okf <dir>        write the OKF bundle straight from the database
 

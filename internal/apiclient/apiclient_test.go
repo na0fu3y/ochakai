@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
-	"github.com/na0fu3y/ochakai/internal/service"
 )
 
 // newTestPair returns a client wired to a test server. Plain http means
@@ -70,7 +69,7 @@ func TestCompileRefusalIs422(t *testing.T) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "metric x is not in the model"})
 	})
-	_, err := c.Compile(context.Background(), service.CompileRequest{})
+	_, err := c.Compile(context.Background(), CompileRequest{})
 	apiErr, ok := err.(*APIError)
 	if !ok || apiErr.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("err = %T %v, want 422 *APIError", err, err)

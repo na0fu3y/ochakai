@@ -18,7 +18,6 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
-	"github.com/na0fu3y/ochakai/internal/service"
 )
 
 type Client struct {
@@ -113,8 +112,8 @@ func (c *Client) Delete(ctx context.Context, typ, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(typ, id), nil, nil, nil)
 }
 
-func (c *Client) Compile(ctx context.Context, req service.CompileRequest) (*service.CompileResult, error) {
-	var res service.CompileResult
+func (c *Client) Compile(ctx context.Context, req CompileRequest) (*CompileResult, error) {
+	var res CompileResult
 	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/compile", nil, req, &res); err != nil {
 		return nil, err
 	}

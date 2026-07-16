@@ -21,10 +21,8 @@ import (
 	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/apiclient"
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/okf"
-	"github.com/na0fu3y/ochakai/internal/service"
 )
 
 var clientCommands = map[string]func(context.Context, []string) error{
@@ -309,12 +307,13 @@ func cmdCompile(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	req := service.CompileRequest{Model: *model, Request: compiler.Request{
+	req := apiclient.CompileRequest{
+		Model:      *model,
 		Metrics:    metrics,
 		Dimensions: dims,
 		Dialect:    *dialect,
 		Limit:      *limit,
-	}}
+	}
 	for _, f := range filters {
 		pf, err := parseFilter(f)
 		if err != nil {
@@ -416,10 +415,10 @@ func decodeEntry(data []byte) (*domain.Knowledge, error) {
 	return &k, nil
 }
 
-func parseFilter(s string) (compiler.Filter, error) {
+func parseFilter(s string) (apiclient.Filter, error) {
 	parts := strings.Fields(s)
 	if len(parts) < 3 {
-		return compiler.Filter{}, fmt.Errorf(`invalid filter %q (want "dataset.field op value")`, s)
+		return apiclient.Filter{}, fmt.Errorf(`invalid filter %q (want "dataset.field op value")`, s)
 	}
 	field, op := parts[0], parts[1]
 	raw := strings.Join(parts[2:], " ")
@@ -433,7 +432,7 @@ func parseFilter(s string) (compiler.Filter, error) {
 	} else {
 		value = scalar(raw)
 	}
-	return compiler.Filter{Field: field, Op: op, Value: value}, nil
+	return apiclient.Filter{Field: field, Op: op, Value: value}, nil
 }
 
 // scalar guesses the value's type: numbers and booleans matter when the
@@ -451,12 +450,12 @@ func scalar(s string) any {
 	return s
 }
 
-func parseGrain(s string) (compiler.TimeGrain, error) {
+func parseGrain(s string) (apiclient.TimeGrain, error) {
 	i := strings.LastIndex(s, ":")
 	if i <= 0 || i == len(s)-1 {
-		return compiler.TimeGrain{}, fmt.Errorf(`invalid grain %q (want "dataset.field:day|week|month|quarter|year")`, s)
+		return apiclient.TimeGrain{}, fmt.Errorf(`invalid grain %q (want "dataset.field:day|week|month|quarter|year")`, s)
 	}
-	return compiler.TimeGrain{Field: s[:i], Grain: s[i+1:]}, nil
+	return apiclient.TimeGrain{Field: s[:i], Grain: s[i+1:]}, nil
 }
 
 // extractTarGz unpacks the OKF bundle under dir, refusing entries that

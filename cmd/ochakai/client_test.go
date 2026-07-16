@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
+	"github.com/na0fu3y/ochakai/internal/apiclient"
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
@@ -62,7 +62,7 @@ func TestParseFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := compiler.Filter{Field: "orders.status", Op: "=", Value: "shipped and packed"}
+	want := apiclient.Filter{Field: "orders.status", Op: "=", Value: "shipped and packed"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
