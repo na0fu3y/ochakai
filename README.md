@@ -1,5 +1,9 @@
 # ochakai
 
+[![ci](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml/badge.svg)](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/na0fu3y/ochakai.svg)](https://pkg.go.dev/github.com/na0fu3y/ochakai)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **ochakai is a context provider for data agents.** Semantic layers tell you
 that revenue = `SUM(price)` — they don't tell you whether 100 is good or bad.
 ochakai keeps metric definitions, verified golden queries, interpretation
@@ -157,6 +161,12 @@ data agents, Airbnb Minerva, Uber uMetric, Snowflake's Verified Query
 Repository, dbt-mcp, Vanna, WrenAI, and the 2026 context-layer landscape
 (OpenMetadata, DataHub, Atlan, warehouse-native semantic layers).
 
+## Contributing
+
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+local setup and the checks CI runs, and [SECURITY.md](SECURITY.md) for
+reporting vulnerabilities.
+
 ## License
 
-MIT
+[MIT](LICENSE)
