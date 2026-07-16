@@ -16,6 +16,11 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 		"bigquery ansi",                   // --dialect
 		"zsh bash fish",                   // completion <shell>
 	}
+	// The #compdef header is what fpath-installed files are matched by;
+	// without it only the source <(...) route works.
+	if !strings.HasPrefix(zshCompletion, "#compdef ochakai\n") {
+		t.Error("zsh script must start with '#compdef ochakai' for fpath installs")
+	}
 	for shell, script := range map[string]string{"zsh": zshCompletion, "bash": bashCompletion, "fish": fishCompletion} {
 		for name := range clientCommands {
 			if !strings.Contains(script, name) {
