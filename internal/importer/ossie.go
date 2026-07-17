@@ -20,11 +20,12 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// Report summarizes what an import did.
+// Report summarizes what an import did. The JSON tags are the wire
+// contract of POST /api/v1/import/ossie (mirrored in apiclient.ImportReport).
 type Report struct {
-	Models  []string
-	Created []string
-	Updated []string
+	Models  []string `json:"models"`
+	Created []string `json:"created"`
+	Updated []string `json:"updated"`
 }
 
 // ImportOssie parses Ossie YAML and stores each semantic model plus derived
@@ -33,7 +34,7 @@ type Report struct {
 func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, actor domain.Actor) (*Report, error) {
 	var spec map[string]any
 	if err := yaml.Unmarshal(yamlSrc, &spec); err != nil {
-		return nil, fmt.Errorf("parse YAML: %w", err)
+		return nil, fmt.Errorf("invalid semantic model YAML: %w", err)
 	}
 	models, err := compiler.ModelsFromSpec(spec)
 	if err != nil {
@@ -43,7 +44,7 @@ func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, acto
 	report := &Report{}
 	for _, m := range models {
 		if m.Name == "" {
-			return nil, fmt.Errorf("semantic model without a name")
+			return nil, fmt.Errorf("invalid semantic model: missing name")
 		}
 		modelSpec, err := toSpecMap(m)
 		if err != nil {

@@ -141,6 +141,12 @@ func (s *Store) ListLinkingTo(ctx context.Context, typ domain.Type, id string, l
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
+// Create inserts a new entry. A live entry with the same type/id is
+// ErrAlreadyExists — including rejected ones, so the memory of no
+// survives. A soft-deleted entry is revived instead: the ID would
+// otherwise be dead forever (the row still owns the primary key while
+// Update refuses deleted rows), and its history stays in the revisions
+// either way.
 func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 	now := time.Now().UTC()
 	k.CreatedAt, k.UpdatedAt = now, now
@@ -153,7 +159,18 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-			ON CONFLICT (type, id) DO NOTHING`,
+			ON CONFLICT (type, id) DO UPDATE SET
+				title=EXCLUDED.title, description=EXCLUDED.description, tags=EXCLUDED.tags,
+				status=EXCLUDED.status, status_note=EXCLUDED.status_note,
+				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
+				verified_by_kind=EXCLUDED.verified_by_kind, verified_by_name=EXCLUDED.verified_by_name,
+				verified_at=EXCLUDED.verified_at,
+				rejected_by_kind=EXCLUDED.rejected_by_kind, rejected_by_name=EXCLUDED.rejected_by_name,
+				rejected_at=EXCLUDED.rejected_at,
+				links=EXCLUDED.links, attrs=EXCLUDED.attrs, body=EXCLUDED.body,
+				created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at,
+				deleted_at=NULL
+			WHERE knowledge.deleted_at IS NOT NULL`,
 			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status, k.StatusNote,
 			k.CreatedBy.Kind, k.CreatedBy.Name, verifiedKind, verifiedName, k.VerifiedAt,
 			rejectedKind, rejectedName, k.RejectedAt,
@@ -198,6 +215,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 }
 
 // SoftDelete hides an entry from reads while keeping full history.
+// Create on the same type/id revives it.
 func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, actor domain.Actor) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		k, err := s.Get(ctx, typ, id)

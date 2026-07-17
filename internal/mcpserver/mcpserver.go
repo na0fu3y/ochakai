@@ -115,8 +115,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "delete_knowledge",
-		Description: "Soft-delete a knowledge entry. History is retained as revisions.",
+		Name: "delete_knowledge",
+		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
+			"create_knowledge on the same type/id revives it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
 		if err := svc.Delete(ctx, domain.Type(in.Type), in.ID, httpauth.Actor(ctx)); err != nil {
 			return nil, deleteOut{}, err

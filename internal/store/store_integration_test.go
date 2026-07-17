@@ -243,3 +243,109 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 		t.Errorf("ListLinkingTo = %v, want it-link-bare and it-link-uri", ids)
 	}
 }
+
+// Create over a soft-deleted entry revives it — otherwise the ID is dead
+// forever (the deleted row still owns the primary key while Update
+// refuses deleted rows). Live entries, including rejected ones, still
+// conflict.
+func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-revive-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	first := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-revive-me", Title: "first life",
+		Status: domain.StatusDraft, CreatedBy: actor,
+	}
+	if err := s.Create(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+
+	// Live entry: create must still conflict.
+	dup := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-revive-me", Title: "imposter",
+		Status: domain.StatusDraft, CreatedBy: actor,
+	}
+	if err := s.Create(ctx, dup); err != ErrAlreadyExists {
+		t.Fatalf("create over a live entry = %v, want ErrAlreadyExists", err)
+	}
+
+	if err := s.SoftDelete(ctx, first.Type, first.ID, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	// Soft-deleted entry: create revives it with the new content.
+	second := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-revive-me", Title: "second life",
+		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
+	}
+	if err := s.Create(ctx, second); err != nil {
+		t.Fatalf("create over a soft-deleted entry: %v", err)
+	}
+	got, err := s.Get(ctx, second.Type, second.ID)
+	if err != nil {
+		t.Fatalf("revived entry not readable: %v", err)
+	}
+	if got.Title != "second life" || got.CreatedBy.Name != "claude-code" {
+		t.Errorf("revived entry = %+v, want the new content and creator", got)
+	}
+
+	// The full lineage stays: create, delete, create.
+	var changes []string
+	rows, err := s.pool.Query(ctx,
+		`SELECT change FROM knowledge_revision WHERE type=$1 AND id=$2 ORDER BY rev`,
+		second.Type, second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		changes = append(changes, c)
+	}
+	want := []string{"create", "delete", "create"}
+	if len(changes) != len(want) {
+		t.Fatalf("revisions = %v, want %v", changes, want)
+	}
+	for i := range want {
+		if changes[i] != want[i] {
+			t.Fatalf("revisions = %v, want %v", changes, want)
+		}
+	}
+
+	// Rejected entries are live: the memory of no is not overwritable.
+	rejected := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-revive-no", Title: "rejected",
+		Status: domain.StatusRejected, StatusNote: "duplicate",
+		CreatedBy: actor, RejectedBy: &actor,
+	}
+	if err := s.Create(ctx, rejected); err != nil {
+		t.Fatal(err)
+	}
+	again := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-revive-no", Title: "try again",
+		Status: domain.StatusDraft, CreatedBy: actor,
+	}
+	if err := s.Create(ctx, again); err != ErrAlreadyExists {
+		t.Fatalf("create over a rejected entry = %v, want ErrAlreadyExists", err)
+	}
+}

@@ -66,7 +66,9 @@ paths:
       description: >
         Entries default to draft. Anyone who can reach ochakai may set
         status=verified; verified_by records who did (provenance over
-        authorization).
+        authorization). A live entry with the same type/id is a 409 —
+        including rejected ones — but creating over a soft-deleted entry
+        revives it (its prior history stays in the revisions).
       requestBody:
         required: true
         content:
@@ -222,6 +224,41 @@ paths:
           content:
             application/gzip:
               schema: { type: string, format: binary }
+  /api/v1/import/ossie:
+    post:
+      operationId: importOssie
+      summary: Import an Apache Ossie semantic model
+      description: >
+        Accepts Ossie semantic model YAML verbatim. Each model is stored
+        for compile, and metric/table knowledge entries are derived so
+        the definitions are searchable. Re-import refreshes definitions
+        without clobbering human-curated status, tags, and bodies.
+      requestBody:
+        required: true
+        content:
+          application/yaml:
+            schema: { type: string }
+      responses:
+        "200":
+          description: Import report.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items: { type: string }
+                    description: Semantic model names stored.
+                  created:
+                    type: array
+                    items: { type: string }
+                    description: URIs of knowledge entries created.
+                  updated:
+                    type: array
+                    items: { type: string }
+                    description: URIs of knowledge entries refreshed.
+        "400": { $ref: "#/components/responses/Error" }
   /api/v1/compile:
     post:
       operationId: compileSQL

@@ -6,6 +6,7 @@ package restapi
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
+	"github.com/na0fu3y/ochakai/internal/importer"
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -159,6 +161,24 @@ func Handler(svc *service.Service) http.Handler {
 			// Headers already sent; nothing to do but log via server.
 			return
 		}
+	})
+
+	// POST /api/v1/import/ossie — import an Apache Ossie semantic model.
+	// The body is the YAML verbatim; models are stored for compile and
+	// metric/table knowledge entries are derived (design doc 0007 moved
+	// this from a DB-direct admin command to the API).
+	mux.HandleFunc("POST /api/v1/import/ossie", func(w http.ResponseWriter, r *http.Request) {
+		src, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<20))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read body: " + err.Error()})
+			return
+		}
+		report, err := importer.ImportOssie(r.Context(), svc, src, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, report)
 	})
 
 	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {

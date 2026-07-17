@@ -78,12 +78,11 @@ git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up
 ```
 
-Import a semantic model and try a search. `import-ossie` is a server
-admin command that talks to the database directly, so it runs inside the
-container (the compose file mounts `examples/` for this):
+Import a semantic model and try a search — everything goes through the
+API, so plain curl works:
 
 ```sh
-docker compose -f deploy/compose.yaml exec ochakai /ochakai import-ossie /examples/semantic-model.yaml
+curl -X POST --data-binary @examples/semantic-model.yaml http://localhost:8080/api/v1/import/ossie
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
 

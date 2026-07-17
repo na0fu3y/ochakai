@@ -45,14 +45,12 @@ _ochakai() {
     'compile:compile metrics into SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
+    'import-ossie:import an Apache Ossie semantic model'
     'use:pick the server for later commands'
     'whoami:print target server, identity, and reachability'
     'ui:serve the web UI locally, acting as you'
     'completion:print a shell completion script'
     'serve:start the MCP + REST server'
-    'import-ossie:import an Apache Ossie semantic model'
-    'export-okf:write the OKF bundle straight from the database'
-    'import-okf:load an OKF bundle straight into the database'
     'version:print the version'
     'help:show help'
   )
@@ -123,13 +121,7 @@ _ochakai() {
       _arguments '1:shell:(zsh bash fish)'
       ;;
     import-ossie)
-      _arguments '1:file:_files'
-      ;;
-    export-okf)
-      _arguments '1:directory:_files -/'
-      ;;
-    import-okf)
-      _arguments '1:bundle:_files'
+      _arguments '--url[server URL]:url:' '1:file:_files'
       ;;
   esac
 }
@@ -150,7 +142,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search context get create update delete compile export import use whoami ui completion serve import-ossie export-okf import-okf version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search context get create update delete compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
     return
   fi
 
@@ -170,6 +162,7 @@ _ochakai() {
     compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
     export)        opts="--url" ;;
     import)        opts="--dry-run --keep-root --url" ;;
+    import-ossie)  opts="--url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
     use)
@@ -179,7 +172,6 @@ _ochakai() {
       fi
       opts="--name" ;;
     completion)    COMPREPLY=($(compgen -W "zsh bash fish" -- "$cur")); return ;;
-    import-ossie|export-okf|import-okf) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
     *)             opts="" ;;
   esac
 
@@ -205,21 +197,19 @@ complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
+complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
 complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
 complete -c ochakai -n __fish_use_subcommand -a ui -d 'serve the web UI locally, acting as you'
 complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
-complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
-complete -c ochakai -n __fish_use_subcommand -a export-okf -d 'write the OKF bundle straight from the database'
-complete -c ochakai -n __fish_use_subcommand -a import-okf -d 'load an OKF bundle straight into the database'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete compile export import whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete compile export import import-ossie whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
-complete -c ochakai -n '__fish_seen_subcommand_from import import-okf' -F
+complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search context get create update compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metric query insight term table' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated' -d 'filter by status'
@@ -237,6 +227,5 @@ complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dialect -x -a 'b
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
-complete -c ochakai -n '__fish_seen_subcommand_from export export-okf' -a '(__fish_complete_directories)'
-complete -c ochakai -n '__fish_seen_subcommand_from import-ossie' -F
+complete -c ochakai -n '__fish_seen_subcommand_from export' -a '(__fish_complete_directories)'
 `

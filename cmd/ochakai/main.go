@@ -12,19 +12,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"os/user"
-	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/config"
-	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
-	"github.com/na0fu3y/ochakai/internal/importer"
 	"github.com/na0fu3y/ochakai/internal/mcpserver"
-	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/restapi"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -67,24 +63,11 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = serve(log)
-	case "import-ossie":
-		if len(os.Args) < 3 {
-			err = fmt.Errorf("usage: ochakai import-ossie <semantic-model.yaml>")
-		} else {
-			err = importOssie(log, os.Args[2])
-		}
-	case "export-okf":
-		if len(os.Args) < 3 {
-			err = fmt.Errorf("usage: ochakai export-okf <output-dir>")
-		} else {
-			err = exportOKF(log, os.Args[2])
-		}
-	case "import-okf":
-		if len(os.Args) < 3 {
-			err = fmt.Errorf("usage: ochakai import-okf <bundle-dir | bundle.tar.gz>")
-		} else {
-			err = importOKF(log, os.Args[2])
-		}
+	case "export-okf", "import-okf":
+		// DB-direct twins of `export`/`import`, removed in design doc 0007.
+		fmt.Fprintf(os.Stderr, "ochakai: %s was removed; run `ochakai serve` next to the database and use `ochakai %s` against it (see `ochakai help`)\n",
+			cmd, strings.TrimSuffix(cmd, "-okf"))
+		os.Exit(1)
 	case "version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -115,13 +98,11 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
+  import-ossie <file>     import an Apache Ossie semantic model
   ui                      serve the web UI locally, acting as you (no deploy)
 
-Server admin commands (run next to the database):
+Server command (runs next to the database):
   serve                   start the MCP + REST server
-  import-ossie <file>     import an Apache Ossie semantic model
-  export-okf <dir>        write the OKF bundle straight from the database
-  import-okf <dir | tgz>  load an OKF bundle straight into the database
 
   version                 print the version
   completion <shell>      print a completion script (zsh, bash, fish)
@@ -199,114 +180,4 @@ func serve(log *slog.Logger) error {
 		return err
 	}
 	return nil
-}
-
-func importOssie(log *slog.Logger, path string) error {
-	ctx := context.Background()
-	svc, _, err := setup(ctx, log)
-	if err != nil {
-		return err
-	}
-	defer svc.Store.Close()
-
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	report, err := importer.ImportOssie(ctx, svc, src, cliActor())
-	if err != nil {
-		return err
-	}
-	log.Info("import complete", "models", report.Models,
-		"created", len(report.Created), "updated", len(report.Updated))
-	for _, uri := range report.Created {
-		fmt.Println("created", uri)
-	}
-	for _, uri := range report.Updated {
-		fmt.Println("updated", uri)
-	}
-	return nil
-}
-
-// exportOKF writes the knowledge base as an OKF bundle directory,
-// ready to commit to git or ship as an archive.
-func exportOKF(log *slog.Logger, dir string) error {
-	ctx := context.Background()
-	svc, _, err := setup(ctx, log)
-	if err != nil {
-		return err
-	}
-	defer svc.Store.Close()
-
-	entries, err := svc.Store.ListAll(ctx)
-	if err != nil {
-		return err
-	}
-	files, err := okf.Bundle(entries)
-	if err != nil {
-		return err
-	}
-	for path, content := range files {
-		full := filepath.Join(dir, filepath.FromSlash(path))
-		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(full, content, 0o644); err != nil {
-			return err
-		}
-	}
-	log.Info("export complete", "dir", dir, "concepts", len(entries), "files", len(files))
-	return nil
-}
-
-// importOKF loads an OKF bundle straight into the database, the inverse of
-// exportOKF. Existing entries are replaced (kept as revisions).
-func importOKF(log *slog.Logger, path string) error {
-	ctx := context.Background()
-	files, err := readBundle(path)
-	if err != nil {
-		return err
-	}
-	if unwrapped, root := okf.StripWrapper(files); root != "" {
-		log.Info("unwrapped bundle directory", "dir", root)
-		files = unwrapped
-	}
-	entries, skipped := okf.FromBundle(files)
-	for _, s := range skipped {
-		log.Warn("skipped bundle file", "reason", s)
-	}
-
-	svc, _, err := setup(ctx, log)
-	if err != nil {
-		return err
-	}
-	defer svc.Store.Close()
-
-	actor := cliActor()
-	var created, updated int
-	for i := range entries {
-		k := &entries[i]
-		if _, err := svc.Create(ctx, k, actor); err == nil {
-			created++
-			fmt.Println("created", k.URI())
-			continue
-		} else if !errors.Is(err, store.ErrAlreadyExists) {
-			return fmt.Errorf("%s: %w", k.URI(), err)
-		}
-		if _, err := svc.Update(ctx, k, actor); err != nil {
-			return fmt.Errorf("%s: %w", k.URI(), err)
-		}
-		updated++
-		fmt.Println("updated", k.URI())
-	}
-	log.Info("import complete", "created", created, "updated", updated, "skipped", len(skipped))
-	return nil
-}
-
-func cliActor() domain.Actor {
-	name := "cli"
-	if u, err := user.Current(); err == nil && u.Username != "" {
-		name = u.Username
-	}
-	return domain.Actor{Kind: domain.ActorHuman, Name: name}
 }
