@@ -5,10 +5,14 @@ package domain
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
-// Type is the kind of a knowledge entry.
+// Type is the kind of a knowledge entry. Any path-segment slug is a valid
+// type (design doc 0005): the built-in types below are recommendations with
+// server behavior attached (compile_sql reads metrics, resource export reads
+// tables), never a closed set — users' own document types are first-class.
 type Type string
 
 const (
@@ -19,10 +23,11 @@ const (
 	TypeTable   Type = "table"   // table catalog entry
 )
 
-// Types lists all valid knowledge types.
+// Types lists the recommended (built-in) knowledge types, in display order.
 var Types = []Type{TypeMetric, TypeQuery, TypeInsight, TypeTerm, TypeTable}
 
-func ValidType(t Type) bool {
+// BuiltinType reports whether t is one of the recommended types.
+func BuiltinType(t Type) bool {
 	for _, v := range Types {
 		if t == v {
 			return true
@@ -30,6 +35,9 @@ func ValidType(t Type) bool {
 	}
 	return false
 }
+
+// ValidType reports whether t can be a knowledge type: one path segment.
+func ValidType(t Type) bool { return segmentRe.MatchString(string(t)) }
 
 // Status is the verification status of a knowledge entry. deprecated means
 // "was correct, no longer recommended"; rejected means "was never accepted"
@@ -106,10 +114,28 @@ type Knowledge struct {
 // URI returns the canonical reference, e.g. "ochakai://metric/revenue".
 func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type, k.ID) }
 
-var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,127}$`)
+// segmentRe matches one path segment. Lowercase is recommended, but case,
+// dots, and underscores are accepted so foreign OKF bundles (table names
+// like GA_sessions_2017) import without renaming. The mandatory leading
+// alphanumeric rules out "." and ".." — IDs stay safe as file paths.
+var segmentRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
-// ValidID reports whether id is a valid knowledge slug.
-func ValidID(id string) bool { return slugRe.MatchString(id) }
+// ValidID reports whether id is a valid knowledge ID: slug segments
+// separated by "/", mirroring OKF's hierarchical concept IDs (the bundle
+// path is "<type>/<id>.md"). The final segment must not be "index" — that
+// filename belongs to the generated per-directory index.md.
+func ValidID(id string) bool {
+	if id == "" || len(id) > 512 {
+		return false
+	}
+	segs := strings.Split(id, "/")
+	for _, s := range segs {
+		if !segmentRe.MatchString(s) {
+			return false
+		}
+	}
+	return segs[len(segs)-1] != "index"
+}
 
 // SearchHit is one search result with its ranking score.
 type SearchHit struct {

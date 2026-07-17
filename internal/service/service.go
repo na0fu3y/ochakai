@@ -105,10 +105,10 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
-		return fmt.Errorf("invalid type %q (valid: metric, query, insight, term, table)", k.Type)
+		return fmt.Errorf("invalid type %q (one slug segment, e.g. metric; recommended: metric, query, insight, term, table)", k.Type)
 	}
 	if !domain.ValidID(k.ID) {
-		return fmt.Errorf("invalid id %q (lowercase slug: a-z 0-9 _ -)", k.ID)
+		return fmt.Errorf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index")`, k.ID)
 	}
 	if strings.TrimSpace(k.Title) == "" {
 		return fmt.Errorf("title is required")

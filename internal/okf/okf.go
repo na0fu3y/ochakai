@@ -20,14 +20,33 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// okfType maps ochakai knowledge types to descriptive OKF type values
-// (OKF registers no taxonomy; values should be self-explanatory).
+// okfType maps ochakai's recommended knowledge types to descriptive OKF
+// type values (OKF registers no taxonomy; values should be self-explanatory).
+// Free types have no display mapping and export as themselves — unless the
+// original bundle spelling survives in attrs[AttrOKFType].
 var okfType = map[domain.Type]string{
 	domain.TypeMetric:  "Metric",
 	domain.TypeQuery:   "Golden Query",
 	domain.TypeInsight: "Insight",
 	domain.TypeTerm:    "Glossary Term",
 	domain.TypeTable:   "Table",
+}
+
+// AttrOKFType preserves the original OKF frontmatter type spelling for
+// imported free types (e.g. "Data Contract" stored under type
+// "data-contract"), so a bundle round-trips byte-for-byte. It is folded
+// back into the type frontmatter key on export, never exported as an attr.
+const AttrOKFType = "okf_type"
+
+// displayType returns the OKF frontmatter type value for k.
+func displayType(k *domain.Knowledge) string {
+	if d, ok := okfType[k.Type]; ok {
+		return d
+	}
+	if s, ok := k.Attrs[AttrOKFType].(string); ok && s != "" {
+		return s
+	}
+	return string(k.Type)
 }
 
 // frontmatter is the OKF frontmatter for one concept. Only "type" is
@@ -52,8 +71,9 @@ type frontmatter struct {
 }
 
 // Bundle renders every entry into a path→content map. Paths follow
-// "<type>/<id>.md" so the OKF concept ID matches ochakai's type/id.
-// index.md files are generated at the root and per type directory.
+// "<type>/<id>.md" so the OKF concept ID matches ochakai's type/id, and
+// hierarchical IDs ("sales/orders") become nested directories. Every
+// directory level gets an index.md for progressive disclosure.
 func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Type != entries[j].Type {
@@ -63,44 +83,102 @@ func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
 	})
 
 	files := map[string][]byte{}
-	byType := map[domain.Type][]domain.Knowledge{}
+	root := &dir{}
 	for _, k := range entries {
 		doc, err := Document(&k)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", k.URI(), err)
 		}
 		files[fmt.Sprintf("%s/%s.md", k.Type, k.ID)] = doc
-		byType[k.Type] = append(byType[k.Type], k)
+		root.insert(strings.Split(string(k.Type)+"/"+k.ID, "/"), k)
 	}
-
-	var root strings.Builder
-	root.WriteString("---\ntype: Index\ntitle: ochakai knowledge bundle\n---\n\n# ochakai knowledge bundle\n\n")
-	for _, t := range domain.Types {
-		group := byType[t]
-		if len(group) == 0 {
-			continue
-		}
-		fmt.Fprintf(&root, "- [%s/](/%s/index.md) — %d concepts\n", t, t, len(group))
-
-		var idx strings.Builder
-		fmt.Fprintf(&idx, "---\ntype: Index\ntitle: %s\n---\n\n# %s\n\n", t, t)
-		for _, k := range group {
-			desc := k.Description
-			if desc != "" {
-				desc = " — " + desc
-			}
-			fmt.Fprintf(&idx, "- [%s](/%s/%s.md)%s\n", k.Title, k.Type, k.ID, desc)
-		}
-		files[string(t)+"/index.md"] = []byte(idx.String())
-	}
-	files["index.md"] = []byte(root.String())
+	root.writeIndexes(files, "")
 	return files, nil
+}
+
+// dir is one directory level of a bundle, used to generate index.md files.
+type dir struct {
+	subdirs map[string]*dir
+	entries []dirEntry // concepts directly in this directory, in bundle order
+	count   int        // concepts in this directory and below
+}
+
+type dirEntry struct {
+	name string // filename without .md
+	k    domain.Knowledge
+}
+
+func (d *dir) insert(segs []string, k domain.Knowledge) {
+	d.count++
+	if len(segs) == 1 {
+		d.entries = append(d.entries, dirEntry{name: segs[0], k: k})
+		return
+	}
+	if d.subdirs == nil {
+		d.subdirs = map[string]*dir{}
+	}
+	sub := d.subdirs[segs[0]]
+	if sub == nil {
+		sub = &dir{}
+		d.subdirs[segs[0]] = sub
+	}
+	sub.insert(segs[1:], k)
+}
+
+// subdirNames orders subdirectories: at the root, the recommended types in
+// their display order first, then everything else alphabetically.
+func (d *dir) subdirNames(atRoot bool) []string {
+	names := make([]string, 0, len(d.subdirs))
+	for n := range d.subdirs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	if !atRoot {
+		return names
+	}
+	ordered := make([]string, 0, len(names))
+	for _, t := range domain.Types {
+		if _, ok := d.subdirs[string(t)]; ok {
+			ordered = append(ordered, string(t))
+		}
+	}
+	for _, n := range names {
+		if !domain.BuiltinType(domain.Type(n)) {
+			ordered = append(ordered, n)
+		}
+	}
+	return ordered
+}
+
+// writeIndexes emits index.md for this directory and recurses. prefix is
+// the bundle-relative directory path, "" for the root or "a/b/" below it.
+func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
+	title := "ochakai knowledge bundle"
+	if prefix != "" {
+		title = strings.TrimSuffix(prefix, "/")
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "---\ntype: Index\ntitle: %s\n---\n\n# %s\n\n", title, title)
+	for _, name := range d.subdirNames(prefix == "") {
+		fmt.Fprintf(&b, "- [%s/](/%s%s/index.md) — %d concepts\n", name, prefix, name, d.subdirs[name].count)
+	}
+	for _, e := range d.entries {
+		desc := e.k.Description
+		if desc != "" {
+			desc = " — " + desc
+		}
+		fmt.Fprintf(&b, "- [%s](/%s%s.md)%s\n", e.k.Title, prefix, e.name, desc)
+	}
+	files[prefix+"index.md"] = []byte(b.String())
+	for name, sub := range d.subdirs {
+		sub.writeIndexes(files, prefix+name+"/")
+	}
 }
 
 // Document renders one knowledge entry as an OKF concept document.
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
-		Type:        okfType[k.Type],
+		Type:        displayType(k),
 		ID:          k.ID,
 		Title:       k.Title,
 		Description: k.Description,
@@ -109,7 +187,7 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Status:      string(k.Status),
 		StatusNote:  k.StatusNote,
 		CreatedBy:   k.CreatedBy.Kind + ":" + k.CreatedBy.Name,
-		Attrs:       k.Attrs,
+		Attrs:       withoutOKFType(k.Attrs),
 	}
 	// "resource" is the canonical URI of the underlying asset; only table
 	// entries describe a physical resource.
@@ -150,6 +228,21 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		}
 	}
 	return []byte(b.String()), nil
+}
+
+// withoutOKFType drops the AttrOKFType key (it is folded into the type
+// frontmatter by displayType) without mutating the entry's attrs.
+func withoutOKFType(attrs map[string]any) map[string]any {
+	if _, ok := attrs[AttrOKFType]; !ok {
+		return attrs
+	}
+	out := make(map[string]any, len(attrs)-1)
+	for key, v := range attrs {
+		if key != AttrOKFType {
+			out[key] = v
+		}
+	}
+	return out
 }
 
 // WriteTarGz streams the bundle as a gzipped tarball (the OKF-sanctioned

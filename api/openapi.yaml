@@ -89,6 +89,9 @@ paths:
       - name: id
         in: path
         required: true
+        description: >
+          Hierarchical IDs keep their slashes as real path separators
+          (GET /api/v1/knowledge/query/sales/monthly-revenue).
         schema: { type: string }
     get:
       operationId: getKnowledge
@@ -122,7 +125,7 @@ paths:
       responses:
         "204": { description: Deleted. }
         "404": { $ref: "#/components/responses/Error" }
-  /api/v1/knowledge/{type}/{id}/usage:
+  /api/v1/usage/{type}/{id}:
     parameters:
       - name: type
         in: path
@@ -131,6 +134,7 @@ paths:
       - name: id
         in: path
         required: true
+        description: Hierarchical IDs keep their slashes as real path separators.
         schema: { type: string }
     get:
       operationId: getKnowledgeUsage
@@ -140,6 +144,8 @@ paths:
         fetched individually, or referenced by compile_sql. The measure of
         the write-back loop — evidence for promoting drafts, and a staleness
         signal for verified entries that stopped being used.
+        (GET /api/v1/knowledge/{type}/{id}/usage remains as a legacy alias
+        for single-segment IDs.)
       responses:
         "200":
           description: Usage totals.
@@ -196,7 +202,12 @@ components:
   schemas:
     Type:
       type: string
-      enum: [metric, query, insight, term, table]
+      description: >
+        Any slug segment works as a type — the built-in five (metric, query,
+        insight, term, table) are recommendations with server behavior
+        attached, not a closed set (design doc 0005).
+      examples: [metric, query, insight, term, table, runbook]
+      pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
     Status:
       type: string
       description: >
@@ -219,7 +230,12 @@ components:
       required: [type, id, title]
       properties:
         type: { $ref: "#/components/schemas/Type" }
-        id: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,127}$" }
+        id:
+          type: string
+          description: >
+            Slug segments separated by "/" (hierarchical, mirroring OKF
+            concept IDs); the final segment must not be "index".
+          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}(/[a-zA-Z0-9][a-zA-Z0-9._-]{0,127})*$"
         title: { type: string }
         description: { type: string }
         tags: { type: array, items: { type: string } }

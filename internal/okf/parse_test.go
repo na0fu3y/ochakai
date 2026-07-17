@@ -2,6 +2,7 @@ package okf
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -68,12 +69,46 @@ Body text here.
 func TestParseRejectsGarbage(t *testing.T) {
 	for _, doc := range []string{
 		"just markdown, no frontmatter",
-		"---\ntype: metric\n", // unterminated
-		"---\ntype: nonsense\ntitle: x\n---\n",
+		"---\ntype: metric\n",             // unterminated
+		"---\ntitle: x\n---\n",            // no type at all
+		"---\ntype: ♥♥\ntitle: x\n---\n",  // no slug can be derived
+		"---\ntype: [a]\ntitle: x\n---\n", // type is not a string
 	} {
 		if _, err := Parse([]byte(doc)); err == nil {
 			t.Errorf("Parse(%q) succeeded, want error", doc)
 		}
+	}
+}
+
+// Free types are first-class (design doc 0005): any slug is accepted
+// verbatim, and a non-slug spelling is slugified with the original kept in
+// attrs.okf_type so the document round-trips.
+func TestParseFreeTypes(t *testing.T) {
+	k, err := Parse([]byte("---\ntype: runbook\nid: restore-backup\ntitle: リストア手順\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Type != "runbook" || k.Attrs[AttrOKFType] != nil {
+		t.Errorf("slug type: got type=%q attrs=%v", k.Type, k.Attrs)
+	}
+
+	k, err = Parse([]byte("---\ntype: Data Contract\nid: orders-contract\ntitle: 注文契約\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Type != "data-contract" || k.Attrs[AttrOKFType] != "Data Contract" {
+		t.Errorf("spelled type: got type=%q attrs=%v", k.Type, k.Attrs)
+	}
+
+	doc, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "type: Data Contract") {
+		t.Errorf("original spelling lost on export:\n%s", doc)
+	}
+	if strings.Contains(string(doc), AttrOKFType) {
+		t.Errorf("okf_type must fold into the type key, not export as an attr:\n%s", doc)
 	}
 }
 
