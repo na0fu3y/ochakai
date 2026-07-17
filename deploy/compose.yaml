@@ -11,6 +11,10 @@ services:
     environment:
       OCHAKAI_DATABASE_URL: postgres://ochakai:ochakai@db:5432/ochakai?sslmode=disable
       OCHAKAI_INSECURE_DEV: "true" # local only: all requests act as human:anonymous
+    volumes:
+      # Lets the quick start run `import-ossie` (a DB-direct admin command,
+      # design doc 0004 §2.3) inside the container, next to the database.
+      - ../examples:/examples:ro
     depends_on:
       db:
         condition: service_healthy
