@@ -9,7 +9,7 @@ import (
 // Guard: the hand-written completion scripts stay in sync with the real
 // command set and the enum flag values.
 func TestCompletionScriptsStayInSync(t *testing.T) {
-	admin := []string{"serve", "import-ossie", "export-okf", "version"}
+	admin := []string{"serve", "import-ossie", "export-okf", "import-okf", "version"}
 	enums := []string{
 		"metric query insight term table", // --type
 		"draft verified deprecated",       // --status

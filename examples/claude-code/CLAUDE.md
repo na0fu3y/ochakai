@@ -29,7 +29,12 @@ entries. Search it before writing analytics SQL; write learnings back.
 - `ochakai create -f entry.md` — write a learning back (OKF markdown as
   printed by `get`, or JSON; see `ochakai create -h`). Entries start as
   `draft`; your identity is recorded as provenance automatically.
-- `ochakai export <dir>` — snapshot the whole knowledge base as markdown.
+- `ochakai export <dir>` — snapshot the whole knowledge base as markdown;
+  `ochakai import <dir>` loads a bundle back (any OKF bundle works).
+
+Types beyond the five above are welcome (any slug works — e.g.
+`runbook/…`), and IDs may be hierarchical (`query/sales/monthly-revenue`)
+to group related knowledge.
 
 When a query you compiled or wrote turns out to be correct and useful,
 save it: `type: query` with `attrs.question` (the natural-language

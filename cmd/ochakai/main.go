@@ -79,6 +79,12 @@ func main() {
 		} else {
 			err = exportOKF(log, os.Args[2])
 		}
+	case "import-okf":
+		if len(os.Args) < 3 {
+			err = fmt.Errorf("usage: ochakai import-okf <bundle-dir | bundle.tar.gz>")
+		} else {
+			err = importOKF(log, os.Args[2])
+		}
 	case "version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -107,11 +113,13 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   delete <type>/<id>      soft-delete an entry (history retained)
   compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
+  import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
 
 Server admin commands (run next to the database):
   serve                   start the MCP + REST server
   import-ossie <file>     import an Apache Ossie semantic model
   export-okf <dir>        write the OKF bundle straight from the database
+  import-okf <dir | tgz>  load an OKF bundle straight into the database
 
   version                 print the version
   completion <shell>      print a completion script (zsh, bash, fish)
@@ -246,6 +254,46 @@ func exportOKF(log *slog.Logger, dir string) error {
 		}
 	}
 	log.Info("export complete", "dir", dir, "concepts", len(entries), "files", len(files))
+	return nil
+}
+
+// importOKF loads an OKF bundle straight into the database, the inverse of
+// exportOKF. Existing entries are replaced (kept as revisions).
+func importOKF(log *slog.Logger, path string) error {
+	ctx := context.Background()
+	files, err := readBundle(path)
+	if err != nil {
+		return err
+	}
+	entries, skipped := okf.FromBundle(files)
+	for _, s := range skipped {
+		log.Warn("skipped bundle file", "reason", s)
+	}
+
+	svc, _, err := setup(ctx, log)
+	if err != nil {
+		return err
+	}
+	defer svc.Store.Close()
+
+	actor := cliActor()
+	var created, updated int
+	for i := range entries {
+		k := &entries[i]
+		if _, err := svc.Create(ctx, k, actor); err == nil {
+			created++
+			fmt.Println("created", k.URI())
+			continue
+		} else if !errors.Is(err, store.ErrAlreadyExists) {
+			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		if _, err := svc.Update(ctx, k, actor); err != nil {
+			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		updated++
+		fmt.Println("updated", k.URI())
+	}
+	log.Info("import complete", "created", created, "updated", updated, "skipped", len(skipped))
 	return nil
 }
 

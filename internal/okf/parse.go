@@ -17,9 +17,24 @@ import (
 // from authentication, never from the payload. The trailing "# Links"
 // section rendered by Document is folded back into structured links.
 func Parse(doc []byte) (*domain.Knowledge, error) {
+	k, rawType, err := parseDoc(doc)
+	if err != nil {
+		return nil, err
+	}
+	if k.Type == "" {
+		return nil, fmt.Errorf("cannot derive a type slug from %q (any slug works as a type; recommended: metric, query, insight, term, table)", rawType)
+	}
+	return k, nil
+}
+
+// parseDoc parses one OKF document, also returning the frontmatter type
+// verbatim so bundle import can preserve the original spelling when the
+// bundle path names the type differently. k.Type is "" when no type slug
+// could be derived \u2014 the caller decides whether path context fills it in.
+func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 	s := strings.TrimPrefix(string(doc), "\ufeff")
 	if !strings.HasPrefix(s, "---\n") {
-		return nil, fmt.Errorf("not an OKF document: missing --- frontmatter")
+		return nil, "", fmt.Errorf("not an OKF document: missing --- frontmatter")
 	}
 	rest := strings.TrimPrefix(s, "---\n")
 	end := strings.Index(rest, "\n---\n")
@@ -32,7 +47,7 @@ func Parse(doc []byte) (*domain.Knowledge, error) {
 	case strings.HasSuffix(rest, "\n---"): // document ends at the delimiter
 		fmPart = rest[:len(rest)-len("---")]
 	default:
-		return nil, fmt.Errorf("not an OKF document: unterminated frontmatter")
+		return nil, "", fmt.Errorf("not an OKF document: unterminated frontmatter")
 	}
 
 	var fm struct {
@@ -45,11 +60,15 @@ func Parse(doc []byte) (*domain.Knowledge, error) {
 		Attrs       map[string]any `yaml:"attrs"`
 	}
 	if err := yaml.Unmarshal([]byte(fmPart), &fm); err != nil {
-		return nil, fmt.Errorf("invalid frontmatter: %w", err)
+		return nil, "", fmt.Errorf("invalid frontmatter: %w", err)
 	}
-	typ, ok := typeFromOKF(fm.Type)
-	if !ok {
-		return nil, fmt.Errorf("unknown type %q (valid: metric, query, insight, term, table)", fm.Type)
+	typ, keepSpelling := typeFromOKF(fm.Type)
+	attrs := fm.Attrs
+	if keepSpelling != "" {
+		if attrs == nil {
+			attrs = map[string]any{}
+		}
+		attrs[AttrOKFType] = keepSpelling
 	}
 
 	trimmedBody, links := splitLinks(strings.TrimSpace(body))
@@ -61,20 +80,52 @@ func Parse(doc []byte) (*domain.Knowledge, error) {
 		Tags:        fm.Tags,
 		Status:      domain.Status(fm.Status),
 		Links:       links,
-		Attrs:       fm.Attrs,
+		Attrs:       attrs,
 		Body:        trimmedBody,
-	}, nil
+	}, fm.Type, nil
 }
 
-// typeFromOKF accepts both the display values Document writes
-// ("Golden Query") and raw ochakai types ("query").
-func typeFromOKF(s string) (domain.Type, bool) {
-	for typ, display := range okfType {
-		if strings.EqualFold(s, display) || s == string(typ) {
-			return typ, true
+// typeFromOKF maps an OKF frontmatter type to an ochakai type. Display
+// values Document writes ("Golden Query") and raw recommended types
+// ("query") map to the built-ins; any other value \u2014 OKF registers no
+// taxonomy \u2014 is slugified into a free type, and when the slug changed the
+// spelling, the original is returned to be preserved as attrs[AttrOKFType].
+// A value no slug can be derived from yields ("", "").
+func typeFromOKF(s string) (typ domain.Type, keepSpelling string) {
+	for t, display := range okfType {
+		if strings.EqualFold(s, display) || s == string(t) {
+			return t, ""
 		}
 	}
-	return "", false
+	slug := slugifyType(s)
+	if !domain.ValidType(domain.Type(slug)) {
+		return "", ""
+	}
+	if slug == s {
+		return domain.Type(slug), ""
+	}
+	return domain.Type(slug), s
+}
+
+// slugifyType lowercases a free OKF type value and replaces runs of
+// characters a slug segment cannot hold with "-" ("Data Contract" \u2192
+// "data-contract").
+func slugifyType(s string) string {
+	var b strings.Builder
+	pending := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+			if pending && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			pending = false
+			b.WriteRune(r)
+		default:
+			pending = true
+		}
+	}
+	return strings.TrimRight(b.String(), "-")
 }
 
 var linkLineRe = regexp.MustCompile(`^- ([^:\s]+): \[([^\]]+)\]\([^)]*\)$`)

@@ -28,7 +28,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
 		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
 			"verified golden queries, interpretation knowledge (how to read a metric), " +
-			"glossary terms, and table catalog entries. It executes no SQL and uses no LLM. " +
+			"glossary terms, and table catalog entries — those five types are recommendations, " +
+			"and any slug works as a type for your own document kinds. IDs may be hierarchical " +
+			"(slash-separated, e.g. sales/orders) to organize knowledge into directories. " +
+			"It executes no SQL and uses no LLM. " +
 			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
 			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
 			"you have actually validated — who verified is always recorded. Knowledge that was " +
@@ -39,7 +42,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "search_knowledge",
-		Description: "Search the knowledge base across all types (metric, query, insight, term, table). " +
+		Description: "Search the knowledge base across all types (recommended: metric, query, insight, term, table; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge.",

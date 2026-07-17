@@ -43,12 +43,14 @@ _ochakai() {
     'delete:soft-delete an entry'
     'compile:compile metrics into SQL'
     'export:download the knowledge base as an OKF bundle'
+    'import:upload an OKF bundle'
     'use:pick the server for later commands'
     'whoami:print target server, identity, and reachability'
     'completion:print a shell completion script'
     'serve:start the MCP + REST server'
     'import-ossie:import an Apache Ossie semantic model'
     'export-okf:write the OKF bundle straight from the database'
+    'import-okf:load an OKF bundle straight into the database'
     'version:print the version'
     'help:show help'
   )
@@ -90,6 +92,9 @@ _ochakai() {
     export)
       _arguments '--url[server URL]:url:' '1:directory:_files -/'
       ;;
+    import)
+      _arguments '--dry-run[parse and list, write nothing]' '--url[server URL]:url:' '1:bundle:_files'
+      ;;
     use)
       local -a servers
       servers=(${(f)"$(ochakai use 2>/dev/null | cut -c3- | cut -f1)"})
@@ -106,6 +111,9 @@ _ochakai() {
       ;;
     export-okf)
       _arguments '1:directory:_files -/'
+      ;;
+    import-okf)
+      _arguments '1:bundle:_files'
       ;;
   esac
 }
@@ -126,7 +134,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search get create update delete compile export use whoami completion serve import-ossie export-okf version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search get create update delete compile export import use whoami completion serve import-ossie export-okf import-okf version help" -- "$cur"))
     return
   fi
 
@@ -144,6 +152,7 @@ _ochakai() {
     delete)        opts="--url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
     export)        opts="--url" ;;
+    import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
     use)
       if [[ $cur != -* ]]; then
@@ -152,7 +161,7 @@ _ochakai() {
       fi
       opts="--name" ;;
     completion)    COMPREPLY=($(compgen -W "zsh bash fish" -- "$cur")); return ;;
-    import-ossie|export-okf) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
+    import-ossie|export-okf|import-okf) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
     *)             opts="" ;;
   esac
 
@@ -176,15 +185,19 @@ complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kep
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
+complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
 complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
 complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
 complete -c ochakai -n __fish_use_subcommand -a export-okf -d 'write the OKF bundle straight from the database'
+complete -c ochakai -n __fish_use_subcommand -a import-okf -d 'load an OKF bundle straight into the database'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export whoami' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export import whoami' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
+complete -c ochakai -n '__fish_seen_subcommand_from import import-okf' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search get create update compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l type -x -a 'metric query insight term table' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l status -x -a 'draft verified deprecated' -d 'filter by status'

@@ -67,7 +67,9 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusCreated, created)
 	})
 
-	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {
+	// {id...} because IDs are hierarchical ("sales/orders", design doc
+	// 0005) — the wildcard captures the remaining path segments.
+	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		k, err := svc.Get(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -76,7 +78,7 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, k)
 	})
 
-	mux.HandleFunc("PUT /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		var k domain.Knowledge
 		if !readJSON(w, r, &k) {
 			return
@@ -91,19 +93,26 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, updated)
 	})
 
-	// GET /api/v1/knowledge/{type}/{id}/usage — how often the entry was
-	// actually used (search hits, fetches, compiles). The measure of the
-	// write-back loop: draft promotion evidence, staleness signal.
-	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}/usage", func(w http.ResponseWriter, r *http.Request) {
+	// GET /api/v1/usage/{type}/{id...} — how often the entry was actually
+	// used (search hits, fetches, compiles). The measure of the write-back
+	// loop: draft promotion evidence, staleness signal. Lives outside
+	// /knowledge/ so a "/usage" suffix can never be confused with an ID
+	// segment.
+	usage := func(w http.ResponseWriter, r *http.Request) {
 		u, err := svc.Usage(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, u)
-	})
+	}
+	mux.HandleFunc("GET /api/v1/usage/{type}/{id...}", usage)
+	// Legacy pre-0005 usage path, kept for existing clients. It shadows
+	// GET on entries whose two-segment ID ends in "usage" — the canonical
+	// path above has no such ambiguity.
+	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}/usage", usage)
 
-	mux.HandleFunc("DELETE /api/v1/knowledge/{type}/{id}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		err := svc.Delete(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)

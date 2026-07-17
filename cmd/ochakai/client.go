@@ -33,6 +33,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"delete":  cmdDelete,
 	"compile": cmdCompile,
 	"export":  cmdExport,
+	"import":  cmdImport,
 	"use":     cmdUse,
 	"whoami":  cmdWhoami,
 
@@ -393,6 +394,148 @@ func cmdExport(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("exported %d files to %s\n", n, pos[0])
 	return nil
+}
+
+func cmdImport(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), index.md files are skipped, existing entries are replaced (kept\nas revisions). Works with any OKF bundle, not just ochakai's own.",
+		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
+	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	files, err := readBundle(pos[0])
+	if err != nil {
+		return err
+	}
+	entries, skipped := okf.FromBundle(files)
+	for _, s := range skipped {
+		fmt.Fprintln(os.Stderr, "skip:", s)
+	}
+	if *dryRun {
+		for i := range entries {
+			fmt.Printf("would import %s\n", entries[i].URI())
+		}
+		fmt.Printf("dry run: %d entries, %d skipped\n", len(entries), len(skipped))
+		return nil
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	var created, updated int
+	for i := range entries {
+		k := &entries[i]
+		if _, err := c.Create(ctx, k); err == nil {
+			created++
+			fmt.Printf("created %s\n", k.URI())
+			continue
+		} else if !isConflict(err) {
+			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		if _, err := c.Update(ctx, k); err != nil {
+			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		updated++
+		fmt.Printf("updated %s\n", k.URI())
+	}
+	fmt.Printf("imported %d entries (%d created, %d updated, %d skipped)\n",
+		created+updated, created, updated, len(skipped))
+	return nil
+}
+
+func isConflict(err error) bool {
+	var apiErr *apiclient.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict
+}
+
+// readBundle loads an OKF bundle into a path→content map from a directory,
+// a tar.gz file, or stdin ("-", tar.gz).
+func readBundle(path string) (map[string][]byte, error) {
+	if path == "-" {
+		return readBundleTarGz(os.Stdin)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if fi.IsDir() {
+		return readBundleDir(path)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return readBundleTarGz(f)
+}
+
+// readBundleDir walks root, skipping dot-entries (.git and friends —
+// bundles live happily in git).
+func readBundleDir(root string) (map[string][]byte, error) {
+	files := map[string][]byte{}
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(d.Name(), ".") && p != root {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)] = data
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+func readBundleTarGz(r io.Reader) (map[string][]byte, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("not a gzip stream (directories are imported directly): %w", err)
+	}
+	tr := tar.NewReader(gz)
+	files := map[string][]byte{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return files, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		if !filepath.IsLocal(filepath.FromSlash(hdr.Name)) {
+			return nil, fmt.Errorf("refusing unsafe path %q in archive", hdr.Name)
+		}
+		data, err := io.ReadAll(tr)
+		if err != nil {
+			return nil, err
+		}
+		files[hdr.Name] = data
+	}
 }
 
 // readEntry reads a knowledge entry from path ("" or "-" = stdin) in

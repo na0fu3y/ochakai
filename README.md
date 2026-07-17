@@ -27,11 +27,13 @@ Principles:
   Proposals that don't make it are kept as `rejected` with the reason
   (`status_note`) so agents stop re-proposing them, and per-entry usage
   counts (`/usage`) show whether the write-back loop is actually working.
-- **Your knowledge is yours.** Self-hostable per tenant; export the whole
-  knowledge base as an
+- **Your knowledge is yours.** Self-hostable per tenant; the knowledge base
+  round-trips through
   [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
-  bundle (`ochakai export-okf <dir>` or `GET /api/v1/export`) — plain
-  markdown + YAML frontmatter that lives happily in git.
+  bundles (`ochakai export` / `ochakai import`) — plain markdown + YAML
+  frontmatter in nested directories that lives happily in git. Import works
+  with any producer's OKF bundle, not just ochakai's own
+  ([design doc 0005](docs/design/0005-okf-compatibility.md)).
 - **Google Cloud native, secret-zero.** ochakai targets Cloud Run +
   Cloud SQL (optionally Vertex AI) exclusively: Cloud Run IAM decides who
   reaches it, callers are identified by their Google identity, and the
@@ -70,6 +72,7 @@ ochakai search "revenue" --type metric --status verified
 ochakai get metric/revenue
 ochakai compile --metric revenue --grain orders.created_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
+ochakai import ./knowledge   # the inverse; works with any OKF bundle
 ```
 
 `ochakai use` saves the selection locally (name more servers with
@@ -122,6 +125,12 @@ time, run them as canaries from your CI:
 | `insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
 | `term` | Glossary term |
 | `table` | Table catalog entry: source, column notes, known issues |
+
+These five are recommendations with server behavior attached (compile,
+canaries), not a closed set — any slug works as a type for your own document
+kinds, and IDs may be hierarchical (`query/sales/monthly-revenue`) to
+organize knowledge into directories
+([design doc 0005](docs/design/0005-okf-compatibility.md)).
 
 ## Configuration
 

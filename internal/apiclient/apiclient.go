@@ -166,8 +166,17 @@ func (c *Client) Export(ctx context.Context) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+// entryPath escapes each ID segment separately: IDs are hierarchical
+// ("sales/orders") and their slashes must stay real path separators.
 func entryPath(typ, id string) string {
-	return "/api/v1/knowledge/" + url.PathEscape(typ) + "/" + url.PathEscape(id)
+	var b strings.Builder
+	b.WriteString("/api/v1/knowledge/")
+	b.WriteString(url.PathEscape(typ))
+	for seg := range strings.SplitSeq(id, "/") {
+		b.WriteString("/")
+		b.WriteString(url.PathEscape(seg))
+	}
+	return b.String()
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*http.Response, error) {
