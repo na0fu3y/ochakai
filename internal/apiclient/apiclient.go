@@ -123,6 +123,38 @@ func (c *Client) Search(ctx context.Context, query string, types, statuses, tags
 	return out.Hits, err
 }
 
+// ContextResult mirrors the /api/v1/context response: ranked hits plus
+// the full entries behind the top ones, expanded one hop through links.
+type ContextResult struct {
+	Hits    []domain.SearchHit `json:"hits"`
+	Entries []domain.Knowledge `json:"entries"`
+}
+
+func (c *Client) Context(ctx context.Context, query string, types, statuses, tags []string, limit int, minScore float64) (*ContextResult, error) {
+	q := url.Values{}
+	q.Set("q", query)
+	if minScore > 0 {
+		q.Set("min_score", strconv.FormatFloat(minScore, 'f', -1, 64))
+	}
+	for _, t := range types {
+		q.Add("type", t)
+	}
+	for _, s := range statuses {
+		q.Add("status", s)
+	}
+	for _, t := range tags {
+		q.Add("tag", t)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	var out ContextResult
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/context", q, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *Client) Get(ctx context.Context, typ, id string) (*domain.Knowledge, error) {
 	var k domain.Knowledge
 	if err := c.doJSON(ctx, http.MethodGet, entryPath(typ, id), nil, nil, &k); err != nil {

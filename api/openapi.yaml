@@ -80,6 +80,61 @@ paths:
               schema: { $ref: "#/components/schemas/Knowledge" }
         "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/context:
+    get:
+      operationId: getContext
+      summary: The one-call read before answering a data question
+      description: >
+        Searches the knowledge base (verified entries rank higher), returns
+        the full entries behind the top hits, and expands one hop through
+        links so companion knowledge (the insight explaining a metric, the
+        golden query answering the question) arrives in the same response.
+        Rejected entries never appear. limit caps the primary entries
+        (default 5, max 20); linked companions share a 2×limit total cap.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: array, items: { $ref: "#/components/schemas/Type" } }
+          explode: true
+        - name: status
+          in: query
+          schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
+          explode: true
+        - name: tag
+          in: query
+          schema: { type: array, items: { type: string } }
+          explode: true
+        - name: limit
+          in: query
+          schema: { type: integer, default: 5, maximum: 20 }
+        - name: min_score
+          in: query
+          description: >
+            Drop hits scoring below this before expansion, for callers that
+            inject the pack automatically and prefer nothing over junk.
+            Scores are search-mode dependent and uncalibrated (trigram
+            similarity plus boosts vs RRF rank fusion) — calibrate against
+            your own corpus before use.
+          schema: { type: number, default: 0 }
+      responses:
+        "200":
+          description: Ranked hits plus the full entries behind the top ones.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hits:
+                    type: array
+                    items: { $ref: "#/components/schemas/SearchHit" }
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/Knowledge" }
+        "400": { $ref: "#/components/responses/Error" }
   /api/v1/knowledge/{type}/{id}:
     parameters:
       - name: type

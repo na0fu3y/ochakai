@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/apiclient"
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -156,13 +158,74 @@ func TestScalar(t *testing.T) {
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "get", "create", "update", "delete", "compile", "export", "import", "use", "whoami", "ui", "completion"} {
+	for _, name := range []string{"search", "context", "get", "create", "update", "delete", "compile", "export", "import", "use", "whoami", "ui", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 12 {
+	if len(clientCommands) != 13 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest
+}
+
+func TestRenderContext(t *testing.T) {
+	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
+	res := &apiclient.ContextResult{
+		Hits: []domain.SearchHit{
+			{Knowledge: domain.Knowledge{Type: domain.TypeQuery, ID: "monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue"}, Score: 0.9},
+			{Knowledge: domain.Knowledge{Type: domain.TypeTerm, ID: "arr", Status: domain.StatusDraft, Title: "ARR"}, Score: 0.1},
+		},
+		Entries: []domain.Knowledge{
+			{
+				Type: domain.TypeQuery, ID: "monthly-revenue", Status: domain.StatusVerified,
+				Title:      "Monthly revenue",
+				CreatedBy:  domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
+				VerifiedBy: &human, VerifiedAt: &now,
+				Attrs: map[string]any{"question": "Revenue by month?", "sql": "SELECT 1\n"},
+				Body:  "Use this over compile.",
+			},
+			{
+				Type: domain.TypeInsight, ID: "revenue-seasonality", Status: domain.StatusDraft,
+				Title: "Seasonality", CreatedBy: domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
+				Body: "Q4 peaks ~40% above baseline.",
+			},
+		},
+	}
+
+	var out bytes.Buffer
+	renderContext(&out, res, 0)
+	s := out.String()
+	for _, want := range []string{
+		"## ochakai://query/monthly-revenue (verified) — Monthly revenue",
+		"verified by human:na0 on 2026-06-01; created by agent:claude",
+		"Q: Revenue by month?",
+		"```sql\nSELECT 1\n```",
+		"Use this over compile.",
+		"## ochakai://insight/revenue-seasonality (draft) — Seasonality",
+		"Also relevant",
+		"- ochakai://term/arr (draft) — ARR",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("output misses %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "ochakai://query/monthly-revenue (verified) — Monthly revenue\n- ") {
+		t.Error("rendered entries must not repeat in the Also relevant list")
+	}
+
+	// A tiny budget still renders the first entry, then reports the rest.
+	out.Reset()
+	renderContext(&out, res, 10)
+	s = out.String()
+	if !strings.Contains(s, "## ochakai://query/monthly-revenue") {
+		t.Errorf("first entry must render regardless of budget:\n%s", s)
+	}
+	if strings.Contains(s, "## ochakai://insight/revenue-seasonality") {
+		t.Errorf("budget must drop later entries:\n%s", s)
+	}
+	if !strings.Contains(s, "1 more entries beyond --budget") {
+		t.Errorf("omitted entries must be reported:\n%s", s)
+	}
 }

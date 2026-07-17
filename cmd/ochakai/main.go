@@ -107,6 +107,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
+  context <question>      the one-call read before a data question (full entries)
   get <type>/<id>         print one entry as an OKF document
   create [-f file]        create an entry from OKF markdown or JSON
   update <type>/<id>      replace an entry (every change kept as a revision)

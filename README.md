@@ -32,6 +32,18 @@ for what they still don't do:
   re-proposing them — a memory of *no* that verified-answer stores
   elsewhere don't keep. Per-entry usage counts show whether the loop is
   actually working.
+- **Not a memory layer — the other half of one.** Memory layers (mem0,
+  Zep, Letta) auto-extract per-user memories with an LLM and inject them
+  back, unaudited: nobody reviews what got remembered, and a wrong
+  memory persists silently. ochakai is the opposite trade: team-shared
+  knowledge that passes through human review, with provenance on every
+  entry. *Memory layers remember what happened; ochakai curates what's
+  true.* They compose — preferences in your memory layer, verified data
+  knowledge here. The delivery trick memory layers got right (no agent
+  judgment needed) ochakai keeps: one `get_context` call returns the
+  relevant entries in full, and the bundled
+  [Claude Code hooks](examples/claude-code) make recall and write-back
+  automatic, no LLM involved.
 - **Verified answers for any client.** Verified-query stores exist — inside
   Snowflake Cortex Analyst, inside Databricks Genie, inside each
   AI-analyst SaaS — and each one feeds only its own chat. ochakai is
@@ -89,6 +101,7 @@ go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 
 ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
 ochakai whoami                     # which server, as whom, reachable?
+ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type metric --status verified
 ochakai get metric/revenue
 ochakai compile --metric revenue --grain orders.created_at:month
@@ -104,7 +117,11 @@ it, so scripts and CI stay explicit. Tab completion:
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 into your project's CLAUDE.md — it teaches the agent the commands and the
-write-learnings-back habit.
+write-learnings-back habit. To make the loop automatic instead of
+habitual, install the [hooks](examples/claude-code): a UserPromptSubmit
+hook injects relevant knowledge before the agent starts (recall), and a
+Stop hook asks it once per data session to save what it learned
+(write-back) — both without an LLM.
 
 ### MCP
 
@@ -141,6 +158,7 @@ it on Cloud Run as a team-shared service.
 
 | Tool | Description |
 |---|---|
+| `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
 | `search_knowledge` | Cross-type search; verified entries rank higher |
 | `get_knowledge` | Fetch one entry with body, attrs, and links |
 | `create_knowledge` | Write learnings back (agents create drafts) |
