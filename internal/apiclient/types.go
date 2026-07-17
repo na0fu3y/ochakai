@@ -29,6 +29,14 @@ type TimeGrain struct {
 	Grain string `json:"grain"` // day | week | month | quarter | year
 }
 
+// ImportReport is the response of POST /api/v1/import/ossie.
+// TestImportReportMatchesServerWire pins it to importer.Report.
+type ImportReport struct {
+	Models  []string `json:"models"`
+	Created []string `json:"created"`
+	Updated []string `json:"updated"`
+}
+
 type CompileResult struct {
 	SQL          string   `json:"sql"`
 	Dialect      string   `json:"dialect"`

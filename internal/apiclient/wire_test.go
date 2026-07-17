@@ -7,6 +7,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/importer"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
 
@@ -50,6 +51,30 @@ func TestCompileRequestMatchesServerWire(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("server decoded:\n%+v\nwant:\n%+v", got, want)
+	}
+}
+
+func TestImportReportMatchesServerWire(t *testing.T) {
+	server := importer.Report{
+		Models:  []string{"sales_analytics"},
+		Created: []string{"metric/revenue"},
+		Updated: []string{"table/orders"},
+	}
+	data, err := json.Marshal(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got ImportReport
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("client cannot decode the server response: %v", err)
+	}
+	want := ImportReport{
+		Models:  []string{"sales_analytics"},
+		Created: []string{"metric/revenue"},
+		Updated: []string{"table/orders"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("client decoded:\n%+v\nwant:\n%+v", got, want)
 	}
 }
 
