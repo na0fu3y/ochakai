@@ -68,15 +68,22 @@
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 0 1.2rem; height: 3.3rem; position: sticky; top: 0; z-index: 10;
   }
-  .brand { font-weight: 700; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: .45rem; }
+  .brand { font-weight: 700; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: .45rem; white-space: nowrap; }
   .brand:hover { text-decoration: none; }
   .topnav { display: flex; gap: .2rem; align-self: stretch; }
   .topnav a {
     display: flex; align-items: center; padding: 0 .8rem; color: var(--muted);
-    border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; white-space: nowrap;
   }
   .topnav a:hover { color: var(--text); text-decoration: none; }
   .topnav a.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+  /* Narrow screens: brand + actions on the first row, nav tabs on their own row. */
+  @media (max-width: 800px) {
+    .topbar { flex-wrap: wrap; height: auto; padding-top: .55rem; gap: .5rem .8rem; }
+    .topnav { order: 10; flex-basis: 100%; align-self: auto; overflow-x: auto; }
+    .topnav a { padding: .1rem .8rem .5rem; }
+    .server-chip { flex: 0 1 auto; min-width: 3rem; }
+  }
   .topbar .spacer { flex: 1; }
   .server-chip {
     font-size: .8rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px;
@@ -88,8 +95,9 @@
   /* ---- layout ---- */
   main { max-width: 68rem; margin: 0 auto; padding: 1.4rem 1.2rem 4rem; }
   .explore { display: grid; grid-template-columns: 14rem 1fr; gap: 1.6rem; align-items: start; }
-  @media (max-width: 760px) { .explore { grid-template-columns: 1fr; } .rail { position: static; } }
+  .explore > section { min-width: 0; }
   .rail { position: sticky; top: 4.6rem; }
+  @media (max-width: 760px) { .explore { grid-template-columns: 1fr; } .rail { position: static; } }
   .rail h3 {
     font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
     color: var(--muted); margin: 1.2rem 0 .45rem;
@@ -109,7 +117,7 @@
   .btn {
     font: inherit; font-weight: 500; cursor: pointer; border-radius: 8px;
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
-    padding: .42rem .85rem; display: inline-flex; align-items: center; gap: .4rem;
+    padding: .42rem .85rem; display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap;
   }
   .btn:hover { border-color: var(--accent); color: var(--accent-strong); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -130,7 +138,7 @@
   .card .head a.title { font-weight: 600; font-size: 1.02rem; color: var(--text); }
   .card .head a.title:hover { color: var(--accent-strong); }
   .type-ico { font-size: 1rem; }
-  .card .meta { color: var(--muted); font-size: .8rem; margin-top: .15rem; }
+  .card .meta { color: var(--muted); font-size: .8rem; margin-top: .15rem; overflow-wrap: anywhere; }
   .card .desc { margin-top: .3rem; font-size: .92rem; }
   .card pre { margin-bottom: 0; }
 
