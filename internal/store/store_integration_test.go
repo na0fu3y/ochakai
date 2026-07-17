@@ -189,6 +189,61 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 	}
 }
 
+// ListLinkingTo powers get_context's reverse-link expansion: entries
+// whose links point at the target must surface — in both the bare and
+// the ochakai:// target forms — and soft-deleted entries must not.
+func TestIntegrationListLinkingTo(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-link-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	entries := []*domain.Knowledge{
+		{Type: domain.TypeMetric, ID: "it-link-metric", Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
+		{Type: domain.TypeInsight, ID: "it-link-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
+			Links: []domain.Link{{Rel: "explains", Target: "metric/it-link-metric"}}},
+		{Type: domain.TypeInsight, ID: "it-link-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
+			Links: []domain.Link{{Rel: "explains", Target: "ochakai://metric/it-link-metric"}}},
+		{Type: domain.TypeInsight, ID: "it-link-gone", Title: "deleted link", Status: domain.StatusDraft, CreatedBy: actor,
+			Links: []domain.Link{{Rel: "explains", Target: "metric/it-link-metric"}}},
+	}
+	for _, k := range entries {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SoftDelete(ctx, domain.TypeInsight, "it-link-gone", actor); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.ListLinkingTo(ctx, domain.TypeMetric, "it-link-metric", 10)
+	if err != nil {
+		t.Fatalf("ListLinkingTo: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, k := range got {
+		ids[k.ID] = true
+	}
+	if len(got) != 2 || !ids["it-link-bare"] || !ids["it-link-uri"] {
+		t.Errorf("ListLinkingTo = %v, want it-link-bare and it-link-uri", ids)
+	}
+}
+
 // Create over a soft-deleted entry revives it — otherwise the ID is dead
 // forever (the deleted row still owns the primary key while Update
 // refuses deleted rows). Live entries, including rejected ones, still

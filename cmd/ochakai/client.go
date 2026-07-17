@@ -27,6 +27,7 @@ import (
 
 var clientCommands = map[string]func(context.Context, []string) error{
 	"search":  cmdSearch,
+	"context": cmdContext,
 	"get":     cmdGet,
 	"create":  cmdCreate,
 	"update":  cmdUpdate,
@@ -163,6 +164,102 @@ func cmdSearch(ctx context.Context, args []string) error {
 		fmt.Println(line)
 	}
 	return nil
+}
+
+func cmdContext(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
+		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type query --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n")
+	var types, statuses, tags repeated
+	fs.Var(&types, "type", "filter by type: metric|query|insight|term|table (repeatable)")
+	fs.Var(&statuses, "status", "filter by status: draft|verified|deprecated (repeatable)")
+	fs.Var(&tags, "tag", "filter by tag (repeatable)")
+	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
+	budget := fs.Int("budget", 0, "stop rendering entries after ~this many bytes (0 = no cap)")
+	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (trigram vs hybrid), so calibrate before use (0 = off)")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) == 0 {
+		fs.Usage()
+		return errReported
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	res, err := c.Context(ctx, strings.Join(pos, " "), types, statuses, tags, *limit, *minScore)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(res)
+	}
+	renderContext(os.Stdout, res, *budget)
+	return nil
+}
+
+// renderContext prints the pack as compact markdown: per entry a heading
+// with URI, status, and title, a provenance line, the golden-query
+// question and SQL when present, then the body. Once the byte budget is
+// spent the remaining entries are dropped with a note (the first entry
+// always renders); hits without a rendered entry become one-line pointers.
+func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
+	rendered := map[string]bool{}
+	written, omitted := 0, 0
+	for i := range res.Entries {
+		k := &res.Entries[i]
+		sec := renderEntry(k)
+		if budget > 0 && written > 0 && written+len(sec) > budget {
+			omitted = len(res.Entries) - i
+			break
+		}
+		fmt.Fprint(w, sec)
+		written += len(sec)
+		rendered[string(k.Type)+"/"+k.ID] = true
+	}
+	if omitted > 0 {
+		fmt.Fprintf(w, "(%d more entries beyond --budget; raise it or `ochakai get` them)\n", omitted)
+	}
+	var rest []string
+	for _, h := range res.Hits {
+		if !rendered[string(h.Type)+"/"+h.ID] {
+			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.Title))
+		}
+	}
+	if len(rest) > 0 {
+		fmt.Fprintf(w, "\nAlso relevant (`ochakai get <type>/<id>` for the full entry):\n%s\n", strings.Join(rest, "\n"))
+	}
+}
+
+func renderEntry(k *domain.Knowledge) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s (%s) — %s\n", k.URI(), k.Status, k.Title)
+	prov := fmt.Sprintf("created by %s:%s", k.CreatedBy.Kind, k.CreatedBy.Name)
+	if k.VerifiedBy != nil && k.VerifiedAt != nil {
+		prov = fmt.Sprintf("verified by %s:%s on %s; %s",
+			k.VerifiedBy.Kind, k.VerifiedBy.Name, k.VerifiedAt.Format("2006-01-02"), prov)
+	}
+	fmt.Fprintln(&b, prov)
+	if k.StatusNote != "" {
+		fmt.Fprintf(&b, "status note: %s\n", k.StatusNote)
+	}
+	if k.Description != "" {
+		fmt.Fprintf(&b, "\n%s\n", k.Description)
+	}
+	if q, ok := k.Attrs["question"].(string); ok && q != "" {
+		fmt.Fprintf(&b, "\nQ: %s\n", q)
+	}
+	if sql, ok := k.Attrs["sql"].(string); ok && sql != "" {
+		fmt.Fprintf(&b, "\n```sql\n%s\n```\n", strings.TrimRight(sql, "\n"))
+	}
+	if body := strings.TrimSpace(k.Body); body != "" {
+		fmt.Fprintf(&b, "\n%s\n", body)
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 func cmdGet(ctx context.Context, args []string) error {

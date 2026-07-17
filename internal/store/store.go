@@ -122,6 +122,25 @@ func (s *Store) Get(ctx context.Context, typ domain.Type, id string) (*domain.Kn
 	return &k, nil
 }
 
+// ListLinkingTo returns live entries whose links point at "<type>/<id>",
+// most recently updated first. This is the reverse edge Context needs:
+// the insight that explains a metric links to the metric, not the other
+// way round. Both bare and ochakai:// target forms match.
+func (s *Store) ListLinkingTo(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Knowledge, error) {
+	target := string(typ) + "/" + id
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge
+		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2)
+		 ORDER BY updated_at DESC LIMIT $3`,
+		fmt.Sprintf(`[{"target": %q}]`, target),
+		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+target),
+		limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
+}
+
 // Create inserts a new entry. A live entry with the same type/id is
 // ErrAlreadyExists — including rejected ones, so the memory of no
 // survives. A soft-deleted entry is revived instead: the ID would

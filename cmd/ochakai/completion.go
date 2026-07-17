@@ -37,6 +37,7 @@ _ochakai() {
   local -a commands
   commands=(
     'search:search knowledge; verified entries rank higher'
+    'context:the one-call read before a data question (full entries)'
     'get:print one entry as an OKF document'
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
@@ -64,6 +65,17 @@ _ochakai() {
         '*--status[filter by status]:status:(draft verified deprecated)' \
         '*--tag[filter by tag]:tag:' \
         '--limit[max results]:limit:' \
+        '--json[print the raw JSON response]' \
+        '--url[server URL]:url:'
+      ;;
+    context)
+      _arguments \
+        '*--type[filter by type]:type:(metric query insight term table)' \
+        '*--status[filter by status]:status:(draft verified deprecated)' \
+        '*--tag[filter by tag]:tag:' \
+        '--limit[max full entries]:limit:' \
+        '--budget[stop rendering after ~bytes]:budget:' \
+        '--min-score[drop hits below this score]:min-score:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
       ;;
@@ -130,7 +142,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search get create update delete compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search context get create update delete compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
     return
   fi
 
@@ -143,6 +155,7 @@ _ochakai() {
 
   case $cmd in
     search)        opts="--type --status --tag --limit --json --url" ;;
+    context)       opts="--type --status --tag --limit --budget --min-score --json --url" ;;
     get)           opts="--json --url" ;;
     create|update) opts="-f --json --url" ;;
     delete)        opts="--url" ;;
@@ -176,6 +189,7 @@ const fishCompletion = `# fish completion for ochakai — ochakai completion fis
 complete -c ochakai -f
 
 complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
+complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full entries)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
@@ -191,16 +205,18 @@ complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell com
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export import import-ossie whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete compile export import import-ossie whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search get create update compile whoami' -l json -d 'print raw JSON'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l type -x -a 'metric query insight term table' -d 'filter by type'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l status -x -a 'draft verified deprecated' -d 'filter by status'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l tag -x -d 'filter by tag'
-complete -c ochakai -n '__fish_seen_subcommand_from search compile' -l limit -x -d 'max results / LIMIT clause'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metric query insight term table' -d 'filter by type'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated' -d 'filter by status'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
+complete -c ochakai -n '__fish_seen_subcommand_from search context compile' -l limit -x -d 'max results / LIMIT clause'
+complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
+complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l metric -x -d 'metric name'
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dimension -x -d 'group-by column as dataset.field'
