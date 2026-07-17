@@ -114,3 +114,42 @@ func TestUIHandlerRejectsForeignHost(t *testing.T) {
 		}
 	}
 }
+
+// CSRF guard: a cross-site page reaching 127.0.0.1 directly carries the
+// loopback Host (passing the rebinding guard) but a foreign Origin. The
+// UI's own requests send no Origin or a loopback one and must reach the
+// backend. A foreign Origin must be refused before the proxy signs and
+// forwards the write.
+func TestUIHandlerRejectsForeignOrigin(t *testing.T) {
+	var reached bool
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+	}))
+	defer backend.Close()
+	h, err := uiHandler(backend.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for origin, want := range map[string]int{
+		"":                          http.StatusOK, // same-origin GET, or a non-browser client
+		"http://127.0.0.1:8098":     http.StatusOK,
+		"http://localhost:8098":     http.StatusOK,
+		"https://evil.example":      http.StatusForbidden,
+		"http://127.0.0.1.evil.com": http.StatusForbidden,
+		"null":                      http.StatusForbidden, // opaque origin (sandboxed iframe, data: page)
+	} {
+		reached = false
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8098/api/v1/knowledge", nil)
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("Origin %q: POST = %d, want %d", origin, rec.Code, want)
+		}
+		if reachedBackend := reached; reachedBackend != (want == http.StatusOK) {
+			t.Errorf("Origin %q: reached backend = %v, want %v", origin, reachedBackend, want == http.StatusOK)
+		}
+	}
+}
