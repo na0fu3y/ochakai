@@ -58,6 +58,25 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 	})
 
+	// GET /api/v1/context?q=...&type=...&status=...&tag=...&limit=...
+	// The one-call read before answering a data question: full entries
+	// behind the top hits, expanded one hop through links.
+	mux.HandleFunc("GET /api/v1/context", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		minScore, _ := strconv.ParseFloat(q.Get("min_score"), 64)
+		res, err := svc.Context(r.Context(), q.Get("q"), store.Filter{
+			Types:    toTypes(q["type"]),
+			Statuses: toStatuses(q["status"]),
+			Tags:     q["tag"],
+		}, limit, minScore)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+
 	mux.HandleFunc("POST /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		var k domain.Knowledge
 		if !readJSON(w, r, &k) {

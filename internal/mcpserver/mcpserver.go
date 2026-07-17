@@ -33,6 +33,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"and any slug works as a type for your own document kinds. IDs may be hierarchical " +
 			"(slash-separated, e.g. sales/orders) to organize knowledge into directories. " +
 			"It executes no SQL and uses no LLM. " +
+			"Before answering a data question, call get_context once — it returns the relevant " +
+			"entries in full, links expanded. " +
 			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
 			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
 			"you have actually validated — who verified is always recorded. Knowledge that was " +
@@ -71,6 +73,23 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, searchOut{}, err
 		}
 		return nil, searchOut{Hits: hits}, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "get_context",
+		Description: "The one call to make before answering a data question: searches the knowledge " +
+			"base (verified entries rank higher), returns the full entries behind the top hits, " +
+			"and expands one hop through links so the insight explaining a metric and the golden " +
+			"query answering the question arrive together. Prefer this over search+get chains; " +
+			"fall back to search_knowledge/get_knowledge for precise lookups.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in contextIn) (*mcp.CallToolResult, contextOut, error) {
+		res, err := svc.Context(ctx, in.Query, store.Filter{
+			Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags,
+		}, in.Limit, in.MinScore)
+		if err != nil {
+			return nil, contextOut{}, err
+		}
+		return nil, contextOut{Hits: res.Hits, Entries: res.Entries}, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -165,6 +184,22 @@ type searchIn struct {
 
 type searchOut struct {
 	Hits []domain.SearchHit `json:"hits"`
+}
+
+type contextIn struct {
+	Query    string   `json:"query"`
+	Types    []string `json:"types,omitempty"`
+	Statuses []string `json:"statuses,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Limit    int      `json:"limit,omitempty"`
+	// MinScore drops hits below it; scores are search-mode dependent
+	// (trigram vs hybrid RRF), so leave it 0 unless calibrated.
+	MinScore float64 `json:"min_score,omitempty"`
+}
+
+type contextOut struct {
+	Hits    []domain.SearchHit `json:"hits"`
+	Entries []domain.Knowledge `json:"entries"`
 }
 
 type getIn struct {

@@ -1,0 +1,27 @@
+{
+  "$comment": "Claude Code hooks for ochakai — see examples/claude-code/README.md. Merge the hooks key into your project's .claude/settings.json and copy the hooks/ scripts to .claude/hooks/.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ochakai-recall.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ochakai-write-back.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

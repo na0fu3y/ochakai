@@ -105,3 +105,26 @@ func TestCompileResultMatchesServerWire(t *testing.T) {
 		t.Errorf("client decoded: %+v", got)
 	}
 }
+
+func TestContextResultMatchesServerWire(t *testing.T) {
+	server := service.ContextResult{
+		Hits: []domain.SearchHit{
+			{Knowledge: domain.Knowledge{Type: domain.TypeMetric, ID: "revenue", Title: "Revenue"}, Score: 0.9},
+		},
+		Entries: []domain.Knowledge{
+			{Type: domain.TypeInsight, ID: "revenue-seasonality", Title: "Seasonality", Body: "Q4 peaks."},
+		},
+	}
+	data, err := json.Marshal(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got ContextResult
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("client cannot decode the server response: %v", err)
+	}
+	if len(got.Hits) != 1 || got.Hits[0].ID != "revenue" ||
+		len(got.Entries) != 1 || got.Entries[0].Body != "Q4 peaks." {
+		t.Errorf("client decoded: %+v", got)
+	}
+}

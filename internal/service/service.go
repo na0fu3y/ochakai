@@ -168,6 +168,102 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	return fused, nil
 }
 
+// ContextResult is the one-call context pack behind get_context and
+// `ochakai context`: the ranked hits, plus the full entries behind the
+// top ones expanded one hop through links.
+type ContextResult struct {
+	Hits    []domain.SearchHit `json:"hits"`
+	Entries []domain.Knowledge `json:"entries"`
+}
+
+// Context gathers what an agent should read before answering a data
+// question, in one call: search (verified entries rank higher), fetch
+// the entries behind the top hits in full, and follow their links one
+// hop so companion knowledge — the insight that says how to read a
+// metric, the golden query that answers the question — arrives without
+// further round trips.
+//
+// minScore drops hits scoring below it before expansion, for callers
+// that inject the pack automatically (hooks) and prefer nothing over
+// junk. It defaults to 0 (off) because scores are search-mode dependent
+// and uncalibrated: trigram similarity plus boosts in lexical mode, RRF
+// rank fusion (~0.02 scale) in hybrid mode — a floor meaningful in one
+// mode is nonsense in the other.
+func (s *Service) Context(ctx context.Context, query string, f store.Filter, limit int, minScore float64) (*ContextResult, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, fmt.Errorf("invalid context request: query is required")
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 5
+	}
+	hits, err := s.Search(ctx, query, f, 2*limit)
+	if err != nil {
+		return nil, err
+	}
+	if minScore > 0 {
+		kept := hits[:0]
+		for _, h := range hits {
+			if h.Score >= minScore {
+				kept = append(kept, h)
+			}
+		}
+		hits = kept
+	}
+	seen := map[string]bool{}
+	var entries []domain.Knowledge
+	addFetched := func(k *domain.Knowledge) {
+		key := string(k.Type) + "/" + k.ID
+		if len(entries) >= 2*limit || seen[key] || k.Status == domain.StatusRejected {
+			return // rejected companions stay out of the pack
+		}
+		seen[key] = true
+		entries = append(entries, *k)
+	}
+	add := func(typ domain.Type, id string) {
+		if len(entries) >= 2*limit || seen[string(typ)+"/"+id] {
+			return
+		}
+		k, err := s.Store.Get(ctx, typ, id)
+		if err != nil {
+			return // deleted targets stay out of the pack
+		}
+		addFetched(k)
+	}
+	for _, h := range hits {
+		if len(entries) >= limit {
+			break
+		}
+		add(h.Type, h.ID)
+	}
+	// One hop through the primary entries' links, both directions: the
+	// query a metric links to, and the insight that links to the metric
+	// (rel: explains points at the metric, not the other way round).
+	// Companions share the 2*limit cap and are never expanded themselves.
+	primaries := len(entries)
+	for i := range primaries {
+		for _, l := range entries[i].Links {
+			typ, id, ok := strings.Cut(strings.TrimPrefix(l.Target, "ochakai://"), "/")
+			if ok {
+				add(domain.Type(typ), id)
+			}
+		}
+		linking, err := s.Store.ListLinkingTo(ctx, entries[i].Type, entries[i].ID, 2*limit)
+		if err != nil {
+			s.Log.Warn("backlink lookup failed", "type", entries[i].Type, "id", entries[i].ID, "error", err)
+			continue
+		}
+		for j := range linking {
+			addFetched(&linking[j])
+		}
+	}
+	targets := make([]store.EventTarget, len(entries))
+	for i := range entries {
+		targets[i] = store.EventTarget{Type: entries[i].Type, ID: entries[i].ID}
+	}
+	s.recordUsage(ctx, domain.EventFetched, targets)
+	return &ContextResult{Hits: hits, Entries: entries}, nil
+}
+
 // ListByVerifiedAt lists entries by verification age, oldest first — the
 // feed for canary runs over verified golden queries (see
 // docs/guides/golden-query-canary.md). Not a search: no usage is recorded.
