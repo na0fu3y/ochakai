@@ -44,6 +44,11 @@ func New(ctx context.Context, baseURL string) (*Client, error) {
 	return c, nil
 }
 
+// TokenSource exposes the resolved Google ID token source so callers can
+// build request paths of their own (e.g. `ochakai ui`'s reverse proxy).
+// Nil for plain-http development servers — send no credentials then.
+func (c *Client) TokenSource() oauth2.TokenSource { return c.tokens }
+
 // Identity resolves, locally, the identity this client would present:
 // the ID token's email, prefixed the way the server maps actors (design
 // doc 0002) — service accounts to agent:, everyone else to human:.

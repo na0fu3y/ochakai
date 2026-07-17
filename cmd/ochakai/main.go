@@ -114,6 +114,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
+  ui                      serve the web UI locally, acting as you (no deploy)
 
 Server admin commands (run next to the database):
   serve                   start the MCP + REST server

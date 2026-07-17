@@ -75,6 +75,7 @@ ochakai get metric/revenue
 ochakai compile --metric revenue --grain orders.created_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle
+ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (no deploy)
 ```
 
 `ochakai use` saves the selection locally (name more servers with
@@ -113,8 +114,10 @@ proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
 The REST API (`/api/v1`) mirrors these tools for building your own web UI —
-see [api/openapi.yaml](api/openapi.yaml) and the sample in
-[examples/webui](examples/webui). To keep golden queries trustworthy over
+see [api/openapi.yaml](api/openapi.yaml). A bundled web UI ships two ways
+(same page, different identity): `ochakai ui` serves it locally acting as
+you, and [examples/webui](examples/webui) deploys it on Cloud Run as a
+team-shared service. To keep golden queries trustworthy over
 time, run them as canaries from your CI:
 [docs/guides/golden-query-canary.md](docs/guides/golden-query-canary.md).
 

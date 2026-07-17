@@ -36,6 +36,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"import":  cmdImport,
 	"use":     cmdUse,
 	"whoami":  cmdWhoami,
+	"ui":      cmdUI,
 
 	"completion": cmdCompletion,
 }
