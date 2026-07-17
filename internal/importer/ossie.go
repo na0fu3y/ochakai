@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -34,17 +33,17 @@ type Report struct {
 func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, actor domain.Actor) (*Report, error) {
 	var spec map[string]any
 	if err := yaml.Unmarshal(yamlSrc, &spec); err != nil {
-		return nil, fmt.Errorf("invalid semantic model YAML: %w", err)
+		return nil, service.Invalidf("invalid semantic model YAML: %v", err)
 	}
 	models, err := compiler.ModelsFromSpec(spec)
 	if err != nil {
-		return nil, err
+		return nil, service.Invalidf("invalid semantic model: %v", err)
 	}
 
 	report := &Report{}
 	for _, m := range models {
 		if m.Name == "" {
-			return nil, fmt.Errorf("invalid semantic model: missing name")
+			return nil, service.Invalidf("invalid semantic model: missing name")
 		}
 		modelSpec, err := toSpecMap(m)
 		if err != nil {

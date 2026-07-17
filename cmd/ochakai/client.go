@@ -152,7 +152,7 @@ func splitRef(s string) (string, string, error) {
 
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output is then verified_at, uri, status, title.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output is then verified_at, uri, status, title — description.",
 		"  ochakai search \"gross margin\" --type metric --type term --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type query --status verified --limit 100\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -462,7 +462,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 	if err := c.Delete(ctx, typ, id); err != nil {
 		return err
 	}
-	fmt.Printf("deleted %s/%s\n", typ, id)
+	fmt.Printf("deleted ochakai://%s/%s\n", typ, id)
 	return nil
 }
 

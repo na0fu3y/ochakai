@@ -50,7 +50,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +
-			"(oldest first, never-verified last; query is ignored, scores are 0) — the feed for " +
+			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
 			"golden-query canary runs and for finding stale verified knowledge.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags}
@@ -58,13 +58,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			if in.Sort != "verified_at" {
 				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at)", in.Sort)
 			}
-			entries, err := svc.ListByVerifiedAt(ctx, f, in.Limit)
+			if in.Query != "" {
+				return nil, searchOut{}, fmt.Errorf("sort=verified_at lists entries by verification age; it cannot be combined with a search query")
+			}
+			hits, err := svc.ListByVerifiedAt(ctx, f, in.Limit)
 			if err != nil {
 				return nil, searchOut{}, err
-			}
-			hits := make([]domain.SearchHit, len(entries))
-			for i, k := range entries {
-				hits[i] = domain.SearchHit{Knowledge: k}
 			}
 			return nil, searchOut{Hits: hits}, nil
 		}
@@ -174,7 +173,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 }
 
 type searchIn struct {
-	Query    string   `json:"query"`
+	// Query drives the search. Optional in the schema because sort mode
+	// rejects it — one of query / sort must be set.
+	Query    string   `json:"query,omitempty"`
 	Types    []string `json:"types,omitempty"`
 	Statuses []string `json:"statuses,omitempty"`
 	Tags     []string `json:"tags,omitempty"`

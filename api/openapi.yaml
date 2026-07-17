@@ -28,12 +28,14 @@ paths:
         With sort=verified_at the endpoint lists entries by verification age
         (oldest first, never-verified last) instead of searching — the feed
         for golden query canary runs (docs/guides/golden-query-canary.md).
+        q and sort are mutually exclusive; combining them is a 400.
       parameters:
         - name: q
           in: query
           schema: { type: string }
         - name: sort
           in: query
+          description: Mutually exclusive with q.
           schema: { type: string, enum: [verified_at] }
         - name: type
           in: query
@@ -52,14 +54,13 @@ paths:
           description: >
             Searching: default 10, max 50. With sort=verified_at the feed
             reads more per page: default 100, max 1000. Out-of-range values
-            fall back to the default.
+            fall back to the default; non-integer values are a 400.
           schema: { type: integer }
       responses:
         "200":
           description: >
             Scored hits, verified entries boosted. With sort=verified_at,
-            hits are plain entries in verification-age order and carry no
-            score.
+            hits are in verification-age order and carry score 0.
           content:
             application/json:
               schema:
@@ -68,6 +69,7 @@ paths:
                   hits:
                     type: array
                     items: { $ref: "#/components/schemas/SearchHit" }
+        "400": { $ref: "#/components/responses/Error" }
     post:
       operationId: createKnowledge
       summary: Create a knowledge entry
@@ -127,7 +129,7 @@ paths:
             inject the pack automatically and prefer nothing over junk.
             Scores are search-mode dependent and uncalibrated (trigram
             similarity plus boosts vs RRF rank fusion) — calibrate against
-            your own corpus before use.
+            your own corpus before use. Non-numeric values are a 400.
           schema: { type: number, default: 0 }
       responses:
         "200":

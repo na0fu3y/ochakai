@@ -10,8 +10,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
@@ -31,7 +31,11 @@ func Handler(svc *service.Service) http.Handler {
 	// instead of searching — the feed for golden query canary runs.
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
+		limit, err := queryInt(q, "limit")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		f := store.Filter{
 			Types:    toTypes(q["type"]),
 			Statuses: toStatuses(q["status"]),
@@ -39,15 +43,19 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		if sort := q.Get("sort"); sort != "" {
 			if sort != "verified_at" {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid sort (valid: verified_at)"})
+				writeError(w, service.Invalidf("invalid sort (valid: verified_at)"))
 				return
 			}
-			entries, err := svc.ListByVerifiedAt(r.Context(), f, limit)
+			if q.Get("q") != "" {
+				writeError(w, service.Invalidf("sort=verified_at lists entries by verification age; it cannot be combined with a search query (q)"))
+				return
+			}
+			hits, err := svc.ListByVerifiedAt(r.Context(), f, limit)
 			if err != nil {
 				writeError(w, err)
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"hits": entries})
+			writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 			return
 		}
 		hits, err := svc.Search(r.Context(), q.Get("q"), f, limit)
@@ -63,8 +71,16 @@ func Handler(svc *service.Service) http.Handler {
 	// behind the top hits, expanded one hop through links.
 	mux.HandleFunc("GET /api/v1/context", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
-		minScore, _ := strconv.ParseFloat(q.Get("min_score"), 64)
+		limit, err := queryInt(q, "limit")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		minScore, err := queryFloat(q, "min_score")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		res, err := svc.Context(r.Context(), q.Get("q"), store.Filter{
 			Types:    toTypes(q["type"]),
 			Statuses: toStatuses(q["status"]),
@@ -217,6 +233,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	var compileErr *compiler.Error
+	var inputErr *service.InvalidInputError
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		status = http.StatusNotFound
@@ -224,10 +241,37 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 	case errors.As(err, &compileErr):
 		status = http.StatusUnprocessableEntity
-	case strings.Contains(err.Error(), "invalid"):
+	case errors.As(err, &inputErr):
 		status = http.StatusBadRequest
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// queryInt and queryFloat parse optional numeric query parameters,
+// rejecting malformed values instead of silently treating them as unset
+// (matching the MCP surface, where the JSON schema enforces types).
+func queryInt(q url.Values, name string) (int, error) {
+	s := q.Get(name)
+	if s == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, service.Invalidf("invalid %s %q (want an integer)", name, s)
+	}
+	return n, nil
+}
+
+func queryFloat(q url.Values, name string) (float64, error) {
+	s := q.Get(name)
+	if s == "" {
+		return 0, nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, service.Invalidf("invalid %s %q (want a number)", name, s)
+	}
+	return f, nil
 }
 
 func toTypes(ss []string) []domain.Type {
