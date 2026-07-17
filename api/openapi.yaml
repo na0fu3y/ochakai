@@ -340,6 +340,7 @@ paths:
                     items: { type: string }
                     description: URIs of knowledge entries refreshed.
         "400": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
   /api/v1/compile:
     post:
       operationId: compileSQL

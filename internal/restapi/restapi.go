@@ -175,10 +175,9 @@ func Handler(svc *service.Service) http.Handler {
 		if !ok {
 			return
 		}
-		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, domain.MaxAttachmentSize+1))
-		if err != nil {
-			writeJSON(w, http.StatusRequestEntityTooLarge,
-				map[string]string{"error": fmt.Sprintf("attachment exceeds %d MiB", domain.MaxAttachmentSize>>20)})
+		data, ok := readBody(w, r, domain.MaxAttachmentSize,
+			fmt.Sprintf("attachment exceeds %d MiB", domain.MaxAttachmentSize>>20))
+		if !ok {
 			return
 		}
 		// okf_path preserves the bundle location a foreign import carried
@@ -280,9 +279,8 @@ func Handler(svc *service.Service) http.Handler {
 	// metric/table knowledge entries are derived (design doc 0007 moved
 	// this from a DB-direct admin command to the API).
 	mux.HandleFunc("POST /api/v1/import/ossie", func(w http.ResponseWriter, r *http.Request) {
-		src, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<20))
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read body: " + err.Error()})
+		src, ok := readBody(w, r, 4<<20, "semantic model exceeds 4 MiB")
+		if !ok {
 			return
 		}
 		report, err := importer.ImportOssie(r.Context(), svc, src, httpauth.Actor(r.Context()))
@@ -313,6 +311,23 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// readBody reads at most limit bytes of the request body. Exceeding the
+// limit is a 413 with tooLarge as the message; any other read failure is
+// a 400 — a client disconnect must not masquerade as a size complaint.
+func readBody(w http.ResponseWriter, r *http.Request, limit int64, tooLarge string) ([]byte, bool) {
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": tooLarge})
+		} else {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read body: " + err.Error()})
+		}
+		return nil, false
+	}
+	return data, true
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {

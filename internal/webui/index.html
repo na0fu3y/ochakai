@@ -2,9 +2,11 @@
 <!-- Sample web UI for the ochakai REST API (api/openapi.yaml).
      A single self-contained file: no build step, no framework, no CDN.
      Serve it from anywhere (main.go proxies /api/v1 to ochakai) and it
-     covers the whole API surface — search, entry details with usage,
-     create/edit with the draft → verified workflow, SQL compilation, and
-     OKF export. A starting point for building your own UI. -->
+     covers the human-facing API surface — search, entry details with
+     usage and image attachments, create/edit with the draft → verified
+     workflow, SQL compilation, and OKF export. (/api/v1/context and the
+     Ossie import are agent/ops surfaces — see api/openapi.yaml.)
+     A starting point for building your own UI. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -203,6 +205,18 @@
   .md h1 { font-size: 1.3rem; } .md h2 { font-size: 1.15rem; } .md h3 { font-size: 1rem; }
   .md p { margin: .5em 0; }
   .md ul, .md ol { margin: .4em 0; padding-left: 1.5em; }
+  .md img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; display: block; margin: .6rem 0; }
+
+  /* ---- attachments ---- */
+  .att-card { display: flex; gap: 1rem; align-items: flex-start; }
+  .att-card a.thumb { flex-shrink: 0; }
+  .att-card img {
+    max-width: 13rem; max-height: 9rem; object-fit: contain; display: block;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
+  }
+  .att-card .att-meta { min-width: 0; display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
+  .att-card .att-meta .mono { overflow-wrap: anywhere; }
+  @media (max-width: 620px) { .att-card { flex-direction: column; } }
 
   /* ---- forms ---- */
   .form { max-width: 46rem; }
@@ -267,20 +281,34 @@ function actorStr(a) {
   if (!a || !a.name) return '';
   return (a.kind === 'agent' ? '🤖 ' : '👤 ') + a.name;
 }
+function fmtSize(n) {
+  if (!n && n !== 0) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
 // URL path for an entry; hierarchical IDs keep their slashes.
 function idPath(type, id) {
   return encodeURIComponent(type) + '/' + String(id).split('/').map(encodeURIComponent).join('/');
 }
 const entryHash = e => '#/k/' + idPath(e.type, e.id);
 
-/* ---- tiny markdown renderer (headings, lists, code, links, emphasis) ---- */
-function md(src) {
+/* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
+// resolveImg maps an image reference from the body to a URL (the detail
+// view resolves entry-relative references to attachment URLs); references
+// it cannot resolve stay literal text rather than rendering broken images.
+function md(src, resolveImg) {
   const lines = String(src ?? '').split('\n');
   let out = '', inCode = false, inList = null, para = [];
+  const img = (m, alt, ref) => {
+    const url = /^https?:/.test(ref) ? ref : resolveImg && resolveImg(ref);
+    return url ? `<img src="${url}" alt="${alt}" loading="lazy">` : m;
+  };
   const inline = s => esc(s)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|\W)\*([^*\n]+)\*(?=\W|$)/g, '$1<em>$2</em>')
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, img)
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   const flushPara = () => { if (para.length) { out += '<p>' + inline(para.join(' ')) + '</p>'; para = []; } };
   const flushList = () => { if (inList) { out += `</${inList}>`; inList = null; } };
@@ -331,7 +359,9 @@ $('#server-chip').addEventListener('click', () => {
 
 async function api(path, opts = {}) {
   const init = { method: opts.method || 'GET' };
-  if (opts.body !== undefined) {
+  if (opts.raw !== undefined) {
+    init.body = opts.raw; // raw bytes (attachment upload), no JSON envelope
+  } else if (opts.body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(opts.body);
   }
@@ -449,7 +479,8 @@ async function runSearch() {
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
   if (explore.tag) p.append('tag', explore.tag);
-  p.set('limit', '25');
+  // The canary feed reads more per page than a search (server default 100).
+  p.set('limit', explore.staleFeed ? '100' : '25');
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
   try {
     const { hits } = await api('/api/v1/knowledge?' + p);
@@ -507,9 +538,12 @@ async function viewDetail(type, id) {
   ].filter(Boolean).join(' · ');
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
+  // Any transition the API allows is offered here (provenance over
+  // authorization, design doc 0002) — only the current status is hidden.
   const canVerify = entry.status !== 'verified';
-  const canDeprecate = entry.status === 'verified';
-  const canReject = entry.status === 'draft';
+  const canDeprecate = entry.status !== 'deprecated';
+  const canReject = entry.status !== 'rejected';
+  const atts = entry.attachments || [];
 
   view.innerHTML = `
     <nav class="crumbs mono"><a href="#/">knowledge</a> / ${esc(entry.type)} / ${esc(entry.id)}</nav>
@@ -532,14 +566,41 @@ async function viewDetail(type, id) {
       <button data-tab="overview" class="active">Overview</button>
       <button data-tab="attrs">Attributes</button>
       <button data-tab="links">Links${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
+      <button data-tab="attachments">Attachments${atts.length ? ' (' + atts.length + ')' : ''}</button>
       <button data-tab="usage">Usage</button>
     </div>
     <div id="tab-body"></div>`;
 
+  // Attachment paths and image resolution (design doc 0008). Body links
+  // are OKF bundle references: relative to the entry document's directory
+  // ("<type>/<id parent>/"), or bundle-root when they start with "/".
+  const lastSeg = entry.id.split('/').pop();
+  const idParent = entry.id.includes('/') ? entry.id.slice(0, entry.id.lastIndexOf('/')) : '';
+  const docDir = entry.type + (idParent ? '/' + idParent : '');
+  const attPath = name => '/api/v1/attachments/' + idPath(entry.type, entry.id) + '/' + encodeURIComponent(name);
+  const attURL = name => baseURL() + attPath(name);
+  const normalize = p => {
+    const out = [];
+    for (const seg of p.split('/')) {
+      if (!seg || seg === '.') continue;
+      if (seg === '..') out.pop(); else out.push(seg);
+    }
+    return out.join('/');
+  };
+  const resolveImg = ref => {
+    const p = normalize(ref.startsWith('/') ? ref : docDir + '/' + ref);
+    const canonical = a => entry.type + '/' + entry.id + '/' + a.name;
+    let hit = atts.find(a => p === (a.okf_path || canonical(a)) || p === canonical(a));
+    // Forgiving fallback: names are unique within the entry, so a filename
+    // match resolves references written against a layout we don't know.
+    hit = hit || atts.find(a => a.name === ref.split('/').pop());
+    return hit ? attURL(hit.name) : null;
+  };
+
   const tabs = {
     overview: () => `
       ${entry.description ? `<p style="font-size:1.02rem">${esc(entry.description)}</p>` : ''}
-      ${entry.body ? `<div class="md">${md(entry.body)}</div>` : ''}
+      ${entry.body ? `<div class="md">${md(entry.body, resolveImg)}</div>` : ''}
       ${!entry.description && !entry.body ? '<div class="empty">No description or body.</div>' : ''}`,
     attrs: () => {
       const attrs = entry.attrs || {};
@@ -563,14 +624,65 @@ async function viewDetail(type, id) {
           <td>${href ? `<a class="mono" href="${href}">${esc(l.target)}</a>` : `<span class="mono">${esc(l.target)}</span>`}</td></tr>`;
       }).join('') + '</table>';
     },
+    attachments: () => {
+      const cards = atts.map(a => `
+        <div class="card att-card">
+          <a class="thumb" href="${attURL(a.name)}" target="_blank" rel="noopener"><img src="${attURL(a.name)}" alt="${esc(a.name)}" loading="lazy"></a>
+          <div class="att-meta">
+            <span class="mono">${esc(a.name)}</span>
+            <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
+            <span class="meta">body reference: <code>![${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})</code></span>
+            <button class="btn small danger" data-detach="${esc(a.name)}">Detach</button>
+          </div>
+        </div>`).join('');
+      return `
+        ${cards || '<div class="empty">No attachments.</div>'}
+        <div class="toolbar" style="margin-top:1rem">
+          <input type="file" id="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+          <button class="btn small" id="att-choose">Choose images…</button>
+          <span class="provenance" id="att-chosen" style="margin:0"></span>
+          <button class="btn small primary" id="att-upload">Attach</button>
+        </div>
+        <p class="provenance">png / jpeg / gif / webp, max 5 MiB each, 20 per entry. Reference an image from the
+        body (<code>![alt](${esc(lastSeg)}/name.png)</code>) so its caption is searchable and it survives OKF export.</p>`;
+    },
     usage: () => '<div class="empty">…</div>',
   };
+
+  function wireAttachments() {
+    const fileInput = $('#att-file');
+    $('#att-choose').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      $('#att-chosen').textContent = [...fileInput.files].map(f => f.name).join(', ');
+    });
+    $('#att-upload').addEventListener('click', async () => {
+      const files = [...fileInput.files];
+      if (!files.length) { toast('Choose image files first.'); return; }
+      try {
+        for (const f of files) {
+          await api(attPath(f.name), { method: 'PUT', raw: f });
+        }
+        toast(files.length > 1 ? `Attached ${files.length} images.` : 'Attached.');
+        viewDetail(entry.type, entry.id);
+      } catch (e) { toast('Attach failed: ' + e.message); }
+    });
+    body.querySelectorAll('[data-detach]').forEach(b => b.addEventListener('click', async () => {
+      const name = b.dataset.detach;
+      if (!confirm(`Detach ${name}? The change is kept as a revision.`)) return;
+      try {
+        await api(attPath(name), { method: 'DELETE' });
+        toast('Detached.');
+        viewDetail(entry.type, entry.id);
+      } catch (e) { toast('Detach failed: ' + e.message); }
+    }));
+  }
 
   const body = $('#tab-body');
   let usageLoaded = false;
   async function showTab(name) {
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     body.innerHTML = tabs[name]();
+    if (name === 'attachments') wireAttachments();
     if (name === 'usage' && !usageLoaded) {
       try {
         const u = await api('/api/v1/usage/' + idPath(entry.type, entry.id));

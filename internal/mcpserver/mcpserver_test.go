@@ -59,6 +59,49 @@ func TestSearchQueryNotRequired(t *testing.T) {
 	t.Fatal("search_knowledge tool not found")
 }
 
+// TestLimitContractsInSchema pins that the tool schemas document the
+// limit defaults and maxima — MCP agents see only the schema, so the
+// contract that openapi.yaml and the CLI help carry must live here too.
+func TestLimitContractsInSchema(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	want := map[string][]string{
+		"search_knowledge": {"default 10", "max 50", "default 100", "max 1000"},
+		"get_context":      {"default 5", "max 20"},
+	}
+	for _, tool := range res.Tools {
+		substrs, ok := want[tool.Name]
+		if !ok {
+			continue
+		}
+		delete(want, tool.Name)
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s schema: %v", tool.Name, err)
+		}
+		var schema struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal %s schema: %v", tool.Name, err)
+		}
+		desc := schema.Properties["limit"].Description
+		for _, s := range substrs {
+			if !strings.Contains(desc, s) {
+				t.Errorf("%s limit description %q does not mention %q", tool.Name, desc, s)
+			}
+		}
+	}
+	for name := range want {
+		t.Errorf("tool %s not found", name)
+	}
+}
+
 // TestSearchRejectsQueryWithSort mirrors the CLI and REST rule: a search
 // query combined with sort=verified_at is an error, not silently ignored.
 func TestSearchRejectsQueryWithSort(t *testing.T) {
