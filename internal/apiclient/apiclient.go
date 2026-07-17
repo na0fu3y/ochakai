@@ -202,6 +202,54 @@ func (c *Client) Delete(ctx context.Context, typ, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(typ, id), nil, nil, nil)
 }
 
+// Attach uploads data as an attachment of the entry (PUT
+// /api/v1/attachments/{type}/{id}/{name}), replacing any attachment of
+// the same name. okfPath preserves a foreign bundle location for
+// round-trips; "" for attachments born here. The server sniffs the media
+// type from the bytes.
+func (c *Client) Attach(ctx context.Context, typ, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
+	var q url.Values
+	if okfPath != "" {
+		q = url.Values{"okf_path": {okfPath}}
+	}
+	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(typ, id, name), q,
+		"application/octet-stream", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var att domain.Attachment
+	if err := json.NewDecoder(resp.Body).Decode(&att); err != nil {
+		return nil, err
+	}
+	return &att, nil
+}
+
+// Attachment fetches one attachment's bytes and media type (GET
+// /api/v1/attachments/{type}/{id}/{name}). Full metadata travels with
+// the entry (Get → Knowledge.Attachments).
+func (c *Client) Attachment(ctx context.Context, typ, id, name string) (data []byte, mediaType string, err error) {
+	resp, err := c.do(ctx, http.MethodGet, attachmentPath(typ, id, name), nil, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, resp.Header.Get("Content-Type"), nil
+}
+
+// Detach removes an attachment (DELETE /api/v1/attachments/{type}/{id}/{name}).
+func (c *Client) Detach(ctx context.Context, typ, id, name string) error {
+	return c.doJSON(ctx, http.MethodDelete, attachmentPath(typ, id, name), nil, nil, nil)
+}
+
+func attachmentPath(typ, id, name string) string {
+	return escapedPath("/api/v1/attachments/", typ, id) + "/" + url.PathEscape(name)
+}
+
 // Usage fetches usage totals for one entry (GET /api/v1/usage/{type}/{id}):
 // search hits, fetches, compile references, and last-used time.
 func (c *Client) Usage(ctx context.Context, typ, id string) (*domain.Usage, error) {

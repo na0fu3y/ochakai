@@ -18,17 +18,24 @@ import (
 // index.md files are navigation that Bundle regenerates, and log.md files
 // are the other OKF-reserved name (update history, SPEC §3) — both are
 // skipped silently, as are hidden paths (.git trees, macOS tar's
-// AppleDouble ._* siblings, .DS_Store). Anything else that cannot become
-// an entry — non-markdown files, unparsable documents, invalid slugs — is
-// reported in skipped as "path: reason" lines rather than failing the
-// whole bundle.
-func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []string) {
+// AppleDouble ._* siblings, .DS_Store).
+//
+// Image files referenced by a concept's body markdown links become that
+// entry's attachments — attribution is by reference, not by location, so
+// any producer's layout works (design doc 0008); the original path is
+// preserved for re-export. Anything else that cannot become an entry or
+// an attachment — unreferenced non-markdown files, unparsable documents,
+// invalid slugs — is reported in skipped as "path: reason" lines rather
+// than failing the whole bundle.
+func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []BundleAttachment, skipped []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
 
+	var docPaths []string // parallel to entries: the bundle path each was read from
+	var nonMarkdown []string
 	for _, p := range paths {
 		clean := path.Clean(strings.TrimPrefix(p, "./"))
 		if hiddenPath(clean) {
@@ -38,7 +45,7 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []
 			continue
 		}
 		if !strings.HasSuffix(clean, ".md") {
-			skipped = append(skipped, p+": not a markdown concept")
+			nonMarkdown = append(nonMarkdown, p)
 			continue
 		}
 		k, err := fromBundleFile(clean, files[p])
@@ -47,6 +54,18 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []
 			continue
 		}
 		entries = append(entries, *k)
+		docPaths = append(docPaths, clean)
+	}
+
+	concepts := make([]conceptRef, len(entries))
+	for i := range entries {
+		concepts[i] = conceptRef{k: &entries[i], docPath: docPaths[i]}
+	}
+	atts, used := resolveAttachments(files, concepts)
+	for _, p := range nonMarkdown {
+		if !used[path.Clean(strings.TrimPrefix(p, "./"))] {
+			skipped = append(skipped, p+": not a markdown concept (and referenced by no entry body)")
+		}
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -55,7 +74,7 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []
 		}
 		return entries[i].ID < entries[j].ID
 	})
-	return entries, skipped
+	return entries, atts, skipped
 }
 
 // StripWrapper unwraps a bundle packed inside a single top-level

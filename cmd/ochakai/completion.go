@@ -42,6 +42,8 @@ _ochakai() {
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
     'delete:soft-delete an entry'
+    'attach:attach images to an entry'
+    'detach:remove an attachment'
     'usage:show usage totals for an entry'
     'compile:compile metrics into SQL'
     'export:download the knowledge base as an OKF bundle'
@@ -82,7 +84,7 @@ _ochakai() {
         '--url[server URL]:url:'
       ;;
     get)
-      _arguments '--json[print JSON instead of the OKF document]' '--url[server URL]:url:'
+      _arguments '--json[print JSON instead of the OKF document]' '--download[save attachments into this directory]:directory:_files -/' '--url[server URL]:url:'
       ;;
     usage)
       _arguments '--json[print JSON]' '--url[server URL]:url:'
@@ -90,8 +92,11 @@ _ochakai() {
     create|update)
       _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
-    delete)
+    delete|detach)
       _arguments '--url[server URL]:url:'
+      ;;
+    attach)
+      _arguments '--name[attachment name]:name:' '--json[print the attachment metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
       ;;
     compile)
       _arguments \
@@ -147,7 +152,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search context get create update delete usage compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search context get create update delete attach detach usage compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
     return
   fi
 
@@ -162,10 +167,11 @@ _ochakai() {
   case $cmd in
     search)        opts="--type --status --tag --sort --limit --json --url" ;;
     context)       opts="--type --status --tag --limit --budget --min-score --json --url" ;;
-    get)           opts="--json --url" ;;
+    get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     create|update) opts="-f --json --url" ;;
-    delete)        opts="--url" ;;
+    delete|detach) opts="--url" ;;
+    attach)        opts="--name --json --url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
     export)        opts="--url" ;;
     import)        opts="--dry-run --keep-root --url" ;;
@@ -201,6 +207,8 @@ complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OK
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
+complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach images to an entry'
+complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
@@ -213,12 +221,15 @@ complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell com
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete usage compile export import import-ossie whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete attach detach usage compile export import import-ossie whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update usage compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update attach usage compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
+complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
+complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metric query insight term table' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at' -d 'list by verification age instead of searching'

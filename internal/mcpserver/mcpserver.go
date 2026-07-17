@@ -92,8 +92,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_knowledge",
-		Description: "Get one knowledge entry by type and id, including its full markdown body, structured attrs, and links.",
+		Name: "get_knowledge",
+		Description: "Get one knowledge entry by type and id, including its full markdown body, structured attrs, " +
+			"links, and attachment metadata (images the body references — fetch bytes with get_attachment).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, domain.Type(in.Type), in.ID)
 		if err != nil {
@@ -139,6 +140,25 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, deleteOut{}, err
 		}
 		return nil, deleteOut{Deleted: true, URI: fmt.Sprintf("ochakai://%s/%s", in.Type, in.ID)}, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "get_attachment",
+		Description: "Fetch one image attached to a knowledge entry (get_knowledge lists attachment " +
+			"metadata under \"attachments\"). Returns the image as content plus its metadata. " +
+			"Images are context-heavy — fetch them deliberately, when the entry's body references " +
+			"one you need to see (a dashboard's normal shape, an ER diagram). ochakai never " +
+			"interprets images; if you learn something from one, write it back into the entry's " +
+			"body with update_knowledge so the knowledge becomes searchable text.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
+		att, data, err := svc.Attachment(ctx, domain.Type(in.Type), in.ID, in.Name)
+		if err != nil {
+			return nil, attachmentOut{}, err
+		}
+		res := &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.ImageContent{Data: data, MIMEType: att.MediaType}},
+		}
+		return res, attachmentOut{Attachment: *att}, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -210,6 +230,16 @@ type getIn struct {
 
 type knowledgeOut struct {
 	Knowledge domain.Knowledge `json:"knowledge"`
+}
+
+type attachmentIn struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
+	Name string `json:"name"` // attachment filename, from the entry's attachments metadata
+}
+
+type attachmentOut struct {
+	Attachment domain.Attachment `json:"attachment"`
 }
 
 type usageOut struct {

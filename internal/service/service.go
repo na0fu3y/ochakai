@@ -45,6 +45,11 @@ func (s *Service) Get(ctx context.Context, typ domain.Type, id string) (*domain.
 	if err != nil {
 		return nil, err
 	}
+	// Metadata only — the bytes are a separate, deliberate fetch
+	// (design doc 0008): images are heavy in agent context.
+	if k.Attachments, err = s.Store.ListAttachments(ctx, typ, id); err != nil {
+		return nil, err
+	}
 	s.recordUsage(ctx, domain.EventFetched, []store.EventTarget{{Type: typ, ID: id}})
 	return k, nil
 }
