@@ -349,3 +349,114 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		t.Fatalf("create over a rejected entry = %v, want ErrAlreadyExists", err)
 	}
 }
+
+// Attachments (design doc 0008): content-addressed blobs, replace-by-name,
+// revisions on attach/detach, and disappearance with the soft-deleted entry.
+func TestIntegrationAttachments(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, del := range []string{
+		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-att%'`,
+		`DELETE FROM knowledge WHERE id LIKE 'it-att%'`,
+		`DELETE FROM knowledge_revision WHERE id LIKE 'it-att%'`,
+	} {
+		if _, err := s.pool.Exec(ctx, del); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	k := &domain.Knowledge{
+		Type: domain.TypeInsight, ID: "it-att-reading", Title: "売上の読み方",
+		Status: domain.StatusDraft, CreatedBy: actor,
+	}
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+
+	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("fake image bytes")...)
+	att, err := s.PutAttachment(ctx, k.Type, k.ID, "weekly.png", "image/png", "", png, actor)
+	if err != nil {
+		t.Fatalf("PutAttachment: %v", err)
+	}
+	if att.Size != int64(len(png)) || att.SHA256 == "" {
+		t.Errorf("attachment metadata wrong: %+v", att)
+	}
+
+	got, data, err := s.GetAttachment(ctx, k.Type, k.ID, "weekly.png")
+	if err != nil {
+		t.Fatalf("GetAttachment: %v", err)
+	}
+	if string(data) != string(png) || got.MediaType != "image/png" {
+		t.Errorf("bytes did not round-trip: %+v", got)
+	}
+
+	// Replace by name: same entry, same name, new bytes.
+	png2 := append([]byte("\x89PNG\r\n\x1a\n"), []byte("updated bytes")...)
+	if _, err := s.PutAttachment(ctx, k.Type, k.ID, "weekly.png", "image/png", "", png2, actor); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.ListAttachments(ctx, k.Type, k.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].SHA256 == att.SHA256 {
+		t.Errorf("replace should keep one attachment with new content: %+v", list)
+	}
+
+	// The dedup blob store keeps both contents (revision history can
+	// reference the old hash).
+	var blobs int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM blob WHERE sha256 IN ($1, $2)`, att.SHA256, list[0].SHA256).Scan(&blobs); err != nil {
+		t.Fatal(err)
+	}
+	if blobs != 2 {
+		t.Errorf("blob count = %d, want 2", blobs)
+	}
+
+	// Attach/detach are revisions on the entry.
+	if err := s.DeleteAttachment(ctx, k.Type, k.ID, "weekly.png", actor); err != nil {
+		t.Fatalf("DeleteAttachment: %v", err)
+	}
+	var changes []string
+	rows, err := s.pool.Query(ctx,
+		`SELECT change FROM knowledge_revision WHERE type=$1 AND id=$2 ORDER BY rev`, k.Type, k.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		changes = append(changes, c)
+	}
+	want := []string{"create", "attach", "attach", "detach"}
+	if len(changes) != len(want) {
+		t.Fatalf("revisions = %v, want %v", changes, want)
+	}
+
+	// Attachments of soft-deleted entries are unreachable.
+	if _, err := s.PutAttachment(ctx, k.Type, k.ID, "weekly.png", "image/png", "", png, actor); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SoftDelete(ctx, k.Type, k.ID, actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.GetAttachment(ctx, k.Type, k.ID, "weekly.png"); err != ErrNotFound {
+		t.Errorf("attachment of a deleted entry = %v, want ErrNotFound", err)
+	}
+}

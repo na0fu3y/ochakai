@@ -32,6 +32,8 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"create":  cmdCreate,
 	"update":  cmdUpdate,
 	"delete":  cmdDelete,
+	"attach":  cmdAttach,
+	"detach":  cmdDetach,
 	"usage":   cmdUsage,
 	"compile": cmdCompile,
 	"export":  cmdExport,
@@ -334,9 +336,10 @@ func cmdUsage(ctx context.Context, args []string) error {
 
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai get [flags] <type>/<id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.",
-		"  ochakai get metric/revenue\n  ochakai get query/monthly-revenue --json | jq -r '.attrs.sql'\n")
+		"Usage: ochakai get [flags] <type>/<id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the image\nfiles themselves (an agent can then read them from disk).",
+		"  ochakai get metric/revenue\n  ochakai get query/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insight/revenue-reading --download ./img\n")
 	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
+	download := fs.String("download", "", "save the entry's attachments into this directory")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -357,6 +360,22 @@ func cmdGet(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if *download != "" && len(k.Attachments) > 0 {
+		if err := os.MkdirAll(*download, 0o755); err != nil {
+			return err
+		}
+		for _, att := range k.Attachments {
+			data, _, err := c.Attachment(ctx, typ, id, att.Name)
+			if err != nil {
+				return fmt.Errorf("attachment %s: %w", att.Name, err)
+			}
+			dst := filepath.Join(*download, att.Name)
+			if err := os.WriteFile(dst, data, 0o644); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "saved %s (%s, %d bytes)\n", dst, att.MediaType, att.Size)
+		}
+	}
 	if *asJSON {
 		return printJSON(k)
 	}
@@ -364,8 +383,93 @@ func cmdGet(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	_, err = os.Stdout.Write(doc)
-	return err
+	if _, err = os.Stdout.Write(doc); err != nil {
+		return err
+	}
+	if *download == "" {
+		for _, att := range k.Attachments {
+			fmt.Fprintf(os.Stderr, "attachment: %s (%s, %d bytes) — `ochakai get %s/%s --download DIR` to save\n",
+				att.Name, att.MediaType, att.Size, typ, id)
+		}
+	}
+	return nil
+}
+
+func cmdAttach(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach images to a knowledge entry (png, jpeg, gif, webp; max 5 MiB\neach, 20 per entry). An attachment of the same name is replaced (the\nchange is kept as a revision). Reference the image from the entry's\nbody so its caption is searchable and it survives OKF export/import —\nthe hint printed after attaching shows the canonical relative link.",
+		"  ochakai attach insight/revenue-reading weekly.png\n  ochakai attach table/orders er-diagram.png --name schema.png\n")
+	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
+	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 2 || (*name != "" && len(pos) != 2) {
+		fs.Usage()
+		return errReported
+	}
+	typ, id, err := splitRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	// The canonical body link is relative to the entry's own document:
+	// "<id last segment>/<name>" (design doc 0008).
+	lastSeg := id[strings.LastIndex(id, "/")+1:]
+	for _, file := range pos[1:] {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+		attName := *name
+		if attName == "" {
+			attName = filepath.Base(file)
+		}
+		att, err := c.Attach(ctx, typ, id, attName, "", data)
+		if err != nil {
+			return fmt.Errorf("%s: %w", file, err)
+		}
+		if *asJSON {
+			if err := printJSON(att); err != nil {
+				return err
+			}
+			continue
+		}
+		fmt.Printf("attached %s/%s/%s (%s, %d bytes)\n", typ, id, att.Name, att.MediaType, att.Size)
+		fmt.Fprintf(os.Stderr, "hint: reference it from the body: ![%s](%s/%s)\n", att.Name, lastSeg, att.Name)
+	}
+	return nil
+}
+
+func cmdDetach(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai detach [flags] <type>/<id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
+		"  ochakai detach insight/revenue-reading weekly.png\n")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 2 {
+		fs.Usage()
+		return errReported
+	}
+	typ, id, err := splitRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	if err := c.Detach(ctx, typ, id, pos[1]); err != nil {
+		return err
+	}
+	fmt.Printf("detached %s/%s/%s\n", typ, id, pos[1])
+	return nil
 }
 
 func cmdCreate(ctx context.Context, args []string) error {
@@ -568,7 +672,7 @@ func cmdExport(ctx context.Context, args []string) error {
 
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions). An archive wrapped in a single directory is unwrapped.\nWorks with any OKF bundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions). Images referenced by an entry's body markdown links become\nits attachments, wherever they sit in the bundle (their location is\npreserved for re-export). An archive wrapped in a single directory is\nunwrapped. Works with any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	keepRoot := fs.Bool("keep-root", false, "keep a single top-level directory as the type instead of unwrapping it")
@@ -590,7 +694,7 @@ func cmdImport(ctx context.Context, args []string) error {
 			files = unwrapped
 		}
 	}
-	entries, skipped := okf.FromBundle(files)
+	entries, atts, skipped := okf.FromBundle(files)
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
 	}
@@ -598,7 +702,10 @@ func cmdImport(ctx context.Context, args []string) error {
 		for i := range entries {
 			fmt.Printf("would import %s\n", entries[i].URI())
 		}
-		fmt.Printf("dry run: %d entries, %d skipped\n", len(entries), len(skipped))
+		for _, a := range atts {
+			fmt.Printf("would attach %s/%s/%s (from %s)\n", a.Type, a.ID, a.Name, a.Path)
+		}
+		fmt.Printf("dry run: %d entries, %d attachments, %d skipped\n", len(entries), len(atts), len(skipped))
 		return nil
 	}
 	c, err := newClient(ctx, *url)
@@ -621,8 +728,20 @@ func cmdImport(ctx context.Context, args []string) error {
 		updated++
 		fmt.Printf("updated %s\n", k.URI())
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d skipped)\n",
-		created+updated, created, updated, len(skipped))
+	for _, a := range atts {
+		// A file already at the canonical layout needs no okf_path — the
+		// preserved-location rule is for foreign layouts only.
+		okfPath := a.Path
+		if okfPath == fmt.Sprintf("%s/%s/%s", a.Type, a.ID, a.Name) {
+			okfPath = ""
+		}
+		if _, err := c.Attach(ctx, string(a.Type), a.ID, a.Name, okfPath, a.Data); err != nil {
+			return fmt.Errorf("attach %s/%s/%s: %w", a.Type, a.ID, a.Name, err)
+		}
+		fmt.Printf("attached %s/%s/%s\n", a.Type, a.ID, a.Name)
+	}
+	fmt.Printf("imported %d entries (%d created, %d updated, %d attachments, %d skipped)\n",
+		created+updated, created, updated, len(atts), len(skipped))
 	return nil
 }
 

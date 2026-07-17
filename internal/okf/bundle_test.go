@@ -67,7 +67,7 @@ func TestBundleRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, skipped := FromBundle(files)
+	got, _, skipped := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -104,7 +104,7 @@ func TestFromBundleForeign(t *testing.T) {
 		"notes/2026/q3.md": []byte("---\ntitle: Q3 notes\n---\n"), // no frontmatter type at all
 		"viz.html":         []byte("<html></html>"),
 	}
-	entries, skipped := FromBundle(files)
+	entries, _, skipped := FromBundle(files)
 	if len(skipped) != 1 || !strings.Contains(skipped[0], "viz.html") {
 		t.Errorf("skipped = %v, want only viz.html", skipped)
 	}
@@ -160,7 +160,7 @@ func TestFromBundleFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries, skipped := FromBundle(files)
+	entries, _, skipped := FromBundle(files)
 	if len(skipped) != 1 || !strings.Contains(skipped[0], "viz.html") {
 		t.Errorf("skipped = %v, want only viz.html", skipped)
 	}
@@ -220,7 +220,7 @@ func TestStripWrapper(t *testing.T) {
 	if len(files) != 2 {
 		t.Errorf("hidden files must be dropped on unwrap: %v", files)
 	}
-	if entries, skipped := FromBundle(wrapped); len(skipped) != 0 || len(entries) != 1 {
+	if entries, _, skipped := FromBundle(wrapped); len(skipped) != 0 || len(entries) != 1 {
 		t.Errorf("hidden files must be skipped silently: skipped=%v entries=%d", skipped, len(entries))
 	}
 

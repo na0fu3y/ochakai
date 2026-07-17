@@ -103,6 +103,7 @@ ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type metric --status verified
 ochakai get metric/revenue
+ochakai attach insight/revenue-reading weekly.png   # images travel with the entry
 ochakai compile --metric revenue --grain orders.created_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle
@@ -159,7 +160,8 @@ it on Cloud Run as a team-shared service.
 |---|---|
 | `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
 | `search_knowledge` | Cross-type search; verified entries rank higher |
-| `get_knowledge` | Fetch one entry with body, attrs, and links |
+| `get_knowledge` | Fetch one entry with body, attrs, links, and attachment metadata |
+| `get_attachment` | Fetch an image attached to an entry (dashboard screenshots, ER diagrams) |
 | `create_knowledge` | Write learnings back (agents create drafts) |
 | `update_knowledge` | Update; every change is kept as a revision |
 | `delete_knowledge` | Soft-delete (history retained) |
@@ -187,6 +189,12 @@ canaries), not a closed set — any slug works as a type for your own document
 kinds, and IDs may be hierarchical (`query/sales/monthly-revenue`) to
 organize knowledge into directories
 ([design doc 0005](docs/design/0005-okf-compatibility.md)).
+
+Entries can carry image attachments — the dashboard screenshot behind an
+insight, the ER diagram behind a table entry. Search stays text-first
+(captions in the body), image bytes are fetched on demand, and images
+round-trip through OKF bundles as plain files next to their entry
+([design doc 0008](docs/design/0008-image-attachments.md)).
 
 ## Configuration
 

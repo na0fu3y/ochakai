@@ -116,8 +116,12 @@ type Knowledge struct {
 	Links       []Link         `json:"links,omitempty"`
 	Attrs       map[string]any `json:"attrs,omitempty"`
 	Body        string         `json:"body,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	// Attachments is read-only metadata (no bytes), populated on single-
+	// entry reads. Attachments are managed through their own endpoints,
+	// never through create/update payloads.
+	Attachments []Attachment `json:"attachments,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
 // URI returns the canonical reference, e.g. "ochakai://metric/revenue".

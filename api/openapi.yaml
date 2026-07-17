@@ -216,6 +216,79 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Usage" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/attachments/{type}/{path}:
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/Type" }
+      - name: path
+        in: path
+        required: true
+        description: >
+          "{id}/{name}" — the entry's (possibly hierarchical) ID followed
+          by the attachment filename. The final segment is always the
+          filename; everything before it is the ID
+          (PUT /api/v1/attachments/insight/revenue-reading/weekly.png).
+        schema: { type: string }
+    put:
+      operationId: putAttachment
+      summary: Attach an image to a knowledge entry
+      description: >
+        Stores the raw request body as an attachment, replacing any
+        attachment of the same name (kept as a revision). The media type
+        is sniffed from the bytes — png, jpeg, gif, and webp are accepted
+        (no SVG: it can carry scripts), at most 5 MiB and 20 attachments
+        per entry. Reference the image from the entry's markdown body
+        (`![baseline](<id last segment>/weekly.png)`) so its caption is
+        searchable and it survives OKF export/import (design doc 0008).
+      parameters:
+        - name: okf_path
+          in: query
+          required: false
+          description: >
+            Bundle path a foreign OKF import carried this file at
+            (clean, bundle-relative). Export writes the file back there
+            so the original body links keep working. Omit for
+            attachments born in ochakai.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          image/*:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Attachment metadata (bytes are fetched with GET).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+    get:
+      operationId: getAttachment
+      summary: Fetch attachment bytes
+      description: >
+        Returns the image bytes with its stored media type; the ETag is
+        the content's SHA-256. Fetching records a usage event against the
+        owning entry.
+      responses:
+        "200":
+          description: The image.
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAttachment
+      summary: Detach an image from a knowledge entry
+      description: >
+        Removes the attachment (kept as a revision; the content-addressed
+        bytes remain referenced by history).
+      responses:
+        "204": { description: Detached. }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/export:
     get:
       operationId: exportOKF
@@ -351,8 +424,35 @@ components:
           type: object
           description: Type-specific structured attributes (e.g. question/sql for query, model/expression for metric).
         body: { type: string, description: Markdown body. }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/Attachment" }
+          readOnly: true
+          description: >
+            Attachment metadata (no bytes — fetch them via
+            /api/v1/attachments/{type}/{id}/{name}). Managed through the
+            attachment endpoints, never through create/update payloads.
         created_at: { type: string, format: date-time, readOnly: true }
         updated_at: { type: string, format: date-time, readOnly: true }
+    Attachment:
+      type: object
+      description: >
+        An image attached to a knowledge entry (design doc 0008). Metadata
+        travels with the entry; bytes are a separate, deliberate fetch so
+        agent context is never flooded with base64.
+      properties:
+        name: { type: string, description: Filename, unique within the entry. }
+        media_type: { type: string, enum: [image/png, image/jpeg, image/gif, image/webp] }
+        size: { type: integer }
+        sha256: { type: string, description: Content hash; attachments are content-addressed and immutable. }
+        okf_path:
+          type: string
+          description: >
+            Bundle path a foreign OKF import carried this file at; export
+            writes it back there so body links keep working. Absent for
+            attachments born in ochakai (exported to "<type>/<id>/<name>").
+        created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
+        created_at: { type: string, format: date-time, readOnly: true }
     Usage:
       type: object
       properties:
