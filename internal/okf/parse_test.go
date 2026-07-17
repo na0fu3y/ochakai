@@ -30,8 +30,17 @@ func TestParseRoundTrip(t *testing.T) {
 		if !reflect.DeepEqual(got.Links, want.Links) {
 			t.Errorf("links = %v, want %v", got.Links, want.Links)
 		}
-		if len(got.Attrs) != len(want.Attrs) {
-			t.Errorf("attrs = %v, want %v", got.Attrs, want.Attrs)
+		wantAttrs := want.Attrs
+		if want.Type == domain.TypeTable {
+			// The exported document spells the source attr as a top-level
+			// resource: key too; importing keeps what the document says.
+			wantAttrs = map[string]any{"resource": want.Attrs["source"]}
+			for key, v := range want.Attrs {
+				wantAttrs[key] = v
+			}
+		}
+		if !reflect.DeepEqual(got.Attrs, wantAttrs) {
+			t.Errorf("attrs = %v, want %v", got.Attrs, wantAttrs)
 		}
 		if wantBody := "12月は+40%が通常。"; want.Body != "" && got.Body != wantBody {
 			t.Errorf("body = %q, want %q", got.Body, wantBody)
@@ -109,6 +118,77 @@ func TestParseFreeTypes(t *testing.T) {
 	}
 	if strings.Contains(string(doc), AttrOKFType) {
 		t.Errorf("okf_type must fold into the type key, not export as an attr:\n%s", doc)
+	}
+}
+
+// Unknown top-level frontmatter keys are producer-defined extensions
+// (SPEC §4.1): they land in attrs as-is and export back to the top level,
+// so a foreign bundle's resource/owner keys survive a round-trip in place.
+func TestParseKeepsUnknownKeys(t *testing.T) {
+	k, err := Parse([]byte(`---
+type: Reference
+title: Average Pageviews
+resource: https://developers.google.com/analytics/bigquery/basic-queries
+owner: analytics-team
+timestamp: '2026-05-28T22:51:43+00:00'
+created_by: 'agent:someone'
+---
+
+Body.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Attrs["resource"] != "https://developers.google.com/analytics/bigquery/basic-queries" ||
+		k.Attrs["owner"] != "analytics-team" {
+		t.Errorf("unknown keys not kept: %v", k.Attrs)
+	}
+	for _, serverOwned := range []string{"timestamp", "created_by"} {
+		if _, ok := k.Attrs[serverOwned]; ok {
+			t.Errorf("server-owned key %s leaked into attrs: %v", serverOwned, k.Attrs)
+		}
+	}
+	if k.CreatedBy.Name != "" {
+		t.Errorf("created_by must come from authentication, not the payload: %v", k.CreatedBy)
+	}
+
+	doc, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"resource: https://developers.google.com/analytics/bigquery/basic-queries",
+		"owner: analytics-team",
+	} {
+		if !strings.Contains(string(doc), want) {
+			t.Errorf("re-export missing %q:\n%s", want, doc)
+		}
+	}
+	if strings.Contains(string(doc), "attrs:") {
+		t.Errorf("re-export must not nest attrs:\n%s", doc)
+	}
+}
+
+func TestParseStatusNoteRoundTrip(t *testing.T) {
+	k, err := Parse([]byte("---\ntype: insight\nid: dup\ntitle: 重複\nstatus: rejected\nstatus_note: 既存と重複\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.StatusNote != "既存と重複" {
+		t.Errorf("status_note = %q", k.StatusNote)
+	}
+	if _, ok := k.Attrs["status_note"]; ok {
+		t.Errorf("status_note is an envelope key, not an attr: %v", k.Attrs)
+	}
+}
+
+func TestParseNormalizesCRLF(t *testing.T) {
+	k, err := Parse([]byte("---\r\ntype: term\r\nid: churn\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Type != domain.TypeTerm || k.Title != "解約" || k.Body != "本文。" {
+		t.Errorf("CRLF document mangled: %+v", k)
 	}
 }
 

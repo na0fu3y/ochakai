@@ -398,9 +398,10 @@ func cmdExport(ctx context.Context, args []string) error {
 
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), index.md files are skipped, existing entries are replaced (kept\nas revisions). Works with any OKF bundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions). An archive wrapped in a single directory is unwrapped.\nWorks with any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
+	keepRoot := fs.Bool("keep-root", false, "keep a single top-level directory as the type instead of unwrapping it")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -412,6 +413,12 @@ func cmdImport(ctx context.Context, args []string) error {
 	files, err := readBundle(pos[0])
 	if err != nil {
 		return err
+	}
+	if !*keepRoot {
+		if unwrapped, root := okf.StripWrapper(files); root != "" {
+			fmt.Fprintf(os.Stderr, "note: unwrapped bundle directory %q (pass --keep-root to treat it as the type)\n", root)
+			files = unwrapped
+		}
 	}
 	entries, skipped := okf.FromBundle(files)
 	for _, s := range skipped {

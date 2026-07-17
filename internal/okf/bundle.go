@@ -15,10 +15,13 @@ import (
 // frontmatter: the first path segment becomes the type and the remaining
 // segments the hierarchical ID; a frontmatter type spelled differently is
 // preserved as attrs[AttrOKFType] so re-export reproduces the original.
-// index.md files are navigation that Bundle regenerates, so they are
-// skipped silently. Anything else that cannot become an entry — non-
-// markdown files, unparsable documents, invalid slugs — is reported in
-// skipped as "path: reason" lines rather than failing the whole bundle.
+// index.md files are navigation that Bundle regenerates, and log.md files
+// are the other OKF-reserved name (update history, SPEC §3) — both are
+// skipped silently, as are hidden paths (.git trees, macOS tar's
+// AppleDouble ._* siblings, .DS_Store). Anything else that cannot become
+// an entry — non-markdown files, unparsable documents, invalid slugs — is
+// reported in skipped as "path: reason" lines rather than failing the
+// whole bundle.
 func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -28,7 +31,10 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []
 
 	for _, p := range paths {
 		clean := path.Clean(strings.TrimPrefix(p, "./"))
-		if path.Base(clean) == "index.md" {
+		if hiddenPath(clean) {
+			continue
+		}
+		if base := path.Base(clean); base == "index.md" || base == "log.md" {
 			continue
 		}
 		if !strings.HasSuffix(clean, ".md") {
@@ -50,6 +56,57 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, skipped []
 		return entries[i].ID < entries[j].ID
 	})
 	return entries, skipped
+}
+
+// StripWrapper unwraps a bundle packed inside a single top-level
+// directory, the shape `tar czf bundle.tar.gz ga4/` produces. Without
+// unwrapping, the wrapper name would silently become every entry's type
+// (first path segment = type). A bundle rooted at the archive top —
+// anything with a top-level file, such as the root index.md every real
+// bundle carries — is returned unchanged. The wrapper name is returned so
+// callers can tell the user what happened ("" when nothing was stripped).
+func StripWrapper(files map[string][]byte) (map[string][]byte, string) {
+	root := ""
+	for p := range files {
+		clean := path.Clean(strings.TrimPrefix(p, "./"))
+		if hiddenPath(clean) {
+			continue // tar noise (._*, .DS_Store) must not defeat detection
+		}
+		i := strings.Index(clean, "/")
+		if i < 0 {
+			return files, ""
+		}
+		if root == "" {
+			root = clean[:i]
+		} else if root != clean[:i] {
+			return files, ""
+		}
+	}
+	if root == "" {
+		return files, ""
+	}
+	out := make(map[string][]byte, len(files))
+	for p, content := range files {
+		clean := path.Clean(strings.TrimPrefix(p, "./"))
+		if hiddenPath(clean) {
+			continue
+		}
+		out[strings.TrimPrefix(clean, root+"/")] = content
+	}
+	return out, root
+}
+
+// hiddenPath reports whether any segment of the (cleaned) path starts
+// with a dot: .git trees, .DS_Store, and the AppleDouble ._* files macOS
+// tar interleaves. Never knowledge — skipped without a report, matching
+// how directory imports already treat dot entries.
+func hiddenPath(clean string) bool {
+	for _, seg := range strings.Split(clean, "/") {
+		if strings.HasPrefix(seg, ".") {
+			return true
+		}
+	}
+	return false
 }
 
 func fromBundleFile(clean string, content []byte) (*domain.Knowledge, error) {

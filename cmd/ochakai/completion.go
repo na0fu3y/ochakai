@@ -93,7 +93,7 @@ _ochakai() {
       _arguments '--url[server URL]:url:' '1:directory:_files -/'
       ;;
     import)
-      _arguments '--dry-run[parse and list, write nothing]' '--url[server URL]:url:' '1:bundle:_files'
+      _arguments '--dry-run[parse and list, write nothing]' '--keep-root[keep a single top-level directory as the type]' '--url[server URL]:url:' '1:bundle:_files'
       ;;
     use)
       local -a servers
@@ -152,7 +152,7 @@ _ochakai() {
     delete)        opts="--url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
     export)        opts="--url" ;;
-    import)        opts="--dry-run --url" ;;
+    import)        opts="--dry-run --keep-root --url" ;;
     whoami)        opts="--json --url" ;;
     use)
       if [[ $cur != -* ]]; then
@@ -197,6 +197,7 @@ complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
 complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export import whoami' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
+complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-okf' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search get create update compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l type -x -a 'metric query insight term table' -d 'filter by type'
