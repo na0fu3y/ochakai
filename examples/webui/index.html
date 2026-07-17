@@ -114,6 +114,10 @@
   }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-weak); border-color: var(--accent); }
   textarea { resize: vertical; }
+  /* 16px inputs on touch-sized screens so iOS Safari doesn't zoom on focus. */
+  @media (max-width: 800px) {
+    input[type=text], input[type=number], select, textarea { font-size: 16px; }
+  }
   .btn {
     font: inherit; font-weight: 500; cursor: pointer; border-radius: 8px;
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
@@ -171,16 +175,24 @@
     margin-top: .7rem; border-left: 3px solid var(--border); padding: .1rem .8rem;
     color: var(--muted); font-size: .9rem;
   }
-  .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin: 1.1rem 0 1rem; }
+  .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin: 1.1rem 0 1rem; overflow-x: auto; }
   .tabs button {
     font: inherit; font-weight: 500; background: none; border: none; cursor: pointer;
     color: var(--muted); padding: .45rem .8rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    white-space: nowrap;
   }
   .tabs button:hover { color: var(--text); }
   .tabs button.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
   table.kv { border-collapse: collapse; width: 100%; }
   table.kv td { border-bottom: 1px solid var(--border); padding: .45rem .6rem .45rem 0; vertical-align: top; }
   table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
+  /* Narrow screens: stack key over value so wide values (SQL) get the full width. */
+  @media (max-width: 640px) {
+    table.kv, table.kv tbody, table.kv tr, table.kv td { display: block; width: auto; }
+    table.kv td { border-bottom: none; padding: .1rem 0; }
+    table.kv td.k { padding-top: .55rem; }
+    table.kv tr { border-bottom: 1px solid var(--border); padding-bottom: .45rem; }
+  }
   .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .8rem; max-width: 42rem; }
   .stat-tiles .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
   .tile .num { font-size: 1.7rem; font-weight: 700; }
