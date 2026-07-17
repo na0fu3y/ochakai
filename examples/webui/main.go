@@ -1,16 +1,16 @@
 // Sample web UI server for ochakai, deployable as its own Cloud Run
-// service. It serves the static UI and reverse-proxies /api/v1 (and /mcp)
-// to the ochakai service, attaching this service's identity token in
-// X-Serverless-Authorization for Cloud Run service-to-service auth. The
-// ochakai deployment therefore stays IAM-restricted, and browser users
-// are recorded as this service's identity (agent:<sa-email>).
+// service. It serves the static UI (internal/webui, shared with the
+// zero-deploy `ochakai ui` command) and reverse-proxies /api/v1 (and
+// /mcp) to the ochakai service, attaching this service's identity token
+// in X-Serverless-Authorization for Cloud Run service-to-service auth.
+// The ochakai deployment therefore stays IAM-restricted, and browser
+// users are recorded as this service's identity (agent:<sa-email>).
 //
 // Without OCHAKAI_URL it serves the static UI only (the page then calls
 // whatever base URL the user enters, e.g. a local ochakai).
 package main
 
 import (
-	_ "embed"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,10 +21,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
 
-//go:embed index.html
-var index []byte
+	"github.com/na0fu3y/ochakai/internal/webui"
+)
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -35,7 +34,7 @@ func main() {
 	})
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(index)
+		_, _ = w.Write(webui.Index)
 	})
 
 	if target := os.Getenv("OCHAKAI_URL"); target != "" {

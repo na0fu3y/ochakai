@@ -6,6 +6,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY examples/webui/ examples/webui/
+COPY internal/webui/ internal/webui/
 RUN CGO_ENABLED=0 go build -trimpath -o /webui ./examples/webui
 
 FROM gcr.io/distroless/static-debian12:nonroot

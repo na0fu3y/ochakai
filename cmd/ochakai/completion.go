@@ -46,6 +46,7 @@ _ochakai() {
     'import:upload an OKF bundle'
     'use:pick the server for later commands'
     'whoami:print target server, identity, and reachability'
+    'ui:serve the web UI locally, acting as you'
     'completion:print a shell completion script'
     'serve:start the MCP + REST server'
     'import-ossie:import an Apache Ossie semantic model'
@@ -103,6 +104,9 @@ _ochakai() {
     whoami)
       _arguments '--json[print JSON]' '--url[server URL]:url:'
       ;;
+    ui)
+      _arguments '--port[port on 127.0.0.1]:port:' '--url[server URL]:url:'
+      ;;
     completion)
       _arguments '1:shell:(zsh bash fish)'
       ;;
@@ -134,7 +138,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search get create update delete compile export import use whoami completion serve import-ossie export-okf import-okf version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search get create update delete compile export import use whoami ui completion serve import-ossie export-okf import-okf version help" -- "$cur"))
     return
   fi
 
@@ -154,6 +158,7 @@ _ochakai() {
     export)        opts="--url" ;;
     import)        opts="--dry-run --keep-root --url" ;;
     whoami)        opts="--json --url" ;;
+    ui)            opts="--port --url" ;;
     use)
       if [[ $cur != -* ]]; then
         COMPREPLY=($(compgen -W "$(ochakai use 2>/dev/null | cut -c3- | cut -f1)" -- "$cur"))
@@ -188,6 +193,7 @@ complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledg
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
 complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
+complete -c ochakai -n __fish_use_subcommand -a ui -d 'serve the web UI locally, acting as you'
 complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
@@ -195,7 +201,8 @@ complete -c ochakai -n __fish_use_subcommand -a export-okf -d 'write the OKF bun
 complete -c ochakai -n __fish_use_subcommand -a import-okf -d 'load an OKF bundle straight into the database'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export import whoami' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export import whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-okf' -F
