@@ -107,25 +107,59 @@ func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
 	})
 	mux.Handle("/api/v1/", proxy)
 	mux.Handle("/mcp", proxy)
-	return loopbackOnly(mux), nil
+	return localBrowserGuard(mux), nil
 }
 
-// loopbackOnly rejects requests whose Host header is not a loopback name.
-// The listener is already bound to 127.0.0.1; this additionally stops DNS
-// rebinding (a malicious page resolving its own hostname to 127.0.0.1 to
-// smuggle same-origin requests into a proxy that signs them as you —
-// kubectl proxy learned this the hard way).
-func loopbackOnly(next http.Handler) http.Handler {
+// localBrowserGuard fends off the two ways a web page in the user's
+// browser could abuse a loopback proxy that signs requests as them. The
+// listener is already bound to 127.0.0.1, so a network peer can't reach
+// it; these guards are about the browser the user drives.
+//
+//   - Host header: rejects non-loopback names, stopping DNS rebinding (a
+//     malicious page pointing its own hostname at 127.0.0.1 to get
+//     same-origin access).
+//   - Origin header: rejects cross-site writes (CSRF). A direct
+//     fetch('http://127.0.0.1:PORT/...') from evil.com carries the right
+//     Host but a foreign Origin; without this check a text/plain POST is
+//     a "simple request" (no CORS preflight) and would be proxied with
+//     the user's token. Same-origin UI requests send no Origin (GET) or a
+//     loopback Origin, so they pass.
+//
+// kubectl proxy learned the rebinding half the hard way; the CSRF half is
+// the same lesson one step further.
+func localBrowserGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-		switch host {
-		case "localhost", "127.0.0.1", "::1", "[::1]":
-			next.ServeHTTP(w, r)
-		default:
+		if !isLoopbackHost(r.Host) {
 			http.Error(w, "unexpected Host header (DNS rebinding guard): open the UI via http://127.0.0.1 or http://localhost", http.StatusForbidden)
+			return
 		}
+		if origin := r.Header.Get("Origin"); origin != "" && !isLoopbackOrigin(origin) {
+			http.Error(w, "cross-origin request refused (CSRF guard): this UI is only for the local browser", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
+}
+
+// isLoopbackHost reports whether a Host header (host or host:port) names
+// the loopback interface.
+func isLoopbackHost(host string) bool {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "::1", "[::1]":
+		return true
+	}
+	return false
+}
+
+// isLoopbackOrigin reports whether an Origin header ("scheme://host[:port]")
+// points at the local machine — the only origin the UI is served from.
+func isLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return isLoopbackHost(u.Host)
 }
