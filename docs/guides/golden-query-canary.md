@@ -20,7 +20,7 @@ curl -s "$OCHAKAI/api/v1/knowledge?type=query&status=verified&sort=verified_at&l
 
 `sort=verified_at` は検証日時の古い順(未検証は最後)に返す。「90 日以上
 再検証されていない verified query」がカナリアの起点になる。OKF エクスポート
-(`ochakai export-okf` / `GET /api/v1/export`)を CI にチェックアウトする方式でもよい。
+(`ochakai export` / `GET /api/v1/export`)を CI にチェックアウトする方式でもよい。
 
 ### 2. 実行 — クライアントの資格情報で
 

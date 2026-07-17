@@ -242,29 +242,13 @@ unavailable, writes and searches degrade gracefully to trigram-only.
 
 ## 5. Load a semantic model and connect Claude Code
 
-Import Apache Ossie semantic models through the
-[Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/sql-proxy)
-(uses your ADC; run `gcloud auth application-default login` once):
+Import Apache Ossie semantic models through the API. The CLI resolves
+Google ID tokens itself from your gcloud login, so no Cloud SQL proxy
+or authorized network is needed — `$OCHAKAI_URL` was exported when the
+service was deployed above:
 
 ```sh
-# terminal 1
-cloud-sql-proxy $PROJECT_ID:$REGION:ochakai --port 55432
-
-# terminal 2
-OCHAKAI_DATABASE_URL="postgres://ochakai:$DB_PASSWORD@localhost:55432/ochakai?sslmode=disable" \
-  go run github.com/na0fu3y/ochakai/cmd/ochakai@latest import-ossie examples/semantic-model.yaml
-```
-
-No proxy installed? A temporary authorized network works with no extra
-tools — remember to remove it afterwards (IPv4 only):
-
-```sh
-gcloud sql instances patch ochakai --authorized-networks=$(curl -4 -s ifconfig.me)/32
-export DB_IP=$(gcloud sql instances describe ochakai \
-  --format='value(ipAddresses[0].ipAddress)')
-OCHAKAI_DATABASE_URL="postgres://ochakai:$DB_PASSWORD@$DB_IP:5432/ochakai?sslmode=require" \
-  go run github.com/na0fu3y/ochakai/cmd/ochakai@latest import-ossie examples/semantic-model.yaml
-gcloud sql instances patch ochakai --clear-authorized-networks
+go run github.com/na0fu3y/ochakai/cmd/ochakai@latest import-ossie examples/semantic-model.yaml
 ```
 
 Connect Claude Code — with the Cloud Run proxy running, no headers, no

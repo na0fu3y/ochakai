@@ -171,6 +171,23 @@ func (c *Client) Export(ctx context.Context) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
+// ImportOssie uploads Apache Ossie semantic model YAML verbatim; the
+// server stores each model for compile and derives metric/table
+// knowledge entries.
+func (c *Client) ImportOssie(ctx context.Context, yamlSrc []byte) (*ImportReport, error) {
+	resp, err := c.doRaw(ctx, http.MethodPost, "/api/v1/import/ossie", nil,
+		"application/yaml", bytes.NewReader(yamlSrc))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var report ImportReport
+	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+		return nil, err
+	}
+	return &report, nil
+}
+
 // entryPath escapes each ID segment separately: IDs are hierarchical
 // ("sales/orders") and their slashes must stay real path separators.
 func entryPath(typ, id string) string {
@@ -186,13 +203,21 @@ func entryPath(typ, id string) string {
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*http.Response, error) {
 	var rd io.Reader
+	contentType := ""
 	if body != nil {
 		buf, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
 		rd = bytes.NewReader(buf)
+		contentType = "application/json"
 	}
+	return c.doRaw(ctx, method, path, query, contentType, rd)
+}
+
+// doRaw is do without the JSON encoding: the body is sent verbatim
+// (nil rd and empty contentType for body-less requests).
+func (c *Client) doRaw(ctx context.Context, method, path string, query url.Values, contentType string, rd io.Reader) (*http.Response, error) {
 	u := c.base + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -201,8 +226,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return nil, err
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	if c.tokens != nil {
 		tok, err := c.tokens.Token()
