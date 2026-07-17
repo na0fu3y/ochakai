@@ -4,41 +4,60 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/na0fu3y/ochakai.svg)](https://pkg.go.dev/github.com/na0fu3y/ochakai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**ochakai is a context provider for data agents.** Semantic layers tell you
-that revenue = `SUM(price)` — they don't tell you whether 100 is good or bad.
-ochakai keeps metric definitions, verified golden queries, interpretation
-knowledge (how to read a metric), glossary terms, and table catalog entries
-in one knowledge base, shared with Claude Code and other data agents over
-[MCP](https://modelcontextprotocol.io), REST, and a CLI. It is built for
-Google Cloud — Cloud Run + Cloud SQL, secret-zero — and runs locally with
-nothing but Docker.
+**ochakai is a context provider for data agents.** Semantic layers tell
+you that revenue = `SUM(price)` — they don't tell you whether 100 is good
+or bad. ochakai keeps that missing half in one knowledge base: metric
+definitions, verified golden queries, interpretation knowledge (how to
+*read* a metric), glossary terms, and table catalog entries — curated by
+humans and agents together, and served to Claude Code and every other
+data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
+a bundled web UI.
 
-Principles:
+## Why ochakai
 
-- **No LLM inside.** ochakai returns deterministically compiled SQL from
-  semantic definitions ([Apache Ossie](https://github.com/apache/ossie)) or
-  human-verified golden queries, verbatim. Interpretation is the client
-  agent's job.
-- **No SQL execution.** ochakai holds no warehouse credentials. It compiles;
-  your agent executes.
-- **Knowledge is co-owned by humans and agents.** Agents are encouraged to
-  write learnings back (`create_knowledge`); entries start as drafts and a
-  human promotes them to `verified`. Every change is kept as a revision.
-  Proposals that don't make it are kept as `rejected` with the reason
-  (`status_note`) so agents stop re-proposing them, and per-entry usage
-  counts (`/usage`) show whether the write-back loop is actually working.
-- **Your knowledge is yours.** Self-hostable per tenant; the knowledge base
-  round-trips through
+In 2026, serving metric definitions to agents over MCP is table stakes —
+semantic layers, warehouses, and data catalogs all do it. ochakai exists
+for what they still don't do:
+
+- **Interpretation knowledge is a first-class type.** An `insight` entry
+  records the baseline, the seasonality, the caveat, the threshold — the
+  tribal knowledge that never fits in a semantic-model YAML and today
+  travels by Slack. Your agent gets it in the same search that returns
+  the metric definition.
+- **A write-back loop with a memory.** Agents are encouraged to write
+  learnings back; entries start as drafts and a human promotes them to
+  `verified`, with provenance (who wrote it, who verified it, when) on
+  every entry and every change kept as a revision. Proposals that don't
+  make it are kept as `rejected` with the reason, so agents stop
+  re-proposing them — a memory of *no* that verified-answer stores
+  elsewhere don't keep. Per-entry usage counts show whether the loop is
+  actually working.
+- **Verified answers for any client.** Verified-query stores exist — inside
+  Snowflake Cortex Analyst, inside Databricks Genie, inside each
+  AI-analyst SaaS — and each one feeds only its own chat. ochakai is
+  client-agnostic by construction: the same verified knowledge serves
+  Claude Code, hosted MCP agents, CI jobs, and whatever you build next.
+- **An exit, guaranteed.** The whole knowledge base round-trips through
   [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
   bundles (`ochakai export` / `ochakai import`) — plain markdown + YAML
-  frontmatter in nested directories that lives happily in git. Import works
-  with any producer's OKF bundle, not just ochakai's own
-  ([design doc 0005](docs/design/0005-okf-compatibility.md)).
-- **Google Cloud native, secret-zero.** ochakai targets Cloud Run +
-  Cloud SQL (optionally Vertex AI) exclusively: Cloud Run IAM decides who
-  reaches it, callers are identified by their Google identity, and the
-  database authenticates the service account — no tokens, no passwords,
-  nothing to issue or rotate.
+  frontmatter that lives happily in git. Import accepts any producer's
+  OKF bundle, not just ochakai's own
+  ([design doc 0005](docs/design/0005-okf-compatibility.md)). MIT-licensed
+  and self-hostable per tenant: your knowledge is never a hostage.
+
+And it stays small by refusing things:
+
+| ochakai has no… | because |
+|---|---|
+| LLM | it returns deterministically compiled SQL from semantic definitions ([Apache Ossie](https://github.com/apache/ossie)) or human-verified golden queries, verbatim. Interpretation is the client agent's job |
+| SQL execution | it holds no warehouse credentials. It compiles; your agent executes |
+| connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume |
+| chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
+| secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
+
+The whole thing is one Go binary and Postgres, deployable on Cloud Run +
+Cloud SQL for [about $10/month](deploy/cloudrun/README.md). Local
+development needs only Docker.
 
 ## Quick start
 
@@ -102,6 +121,22 @@ committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
 proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 `localhost:8787`.
 
+### Web UI: the human half of the loop
+
+Agents write drafts; somebody has to read them. The bundled web UI is
+where a human reviews what agents learned — search and filter by status,
+read an entry with its links and usage counts, then verify / deprecate /
+reject (with the reason) in one click. It also shows the *verification
+age* feed (oldest `verified_at` first) so stale golden queries surface,
+and compiles metrics interactively for debugging semantic models. One
+self-contained page, no build step; deliberately **not** a BI tool — no
+charts, no query execution, no chat.
+
+Same page, two identities ([design doc 0006](docs/design/0006-web-ui-serving.md)):
+`ochakai ui` serves it on loopback acting as *you* (zero deploy, edits
+recorded as `human:<you>`), and [examples/webui](examples/webui) deploys
+it on Cloud Run as a team-shared service.
+
 ## MCP tools
 
 | Tool | Description |
@@ -113,12 +148,9 @@ proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 | `delete_knowledge` | Soft-delete (history retained) |
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
-The REST API (`/api/v1`) mirrors these tools for building your own web UI —
-see [api/openapi.yaml](api/openapi.yaml). A bundled web UI ships two ways
-(same page, different identity): `ochakai ui` serves it locally acting as
-you, and [examples/webui](examples/webui) deploys it on Cloud Run as a
-team-shared service. To keep golden queries trustworthy over
-time, run them as canaries from your CI:
+The REST API (`/api/v1`) mirrors these tools — see
+[api/openapi.yaml](api/openapi.yaml). To keep golden queries trustworthy
+over time, run them as canaries from your CI:
 [docs/guides/golden-query-canary.md](docs/guides/golden-query-canary.md).
 
 ## Knowledge types
@@ -143,7 +175,7 @@ organize knowledge into directories
 |---|---|
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required; `DATABASE_URL` also works) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the `DATABASE_URL` carries no secret |
-| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only). Auth is ADC — no API keys |
+| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
 | `PORT` / `OCHAKAI_ADDR` | Listen address (default `:8080`) |
