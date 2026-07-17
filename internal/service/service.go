@@ -27,6 +27,17 @@ type Service struct {
 	Log      *slog.Logger
 }
 
+// InvalidInputError marks a failure caused by the client's input, so
+// transport layers can classify it (REST: 400) without string matching.
+type InvalidInputError struct{ msg string }
+
+func (e *InvalidInputError) Error() string { return e.msg }
+
+// Invalidf builds an InvalidInputError from a format string.
+func Invalidf(format string, args ...any) error {
+	return &InvalidInputError{msg: fmt.Sprintf(format, args...)}
+}
+
 // --- knowledge CRUD ---
 
 func (s *Service) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
@@ -110,16 +121,16 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
-		return fmt.Errorf("invalid type %q (one slug segment, e.g. metric; recommended: metric, query, insight, term, table)", k.Type)
+		return Invalidf("invalid type %q (one slug segment, e.g. metric; recommended: metric, query, insight, term, table)", k.Type)
 	}
 	if !domain.ValidID(k.ID) {
-		return fmt.Errorf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index")`, k.ID)
+		return Invalidf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index")`, k.ID)
 	}
 	if strings.TrimSpace(k.Title) == "" {
-		return fmt.Errorf("title is required")
+		return Invalidf("title is required")
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
-		return fmt.Errorf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
+		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
 	}
 	return nil
 }
@@ -196,7 +207,7 @@ type ContextResult struct {
 // mode is nonsense in the other.
 func (s *Service) Context(ctx context.Context, query string, f store.Filter, limit int, minScore float64) (*ContextResult, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil, fmt.Errorf("invalid context request: query is required")
+		return nil, Invalidf("invalid context request: query is required")
 	}
 	if limit <= 0 || limit > 20 {
 		limit = 5
@@ -272,11 +283,21 @@ func (s *Service) Context(ctx context.Context, query string, f store.Filter, lim
 // ListByVerifiedAt lists entries by verification age, oldest first — the
 // feed for canary runs over verified golden queries (see
 // docs/guides/golden-query-canary.md). Not a search: no usage is recorded.
-func (s *Service) ListByVerifiedAt(ctx context.Context, f store.Filter, limit int) ([]domain.Knowledge, error) {
+// Results are SearchHits with score 0, so the REST and MCP responses keep
+// the exact wire shape of a search across both modes.
+func (s *Service) ListByVerifiedAt(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	return s.Store.ListByVerifiedAt(ctx, f, limit)
+	entries, err := s.Store.ListByVerifiedAt(ctx, f, limit)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]domain.SearchHit, len(entries))
+	for i, k := range entries {
+		hits[i] = domain.SearchHit{Knowledge: k}
+	}
+	return hits, nil
 }
 
 // Usage returns usage totals for one entry (404 when the entry is gone).

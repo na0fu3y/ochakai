@@ -17,12 +17,14 @@ import (
 // never taken from the caller. okfPath preserves a foreign bundle
 // location for round-trips; "" for attachments born here.
 func (s *Service) Attach(ctx context.Context, typ domain.Type, id, name, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+	// Both are judgments about the client's bytes, so classify them as
+	// input errors (REST: 400).
 	if err := domain.ValidateAttachment(name, len(data)); err != nil {
-		return nil, err
+		return nil, Invalidf("%v", err)
 	}
 	mediaType, err := domain.DetectAttachmentMediaType(data)
 	if err != nil {
-		return nil, err
+		return nil, Invalidf("%v", err)
 	}
 	return s.Store.PutAttachment(ctx, typ, id, name, mediaType, okfPath, data, actor)
 }
