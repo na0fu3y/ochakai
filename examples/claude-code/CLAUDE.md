@@ -25,7 +25,14 @@ entries. Search it before writing analytics SQL; write learnings back.
   — one hit per line: score, uri, status, title. Trust `verified` entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
 - `ochakai get <type>/<id>` — full entry as markdown (YAML frontmatter +
-  body). Follow the `# Links` section to related entries.
+  body). Follow the `# Links` section to related entries. If stderr lists
+  attachments (dashboard screenshots, ER diagrams), fetch them with
+  `ochakai get <type>/<id> --download <dir>` and Read the saved files when
+  the body's image references matter to the question.
+- `ochakai attach <type>/<id> <file.png>` — attach an image to an entry
+  (and reference it from the body so the caption is searchable). If you
+  learn something by looking at an image, write it into the body with
+  `ochakai update` — knowledge locked in pixels is invisible to search.
 - `ochakai compile --metric <name> [--dimension ds.field] [--grain ds.time_field:month] [--filter "ds.field = value"]`
   — deterministic SQL on stdout. ochakai never executes SQL; run the result
   with your own warehouse access. **Exit 2** means the request is outside

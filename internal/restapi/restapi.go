@@ -8,8 +8,10 @@ package restapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -135,6 +137,77 @@ func Handler(svc *service.Service) http.Handler {
 	// path above has no such ambiguity.
 	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}/usage", usage)
 
+	// Attachments (design doc 0008): images attached to an entry, bytes
+	// fetched on demand — entry reads carry metadata only. The path is
+	// /attachments/{type}/{id segments...}/{name}; the final segment is
+	// always the filename (attachment names are single segments), so the
+	// wildcard split is unambiguous. Lives outside /knowledge/ for the
+	// same reason /usage does: a suffix after a hierarchical {id...}
+	// would be unroutable.
+	attachmentRef := func(w http.ResponseWriter, r *http.Request) (domain.Type, string, string, bool) {
+		id, name, ok := splitAttachmentPath(r.PathValue("path"))
+		if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid attachment path (want /api/v1/attachments/{type}/{id}/{name})"})
+			return "", "", "", false
+		}
+		return domain.Type(r.PathValue("type")), id, name, true
+	}
+
+	mux.HandleFunc("PUT /api/v1/attachments/{type}/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		typ, id, name, ok := attachmentRef(w, r)
+		if !ok {
+			return
+		}
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, domain.MaxAttachmentSize+1))
+		if err != nil {
+			writeJSON(w, http.StatusRequestEntityTooLarge,
+				map[string]string{"error": fmt.Sprintf("attachment exceeds %d MiB", domain.MaxAttachmentSize>>20)})
+			return
+		}
+		// okf_path preserves the bundle location a foreign import carried
+		// this file at, so re-export keeps the original body links working.
+		okfPath := r.URL.Query().Get("okf_path")
+		if okfPath != "" && (okfPath != path.Clean(okfPath) || okfPath == "." ||
+			strings.HasPrefix(okfPath, "/") || strings.HasPrefix(okfPath, "..")) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid okf_path (want a clean bundle-relative path)"})
+			return
+		}
+		att, err := svc.Attach(r.Context(), typ, id, name, okfPath, data, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, att)
+	})
+
+	mux.HandleFunc("GET /api/v1/attachments/{type}/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		typ, id, name, ok := attachmentRef(w, r)
+		if !ok {
+			return
+		}
+		att, data, err := svc.Attachment(r.Context(), typ, id, name)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", att.MediaType)
+		w.Header().Set("ETag", `"`+att.SHA256+`"`)
+		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
+		_, _ = w.Write(data)
+	})
+
+	mux.HandleFunc("DELETE /api/v1/attachments/{type}/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		typ, id, name, ok := attachmentRef(w, r)
+		if !ok {
+			return
+		}
+		if err := svc.Detach(r.Context(), typ, id, name, httpauth.Actor(r.Context())); err != nil {
+			writeError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	mux.HandleFunc("DELETE /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		err := svc.Delete(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), httpauth.Actor(r.Context()))
 		if err != nil {
@@ -145,7 +218,8 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// GET /api/v1/export — the whole knowledge base as an OKF bundle
-	// (tar.gz of markdown + YAML frontmatter). Your knowledge is yours.
+	// (tar.gz of markdown + YAML frontmatter, plus attached images as
+	// plain files). Your knowledge is yours.
 	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
 		entries, err := svc.Store.ListAll(r.Context())
 		if err != nil {
@@ -156,6 +230,25 @@ func Handler(svc *service.Service) http.Handler {
 		if err != nil {
 			writeError(w, err)
 			return
+		}
+		// Attachments go next to their entries: "<type>/<id>/<name>", or
+		// the foreign path they were imported at (okf_path) so original
+		// body links keep working. A foreign path already taken by a
+		// concept document falls back to the canonical layout — identical
+		// content at the same path (the same image referenced by two
+		// entries) is no conflict.
+		atts, err := svc.Store.ListAllAttachments(r.Context())
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		for i := range atts {
+			a := &atts[i]
+			p := okf.AttachmentPath(a.Type, a.ID, &a.Att)
+			if _, taken := files[p]; taken {
+				p = string(a.Type) + "/" + a.ID + "/" + a.Att.Name
+			}
+			files[p] = a.Data
 		}
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
@@ -228,6 +321,17 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// splitAttachmentPath cuts "{id...}/{name}" at the final slash: attachment
+// names are single segments, so the last segment is always the filename
+// and the rest is the (possibly hierarchical) entry ID.
+func splitAttachmentPath(p string) (id, name string, ok bool) {
+	i := strings.LastIndex(p, "/")
+	if i <= 0 || i == len(p)-1 {
+		return "", "", false
+	}
+	return p[:i], p[i+1:], true
 }
 
 func toTypes(ss []string) []domain.Type {
