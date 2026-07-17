@@ -1,6 +1,7 @@
-// Package mcpserver exposes ochakai's seven MCP tools over streamable HTTP.
+// Package mcpserver exposes ochakai's MCP tools over streamable HTTP.
 // Tool names follow verb_object so they stay unambiguous next to other MCP
-// servers' tools (design doc §4).
+// servers' tools (design doc §4). The REST API (internal/restapi) is a
+// superset of these tools: same operations plus bulk export/import.
 package mcpserver
 
 import (
@@ -47,11 +48,27 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Description: "Search the knowledge base across all types (recommended: metric, query, insight, term, table; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
-			"to check whether a proposal was already rejected before creating similar knowledge.",
+			"to check whether a proposal was already rejected before creating similar knowledge. " +
+			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +
+			"(oldest first, never-verified last; query is ignored, scores are 0) — the feed for " +
+			"golden-query canary runs and for finding stale verified knowledge.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
-		hits, err := svc.Search(ctx, in.Query, store.Filter{
-			Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags,
-		}, in.Limit)
+		f := store.Filter{Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags}
+		if in.Sort != "" {
+			if in.Sort != "verified_at" {
+				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at)", in.Sort)
+			}
+			entries, err := svc.ListByVerifiedAt(ctx, f, in.Limit)
+			if err != nil {
+				return nil, searchOut{}, err
+			}
+			hits := make([]domain.SearchHit, len(entries))
+			for i, k := range entries {
+				hits[i] = domain.SearchHit{Knowledge: k}
+			}
+			return nil, searchOut{Hits: hits}, nil
+		}
+		hits, err := svc.Search(ctx, in.Query, f, in.Limit)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
@@ -126,6 +143,20 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name: "get_knowledge_usage",
+		Description: "Usage totals for one knowledge entry: how often it appeared in search results, " +
+			"was fetched individually, or was referenced by compile_sql, with last_used_at. " +
+			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
+			"and a staleness signal for verified entries that stopped being used.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, usageOut, error) {
+		u, err := svc.Usage(ctx, domain.Type(in.Type), in.ID)
+		if err != nil {
+			return nil, usageOut{}, err
+		}
+		return nil, usageOut{Usage: *u}, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name: "compile_sql",
 		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from the " +
 			"imported Ossie semantic model (no LLM involved). Dialects: bigquery (default), ansi. " +
@@ -147,6 +178,7 @@ type searchIn struct {
 	Types    []string `json:"types,omitempty"`
 	Statuses []string `json:"statuses,omitempty"`
 	Tags     []string `json:"tags,omitempty"`
+	Sort     string   `json:"sort,omitempty"` // "" to search; "verified_at" to list by verification age
 	Limit    int      `json:"limit,omitempty"`
 }
 
@@ -177,6 +209,10 @@ type getIn struct {
 
 type knowledgeOut struct {
 	Knowledge domain.Knowledge `json:"knowledge"`
+}
+
+type usageOut struct {
+	Usage domain.Usage `json:"usage"`
 }
 
 type deleteOut struct {

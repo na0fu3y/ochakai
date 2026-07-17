@@ -4,17 +4,26 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
 // Guard: the hand-written completion scripts stay in sync with the real
-// command set and the enum flag values.
+// command set and the enum flag values. Type and status values come from
+// the domain package so a new enum value fails this test until every
+// script (and only the scripts) is updated by hand.
 func TestCompletionScriptsStayInSync(t *testing.T) {
 	admin := []string{"serve", "version"}
 	enums := []string{
-		"metric query insight term table", // --type
-		"draft verified deprecated",       // --status
-		"bigquery ansi",                   // --dialect
-		"zsh bash fish",                   // completion <shell>
+		"bigquery ansi", // --dialect
+		"zsh bash fish", // completion <shell>
+		"verified_at",   // --sort
+	}
+	for _, typ := range domain.Types {
+		enums = append(enums, string(typ)) // --type
+	}
+	for _, s := range domain.Statuses {
+		enums = append(enums, string(s)) // --status
 	}
 	// The #compdef header is what fpath-installed files are matched by;
 	// without it only the source <(...) route works.

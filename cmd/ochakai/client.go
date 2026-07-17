@@ -1,7 +1,6 @@
-// Client-side subcommands (design doc 0004): pure clients of a remote
-// ochakai's /api/v1, named by --url or $OCHAKAI_URL. Server-admin
-// commands (serve, import-ossie, export-okf) live in main.go and talk to
-// the database directly.
+// Client-side subcommands (design docs 0004/0007): pure clients of a
+// remote ochakai's /api/v1, named by --url or $OCHAKAI_URL. The only
+// command that talks to the database directly is `serve` (main.go).
 package main
 
 import (
@@ -19,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/apiclient"
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -32,6 +32,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"create":  cmdCreate,
 	"update":  cmdUpdate,
 	"delete":  cmdDelete,
+	"usage":   cmdUsage,
 	"compile": cmdCompile,
 	"export":  cmdExport,
 	"import":  cmdImport,
@@ -122,6 +123,24 @@ func printJSON(v any) error {
 	return enc.Encode(v)
 }
 
+// typeList and statusList render the domain enumerations for help text,
+// so flag help can never drift from the model again.
+func typeList() string {
+	ss := make([]string, len(domain.Types))
+	for i, t := range domain.Types {
+		ss[i] = string(t)
+	}
+	return strings.Join(ss, "|")
+}
+
+func statusList() string {
+	ss := make([]string, len(domain.Statuses))
+	for i, s := range domain.Statuses {
+		ss[i] = string(s)
+	}
+	return strings.Join(ss, "|")
+}
+
 // splitRef parses "<type>/<id>" (an "ochakai://" prefix is tolerated).
 func splitRef(s string) (string, string, error) {
 	typ, id, ok := strings.Cut(strings.TrimPrefix(s, "ochakai://"), "/")
@@ -133,23 +152,30 @@ func splitRef(s string) (string, string, error) {
 
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).",
-		"  ochakai search \"gross margin\" --type metric --type term --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n")
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output is then verified_at, uri, status, title.",
+		"  ochakai search \"gross margin\" --type metric --type term --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type query --status verified --limit 100\n")
 	var types, statuses, tags repeated
-	fs.Var(&types, "type", "filter by type: metric|query|insight|term|table (repeatable)")
-	fs.Var(&statuses, "status", "filter by status: draft|verified|deprecated (repeatable)")
+	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
+	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	limit := fs.Int("limit", 0, "max results (server default 10, max 50)")
+	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age, oldest first`)
+	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
+	if *sortBy != "" && len(pos) > 0 {
+		return fmt.Errorf("--sort lists entries by verification age; it cannot be combined with a search query")
+	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
 	}
-	hits, err := c.Search(ctx, strings.Join(pos, " "), types, statuses, tags, *limit)
+	hits, err := c.Search(ctx, apiclient.SearchParams{
+		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
+		Sort: *sortBy, Limit: *limit,
+	})
 	if err != nil {
 		return err
 	}
@@ -157,7 +183,14 @@ func cmdSearch(ctx context.Context, args []string) error {
 		return printJSON(map[string]any{"hits": hits})
 	}
 	for _, h := range hits {
-		line := fmt.Sprintf("%.3f\t%s\t%s\t%s", h.Score, h.URI(), h.Status, h.Title)
+		lead := fmt.Sprintf("%.3f", h.Score)
+		if *sortBy != "" {
+			lead = "-" // never verified sorts last
+			if h.VerifiedAt != nil {
+				lead = h.VerifiedAt.Format(time.RFC3339)
+			}
+		}
+		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.Title)
 		if h.Description != "" {
 			line += " — " + h.Description
 		}
@@ -171,8 +204,8 @@ func cmdContext(ctx context.Context, args []string) error {
 		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
 		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type query --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n")
 	var types, statuses, tags repeated
-	fs.Var(&types, "type", "filter by type: metric|query|insight|term|table (repeatable)")
-	fs.Var(&statuses, "status", "filter by status: draft|verified|deprecated (repeatable)")
+	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
+	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "stop rendering entries after ~this many bytes (0 = no cap)")
@@ -260,6 +293,43 @@ func renderEntry(k *domain.Knowledge) string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+func cmdUsage(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai usage [flags] <type>/<id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, referenced by compile — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
+		"  ochakai usage query/monthly-revenue\n  ochakai usage metric/revenue --json\n")
+	asJSON := fs.Bool("json", false, "print JSON")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	typ, id, err := splitRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	u, err := c.Usage(ctx, typ, id)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(u)
+	}
+	last := "-"
+	if u.LastUsedAt != nil {
+		last = u.LastUsedAt.Format(time.RFC3339)
+	}
+	fmt.Printf("search_hits\t%d\nfetches\t%d\ncompiles\t%d\nlast_used_at\t%s\n",
+		u.SearchHits, u.Fetches, u.Compiles, last)
+	return nil
 }
 
 func cmdGet(ctx context.Context, args []string) error {

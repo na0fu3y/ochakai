@@ -163,9 +163,11 @@ it on Cloud Run as a team-shared service.
 | `create_knowledge` | Write learnings back (agents create drafts) |
 | `update_knowledge` | Update; every change is kept as a revision |
 | `delete_knowledge` | Soft-delete (history retained) |
+| `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
-The REST API (`/api/v1`) mirrors these tools — see
+The REST API (`/api/v1`) is a superset of these tools, adding bulk
+export/import — see
 [api/openapi.yaml](api/openapi.yaml). To keep golden queries trustworthy
 over time, run them as canaries from your CI:
 [docs/guides/golden-query-canary.md](docs/guides/golden-query-canary.md).

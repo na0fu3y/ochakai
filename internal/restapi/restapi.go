@@ -1,6 +1,8 @@
 // Package restapi serves /api/v1 so users can build their own web UIs
-// (a sample lives in examples/webui). It mirrors the MCP tools; the spec
-// is committed at api/openapi.yaml.
+// (a sample lives in examples/webui). It is a superset of the MCP tools:
+// the same knowledge/search/usage/compile operations plus bulk endpoints
+// (export, import/ossie) that make no sense as agent tool calls. The
+// spec is committed at api/openapi.yaml.
 package restapi
 
 import (
