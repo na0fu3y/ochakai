@@ -192,15 +192,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	return s
 }
 
+// The jsonschema tags spell out the numeric contracts (defaults, maxima,
+// out-of-range fallback) that api/openapi.yaml and the CLI help already
+// document — MCP agents only see the tool schema.
 type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
 	// rejects it — one of query / sort must be set.
-	Query    string   `json:"query,omitempty"`
-	Types    []string `json:"types,omitempty"`
-	Statuses []string `json:"statuses,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Sort     string   `json:"sort,omitempty"` // "" to search; "verified_at" to list by verification age
-	Limit    int      `json:"limit,omitempty"`
+	Query    string   `json:"query,omitempty" jsonschema:"search text; omit when sort is set"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metric, query, insight, term, table, or any custom slug)"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
+	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age instead (mutually exclusive with query)"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
 
 type searchOut struct {
@@ -208,14 +211,14 @@ type searchOut struct {
 }
 
 type contextIn struct {
-	Query    string   `json:"query"`
-	Types    []string `json:"types,omitempty"`
-	Statuses []string `json:"statuses,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Limit    int      `json:"limit,omitempty"`
+	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metric, query, insight, term, table, or any custom slug)"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
+	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
 	// MinScore drops hits below it; scores are search-mode dependent
 	// (trigram vs hybrid RRF), so leave it 0 unless calibrated.
-	MinScore float64 `json:"min_score,omitempty"`
+	MinScore float64 `json:"min_score,omitempty" jsonschema:"drop hits scoring below this; scores are search-mode dependent and uncalibrated, so leave 0 (off) unless calibrated against your corpus"`
 }
 
 type contextOut struct {
@@ -252,16 +255,16 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string         `json:"type"`
-	ID          string         `json:"id"`
+	Type        string         `json:"type" jsonschema:"one slug segment; recommended: metric, query, insight, term, table — any custom slug works"`
+	ID          string         `json:"id" jsonschema:"slug segments separated by / (hierarchical, e.g. sales/orders); the last segment must not be \"index\""`
 	Title       string         `json:"title"`
 	Description string         `json:"description,omitempty"`
 	Tags        []string       `json:"tags,omitempty"`
-	Status      string         `json:"status,omitempty"`
-	StatusNote  string         `json:"status_note,omitempty"`
-	Links       []domain.Link  `json:"links,omitempty"`
-	Attrs       map[string]any `json:"attrs,omitempty"`
-	Body        string         `json:"body,omitempty"`
+	Status      string         `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
+	StatusNote  string         `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
+	Links       []domain.Link  `json:"links,omitempty" jsonschema:"typed edges to other entries, e.g. {rel: about, target: metric/revenue}"`
+	Attrs       map[string]any `json:"attrs,omitempty" jsonschema:"type-specific structured attributes, e.g. question/sql for a query"`
+	Body        string         `json:"body,omitempty" jsonschema:"markdown body"`
 }
 
 func (in writeIn) toKnowledge() *domain.Knowledge {
