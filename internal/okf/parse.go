@@ -31,8 +31,20 @@ func Parse(doc []byte) (*domain.Knowledge, error) {
 // verbatim so bundle import can preserve the original spelling when the
 // bundle path names the type differently. k.Type is "" when no type slug
 // could be derived \u2014 the caller decides whether path context fills it in.
+//
+// Frontmatter keys fall into three groups. Envelope keys (type, id, title,
+// description, tags, status, status_note) map to Knowledge fields.
+// Server-owned keys (timestamp, created_by, verified_*, rejected_*) are
+// ignored \u2014 provenance comes from authentication. Everything else is a
+// producer-defined extension key (OKF SPEC \u00a74.1) and is kept as-is in
+// attrs, so foreign keys like "resource" or "owner" survive a round-trip
+// at their original top-level position. A nested "attrs" map (the shape
+// older ochakai exports wrote) is folded in for backward compatibility.
 func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 	s := strings.TrimPrefix(string(doc), "\ufeff")
+	// OKF specifies UTF-8 markdown but not line endings; normalize CRLF so
+	// the delimiter scan below works on bundles authored on Windows.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
 	if !strings.HasPrefix(s, "---\n") {
 		return nil, "", fmt.Errorf("not an OKF document: missing --- frontmatter")
 	}
@@ -50,39 +62,92 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 		return nil, "", fmt.Errorf("not an OKF document: unterminated frontmatter")
 	}
 
-	var fm struct {
-		Type        string         `yaml:"type"`
-		ID          string         `yaml:"id"`
-		Title       string         `yaml:"title"`
-		Description string         `yaml:"description"`
-		Tags        []string       `yaml:"tags"`
-		Status      string         `yaml:"status"`
-		Attrs       map[string]any `yaml:"attrs"`
-	}
-	if err := yaml.Unmarshal([]byte(fmPart), &fm); err != nil {
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(fmPart), &raw); err != nil {
 		return nil, "", fmt.Errorf("invalid frontmatter: %w", err)
 	}
-	typ, keepSpelling := typeFromOKF(fm.Type)
-	attrs := fm.Attrs
-	if keepSpelling != "" {
+	var str = func(key string) (string, error) {
+		v, ok := raw[key]
+		if !ok || v == nil {
+			return "", nil
+		}
+		s, ok := v.(string)
+		if !ok {
+			return "", fmt.Errorf("invalid frontmatter: %s is not a string", key)
+		}
+		return s, nil
+	}
+	var fm struct{ typ, id, title, description, status, statusNote string }
+	for _, f := range []struct {
+		key string
+		dst *string
+	}{
+		{"type", &fm.typ}, {"id", &fm.id}, {"title", &fm.title},
+		{"description", &fm.description}, {"status", &fm.status},
+		{"status_note", &fm.statusNote},
+	} {
+		var err error
+		if *f.dst, err = str(f.key); err != nil {
+			return nil, "", err
+		}
+	}
+	var tags []string
+	if v, ok := raw["tags"]; ok && v != nil {
+		list, ok := v.([]any)
+		if !ok {
+			return nil, "", fmt.Errorf("invalid frontmatter: tags is not a list")
+		}
+		for _, t := range list {
+			s, ok := t.(string)
+			if !ok {
+				return nil, "", fmt.Errorf("invalid frontmatter: tags is not a list of strings")
+			}
+			tags = append(tags, s)
+		}
+	}
+
+	var attrs map[string]any
+	setAttr := func(key string, v any) {
 		if attrs == nil {
 			attrs = map[string]any{}
 		}
-		attrs[AttrOKFType] = keepSpelling
+		attrs[key] = v
+	}
+	if legacy, ok := raw["attrs"].(map[string]any); ok {
+		for key, v := range legacy {
+			setAttr(key, v)
+		}
+	}
+	for key, v := range raw {
+		switch key {
+		case "type", "id", "title", "description", "tags", "status", "status_note":
+			// envelope, extracted above
+		case "timestamp", "created_by", "verified_by", "verified_at", "rejected_by", "rejected_at":
+			// server-owned, never from the payload
+		case "attrs":
+			// legacy nested extensions, folded in above
+		default:
+			setAttr(key, v)
+		}
+	}
+	typ, keepSpelling := typeFromOKF(fm.typ)
+	if keepSpelling != "" {
+		setAttr(AttrOKFType, keepSpelling)
 	}
 
 	trimmedBody, links := splitLinks(strings.TrimSpace(body))
 	return &domain.Knowledge{
 		Type:        typ,
-		ID:          fm.ID,
-		Title:       fm.Title,
-		Description: fm.Description,
-		Tags:        fm.Tags,
-		Status:      domain.Status(fm.Status),
+		ID:          fm.id,
+		Title:       fm.title,
+		Description: fm.description,
+		Tags:        tags,
+		Status:      domain.Status(fm.status),
+		StatusNote:  fm.statusNote,
 		Links:       links,
 		Attrs:       attrs,
 		Body:        trimmedBody,
-	}, fm.Type, nil
+	}, fm.typ, nil
 }
 
 // typeFromOKF maps an OKF frontmatter type to an ochakai type. Display

@@ -59,10 +59,15 @@ ochakai もこれに合わせ、ID をスラッシュ区切りのスラグ列に
 |---|---|
 | タイプの表記 | frontmatter の `type` が推奨タイプの表示名/スラグならそれに写像。それ以外はスラグ化し、**表記が変わる場合は元の表記を `attrs.okf_type` に保存**。エクスポート時に `type` キーへ畳み戻し、属性としては出力しない |
 | パスと frontmatter の不一致 | **パスが勝つ**(OKF の concept ID = パス)。`tables/users.md` に `type: Table` とあれば type=`tables`、`okf_type: Table` として保存し、再エクスポートで元の位置・元の表記に戻る |
-| `index.md` | ナビゲーションであり実体ではない。インポートでは黙ってスキップし、エクスポートで全ディレクトリ階層に再生成する |
+| 未知の frontmatter キー | プロデューサ拡張キー(OKF SPEC §4.1)として**値ごとそのまま `attrs` に保存**し、エクスポートで**トップレベルキーに書き戻す**(`resource` / `owner` 等が元の位置・表記で往復する)。`attrs:` のネストは出力しない(旧形式のネストは読み込みで畳み込む)。封筒キーと同名の attr はエクスポートせず封筒が勝つ |
+| `resource` | 拡張キーの一般規則で `attrs.resource` として往復。ochakai 自身の table エントリは従来どおり `attrs.source` から導出して出力する(`attrs.resource` があればそちらが優先) |
+| `index.md` / `log.md` | OKF の予約ファイル。ナビゲーション/履歴であり実体ではないため、インポートでは黙ってスキップ。index.md はエクスポートで全ディレクトリ階層に再生成する(SPEC §6 に従い **frontmatter なし**、ルートのみ `okf_version` を宣言) |
+| 隠しファイル | セグメントが `.` で始まるパス(`.git`、macOS tar の `._*`、`.DS_Store`)はナレッジにならないため黙ってスキップ(ディレクトリ走査と tar で同じ扱い) |
 | 非 Markdown ファイル | ナレッジにならないためスキップし、レポートに残す(例: GA4 バンドルの `viz.html`) |
 | ルート直下の concept | タイプディレクトリがないため frontmatter のタイプで受ける(再エクスポートでタイプディレクトリ配下に移動する) |
-| サーバー所有キー | `timestamp` / `created_by` / `verified_*` は従来どおりペイロードから受け取らない。provenance は認証から来る |
+| 単一ディレクトリに包まれたアーカイブ | `tar czf bundle.tgz ga4/` の形。放置すると包みディレクトリ名が全エントリのタイプになるため、**自動でアンラップして通知**する(`ochakai import --keep-root` で抑止) |
+| 改行コード | CRLF は LF に正規化して受ける(OKF は改行コードを規定しない) |
+| サーバー所有キー | `timestamp` / `created_by` / `verified_*` は従来どおりペイロードから受け取らない。provenance は認証から来る。`status` / `status_note` は封筒キーとして受ける |
 
 ### 3.4 インポートの入口
 

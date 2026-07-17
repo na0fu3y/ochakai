@@ -265,6 +265,10 @@ func importOKF(log *slog.Logger, path string) error {
 	if err != nil {
 		return err
 	}
+	if unwrapped, root := okf.StripWrapper(files); root != "" {
+		log.Info("unwrapped bundle directory", "dir", root)
+		files = unwrapped
+	}
 	entries, skipped := okf.FromBundle(files)
 	for _, s := range skipped {
 		log.Warn("skipped bundle file", "reason", s)

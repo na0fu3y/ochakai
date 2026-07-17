@@ -124,11 +124,57 @@ func TestBundleLayoutAndIndexes(t *testing.T) {
 			t.Errorf("bundle missing %s (have %d files)", path, len(files))
 		}
 	}
-	if !strings.Contains(string(files["insight/index.md"]), "[売上の季節性](/insight/revenue-seasonality.md)") {
-		t.Errorf("type index missing concept link:\n%s", files["insight/index.md"])
+	// Index files list their contents with relative links and no
+	// frontmatter (SPEC §6); the root index alone declares okf_version
+	// (§11).
+	typeIdx := string(files["insight/index.md"])
+	if !strings.Contains(typeIdx, "[売上の季節性](revenue-seasonality.md)") {
+		t.Errorf("type index missing concept link:\n%s", typeIdx)
 	}
-	if !strings.Contains(string(files["index.md"]), "[insight/](/insight/index.md)") {
-		t.Errorf("root index missing type link:\n%s", files["index.md"])
+	if strings.HasPrefix(typeIdx, "---") {
+		t.Errorf("non-root index must not carry frontmatter:\n%s", typeIdx)
+	}
+	root := string(files["index.md"])
+	if !strings.Contains(root, "[insight/](insight/index.md)") {
+		t.Errorf("root index missing type link:\n%s", root)
+	}
+	if !strings.HasPrefix(root, "---\nokf_version: \"0.1\"\n---\n") {
+		t.Errorf("root index must declare okf_version:\n%s", root)
+	}
+}
+
+// Extension attrs export as producer-defined top-level frontmatter keys
+// (SPEC §4.1), not nested under an attrs map, so foreign consumers see
+// them and foreign bundles round-trip in place.
+func TestDocumentFlattensAttrs(t *testing.T) {
+	entries := sample()
+	doc, err := Document(&entries[0]) // attrs: {kind: seasonality}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fm map[string]any
+	if err := yaml.Unmarshal([]byte(strings.SplitN(string(doc), "---\n", 3)[1]), &fm); err != nil {
+		t.Fatal(err)
+	}
+	if fm["kind"] != "seasonality" {
+		t.Errorf("extension key not at top level: %v", fm)
+	}
+	if _, ok := fm["attrs"]; ok {
+		t.Errorf("attrs must not nest:\n%s", doc)
+	}
+
+	// An attr whose name collides with an envelope key must not clobber it.
+	k := entries[0]
+	k.Attrs = map[string]any{"title": "偽タイトル", "kind": "seasonality"}
+	doc, err = Document(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal([]byte(strings.SplitN(string(doc), "---\n", 3)[1]), &fm); err != nil {
+		t.Fatalf("colliding attr broke the frontmatter: %v\n%s", err, doc)
+	}
+	if fm["title"] != "売上の季節性" {
+		t.Errorf("envelope must win over a colliding attr: %v", fm["title"])
 	}
 }
 
