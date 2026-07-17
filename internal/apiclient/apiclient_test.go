@@ -36,7 +36,10 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 			{Knowledge: domain.Knowledge{Type: domain.TypeMetric, ID: "revenue", Title: "売上"}, Score: 0.9},
 		}})
 	})
-	hits, err := c.Search(context.Background(), "revenue", []string{"metric", "term"}, []string{"verified"}, []string{"core"}, 5)
+	hits, err := c.Search(context.Background(), SearchParams{
+		Query: "revenue", Types: []string{"metric", "term"}, Statuses: []string{"verified"},
+		Tags: []string{"core"}, Limit: 5,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +47,45 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 		t.Errorf("hits = %+v", hits)
 	}
 	if got.Get("q") != "revenue" || len(got["type"]) != 2 || got.Get("status") != "verified" ||
-		got.Get("tag") != "core" || got.Get("limit") != "5" {
+		got.Get("tag") != "core" || got.Get("limit") != "5" || got.Has("sort") {
 		t.Errorf("query = %v", got)
+	}
+}
+
+func TestSearchSortSendsSortParam(t *testing.T) {
+	var got url.Values
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		// The verified_at feed returns entries without scores.
+		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.Knowledge{
+			{Type: domain.TypeQuery, ID: "monthly-revenue", Title: "月次売上"},
+		}})
+	})
+	hits, err := c.Search(context.Background(), SearchParams{Sort: "verified_at", Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].ID != "monthly-revenue" || hits[0].Score != 0 {
+		t.Errorf("hits = %+v", hits)
+	}
+	if got.Get("sort") != "verified_at" || got.Get("limit") != "100" || got.Has("q") {
+		t.Errorf("query = %v", got)
+	}
+}
+
+func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/usage/query/sales/monthly-revenue" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(domain.Usage{SearchHits: 12, Fetches: 4, Compiles: 2})
+	})
+	u, err := c.Usage(context.Background(), "query", "sales/monthly-revenue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.SearchHits != 12 || u.Fetches != 4 || u.Compiles != 2 {
+		t.Errorf("usage = %+v", u)
 	}
 }
 

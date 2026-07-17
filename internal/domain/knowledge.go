@@ -51,8 +51,17 @@ const (
 	StatusRejected   Status = "rejected"
 )
 
+// Statuses lists all statuses in lifecycle order — the single source for
+// every user-facing enumeration (CLI help, completions, docs guards).
+var Statuses = []Status{StatusDraft, StatusVerified, StatusDeprecated, StatusRejected}
+
 func ValidStatus(s Status) bool {
-	return s == StatusDraft || s == StatusVerified || s == StatusDeprecated || s == StatusRejected
+	for _, v := range Statuses {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 // Usage event kinds recorded per knowledge entry (design doc 0001 §9).

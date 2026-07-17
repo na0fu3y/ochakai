@@ -99,22 +99,39 @@ func (e *APIError) Error() string {
 	return http.StatusText(e.StatusCode)
 }
 
-func (c *Client) Search(ctx context.Context, query string, types, statuses, tags []string, limit int) ([]domain.SearchHit, error) {
+// SearchParams are the query parameters of GET /api/v1/knowledge.
+type SearchParams struct {
+	Query    string
+	Types    []string
+	Statuses []string
+	Tags     []string
+	// Sort switches the endpoint from searching to listing:
+	// "verified_at" returns entries by verification age, oldest first
+	// (the golden-query canary feed). Query is ignored then, and the
+	// returned hits carry no score.
+	Sort  string
+	Limit int
+}
+
+func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit, error) {
 	q := url.Values{}
-	if query != "" {
-		q.Set("q", query)
+	if p.Query != "" {
+		q.Set("q", p.Query)
 	}
-	for _, t := range types {
+	if p.Sort != "" {
+		q.Set("sort", p.Sort)
+	}
+	for _, t := range p.Types {
 		q.Add("type", t)
 	}
-	for _, s := range statuses {
+	for _, s := range p.Statuses {
 		q.Add("status", s)
 	}
-	for _, t := range tags {
+	for _, t := range p.Tags {
 		q.Add("tag", t)
 	}
-	if limit > 0 {
-		q.Set("limit", strconv.Itoa(limit))
+	if p.Limit > 0 {
+		q.Set("limit", strconv.Itoa(p.Limit))
 	}
 	var out struct {
 		Hits []domain.SearchHit `json:"hits"`
@@ -151,6 +168,16 @@ func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (*domain.Knowl
 
 func (c *Client) Delete(ctx context.Context, typ, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(typ, id), nil, nil, nil)
+}
+
+// Usage fetches usage totals for one entry (GET /api/v1/usage/{type}/{id}):
+// search hits, fetches, compile references, and last-used time.
+func (c *Client) Usage(ctx context.Context, typ, id string) (*domain.Usage, error) {
+	var u domain.Usage
+	if err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/usage/", typ, id), nil, nil, &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 func (c *Client) Compile(ctx context.Context, req CompileRequest) (*CompileResult, error) {
@@ -190,9 +217,11 @@ func (c *Client) ImportOssie(ctx context.Context, yamlSrc []byte) (*ImportReport
 
 // entryPath escapes each ID segment separately: IDs are hierarchical
 // ("sales/orders") and their slashes must stay real path separators.
-func entryPath(typ, id string) string {
+func entryPath(typ, id string) string { return escapedPath("/api/v1/knowledge/", typ, id) }
+
+func escapedPath(base, typ, id string) string {
 	var b strings.Builder
-	b.WriteString("/api/v1/knowledge/")
+	b.WriteString(base)
 	b.WriteString(url.PathEscape(typ))
 	for seg := range strings.SplitSeq(id, "/") {
 		b.WriteString("/")

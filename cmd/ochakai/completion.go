@@ -41,6 +41,7 @@ _ochakai() {
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
     'delete:soft-delete an entry'
+    'usage:show usage totals for an entry'
     'compile:compile metrics into SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
@@ -61,14 +62,18 @@ _ochakai() {
     search)
       _arguments \
         '*--type[filter by type]:type:(metric query insight term table)' \
-        '*--status[filter by status]:status:(draft verified deprecated)' \
+        '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
+        '--sort[list by verification age instead of searching]:sort:(verified_at)' \
         '--limit[max results]:limit:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
       ;;
     get)
       _arguments '--json[print JSON instead of the OKF document]' '--url[server URL]:url:'
+      ;;
+    usage)
+      _arguments '--json[print JSON]' '--url[server URL]:url:'
       ;;
     create|update)
       _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
@@ -130,20 +135,22 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search get create update delete compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search get create update delete usage compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
     return
   fi
 
   case $prev in
     --type|-type) COMPREPLY=($(compgen -W "metric query insight term table" -- "$cur")); return ;;
-    --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated" -- "$cur")); return ;;
+    --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
+    --sort|-sort) COMPREPLY=($(compgen -W "verified_at" -- "$cur")); return ;;
     --dialect|-dialect) COMPREPLY=($(compgen -W "bigquery ansi" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --limit --json --url" ;;
+    search)        opts="--type --status --tag --sort --limit --json --url" ;;
     get)           opts="--json --url" ;;
+    usage)         opts="--json --url" ;;
     create|update) opts="-f --json --url" ;;
     delete)        opts="--url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
@@ -180,6 +187,7 @@ complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OK
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
+complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
@@ -191,14 +199,15 @@ complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell com
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete compile export import import-ossie whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search get create update delete usage compile export import import-ossie whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search get create update compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search get create update usage compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l type -x -a 'metric query insight term table' -d 'filter by type'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l status -x -a 'draft verified deprecated' -d 'filter by status'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at' -d 'list by verification age instead of searching'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search compile' -l limit -x -d 'max results / LIMIT clause'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'

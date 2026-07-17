@@ -94,6 +94,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   create [-f file]        create an entry from OKF markdown or JSON
   update <type>/<id>      replace an entry (every change kept as a revision)
   delete <type>/<id>      soft-delete an entry (history retained)
+  usage <type>/<id>       show usage totals (search hits, fetches, compiles)
   compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)

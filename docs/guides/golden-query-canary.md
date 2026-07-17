@@ -14,10 +14,13 @@
 ### 1. 列挙 — 再検証が古い順に取り出す
 
 ```sh
-curl -s "$OCHAKAI/api/v1/knowledge?type=query&status=verified&sort=verified_at&limit=100" \
+ochakai search --sort verified_at --type query --status verified --limit 100 --json \
   | jq -r '.hits[] | [.id, .verified_at, .attrs.sql] | @tsv'
 ```
 
+REST 直接なら
+`GET /api/v1/knowledge?type=query&status=verified&sort=verified_at&limit=100`、
+MCP なら `search_knowledge` の `sort: "verified_at"` が同じフィードを返す。
 `sort=verified_at` は検証日時の古い順(未検証は最後)に返す。「90 日以上
 再検証されていない verified query」がカナリアの起点になる。OKF エクスポート
 (`ochakai export` / `GET /api/v1/export`)を CI にチェックアウトする方式でもよい。
@@ -82,6 +85,7 @@ jobs:
 
 ## 補助シグナル: 利用テレメトリ
 
-`GET /api/v1/knowledge/query/<id>/usage` は、そのクエリが実際に検索ヒット・
+`ochakai usage query/<id>`(REST: `GET /api/v1/usage/query/<id>`、MCP:
+`get_knowledge_usage`)は、そのクエリが実際に検索ヒット・
 取得された回数と最終利用日時を返す。**長期間使われていない verified** は
 カナリアの優先度を下げる(または deprecated 候補にする)材料になる。
