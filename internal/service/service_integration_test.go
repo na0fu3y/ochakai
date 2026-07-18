@@ -49,7 +49,13 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 			Body:   "受注合計。",
 		}
 	}
-	created, err := svc.Create(ctx, entry(), actor)
+	if _, err := svc.Create(ctx, entry(), actor); err != nil {
+		t.Fatal(err)
+	}
+	// Read the baseline back through the store: PostgreSQL timestamptz is
+	// microsecond precision, so the Create return value's nanosecond
+	// time.Now() would never equal a value round-tripped through the DB.
+	created, err := svc.Get(ctx, domain.TypeMetric, id)
 	if err != nil {
 		t.Fatal(err)
 	}
