@@ -105,3 +105,56 @@ func TestReportOutcomeValidation(t *testing.T) {
 		t.Errorf("oversized note: got %v, want a note-exceeds InvalidInputError", err)
 	}
 }
+
+func TestEmbeddingText(t *testing.T) {
+	k := &domain.Knowledge{
+		Title:       "Revenue",
+		Description: "total sales",
+		Tags:        []string{"finance", "kpi"},
+		Attrs:       map[string]any{"question": "monthly revenue?"},
+		Body:        "body text",
+	}
+	got := embeddingText(k)
+	for _, want := range []string{"Revenue", "total sales", "finance kpi", "monthly revenue?", "body text"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("embeddingText misses %q:\n%s", want, got)
+		}
+	}
+}
+
+// The body is truncated to stay within embedding-model input limits;
+// the envelope fields must survive untouched.
+func TestEmbeddingTextTruncatesBody(t *testing.T) {
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", 5000)}
+	got := embeddingText(k)
+	if len(got) > 4100 {
+		t.Errorf("embeddingText length = %d, want body capped at 4000", len(got))
+	}
+	if !strings.HasPrefix(got, "T") {
+		t.Errorf("title must lead the text: %q", got[:20])
+	}
+}
+
+func TestValidateRejectsBadInput(t *testing.T) {
+	base := func() *domain.Knowledge {
+		return &domain.Knowledge{Type: "metric", ID: "revenue", Title: "Revenue"}
+	}
+	if err := validate(base()); err != nil {
+		t.Errorf("valid entry rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*domain.Knowledge){
+		"bad type":    func(k *domain.Knowledge) { k.Type = "no/slash" },
+		"bad id":      func(k *domain.Knowledge) { k.ID = "UPPER//bad" },
+		"index id":    func(k *domain.Knowledge) { k.ID = "sales/index" },
+		"empty title": func(k *domain.Knowledge) { k.Title = "   " },
+		"bad status":  func(k *domain.Knowledge) { k.Status = "published" },
+	} {
+		k := base()
+		mutate(k)
+		err := validate(k)
+		var invalid *InvalidInputError
+		if err == nil || !errors.As(err, &invalid) {
+			t.Errorf("%s: want InvalidInputError, got %v", name, err)
+		}
+	}
+}

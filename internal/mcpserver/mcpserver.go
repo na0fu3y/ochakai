@@ -109,7 +109,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
 			"each hit carries its usage totals — the draft review/promotion feed.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
-		f := store.Filter{Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags}
+		f := store.Filter{Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags}
 		if in.Sort != "" {
 			if in.Sort != "verified_at" && in.Sort != "usage" {
 				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at, usage)", in.Sort)
@@ -144,7 +144,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"fall back to search_knowledge/get_knowledge for precise lookups.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in contextIn) (*mcp.CallToolResult, contextOut, error) {
 		res, err := svc.Context(ctx, in.Query, store.Filter{
-			Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags,
+			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
 		}, in.Limit, in.MinScore)
 		if err != nil {
 			return nil, contextOut{}, err
@@ -422,20 +422,4 @@ func (in writeIn) toKnowledge() *domain.Knowledge {
 		Attrs:       in.Attrs,
 		Body:        in.Body,
 	}
-}
-
-func toTypes(ss []string) []domain.Type {
-	out := make([]domain.Type, 0, len(ss))
-	for _, s := range ss {
-		out = append(out, domain.Type(s))
-	}
-	return out
-}
-
-func toStatuses(ss []string) []domain.Status {
-	out := make([]domain.Status, 0, len(ss))
-	for _, s := range ss {
-		out = append(out, domain.Status(s))
-	}
-	return out
 }

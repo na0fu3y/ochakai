@@ -284,3 +284,132 @@ func TestNewRejectsBadURLs(t *testing.T) {
 		}
 	}
 }
+
+func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
+	var got url.Values
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/context" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		got = r.URL.Query()
+		_ = json.NewEncoder(w).Encode(ContextResult{
+			Hits:    []domain.SearchHit{{Knowledge: domain.Knowledge{Type: "metric", ID: "revenue"}, Score: 0.8}},
+			Entries: []domain.Knowledge{{Type: "metric", ID: "revenue", Title: "売上"}},
+		})
+	})
+	res, err := c.Context(context.Background(), "why did revenue drop",
+		[]string{"metric"}, []string{"verified"}, []string{"core"}, 7, 0.5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Hits) != 1 || len(res.Entries) != 1 || res.Entries[0].Title != "売上" {
+		t.Errorf("result = %+v", res)
+	}
+	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metric" ||
+		got.Get("status") != "verified" || got.Get("tag") != "core" ||
+		got.Get("limit") != "7" || got.Get("min_score") != "0.5" {
+		t.Errorf("query = %v", got)
+	}
+}
+
+func TestAttachSendsBytesAndOKFPath(t *testing.T) {
+	body := []byte("attachment bytes")
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/attachments/insight/sales/reading/weekly.png" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("okf_path") != "images/weekly.png" {
+			t.Errorf("okf_path = %q", r.URL.Query().Get("okf_path"))
+		}
+		got, _ := io.ReadAll(r.Body)
+		if string(got) != string(body) {
+			t.Errorf("body = %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(domain.Attachment{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
+	})
+	att, err := c.Attach(context.Background(), "insight", "sales/reading", "weekly.png", "images/weekly.png", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if att.Name != "weekly.png" || att.MediaType != "image/png" {
+		t.Errorf("attachment = %+v", att)
+	}
+}
+
+func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/attachments/insight/reading/weekly.png" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("png bytes"))
+	})
+	data, mediaType, err := c.Attachment(context.Background(), "insight", "reading", "weekly.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "png bytes" || mediaType != "image/png" {
+		t.Errorf("data = %q, mediaType = %q", data, mediaType)
+	}
+}
+
+func TestDetachHitsAttachmentPath(t *testing.T) {
+	called := false
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/attachments/insight/reading/weekly.png" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	if err := c.Detach(context.Background(), "insight", "reading", "weekly.png"); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Error("no request sent")
+	}
+}
+
+func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/usage/query/monthly-revenue" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var in map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			t.Errorf("bad body: %v", err)
+		}
+		if in["outcome"] != "failed" || in["note"] != "joins dropped rows" {
+			t.Errorf("payload = %v", in)
+		}
+		_ = json.NewEncoder(w).Encode(domain.Usage{Worked: 3, Failed: 1})
+	})
+	u, err := c.ReportOutcome(context.Background(), "query", "monthly-revenue", "failed", "joins dropped rows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Worked != 3 || u.Failed != 1 {
+		t.Errorf("usage = %+v", u)
+	}
+}
+
+func TestImportOssieSendsYAMLVerbatim(t *testing.T) {
+	src := []byte("name: sales\nmetrics: []\n")
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/import/ossie" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		got, _ := io.ReadAll(r.Body)
+		if string(got) != string(src) {
+			t.Errorf("body = %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(ImportReport{Models: []string{"sales"}, Created: []string{"ochakai://metric/revenue"}})
+	})
+	report, err := c.ImportOssie(context.Background(), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Models) != 1 || report.Models[0] != "sales" || len(report.Created) != 1 {
+		t.Errorf("report = %+v", report)
+	}
+}
