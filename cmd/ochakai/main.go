@@ -63,6 +63,8 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = serve(log)
+	case "serve-ui":
+		err = serveUI(log)
 	case "version":
 		fmt.Println(version)
 	case "help", "-h", "--help":
@@ -103,8 +105,10 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   import-ossie <file>     import an Apache Ossie semantic model
   ui                      serve the web UI locally, acting as you (no deploy)
 
-Server command (runs next to the database):
-  serve                   start the MCP + REST server
+Server commands (run as deployed services, configured by environment):
+  serve                   start the MCP + REST server (runs next to the database)
+  serve-ui                serve the team web UI, proxying to $OCHAKAI_URL as the
+                          service identity (same image as serve: --args=serve-ui)
 
   version                 print the version
   completion <shell>      print a completion script (zsh, bash, fish)

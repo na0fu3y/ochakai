@@ -99,8 +99,9 @@ charts, no query execution, no chat.
 
 Same page, two identities ([design doc 0006](docs/design/0006-web-ui-serving.md)):
 `ochakai ui` serves it on loopback acting as *you* (zero deploy, edits
-recorded as `human:<you>`), and [examples/webui](examples/webui) deploys
-it on Cloud Run as a team-shared service.
+recorded as `human:<you>`), and `ochakai serve-ui` deploys it as a
+team-shared service — same container image as the server, just
+`--args=serve-ui` ([deploy guide §5b](deploy/cloudrun/README.md)).
 
 ## Why ochakai
 

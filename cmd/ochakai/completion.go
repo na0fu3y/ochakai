@@ -58,6 +58,7 @@ _ochakai() {
     'ui:serve the web UI locally, acting as you'
     'completion:print a shell completion script'
     'serve:start the MCP + REST server'
+    'serve-ui:serve the team web UI as a deployed service'
     'version:print the version'
     'help:show help'
   )
@@ -165,7 +166,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie use whoami ui completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -244,6 +245,7 @@ complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, 
 complete -c ochakai -n __fish_use_subcommand -a ui -d 'serve the web UI locally, acting as you'
 complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
+complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
 complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie whoami ui' -l url -x -d 'server URL'

@@ -13,7 +13,7 @@ import (
 // the domain package so a new enum value fails this test until every
 // script (and only the scripts) is updated by hand.
 func TestCompletionScriptsStayInSync(t *testing.T) {
-	admin := []string{"serve", "version"}
+	admin := []string{"serve", "serve-ui", "version"}
 	enums := []string{
 		"bigquery ansi", // --dialect
 		"zsh bash fish", // completion <shell>
