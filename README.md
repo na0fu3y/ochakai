@@ -168,6 +168,15 @@ it on Cloud Run as a team-shared service.
 | `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
+Every entry is also an **MCP resource** addressable by its canonical URI —
+`ochakai://{type}/{id}`, e.g. `ochakai://metric/revenue` (IDs may be
+hierarchical, like `ochakai://query/sales/top-customers`). Clients that
+support resource references (`@`-mentions) can pull an entry in as an OKF
+document — frontmatter, body, and links — without a tool call; discovery
+stays with `get_context`/`search_knowledge`. Read tools carry `readOnly`
+annotations and `delete_knowledge` a `destructive` one, so client
+auto-approval policies work without parsing descriptions.
+
 The REST API (`/api/v1`) is a superset of these tools, adding bulk
 export/import — see
 [api/openapi.yaml](api/openapi.yaml). To keep golden queries trustworthy

@@ -126,3 +126,132 @@ func TestSearchRejectsQueryWithSort(t *testing.T) {
 		t.Errorf("error %q does not mention the combination rule", text)
 	}
 }
+
+// TestParseKnowledgeURI pins the URI splitter feeding the resource template:
+// hierarchical IDs keep their slashes, and malformed URIs are rejected before
+// any store lookup.
+func TestParseKnowledgeURI(t *testing.T) {
+	cases := []struct {
+		uri     string
+		typ, id string
+		ok      bool
+	}{
+		{"ochakai://metric/revenue", "metric", "revenue", true},
+		{"ochakai://query/sales/top-customers", "query", "sales/top-customers", true},
+		{"ochakai://table/GA_sessions_2017", "table", "GA_sessions_2017", true},
+		{"ochakai://metric/", "", "", false},  // empty id
+		{"ochakai:///revenue", "", "", false}, // empty type
+		{"ochakai://metric", "", "", false},   // no id segment
+		{"file:///metric/revenue", "", "", false},
+		{"metric/revenue", "", "", false},
+	}
+	for _, c := range cases {
+		typ, id, ok := parseKnowledgeURI(c.uri)
+		if typ != c.typ || id != c.id || ok != c.ok {
+			t.Errorf("parseKnowledgeURI(%q) = (%q, %q, %v), want (%q, %q, %v)",
+				c.uri, typ, id, ok, c.typ, c.id, c.ok)
+		}
+	}
+}
+
+// TestResourceTemplateAdvertised pins that entries are addressable as MCP
+// resources via the ochakai:// template — and that we advertise only the
+// template, not an enumeration of every entry (resources/list stays empty).
+func TestResourceTemplateAdvertised(t *testing.T) {
+	cs := connect(t)
+	ctx := context.Background()
+
+	tmpls, err := cs.ListResourceTemplates(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	if len(tmpls.ResourceTemplates) != 1 {
+		t.Fatalf("got %d resource templates, want 1", len(tmpls.ResourceTemplates))
+	}
+	rt := tmpls.ResourceTemplates[0]
+	// {+id} (reserved expansion) is what lets hierarchical IDs match; a plain
+	// {id} would stop at the first slash.
+	if rt.URITemplate != "ochakai://{type}/{+id}" {
+		t.Errorf("URITemplate = %q, want ochakai://{type}/{+id}", rt.URITemplate)
+	}
+	if rt.MIMEType != "text/markdown" {
+		t.Errorf("MIMEType = %q, want text/markdown", rt.MIMEType)
+	}
+
+	res, err := cs.ListResources(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListResources: %v", err)
+	}
+	if len(res.Resources) != 0 {
+		t.Errorf("got %d static resources, want 0 (discovery is via tools, not enumeration)", len(res.Resources))
+	}
+}
+
+// TestReadResourceRejectsMalformedURI checks the resource handler refuses a
+// URI that matches the template shape but has an empty segment, returning
+// not-found before it ever reaches the store.
+func TestReadResourceRejectsMalformedURI(t *testing.T) {
+	cs := connect(t)
+	for _, uri := range []string{"ochakai://metric/", "ochakai:///revenue"} {
+		_, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
+		if err == nil {
+			t.Errorf("ReadResource(%q) succeeded, want not-found error", uri)
+		}
+	}
+}
+
+// TestToolAnnotations pins the auto-approval hints: readers are read-only,
+// writes are non-destructive (history kept as revisions), only delete is
+// destructive. MCP clients gate auto-approval on these, so they must be exact.
+func TestToolAnnotations(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	// want[name] = expected (readOnly, destructiveSet, destructiveValue)
+	type ann struct {
+		readOnly    bool
+		destructive *bool
+	}
+	yes, no := true, false
+	want := map[string]ann{
+		"search_knowledge":    {readOnly: true},
+		"get_context":         {readOnly: true},
+		"get_knowledge":       {readOnly: true},
+		"get_attachment":      {readOnly: true},
+		"get_knowledge_usage": {readOnly: true},
+		"compile_sql":         {readOnly: true},
+		"create_knowledge":    {destructive: &no},
+		"update_knowledge":    {destructive: &no},
+		"delete_knowledge":    {destructive: &yes},
+	}
+	seen := map[string]bool{}
+	for _, tool := range res.Tools {
+		w, ok := want[tool.Name]
+		if !ok {
+			continue
+		}
+		seen[tool.Name] = true
+		if tool.Annotations == nil {
+			t.Errorf("%s: no annotations", tool.Name)
+			continue
+		}
+		if tool.Annotations.ReadOnlyHint != w.readOnly {
+			t.Errorf("%s: ReadOnlyHint = %v, want %v", tool.Name, tool.Annotations.ReadOnlyHint, w.readOnly)
+		}
+		switch {
+		case w.destructive == nil && tool.Annotations.DestructiveHint != nil:
+			t.Errorf("%s: DestructiveHint set, want unset", tool.Name)
+		case w.destructive != nil && tool.Annotations.DestructiveHint == nil:
+			t.Errorf("%s: DestructiveHint unset, want %v", tool.Name, *w.destructive)
+		case w.destructive != nil && *tool.Annotations.DestructiveHint != *w.destructive:
+			t.Errorf("%s: DestructiveHint = %v, want %v", tool.Name, *tool.Annotations.DestructiveHint, *w.destructive)
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("tool %s not found", name)
+		}
+	}
+}
