@@ -184,7 +184,8 @@ annotations and `delete_knowledge` a `destructive` one, so client
 auto-approval policies work without parsing descriptions.
 
 The REST API (`/api/v1`) is a superset of these tools, adding bulk
-export/import — see
+export/import, the human-facing browse/revisions/backlinks reads, and
+attachment writes — see
 [api/openapi.yaml](api/openapi.yaml). To keep golden queries trustworthy
 over time, run them as canaries from your CI:
 [docs/guides/golden-query-canary.md](docs/guides/golden-query-canary.md).
