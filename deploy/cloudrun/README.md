@@ -276,8 +276,8 @@ as its own tiny service: a static page plus a reverse proxy that attaches
 its service identity (`X-Serverless-Authorization`) to API calls, so
 ochakai stays organization-restricted while the UI is reachable from any
 machine. Browser users are recorded as the webui's service account
-(`agent:ochakai-webui@…`); per-user browser identity needs IAP or MCP
-OAuth (issue #5).
+(`agent:ochakai-webui@…`); per-user browser identity needs IAP. (MCP
+clients get per-user identity without the proxy via §5c's connector.)
 
 ```sh
 # build & push (from the repository root)
@@ -305,6 +305,73 @@ are same-origin through the proxy, so nothing else to configure. Note
 the trade-off: the webui itself is public, so anyone who finds its URL
 can read and write through it as the webui's identity. Put IAP in front
 of it if that is not acceptable.
+
+## 5c. Optional: the MCP OAuth connector (claude.ai / ChatGPT, proxyless Claude Code)
+
+claude.ai and ChatGPT connect to MCP servers from their own cloud, so
+they can never pass Cloud Run IAM. The connector
+([design doc 0010](../../docs/design/0010-mcp-oauth-connector.md)) is the
+**same image deployed a second time, publicly**, exposing only `/mcp` +
+OAuth endpoints. Sign-in is delegated to Google and restricted to your
+Workspace domain; the private service from §3 stays exactly as it is.
+Skip this section entirely if nobody needs those clients.
+
+First create a Google OAuth client (this is the one credential in the
+whole deployment; Google offers no API for this — use the console):
+
+1. **APIs & Services → OAuth consent screen**: User Type **Internal**
+   (blocks non-org logins at Google's side, before ochakai's own check).
+2. **Credentials → Create credentials → OAuth client ID**: type
+   **Web application**, authorized redirect URI
+   `https://ochakai-connector-<PROJECT_NUMBER>.<REGION>.run.app/oauth/callback`
+   (Cloud Run's deterministic URL — check it after deploying if unsure).
+
+```sh
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+export CONNECTOR_URL=https://ochakai-connector-$PROJECT_NUMBER.$REGION.run.app
+
+gcloud run deploy ochakai-connector \
+  --image=$IMAGE \
+  --region=$REGION \
+  --service-account=$SERVICE_ACCOUNT \
+  --allow-unauthenticated \
+  --min-instances=0 --max-instances=2 \
+  --cpu=1 --memory=512Mi \
+  --add-cloudsql-instances=$PROJECT_ID:$REGION:ochakai \
+  --set-env-vars="OCHAKAI_DB_IAM_AUTH=true" \
+  --set-env-vars="OCHAKAI_DATABASE_URL=postgres:///ochakai?host=/cloudsql/$PROJECT_ID:$REGION:ochakai&user=$DB_SA_USER" \
+  --set-env-vars="OCHAKAI_CONNECTOR_PUBLIC_URL=$CONNECTOR_URL" \
+  --set-env-vars="OCHAKAI_CONNECTOR_ALLOWED_DOMAIN=your-org.example" \
+  --set-env-vars="OCHAKAI_CONNECTOR_GOOGLE_CLIENT_ID=<client-id>" \
+  --set-secrets="OCHAKAI_CONNECTOR_GOOGLE_CLIENT_SECRET=ochakai-connector-google:latest"
+```
+
+(Put the client secret in Secret Manager first:
+`printf '%s' '<secret>' | gcloud secrets create ochakai-connector-google --data-file=-`,
+then grant the service account `roles/secretmanager.secretAccessor` on it.)
+
+Connect from claude.ai: **Settings → Connectors → Add custom connector**
+with URL `$CONNECTOR_URL/mcp` — the OAuth client ID/secret fields stay
+empty (the connector supports CIMD, so no registration is needed).
+ChatGPT custom connectors work the same way. Claude Code can now skip
+the §5 proxy:
+
+```sh
+claude mcp add --transport http ochakai $CONNECTOR_URL/mcp
+```
+
+Notes:
+
+- **This service is public by design** — reachability is controlled by
+  its own OAuth tokens (Google-verified `hd` domain check, hashed
+  storage, refresh rotation), not by IAM. The `--no-allow-unauthenticated`
+  rule in §3 applies to the *private* service only.
+- `--allow-unauthenticated` grants `allUsers`, which **Domain Restricted
+  Sharing blocks**. Exempt just this service (tags + conditional org
+  policy) rather than lifting the policy project-wide.
+- Everyone signs in interactively, so every write is recorded as
+  `human:<email>` — same provenance as the §5 proxy path.
+- The webui (§5b) and REST are not served here; only `/mcp` and OAuth.
 
 ## 6. Security hardening checklist
 
