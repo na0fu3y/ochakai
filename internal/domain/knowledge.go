@@ -150,8 +150,12 @@ func ValidID(id string) bool {
 	return segs[len(segs)-1] != "index"
 }
 
-// SearchHit is one search result with its ranking score.
+// SearchHit is one search result with its ranking score. Usage is
+// populated only by the sort=usage listing (the draft review feed), where
+// the promotion signal is the point; it stays nil for search results and
+// the verified_at feed so their wire shape is unchanged.
 type SearchHit struct {
 	Knowledge
 	Score float64 `json:"score"`
+	Usage *Usage  `json:"usage,omitempty"`
 }

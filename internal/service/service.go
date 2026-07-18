@@ -300,6 +300,18 @@ func (s *Service) ListByVerifiedAt(ctx context.Context, f store.Filter, limit in
 	return hits, nil
 }
 
+// ListByUsage lists entries by demand — most-searched first, never-used
+// drafts oldest-first at the bottom — for the web UI draft review queue.
+// Not a search: no usage is recorded (reading the queue must not inflate
+// the very signal it ranks by). Each hit carries its usage totals; score
+// is 0, keeping the wire shape of a search across all list modes.
+func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	return s.Store.ListByUsage(ctx, f, limit)
+}
+
 // Usage returns usage totals for one entry (404 when the entry is gone).
 func (s *Service) Usage(ctx context.Context, typ domain.Type, id string) (*domain.Usage, error) {
 	if _, err := s.Store.Get(ctx, typ, id); err != nil {

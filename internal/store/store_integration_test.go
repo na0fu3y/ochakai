@@ -150,6 +150,55 @@ func TestIntegration(t *testing.T) {
 	if len(list) < 2 || list[0].ID != older.ID {
 		t.Errorf("oldest verification must come first: %+v", list)
 	}
+
+	// ListByUsage: the draft review feed. Two drafts, unequal demand — the
+	// more-searched one ranks first, and each hit carries its usage totals.
+	hot := &domain.Knowledge{
+		Type: domain.TypeInsight, ID: "it-draft-hot", Title: "よく検索される草案",
+		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
+	}
+	cold := &domain.Knowledge{
+		Type: domain.TypeInsight, ID: "it-draft-cold", Title: "検索されない草案",
+		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
+	}
+	for _, d := range []*domain.Knowledge{hot, cold} {
+		if err := s.Create(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []EventTarget{{Type: hot.Type, ID: hot.ID}}); err != nil {
+			t.Fatalf("RecordEvents: %v", err)
+		}
+	}
+	feed, err := s.ListByUsage(ctx, Filter{
+		Types:    []domain.Type{domain.TypeInsight},
+		Statuses: []domain.Status{domain.StatusDraft},
+	}, 100)
+	if err != nil {
+		t.Fatalf("ListByUsage: %v", err)
+	}
+	if len(feed) < 2 || feed[0].ID != hot.ID {
+		t.Errorf("most-searched draft must come first: %+v", feed)
+	}
+	if feed[0].Usage == nil || feed[0].Usage.SearchHits != 3 {
+		t.Errorf("hit must carry usage totals (search_hits=3): %+v", feed[0].Usage)
+	}
+	if feed[0].Score != 0 {
+		t.Errorf("listing hits carry score 0, got %v", feed[0].Score)
+	}
+	var sawCold bool
+	for _, h := range feed {
+		if h.ID == cold.ID {
+			sawCold = true
+			if h.Usage == nil || h.Usage.SearchHits != 0 {
+				t.Errorf("never-searched draft must report 0 search_hits: %+v", h.Usage)
+			}
+		}
+	}
+	if !sawCold {
+		t.Error("ListByUsage must include never-used drafts (the inventory tail)")
+	}
 }
 
 // SoftDelete must survive a database where semantic search was never
