@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -36,6 +37,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Before answering a data question, call get_context once — it returns the relevant " +
 			"entries in full, links expanded. " +
 			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
+			"After acting on knowledge (running a golden query, using a compiled SQL), report " +
+			"whether it actually worked with report_outcome — failed reports are how stale " +
+			"verified knowledge gets caught. " +
 			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
 			"you have actually validated — who verified is always recorded. Knowledge that was " +
 			"reviewed and not accepted is status=rejected (with status_note explaining why); " +
@@ -176,6 +180,26 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name: "report_outcome",
+		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
+			"write-back loop. After running a golden query or a compiled SQL, report worked " +
+			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
+			"Reports feed the entry's usage totals (get_knowledge_usage), where failed counts " +
+			"against verified entries flag them for re-verification. Your identity is recorded " +
+			"with each report. Returns the entry's updated usage totals.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
+		typ, id, ok := strings.Cut(strings.TrimPrefix(in.Target, "ochakai://"), "/")
+		if !ok || typ == "" || id == "" {
+			return nil, usageOut{}, fmt.Errorf("invalid target %q (want <type>/<id>, e.g. query/monthly-revenue)", in.Target)
+		}
+		u, err := svc.ReportOutcome(ctx, domain.Type(typ), id, in.Outcome, in.Note)
+		if err != nil {
+			return nil, usageOut{}, err
+		}
+		return nil, usageOut{Usage: *u}, nil
+	})
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name: "compile_sql",
 		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from the " +
 			"imported Ossie semantic model (no LLM involved). Dialects: bigquery (default), ansi. " +
@@ -247,6 +271,12 @@ type attachmentOut struct {
 
 type usageOut struct {
 	Usage domain.Usage `json:"usage"`
+}
+
+type outcomeIn struct {
+	Target  string `json:"target" jsonschema:"the entry the outcome is about, as <type>/<id> (e.g. query/monthly-revenue; an ochakai:// prefix is tolerated)"`
+	Outcome string `json:"outcome" jsonschema:"\"worked\" = acting on the entry gave a correct result; \"failed\" = it gave a wrong or unusable one"`
+	Note    string `json:"note,omitempty" jsonschema:"optional context recorded with the report: what was run, what went wrong (max 2000 bytes)"`
 }
 
 type deleteOut struct {

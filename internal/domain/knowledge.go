@@ -65,17 +65,37 @@ func ValidStatus(s Status) bool {
 }
 
 // Usage event kinds recorded per knowledge entry (design doc 0001 §9).
+// The first three are recorded passively by reads; worked/failed are
+// deliberate outcome reports (report_outcome) closing the write-back loop.
 const (
 	EventSearchHit = "search_hit" // appeared in search results
 	EventFetched   = "fetched"    // fetched individually via get
 	EventCompiled  = "compiled"   // referenced by compile_sql
+	EventWorked    = "worked"     // caller reports the entry led to a correct result
+	EventFailed    = "failed"     // caller reports the entry led to a wrong or unusable result
 )
 
-// Usage aggregates how often a knowledge entry was actually used.
+// Outcomes lists the reportable outcome kinds — the single source for
+// every user-facing enumeration (tool schema, CLI help, completions).
+var Outcomes = []string{EventWorked, EventFailed}
+
+func ValidOutcome(o string) bool {
+	for _, v := range Outcomes {
+		if o == v {
+			return true
+		}
+	}
+	return false
+}
+
+// Usage aggregates how often a knowledge entry was actually used, and
+// how often users reported it worked or failed.
 type Usage struct {
 	SearchHits int64      `json:"search_hits"`
 	Fetches    int64      `json:"fetches"`
 	Compiles   int64      `json:"compiles"`
+	Worked     int64      `json:"worked"`
+	Failed     int64      `json:"failed"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 }
 

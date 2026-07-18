@@ -45,6 +45,7 @@ _ochakai() {
     'attach:attach images to an entry'
     'detach:remove an attachment'
     'usage:show usage totals for an entry'
+    'report:report an outcome (worked/failed) for an entry'
     'compile:compile metrics into SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
@@ -88,6 +89,9 @@ _ochakai() {
       ;;
     usage)
       _arguments '--json[print JSON]' '--url[server URL]:url:'
+      ;;
+    report)
+      _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
       ;;
     create|update)
       _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
@@ -152,7 +156,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search context get create update delete attach detach usage compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search context get create update delete attach detach usage report compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
     return
   fi
 
@@ -169,6 +173,12 @@ _ochakai() {
     context)       opts="--type --status --tag --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
+    report)
+      if [[ $prev != -* && $COMP_CWORD -eq 3 && $cur != -* ]]; then
+        COMPREPLY=($(compgen -W "worked failed" -- "$cur"))
+        return
+      fi
+      opts="--note --json --url" ;;
     create|update) opts="-f --json --url" ;;
     delete|detach) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
@@ -210,6 +220,7 @@ complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
 complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach images to an entry'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
+complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
@@ -221,12 +232,14 @@ complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell com
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete attach detach usage compile export import import-ossie whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete attach detach usage report compile export import import-ossie whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update attach usage compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search context get create update attach usage report compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
+complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F

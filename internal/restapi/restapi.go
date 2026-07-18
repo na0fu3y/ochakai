@@ -149,6 +149,24 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	}
 	mux.HandleFunc("GET /api/v1/usage/{type}/{id...}", usage)
+	// POST reports an outcome (worked/failed) against the entry — the
+	// write half of the same usage resource, so no new API surface is
+	// added (issue #41). Responds with the updated totals.
+	mux.HandleFunc("POST /api/v1/usage/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Outcome string `json:"outcome"`
+			Note    string `json:"note"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		u, err := svc.ReportOutcome(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), in.Outcome, in.Note)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, u)
+	})
 	// Legacy pre-0005 usage path, kept for existing clients. It shadows
 	// GET on entries whose two-segment ID ends in "usage" — the canonical
 	// path above has no such ambiguity.

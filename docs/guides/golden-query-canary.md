@@ -47,6 +47,11 @@ ochakai はこの工程に関与しない。
 - **失敗・警告**: 対象ナレッジへ `insight`(`kind: caveat`)を draft で作成するか、
   `status: deprecated` + `status_note`(理由)への変更を提案する。判断は人間が
   provenance を見て行う。誤りと確定した場合は `status: rejected` + `status_note`。
+- **どちらの場合も成果を記録する**: `ochakai report query/<id> worked` /
+  `ochakai report query/<id> failed --note "何が起きたか"`(REST:
+  `POST /api/v1/usage/query/<id>`、MCP: `report_outcome`)。worked / failed の
+  累計が `/usage` に出るので、failed が積んだ verified エントリは
+  再検証の優先対象として拾える。
 
 ## CI スニペット(GitHub Actions + BigQuery)
 
@@ -87,5 +92,7 @@ jobs:
 
 `ochakai usage query/<id>`(REST: `GET /api/v1/usage/query/<id>`、MCP:
 `get_knowledge_usage`)は、そのクエリが実際に検索ヒット・
-取得された回数と最終利用日時を返す。**長期間使われていない verified** は
-カナリアの優先度を下げる(または deprecated 候補にする)材料になる。
+取得された回数、worked / failed の報告数、最終利用日時を返す。
+**長期間使われていない verified** はカナリアの優先度を下げる(または
+deprecated 候補にする)材料になり、**failed が積んだ verified** は逆に
+優先的に再検証する材料になる。

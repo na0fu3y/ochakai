@@ -126,3 +126,40 @@ func TestSearchRejectsQueryWithSort(t *testing.T) {
 		t.Errorf("error %q does not mention the combination rule", text)
 	}
 }
+
+// TestReportOutcomeValidation pins the tool's input checks: a target
+// that is not <type>/<id> and an unknown outcome are tool errors (not
+// transport failures), and both fire before any store access.
+func TestReportOutcomeValidation(t *testing.T) {
+	cs := connect(t)
+	cases := []struct {
+		name       string
+		args       map[string]any
+		wantSubstr string
+	}{
+		{"bad target", map[string]any{"target": "no-slash", "outcome": "worked"}, "invalid target"},
+		{"bad outcome", map[string]any{"target": "query/q", "outcome": "misleading"}, "invalid outcome"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+				Name: "report_outcome", Arguments: c.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if !res.IsError {
+				t.Fatal("expected a tool error")
+			}
+			text := ""
+			for _, content := range res.Content {
+				if tc, ok := content.(*mcp.TextContent); ok {
+					text += tc.Text
+				}
+			}
+			if !strings.Contains(text, c.wantSubstr) {
+				t.Errorf("error %q does not mention %q", text, c.wantSubstr)
+			}
+		})
+	}
+}

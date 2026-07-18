@@ -19,6 +19,7 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 		"zsh bash fish", // completion <shell>
 		"verified_at",   // --sort
 	}
+	enums = append(enums, domain.Outcomes...) // report <outcome>
 	for _, typ := range domain.Types {
 		enums = append(enums, string(typ)) // --type
 	}

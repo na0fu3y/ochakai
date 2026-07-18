@@ -48,6 +48,29 @@ func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Act
 	return nil
 }
 
+// RecordOutcome appends one outcome event (worked/failed) with its note
+// and bumps the running totals. Unlike RecordEvents, failures matter to
+// the caller — an outcome report is a deliberate write, not a side
+// effect of a read — so the error is returned for the transport to
+// surface.
+func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Actor, target EventTarget, note string) error {
+	_, err := s.pool.Exec(ctx, `
+		WITH ev AS (
+			INSERT INTO knowledge_event (knowledge_type, knowledge_id, event, actor_kind, actor_name, note)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		)
+		INSERT INTO knowledge_usage (knowledge_type, knowledge_id, event, count, last_at)
+		VALUES ($1, $2, $3, 1, now())
+		ON CONFLICT (knowledge_type, knowledge_id, event)
+		DO UPDATE SET count = knowledge_usage.count + 1, last_at = EXCLUDED.last_at`,
+		target.Type, target.ID, event, actor.Kind, actor.Name, note)
+	if err != nil {
+		return err
+	}
+	s.maybePruneEvents(ctx)
+	return nil
+}
+
 // maybePruneEvents drops raw events older than the retention window, at
 // most once per day per process (totals live on in knowledge_usage).
 func (s *Store) maybePruneEvents(ctx context.Context) {
@@ -86,6 +109,10 @@ func (s *Store) Usage(ctx context.Context, typ domain.Type, id string) (*domain.
 			u.Fetches = count
 		case domain.EventCompiled:
 			u.Compiles = count
+		case domain.EventWorked:
+			u.Worked = count
+		case domain.EventFailed:
+			u.Failed = count
 		}
 		if u.LastUsedAt == nil || lastAt.After(*u.LastUsedAt) {
 			t := lastAt

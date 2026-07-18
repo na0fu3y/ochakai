@@ -692,6 +692,8 @@ async function viewDetail(type, id) {
             <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">search hits</div></div>
             <div class="tile"><div class="num">${u.fetches ?? 0}</div><div class="lbl">fetches</div></div>
             <div class="tile"><div class="num">${u.compiles ?? 0}</div><div class="lbl">compiles</div></div>
+            <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">worked</div></div>
+            <div class="tile"><div class="num">${u.failed ?? 0}</div><div class="lbl">failed</div></div>
           </div>
           <p class="provenance">${u.last_used_at ? 'last used ' + esc(fmtDate(u.last_used_at)) : 'never used'}</p>`;
         if (document.querySelector('#tabs button.active')?.dataset.tab === 'usage') body.innerHTML = tabs.usage();
