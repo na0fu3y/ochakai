@@ -109,6 +109,36 @@ func TestCompileStarJoinWithDimensionsFiltersGrain(t *testing.T) {
 	}
 }
 
+func TestCompileUndeclaredFieldPassesThroughWithNote(t *testing.T) {
+	res, err := Compile(testModel(t), Request{
+		Metrics:    []string{"revenue"},
+		Dimensions: []string{"orders.status"},
+		Filters:    []Filter{{Field: "orders.status", Op: "=", Value: "shipped"}},
+		Dialect:    "ansi",
+	})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if !strings.Contains(res.SQL, "orders.status AS orders_status") {
+		t.Errorf("undeclared field must pass through as a physical column:\n%s", res.SQL)
+	}
+	if len(res.Notes) != 1 || !strings.Contains(res.Notes[0], "orders.status is not declared") {
+		t.Errorf("want one deduplicated pass-through note, got %v", res.Notes)
+	}
+
+	declared, err := Compile(testModel(t), Request{
+		Metrics:    []string{"revenue"},
+		Dimensions: []string{"customers.region"},
+		Dialect:    "ansi",
+	})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if len(declared.Notes) != 0 {
+		t.Errorf("declared fields must not produce notes, got %v", declared.Notes)
+	}
+}
+
 func TestCompileUnknownMetricFails(t *testing.T) {
 	_, err := Compile(testModel(t), Request{Metrics: []string{"nonexistent"}})
 	if err == nil || !strings.Contains(err.Error(), "nonexistent") {

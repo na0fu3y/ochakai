@@ -107,7 +107,7 @@ ochakai context "why is revenue down?"  # the one-call read before a data questi
 ochakai search "revenue" --type metric --status verified
 ochakai get metric/revenue
 ochakai attach insight/revenue-reading weekly.png   # images travel with the entry
-ochakai compile --metric revenue --grain orders.created_at:month
+ochakai compile --metric revenue --grain orders.ordered_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle
 ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (no deploy)

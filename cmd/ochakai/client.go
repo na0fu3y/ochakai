@@ -613,7 +613,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 func cmdCompile(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai compile [flags] --metric <name>\n\nDeterministically compile metrics into SQL (never executed, never\nguessed). SQL goes to stdout; notes and related verified golden\nqueries go to stderr — prefer a verified query when it answers the\nquestion. Exit 2 means the request is outside the supported subset;\nthe reason is on stderr.",
-		"  ochakai compile --metric revenue --dimension orders.region --grain orders.created_at:month\n  ochakai compile --metric revenue --filter \"orders.status = shipped\" > revenue.sql\n")
+		"  ochakai compile --metric revenue --dimension customers.region --grain orders.ordered_at:month\n  ochakai compile --metric revenue --filter \"orders.status = shipped\" > revenue.sql\n")
 	var metrics, dims, filters repeated
 	fs.Var(&metrics, "metric", "metric name (repeatable, required)")
 	fs.Var(&dims, "dimension", "group-by column as dataset.field (repeatable)")
