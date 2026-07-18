@@ -273,7 +273,7 @@ updated knowledge with `gemini-embedding-001`. Search becomes hybrid
 (trigram + vector, reciprocal rank fusion). If Vertex AI is ever
 unavailable, writes and searches degrade gracefully to trigram-only.
 
-## 4b. Attachments require GCS (design doc 0013)
+## 4b. Attachments require GCS
 
 Attachment bytes live only in a GCS bucket — metadata and revisions stay
 in Postgres, and auth is ADC via the service identity, no keys. Without
@@ -335,7 +335,7 @@ curl -X POST "http://localhost:8787/api/v1/compile" \
 ## 5b. Optional: the team web UI behind IAP (separate service, by design)
 
 The web UI runs as its own service, **not** inside `serve` — the core
-keeps its serving surface minimal (design doc 0006). For personal use it
+keeps its serving surface minimal. For personal use it
 needs no deployment at all: `ochakai ui` serves the same page on loopback
 with your own identity. Deploy this service when people who cannot run
 the Go CLI need browser access.
@@ -351,7 +351,7 @@ sits in front, so browsers sign in with their Google account and only
 your organization gets through — no `allUsers` grant anywhere. Note that
 writes through the UI are still recorded as the webui's service account
 (`agent:ochakai-webui@…`), not the browser user; per-user provenance
-would need IAP JWT verification (design doc 0002 §4). MCP and CLI
+would need IAP JWT verification, which ochakai does not do. MCP and CLI
 clients get per-user identity via the §5 proxy path.
 
 ```sh
@@ -578,8 +578,7 @@ working against a newer schema.
 
 Version notes:
 
-- **→ 0.9.0 (breaking)**: the MCP OAuth connector service is retired
-  ([design doc 0012](../../docs/design/0012-retire-mcp-oauth-connector.md)).
+- **→ 0.9.0 (breaking)**: the MCP OAuth connector service is retired.
   `OCHAKAI_CONNECTOR_PUBLIC_URL` is now silently ignored — **never point
   a connector deployment at this image**: that service was publicly
   invokable, and this image would serve the trust-the-headers private

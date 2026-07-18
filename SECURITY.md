@@ -18,8 +18,7 @@ ochakai's security posture is deliberately narrow (see
   Cloud Run IAM's job: ochakai trusts the identity headers Cloud Run
   forwards after its IAM check and must **never run publicly invokable**.
   (The publicly reachable MCP OAuth connector service existed briefly
-  and was retired — design doc
-  [0012](docs/design/0012-retire-mcp-oauth-connector.md).)
+  and was retired in 0.9.0.)
 
 Especially interesting reports, given that design:
 
