@@ -229,6 +229,26 @@ func ValidIDPrefix(prefix string) bool {
 	return true
 }
 
+// ToTypes converts transport-layer type filters (query parameters, tool
+// inputs) into domain types — shared by the REST and MCP surfaces so the
+// conversion is written once.
+func ToTypes(ss []string) []Type {
+	out := make([]Type, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, Type(s))
+	}
+	return out
+}
+
+// ToStatuses is ToTypes for status filters.
+func ToStatuses(ss []string) []Status {
+	out := make([]Status, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, Status(s))
+	}
+	return out
+}
+
 // SearchHit is one search result with its ranking score. Usage is
 // populated only by the sort=usage listing (the draft review feed), where
 // the promotion signal is the point; it stays nil for search results and

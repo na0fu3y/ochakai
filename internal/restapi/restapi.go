@@ -43,8 +43,8 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		f := store.Filter{
-			Types:    toTypes(q["type"]),
-			Statuses: toStatuses(q["status"]),
+			Types:    domain.ToTypes(q["type"]),
+			Statuses: domain.ToStatuses(q["status"]),
 			Tags:     q["tag"],
 		}
 		if sort := q.Get("sort"); sort != "" {
@@ -107,8 +107,8 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		res, err := svc.Context(r.Context(), q.Get("q"), store.Filter{
-			Types:    toTypes(q["type"]),
-			Statuses: toStatuses(q["status"]),
+			Types:    domain.ToTypes(q["type"]),
+			Statuses: domain.ToStatuses(q["status"]),
 			Tags:     q["tag"],
 		}, limit, minScore)
 		if err != nil {
@@ -485,20 +485,4 @@ func splitAttachmentPath(p string) (id, name string, ok bool) {
 		return "", "", false
 	}
 	return p[:i], p[i+1:], true
-}
-
-func toTypes(ss []string) []domain.Type {
-	out := make([]domain.Type, 0, len(ss))
-	for _, s := range ss {
-		out = append(out, domain.Type(s))
-	}
-	return out
-}
-
-func toStatuses(ss []string) []domain.Status {
-	out := make([]domain.Status, 0, len(ss))
-	for _, s := range ss {
-		out = append(out, domain.Status(s))
-	}
-	return out
 }

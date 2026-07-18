@@ -82,26 +82,35 @@ const knowledgeCols = `type, id, title, description, tags, status, status_note,
 	rejected_by_kind, rejected_by_name, rejected_at,
 	links, attrs, body, created_at, updated_at`
 
-func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
-	var k domain.Knowledge
+// knowledgeDest returns the scan destinations for knowledgeCols targeting
+// k, plus a finish func that decodes the JSON columns and nullable actors
+// after the scan. Row shapes with trailing columns (score, usage totals)
+// append their own destinations — the column list lives here once.
+func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
 	var links, attrs []byte
-	err := row.Scan(&k.Type, &k.ID, &k.Title, &k.Description, &k.Tags, &k.Status, &k.StatusNote,
+	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Tags, &k.Status, &k.StatusNote,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &verifiedKind, &verifiedName, &k.VerifiedAt,
 		&rejectedKind, &rejectedName, &k.RejectedAt,
-		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt)
-	if err != nil {
+		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt}
+	finish = func() error {
+		k.VerifiedBy = actorFrom(verifiedKind, verifiedName)
+		k.RejectedBy = actorFrom(rejectedKind, rejectedName)
+		if err := json.Unmarshal(links, &k.Links); err != nil {
+			return err
+		}
+		return json.Unmarshal(attrs, &k.Attrs)
+	}
+	return dests, finish
+}
+
+func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
+	var k domain.Knowledge
+	dests, finish := knowledgeDest(&k)
+	if err := row.Scan(dests...); err != nil {
 		return k, err
 	}
-	k.VerifiedBy = actorFrom(verifiedKind, verifiedName)
-	k.RejectedBy = actorFrom(rejectedKind, rejectedName)
-	if err := json.Unmarshal(links, &k.Links); err != nil {
-		return k, err
-	}
-	if err := json.Unmarshal(attrs, &k.Attrs); err != nil {
-		return k, err
-	}
-	return k, nil
+	return k, finish()
 }
 
 func actorFrom(kind, name *string) *domain.Actor {
@@ -235,9 +244,17 @@ func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, acto
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx,
-			`UPDATE knowledge SET deleted_at = now(), updated_at = now() WHERE type=$1 AND id=$2`, typ, id); err != nil {
+		// deleted_at IS NULL guards the race with a concurrent delete: the
+		// Get above ran outside this transaction, and a double delete must
+		// not record a second "delete" revision.
+		tag, err := tx.Exec(ctx,
+			`UPDATE knowledge SET deleted_at = now(), updated_at = now()
+			 WHERE type=$1 AND id=$2 AND deleted_at IS NULL`, typ, id)
+		if err != nil {
 			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
 		}
 		// knowledge_embedding only exists once semantic search has been
 		// enabled; a failed statement aborts the whole Postgres transaction,
@@ -343,24 +360,11 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit
 
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
-	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
-	var links, attrs []byte
-	err := row.Scan(&h.Type, &h.ID, &h.Title, &h.Description, &h.Tags, &h.Status, &h.StatusNote,
-		&h.CreatedBy.Kind, &h.CreatedBy.Name, &verifiedKind, &verifiedName, &h.VerifiedAt,
-		&rejectedKind, &rejectedName, &h.RejectedAt,
-		&links, &attrs, &h.Body, &h.CreatedAt, &h.UpdatedAt, &h.Score)
-	if err != nil {
+	dests, finish := knowledgeDest(&h.Knowledge)
+	if err := row.Scan(append(dests, &h.Score)...); err != nil {
 		return h, err
 	}
-	h.VerifiedBy = actorFrom(verifiedKind, verifiedName)
-	h.RejectedBy = actorFrom(rejectedKind, rejectedName)
-	if err := json.Unmarshal(links, &h.Links); err != nil {
-		return h, err
-	}
-	if err := json.Unmarshal(attrs, &h.Attrs); err != nil {
-		return h, err
-	}
-	return h, nil
+	return h, finish()
 }
 
 // buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
@@ -440,23 +444,13 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 // ListByUsage projection). Score stays 0 — this is a listing, not a search.
 func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
-	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
-	var links, attrs []byte
 	var u domain.Usage
-	err := row.Scan(&h.Type, &h.ID, &h.Title, &h.Description, &h.Tags, &h.Status, &h.StatusNote,
-		&h.CreatedBy.Kind, &h.CreatedBy.Name, &verifiedKind, &verifiedName, &h.VerifiedAt,
-		&rejectedKind, &rejectedName, &h.RejectedAt,
-		&links, &attrs, &h.Body, &h.CreatedAt, &h.UpdatedAt,
-		&u.SearchHits, &u.Fetches, &u.Compiles, &u.Worked, &u.Failed, &u.LastUsedAt)
-	if err != nil {
+	dests, finish := knowledgeDest(&h.Knowledge)
+	if err := row.Scan(append(dests,
+		&u.SearchHits, &u.Fetches, &u.Compiles, &u.Worked, &u.Failed, &u.LastUsedAt)...); err != nil {
 		return h, err
 	}
-	h.VerifiedBy = actorFrom(verifiedKind, verifiedName)
-	h.RejectedBy = actorFrom(rejectedKind, rejectedName)
-	if err := json.Unmarshal(links, &h.Links); err != nil {
-		return h, err
-	}
-	if err := json.Unmarshal(attrs, &h.Attrs); err != nil {
+	if err := finish(); err != nil {
 		return h, err
 	}
 	h.Usage = &u

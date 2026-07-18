@@ -127,3 +127,17 @@ func TestValidType(t *testing.T) {
 		t.Error(`BuiltinType("runbook") = true, want false`)
 	}
 }
+
+func TestToTypesAndToStatuses(t *testing.T) {
+	types := ToTypes([]string{"metric", "custom-type"})
+	if len(types) != 2 || types[0] != TypeMetric || types[1] != Type("custom-type") {
+		t.Errorf("ToTypes = %v", types)
+	}
+	statuses := ToStatuses([]string{"verified", "draft"})
+	if len(statuses) != 2 || statuses[0] != StatusVerified || statuses[1] != StatusDraft {
+		t.Errorf("ToStatuses = %v", statuses)
+	}
+	if got := ToTypes(nil); len(got) != 0 {
+		t.Errorf("ToTypes(nil) = %v, want empty", got)
+	}
+}
