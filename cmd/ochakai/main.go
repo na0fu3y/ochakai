@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/config"
+	"github.com/na0fu3y/ochakai/internal/connector"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/mcpserver"
@@ -153,6 +154,17 @@ func serve(log *slog.Logger) error {
 	}
 	defer svc.Store.Close()
 
+	// Connector mode (design doc 0010): the publicly deployable second
+	// service. Only OAuth + /mcp + health exist; REST and the private
+	// service's trust model (httpauth) are not reachable here.
+	if cfg.Connector != nil {
+		handler := connector.Handler(cfg.Connector, svc.Store, mcpserver.Handler(svc, version), version, log)
+		log.Info("ochakai connector listening", "addr", cfg.Addr, "version", version,
+			"public_url", cfg.Connector.PublicURL, "allowed_domain", cfg.Connector.AllowedDomain,
+			"endpoints", []string{"/mcp", "/oauth/*", "/.well-known/*", "/health"})
+		return runServer(ctx, cfg.Addr, handler)
+	}
+
 	mux := http.NewServeMux()
 	// /health is the canonical health endpoint. /healthz is kept for local
 	// use but is unreachable behind Google Frontends (Cloud Run's run.app
@@ -186,9 +198,15 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
 	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
 
+	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
+		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})
+	return runServer(ctx, cfg.Addr, mux)
+}
+
+func runServer(ctx context.Context, addr string, handler http.Handler) error {
 	server := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           mux,
+		Addr:              addr,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
@@ -197,9 +215,6 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-
-	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
-		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
