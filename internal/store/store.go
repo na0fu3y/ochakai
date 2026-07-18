@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/na0fu3y/ochakai/internal/blob"
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
@@ -22,9 +23,17 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 
 type Store struct {
 	pool *pgxpool.Pool
+	// blobs, when set, holds attachment bytes instead of the blob table's
+	// bytea column (design doc 0011). Metadata stays in PostgreSQL either
+	// way; reads fall back to bytea for rows the backfill hasn't reached.
+	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64
 }
+
+// UseBlobStore routes attachment bytes to b (design doc 0011). Call
+// before serving; existing inline rows are moved by MigrateBlobsOut.
+func (s *Store) UseBlobStore(b blob.Store) { s.blobs = b }
 
 func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
