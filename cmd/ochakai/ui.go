@@ -1,8 +1,8 @@
 // `ochakai ui`: serve the bundled web UI on loopback, reverse-proxying
 // /api/v1 (and /mcp) to the selected server with the caller's own Google
-// identity — the zero-deploy counterpart of examples/webui (design doc
-// 0006). Same page, different proxy: here edits are recorded as
-// human:<you>, on the Cloud Run sample as the webui's service account.
+// identity — the zero-deploy counterpart of `ochakai serve-ui` (design
+// doc 0006). Same page, different proxy: here edits are recorded as
+// human:<you>, on the deployed serve-ui as its service account.
 package main
 
 import (
@@ -25,7 +25,7 @@ import (
 
 func cmdUI(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
-		"Usage: ochakai ui [flags]\n\nServe the web UI at http://127.0.0.1:<port> against the selected\nserver. API calls are proxied with your own Google identity (resolved\nthe same way as every other client command), so no deployment is\nneeded and your edits are recorded as human:<you>. The proxy also\nexposes /mcp, so it doubles as an authenticated local MCP endpoint.\nFor a team-shared UI on Cloud Run, see examples/webui.",
+		"Usage: ochakai ui [flags]\n\nServe the web UI at http://127.0.0.1:<port> against the selected\nserver. API calls are proxied with your own Google identity (resolved\nthe same way as every other client command), so no deployment is\nneeded and your edits are recorded as human:<you>. The proxy also\nexposes /mcp, so it doubles as an authenticated local MCP endpoint.\nFor a team-shared UI on Cloud Run, deploy `ochakai serve-ui`.",
 		"  ochakai ui\n  ochakai ui --port 9000\n  claude mcp add --transport http ochakai http://127.0.0.1:8098/mcp\n")
 	port := fs.Int("port", 8098, "port to listen on (always bound to 127.0.0.1: whoever reaches the proxy acts as you)")
 	pos, err := parseArgs(fs, args)

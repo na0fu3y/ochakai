@@ -302,17 +302,20 @@ curl -X POST "http://localhost:8787/api/v1/compile" \
   -d '{"metrics":["revenue"],"dimensions":["customers.region"],"dialect":"bigquery"}'
 ```
 
-## 5b. Optional: the sample web UI behind IAP (separate service, by design)
+## 5b. Optional: the team web UI behind IAP (separate service, by design)
 
-The sample UI ([examples/webui](../../examples/webui)) is **not** part of
-the ochakai image — the core keeps its serving surface minimal. For
-personal use it needs no deployment at all: `ochakai ui` serves the same
-page on loopback with your own identity. Deploy this service when people
-who cannot run the Go CLI need browser access.
+The web UI runs as its own service, **not** inside `serve` — the core
+keeps its serving surface minimal (design doc 0006). For personal use it
+needs no deployment at all: `ochakai ui` serves the same page on loopback
+with your own identity. Deploy this service when people who cannot run
+the Go CLI need browser access.
 
-It ships as its own tiny service: a static page plus a reverse proxy that
-attaches its service identity (`X-Serverless-Authorization`) to API
-calls, so ochakai stays organization-restricted. The webui itself is
+It is the **same container image** as ochakai itself, started with
+`--args=serve-ui` instead of the default `serve`: a static page plus a
+reverse proxy that attaches its service identity
+(`X-Serverless-Authorization`) to API calls, so ochakai stays
+organization-restricted — no second image to build, and the UI is always
+the exact version of the server it fronts. The webui itself is
 non-public too: [Identity-Aware Proxy](https://cloud.google.com/iap/docs/enabling-cloud-run)
 sits in front, so browsers sign in with their Google account and only
 your organization gets through — no `allUsers` grant anywhere. Note that
@@ -322,22 +325,16 @@ would need IAP JWT verification (design doc 0002 §4). MCP and CLI
 clients get per-user identity via the §5 proxy path.
 
 ```sh
-# build & push (from the repository root)
-gcloud artifacts repositories create images --repository-format=docker --location=$REGION
-docker build --platform linux/amd64 -f examples/webui/Dockerfile \
-  -t $REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1 .
-docker push $REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1
-
 # dedicated identity, allowed to invoke ochakai only
 gcloud iam service-accounts create ochakai-webui
 gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=serviceAccount:ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --role=roles/run.invoker
 
-# deploy non-public, with IAP in front
+# deploy non-public, with IAP in front — same $IMAGE as §3
 gcloud services enable iap.googleapis.com
 gcloud beta run deploy ochakai-webui \
-  --image=$REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1 \
+  --image=$IMAGE --args=serve-ui \
   --region=$REGION --no-allow-unauthenticated --iap \
   --service-account=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --min-instances=0 --max-instances=1 --cpu=1 --memory=256Mi \

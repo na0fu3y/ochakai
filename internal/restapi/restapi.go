@@ -1,5 +1,5 @@
 // Package restapi serves /api/v1 so users can build their own web UIs
-// (a sample lives in examples/webui). It is a superset of the MCP tools:
+// (the bundled one lives in internal/webui). It is a superset of the MCP tools:
 // the same knowledge/search/usage/compile operations plus bulk endpoints
 // (export, import/ossie) that make no sense as agent tool calls, and
 // human-facing endpoints (browse, revisions, backlinks) that stay off
