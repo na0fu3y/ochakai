@@ -208,7 +208,7 @@ organize knowledge into directories
 Entries can carry file attachments — the dashboard screenshot behind an
 insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
 behind a dataset. Accepted formats are the intersection of what Claude
-reads and what Gemini embeds (png/jpeg/gif/webp, pdf, plain text —
+reads and what Gemini embeds (png/jpeg/webp, pdf, plain text —
 sniffed from the bytes). Search stays text-first (captions in the body),
 attachment bytes live in GCS and are fetched on demand, and attachments
 round-trip through OKF bundles as plain files next to their entry

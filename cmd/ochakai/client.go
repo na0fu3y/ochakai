@@ -437,7 +437,7 @@ func cmdGet(ctx context.Context, args []string) error {
 
 func cmdAttach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, gif, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
+		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
 		"  ochakai attach insight/revenue-reading weekly.png\n  ochakai attach table/orders seeds.txt\n  ochakai attach table/orders er-diagram.png --name schema.png\n")
 	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
 	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")

@@ -423,7 +423,7 @@ paths:
       description: >
         Stores the raw request body as an attachment, replacing any
         attachment of the same name (kept as a revision). The media type
-        is sniffed from the bytes — png, jpeg, gif, webp, pdf, and plain
+        is sniffed from the bytes — png, jpeg, webp, pdf, and plain
         text are accepted (never text/html or image/svg+xml: they can
         carry scripts), at most 5 MiB and 20 attachments per entry.
         Reference the file from the entry's markdown body
@@ -634,7 +634,7 @@ components:
         agent context is never flooded with base64.
       properties:
         name: { type: string, description: Filename, unique within the entry. }
-        media_type: { type: string, enum: [image/png, image/jpeg, image/gif, image/webp] }
+        media_type: { type: string, enum: [image/png, image/jpeg, image/webp, application/pdf, text/plain] }
         size: { type: integer }
         sha256: { type: string, description: Content hash; attachments are content-addressed and immutable. }
         okf_path:

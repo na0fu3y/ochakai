@@ -864,12 +864,12 @@ async function viewDetail(type, id) {
       return `
         ${cards || '<div class="empty">No attachments.</div>'}
         <div class="toolbar" style="margin-top:1rem">
-          <input type="file" id="att-file" accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
+          <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
           <button class="btn small" id="att-choose">Choose files…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">Attach</button>
         </div>
-        <p class="provenance">png / jpeg / gif / webp / pdf / plain text, max 5 MiB each, 20 per entry. Reference a file from the
+        <p class="provenance">png / jpeg / webp / pdf / plain text, max 5 MiB each, 20 per entry. Reference a file from the
         body (<code>![alt](${esc(lastSeg)}/name.png)</code> or <code>[name](${esc(lastSeg)}/name.txt)</code>) so it is findable and survives OKF export.</p>`;
     },
     linked: () => '<div class="empty">…</div>',
