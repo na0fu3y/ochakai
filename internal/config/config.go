@@ -5,10 +5,8 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
-	"strings"
 )
 
 type Config struct {
@@ -31,27 +29,6 @@ type Config struct {
 	// Embedding is nil when semantic search is disabled (the default).
 	// Set OCHAKAI_VERTEX_PROJECT to enable it.
 	Embedding *EmbeddingConfig
-
-	// Connector is nil unless connector mode is enabled (design doc
-	// 0010): the publicly reachable second service that guards /mcp with
-	// OAuth for claude.ai / ChatGPT remote connectors. Set
-	// OCHAKAI_CONNECTOR_PUBLIC_URL to enable it.
-	Connector *ConnectorConfig
-}
-
-// ConnectorConfig configures the MCP OAuth connector service: a minimal
-// authorization server that delegates login to Google (design doc 0010).
-type ConnectorConfig struct {
-	// PublicURL is the connector's own public base URL (issuer and
-	// resource base), e.g. "https://ochakai-connector-xyz.a.run.app".
-	PublicURL string
-	// GoogleClientID / GoogleClientSecret identify the organization's
-	// Google OAuth client used to delegate login.
-	GoogleClientID     string
-	GoogleClientSecret string
-	// AllowedDomain is the Workspace domain enforced on the id_token's
-	// hd claim.
-	AllowedDomain string
 }
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
@@ -78,15 +55,13 @@ func FromEnv() (*Config, error) {
 		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL (or DATABASE_URL) is required")
 	}
 
-	if publicURL := os.Getenv("OCHAKAI_CONNECTOR_PUBLIC_URL"); publicURL != "" {
-		conn, err := connectorFromEnv(publicURL)
-		if err != nil {
-			return nil, err
-		}
-		if cfg.InsecureDev {
-			return nil, fmt.Errorf("OCHAKAI_CONNECTOR_PUBLIC_URL and OCHAKAI_INSECURE_DEV are mutually exclusive: the connector is the public surface and must never run unauthenticated")
-		}
-		cfg.Connector = conn
+	// The MCP OAuth connector service was removed (design doc 0012). This
+	// is a refuse-to-start guard, not silent tolerance like other removed
+	// variables: connector deployments were publicly invokable (allUsers),
+	// and a binary that ignored the variable would serve the trust-the-
+	// headers private surface on that public service.
+	if os.Getenv("OCHAKAI_CONNECTOR_PUBLIC_URL") != "" {
+		return nil, fmt.Errorf("OCHAKAI_CONNECTOR_PUBLIC_URL is set, but the MCP OAuth connector was removed (design doc 0012); this deployment is publicly invokable and must not run this image — delete the connector service (and its allUsers grant) instead of upgrading it")
 	}
 
 	if project := os.Getenv("OCHAKAI_VERTEX_PROJECT"); project != "" {
@@ -103,30 +78,6 @@ func FromEnv() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-// connectorFromEnv validates connector-mode configuration. The public
-// URL must be https (http is tolerated for loopback hosts only, for
-// local testing against a real Google client).
-func connectorFromEnv(publicURL string) (*ConnectorConfig, error) {
-	u, err := url.Parse(publicURL)
-	if err != nil || u.Host == "" {
-		return nil, fmt.Errorf("OCHAKAI_CONNECTOR_PUBLIC_URL must be an absolute URL: %q", publicURL)
-	}
-	loopback := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
-	if u.Scheme != "https" && !(u.Scheme == "http" && loopback) {
-		return nil, fmt.Errorf("OCHAKAI_CONNECTOR_PUBLIC_URL must be https (got %q)", publicURL)
-	}
-	conn := &ConnectorConfig{
-		PublicURL:          strings.TrimRight(publicURL, "/"),
-		GoogleClientID:     os.Getenv("OCHAKAI_CONNECTOR_GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: os.Getenv("OCHAKAI_CONNECTOR_GOOGLE_CLIENT_SECRET"),
-		AllowedDomain:      os.Getenv("OCHAKAI_CONNECTOR_ALLOWED_DOMAIN"),
-	}
-	if conn.GoogleClientID == "" || conn.GoogleClientSecret == "" || conn.AllowedDomain == "" {
-		return nil, fmt.Errorf("connector mode needs all of OCHAKAI_CONNECTOR_GOOGLE_CLIENT_ID, OCHAKAI_CONNECTOR_GOOGLE_CLIENT_SECRET, OCHAKAI_CONNECTOR_ALLOWED_DOMAIN (design doc 0010)")
-	}
-	return conn, nil
 }
 
 func envOr(key, fallback string) string {
