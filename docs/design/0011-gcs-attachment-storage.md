@@ -1,6 +1,8 @@
 # ochakai 設計ドキュメント 0011: 添付画像バイト列の GCS 移行
 
-Status: Accepted(2026-07-18 の議論で決定)
+Status: Superseded in part by 0013(bytea との二重化は廃止され GCS のみに。
+§2.1 の「未設定なら従来どおり bytea」と §2.4 の二重読み出し・再インライン
+化はもう当てはまらない)
 Date: 2026-07-18
 
 ## 1. 目的

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -443,6 +442,8 @@ func TestIntegrationAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	// Attachment bytes live only in the blob store (design doc 0013).
+	s.UseBlobStore(newFakeBlobStore())
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -638,149 +639,4 @@ func (f *fakeBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 		return nil, fmt.Errorf("fake blob store: %s not found", sum)
 	}
 	return append([]byte(nil), data...), nil
-}
-
-// External blob storage (design doc 0011): startup backfill moves inline
-// bytes out, reads resolve from the blob store, new attachments skip the
-// bytea column, and re-attaching inline heals a migrated blob.
-func TestIntegrationExternalBlobs(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := context.Background()
-	s, err := New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	for _, del := range []string{
-		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-ext%'`,
-		`DELETE FROM knowledge WHERE id LIKE 'it-ext%'`,
-		`DELETE FROM knowledge_revision WHERE id LIKE 'it-ext%'`,
-	} {
-		if _, err := s.pool.Exec(ctx, del); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	actor := domain.Actor{Kind: "human", Name: "test"}
-	k := &domain.Knowledge{
-		Type: domain.TypeInsight, ID: "it-ext-reading", Title: "移行テスト",
-		Status: domain.StatusDraft, CreatedBy: actor,
-	}
-	if err := s.Create(ctx, k); err != nil {
-		t.Fatal(err)
-	}
-
-	// Attach in bytea mode: bytes are inline.
-	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("external blob test bytes")...)
-	att, err := s.PutAttachment(ctx, k.Type, k.ID, "chart.png", "image/png", "", png, actor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var inline []byte
-	if err := s.pool.QueryRow(ctx, `SELECT bytes FROM blob WHERE sha256=$1`, att.SHA256).Scan(&inline); err != nil {
-		t.Fatal(err)
-	}
-	if inline == nil {
-		t.Fatal("bytea mode should store bytes inline")
-	}
-
-	// Enable the blob store and backfill. The backfill is table-wide, so
-	// restore every moved row afterwards to keep the shared test DB
-	// usable for other tests and re-runs.
-	fake := newFakeBlobStore()
-	s.UseBlobStore(fake)
-	// defer, not t.Cleanup: it must run before the deferred s.Close.
-	defer func() {
-		for sum, data := range fake.m {
-			if _, err := s.pool.Exec(ctx,
-				`UPDATE blob SET bytes=$2 WHERE sha256=$1 AND bytes IS NULL`, sum, data); err != nil {
-				t.Errorf("restore blob %s: %v", sum, err)
-			}
-		}
-	}()
-	moved, err := s.MigrateBlobsOut(ctx)
-	if err != nil {
-		t.Fatalf("MigrateBlobsOut: %v", err)
-	}
-	if moved < 1 {
-		t.Fatalf("moved = %d, want >= 1", moved)
-	}
-	if err := s.pool.QueryRow(ctx, `SELECT bytes FROM blob WHERE sha256=$1`, att.SHA256).Scan(&inline); err != nil {
-		t.Fatal(err)
-	}
-	if inline != nil {
-		t.Error("backfill should NULL the inline bytes")
-	}
-	if _, ok := fake.m[att.SHA256]; !ok {
-		t.Error("backfill should upload the blob")
-	}
-	// Idempotent: a second run has nothing to do.
-	if moved, err = s.MigrateBlobsOut(ctx); err != nil || moved != 0 {
-		t.Errorf("second backfill = (%d, %v), want (0, nil)", moved, err)
-	}
-
-	// Reads resolve from the blob store.
-	_, data, err := s.GetAttachment(ctx, k.Type, k.ID, "chart.png")
-	if err != nil {
-		t.Fatalf("GetAttachment after migration: %v", err)
-	}
-	if string(data) != string(png) {
-		t.Error("migrated bytes did not round-trip")
-	}
-
-	// New attachments skip bytea entirely.
-	png2 := append([]byte("\x89PNG\r\n\x1a\n"), []byte("born external")...)
-	att2, err := s.PutAttachment(ctx, k.Type, k.ID, "born.png", "image/png", "", png2, actor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.pool.QueryRow(ctx, `SELECT bytes FROM blob WHERE sha256=$1`, att2.SHA256).Scan(&inline); err != nil {
-		t.Fatal(err)
-	}
-	if inline != nil {
-		t.Error("with a blob store, bytes must not be stored inline")
-	}
-	if _, data, err = s.GetAttachment(ctx, k.Type, k.ID, "born.png"); err != nil || string(data) != string(png2) {
-		t.Errorf("external attachment did not round-trip: %v", err)
-	}
-
-	// The export listing resolves external bytes too.
-	all, err := s.ListAllAttachments(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := 0
-	for _, e := range all {
-		if e.ID == k.ID && (e.Att.Name == "chart.png" || e.Att.Name == "born.png") && len(e.Data) > 0 {
-			found++
-		}
-	}
-	if found != 2 {
-		t.Errorf("ListAllAttachments resolved %d of 2 external blobs", found)
-	}
-
-	// Without a blob store, a migrated blob is unreadable with a
-	// pointed error…
-	bare, err := New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bare.Close()
-	if _, _, err := bare.GetAttachment(ctx, k.Type, k.ID, "born.png"); err == nil ||
-		!strings.Contains(err.Error(), "OCHAKAI_GCS_BUCKET") {
-		t.Errorf("bytea-mode read of migrated blob = %v, want config hint", err)
-	}
-	// …and re-attaching the same content inline heals it (0011 §2.4).
-	if _, err := bare.PutAttachment(ctx, k.Type, k.ID, "born.png", "image/png", "", png2, actor); err != nil {
-		t.Fatal(err)
-	}
-	if _, data, err = bare.GetAttachment(ctx, k.Type, k.ID, "born.png"); err != nil || string(data) != string(png2) {
-		t.Errorf("healed attachment did not round-trip: %v", err)
-	}
 }

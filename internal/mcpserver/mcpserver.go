@@ -208,20 +208,35 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_attachment",
 		Annotations: readOnly,
-		Description: "Fetch one image attached to a knowledge entry (get_knowledge lists attachment " +
-			"metadata under \"attachments\"). Returns the image as content plus its metadata. " +
-			"Images are context-heavy — fetch them deliberately, when the entry's body references " +
-			"one you need to see (a dashboard's normal shape, an ER diagram). ochakai never " +
-			"interprets images; if you learn something from one, write it back into the entry's " +
-			"body with update_knowledge so the knowledge becomes searchable text.",
+		Description: "Fetch one file attached to a knowledge entry (get_knowledge lists attachment " +
+			"metadata under \"attachments\": images, PDFs, plain-text data files). Returns the " +
+			"file as content plus its metadata. Attachments are context-heavy — fetch them " +
+			"deliberately, when the entry's body references one you need to see (a dashboard's " +
+			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
+			"if you learn something from one, write it back into the entry's body with " +
+			"update_knowledge so the knowledge becomes searchable text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
 		att, data, err := svc.Attachment(ctx, domain.Type(in.Type), in.ID, in.Name)
 		if err != nil {
 			return nil, attachmentOut{}, err
 		}
-		res := &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.ImageContent{Data: data, MIMEType: att.MediaType}},
+		// The content block matches the media type (design doc 0013):
+		// images as image content, plain text inline, PDFs as an embedded
+		// blob resource.
+		var content mcp.Content
+		switch {
+		case strings.HasPrefix(att.MediaType, "image/"):
+			content = &mcp.ImageContent{Data: data, MIMEType: att.MediaType}
+		case att.MediaType == "text/plain":
+			content = &mcp.TextContent{Text: string(data)}
+		default:
+			content = &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
+				URI:      fmt.Sprintf("ochakai://%s/%s/attachments/%s", in.Type, in.ID, att.Name),
+				MIMEType: att.MediaType,
+				Blob:     data,
+			}}
 		}
+		res := &mcp.CallToolResult{Content: []mcp.Content{content}}
 		return res, attachmentOut{Attachment: *att}, nil
 	})
 

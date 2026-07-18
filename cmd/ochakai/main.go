@@ -132,13 +132,12 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	} else {
 		log.Info("semantic search disabled; using trigram search only")
 	}
-	if err := st.Migrate(ctx, embedDim); err != nil {
-		return nil, nil, err
-	}
-	// Attachment bytes on GCS (design doc 0011): route new bytes to the
-	// bucket and finish any interrupted backfill of inline rows. Failing
-	// the start is deliberate — the backfill is idempotent and the next
-	// boot resumes it.
+	// Attachment bytes live only on GCS (design doc 0013). The blob store
+	// is wired and the legacy bytea backfill runs BEFORE schema migrations:
+	// migration 0009 drops the bytea column and refuses to run while
+	// inline bytes remain, so this order lets one boot with the bucket set
+	// finish the move. Failing the start on a backfill error is deliberate
+	// — the backfill is idempotent and the next boot resumes it.
 	if cfg.GCSBucket != "" {
 		bs, err := blob.NewGCS(ctx, cfg.GCSBucket)
 		if err != nil {
@@ -153,6 +152,11 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 			log.Info("migrated inline attachment blobs to GCS", "count", moved, "bucket", cfg.GCSBucket)
 		}
 		log.Info("attachment bytes on GCS", "bucket", cfg.GCSBucket)
+	} else {
+		log.Info("attachments disabled (no OCHAKAI_GCS_BUCKET); markdown entries only")
+	}
+	if err := st.Migrate(ctx, embedDim); err != nil {
+		return nil, nil, err
 	}
 	return &service.Service{Store: st, Embedder: embedder, Config: cfg, Log: log}, cfg, nil
 }

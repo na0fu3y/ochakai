@@ -64,7 +64,8 @@ func TestFromBundleRootConceptAttachment(t *testing.T) {
 }
 
 // Markdown links must not attach concept documents, oversized files, or
-// non-image bytes.
+// files that resolve nowhere; orphans outside any entry's namespace stay
+// in the skip report.
 func TestFromBundleAttachmentAllowlist(t *testing.T) {
 	files := map[string][]byte{
 		"term/a.md": []byte("---\ntype: Glossary Term\ntitle: a\n---\n\n" +
@@ -80,6 +81,81 @@ func TestFromBundleAttachmentAllowlist(t *testing.T) {
 	// data.csv and big.png stay reported; term/b.md imported as an entry.
 	if len(skipped) != 2 {
 		t.Errorf("skipped = %v", skipped)
+	}
+}
+
+// Non-image files in the allowlist (design doc 0013) attach like images:
+// by body reference wherever they sit, and PDFs and plain text both pass
+// the sniffer.
+func TestFromBundleFileAttachments(t *testing.T) {
+	files := map[string][]byte{
+		"table/orders.md": []byte("---\ntype: Table\ntitle: orders\n---\n\n" +
+			"シード: [seeds](/data/seeds.txt)、仕様: [spec](orders/spec.pdf)\n"),
+		"data/seeds.txt":        []byte("https://example.com/schema\nhttps://example.com/docs\n"),
+		"table/orders/spec.pdf": []byte("%PDF-1.7 fake pdf body"),
+	}
+	_, atts, skipped := FromBundle(files)
+	got := map[string]string{}
+	for _, a := range atts {
+		got[string(a.Type)+"/"+a.ID+"/"+a.Name] = a.Path
+	}
+	want := map[string]string{
+		"table/orders/seeds.txt": "data/seeds.txt",
+		"table/orders/spec.pdf":  "table/orders/spec.pdf",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("attachments = %v, want %v", got, want)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("skipped = %v, want none", skipped)
+	}
+}
+
+// Canonical-namespace attribution (design doc 0013): an unreferenced
+// non-markdown file at "<type>/<id>/<name>" attaches to that entry; a
+// referenced file of the same name is not double-attached; orphans
+// elsewhere stay in the skip report.
+func TestFromBundleNamespaceAttribution(t *testing.T) {
+	files := map[string][]byte{
+		"table/orders.md": []byte("---\ntype: Table\ntitle: orders\n---\n\n" +
+			"![er](orders/er.png)\n"), // referenced: claims table/orders/er.png
+		"table/orders/er.png":    pngBytes(),
+		"table/orders/seeds.txt": []byte("seed data, referenced by no body\n"),
+		"orphan/seeds.txt":       []byte("no entry named orphan\n"),
+	}
+	entries, atts, skipped := FromBundle(files)
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(entries))
+	}
+	got := map[string]string{}
+	for _, a := range atts {
+		got[string(a.Type)+"/"+a.ID+"/"+a.Name] = a.Path
+	}
+	want := map[string]string{
+		"table/orders/er.png":    "table/orders/er.png",
+		"table/orders/seeds.txt": "table/orders/seeds.txt",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("attachments = %v, want %v", got, want)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "orphan/seeds.txt") {
+		t.Errorf("skipped = %v, want only orphan/seeds.txt", skipped)
+	}
+}
+
+// Namespace attribution follows hierarchical IDs: the entry's directory
+// is its full canonical path, not just one segment deep.
+func TestFromBundleNamespaceHierarchicalID(t *testing.T) {
+	files := map[string][]byte{
+		"query/sales/monthly.md":           []byte("---\ntype: Golden Query\ntitle: monthly\n---\n"),
+		"query/sales/monthly/expected.txt": []byte("month,revenue\n2026-01,100\n"),
+	}
+	_, atts, skipped := FromBundle(files)
+	if len(atts) != 1 || atts[0].ID != "sales/monthly" || atts[0].Name != "expected.txt" {
+		t.Fatalf("atts = %+v", atts)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("skipped = %v, want none", skipped)
 	}
 }
 

@@ -20,13 +20,15 @@ import (
 // skipped silently, as are hidden paths (.git trees, macOS tar's
 // AppleDouble ._* siblings, .DS_Store).
 //
-// Image files referenced by a concept's body markdown links become that
-// entry's attachments — attribution is by reference, not by location, so
-// any producer's layout works (design doc 0008); the original path is
-// preserved for re-export. Anything else that cannot become an entry or
-// an attachment — unreferenced non-markdown files, unparsable documents,
-// invalid slugs — is reported in skipped as "path: reason" lines rather
-// than failing the whole bundle.
+// Files referenced by a concept's body markdown links become that
+// entry's attachments — attribution is by reference first, so any
+// producer's layout works (design doc 0008); the original path is
+// preserved for re-export. Unreferenced non-markdown files sitting in an
+// entry's canonical namespace ("<type>/<id>/<name>") attach to that entry
+// (design doc 0013). Anything else that cannot become an entry or an
+// attachment — orphaned non-markdown files, unparsable documents, invalid
+// slugs — is reported in skipped as "path: reason" lines rather than
+// failing the whole bundle.
 func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []BundleAttachment, skipped []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -64,7 +66,7 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 	atts, used := resolveAttachments(files, concepts)
 	for _, p := range nonMarkdown {
 		if !used[path.Clean(strings.TrimPrefix(p, "./"))] {
-			skipped = append(skipped, p+": not a markdown concept (and referenced by no entry body)")
+			skipped = append(skipped, p+": not a markdown concept (referenced by no entry body, and not in an entry's directory)")
 		}
 	}
 

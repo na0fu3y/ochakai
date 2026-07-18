@@ -27,6 +27,7 @@ func TestWriteErrorStatuses(t *testing.T) {
 		{"already exists", store.ErrAlreadyExists, http.StatusConflict},
 		{"compile refusal", &compiler.Error{Reason: "outside the subset"}, http.StatusUnprocessableEntity},
 		{"invalid input", service.Invalidf("title is required"), http.StatusBadRequest},
+		{"unsupported", service.Unsupportedf("attachments need GCS"), http.StatusNotImplemented},
 		{"unknown", errors.New("connection reset"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
@@ -68,6 +69,23 @@ func TestBadRequestValidation(t *testing.T) {
 				t.Errorf("GET %s body %q does not mention %q", c.url, rec.Body, c.wantSubstr)
 			}
 		})
+	}
+}
+
+// TestAttachWithoutBlobStore pins the 501: on an instance without GCS
+// (design doc 0013), attaching fails before any validation or DB access
+// with the config hint.
+func TestAttachWithoutBlobStore(t *testing.T) {
+	h := Handler(&service.Service{Store: &store.Store{}})
+	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut,
+		"/api/v1/attachments/insight/revenue/weekly.png", bytes.NewReader(png)))
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("PUT attachment without GCS = %d, want 501 (body: %s)", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "OCHAKAI_GCS_BUCKET") {
+		t.Errorf("body %q does not carry the config hint", rec.Body)
 	}
 }
 

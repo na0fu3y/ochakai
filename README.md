@@ -50,7 +50,7 @@ ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type metric --status verified
 ochakai get metric/revenue
-ochakai attach insight/revenue-reading weekly.png   # images travel with the entry
+ochakai attach insight/revenue-reading weekly.png   # files travel with the entry
 ochakai compile --metric revenue --grain orders.ordered_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle
@@ -203,11 +203,15 @@ kinds, and IDs may be hierarchical (`query/sales/monthly-revenue`) to
 organize knowledge into directories
 ([design doc 0005](docs/design/0005-okf-compatibility.md)).
 
-Entries can carry image attachments — the dashboard screenshot behind an
-insight, the ER diagram behind a table entry. Search stays text-first
-(captions in the body), image bytes are fetched on demand, and images
+Entries can carry file attachments — the dashboard screenshot behind an
+insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
+behind a dataset. Accepted formats are the intersection of what Claude
+reads and what Gemini embeds (png/jpeg/gif/webp, pdf, plain text —
+sniffed from the bytes). Search stays text-first (captions in the body),
+attachment bytes live in GCS and are fetched on demand, and attachments
 round-trip through OKF bundles as plain files next to their entry
-([design doc 0008](docs/design/0008-image-attachments.md)).
+([design docs 0008](docs/design/0008-image-attachments.md) and
+[0013](docs/design/0013-attachment-files-gcs-only.md)).
 
 ## Configuration
 
@@ -215,7 +219,7 @@ round-trip through OKF bundles as plain files next to their entry
 |---|---|
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required; `DATABASE_URL` also works) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the `DATABASE_URL` carries no secret |
-| `OCHAKAI_GCS_BUCKET` | Set to store attachment images as GCS objects instead of Postgres rows (auth is ADC — no keys); existing images are migrated out at startup. Default: unset, images live in Postgres and local development stays Docker-only |
+| `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys); legacy in-Postgres bytes are migrated out at startup. Default: unset — the instance stores markdown entries only and attach operations return an error ([design doc 0013](docs/design/0013-attachment-files-gcs-only.md)) |
 | `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |

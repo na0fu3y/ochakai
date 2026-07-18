@@ -437,8 +437,8 @@ func cmdGet(ctx context.Context, args []string) error {
 
 func cmdAttach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach images to a knowledge entry (png, jpeg, gif, webp; max 5 MiB\neach, 20 per entry). An attachment of the same name is replaced (the\nchange is kept as a revision). Reference the image from the entry's\nbody so its caption is searchable and it survives OKF export/import —\nthe hint printed after attaching shows the canonical relative link.",
-		"  ochakai attach insight/revenue-reading weekly.png\n  ochakai attach table/orders er-diagram.png --name schema.png\n")
+		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, gif, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
+		"  ochakai attach insight/revenue-reading weekly.png\n  ochakai attach table/orders seeds.txt\n  ochakai attach table/orders er-diagram.png --name schema.png\n")
 	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
 	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
 	pos, err := parseArgs(fs, args)
@@ -480,7 +480,11 @@ func cmdAttach(ctx context.Context, args []string) error {
 			continue
 		}
 		fmt.Printf("attached %s/%s/%s (%s, %d bytes)\n", typ, id, att.Name, att.MediaType, att.Size)
-		fmt.Fprintf(os.Stderr, "hint: reference it from the body: ![%s](%s/%s)\n", att.Name, lastSeg, att.Name)
+		link := fmt.Sprintf("[%s](%s/%s)", att.Name, lastSeg, att.Name)
+		if strings.HasPrefix(att.MediaType, "image/") {
+			link = "!" + link
+		}
+		fmt.Fprintf(os.Stderr, "hint: reference it from the body: %s\n", link)
 	}
 	return nil
 }
@@ -716,7 +720,7 @@ func cmdExport(ctx context.Context, args []string) error {
 
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions; entries identical to what is stored are left untouched\nand reported as unchanged). Images referenced by an entry's body markdown links become\nits attachments, wherever they sit in the bundle (their location is\npreserved for re-export). An archive wrapped in a single directory is\nunwrapped. Works with any OKF bundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions; entries identical to what is stored are left untouched\nand reported as unchanged). Files referenced by an entry's body markdown links become\nits attachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<type>/<id>/<name>) attach to that entry. An archive\nwrapped in a single directory is unwrapped. Works with any OKF\nbundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	keepRoot := fs.Bool("keep-root", false, "keep a single top-level directory as the type instead of unwrapping it")

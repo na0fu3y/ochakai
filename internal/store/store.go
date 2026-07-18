@@ -23,17 +23,21 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 
 type Store struct {
 	pool *pgxpool.Pool
-	// blobs, when set, holds attachment bytes instead of the blob table's
-	// bytea column (design doc 0011). Metadata stays in PostgreSQL either
-	// way; reads fall back to bytea for rows the backfill hasn't reached.
+	// blobs holds attachment bytes (GCS, design doc 0013); metadata stays
+	// in PostgreSQL. When nil, attachments are unsupported — markdown
+	// entries only.
 	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64
 }
 
-// UseBlobStore routes attachment bytes to b (design doc 0011). Call
-// before serving; existing inline rows are moved by MigrateBlobsOut.
+// UseBlobStore routes attachment bytes to b (design doc 0013). Call
+// before serving; legacy inline rows are moved by MigrateBlobsOut.
 func (s *Store) UseBlobStore(b blob.Store) { s.blobs = b }
+
+// HasBlobStore reports whether attachment bytes have somewhere to live —
+// false means attachments are unsupported (design doc 0013).
+func (s *Store) HasBlobStore() bool { return s.blobs != nil }
 
 func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)

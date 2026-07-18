@@ -7,16 +7,20 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// Attachment operations (design doc 0008). ochakai stores and serves
-// image bytes; it never interprets them — no OCR, no captioning. Reading
-// an image and writing what it shows back into the body is the client
-// agent's job, like every other interpretation.
+// Attachment operations (design docs 0008, 0013). ochakai stores and
+// serves attachment bytes; it never interprets them — no OCR, no
+// captioning, no parsing. Reading a file and writing what it says back
+// into the body is the client agent's job, like every other
+// interpretation.
 
 // Attach stores data as an attachment of the entry, replacing any
 // attachment of the same name. The media type is sniffed from the bytes,
 // never taken from the caller. okfPath preserves a foreign bundle
 // location for round-trips; "" for attachments born here.
 func (s *Service) Attach(ctx context.Context, typ domain.Type, id, name, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+	if !s.Store.HasBlobStore() {
+		return nil, Unsupportedf("attachments are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
+	}
 	// Both are judgments about the client's bytes, so classify them as
 	// input errors (REST: 400).
 	if err := domain.ValidateAttachment(name, len(data)); err != nil {

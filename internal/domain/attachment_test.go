@@ -33,12 +33,29 @@ func TestDetectAttachmentMediaType(t *testing.T) {
 	if mt, err := DetectAttachmentMediaType(gif); err != nil || mt != "image/gif" {
 		t.Errorf("gif: got %q, %v", mt, err)
 	}
-	// SVG sniffs as XML/text — must be refused (script-bearing).
-	if _, err := DetectAttachmentMediaType([]byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)); err == nil {
-		t.Error("svg accepted")
+	if mt, err := DetectAttachmentMediaType([]byte("%PDF-1.7 fake pdf body")); err != nil || mt != "application/pdf" {
+		t.Errorf("pdf: got %q, %v", mt, err)
 	}
-	if _, err := DetectAttachmentMediaType([]byte("just text")); err == nil {
-		t.Error("plain text accepted")
+	if mt, err := DetectAttachmentMediaType([]byte("seed,urls\nhttps://example.com\n")); err != nil || mt != "text/plain" {
+		t.Errorf("text: got %q, %v", mt, err)
+	}
+	// Markup with an HTML signature sniffs as text/html — refused
+	// (script-bearing; design doc 0013).
+	if _, err := DetectAttachmentMediaType([]byte(`<!DOCTYPE html><script>alert(1)</script>`)); err == nil {
+		t.Error("html accepted")
+	}
+	// An XML declaration sniffs as text/xml (SVG's usual shape) — refused.
+	if _, err := DetectAttachmentMediaType([]byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>`)); err == nil {
+		t.Error("xml/svg accepted")
+	}
+	// SVG without the XML declaration has no HTML signature and passes as
+	// text/plain — stored and served inert, never as image/svg+xml.
+	if mt, err := DetectAttachmentMediaType([]byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)); err != nil || mt != "text/plain" {
+		t.Errorf("bare svg: got %q, %v (want inert text/plain)", mt, err)
+	}
+	// Binary that is no allowlisted format sniffs application/octet-stream.
+	if _, err := DetectAttachmentMediaType([]byte{0x00, 0x01, 0x02, 0x03}); err == nil {
+		t.Error("arbitrary binary accepted")
 	}
 }
 

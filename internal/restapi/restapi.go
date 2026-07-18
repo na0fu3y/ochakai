@@ -268,11 +268,17 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		w.Header().Set("Content-Type", att.MediaType)
+		ct := att.MediaType
+		// Plain text without a charset invites browser guessing; the sniffer
+		// only passes UTF-8/UTF-16 text through, so declare it.
+		if ct == "text/plain" {
+			ct = "text/plain; charset=utf-8"
+		}
+		w.Header().Set("Content-Type", ct)
 		// The bytes are user-uploaded and served inline; the media type is
-		// sniffed and allowlisted (images only, no SVG), but nosniff keeps a
-		// browser from overriding that and interpreting them as anything
-		// executable.
+		// sniffed and allowlisted (design doc 0013 — nothing executable, no
+		// text/html, no image/svg+xml), but nosniff keeps a browser from
+		// overriding that and interpreting them as anything else.
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("ETag", `"`+att.SHA256+`"`)
 		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
@@ -410,6 +416,7 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	var compileErr *compiler.Error
 	var inputErr *service.InvalidInputError
+	var unsupportedErr *service.UnsupportedError
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		status = http.StatusNotFound
@@ -419,6 +426,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusUnprocessableEntity
 	case errors.As(err, &inputErr):
 		status = http.StatusBadRequest
+	case errors.As(err, &unsupportedErr):
+		status = http.StatusNotImplemented
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }

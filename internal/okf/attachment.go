@@ -8,20 +8,25 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// Attachments in OKF bundles (design doc 0008). The OKF spec is silent
-// on non-markdown files — nothing forbids them, consumers must be
+// Attachments in OKF bundles (design docs 0008, 0013). The OKF spec is
+// silent on non-markdown files — nothing forbids them, consumers must be
 // permissive, and only the index.md / log.md *filenames* are reserved.
-// Three rules keep ochakai consistent with that world:
+// Four rules keep ochakai consistent with that world:
 //
-//   - Attribution is reference-driven, never path-driven: an image
-//     belongs to the entry whose body links to it, wherever the file
-//     sits. Foreign bundles keep their own layouts.
+//   - Attribution is reference-driven first: a file belongs to the entry
+//     whose body links to it, wherever the file sits. Foreign bundles
+//     keep their own layouts.
 //   - ochakai's canonical export layout is the entry-named directory,
 //     "<type>/<id>/<name>" next to "<type>/<id>.md" — everything about
 //     an entry lives in its OKF namespace, and `<id>/<name>` relative
 //     links render on GitHub. Sharing the directory with hierarchical
 //     child entries is harmless: concept parsers ignore non-md files,
 //     and attachment names may not end in .md.
+//   - The canonical layout also reads backwards (design doc 0013): a
+//     non-markdown file no body references, sitting at "<type>/<id>/<name>"
+//     for an entry in the bundle, attaches to that entry. Data files next
+//     to a concept document — a seeds.txt, an expected-results CSV —
+//     round-trip without requiring a body link.
 //   - A foreign file goes back where it came from: okf_path (recorded on
 //     import) wins over the canonical layout, so body links that use the
 //     original location keep working byte-for-byte.
@@ -57,9 +62,11 @@ type conceptRef struct {
 // resolveAttachments walks each entry's body markdown links and collects
 // the bundle files they reference: relative links resolve against the
 // concept document's directory, /-rooted links against the bundle root
-// (both OKF SPEC §5 forms). Only files that exist in the bundle, pass
-// the attachment allowlist (image bytes, not *.md), and fit the size
-// limit attach; everything else is left for the skip report.
+// (both OKF SPEC §5 forms). A second pass attributes by the canonical
+// namespace (design doc 0013): an unreferenced non-markdown file at
+// "<type>/<id>/<name>" attaches to the bundle's entry <type>/<id>. Only
+// files that pass the attachment allowlist (sniffed bytes, not *.md) and
+// fit the size limit attach; everything else is left for the skip report.
 // The returned used set holds the consumed bundle paths.
 func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []BundleAttachment, used map[string]bool) {
 	used = map[string]bool{}
@@ -67,11 +74,25 @@ func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []
 	for p, data := range files {
 		index[path.Clean(strings.TrimPrefix(p, "./"))] = data
 	}
+	seen := map[*domain.Knowledge]map[string]bool{}
+	attach := func(k *domain.Knowledge, p string, data []byte) {
+		name := path.Base(p)
+		if seen[k] == nil {
+			seen[k] = map[string]bool{}
+		}
+		if seen[k][name] || !domain.ValidAttachmentName(name) || len(data) > domain.MaxAttachmentSize || len(data) == 0 {
+			return
+		}
+		if _, err := domain.DetectAttachmentMediaType(data); err != nil {
+			return
+		}
+		seen[k][name] = true
+		used[p] = true
+		atts = append(atts, BundleAttachment{Type: k.Type, ID: k.ID, Name: name, Path: p, Data: data})
+	}
 	for _, c := range concepts {
-		k := c.k
 		docDir := path.Dir(c.docPath)
-		seen := map[string]bool{}
-		for _, target := range bodyLinkTargets(k.Body) {
+		for _, target := range bodyLinkTargets(c.k.Body) {
 			p, ok := resolveTarget(docDir, target)
 			if !ok {
 				continue
@@ -80,16 +101,26 @@ func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []
 			if !exists || strings.HasSuffix(strings.ToLower(p), ".md") {
 				continue
 			}
-			name := path.Base(p)
-			if seen[name] || !domain.ValidAttachmentName(name) || len(data) > domain.MaxAttachmentSize || len(data) == 0 {
-				continue
-			}
-			if _, err := domain.DetectAttachmentMediaType(data); err != nil {
-				continue
-			}
-			seen[name] = true
-			used[p] = true
-			atts = append(atts, BundleAttachment{Type: k.Type, ID: k.ID, Name: name, Path: p, Data: data})
+			attach(c.k, p, data)
+		}
+	}
+	// Canonical-namespace pass: reference-driven attribution won, so only
+	// still-unclaimed files are considered, in stable path order.
+	byDir := map[string]*domain.Knowledge{}
+	for _, c := range concepts {
+		byDir[string(c.k.Type)+"/"+c.k.ID] = c.k
+	}
+	rest := make([]string, 0, len(index))
+	for p := range index {
+		rest = append(rest, p)
+	}
+	sort.Strings(rest)
+	for _, p := range rest {
+		if used[p] || strings.HasSuffix(strings.ToLower(p), ".md") {
+			continue
+		}
+		if k, ok := byDir[path.Dir(p)]; ok {
+			attach(k, p, index[p])
 		}
 	}
 	sort.Slice(atts, func(i, j int) bool {
