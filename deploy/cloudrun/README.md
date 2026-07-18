@@ -40,11 +40,12 @@ gcloud artifacts repositories create ghcr \
   --remote-docker-repo=https://ghcr.io \
   --location=$REGION
 
-export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.8.0
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.9.0
 ```
 
 (Check [tags](https://github.com/na0fu3y/ochakai/tags) for the latest;
-§3 requires 0.3.0 or later, §4b requires 0.8.0 or later.)
+§3 requires 0.3.0 or later, §4b requires 0.8.0 or later, §5b requires
+0.9.0 or later.)
 
 ## 2. Create the database (cheapest viable instance)
 
@@ -72,26 +73,33 @@ Notes:
 
 - Instance creation takes 10–15 minutes.
 - `--no-backup` keeps the example cheap; enable backups for anything you
-  care about (`gcloud sql instances patch ochakai --backup`).
+  care about (`gcloud sql instances patch ochakai --backup-start-time=03:00`
+  — there is no bare `--backup` flag on `patch`; enabling means picking a
+  start time).
 - Users created through the Cloud SQL API (like this admin user) are
   members of `cloudsqlsuperuser` and can create extensions. The runtime
   service account deliberately gets neither (§3).
 - **About the public IP**: it is not open to the internet. With the
-  authorized-networks list empty (the default; §5's fallback adds an
-  entry only temporarily — always remove it), direct connections are
+  authorized-networks list empty (the default), direct connections are
   dropped, and the only way in is the Cloud SQL connector — IAM-checked
   (`cloudsql.instances.connect`) and mTLS'd — followed by database
-  authentication. Keep the list empty and this posture holds. To remove
-  the reachable endpoint entirely, see §2b.
+  authentication. Local admin access (§3's SQL, §6's maintenance) goes
+  through [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy),
+  which uses the same connector path, so the list never needs an entry.
+  Keep it empty and this posture holds. To remove the reachable endpoint
+  entirely, see §2b.
 
 ### 2b. Optional hardening: private IP only
 
 For production-like deployments, drop the public IP entirely. Costs
 nothing extra (VPC, private services access, and Cloud Run's Direct VPC
-egress are free); the trade-off is that local admin access (§5's import)
+egress are free); the trade-off is that local admin access (§3's SQL,
+§6's maintenance — §5's import is unaffected, it goes over the API)
 needs a temporary public IP or a VPC-attached workstation.
 
-One-time per VPC — allocate a peering range and connect it:
+One-time per VPC — allocate a peering range and connect it (if the
+Compute API was just enabled, the `addresses create` may need a minute
+before it stops returning `SERVICE_DISABLED`):
 
 ```sh
 gcloud services enable servicenetworking.googleapis.com compute.googleapis.com
@@ -102,20 +110,34 @@ gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com 
 ```
 
 Then create the instance with `--network=default --no-assign-ip`
-(instead of the defaults above), and add Direct VPC egress to the §3
-deploy so Cloud Run can reach it:
+(instead of the defaults above) — or convert an existing one, which is
+the same patch and takes 15–20 minutes:
 
 ```sh
-gcloud run deploy ochakai ... \
+gcloud sql instances patch ochakai --network=default --no-assign-ip
+```
+
+Add Direct VPC egress to the Cloud Run service so it can reach the
+private IP (the `/cloudsql` connector socket follows automatically; the
+`OCHAKAI_DATABASE_URL` doesn't change):
+
+```sh
+gcloud run services update ochakai --region=$REGION \
   --network=default --subnet=default
 ```
 
-For §5's import, temporarily attach a public IP and detach it after:
+Local admin access (§3's SQL, §6's maintenance) no longer works from
+outside the VPC — `cloud-sql-proxy` connects only to instances it can
+route to. Temporarily attach a public IP and detach it after:
 
 ```sh
-gcloud sql instances patch ochakai --assign-ip       # + authorized network, import
+gcloud sql instances patch ochakai --assign-ip       # + cloud-sql-proxy, do the work
 gcloud sql instances patch ochakai --no-assign-ip    # afterwards
 ```
+
+(If §6's `sql.restrictPublicIp` org policy is enforced, the temporary
+`--assign-ip` is blocked too — lift the policy for the window or use a
+VPC-attached workstation.)
 
 ## 3. Deploy Cloud Run (dedicated identity, passwordless, org-restricted)
 
@@ -139,7 +161,10 @@ gcloud sql users create $DB_SA_USER --instance=ochakai --type=cloud_iam_service_
 ```
 
 Set up the database for the service account (one-time, as the admin
-user — e.g. through §5's temporary authorized network). Extensions are
+user — connect with
+`cloud-sql-proxy $PROJECT_ID:$REGION:ochakai --port 55432` and
+`psql "host=localhost port=55432 dbname=ochakai user=ochakai"`, using
+`$DB_PASSWORD` from §2). Extensions are
 pre-created here so the runtime never needs elevated rights: ochakai's
 startup migration only ever hits the privilege-free
 `CREATE EXTENSION IF NOT EXISTS` skip path. Everything else is explicit
@@ -157,8 +182,15 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<P
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
 ```
 
-Tip: run §5's import once **before the first deploy** — it creates the
-schema as the admin user, so both identities can work with it.
+Note on ownership: the first deploy's startup migration creates the
+tables, owned by the **runtime service account** (imports go through the
+API, so nothing is ever created as the admin). For the admin user to
+work with those tables directly (maintenance, ad-hoc SQL), give it the
+runtime's role in the same session:
+
+```sql
+GRANT "ochakai-run@<PROJECT_ID>.iam" TO "ochakai";
+```
 
 Deploy privately with the dedicated identity and `OCHAKAI_DB_IAM_AUTH`
 (passwordless database), then allow your organization to invoke it:
@@ -328,8 +360,10 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=serviceAccount:ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --role=roles/run.invoker
 
-# deploy non-public, with IAP in front — same $IMAGE as §3
-gcloud services enable iap.googleapis.com
+# deploy non-public, with IAP in front — same $IMAGE as §3.
+# (--iap needs the gcloud beta component; the iap web command below
+#  needs the Resource Manager API)
+gcloud services enable iap.googleapis.com cloudresourcemanager.googleapis.com
 gcloud beta run deploy ochakai-webui \
   --image=$IMAGE --args=serve-ui \
   --region=$REGION --no-allow-unauthenticated --iap \
@@ -337,11 +371,9 @@ gcloud beta run deploy ochakai-webui \
   --min-instances=0 --max-instances=1 --cpu=1 --memory=256Mi \
   --set-env-vars=OCHAKAI_URL=$OCHAKAI_URL
 
-# let IAP invoke the service, and your organization through IAP
-export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-gcloud run services add-iam-policy-binding ochakai-webui --region=$REGION \
-  --member=serviceAccount:service-$PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com \
-  --role=roles/run.invoker
+# let your organization through IAP (the deploy already granted IAP's
+# service agent run.invoker on the service — "Setting IAP service agent"
+# in its output)
 gcloud beta iap web add-iam-policy-binding \
   --resource-type=cloud-run --service=ochakai-webui --region=$REGION \
   --member=domain:your-org.example --role=roles/iap.httpsResourceAccessor
@@ -349,7 +381,23 @@ gcloud beta iap web add-iam-policy-binding \
 
 Open the webui service URL: IAP presents the Google sign-in, then the
 page loads. The UI and API are same-origin through the proxy, so nothing
-else to configure.
+else to configure. To check IAP is actually fronting the service, request
+it unauthenticated — the response is a 302 to `accounts.google.com`
+with an `x-goog-iap-generated-response: true` header, not the page.
+
+Notes from exercising this end-to-end:
+
+- **Upgrading a pre-0.9.0 webui deployment** (a separately built image,
+  or one exposed with `allUsers`): the same `gcloud beta run deploy`
+  converts it in place — enabling IAP replaces the service's invoker
+  policy, so a leftover `allUsers` binding is removed automatically.
+- **Programmatic access** (curl, scripts) is limited with the
+  Google-managed OAuth client that `--iap` uses: ordinary ID tokens are
+  rejected. A service account granted `roles/iap.httpsResourceAccessor`
+  can get through with a self-signed JWT whose `aud` is the service URL
+  plus `/*` (`gcloud iam service-accounts sign-jwt`); for anything more,
+  configure IAP with a custom OAuth client. Browsers are the intended
+  clients here — MCP and CLI use the §5 path.
 
 ## 6. Security hardening checklist
 
@@ -365,13 +413,23 @@ Administrator role). These make the risky states unrepresentable rather
 than merely avoided:
 
 ```sh
-# forbid broad authorized networks (e.g. 0.0.0.0/0) on Cloud SQL
+# forbid adding ANY authorized network on Cloud SQL (not just broad
+# ranges — the empty-list posture becomes unrepresentable to leave)
 gcloud resource-manager org-policies enable-enforce \
   sql.restrictAuthorizedNetworks --project=$PROJECT_ID
-# forbid public IPs on Cloud SQL entirely — pair with §2b
+# forbid public IPs on Cloud SQL — pair with §2b. Existing public IPs
+# are grandfathered: the instance keeps running and unrelated patches
+# still work; only changes to the IP configuration are blocked
 gcloud resource-manager org-policies enable-enforce \
   sql.restrictPublicIp --project=$PROJECT_ID
 ```
+
+Enforcement takes a minute or two to propagate — a violating patch
+issued immediately after can still succeed. Verify the guardrail is
+live by trying one: `gcloud sql instances patch ochakai
+--authorized-networks=203.0.113.1/32` should fail with an
+`Organization Policy check failure` (and if it succeeded, you were too
+fast — `--clear-authorized-networks` and try again).
 
 Keep Domain Restricted Sharing (`iam.allowedPolicyMemberDomains`) on at
 the org level; nothing in this guide needs `allUsers` — every service,
@@ -387,28 +445,75 @@ gcloud sql instances patch ochakai --ssl-mode=ENCRYPTED_ONLY
 ```
 
 **Retire the last password.** The admin user's password is the only
-secret in the whole system, and it too can go: create a personal IAM
-login for maintenance, hand it the same object privileges, and delete
-the password user. Future imports go through
-`cloud-sql-proxy --auto-iam-authn` with your own identity:
+stored secret in the whole system, and it too can go: create a personal
+IAM login for maintenance, transfer the admin user's objects to it, and
+delete the password user. Future maintenance goes through
+`cloud-sql-proxy --auto-iam-authn` with your own identity.
+
+Two Postgres facts shape the sequence. Tables created by startup
+migrations are owned by the **runtime service account**, so the admin
+cannot `GRANT` on them — you inherit them via role membership instead.
+And a role that still owns objects or appears in grants cannot be
+dropped, so the admin's footprint must be reassigned and dropped first —
+which also **revokes every grant the admin ever made, breaking the
+running service until the re-grant below**. Do this in one sitting:
 
 ```sh
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=user:you@your-org.example --role=roles/cloudsql.instanceUser
 gcloud sql users create you@your-org.example --instance=ochakai --type=cloud_iam_user
-# as the admin user, repeat §3's GRANT block for "you@your-org.example", then:
+```
+
+As the admin user (`cloud-sql-proxy` + `psql`, §3), in one session:
+
+```sql
+GRANT "ochakai-run@<PROJECT_ID>.iam" TO "you@your-org.example";  -- inherit runtime-owned tables, present and future
+REASSIGN OWNED BY "ochakai" TO "you@your-org.example";
+DROP OWNED BY "ochakai";  -- clears its grants; the service is degraded from here until re-granted
+GRANT USAGE, CREATE ON SCHEMA public
+  TO "ochakai-run@<PROJECT_ID>.iam", "you@your-org.example";
+```
+
+(The schema grant must come from a `cloudsqlsuperuser` member — the
+admin still qualifies; your IAM login never will.) Then as yourself
+(`cloud-sql-proxy --auto-iam-authn`, connect as `you@your-org.example`),
+re-grant the runtime on the tables you now own:
+
+```sql
+GRANT ALL ON ALL TABLES IN SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<PROJECT_ID>.iam";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
+```
+
+Finally delete the password user and verify a cold start (the startup
+migration needs the schema grant — a warm instance can mask a mistake):
+
+```sh
 gcloud sql users delete ochakai --instance=ochakai
+gcloud run services update ochakai --region=$REGION --update-labels=grants=rotated  # forces a new instance
+# then §3's proxy + curl /health
 ```
 
 (URL-encode the `@` as `%40` in connection strings:
 `postgres://you%40your-org.example@localhost:55432/ochakai`.)
 
+What "secret-zero" means afterwards: the built-in `postgres` user still
+exists, and anyone with Cloud SQL admin IAM can mint it a throwaway
+password (`gcloud sql users set-password postgres ...`) for break-glass
+schema-level work — no *stored* secret remains, and admin access stays
+IAM-gated.
+
 **Backups and point-in-time recovery** — the example skips them for
 cost; real knowledge deserves them:
 
 ```sh
-gcloud sql instances patch ochakai --backup --enable-point-in-time-recovery
+gcloud sql instances patch ochakai --backup-start-time=03:00 --enable-point-in-time-recovery
 ```
+
+(Enabling backups means picking a start time — there is no bare
+`--backup` flag on `patch`. To turn both off again, disable PITR first:
+`--no-backup` refuses to combine with `--no-enable-point-in-time-recovery`.)
 
 **Deploy-time image gating**: releases ship SLSA provenance (§8's
 `gh attestation verify`); Binary Authorization can enforce that check
@@ -419,11 +524,12 @@ automatically on every deploy instead of relying on operator diligence.
 trails, enable Cloud SQL Data Access audit logs in the Console — admin
 activity is logged by default.
 
-Of these, the org-policy guardrails, TLS enforcement, and
-password-retirement steps — and §5b's IAP commands — follow standard
-Google Cloud procedures but, like §2b, have not yet been exercised
-end-to-end by this guide's maintainers; report anything that doesn't
-work as written.
+Everything above — §2b's private IP, §5b's IAP commands, the org-policy
+guardrails, TLS enforcement, backups, and the password-retirement
+sequence — has been exercised end-to-end on this guide's example
+deployment (2026-07, Postgres 17, gcloud 575). The one exception is
+Binary Authorization, which remains a pointer; report anything that
+doesn't work as written.
 
 ## 7. Troubleshooting in security-hardened organizations
 
@@ -524,4 +630,7 @@ gcloud run services delete ochakai --region=$REGION --quiet
 gcloud run services delete ochakai-webui --region=$REGION --quiet
 gcloud sql instances delete ochakai --quiet
 gcloud storage rm -r gs://$PROJECT_ID-ochakai-blobs --quiet  # if §4b was used
+# if §2b was used:
+gcloud services vpc-peerings delete --service=servicenetworking.googleapis.com --network=default --quiet
+gcloud compute addresses delete google-managed-services-default --global --quiet
 ```
