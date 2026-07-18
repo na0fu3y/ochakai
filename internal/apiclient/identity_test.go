@@ -38,7 +38,7 @@ func TestIdentityPlainHTTPIsAnonymous(t *testing.T) {
 
 func TestIdentityPrefixesActors(t *testing.T) {
 	for email, want := range map[string]string{
-		"na0@datanest.jp":                     "human:na0@datanest.jp",
+		"someone@example.com":                 "human:someone@example.com",
 		"robot@proj.iam.gserviceaccount.com":  "agent:robot@proj.iam.gserviceaccount.com",
 		"ochakai@appspot.gserviceaccount.com": "agent:ochakai@appspot.gserviceaccount.com",
 	} {

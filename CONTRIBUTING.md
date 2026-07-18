@@ -1,6 +1,7 @@
 # Contributing to ochakai
 
-Thanks for your interest! Issues and pull requests are welcome.
+Thanks for your interest! Issues and pull requests are welcome. This
+project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
