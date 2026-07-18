@@ -240,6 +240,12 @@
     max-width: 13rem; max-height: 9rem; object-fit: contain; display: block;
     border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
   }
+  .att-card a.thumb-file {
+    display: flex; align-items: center; justify-content: center;
+    width: 6rem; height: 6rem; font-weight: 600; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
+    text-decoration: none;
+  }
   .att-card .att-meta { min-width: 0; display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
   .att-card .att-meta .mono { overflow-wrap: anywhere; }
   @media (max-width: 620px) { .att-card { flex-direction: column; } }
@@ -734,26 +740,33 @@ async function viewDetail(type, id) {
       }).join('') + '</table>';
     },
     attachments: () => {
-      const cards = atts.map(a => `
+      const cards = atts.map(a => {
+        const isImage = (a.media_type || '').startsWith('image/');
+        const thumb = isImage
+          ? `<a class="thumb" href="${attURL(a.name)}" target="_blank" rel="noopener"><img src="${attURL(a.name)}" alt="${esc(a.name)}" loading="lazy"></a>`
+          : `<a class="thumb thumb-file" href="${attURL(a.name)}" target="_blank" rel="noopener">${a.media_type === 'application/pdf' ? 'PDF' : 'TXT'}</a>`;
+        const ref = isImage ? `![${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})` : `[${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})`;
+        return `
         <div class="card att-card">
-          <a class="thumb" href="${attURL(a.name)}" target="_blank" rel="noopener"><img src="${attURL(a.name)}" alt="${esc(a.name)}" loading="lazy"></a>
+          ${thumb}
           <div class="att-meta">
             <span class="mono">${esc(a.name)}</span>
             <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
-            <span class="meta">body reference: <code>![${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})</code></span>
+            <span class="meta">body reference: <code>${ref}</code></span>
             <button class="btn small danger" data-detach="${esc(a.name)}">Detach</button>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       return `
         ${cards || '<div class="empty">No attachments.</div>'}
         <div class="toolbar" style="margin-top:1rem">
-          <input type="file" id="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
-          <button class="btn small" id="att-choose">Choose images…</button>
+          <input type="file" id="att-file" accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
+          <button class="btn small" id="att-choose">Choose files…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">Attach</button>
         </div>
-        <p class="provenance">png / jpeg / gif / webp, max 5 MiB each, 20 per entry. Reference an image from the
-        body (<code>![alt](${esc(lastSeg)}/name.png)</code>) so its caption is searchable and it survives OKF export.</p>`;
+        <p class="provenance">png / jpeg / gif / webp / pdf / plain text, max 5 MiB each, 20 per entry. Reference a file from the
+        body (<code>![alt](${esc(lastSeg)}/name.png)</code> or <code>[name](${esc(lastSeg)}/name.txt)</code>) so it is findable and survives OKF export.</p>`;
     },
     linked: () => '<div class="empty">…</div>',
     usage: () => '<div class="empty">…</div>',
@@ -768,12 +781,12 @@ async function viewDetail(type, id) {
     });
     $('#att-upload').addEventListener('click', async () => {
       const files = [...fileInput.files];
-      if (!files.length) { toast('Choose image files first.'); return; }
+      if (!files.length) { toast('Choose files first.'); return; }
       try {
         for (const f of files) {
           await api(attPath(f.name), { method: 'PUT', raw: f });
         }
-        toast(files.length > 1 ? `Attached ${files.length} images.` : 'Attached.');
+        toast(files.length > 1 ? `Attached ${files.length} files.` : 'Attached.');
         viewDetail(entry.type, entry.id);
       } catch (e) { toast('Attach failed: ' + e.message); }
     });

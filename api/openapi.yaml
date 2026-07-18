@@ -361,15 +361,19 @@ paths:
         schema: { type: string }
     put:
       operationId: putAttachment
-      summary: Attach an image to a knowledge entry
+      summary: Attach a file to a knowledge entry
       description: >
         Stores the raw request body as an attachment, replacing any
         attachment of the same name (kept as a revision). The media type
-        is sniffed from the bytes — png, jpeg, gif, and webp are accepted
-        (no SVG: it can carry scripts), at most 5 MiB and 20 attachments
-        per entry. Reference the image from the entry's markdown body
-        (`![baseline](<id last segment>/weekly.png)`) so its caption is
-        searchable and it survives OKF export/import (design doc 0008).
+        is sniffed from the bytes — png, jpeg, gif, webp, pdf, and plain
+        text are accepted (never text/html or image/svg+xml: they can
+        carry scripts), at most 5 MiB and 20 attachments per entry.
+        Reference the file from the entry's markdown body
+        (`![baseline](<id last segment>/weekly.png)` or
+        `[seeds](<id last segment>/seeds.txt)`) so it is findable and
+        survives OKF export/import (design docs 0008, 0013). Requires the
+        server to have GCS configured (OCHAKAI_GCS_BUCKET); without it
+        the request fails with 501.
       parameters:
         - name: okf_path
           in: query
@@ -383,7 +387,7 @@ paths:
       requestBody:
         required: true
         content:
-          image/*:
+          "*/*":
             schema: { type: string, format: binary }
       responses:
         "200":
@@ -394,23 +398,24 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
     get:
       operationId: getAttachment
       summary: Fetch attachment bytes
       description: >
-        Returns the image bytes with its stored media type; the ETag is
-        the content's SHA-256. Fetching records a usage event against the
-        owning entry.
+        Returns the file bytes with the stored (sniffed) media type; the
+        ETag is the content's SHA-256. Fetching records a usage event
+        against the owning entry.
       responses:
         "200":
-          description: The image.
+          description: The attachment bytes.
           content:
-            image/*:
+            "*/*":
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteAttachment
-      summary: Detach an image from a knowledge entry
+      summary: Detach a file from a knowledge entry
       description: >
         Removes the attachment (kept as a revision; the content-addressed
         bytes remain referenced by history).

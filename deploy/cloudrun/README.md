@@ -240,13 +240,13 @@ updated knowledge with `gemini-embedding-001`. Search becomes hybrid
 (trigram + vector, reciprocal rank fusion). If Vertex AI is ever
 unavailable, writes and searches degrade gracefully to trigram-only.
 
-## 4b. Optional: attachment images on GCS (0.8.0+)
+## 4b. Attachments require GCS (design doc 0013)
 
-By default attachment images live in Postgres (design doc 0008), which
-keeps local development Docker-only. When they start crowding the
-database, move the bytes to a GCS bucket (design doc 0011) — metadata,
-revisions, and the API surface don't change, and auth is ADC via the
-service identity, no keys:
+Attachment bytes live only in a GCS bucket — metadata and revisions stay
+in Postgres, and auth is ADC via the service identity, no keys. Without
+`OCHAKAI_GCS_BUCKET` the service runs markdown-only: attach operations
+return 501 and imports report attachments as failed. Skip this section
+only if you never attach files:
 
 ```sh
 gcloud storage buckets create gs://$PROJECT_ID-ochakai-blobs \
@@ -259,21 +259,20 @@ gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_GCS_BUCKET=$PROJECT_ID-ochakai-blobs
 ```
 
-On the next start, ochakai copies existing inline images to the bucket
-(objects are content-addressed `blob/<sha256>`, create-only, never
-deleted) and clears the database copies; the backfill is idempotent, so
-an interrupted start resumes on the next one. New attachments go
-straight to the bucket.
+On the next start, ochakai copies any legacy in-Postgres attachment
+bytes to the bucket (objects are content-addressed `blob/<sha256>`,
+create-only, never deleted), clears the database copies, and drops the
+legacy bytea column (migration 0009); the backfill is idempotent, so an
+interrupted start resumes on the next one. New attachments go straight
+to the bucket.
 
-On images older than 0.8.0 the variable is silently ignored — no error,
-no migration. Check the running tag
-(`gcloud run services describe ochakai --region=$REGION --format='value(spec.template.spec.containers[0].image)'`)
-before enabling.
-
-**Rollback caveat**: the backfill is not additive — once it has run,
-binaries older than the env var (or a deployment with the var removed)
-cannot read migrated images. Enable it only after the current release is
-settled, and keep the var set from then on.
+**Upgrading from ≤0.8.x with attachments and no bucket**: set
+`OCHAKAI_GCS_BUCKET` *before* (or together with) deploying this version.
+Migration 0009 refuses to run while attachment bytes are still inline
+and no bucket is configured — the service fails to start with the
+instruction, nothing is lost. Once migrated, the bytea column is gone,
+so binaries and configurations without the bucket cannot read
+attachments again; keep the var set from then on.
 
 ## 5. Load a semantic model and connect Claude Code
 

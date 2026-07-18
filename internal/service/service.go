@@ -38,6 +38,18 @@ func Invalidf(format string, args ...any) error {
 	return &InvalidInputError{msg: fmt.Sprintf(format, args...)}
 }
 
+// UnsupportedError marks an operation this deployment cannot perform —
+// not a client mistake and not a crash, but a missing capability the
+// operator would have to configure (REST: 501).
+type UnsupportedError struct{ msg string }
+
+func (e *UnsupportedError) Error() string { return e.msg }
+
+// Unsupportedf builds an UnsupportedError from a format string.
+func Unsupportedf(format string, args ...any) error {
+	return &UnsupportedError{msg: fmt.Sprintf(format, args...)}
+}
+
 // --- knowledge CRUD ---
 
 func (s *Service) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
