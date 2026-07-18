@@ -70,6 +70,14 @@ type Result struct {
 
 var identRe = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)`)
 
+// bareColumn matches a single unquoted SQL column identifier. It gates
+// caller-controlled field references (dimensions, filter fields, time
+// grain) that pass through as physical columns: those flow verbatim into
+// the compiled SQL, which is executed downstream with real warehouse
+// credentials, so anything that is not a plain identifier must be rejected
+// rather than concatenated (SQL injection).
+var bareColumn = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // Compile builds a SQL statement for the request against the model.
 func Compile(m *Model, req Request) (*Result, error) {
 	if len(req.Metrics) == 0 {
@@ -247,6 +255,15 @@ func (m *Model) resolveFieldRef(ref string, dialect Dialect, needed map[string]b
 func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect) (string, error) {
 	f := ds.field(name)
 	if f == nil {
+		// Undeclared columns pass through as physical columns (the Ossie
+		// draft does not require every column to be declared), but only when
+		// the name is a bare SQL identifier. This branch is reachable with
+		// caller-controlled input (a dimension/filter/time-grain field that
+		// names no declared field), so an unchecked pass-through would splice
+		// arbitrary SQL into the compiled statement.
+		if !bareColumn.MatchString(name) {
+			return "", &Error{Reason: fmt.Sprintf("field %q is not defined in dataset %q and is not a bare column name; declare it as a field to use an expression", name, ds.Name)}
+		}
 		return ds.Name + "." + name, nil
 	}
 	expr, ok := f.Expression.ForDialect(dialect.ossieKey())
@@ -255,7 +272,7 @@ func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect) (string,
 	}
 	// Field expressions are relative to their dataset: qualify bare
 	// identifiers with the dataset alias.
-	if regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(expr) {
+	if bareColumn.MatchString(expr) {
 		return ds.Name + "." + expr, nil
 	}
 	return "(" + expr + ")", nil

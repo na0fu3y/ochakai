@@ -154,6 +154,58 @@ func TestCompileUnsupportedDialectFails(t *testing.T) {
 	}
 }
 
+// TestFieldRefInjectionRejected covers the caller-controlled field
+// references that pass through as physical columns. An undeclared field
+// that is not a bare identifier must be refused, never spliced into the
+// compiled SQL (which is executed downstream with real credentials).
+func TestFieldRefInjectionRejected(t *testing.T) {
+	const inject = "amount) AS x, (SELECT secret FROM other"
+	cases := []struct {
+		name string
+		req  Request
+	}{
+		{"dimension", Request{
+			Metrics:    []string{"revenue"},
+			Dimensions: []string{"orders." + inject},
+		}},
+		{"filter field", Request{
+			Metrics: []string{"revenue"},
+			Filters: []Filter{{Field: "orders." + inject, Op: "=", Value: "x"}},
+		}},
+		{"time grain field", Request{
+			Metrics:   []string{"revenue"},
+			TimeGrain: &TimeGrain{Field: "orders." + inject, Grain: "month"},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := Compile(testModel(t), tc.req)
+			if err == nil {
+				t.Fatalf("injection not rejected; compiled SQL:\n%s", res.SQL)
+			}
+			if !strings.Contains(err.Error(), "bare column name") {
+				t.Fatalf("want bare-column rejection, got %v", err)
+			}
+		})
+	}
+}
+
+// TestUndeclaredBareColumnPassesThrough keeps the legitimate case working:
+// a plain, undeclared column is still usable without being declared.
+func TestUndeclaredBareColumnPassesThrough(t *testing.T) {
+	res, err := Compile(testModel(t), Request{
+		Metrics:    []string{"revenue"},
+		Dimensions: []string{"orders.channel"},
+		Dialect:    "ansi",
+	})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if !strings.Contains(res.SQL, "orders.channel AS orders_channel") {
+		t.Errorf("bare column not passed through:\n%s", res.SQL)
+	}
+}
+
 func TestExpressionShapes(t *testing.T) {
 	cases := []string{
 		`expression: SUM(orders.amount)`,

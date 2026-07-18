@@ -263,6 +263,11 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", att.MediaType)
+		// The bytes are user-uploaded and served inline; the media type is
+		// sniffed and allowlisted (images only, no SVG), but nosniff keeps a
+		// browser from overriding that and interpreting them as anything
+		// executable.
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("ETag", `"`+att.SHA256+`"`)
 		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
 		_, _ = w.Write(data)
