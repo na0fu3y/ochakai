@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml/badge.svg)](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/na0fu3y/ochakai.svg)](https://pkg.go.dev/github.com/na0fu3y/ochakai)
+[![Go Report Card](https://goreportcard.com/badge/github.com/na0fu3y/ochakai)](https://goreportcard.com/report/github.com/na0fu3y/ochakai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **ochakai is a context provider for data agents.** Semantic layers tell
@@ -11,64 +12,7 @@ definitions, verified golden queries, interpretation knowledge (how to
 *read* a metric), glossary terms, and table catalog entries — curated by
 humans and agents together, and served to Claude Code and every other
 data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
-a bundled web UI.
-
-## Why ochakai
-
-In 2026, serving metric definitions to agents over MCP is table stakes —
-semantic layers, warehouses, and data catalogs all do it. ochakai exists
-for what they still don't do:
-
-- **Interpretation knowledge is a first-class type.** An `insight` entry
-  records the baseline, the seasonality, the caveat, the threshold — the
-  tribal knowledge that never fits in a semantic-model YAML and today
-  travels by Slack. Your agent gets it in the same search that returns
-  the metric definition.
-- **A write-back loop with a memory.** Agents are encouraged to write
-  learnings back; entries start as drafts and a human promotes them to
-  `verified`, with provenance (who wrote it, who verified it, when) on
-  every entry and every change kept as a revision. Proposals that don't
-  make it are kept as `rejected` with the reason, so agents stop
-  re-proposing them — a memory of *no* that verified-answer stores
-  elsewhere don't keep. Per-entry usage counts show whether the loop is
-  actually working, and outcome reports (`report_outcome`: worked /
-  failed) close its last edge — an agent that ran a golden query and got
-  a wrong number says so, instead of the next agent trusting the same
-  entry blind.
-- **Not a memory layer — the other half of one.** Memory layers (mem0,
-  Zep, Letta) auto-extract per-user memories with an LLM and inject them
-  back, unaudited: nobody reviews what got remembered, and a wrong
-  memory persists silently. ochakai is the opposite trade: team-shared
-  knowledge that passes through human review, with provenance on every
-  entry. *Memory layers remember what happened; ochakai curates what's
-  true.* They compose — preferences in your memory layer, verified data
-  knowledge here. The delivery trick memory layers got right (no agent
-  judgment needed) ochakai keeps: one `get_context` call returns the
-  relevant entries in full, and the bundled
-  [Claude Code hooks](examples/claude-code) make recall and write-back
-  automatic, no LLM involved.
-- **Verified answers for any client.** Verified-query stores exist — inside
-  Snowflake Cortex Analyst, inside Databricks Genie, inside each
-  AI-analyst SaaS — and each one feeds only its own chat. ochakai is
-  client-agnostic by construction: the same verified knowledge serves
-  Claude Code, hosted MCP agents, CI jobs, and whatever you build next.
-- **An exit, guaranteed.** The whole knowledge base round-trips through
-  [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
-  bundles (`ochakai export` / `ochakai import`) — plain markdown + YAML
-  frontmatter that lives happily in git. Import accepts any producer's
-  OKF bundle, not just ochakai's own
-  ([design doc 0005](docs/design/0005-okf-compatibility.md)). MIT-licensed
-  and self-hostable per tenant: your knowledge is never a hostage.
-
-And it stays small by refusing things:
-
-| ochakai has no… | because |
-|---|---|
-| LLM | it returns deterministically compiled SQL from semantic definitions ([Apache Ossie](https://github.com/apache/ossie)) or human-verified golden queries, verbatim. Interpretation is the client agent's job |
-| SQL execution | it holds no warehouse credentials. It compiles; your agent executes |
-| connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume |
-| chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
-| secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
+a bundled web UI. More at [ochak.ai](https://ochak.ai).
 
 The whole thing is one Go binary and Postgres, deployable on Cloud Run +
 Cloud SQL for [about $10/month](deploy/cloudrun/README.md). Local
@@ -156,6 +100,63 @@ Same page, two identities ([design doc 0006](docs/design/0006-web-ui-serving.md)
 `ochakai ui` serves it on loopback acting as *you* (zero deploy, edits
 recorded as `human:<you>`), and [examples/webui](examples/webui) deploys
 it on Cloud Run as a team-shared service.
+
+## Why ochakai
+
+In 2026, serving metric definitions to agents over MCP is table stakes —
+semantic layers, warehouses, and data catalogs all do it. ochakai exists
+for what they still don't do:
+
+- **Interpretation knowledge is a first-class type.** An `insight` entry
+  records the baseline, the seasonality, the caveat, the threshold — the
+  tribal knowledge that never fits in a semantic-model YAML and today
+  travels by Slack. Your agent gets it in the same search that returns
+  the metric definition.
+- **A write-back loop with a memory.** Agents are encouraged to write
+  learnings back; entries start as drafts and a human promotes them to
+  `verified`, with provenance (who wrote it, who verified it, when) on
+  every entry and every change kept as a revision. Proposals that don't
+  make it are kept as `rejected` with the reason, so agents stop
+  re-proposing them — a memory of *no* that verified-answer stores
+  elsewhere don't keep. Per-entry usage counts show whether the loop is
+  actually working, and outcome reports (`report_outcome`: worked /
+  failed) close its last edge — an agent that ran a golden query and got
+  a wrong number says so, instead of the next agent trusting the same
+  entry blind.
+- **Not a memory layer — the other half of one.** Memory layers (mem0,
+  Zep, Letta) auto-extract per-user memories with an LLM and inject them
+  back, unaudited: nobody reviews what got remembered, and a wrong
+  memory persists silently. ochakai is the opposite trade: team-shared
+  knowledge that passes through human review, with provenance on every
+  entry. *Memory layers remember what happened; ochakai curates what's
+  true.* They compose — preferences in your memory layer, verified data
+  knowledge here. The delivery trick memory layers got right (no agent
+  judgment needed) ochakai keeps: one `get_context` call returns the
+  relevant entries in full, and the bundled
+  [Claude Code hooks](examples/claude-code) make recall and write-back
+  automatic, no LLM involved.
+- **Verified answers for any client.** Verified-query stores exist — inside
+  Snowflake Cortex Analyst, inside Databricks Genie, inside each
+  AI-analyst SaaS — and each one feeds only its own chat. ochakai is
+  client-agnostic by construction: the same verified knowledge serves
+  Claude Code, hosted MCP agents, CI jobs, and whatever you build next.
+- **An exit, guaranteed.** The whole knowledge base round-trips through
+  [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+  bundles (`ochakai export` / `ochakai import`) — plain markdown + YAML
+  frontmatter that lives happily in git. Import accepts any producer's
+  OKF bundle, not just ochakai's own
+  ([design doc 0005](docs/design/0005-okf-compatibility.md)). MIT-licensed
+  and self-hostable per tenant: your knowledge is never a hostage.
+
+And it stays small by refusing things:
+
+| ochakai has no… | because |
+|---|---|
+| LLM | it returns deterministically compiled SQL from semantic definitions ([Apache Ossie](https://github.com/apache/ossie)) or human-verified golden queries, verbatim. Interpretation is the client agent's job |
+| SQL execution | it holds no warehouse credentials. It compiles; your agent executes |
+| connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume |
+| chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
+| secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
 
 ## MCP tools
 
