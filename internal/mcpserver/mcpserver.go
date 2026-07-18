@@ -3,7 +3,8 @@
 // servers' tools (design doc §4). The REST API (internal/restapi) is a
 // superset of these tools: same operations plus bulk export/import and
 // the human-facing browse/revisions/backlinks endpoints (design doc
-// 0014 §2.3 keeps those off MCP — agents use search/get_context).
+// 0015 keeps those off MCP — agents use search/get_context; tool
+// schemas cost agent context, so the tool count is a budget).
 package mcpserver
 
 import (

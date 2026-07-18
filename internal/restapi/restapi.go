@@ -4,8 +4,8 @@
 // (export, import/ossie) that make no sense as agent tool calls, and
 // human-facing endpoints (browse, revisions, backlinks) that stay off
 // MCP by design (agents get search/get_context instead; design doc
-// 0014 §2.3). The CLI covers this whole surface; the spec is committed
-// at api/openapi.yaml.
+// 0015 records the per-surface policy). The CLI covers this whole
+// surface; the spec is committed at api/openapi.yaml.
 package restapi
 
 import (
