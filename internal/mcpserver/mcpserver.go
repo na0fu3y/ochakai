@@ -51,17 +51,23 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +
 			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
-			"golden-query canary runs and for finding stale verified knowledge.",
+			"golden-query canary runs and for finding stale verified knowledge. With sort=\"usage\" it " +
+			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
+			"each hit carries its usage totals — the draft review/promotion feed.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags}
 		if in.Sort != "" {
-			if in.Sort != "verified_at" {
-				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at)", in.Sort)
+			if in.Sort != "verified_at" && in.Sort != "usage" {
+				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at, usage)", in.Sort)
 			}
 			if in.Query != "" {
-				return nil, searchOut{}, fmt.Errorf("sort=verified_at lists entries by verification age; it cannot be combined with a search query")
+				return nil, searchOut{}, fmt.Errorf("sort=%s lists entries; it cannot be combined with a search query", in.Sort)
 			}
-			hits, err := svc.ListByVerifiedAt(ctx, f, in.Limit)
+			list := svc.ListByVerifiedAt
+			if in.Sort == "usage" {
+				list = svc.ListByUsage
+			}
+			hits, err := list(ctx, f, in.Limit)
 			if err != nil {
 				return nil, searchOut{}, err
 			}
@@ -202,7 +208,7 @@ type searchIn struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metric, query, insight, term, table, or any custom slug)"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age instead (mutually exclusive with query)"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed) — both mutually exclusive with query"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
 

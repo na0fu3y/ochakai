@@ -102,27 +102,40 @@ func TestLimitContractsInSchema(t *testing.T) {
 	}
 }
 
-// TestSearchRejectsQueryWithSort mirrors the CLI and REST rule: a search
-// query combined with sort=verified_at is an error, not silently ignored.
-func TestSearchRejectsQueryWithSort(t *testing.T) {
+// TestSearchSortValidation mirrors the CLI and REST rules: a search query
+// combined with a sort mode is an error (not silently ignored), and an
+// unknown sort is rejected — for both verified_at and usage.
+func TestSearchSortValidation(t *testing.T) {
 	cs := connect(t)
-	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "search_knowledge",
-		Arguments: map[string]any{"sort": "verified_at", "query": "revenue"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+	cases := []struct {
+		name       string
+		args       map[string]any
+		wantSubstr string
+	}{
+		{"verified_at with query", map[string]any{"sort": "verified_at", "query": "revenue"}, "cannot be combined"},
+		{"usage with query", map[string]any{"sort": "usage", "query": "revenue"}, "cannot be combined"},
+		{"invalid sort", map[string]any{"sort": "created_at"}, "invalid sort"},
 	}
-	if !res.IsError {
-		t.Fatal("expected a tool error for query combined with sort")
-	}
-	text := ""
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcp.TextContent); ok {
-			text += tc.Text
-		}
-	}
-	if !strings.Contains(text, "cannot be combined") {
-		t.Errorf("error %q does not mention the combination rule", text)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+				Name: "search_knowledge", Arguments: c.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if !res.IsError {
+				t.Fatalf("expected a tool error for %s", c.name)
+			}
+			text := ""
+			for _, ct := range res.Content {
+				if tc, ok := ct.(*mcp.TextContent); ok {
+					text += tc.Text
+				}
+			}
+			if !strings.Contains(text, c.wantSubstr) {
+				t.Errorf("error %q does not mention %q", text, c.wantSubstr)
+			}
+		})
 	}
 }
