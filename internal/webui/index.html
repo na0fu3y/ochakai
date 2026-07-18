@@ -4,7 +4,8 @@
      Serve it from anywhere (main.go proxies /api/v1 to ochakai) and it
      covers the human-facing API surface — search, entry details with
      usage and image attachments, create/edit with the draft → verified
-     workflow, SQL compilation, and OKF export. (/api/v1/context and the
+     workflow, the draft review queue (sort=usage), SQL compilation, and
+     OKF export. (/api/v1/context and the
      Ossie import are agent/ops surfaces — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -244,6 +245,7 @@
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
     <a href="#/" data-route="explore">Explore</a>
+    <a href="#/review" data-route="review">Review</a>
     <a href="#/compile" data-route="compile">Compile</a>
     <a href="#/new" data-route="new">New entry</a>
   </nav>
@@ -280,6 +282,18 @@ function fmtDate(s) {
 function actorStr(a) {
   if (!a || !a.name) return '';
   return (a.kind === 'agent' ? '🤖 ' : '👤 ') + a.name;
+}
+// Whole days since an ISO timestamp (null for unparseable input).
+function daysSince(s) {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d) ? null : Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+function fmtAge(days) {
+  if (days === null) return '';
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return days + ' days ago';
 }
 function fmtSize(n) {
   if (!n && n !== 0) return '';
@@ -400,6 +414,9 @@ function route() {
   } else if (head === 'new') {
     mark('new');
     viewEditor(null, null);
+  } else if (head === 'review') {
+    mark('review');
+    viewReview();
   } else if (head === 'compile') {
     mark('compile');
     viewCompile();
@@ -706,18 +723,11 @@ async function viewDetail(type, id) {
   showTab('overview');
 
   const setStatus = async (status, askNote) => {
-    let note;
-    if (askNote) {
-      note = prompt(`Why ${status}? (recorded as status_note so agents stop re-proposing it)`, entry.status_note || '');
-      if (note === null) return;
-    }
-    const payload = editablePayload(entry);
-    payload.status = status;
-    if (note !== undefined) payload.status_note = note;
     try {
-      await api('/api/v1/knowledge/' + idPath(entry.type, entry.id), { method: 'PUT', body: payload });
-      toast(`Marked ${status}.`);
-      viewDetail(entry.type, entry.id);
+      if (await applyStatus(entry, status, askNote)) {
+        toast(`Marked ${status}.`);
+        viewDetail(entry.type, entry.id);
+      }
     } catch (e) { toast('Failed: ' + e.message); }
   };
   $('#act-verify')?.addEventListener('click', () => setStatus('verified', false));
@@ -740,6 +750,132 @@ function editablePayload(e) {
     if (e[k] !== undefined && e[k] !== null) p[k] = e[k];
   }
   return p;
+}
+
+// Apply a status transition (full-replacement PUT), prompting for a
+// status_note when the transition needs a recorded reason. Returns true on
+// success, false if the user cancelled the note prompt. Throws on API
+// failure so callers can toast it. Shared by the detail view and the
+// review queue; the entry may be a full Knowledge or a SearchHit (which
+// embeds one), since both carry the writable fields.
+async function applyStatus(entry, status, askNote) {
+  let note;
+  if (askNote) {
+    note = prompt(`Why ${status}? (recorded as status_note so agents stop re-proposing it)`, entry.status_note || '');
+    if (note === null) return false;
+  }
+  const payload = editablePayload(entry);
+  payload.status = status;
+  if (note !== undefined) payload.status_note = note;
+  await api('/api/v1/knowledge/' + idPath(entry.type, entry.id), { method: 'PUT', body: payload });
+  return true;
+}
+
+/* ============================== review queue ============================== */
+
+// A draft with zero search hits, older than this, is flagged stale — the
+// inventory case (nobody's finding it; a candidate to drop). Sort=usage
+// already sinks these to the bottom; the toggle isolates them.
+const STALE_DAYS = 14;
+const review = { staleOnly: false };
+
+function viewReview() {
+  view.innerHTML = `
+    <div class="section-title">Draft review queue</div>
+    <p style="color:var(--muted);max-width:48rem">Drafts agents wrote back, most-demanded first — ranked by search hits, how
+    often the draft already surfaces when people search. Verify what's true, reject what isn't (the reason is recorded as
+    status_note so agents stop re-proposing it). Never-used drafts sink to the bottom; toggle <em>stale</em> to triage them.</p>
+    <div class="toolbar">
+      <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
+        stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
+      <span class="grow"></span>
+      <button class="btn small" id="r-refresh">Refresh</button>
+    </div>
+    <div id="review-results"><div class="empty">…</div></div>`;
+  $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
+  $('#r-refresh').addEventListener('click', runReview);
+  runReview();
+}
+
+function isStaleDraft(h) {
+  const age = daysSince(h.created_at);
+  return ((h.usage && h.usage.search_hits) || 0) === 0 && age !== null && age >= STALE_DAYS;
+}
+
+async function runReview() {
+  const out = $('#review-results');
+  if (!out) return;
+  const my = runReview._seq = (runReview._seq || 0) + 1;
+  try {
+    const { hits } = await api('/api/v1/knowledge?sort=usage&status=draft&limit=100');
+    if (my !== runReview._seq || out !== $('#review-results')) return; // stale response
+    let list = hits || [];
+    if (review.staleOnly) list = list.filter(isStaleDraft);
+    if (!list.length) {
+      out.innerHTML = `<div class="empty">${review.staleOnly ? 'No stale drafts — nothing gathering dust.' : 'No drafts awaiting review.'}</div>`;
+      return;
+    }
+    out.innerHTML = list.map(reviewCard).join('');
+    wireReviewActions(out);
+  } catch (e) {
+    if (my !== runReview._seq || out !== $('#review-results')) return;
+    out.innerHTML = `<div class="error-banner">Could not load the review queue: ${esc(e.message)}</div>`;
+  }
+}
+
+function reviewCard(h) {
+  const u = h.usage || {};
+  const tags = (h.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
+  const who = actorStr(h.created_by);
+  const age = daysSince(h.created_at);
+  const usageBits = (u.search_hits || u.fetches || u.compiles)
+    ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0} · compiled ${u.compiles || 0}`
+    : 'no usage yet';
+  const outcomeBits = (u.worked || u.failed)
+    ? `${u.failed ? '⚠️ ' : ''}worked ${u.worked || 0} · failed ${u.failed || 0}`
+    : '';
+  const meta = [
+    `<span class="mono">ochakai://${esc(h.type)}/${esc(h.id)}</span>`,
+    who ? esc(who) : '',
+    age !== null ? 'created ' + esc(fmtAge(age)) : '',
+    usageBits,
+    outcomeBits,
+  ].filter(Boolean).join(' · ');
+  return `<article class="card" data-type="${esc(h.type)}" data-id="${esc(h.id)}">
+    <div class="head">
+      <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
+      <a class="title" href="${entryHash(h)}">${esc(h.title)}</a>
+      <span class="badge draft">draft</span>
+      ${isStaleDraft(h) ? '<span class="badge" title="0 search hits and idle — a candidate to drop">🕸️ stale</span>' : ''}
+      ${tags}
+      <span class="actions" style="margin-left:auto;display:flex;gap:.45rem">
+        <button class="btn small primary" data-act="verify">✓ Verify</button>
+        <button class="btn small danger" data-act="reject">Reject</button>
+      </span>
+    </div>
+    <div class="meta">${meta}</div>
+    ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
+  </article>`;
+}
+
+function wireReviewActions(container) {
+  container.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
+    const card = btn.closest('[data-type]');
+    const status = btn.dataset.act === 'verify' ? 'verified' : 'rejected';
+    // Re-fetch the current entry before a full-replacement PUT: the list
+    // row may be stale, and status_note aside, we must not clobber a body
+    // edited since the queue loaded.
+    let entry;
+    try {
+      entry = await api('/api/v1/knowledge/' + idPath(card.dataset.type, card.dataset.id));
+    } catch (e) { toast('Load failed: ' + e.message); return; }
+    try {
+      if (await applyStatus(entry, status, status === 'rejected')) {
+        toast(`Marked ${status}.`);
+        runReview();
+      }
+    } catch (e) { toast('Failed: ' + e.message); }
+  }));
 }
 
 /* ============================== editor ============================== */

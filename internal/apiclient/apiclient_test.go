@@ -73,6 +73,29 @@ func TestSearchSortSendsSortParam(t *testing.T) {
 	}
 }
 
+// The sort=usage feed (draft review) sends sort=usage and decodes the
+// per-hit usage object the plain search and verified_at feeds omit.
+func TestSearchUsageSortDecodesUsage(t *testing.T) {
+	var got url.Values
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
+			{Knowledge: domain.Knowledge{Type: domain.TypeInsight, ID: "draft-a", Title: "草案"},
+				Usage: &domain.Usage{SearchHits: 7, Fetches: 2}},
+		}})
+	})
+	hits, err := c.Search(context.Background(), SearchParams{Sort: "usage", Statuses: []string{"draft"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("sort") != "usage" || got.Get("status") != "draft" || got.Has("q") {
+		t.Errorf("query = %v", got)
+	}
+	if len(hits) != 1 || hits[0].Usage == nil || hits[0].Usage.SearchHits != 7 {
+		t.Errorf("usage did not decode: %+v", hits)
+	}
+}
+
 func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/usage/query/sales/monthly-revenue" {

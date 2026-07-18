@@ -45,15 +45,20 @@ func Handler(svc *service.Service) http.Handler {
 			Tags:     q["tag"],
 		}
 		if sort := q.Get("sort"); sort != "" {
-			if sort != "verified_at" {
-				writeError(w, service.Invalidf("invalid sort (valid: verified_at)"))
+			if sort != "verified_at" && sort != "usage" {
+				writeError(w, service.Invalidf("invalid sort (valid: verified_at, usage)"))
 				return
 			}
 			if q.Get("q") != "" {
-				writeError(w, service.Invalidf("sort=verified_at lists entries by verification age; it cannot be combined with a search query (q)"))
+				writeError(w, service.Invalidf("sort=%s lists entries; it cannot be combined with a search query (q)", sort))
 				return
 			}
-			hits, err := svc.ListByVerifiedAt(r.Context(), f, limit)
+			var hits []domain.SearchHit
+			if sort == "usage" {
+				hits, err = svc.ListByUsage(r.Context(), f, limit)
+			} else {
+				hits, err = svc.ListByVerifiedAt(r.Context(), f, limit)
+			}
 			if err != nil {
 				writeError(w, err)
 				return

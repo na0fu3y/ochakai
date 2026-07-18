@@ -6,6 +6,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,11 +15,15 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-const serverName = "ochakai"
+const (
+	serverName = "ochakai"
+	uriScheme  = "ochakai://"
+)
 
 // Handler returns the streamable HTTP handler serving the MCP endpoint.
 func Handler(svc *service.Service, version string) http.Handler {
@@ -47,25 +52,73 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"re-proposing similar knowledge. Knowledge is co-owned by humans and agents.",
 	})
 
+	// Expose entries as MCP resources so clients can @-mention them by their
+	// canonical ochakai:// URI. Only the template is advertised — enumerating
+	// every entry in resources/list would flood the client, so discovery stays
+	// with search_knowledge/get_context and the URI is the addressing scheme.
+	// {+id} (RFC 6570 reserved expansion) lets hierarchical, slash-separated
+	// IDs match; a plain {id} would stop at the first slash.
+	s.AddResourceTemplate(&mcp.ResourceTemplate{
+		Name:     "knowledge",
+		Title:    "Knowledge entry",
+		MIMEType: "text/markdown",
+		Description: "A single knowledge entry as an OKF document: YAML frontmatter (title, " +
+			"status, provenance, type-specific attrs) followed by the markdown body and its " +
+			"links. Address by canonical URI, e.g. ochakai://metric/revenue; IDs may be " +
+			"hierarchical (ochakai://query/sales/top-customers). Discover URIs with " +
+			"search_knowledge or get_context; get_knowledge returns the same entry as JSON.",
+		URITemplate: "ochakai://{type}/{+id}",
+	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		typ, id, ok := parseKnowledgeURI(req.Params.URI)
+		if !ok {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		k, err := svc.Get(ctx, domain.Type(typ), id)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return nil, mcp.ResourceNotFoundError(req.Params.URI)
+			}
+			return nil, err
+		}
+		doc, err := okf.Document(k)
+		if err != nil {
+			return nil, err
+		}
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{{
+				URI:      req.Params.URI,
+				MIMEType: "text/markdown",
+				Text:     string(doc),
+			}},
+		}, nil
+	})
+
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "search_knowledge",
+		Name:        "search_knowledge",
+		Annotations: readOnly,
 		Description: "Search the knowledge base across all types (recommended: metric, query, insight, term, table; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +
 			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
-			"golden-query canary runs and for finding stale verified knowledge.",
+			"golden-query canary runs and for finding stale verified knowledge. With sort=\"usage\" it " +
+			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
+			"each hit carries its usage totals — the draft review/promotion feed.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{Types: toTypes(in.Types), Statuses: toStatuses(in.Statuses), Tags: in.Tags}
 		if in.Sort != "" {
-			if in.Sort != "verified_at" {
-				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at)", in.Sort)
+			if in.Sort != "verified_at" && in.Sort != "usage" {
+				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at, usage)", in.Sort)
 			}
 			if in.Query != "" {
-				return nil, searchOut{}, fmt.Errorf("sort=verified_at lists entries by verification age; it cannot be combined with a search query")
+				return nil, searchOut{}, fmt.Errorf("sort=%s lists entries; it cannot be combined with a search query", in.Sort)
 			}
-			hits, err := svc.ListByVerifiedAt(ctx, f, in.Limit)
+			list := svc.ListByVerifiedAt
+			if in.Sort == "usage" {
+				list = svc.ListByUsage
+			}
+			hits, err := list(ctx, f, in.Limit)
 			if err != nil {
 				return nil, searchOut{}, err
 			}
@@ -79,7 +132,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "get_context",
+		Name:        "get_context",
+		Annotations: readOnly,
 		Description: "The one call to make before answering a data question: searches the knowledge " +
 			"base (verified entries rank higher), returns the full entries behind the top hits, " +
 			"and expands one hop through links so the insight explaining a metric and the golden " +
@@ -96,7 +150,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "get_knowledge",
+		Name:        "get_knowledge",
+		Annotations: readOnly,
 		Description: "Get one knowledge entry by type and id, including its full markdown body, structured attrs, " +
 			"links, and attachment metadata (images the body references — fetch bytes with get_attachment).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
@@ -108,7 +163,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "create_knowledge",
+		Name:        "create_knowledge",
+		Annotations: nonDestructive,
 		Description: "Create a knowledge entry. Write back what you learned: metric caveats, verified answers, " +
 			"glossary terms. Entries default to draft; your identity is recorded as created_by. " +
 			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
@@ -122,7 +178,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "update_knowledge",
+		Name:        "update_knowledge",
+		Annotations: nonDestructive,
 		Description: "Update a knowledge entry (full replacement of title/description/tags/status/links/attrs/body). " +
 			"Every change is kept as a revision. Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
@@ -136,7 +193,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "delete_knowledge",
+		Name:        "delete_knowledge",
+		Annotations: destructive,
 		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
 			"create_knowledge on the same type/id revives it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
@@ -147,7 +205,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "get_attachment",
+		Name:        "get_attachment",
+		Annotations: readOnly,
 		Description: "Fetch one image attached to a knowledge entry (get_knowledge lists attachment " +
 			"metadata under \"attachments\"). Returns the image as content plus its metadata. " +
 			"Images are context-heavy — fetch them deliberately, when the entry's body references " +
@@ -166,7 +225,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "get_knowledge_usage",
+		Name:        "get_knowledge_usage",
+		Annotations: readOnly,
 		Description: "Usage totals for one knowledge entry: how often it appeared in search results, " +
 			"was fetched individually, or was referenced by compile_sql, with last_used_at. " +
 			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
@@ -180,7 +240,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "report_outcome",
+		Name:        "report_outcome",
+		Annotations: nonDestructive,
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
 			"write-back loop. After running a golden query or a compiled SQL, report worked " +
 			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
@@ -200,7 +261,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name: "compile_sql",
+		Name:        "compile_sql",
+		Annotations: readOnly,
 		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from the " +
 			"imported Ossie semantic model (no LLM involved). Dialects: bigquery (default), ansi. " +
 			"ochakai does not execute SQL — run the result with your own warehouse tool. " +
@@ -216,6 +278,36 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	return s
 }
 
+// Tool annotations let clients apply auto-approval policies without reading
+// prose. readOnlyHint here describes the knowledge domain: search/get/compile
+// never change an entry (they may bump usage counters — telemetry the hint
+// deliberately ignores). Writes are non-destructive because history is kept as
+// revisions; only delete is flagged destructive. The values are immutable and
+// shared across tools.
+var (
+	readOnly       = &mcp.ToolAnnotations{ReadOnlyHint: true}
+	nonDestructive = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}
+	destructive    = &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)}
+)
+
+func boolPtr(b bool) *bool { return &b }
+
+// parseKnowledgeURI splits a canonical knowledge URI (ochakai://<type>/<id>)
+// into its type and id. Internal slashes stay with the id so hierarchical IDs
+// (ochakai://query/sales/orders) round-trip. ok is false when the URI lacks
+// the scheme or either segment is empty.
+func parseKnowledgeURI(uri string) (typ, id string, ok bool) {
+	rest, found := strings.CutPrefix(uri, uriScheme)
+	if !found {
+		return "", "", false
+	}
+	typ, id, ok = strings.Cut(rest, "/")
+	if !ok || typ == "" || id == "" {
+		return "", "", false
+	}
+	return typ, id, true
+}
+
 // The jsonschema tags spell out the numeric contracts (defaults, maxima,
 // out-of-range fallback) that api/openapi.yaml and the CLI help already
 // document — MCP agents only see the tool schema.
@@ -226,7 +318,7 @@ type searchIn struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metric, query, insight, term, table, or any custom slug)"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age instead (mutually exclusive with query)"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed) — both mutually exclusive with query"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
 
@@ -251,8 +343,8 @@ type contextOut struct {
 }
 
 type getIn struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
+	Type string `json:"type" jsonschema:"the entry's type slug (metric, query, insight, term, table, or any custom slug)"`
+	ID   string `json:"id" jsonschema:"the entry's id; / separates segments for hierarchical ids (e.g. sales/orders)"`
 }
 
 type knowledgeOut struct {
@@ -260,9 +352,9 @@ type knowledgeOut struct {
 }
 
 type attachmentIn struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-	Name string `json:"name"` // attachment filename, from the entry's attachments metadata
+	Type string `json:"type" jsonschema:"the entry's type slug (metric, query, insight, term, table, or any custom slug)"`
+	ID   string `json:"id" jsonschema:"the entry's id (/ separates segments for hierarchical ids)"`
+	Name string `json:"name" jsonschema:"attachment filename, from the entry's attachments metadata"`
 }
 
 type attachmentOut struct {

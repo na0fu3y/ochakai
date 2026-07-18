@@ -155,13 +155,13 @@ func splitRef(s string) (string, string, error) {
 
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output is then verified_at, uri, status, title — description.",
-		"  ochakai search \"gross margin\" --type metric --type term --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type query --status verified --limit 100\n")
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.",
+		"  ochakai search \"gross margin\" --type metric --type term --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type query --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age, oldest first`)
+	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first)`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -169,7 +169,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 		return err
 	}
 	if *sortBy != "" && len(pos) > 0 {
-		return fmt.Errorf("--sort lists entries by verification age; it cannot be combined with a search query")
+		return fmt.Errorf("--sort lists entries; it cannot be combined with a search query")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -187,10 +187,16 @@ func cmdSearch(ctx context.Context, args []string) error {
 	}
 	for _, h := range hits {
 		lead := fmt.Sprintf("%.3f", h.Score)
-		if *sortBy != "" {
+		switch *sortBy {
+		case "verified_at":
 			lead = "-" // never verified sorts last
 			if h.VerifiedAt != nil {
 				lead = h.VerifiedAt.Format(time.RFC3339)
+			}
+		case "usage":
+			lead = "0" // never-used drafts sort last
+			if h.Usage != nil {
+				lead = strconv.FormatInt(h.Usage.SearchHits, 10)
 			}
 		}
 		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.Title)

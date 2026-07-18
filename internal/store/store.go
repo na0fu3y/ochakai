@@ -359,6 +359,67 @@ func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]do
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
+// ListByUsage returns filtered entries ordered by demand, most-searched
+// first: search_hits descending, then oldest-created (created_at ascending)
+// as the tiebreak. This is the draft review feed — the promotion queue at
+// the top, and never-used drafts (search_hits 0) sinking oldest-first to
+// the bottom for inventory. Each hit carries its usage totals so the
+// caller renders the signal without a per-entry round trip. Score is 0.
+func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
+	where, args := f.buildWhere("k.")
+	// Conditional aggregation over knowledge_usage in one lateral pass:
+	// running totals per event live in that table (see usage.go).
+	q := fmt.Sprintf(`
+		SELECT `+qualifyCols("k")+`,
+			u.search_hits, u.fetches, u.compiles, u.worked, u.failed, u.last_used_at
+		FROM knowledge k
+		LEFT JOIN LATERAL (
+			SELECT
+				COALESCE(sum(count) FILTER (WHERE event = 'search_hit'), 0) AS search_hits,
+				COALESCE(sum(count) FILTER (WHERE event = 'fetched'), 0)   AS fetches,
+				COALESCE(sum(count) FILTER (WHERE event = 'compiled'), 0)  AS compiles,
+				COALESCE(sum(count) FILTER (WHERE event = 'worked'), 0)    AS worked,
+				COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
+				max(last_at) AS last_used_at
+			FROM knowledge_usage
+			WHERE knowledge_type = k.type AND knowledge_id = k.id
+		) u ON true
+		WHERE %s
+		ORDER BY u.search_hits DESC, k.created_at ASC, k.type, k.id LIMIT %d`, where, limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanUsageHit)
+}
+
+// scanUsageHit reads a knowledge row followed by its usage totals (the
+// ListByUsage projection). Score stays 0 — this is a listing, not a search.
+func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
+	var h domain.SearchHit
+	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
+	var links, attrs []byte
+	var u domain.Usage
+	err := row.Scan(&h.Type, &h.ID, &h.Title, &h.Description, &h.Tags, &h.Status, &h.StatusNote,
+		&h.CreatedBy.Kind, &h.CreatedBy.Name, &verifiedKind, &verifiedName, &h.VerifiedAt,
+		&rejectedKind, &rejectedName, &h.RejectedAt,
+		&links, &attrs, &h.Body, &h.CreatedAt, &h.UpdatedAt,
+		&u.SearchHits, &u.Fetches, &u.Compiles, &u.Worked, &u.Failed, &u.LastUsedAt)
+	if err != nil {
+		return h, err
+	}
+	h.VerifiedBy = actorFrom(verifiedKind, verifiedName)
+	h.RejectedBy = actorFrom(rejectedKind, rejectedName)
+	if err := json.Unmarshal(links, &h.Links); err != nil {
+		return h, err
+	}
+	if err := json.Unmarshal(attrs, &h.Attrs); err != nil {
+		return h, err
+	}
+	h.Usage = &u
+	return h, nil
+}
+
 // ListAll returns every non-deleted entry, ordered by type then id.
 // Used by the OKF exporter.
 func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {

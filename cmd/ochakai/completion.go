@@ -68,7 +68,7 @@ _ochakai() {
         '*--type[filter by type]:type:(metric query insight term table)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
-        '--sort[list by verification age instead of searching]:sort:(verified_at)' \
+        '--sort[list instead of searching: by verification age or by demand]:sort:(verified_at usage)' \
         '--limit[max results]:limit:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
@@ -163,7 +163,7 @@ _ochakai() {
   case $prev in
     --type|-type) COMPREPLY=($(compgen -W "metric query insight term table" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
-    --sort|-sort) COMPREPLY=($(compgen -W "verified_at" -- "$cur")); return ;;
+    --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage" -- "$cur")); return ;;
     --dialect|-dialect) COMPREPLY=($(compgen -W "bigquery ansi" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
@@ -245,7 +245,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attac
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metric query insight term table' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at' -d 'list by verification age instead of searching'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage' -d 'list instead of searching: by verification age or by demand'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context compile' -l limit -x -d 'max results / LIMIT clause'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'

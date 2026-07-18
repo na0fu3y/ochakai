@@ -28,6 +28,9 @@ paths:
         With sort=verified_at the endpoint lists entries by verification age
         (oldest first, never-verified last) instead of searching — the feed
         for golden query canary runs (docs/guides/golden-query-canary.md).
+        With sort=usage it lists by demand (most search_hits first, never-used
+        oldest-first at the bottom) and each hit carries its usage totals —
+        the draft review/promotion feed.
         q and sort are mutually exclusive; combining them is a 400.
       parameters:
         - name: q
@@ -36,7 +39,7 @@ paths:
         - name: sort
           in: query
           description: Mutually exclusive with q.
-          schema: { type: string, enum: [verified_at] }
+          schema: { type: string, enum: [verified_at, usage] }
         - name: type
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Type" } }
@@ -52,15 +55,18 @@ paths:
         - name: limit
           in: query
           description: >
-            Searching: default 10, max 50. With sort=verified_at the feed
-            reads more per page: default 100, max 1000. Out-of-range values
-            fall back to the default; non-integer values are a 400.
+            Searching: default 10, max 50. With sort=verified_at or
+            sort=usage the feed reads more per page: default 100, max 1000.
+            Out-of-range values fall back to the default; non-integer values
+            are a 400.
           schema: { type: integer }
       responses:
         "200":
           description: >
             Scored hits, verified entries boosted. With sort=verified_at,
-            hits are in verification-age order and carry score 0.
+            hits are in verification-age order and carry score 0. With
+            sort=usage, hits are in demand order, carry score 0, and each
+            populates the usage object.
           content:
             application/json:
               schema:
@@ -505,6 +511,13 @@ components:
         - type: object
           properties:
             score: { type: number }
+            usage:
+              allOf: [ { $ref: "#/components/schemas/Usage" } ]
+              readOnly: true
+              description: >
+                Usage totals, present only in the sort=usage listing (the
+                draft review feed); absent for search results and the
+                verified_at feed.
     CompileRequest:
       type: object
       required: [metrics]
