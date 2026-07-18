@@ -43,9 +43,10 @@ gcloud artifacts repositories create ghcr \
 export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.9.0
 ```
 
-(Check [tags](https://github.com/na0fu3y/ochakai/tags) for the latest;
-§3 requires 0.3.0 or later, §4b requires 0.8.0 or later, §5b requires
-0.9.0 or later.)
+(Check [tags](https://github.com/na0fu3y/ochakai/tags) for the latest.
+This guide assumes 0.9.0 or later; earlier releases are
+[retracted](https://go.dev/ref/mod#go-mod-file-retract) and unsupported —
+if you run one, see §8 for the upgrade path.)
 
 ## 2. Create the database (cheapest viable instance)
 
@@ -596,32 +597,17 @@ Version notes:
   Postgres, §4b), and OKF import of the pre-0.4 nested `attrs:`
   frontmatter form (re-export old bundles, or lift the keys to the top
   level — SPEC §4.1).
-- **→ 0.8.0 (breaking)**: the v0.3 migration shims are gone. The legacy
-  `GET /api/v1/knowledge/{type}/{id}/usage` alias is removed — use
-  `GET /api/v1/usage/{type}/{id}`. The startup guard that refused to run
-  with removed v0.2 variables (`OCHAKAI_CLIENTS`, `OCHAKAI_AUTH`,
-  `OCHAKAI_CORS_ORIGINS`, `OCHAKAI_EMBEDDING_PROVIDER`) is also gone:
-  stale variables are now silently ignored, so double-check they are
-  unset before upgrading straight from ≤0.2 (see the 0.3.0 note).
-  Also in 0.8.0: attachment images can move to GCS (`OCHAKAI_GCS_BUCKET`,
-  §4b). Opt-in; enabling it migrates image bytes out of Postgres at
-  startup — read §4b's rollback caveat before setting the variable.
-- **→ 0.3.0 (breaking)**: ochakai is Google Cloud only (design doc 0003).
-  Bearer-token auth (`OCHAKAI_CLIENTS`), `OCHAKAI_AUTH`, and
-  `OCHAKAI_CORS_ORIGINS` are removed — remove them from the deployment
-  and follow §3 (IAM-restricted + identity headers). Deployments that
-  were public + tokens must switch to `--no-allow-unauthenticated` with
-  IAM invoker grants. `OCHAKAI_EMBEDDING_PROVIDER=vertex` is tolerated
-  but unnecessary: `OCHAKAI_VERTEX_PROJECT` alone enables embeddings.
-- **→ 0.2.1**: to adopt passwordless database auth, run §3's identity
-  steps (dedicated SA, IAM database user, grants) against your existing
-  instance — `cloudsql.iam_authentication=on` can be enabled with
-  `gcloud sql instances patch` (brief restart) — then update the service
-  with `--service-account`, `OCHAKAI_DB_IAM_AUTH=true`, and the
-  password-free `OCHAKAI_DATABASE_URL`.
-- **→ 0.2.0**: the verified-promotion restriction is gone
-  (`OCHAKAI_VERIFY_ACTORS` is ignored) — anyone who can reach ochakai may
-  set `status=verified`, recorded in `verified_by`.
+- **From anything older than 0.8.0**: all pre-0.9.0 releases are
+  [retracted](https://go.dev/ref/mod#go-mod-file-retract) and their
+  per-version upgrade notes have been removed from this guide — recover
+  them from git history if needed
+  (`git log -- deploy/cloudrun/README.md`). The short of it: remove
+  pre-0.3 configuration (`OCHAKAI_CLIENTS`, `OCHAKAI_AUTH`,
+  `OCHAKAI_CORS_ORIGINS`, `OCHAKAI_EMBEDDING_PROVIDER` — stale variables
+  are silently ignored, so check they are unset), adopt §3's posture
+  (`--no-allow-unauthenticated` + IAM invoker grants, identity headers,
+  passwordless database), step through **0.8.x** for the attachment
+  backfill if applicable (§4b), then land on 0.9.0 with the note above.
 
 ## 9. Teardown
 
