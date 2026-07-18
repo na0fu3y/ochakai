@@ -27,8 +27,8 @@ import (
 )
 
 // version is stamped by -ldflags at release; otherwise it comes from the
-// module version Go records in the binary (`go install …@v0.4.0` →
-// "v0.4.0"), falling back to "dev" for in-tree builds.
+// module version Go records in the binary (`go install …@v0.9.0` →
+// "v0.9.0"), falling back to "dev" for in-tree builds.
 var version = ""
 
 func resolveVersion() string {

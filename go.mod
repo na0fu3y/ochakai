@@ -2,6 +2,11 @@ module github.com/na0fu3y/ochakai
 
 go 1.26.5
 
+// Pre-0.9.0 releases are unsupported: superseded by 0.9.0 (the first
+// release the deploy guide and docs are written against; earlier images
+// also predate the Go 1.26.5 stdlib security fixes).
+retract [v0.1.0, v0.8.0]
+
 require (
 	cloud.google.com/go/storage v1.63.1
 	github.com/jackc/pgx/v5 v5.10.0
