@@ -40,11 +40,11 @@ gcloud artifacts repositories create ghcr \
   --remote-docker-repo=https://ghcr.io \
   --location=$REGION
 
-export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.3.0
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.8.0
 ```
 
-(Check [releases](https://github.com/na0fu3y/ochakai/releases) for the
-latest tag; §3 requires 0.3.0 or later.)
+(Check [tags](https://github.com/na0fu3y/ochakai/tags) for the latest;
+§3 requires 0.3.0 or later, §4b requires 0.8.0 or later.)
 
 ## 2. Create the database (cheapest viable instance)
 
@@ -240,7 +240,7 @@ updated knowledge with `gemini-embedding-001`. Search becomes hybrid
 (trigram + vector, reciprocal rank fusion). If Vertex AI is ever
 unavailable, writes and searches degrade gracefully to trigram-only.
 
-## 4b. Optional: attachment images on GCS
+## 4b. Optional: attachment images on GCS (0.8.0+)
 
 By default attachment images live in Postgres (design doc 0008), which
 keeps local development Docker-only. When they start crowding the
@@ -264,6 +264,11 @@ On the next start, ochakai copies existing inline images to the bucket
 deleted) and clears the database copies; the backfill is idempotent, so
 an interrupted start resumes on the next one. New attachments go
 straight to the bucket.
+
+On images older than 0.8.0 the variable is silently ignored — no error,
+no migration. Check the running tag
+(`gcloud run services describe ochakai --region=$REGION --format='value(spec.template.spec.containers[0].image)'`)
+before enabling.
 
 **Rollback caveat**: the backfill is not additive — once it has run,
 binaries older than the env var (or a deployment with the var removed)

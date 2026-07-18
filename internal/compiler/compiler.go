@@ -104,7 +104,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 		if !ok {
 			return nil, &Error{Reason: fmt.Sprintf("metric %q has no expression for dialect %s or ANSI_SQL", name, dialect.ossieKey())}
 		}
-		expr, err := m.rewriteExpr(raw, dialect, needed)
+		expr, err := m.rewriteExpr(raw, dialect, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +115,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 	type selectCol struct{ expr, alias string }
 	var groupCols []selectCol
 	if req.TimeGrain != nil {
-		expr, err := m.resolveFieldRef(req.TimeGrain.Field, dialect, needed)
+		expr, err := m.resolveFieldRef(req.TimeGrain.Field, dialect, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 		groupCols = append(groupCols, selectCol{expr: truncated, alias: strings.ReplaceAll(req.TimeGrain.Field, ".", "_") + "_" + req.TimeGrain.Grain})
 	}
 	for _, dim := range req.Dimensions {
-		expr, err := m.resolveFieldRef(dim, dialect, needed)
+		expr, err := m.resolveFieldRef(dim, dialect, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +135,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 
 	var whereClauses []string
 	for _, f := range req.Filters {
-		expr, err := m.resolveFieldRef(f.Field, dialect, needed)
+		expr, err := m.resolveFieldRef(f.Field, dialect, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -205,13 +205,13 @@ func Compile(m *Model, req Request) (*Result, error) {
 		datasets = append(datasets, ds)
 	}
 	sort.Strings(datasets)
-	return &Result{SQL: b.String(), Dialect: dialect, DatasetsUsed: datasets, Notes: notes}, nil
+	return &Result{SQL: b.String(), Dialect: dialect, DatasetsUsed: datasets, Notes: dedupe(notes)}, nil
 }
 
 // rewriteExpr replaces every dataset.field reference in an expression with
 // the field's physical expression qualified by the dataset alias, and
 // records referenced datasets.
-func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool) (string, error) {
+func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool, notes *[]string) (string, error) {
 	var rewriteErr error
 	out := identRe.ReplaceAllStringFunc(expr, func(ref string) string {
 		parts := strings.SplitN(ref, ".", 2)
@@ -221,7 +221,7 @@ func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool
 			return ref
 		}
 		needed[ds.Name] = true
-		resolved, err := m.resolveField(ds, parts[1], dialect)
+		resolved, err := m.resolveField(ds, parts[1], dialect, notes)
 		if err != nil {
 			rewriteErr = err
 			return ref
@@ -236,7 +236,7 @@ func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool
 
 // resolveFieldRef resolves a "dataset.field" reference used as a dimension,
 // filter, or time grain column.
-func (m *Model) resolveFieldRef(ref string, dialect Dialect, needed map[string]bool) (string, error) {
+func (m *Model) resolveFieldRef(ref string, dialect Dialect, needed map[string]bool, notes *[]string) (string, error) {
 	parts := strings.SplitN(ref, ".", 2)
 	if len(parts) != 2 {
 		return "", &Error{Reason: fmt.Sprintf("field reference %q must be dataset.field", ref)}
@@ -246,13 +246,14 @@ func (m *Model) resolveFieldRef(ref string, dialect Dialect, needed map[string]b
 		return "", &Error{Reason: fmt.Sprintf("dataset %q is not defined in semantic model %q", parts[0], m.Name)}
 	}
 	needed[ds.Name] = true
-	return m.resolveField(ds, parts[1], dialect)
+	return m.resolveField(ds, parts[1], dialect, notes)
 }
 
 // resolveField maps a logical field to "alias.physical_expr". Unknown names
 // pass through as physical columns (the Ossie draft does not require every
-// column to be declared as a field).
-func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect) (string, error) {
+// column to be declared as a field), with a note so the caller knows the
+// column's existence was taken on trust, not checked against the model.
+func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect, notes *[]string) (string, error) {
 	f := ds.field(name)
 	if f == nil {
 		// Undeclared columns pass through as physical columns (the Ossie
@@ -264,6 +265,7 @@ func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect) (string,
 		if !bareColumn.MatchString(name) {
 			return "", &Error{Reason: fmt.Sprintf("field %q is not defined in dataset %q and is not a bare column name; declare it as a field to use an expression", name, ds.Name)}
 		}
+		*notes = append(*notes, fmt.Sprintf("%s.%s is not declared in semantic model %q; passed through as a physical column", ds.Name, name, m.Name))
 		return ds.Name + "." + name, nil
 	}
 	expr, ok := f.Expression.ForDialect(dialect.ossieKey())
@@ -330,6 +332,20 @@ func (m *Model) resolveJoins(root string, needed map[string]bool, dialect Dialec
 		}
 	}
 	return joins, nil
+}
+
+// dedupe drops repeated notes (the same undeclared field may be resolved
+// as a dimension, a filter, and a grain in one request), keeping order.
+func dedupe(notes []string) []string {
+	seen := map[string]bool{}
+	out := notes[:0]
+	for _, n := range notes {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func referencedDatasets(m *Model, expr string) []string {
