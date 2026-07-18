@@ -29,9 +29,11 @@ func TestDetectAttachmentMediaType(t *testing.T) {
 	if mt, err := DetectAttachmentMediaType(png); err != nil || mt != "image/png" {
 		t.Errorf("png: got %q, %v", mt, err)
 	}
+	// gif fell out of the allowlist with the grandfather clause (Claude
+	// reads it, gemini-embedding-2 cannot embed it).
 	gif := append([]byte("GIF89a"), make([]byte, 16)...)
-	if mt, err := DetectAttachmentMediaType(gif); err != nil || mt != "image/gif" {
-		t.Errorf("gif: got %q, %v", mt, err)
+	if _, err := DetectAttachmentMediaType(gif); err == nil {
+		t.Error("gif accepted")
 	}
 	if mt, err := DetectAttachmentMediaType([]byte("%PDF-1.7 fake pdf body")); err != nil || mt != "application/pdf" {
 		t.Errorf("pdf: got %q, %v", mt, err)

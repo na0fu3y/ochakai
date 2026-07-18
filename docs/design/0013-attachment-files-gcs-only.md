@@ -36,13 +36,14 @@ Date: 2026-07-18
 | media_type | 由来 |
 |---|---|
 | `image/png` `image/jpeg` `image/webp` | 両リスト |
-| `image/gif` | 既存許可リストの祖父条項(下記) |
 | `application/pdf` | 両リスト |
 | `text/plain` | 両リスト |
 
-- **`image/gif` は残す。** gemini-embedding-2 のリストには無いが、
-  0008 以来の許可形式であり、既存データと OKF ラウンドトリップを壊して
-  まで落とす利得がない。将来の埋め込み対象からは外れるだけである。
+- **`image/gif` は落とす。** 0008 以来の許可形式で、当初は祖父条項として
+  残す判断だったが、同日の議論で互換性配慮は不要と決まり、リストを
+  交わり厳密に揃えた(gemini-embedding-2 は gif を埋め込めない)。
+  保存済みの gif 添付はメタデータもバイト列もそのまま読める — 弾かれる
+  のは新規 attach だけで、既存データの再インポートは skip 報告に載る。
 - **`text/plain` はスニッフィング判定**(従来どおりバイト列が決める。
   クライアント申告の media type は信用しない)。Go の
   `http.DetectContentType` は UTF-8/UTF-16 テキストを `text/plain` と

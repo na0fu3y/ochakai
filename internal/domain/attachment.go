@@ -34,17 +34,17 @@ const (
 )
 
 // attachmentMediaTypes is the allowlist of what an attachment may be
-// (design doc 0013): the intersection of what Claude accepts as an upload
-// and what gemini-embedding-2 takes as input, plus image/gif grandfathered
-// from the original image-only list (design doc 0008). Never text/html or
-// image/svg+xml: both can carry scripts, and serving them from the API
-// would hand every knowledge author an XSS vector into web UIs. Note that
-// sniffing decides — CSV/JSON/markup without an HTML signature all pass as
-// text/plain and are always served as such, never as something executable.
+// (design doc 0013): exactly the intersection of what Claude accepts as
+// an upload and what gemini-embedding-2 takes as input — gif, in the
+// original image-only list (design doc 0008), is not embeddable and was
+// dropped. Never text/html or image/svg+xml: both can carry scripts, and
+// serving them from the API would hand every knowledge author an XSS
+// vector into web UIs. Note that sniffing decides — CSV/JSON/markup
+// without an HTML signature all pass as text/plain and are always served
+// as such, never as something executable.
 var attachmentMediaTypes = map[string]bool{
 	"image/png":       true,
 	"image/jpeg":      true,
-	"image/gif":       true,
 	"image/webp":      true,
 	"application/pdf": true,
 	"text/plain":      true,
@@ -64,7 +64,7 @@ func DetectAttachmentMediaType(data []byte) (string, error) {
 	mt, _, _ := strings.Cut(http.DetectContentType(data), ";")
 	mt = strings.TrimSpace(mt)
 	if !attachmentMediaTypes[mt] {
-		return "", fmt.Errorf("unsupported attachment content %q (allowed: png, jpeg, gif, webp, pdf, plain text)", mt)
+		return "", fmt.Errorf("unsupported attachment content %q (allowed: png, jpeg, webp, pdf, plain text)", mt)
 	}
 	return mt, nil
 }
