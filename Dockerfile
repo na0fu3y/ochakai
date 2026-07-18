@@ -1,6 +1,6 @@
 # Reproducible static build: no CGO, trimmed paths, minimal base image.
 # Cross-compiles on the build platform (no QEMU emulation for arm64).
-FROM --platform=$BUILDPLATFORM golang:1.26.4 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.5 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
