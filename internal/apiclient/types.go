@@ -32,9 +32,10 @@ type TimeGrain struct {
 // ImportReport is the response of POST /api/v1/import/ossie.
 // TestImportReportMatchesServerWire pins it to importer.Report.
 type ImportReport struct {
-	Models  []string `json:"models"`
-	Created []string `json:"created"`
-	Updated []string `json:"updated"`
+	Models    []string `json:"models"`
+	Created   []string `json:"created"`
+	Updated   []string `json:"updated"`
+	Unchanged []string `json:"unchanged,omitempty"`
 }
 
 type CompileResult struct {

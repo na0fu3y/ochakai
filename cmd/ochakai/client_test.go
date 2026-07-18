@@ -4,7 +4,12 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
+	"encoding/json"
 	"flag"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -227,5 +232,68 @@ func TestRenderContext(t *testing.T) {
 	}
 	if !strings.Contains(s, "1 more entries beyond --budget") {
 		t.Errorf("omitted entries must be reported:\n%s", s)
+	}
+}
+
+// TestImportReportsUnchanged pins the import summary against a fake
+// server: an existing entry whose PUT answers with Ochakai-Unchanged
+// counts (and prints) as unchanged, everything else as before. Servers
+// without the header (absent on the second PUT) keep reporting updated.
+func TestImportReportsUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	for name, doc := range map[string]string{
+		"same.md": "---\ntype: metric\ntitle: Same\n---\n\nbody\n",
+		"diff.md": "---\ntype: metric\ntitle: Diff\n---\n\nbody\n",
+	} {
+		if err := os.MkdirAll(filepath.Join(dir, "metric"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "metric", name), []byte(doc), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "already exists"})
+	})
+	mux.HandleFunc("PUT /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		var k domain.Knowledge
+		if err := json.NewDecoder(r.Body).Decode(&k); err != nil {
+			t.Errorf("bad PUT payload: %v", err)
+		}
+		if r.PathValue("id") == "same" {
+			w.Header().Set("Ochakai-Unchanged", "true")
+		}
+		_ = json.NewEncoder(w).Encode(k)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	orig := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	importErr := cmdImport(context.Background(), []string{dir, "--url", srv.URL})
+	pw.Close()
+	os.Stdout = orig
+	out, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if importErr != nil {
+		t.Fatalf("cmdImport: %v\noutput:\n%s", importErr, out)
+	}
+	for _, want := range []string{
+		"unchanged ochakai://metric/same\n",
+		"updated ochakai://metric/diff\n",
+		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 skipped)\n",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output misses %q:\n%s", want, out)
+		}
 	}
 }

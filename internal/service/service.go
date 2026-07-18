@@ -70,13 +70,18 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 	return k, nil
 }
 
-func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
+// Update replaces an entry's content. changed=false means the payload
+// matched the stored content exactly, so nothing was written: revisions
+// are the audit trail of changes and updated_at means "content last
+// changed" — recurring bundle imports and agents re-saving what they
+// just read must not bury real history under identical snapshots.
+func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (updated *domain.Knowledge, changed bool, err error) {
 	if err := validate(k); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	old, err := s.Store.Get(ctx, k.Type, k.ID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if k.Status == "" {
 		k.Status = old.Status
@@ -85,12 +90,15 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	k.CreatedAt = old.CreatedAt
 	k.VerifiedBy, k.VerifiedAt = old.VerifiedBy, old.VerifiedAt
 	k.RejectedBy, k.RejectedAt = old.RejectedBy, old.RejectedAt
+	if k.SameContent(old) {
+		return old, false, nil
+	}
 	s.applyVerification(k, old, actor)
 	if err := s.Store.Update(ctx, k, actor); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	s.updateEmbedding(ctx, k)
-	return k, nil
+	return k, true, nil
 }
 
 func (s *Service) Delete(ctx context.Context, typ domain.Type, id string, actor domain.Actor) error {

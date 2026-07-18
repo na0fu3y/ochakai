@@ -190,13 +190,21 @@ func (c *Client) Create(ctx context.Context, k *domain.Knowledge) (*domain.Knowl
 }
 
 // Update replaces the entry at k.Type/k.ID (full replacement; the server
-// keeps every change as a revision).
-func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (*domain.Knowledge, error) {
-	var updated domain.Knowledge
-	if err := c.doJSON(ctx, http.MethodPut, entryPath(string(k.Type), k.ID), nil, k, &updated); err != nil {
-		return nil, err
+// keeps every change as a revision). changed=false reports the server
+// wrote nothing because the payload matched the stored content (the
+// Ochakai-Unchanged response header); servers predating the header
+// always report changed=true.
+func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (updated *domain.Knowledge, changed bool, err error) {
+	resp, err := c.do(ctx, http.MethodPut, entryPath(string(k.Type), k.ID), nil, k)
+	if err != nil {
+		return nil, false, err
 	}
-	return &updated, nil
+	defer resp.Body.Close()
+	var out domain.Knowledge
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, false, err
+	}
+	return &out, resp.Header.Get("Ochakai-Unchanged") != "true", nil
 }
 
 func (c *Client) Delete(ctx context.Context, typ, id string) error {
