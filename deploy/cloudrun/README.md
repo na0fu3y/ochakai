@@ -499,10 +499,16 @@ working against a newer schema.
 
 Version notes:
 
+- **→ 0.8.0 (breaking)**: the v0.3 migration shims are gone. The legacy
+  `GET /api/v1/knowledge/{type}/{id}/usage` alias is removed — use
+  `GET /api/v1/usage/{type}/{id}`. The startup guard that refused to run
+  with removed v0.2 variables (`OCHAKAI_CLIENTS`, `OCHAKAI_AUTH`,
+  `OCHAKAI_CORS_ORIGINS`, `OCHAKAI_EMBEDDING_PROVIDER`) is also gone:
+  stale variables are now silently ignored, so double-check they are
+  unset before upgrading straight from ≤0.2 (see the 0.3.0 note).
 - **→ 0.3.0 (breaking)**: ochakai is Google Cloud only (design doc 0003).
   Bearer-token auth (`OCHAKAI_CLIENTS`), `OCHAKAI_AUTH`, and
-  `OCHAKAI_CORS_ORIGINS` are removed — the service refuses to start if
-  the removed variables are still set, so remove them from the deployment
+  `OCHAKAI_CORS_ORIGINS` are removed — remove them from the deployment
   and follow §3 (IAM-restricted + identity headers). Deployments that
   were public + tokens must switch to `--no-allow-unauthenticated` with
   IAM invoker grants. `OCHAKAI_EMBEDDING_PROVIDER=vertex` is tolerated

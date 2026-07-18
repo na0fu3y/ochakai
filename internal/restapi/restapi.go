@@ -210,11 +210,6 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 	})
-	// Legacy pre-0005 usage path, kept for existing clients. It shadows
-	// GET on entries whose two-segment ID ends in "usage" — the canonical
-	// path above has no such ambiguity.
-	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id}/usage", usage)
-
 	// Attachments (design doc 0008): images attached to an entry, bytes
 	// fetched on demand — entry reads carry metadata only. The path is
 	// /attachments/{type}/{id segments...}/{name}; the final segment is

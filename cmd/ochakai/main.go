@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
 	"syscall"
 	"time"
 
@@ -64,11 +63,6 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = serve(log)
-	case "export-okf", "import-okf":
-		// DB-direct twins of `export`/`import`, removed in design doc 0007.
-		fmt.Fprintf(os.Stderr, "ochakai: %s was removed; run `ochakai serve` next to the database and use `ochakai %s` against it (see `ochakai help`)\n",
-			cmd, strings.TrimSuffix(cmd, "-okf"))
-		os.Exit(1)
 	case "version":
 		fmt.Println(version)
 	case "help", "-h", "--help":

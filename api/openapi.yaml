@@ -215,8 +215,6 @@ paths:
         fetched individually, or referenced by compile_sql. The measure of
         the write-back loop — evidence for promoting drafts, and a staleness
         signal for verified entries that stopped being used.
-        (GET /api/v1/knowledge/{type}/{id}/usage remains as a legacy alias
-        for single-segment IDs.)
       responses:
         "200":
           description: Usage totals.
