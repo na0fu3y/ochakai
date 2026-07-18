@@ -97,6 +97,64 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/browse:
+    get:
+      operationId: browseKnowledge
+      summary: Browse one level of the ID hierarchy
+      description: >
+        IDs are hierarchical slug paths; this returns one level of that
+        tree (design doc 0014). Without type: the types with live-entry
+        counts (the root). With type (and an optional prefix like
+        "sales" or "sales/"): the subdirectories directly under it, each
+        with the count of entries beneath, plus the entries at that
+        level as a light projection (no body). Rejected and deleted
+        entries are excluded, as in search. Entries at one level cap at
+        1000 with truncated=true. Browsing records no usage.
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/Type" }
+        - name: prefix
+          in: query
+          description: ID prefix ("a/b" or "a/b/"); requires type.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One level of the tree.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  types:
+                    type: array
+                    description: Only at the root (no type given).
+                    items:
+                      type: object
+                      properties:
+                        type: { $ref: "#/components/schemas/Type" }
+                        count: { type: integer }
+                  dirs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string, description: Next ID segment. }
+                        count: { type: integer, description: Entries anywhere beneath. }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { $ref: "#/components/schemas/Type" }
+                        id: { type: string }
+                        title: { type: string }
+                        status: { $ref: "#/components/schemas/Status" }
+                        updated_at: { type: string, format: date-time }
+                  truncated:
+                    type: boolean
+                    description: The entry list hit the 1000-per-level cap.
+        "400": { $ref: "#/components/responses/Error" }
   /api/v1/context:
     get:
       operationId: getContext

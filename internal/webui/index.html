@@ -233,6 +233,25 @@
   .md ul, .md ol { margin: .4em 0; padding-left: 1.5em; }
   .md img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; display: block; margin: .6rem 0; }
 
+  /* ---- browse tree ---- */
+  .browse details.node > summary {
+    cursor: pointer; display: flex; gap: .5rem; align-items: baseline;
+    padding: .25rem .45rem; border-radius: 6px; list-style-position: outside;
+  }
+  .browse details.node > summary:hover { background: var(--code-bg); }
+  .browse details.node > .children {
+    margin-left: .85rem; padding-left: .7rem; border-left: 1px solid var(--border);
+  }
+  .browse .dir-name { overflow-wrap: anywhere; }
+  .browse .count { color: var(--muted); font-size: .78rem; }
+  .browse .tree-entry {
+    display: flex; gap: .55rem; align-items: baseline; flex-wrap: wrap;
+    padding: .22rem .45rem; border-radius: 6px; color: inherit; text-decoration: none;
+  }
+  .browse .tree-entry:hover { background: var(--code-bg); text-decoration: none; }
+  .browse .tree-entry .entry-title { color: var(--muted); }
+  .browse .tree-entry:hover .entry-title { color: var(--text); }
+
   /* ---- attachments ---- */
   .att-card { display: flex; gap: 1rem; align-items: flex-start; }
   .att-card a.thumb { flex-shrink: 0; }
@@ -270,6 +289,7 @@
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
     <a href="#/" data-route="explore">Explore</a>
+    <a href="#/browse" data-route="browse">Browse</a>
     <a href="#/review" data-route="review">Review</a>
     <a href="#/compile" data-route="compile">Compile</a>
     <a href="#/new" data-route="new">New entry</a>
@@ -451,6 +471,9 @@ function route() {
   } else if (head === 'new') {
     mark('new');
     viewEditor(null, null);
+  } else if (head === 'browse') {
+    mark('browse');
+    viewBrowse();
   } else if (head === 'review') {
     mark('review');
     viewReview();
@@ -620,6 +643,87 @@ function hitCard(h) {
     ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
     ${sql}
   </article>`;
+}
+
+/* ============================== browse ============================== */
+
+// The folder view of hierarchical IDs (design doc 0014): types at the
+// root, then ID segments as directories, loaded one level per request.
+// Expanded nodes survive navigation within the session and are restored
+// (re-fetched) when the tab is reopened.
+const browse = { open: new Set() }; // keys: type + ' ' + prefix
+
+function viewBrowse() {
+  view.innerHTML = `
+  <section class="browse">
+    <p class="provenance" style="margin-top:0">Knowledge as a folder tree — types at the root, hierarchical IDs
+    (<code>query/sales/monthly-revenue</code>) as directories. Rejected entries are hidden, as in search.</p>
+    <div id="tree"><div class="empty">…</div></div>
+  </section>`;
+  const tree = $('#tree');
+  api('/api/v1/browse').then(res => {
+    if (tree !== $('#tree')) return; // navigated away
+    const types = res.types || [];
+    if (!types.length) {
+      tree.innerHTML = '<div class="empty">No knowledge yet.</div>';
+      return;
+    }
+    tree.innerHTML = types.map(t => nodeHTML(t.type, '', `<span class="type-ico">${icon(t.type)}</span>` +
+      `<span class="dir-name">${esc(t.type)}</span>`, t.count)).join('');
+    wireNodes(tree);
+  }).catch(e => {
+    if (tree === $('#tree')) tree.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;
+  });
+}
+
+function nodeHTML(type, prefix, label, count) {
+  const key = type + ' ' + prefix;
+  return `<details class="node" data-type="${esc(type)}" data-prefix="${esc(prefix)}" ${browse.open.has(key) ? 'open' : ''}>
+    <summary>${label}<span class="count">${count}</span></summary>
+    <div class="children"><div class="empty">…</div></div>
+  </details>`;
+}
+
+// wireNodes attaches lazy loading to every not-yet-wired node under
+// root, and immediately loads the ones restored as open.
+function wireNodes(root) {
+  root.querySelectorAll('details.node:not([data-wired])').forEach(d => {
+    d.dataset.wired = '1';
+    const key = d.dataset.type + ' ' + d.dataset.prefix;
+    const load = () => loadNode(d);
+    d.addEventListener('toggle', () => {
+      d.open ? browse.open.add(key) : browse.open.delete(key);
+      if (d.open && !d.dataset.loaded) load();
+    });
+    if (d.open) load();
+  });
+}
+
+async function loadNode(d) {
+  d.dataset.loaded = '1';
+  const box = d.querySelector(':scope > .children');
+  const type = d.dataset.type, prefix = d.dataset.prefix;
+  try {
+    const res = await api(`/api/v1/browse?type=${encodeURIComponent(type)}&prefix=${encodeURIComponent(prefix)}`);
+    const dirs = (res.dirs || []).map(dir => nodeHTML(type, prefix + dir.name + '/',
+      `<span class="type-ico">📁</span><span class="dir-name mono">${esc(dir.name)}/</span>`, dir.count)).join('');
+    const entries = (res.entries || []).map(e => {
+      const seg = e.id.slice(prefix.length);
+      return `<a class="tree-entry" href="#/k/${idPath(e.type, e.id)}">
+        <span class="mono">${esc(seg)}</span>
+        <span class="entry-title">${esc(e.title)}</span>
+        <span class="badge ${esc(e.status)}">${esc(e.status)}</span>
+      </a>`;
+    }).join('');
+    const note = res.truncated
+      ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
+         better split into subdirectories.</div>` : '';
+    box.innerHTML = (dirs + entries + note) || '<div class="empty">Empty.</div>';
+    wireNodes(box);
+  } catch (e) {
+    delete d.dataset.loaded; // reopen retries
+    box.innerHTML = `<div class="error-banner">Load failed: ${esc(e.message)}</div>`;
+  }
 }
 
 /* ============================== detail ============================== */

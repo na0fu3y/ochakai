@@ -210,6 +210,25 @@ func ValidID(id string) bool {
 	return segs[len(segs)-1] != "index"
 }
 
+// ValidIDPrefix reports whether prefix can lead a knowledge ID: empty
+// (the root) or slug segments separated by "/". Unlike ValidID, a final
+// "index" segment is fine — it only names a directory here, and the
+// index.md reservation is about a document's own filename.
+func ValidIDPrefix(prefix string) bool {
+	if prefix == "" {
+		return true
+	}
+	if len(prefix) > 512 {
+		return false
+	}
+	for _, s := range strings.Split(prefix, "/") {
+		if !segmentRe.MatchString(s) {
+			return false
+		}
+	}
+	return true
+}
+
 // SearchHit is one search result with its ranking score. Usage is
 // populated only by the sort=usage listing (the draft review feed), where
 // the promotion signal is the point; it stays nil for search results and
