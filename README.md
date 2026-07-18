@@ -166,7 +166,7 @@ And it stays small by refusing things:
 | `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
 | `search_knowledge` | Cross-type search; verified entries rank higher |
 | `get_knowledge` | Fetch one entry with body, attrs, links, and attachment metadata |
-| `get_attachment` | Fetch an image attached to an entry (dashboard screenshots, ER diagrams) |
+| `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
 | `create_knowledge` | Write learnings back (agents create drafts) |
 | `update_knowledge` | Update; every change is kept as a revision |
 | `delete_knowledge` | Soft-delete (history retained) |

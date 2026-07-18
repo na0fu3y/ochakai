@@ -173,6 +173,56 @@ func (c *Client) Context(ctx context.Context, query string, types, statuses, tag
 	return &out, nil
 }
 
+// Browse lists one level of the ID hierarchy (GET /api/v1/browse,
+// design doc 0014). With typ empty it returns the type list (prefix
+// must be empty too); with a type it returns the subdirectories and
+// entries directly under prefix.
+func (c *Client) Browse(ctx context.Context, typ, prefix string) (*BrowseResult, error) {
+	q := url.Values{}
+	if typ != "" {
+		q.Set("type", typ)
+	}
+	if prefix != "" {
+		q.Set("prefix", prefix)
+	}
+	var out BrowseResult
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/browse", q, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Revisions fetches an entry's change history, newest first, with full
+// snapshots (GET /api/v1/revisions/{type}/{id}). Works for soft-deleted
+// entries too. limit 0 uses the server default.
+func (c *Client) Revisions(ctx context.Context, typ, id string, limit int) ([]domain.Revision, error) {
+	var out struct {
+		Revisions []domain.Revision `json:"revisions"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/revisions/", typ, id), limitQuery(limit), nil, &out)
+	return out.Revisions, err
+}
+
+// Backlinks fetches live entries whose links point at the given entry,
+// most recently updated first (GET /api/v1/backlinks/{type}/{id}).
+// limit 0 uses the server default.
+func (c *Client) Backlinks(ctx context.Context, typ, id string, limit int) ([]domain.Knowledge, error) {
+	var out struct {
+		Entries []domain.Knowledge `json:"entries"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/backlinks/", typ, id), limitQuery(limit), nil, &out)
+	return out.Entries, err
+}
+
+// limitQuery renders an optional limit as query parameters (nil when
+// unset, so the server default applies).
+func limitQuery(limit int) url.Values {
+	if limit <= 0 {
+		return nil
+	}
+	return url.Values{"limit": {strconv.Itoa(limit)}}
+}
+
 func (c *Client) Get(ctx context.Context, typ, id string) (*domain.Knowledge, error) {
 	var k domain.Knowledge
 	if err := c.doJSON(ctx, http.MethodGet, entryPath(typ, id), nil, nil, &k); err != nil {

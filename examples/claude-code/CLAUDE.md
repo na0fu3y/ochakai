@@ -29,10 +29,11 @@ entries. Search it before writing analytics SQL; write learnings back.
   attachments (dashboard screenshots, ER diagrams), fetch them with
   `ochakai get <type>/<id> --download <dir>` and Read the saved files when
   the body's image references matter to the question.
-- `ochakai attach <type>/<id> <file.png>` — attach an image to an entry
-  (and reference it from the body so the caption is searchable). If you
-  learn something by looking at an image, write it into the body with
-  `ochakai update` — knowledge locked in pixels is invisible to search.
+- `ochakai attach <type>/<id> <file>` — attach a file to an entry
+  (png/jpeg/webp, pdf, plain text; reference it from the body so the
+  caption is searchable). If you learn something by looking at an
+  attachment, write it into the body with `ochakai update` — knowledge
+  locked in pixels is invisible to search.
 - `ochakai compile --metric <name> [--dimension ds.field] [--grain ds.time_field:month] [--filter "ds.field = value"]`
   — deterministic SQL on stdout. ochakai never executes SQL; run the result
   with your own warehouse access. **Exit 2** means the request is outside

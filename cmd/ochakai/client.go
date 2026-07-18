@@ -26,22 +26,25 @@ import (
 )
 
 var clientCommands = map[string]func(context.Context, []string) error{
-	"search":  cmdSearch,
-	"context": cmdContext,
-	"get":     cmdGet,
-	"create":  cmdCreate,
-	"update":  cmdUpdate,
-	"delete":  cmdDelete,
-	"attach":  cmdAttach,
-	"detach":  cmdDetach,
-	"usage":   cmdUsage,
-	"report":  cmdReport,
-	"compile": cmdCompile,
-	"export":  cmdExport,
-	"import":  cmdImport,
-	"use":     cmdUse,
-	"whoami":  cmdWhoami,
-	"ui":      cmdUI,
+	"search":    cmdSearch,
+	"browse":    cmdBrowse,
+	"context":   cmdContext,
+	"get":       cmdGet,
+	"create":    cmdCreate,
+	"update":    cmdUpdate,
+	"delete":    cmdDelete,
+	"attach":    cmdAttach,
+	"detach":    cmdDetach,
+	"usage":     cmdUsage,
+	"report":    cmdReport,
+	"revisions": cmdRevisions,
+	"backlinks": cmdBacklinks,
+	"compile":   cmdCompile,
+	"export":    cmdExport,
+	"import":    cmdImport,
+	"use":       cmdUse,
+	"whoami":    cmdWhoami,
+	"ui":        cmdUI,
 
 	"import-ossie": cmdImportOssie,
 
@@ -204,6 +207,54 @@ func cmdSearch(ctx context.Context, args []string) error {
 			line += " — " + h.Description
 		}
 		fmt.Println(line)
+	}
+	return nil
+}
+
+func cmdBrowse(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai browse [flags] [type[/prefix]]\n\nList one level of the ID hierarchy (the folder view of design doc\n0014, the CLI counterpart of the web UI's Browse tab). Without an\nargument, the types with their entry counts; with type (and an\noptional prefix) the subdirectories and entries directly under it.\nDirectories print as \"name/\tcount\", entries as \"segment\tstatus\ttitle\".\nRejected entries are hidden, as in search.",
+		"  ochakai browse\n  ochakai browse query\n  ochakai browse query/sales\n")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 1 {
+		fs.Usage()
+		return errReported
+	}
+	var typ, prefix string
+	if len(pos) == 1 {
+		typ, prefix, _ = strings.Cut(strings.TrimPrefix(pos[0], "ochakai://"), "/")
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	res, err := c.Browse(ctx, typ, prefix)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(res)
+	}
+	for _, t := range res.Types {
+		fmt.Printf("%s/\t%d\n", t.Type, t.Count)
+	}
+	for _, d := range res.Dirs {
+		fmt.Printf("%s/\t%d\n", d.Name, d.Count)
+	}
+	prefix = strings.TrimSuffix(prefix, "/")
+	for _, e := range res.Entries {
+		seg := e.ID
+		if prefix != "" {
+			seg = strings.TrimPrefix(seg, prefix+"/")
+		}
+		fmt.Printf("%s\t%s\t%s\n", seg, e.Status, e.Title)
+	}
+	if res.Truncated {
+		fmt.Fprintln(os.Stderr, "note: showing the first 1000 entries at this level (server cap)")
 	}
 	return nil
 }
@@ -374,9 +425,85 @@ func cmdReport(ctx context.Context, args []string) error {
 	return nil
 }
 
+func cmdRevisions(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai revisions [flags] <type>/<id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. Full snapshots are in\nthe JSON output (--json).",
+		"  ochakai revisions metric/revenue\n  ochakai revisions query/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
+	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
+	asJSON := fs.Bool("json", false, "print the raw JSON response (includes full snapshots)")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	typ, id, err := splitRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	revs, err := c.Revisions(ctx, typ, id, *limit)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(map[string]any{"revisions": revs})
+	}
+	for _, r := range revs {
+		fmt.Printf("#%d\t%s\t%s:%s\t%s\n", r.Rev, r.Change,
+			r.ChangedBy.Kind, r.ChangedBy.Name, r.ChangedAt.Format(time.RFC3339))
+	}
+	return nil
+}
+
+func cmdBacklinks(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai backlinks [flags] <type>/<id>\n\nList live entries whose links point at this entry, most recently\nupdated first — the reverse edge the web UI shows as \"linked from\"\n(context already follows it when packing companions).\nOutput: uri, status, title — description (one entry per line).",
+		"  ochakai backlinks metric/revenue\n  ochakai backlinks metric/revenue --json | jq '.entries[].id'\n")
+	limit := fs.Int("limit", 0, "max entries (server default 20, max 100)")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	typ, id, err := splitRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	entries, err := c.Backlinks(ctx, typ, id, *limit)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(map[string]any{"entries": entries})
+	}
+	for i := range entries {
+		e := &entries[i]
+		line := fmt.Sprintf("%s\t%s\t%s", e.URI(), e.Status, e.Title)
+		if e.Description != "" {
+			line += " — " + e.Description
+		}
+		fmt.Println(line)
+	}
+	return nil
+}
+
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai get [flags] <type>/<id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the image\nfiles themselves (an agent can then read them from disk).",
+		"Usage: ochakai get [flags] <type>/<id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the\nattachment files themselves (an agent can then read them from disk).",
 		"  ochakai get metric/revenue\n  ochakai get query/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insight/revenue-reading --download ./img\n")
 	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
 	download := fs.String("download", "", "save the entry's attachments into this directory")

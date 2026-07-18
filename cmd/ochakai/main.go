@@ -85,6 +85,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
+  browse [type[/prefix]]  list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <type>/<id>         print one entry as an OKF document
   create [-f file]        create an entry from OKF markdown or JSON
@@ -94,6 +95,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   detach <type>/<id> <n>  remove an attachment
   usage <type>/<id>       show usage totals (search hits, fetches, compiles, outcomes)
   report <type>/<id> <o>  report an outcome: worked | failed (--note for why)
+  revisions <type>/<id>   list an entry's change history (newest first)
+  backlinks <type>/<id>   list entries whose links point at this one
   compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
