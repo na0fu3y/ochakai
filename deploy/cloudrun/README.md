@@ -240,6 +240,36 @@ updated knowledge with `gemini-embedding-001`. Search becomes hybrid
 (trigram + vector, reciprocal rank fusion). If Vertex AI is ever
 unavailable, writes and searches degrade gracefully to trigram-only.
 
+## 4b. Optional: attachment images on GCS
+
+By default attachment images live in Postgres (design doc 0008), which
+keeps local development Docker-only. When they start crowding the
+database, move the bytes to a GCS bucket (design doc 0011) — metadata,
+revisions, and the API surface don't change, and auth is ADC via the
+service identity, no keys:
+
+```sh
+gcloud storage buckets create gs://$PROJECT_ID-ochakai-blobs \
+  --location=$REGION --uniform-bucket-level-access --public-access-prevention
+
+gcloud storage buckets add-iam-policy-binding gs://$PROJECT_ID-ochakai-blobs \
+  --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/storage.objectUser  # ochakai-run SA from §3
+
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_GCS_BUCKET=$PROJECT_ID-ochakai-blobs
+```
+
+On the next start, ochakai copies existing inline images to the bucket
+(objects are content-addressed `blob/<sha256>`, create-only, never
+deleted) and clears the database copies; the backfill is idempotent, so
+an interrupted start resumes on the next one. New attachments go
+straight to the bucket.
+
+**Rollback caveat**: the backfill is not additive — once it has run,
+binaries older than the env var (or a deployment with the var removed)
+cannot read migrated images. Enable it only after the current release is
+settled, and keep the var set from then on.
+
 ## 5. Load a semantic model and connect Claude Code
 
 Import Apache Ossie semantic models through the API. The CLI resolves
@@ -506,6 +536,9 @@ Version notes:
   `OCHAKAI_CORS_ORIGINS`, `OCHAKAI_EMBEDDING_PROVIDER`) is also gone:
   stale variables are now silently ignored, so double-check they are
   unset before upgrading straight from ≤0.2 (see the 0.3.0 note).
+  Also in 0.8.0: attachment images can move to GCS (`OCHAKAI_GCS_BUCKET`,
+  §4b). Opt-in; enabling it migrates image bytes out of Postgres at
+  startup — read §4b's rollback caveat before setting the variable.
 - **→ 0.3.0 (breaking)**: ochakai is Google Cloud only (design doc 0003).
   Bearer-token auth (`OCHAKAI_CLIENTS`), `OCHAKAI_AUTH`, and
   `OCHAKAI_CORS_ORIGINS` are removed — remove them from the deployment
@@ -529,4 +562,5 @@ Version notes:
 gcloud run services delete ochakai --region=$REGION --quiet
 gcloud run services delete ochakai-webui --region=$REGION --quiet
 gcloud sql instances delete ochakai --quiet
+gcloud storage rm -r gs://$PROJECT_ID-ochakai-blobs --quiet  # if §4b was used
 ```

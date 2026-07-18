@@ -18,6 +18,11 @@ import (
 // it once, and revisions can name any historical content by hash. The
 // attachment row maps entry + filename to a blob. Blobs are never
 // deleted: like knowledge revisions, history is retained.
+//
+// With an external blob store configured (design doc 0011), the bytes
+// live in GCS under blob/<sha256> and the blob row's bytes column is
+// NULL; everything else — content addressing, immutability, metadata,
+// never deleting — is unchanged.
 
 const attachmentCols = `a.name, b.media_type, b.size, a.sha256, a.okf_path,
 	a.created_by_kind, a.created_by_name, a.created_at`
@@ -45,6 +50,16 @@ func (s *Store) PutAttachment(ctx context.Context, typ domain.Type, id, name, me
 		CreatedBy: actor,
 		CreatedAt: time.Now().UTC(),
 	}
+	// The external upload happens outside (before) the transaction:
+	// create-only and content-addressed, so a DB failure afterwards
+	// leaves only an unreferenced object the next identical attach reuses.
+	inline := data
+	if s.blobs != nil {
+		if err := s.blobs.Put(ctx, att.SHA256, mediaType, data); err != nil {
+			return nil, err
+		}
+		inline = nil
+	}
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		k, err := s.Get(ctx, typ, id)
 		if err != nil {
@@ -59,9 +74,15 @@ func (s *Store) PutAttachment(ctx context.Context, typ domain.Type, id, name, me
 		if count >= domain.MaxAttachmentsPerEntry {
 			return fmt.Errorf("invalid attachment: entry already has %d attachments (max %d)", count, domain.MaxAttachmentsPerEntry)
 		}
+		// The conditional update re-inlines a blob whose bytes were
+		// migrated out while a blob store was configured: attaching the
+		// same content in bytea mode heals it (the rollback path in
+		// design doc 0011 §2.4). Content addressing keeps this safe —
+		// same sha256, same bytes.
 		if _, err := tx.Exec(ctx, `INSERT INTO blob (sha256, media_type, bytes, size)
-			VALUES ($1, $2, $3, $4) ON CONFLICT (sha256) DO NOTHING`,
-			att.SHA256, att.MediaType, data, att.Size); err != nil {
+			VALUES ($1, $2, $3, $4) ON CONFLICT (sha256) DO UPDATE SET bytes = EXCLUDED.bytes
+			WHERE blob.bytes IS NULL AND EXCLUDED.bytes IS NOT NULL`,
+			att.SHA256, att.MediaType, inline, att.Size); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO attachment
@@ -109,7 +130,63 @@ func (s *Store) GetAttachment(ctx context.Context, typ domain.Type, id, name str
 	if err != nil {
 		return nil, nil, err
 	}
-	return &wd.att, wd.data, nil
+	data, err := s.blobBytes(ctx, wd.att.SHA256, wd.data)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &wd.att, data, nil
+}
+
+// blobBytes resolves a blob's content from its inline bytes or, when they
+// are NULL (migrated out, design doc 0011), from the external blob store.
+func (s *Store) blobBytes(ctx context.Context, sha256 string, inline []byte) ([]byte, error) {
+	if inline != nil {
+		return inline, nil
+	}
+	if s.blobs == nil {
+		return nil, fmt.Errorf("blob %s was migrated to the external blob store but none is configured; set OCHAKAI_GCS_BUCKET (design doc 0011)", sha256)
+	}
+	return s.blobs.Get(ctx, sha256)
+}
+
+// MigrateBlobsOut copies every blob still stored inline to the external
+// blob store and clears the inline bytes, returning how many rows moved.
+// Idempotent per sha256 (Put is create-only, NULLing is the last step),
+// so an interrupted run is finished by the next start.
+func (s *Store) MigrateBlobsOut(ctx context.Context) (int, error) {
+	if s.blobs == nil {
+		return 0, errors.New("no blob store configured")
+	}
+	rows, err := s.pool.Query(ctx, `SELECT sha256 FROM blob WHERE bytes IS NOT NULL ORDER BY sha256`)
+	if err != nil {
+		return 0, err
+	}
+	sums, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return 0, err
+	}
+	// One blob at a time: startup memory stays bounded by the largest
+	// attachment, not the table.
+	moved := 0
+	for _, sum := range sums {
+		var mediaType string
+		var data []byte
+		if err := s.pool.QueryRow(ctx,
+			`SELECT media_type, bytes FROM blob WHERE sha256=$1`, sum).Scan(&mediaType, &data); err != nil {
+			return moved, err
+		}
+		if data == nil {
+			continue // raced with another instance's backfill
+		}
+		if err := s.blobs.Put(ctx, sum, mediaType, data); err != nil {
+			return moved, fmt.Errorf("migrate blob %s: %w", sum, err)
+		}
+		if _, err := s.pool.Exec(ctx, `UPDATE blob SET bytes = NULL WHERE sha256=$1`, sum); err != nil {
+			return moved, err
+		}
+		moved++
+	}
+	return moved, nil
 }
 
 // ListAttachments returns the metadata (no bytes) of a live entry's
@@ -166,12 +243,21 @@ func (s *Store) ListAllAttachments(ctx context.Context) ([]ExportAttachment, err
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
+	atts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
 		var e ExportAttachment
 		err := row.Scan(&e.Type, &e.ID, &e.Att.Name, &e.Att.MediaType, &e.Att.Size, &e.Att.SHA256, &e.Att.OKFPath,
 			&e.Att.CreatedBy.Kind, &e.Att.CreatedBy.Name, &e.Att.CreatedAt, &e.Data)
 		return e, err
 	})
+	if err != nil {
+		return nil, err
+	}
+	for i := range atts {
+		if atts[i].Data, err = s.blobBytes(ctx, atts[i].Att.SHA256, atts[i].Data); err != nil {
+			return nil, err
+		}
+	}
+	return atts, nil
 }
 
 // touchAndRevise bumps the entry's updated_at and records a revision

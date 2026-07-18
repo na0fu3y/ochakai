@@ -215,6 +215,7 @@ round-trip through OKF bundles as plain files next to their entry
 |---|---|
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required; `DATABASE_URL` also works) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the `DATABASE_URL` carries no secret |
+| `OCHAKAI_GCS_BUCKET` | Set to store attachment images as GCS objects instead of Postgres rows (auth is ADC — no keys); existing images are migrated out at startup. Default: unset, images live in Postgres and local development stays Docker-only |
 | `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |

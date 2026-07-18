@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/na0fu3y/ochakai/internal/blob"
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/connector"
 	"github.com/na0fu3y/ochakai/internal/embed"
@@ -134,6 +135,25 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	}
 	if err := st.Migrate(ctx, embedDim); err != nil {
 		return nil, nil, err
+	}
+	// Attachment bytes on GCS (design doc 0011): route new bytes to the
+	// bucket and finish any interrupted backfill of inline rows. Failing
+	// the start is deliberate — the backfill is idempotent and the next
+	// boot resumes it.
+	if cfg.GCSBucket != "" {
+		bs, err := blob.NewGCS(ctx, cfg.GCSBucket)
+		if err != nil {
+			return nil, nil, err
+		}
+		st.UseBlobStore(bs)
+		moved, err := st.MigrateBlobsOut(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("migrating attachment blobs to gs://%s: %w", cfg.GCSBucket, err)
+		}
+		if moved > 0 {
+			log.Info("migrated inline attachment blobs to GCS", "count", moved, "bucket", cfg.GCSBucket)
+		}
+		log.Info("attachment bytes on GCS", "bucket", cfg.GCSBucket)
 	}
 	return &service.Service{Store: st, Embedder: embedder, Config: cfg, Log: log}, cfg, nil
 }

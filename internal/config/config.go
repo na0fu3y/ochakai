@@ -23,6 +23,10 @@ type Config struct {
 	// InsecureDev disables authentication for local development: every
 	// request acts as human:anonymous. Never enable on a deployment.
 	InsecureDev bool
+	// GCSBucket, when set, stores attachment bytes as GCS objects
+	// (blob/<sha256>) instead of Postgres bytea rows; existing inline
+	// blobs are migrated out at startup (design doc 0011). Auth is ADC.
+	GCSBucket string
 
 	// Embedding is nil when semantic search is disabled (the default).
 	// Set OCHAKAI_VERTEX_PROJECT to enable it.
@@ -65,6 +69,7 @@ func FromEnv() (*Config, error) {
 		DatabaseURL: firstEnv("OCHAKAI_DATABASE_URL", "DATABASE_URL"),
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
 		InsecureDev: os.Getenv("OCHAKAI_INSECURE_DEV") == "true",
+		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
 	}
 	if addr := os.Getenv("OCHAKAI_ADDR"); addr != "" {
 		cfg.Addr = addr
