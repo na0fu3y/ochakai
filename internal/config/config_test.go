@@ -5,24 +5,11 @@ import (
 	"testing"
 )
 
-// The connector service is removed (design doc 0012); a deployment still
-// configured for it was publicly invokable and must not silently start
-// as the private trust-the-headers surface.
-func TestRemovedConnectorRefusesToStart(t *testing.T) {
-	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
-
-	t.Run("guard", func(t *testing.T) {
-		t.Setenv("OCHAKAI_CONNECTOR_PUBLIC_URL", "https://connector.example")
-		if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_CONNECTOR_PUBLIC_URL") {
-			t.Errorf("err = %v, want refuse-to-start guard", err)
-		}
-	})
-
-	t.Run("absent is fine", func(t *testing.T) {
-		if _, err := FromEnv(); err != nil {
-			t.Fatal(err)
-		}
-	})
+func TestDatabaseURLRequired(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_DATABASE_URL") {
+		t.Errorf("err = %v, want OCHAKAI_DATABASE_URL requirement", err)
+	}
 }
 
 func TestGCSBucket(t *testing.T) {

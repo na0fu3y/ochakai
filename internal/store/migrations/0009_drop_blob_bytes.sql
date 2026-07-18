@@ -1,9 +1,9 @@
 -- Attachment bytes live only in GCS now (design doc 0013): the bytea
--- column of design doc 0008 is retired. The startup order guarantees the
--- backfill (MigrateBlobsOut) ran before this migration when a bucket is
--- configured; if inline bytes remain anyway — a GCS-less instance with
--- legacy attachments — dropping the column would destroy them, so fail
--- the migration with instructions instead.
+-- column of design doc 0008 is retired. The 0.8.x startup backfill
+-- (removed since) moved inline bytes to GCS before this migration ran;
+-- if inline bytes remain — an upgrade that skipped 0.8.x — dropping the
+-- column would destroy them, so fail the migration with instructions
+-- instead.
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns
@@ -11,8 +11,9 @@ BEGIN
                  AND table_name = 'blob' AND column_name = 'bytes') THEN
         IF EXISTS (SELECT 1 FROM blob WHERE bytes IS NOT NULL) THEN
             RAISE EXCEPTION 'attachment bytes are still inline in PostgreSQL; '
-                'set OCHAKAI_GCS_BUCKET and restart so they migrate to GCS '
-                'before the bytea column can be dropped (design doc 0013)';
+                'upgrade through a 0.8.x release with OCHAKAI_GCS_BUCKET set '
+                'so they migrate to GCS before the bytea column can be '
+                'dropped (design doc 0013)';
         END IF;
         ALTER TABLE blob DROP COLUMN bytes;
     END IF;

@@ -76,14 +76,13 @@ type frontmatter struct {
 
 // reservedKeys are the frontmatter keys the envelope owns. An attr with a
 // reserved name is not exported as an extension key: the envelope value
-// wins ("attrs" is reserved so a literal attr of that name cannot
-// masquerade as the legacy nested form on re-import).
+// wins.
 var reservedKeys = map[string]bool{
 	"type": true, "id": true, "title": true, "description": true,
 	"resource": true, "tags": true, "timestamp": true, "status": true,
 	"status_note": true, "created_by": true, "verified_by": true,
 	"verified_at": true, "rejected_by": true, "rejected_at": true,
-	"attrs": true, AttrOKFType: true,
+	AttrOKFType: true,
 }
 
 // Bundle renders every entry into a path→content map. Paths follow

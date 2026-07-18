@@ -128,59 +128,6 @@ func (s *Store) GetAttachment(ctx context.Context, typ domain.Type, id, name str
 	return &att, data, nil
 }
 
-// MigrateBlobsOut copies every blob still stored inline in the legacy
-// bytea column to the external blob store and clears the inline bytes,
-// returning how many rows moved. It runs before schema migrations so
-// migration 0009 (which drops the column, design doc 0013) finds nothing
-// left to lose; on databases where the table or column is already gone
-// there is nothing to do. Idempotent per sha256 (Put is create-only,
-// NULLing is the last step), so an interrupted run is finished by the
-// next start.
-func (s *Store) MigrateBlobsOut(ctx context.Context) (int, error) {
-	if s.blobs == nil {
-		return 0, errors.New("no blob store configured")
-	}
-	var hasInline bool
-	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (
-		SELECT 1 FROM information_schema.columns
-		WHERE table_schema = current_schema() AND table_name = 'blob' AND column_name = 'bytes')`).Scan(&hasInline); err != nil {
-		return 0, err
-	}
-	if !hasInline {
-		return 0, nil
-	}
-	rows, err := s.pool.Query(ctx, `SELECT sha256 FROM blob WHERE bytes IS NOT NULL ORDER BY sha256`)
-	if err != nil {
-		return 0, err
-	}
-	sums, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return 0, err
-	}
-	// One blob at a time: startup memory stays bounded by the largest
-	// attachment, not the table.
-	moved := 0
-	for _, sum := range sums {
-		var mediaType string
-		var data []byte
-		if err := s.pool.QueryRow(ctx,
-			`SELECT media_type, bytes FROM blob WHERE sha256=$1`, sum).Scan(&mediaType, &data); err != nil {
-			return moved, err
-		}
-		if data == nil {
-			continue // raced with another instance's backfill
-		}
-		if err := s.blobs.Put(ctx, sum, mediaType, data); err != nil {
-			return moved, fmt.Errorf("migrate blob %s: %w", sum, err)
-		}
-		if _, err := s.pool.Exec(ctx, `UPDATE blob SET bytes = NULL WHERE sha256=$1`, sum); err != nil {
-			return moved, err
-		}
-		moved++
-	}
-	return moved, nil
-}
-
 // ListAttachments returns the metadata (no bytes) of a live entry's
 // attachments, in name order.
 func (s *Store) ListAttachments(ctx context.Context, typ domain.Type, id string) ([]domain.Attachment, error) {

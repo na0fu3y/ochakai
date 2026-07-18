@@ -219,13 +219,13 @@ round-trip through OKF bundles as plain files next to their entry
 
 | Env var | Description |
 |---|---|
-| `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required; `DATABASE_URL` also works) |
-| `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the `DATABASE_URL` carries no secret |
-| `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys); legacy in-Postgres bytes are migrated out at startup. Default: unset — the instance stores markdown entries only and attach operations return an error ([design doc 0013](docs/design/0013-attachment-files-gcs-only.md)) |
+| `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required) |
+| `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
+| `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error ([design doc 0013](docs/design/0013-attachment-files-gcs-only.md)) |
 | `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
-| `PORT` / `OCHAKAI_ADDR` | Listen address (default `:8080`) |
+| `PORT` | Listen port (default `8080`) |
 
 Authentication has no configuration: ochakai reads the caller identity
 that Cloud Run forwards after its IAM check (`human:<email>` for people,

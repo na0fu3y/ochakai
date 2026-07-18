@@ -113,19 +113,12 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 		}
 		attrs[key] = v
 	}
-	if legacy, ok := raw["attrs"].(map[string]any); ok {
-		for key, v := range legacy {
-			setAttr(key, v)
-		}
-	}
 	for key, v := range raw {
 		switch key {
 		case "type", "id", "title", "description", "tags", "status", "status_note":
 			// envelope, extracted above
 		case "timestamp", "created_by", "verified_by", "verified_at", "rejected_by", "rejected_at":
 			// server-owned, never from the payload
-		case "attrs":
-			// legacy nested extensions, folded in above
 		default:
 			setAttr(key, v)
 		}
