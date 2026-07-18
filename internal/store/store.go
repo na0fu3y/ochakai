@@ -32,7 +32,7 @@ type Store struct {
 }
 
 // UseBlobStore routes attachment bytes to b (design doc 0013). Call
-// before serving; legacy inline rows are moved by MigrateBlobsOut.
+// before serving.
 func (s *Store) UseBlobStore(b blob.Store) { s.blobs = b }
 
 // HasBlobStore reports whether attachment bytes have somewhere to live —

@@ -135,25 +135,13 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	} else {
 		log.Info("semantic search disabled; using trigram search only")
 	}
-	// Attachment bytes live only on GCS (design doc 0013). The blob store
-	// is wired and the legacy bytea backfill runs BEFORE schema migrations:
-	// migration 0009 drops the bytea column and refuses to run while
-	// inline bytes remain, so this order lets one boot with the bucket set
-	// finish the move. Failing the start on a backfill error is deliberate
-	// — the backfill is idempotent and the next boot resumes it.
+	// Attachment bytes live only on GCS (design doc 0013).
 	if cfg.GCSBucket != "" {
 		bs, err := blob.NewGCS(ctx, cfg.GCSBucket)
 		if err != nil {
 			return nil, nil, err
 		}
 		st.UseBlobStore(bs)
-		moved, err := st.MigrateBlobsOut(ctx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("migrating attachment blobs to gs://%s: %w", cfg.GCSBucket, err)
-		}
-		if moved > 0 {
-			log.Info("migrated inline attachment blobs to GCS", "count", moved, "bucket", cfg.GCSBucket)
-		}
 		log.Info("attachment bytes on GCS", "bucket", cfg.GCSBucket)
 	} else {
 		log.Info("attachments disabled (no OCHAKAI_GCS_BUCKET); markdown entries only")
@@ -175,15 +163,12 @@ func serve(log *slog.Logger) error {
 	defer svc.Store.Close()
 
 	mux := http.NewServeMux()
-	// /health is the canonical health endpoint. /healthz is kept for local
-	// use but is unreachable behind Google Frontends (Cloud Run's run.app
-	// intercepts the path and returns its own 404) — discovered the hard way.
-	health := func(w http.ResponseWriter, _ *http.Request) {
+	// /health, not /healthz: Google Frontends intercept /healthz on
+	// run.app URLs and return their own 404 — discovered the hard way.
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
-	}
-	mux.HandleFunc("GET /health", health)
-	mux.HandleFunc("GET /healthz", health)
+	})
 	// The server deliberately does not serve the web UI (design doc 0006
 	// §4) — but a bare 404 at / strands newcomers who just ran the compose
 	// file and opened the port. Point them at the real entry points.

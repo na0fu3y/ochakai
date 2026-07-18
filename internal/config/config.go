@@ -10,7 +10,7 @@ import (
 )
 
 type Config struct {
-	// Addr is the listen address. Cloud Run's PORT is honored when set.
+	// Addr is the listen address, ":" + PORT (Cloud Run's contract).
 	Addr string
 	// DatabaseURL is the Cloud SQL connection string (required).
 	DatabaseURL string
@@ -21,9 +21,9 @@ type Config struct {
 	// InsecureDev disables authentication for local development: every
 	// request acts as human:anonymous. Never enable on a deployment.
 	InsecureDev bool
-	// GCSBucket, when set, stores attachment bytes as GCS objects
-	// (blob/<sha256>) instead of Postgres bytea rows; existing inline
-	// blobs are migrated out at startup (design doc 0011). Auth is ADC.
+	// GCSBucket names the bucket holding attachment bytes as GCS objects
+	// (blob/<sha256>, design doc 0013). Auth is ADC. When empty,
+	// attachments are unsupported — markdown entries only.
 	GCSBucket string
 
 	// Embedding is nil when semantic search is disabled (the default).
@@ -43,25 +43,13 @@ type EmbeddingConfig struct {
 func FromEnv() (*Config, error) {
 	cfg := &Config{
 		Addr:        ":" + envOr("PORT", "8080"),
-		DatabaseURL: firstEnv("OCHAKAI_DATABASE_URL", "DATABASE_URL"),
+		DatabaseURL: os.Getenv("OCHAKAI_DATABASE_URL"),
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
 		InsecureDev: os.Getenv("OCHAKAI_INSECURE_DEV") == "true",
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
 	}
-	if addr := os.Getenv("OCHAKAI_ADDR"); addr != "" {
-		cfg.Addr = addr
-	}
 	if cfg.DatabaseURL == "" {
-		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL (or DATABASE_URL) is required")
-	}
-
-	// The MCP OAuth connector service was removed (design doc 0012). This
-	// is a refuse-to-start guard, not silent tolerance like other removed
-	// variables: connector deployments were publicly invokable (allUsers),
-	// and a binary that ignored the variable would serve the trust-the-
-	// headers private surface on that public service.
-	if os.Getenv("OCHAKAI_CONNECTOR_PUBLIC_URL") != "" {
-		return nil, fmt.Errorf("OCHAKAI_CONNECTOR_PUBLIC_URL is set, but the MCP OAuth connector was removed (design doc 0012); this deployment is publicly invokable and must not run this image — delete the connector service (and its allUsers grant) instead of upgrading it")
+		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL is required")
 	}
 
 	if project := os.Getenv("OCHAKAI_VERTEX_PROJECT"); project != "" {
@@ -85,13 +73,4 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func firstEnv(keys ...string) string {
-	for _, k := range keys {
-		if v := os.Getenv(k); v != "" {
-			return v
-		}
-	}
-	return ""
 }

@@ -54,9 +54,8 @@ type: query
 id: monthly-revenue
 title: 月次売上
 status: draft
-attrs:
-  question: 月ごとの売上は？
-  sql: SELECT 1
+question: 月ごとの売上は？
+sql: SELECT 1
 ---
 
 Body text here.

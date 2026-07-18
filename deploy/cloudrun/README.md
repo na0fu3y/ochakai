@@ -259,17 +259,14 @@ gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_GCS_BUCKET=$PROJECT_ID-ochakai-blobs
 ```
 
-On the next start, ochakai copies any legacy in-Postgres attachment
-bytes to the bucket (objects are content-addressed `blob/<sha256>`,
-create-only, never deleted), clears the database copies, and drops the
-legacy bytea column (migration 0009); the backfill is idempotent, so an
-interrupted start resumes on the next one. New attachments go straight
-to the bucket.
+Attachment bytes go straight to the bucket (objects are
+content-addressed `blob/<sha256>`, create-only, never deleted).
 
-**Upgrading from ≤0.8.x with attachments and no bucket**: set
-`OCHAKAI_GCS_BUCKET` *before* (or together with) deploying this version.
-Migration 0009 refuses to run while attachment bytes are still inline
-and no bucket is configured — the service fails to start with the
+**Upgrading from ≤0.8.x with attachments and no bucket**: run a 0.8.x
+release with `OCHAKAI_GCS_BUCKET` set once — its startup backfill moves
+the in-Postgres attachment bytes to the bucket. From 0.9.0 on, the
+backfill is gone and migration 0009 refuses to run while attachment
+bytes are still inline — the service fails to start with the
 instruction, nothing is lost. Once migrated, the bytea column is gone,
 so binaries and configurations without the bucket cannot read
 attachments again; keep the var set from then on.
@@ -479,9 +476,9 @@ Version notes:
 
 - **→ 0.9.0 (breaking)**: the MCP OAuth connector service is retired
   ([design doc 0012](../../docs/design/0012-retire-mcp-oauth-connector.md)).
-  A deployment with `OCHAKAI_CONNECTOR_PUBLIC_URL` set **refuses to
-  start** — deliberately, because that service was publicly invokable
-  and this image would otherwise serve the trust-the-headers private
+  `OCHAKAI_CONNECTOR_PUBLIC_URL` is now silently ignored — **never point
+  a connector deployment at this image**: that service was publicly
+  invokable, and this image would serve the trust-the-headers private
   surface on it. Delete the connector service instead of upgrading it
   (`gcloud run services delete ochakai-connector --region=$REGION`), and
   clean up its Google OAuth client, the Secret Manager client secret,
@@ -489,6 +486,13 @@ Version notes:
   unaffected; its startup migration drops the now-unused `oauth_*`
   tables (which the private service never read, so rolling it back
   afterwards remains safe).
+  Also removed in 0.9.0: the `DATABASE_URL` alias (use
+  `OCHAKAI_DATABASE_URL`), `OCHAKAI_ADDR` (use `PORT`), the `/healthz`
+  alias (use `/health`), the startup bytea→GCS backfill (upgrade through
+  0.8.x with `OCHAKAI_GCS_BUCKET` set if attachment bytes are still in
+  Postgres, §4b), and OKF import of the pre-0.4 nested `attrs:`
+  frontmatter form (re-export old bundles, or lift the keys to the top
+  level — SPEC §4.1).
 - **→ 0.8.0 (breaking)**: the v0.3 migration shims are gone. The legacy
   `GET /api/v1/knowledge/{type}/{id}/usage` alias is removed — use
   `GET /api/v1/usage/{type}/{id}`. The startup guard that refused to run
