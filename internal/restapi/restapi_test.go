@@ -98,3 +98,30 @@ func TestOversizedBodies(t *testing.T) {
 		})
 	}
 }
+
+// TestReportOutcomeBadRequests pins the outcome endpoint's client-error
+// paths, which all fire before any store access: malformed JSON and an
+// unknown outcome are 400s.
+func TestReportOutcomeBadRequests(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct {
+		name, body, wantSubstr string
+	}{
+		{"invalid JSON", "not json", "invalid JSON"},
+		{"unknown outcome", `{"outcome":"misleading"}`, "invalid outcome"},
+		{"missing outcome", `{}`, "invalid outcome"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/usage/query/monthly-revenue", strings.NewReader(c.body))
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("POST usage = %d, want 400 (body: %s)", rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), c.wantSubstr) {
+				t.Errorf("body %q does not mention %q", rec.Body, c.wantSubstr)
+			}
+		})
+	}
+}

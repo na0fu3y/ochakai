@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -81,5 +84,24 @@ func TestRRFFuseLimit(t *testing.T) {
 	}
 	if got := len(rrfFuse(2, list)); got != 2 {
 		t.Errorf("want limit 2, got %d", got)
+	}
+}
+
+// TestReportOutcomeValidation pins the input checks that run before any
+// store access: an unknown outcome and an oversized note are client
+// errors (InvalidInputError → 400), never a nil-store panic.
+func TestReportOutcomeValidation(t *testing.T) {
+	s := &Service{}
+	ctx := context.Background()
+	var inputErr *InvalidInputError
+
+	_, err := s.ReportOutcome(ctx, domain.TypeQuery, "q", "misleading", "")
+	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "invalid outcome") {
+		t.Errorf("unknown outcome: got %v, want an invalid-outcome InvalidInputError", err)
+	}
+
+	_, err = s.ReportOutcome(ctx, domain.TypeQuery, "q", domain.EventWorked, strings.Repeat("x", maxOutcomeNote+1))
+	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "note exceeds") {
+		t.Errorf("oversized note: got %v, want a note-exceeds InvalidInputError", err)
 	}
 }

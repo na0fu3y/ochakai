@@ -97,7 +97,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   delete <type>/<id>      soft-delete an entry (history retained)
   attach <type>/<id> <f>  attach images to an entry (png/jpeg/gif/webp)
   detach <type>/<id> <n>  remove an attachment
-  usage <type>/<id>       show usage totals (search hits, fetches, compiles)
+  usage <type>/<id>       show usage totals (search hits, fetches, compiles, outcomes)
+  report <type>/<id> <o>  report an outcome: worked | failed (--note for why)
   compile --metric <m>    compile metrics into SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)

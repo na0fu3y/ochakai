@@ -35,6 +35,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"attach":  cmdAttach,
 	"detach":  cmdDetach,
 	"usage":   cmdUsage,
+	"report":  cmdReport,
 	"compile": cmdCompile,
 	"export":  cmdExport,
 	"import":  cmdImport,
@@ -335,8 +336,41 @@ func cmdUsage(ctx context.Context, args []string) error {
 	if u.LastUsedAt != nil {
 		last = u.LastUsedAt.Format(time.RFC3339)
 	}
-	fmt.Printf("search_hits\t%d\nfetches\t%d\ncompiles\t%d\nlast_used_at\t%s\n",
-		u.SearchHits, u.Fetches, u.Compiles, last)
+	fmt.Printf("search_hits\t%d\nfetches\t%d\ncompiles\t%d\nworked\t%d\nfailed\t%d\nlast_used_at\t%s\n",
+		u.SearchHits, u.Fetches, u.Compiles, u.Worked, u.Failed, last)
+	return nil
+}
+
+func cmdReport(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai report [flags] <type>/<id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running a golden query or compiled\nSQL, report worked or failed (say what went wrong with --note);\nfailed counts against verified entries flag them for re-verification.\nPrints the entry's updated usage totals.",
+		"  ochakai report query/monthly-revenue worked\n  ochakai report query/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
+	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong")
+	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 2 {
+		fs.Usage()
+		return errReported
+	}
+	typ, id, err := splitRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	u, err := c.ReportOutcome(ctx, typ, id, pos[1], *note)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(u)
+	}
+	fmt.Printf("reported %s ochakai://%s/%s (worked %d, failed %d)\n", pos[1], typ, id, u.Worked, u.Failed)
 	return nil
 }
 
