@@ -74,6 +74,20 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 	})
 
+	// GET /api/v1/browse?type=...&prefix=... — one level of the ID
+	// hierarchy (design doc 0014): without type, the type list; with one,
+	// the subdirectories and entries directly under prefix. The tree view
+	// behind the web UI's Browse tab.
+	mux.HandleFunc("GET /api/v1/browse", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		res, err := svc.Browse(r.Context(), domain.Type(q.Get("type")), q.Get("prefix"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+
 	// GET /api/v1/context?q=...&type=...&status=...&tag=...&limit=...
 	// The one-call read before answering a data question: full entries
 	// behind the top hits, expanded one hop through links.

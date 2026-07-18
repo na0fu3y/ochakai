@@ -29,6 +29,27 @@ func TestValidID(t *testing.T) {
 	}
 }
 
+func TestValidIDPrefix(t *testing.T) {
+	valid := []string{
+		"", "sales", "sales/orders", "index", "a/index", // "index" only names a directory here
+		"GA_sessions_2017", "notes/2026",
+	}
+	for _, p := range valid {
+		if !ValidIDPrefix(p) {
+			t.Errorf("ValidIDPrefix(%q) = false, want true", p)
+		}
+	}
+	invalid := []string{
+		"/", "a/", "/a", "a//b", "日本語", "a b", "../etc", ".hidden",
+		strings.Repeat("a", 129), strings.Repeat("a/", 300) + "a",
+	}
+	for _, p := range invalid {
+		if ValidIDPrefix(p) {
+			t.Errorf("ValidIDPrefix(%q) = true, want false", p)
+		}
+	}
+}
+
 // TestSameContent pins the no-op-update predicate: authored content
 // decides, server-managed provenance and timestamps never do, and attrs
 // compare by value across decoders (YAML ints vs JSON float64s).

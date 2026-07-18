@@ -57,6 +57,9 @@ func TestBadRequestValidation(t *testing.T) {
 		{"bad backlinks limit", "/api/v1/backlinks/metric/revenue?limit=1.5", "invalid limit"},
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
 		{"bad min_score", "/api/v1/context?q=x&min_score=high", "invalid min_score"},
+		{"browse prefix without type", "/api/v1/browse?prefix=sales", "prefix requires a type"},
+		{"browse bad type", "/api/v1/browse?type=no%2Fslash", "invalid type"},
+		{"browse bad prefix", "/api/v1/browse?type=query&prefix=..%2Fescape", "invalid prefix"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

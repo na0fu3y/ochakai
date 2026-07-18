@@ -88,6 +88,8 @@ proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 
 Agents write drafts; somebody has to read them. The bundled web UI is
 where a human reviews what agents learned — search and filter by status,
+browse the knowledge as a folder tree (hierarchical IDs are directories,
+[design doc 0014](docs/design/0014-folder-browse.md)),
 read an entry with its links and usage counts, then verify / deprecate /
 reject (with the reason) in one click. It also shows the *verification
 age* feed (oldest `verified_at` first) so stale golden queries surface,
