@@ -96,6 +96,96 @@ func TestSearchUsageSortDecodesUsage(t *testing.T) {
 	}
 }
 
+func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
+	var got url.Values
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/browse" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		got = r.URL.Query()
+		_ = json.NewEncoder(w).Encode(BrowseResult{
+			Dirs:    []BrowseDir{{Name: "sales", Count: 4}},
+			Entries: []BrowseEntry{{Type: "query", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusVerified}},
+		})
+	})
+	res, err := c.Browse(context.Background(), "query", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("type") != "query" || got.Has("prefix") {
+		t.Errorf("query = %v", got)
+	}
+	if len(res.Dirs) != 1 || res.Dirs[0].Name != "sales" ||
+		len(res.Entries) != 1 || res.Entries[0].ID != "monthly-revenue" {
+		t.Errorf("res = %+v", res)
+	}
+
+	// Root level: no parameters at all.
+	if _, err := c.Browse(context.Background(), "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("root query = %v, want empty", got)
+	}
+
+	// A prefix scopes within the type.
+	if _, err := c.Browse(context.Background(), "query", "sales/"); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("type") != "query" || got.Get("prefix") != "sales/" {
+		t.Errorf("prefixed query = %v", got)
+	}
+}
+
+func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
+	var got url.Values
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/revisions/query/sales/monthly-revenue" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		got = r.URL.Query()
+		_ = json.NewEncoder(w).Encode(map[string]any{"revisions": []domain.Revision{
+			{Rev: 2, Change: "update", ChangedBy: domain.Actor{Kind: domain.ActorHuman, Name: "na0"}},
+		}})
+	})
+	revs, err := c.Revisions(context.Background(), "query", "sales/monthly-revenue", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("limit") != "10" {
+		t.Errorf("query = %v", got)
+	}
+	if len(revs) != 1 || revs[0].Rev != 2 || revs[0].Change != "update" {
+		t.Errorf("revs = %+v", revs)
+	}
+
+	// limit 0 = server default: no limit parameter on the wire.
+	if _, err := c.Revisions(context.Background(), "query", "sales/monthly-revenue", 0); err != nil {
+		t.Fatal(err)
+	}
+	if got.Has("limit") {
+		t.Errorf("default query = %v, want no limit", got)
+	}
+}
+
+func TestBacklinksHitsCanonicalPathAndDecodesEntries(t *testing.T) {
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/backlinks/metric/revenue" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"entries": []domain.Knowledge{
+			{Type: domain.TypeInsight, ID: "revenue-reading", Title: "売上の読み方"},
+		}})
+	})
+	entries, err := c.Backlinks(context.Background(), "metric", "revenue", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].ID != "revenue-reading" {
+		t.Errorf("entries = %+v", entries)
+	}
+}
+
 func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/usage/query/sales/monthly-revenue" {

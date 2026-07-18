@@ -37,15 +37,18 @@ _ochakai() {
   local -a commands
   commands=(
     'search:search knowledge; verified entries rank higher'
+    'browse:list one level of the ID hierarchy (folder view)'
     'context:the one-call read before a data question (full entries)'
     'get:print one entry as an OKF document'
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
     'delete:soft-delete an entry'
-    'attach:attach images to an entry'
+    'attach:attach files to an entry'
     'detach:remove an attachment'
     'usage:show usage totals for an entry'
     'report:report an outcome (worked/failed) for an entry'
+    'revisions:list the change history of an entry (newest first)'
+    'backlinks:list entries whose links point at this one'
     'compile:compile metrics into SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
@@ -89,6 +92,12 @@ _ochakai() {
       ;;
     usage)
       _arguments '--json[print JSON]' '--url[server URL]:url:'
+      ;;
+    browse)
+      _arguments '--json[print the raw JSON response]' '--url[server URL]:url:'
+      ;;
+    revisions|backlinks)
+      _arguments '--limit[max results]:limit:' '--json[print the raw JSON response]' '--url[server URL]:url:'
       ;;
     report)
       _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
@@ -156,7 +165,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search context get create update delete attach detach usage report compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie use whoami ui completion serve version help" -- "$cur"))
     return
   fi
 
@@ -170,9 +179,11 @@ _ochakai() {
 
   case $cmd in
     search)        opts="--type --status --tag --sort --limit --json --url" ;;
+    browse)        opts="--json --url" ;;
     context)       opts="--type --status --tag --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
+    revisions|backlinks) opts="--limit --json --url" ;;
     report)
       if [[ $prev != -* && $COMP_CWORD -eq 3 && $cur != -* ]]; then
         COMPREPLY=($(compgen -W "worked failed" -- "$cur"))
@@ -212,15 +223,18 @@ const fishCompletion = `# fish completion for ochakai — ochakai completion fis
 complete -c ochakai -f
 
 complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
+complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
 complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full entries)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
-complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach images to an entry'
+complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to an entry'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
+complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
+complete -c ochakai -n __fish_use_subcommand -a backlinks -d 'list entries whose links point at this one'
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
@@ -232,12 +246,12 @@ complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell com
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update delete attach detach usage report compile export import import-ossie whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context get create update attach usage report compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update attach usage report revisions backlinks compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
@@ -247,7 +261,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage' -d 'list instead of searching: by verification age or by demand'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
-complete -c ochakai -n '__fish_seen_subcommand_from search context compile' -l limit -x -d 'max results / LIMIT clause'
+complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks compile' -l limit -x -d 'max results / LIMIT clause'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'
