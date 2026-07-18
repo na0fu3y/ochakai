@@ -572,12 +572,16 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	updated, err := c.Update(ctx, k)
+	updated, changed, err := c.Update(ctx, k)
 	if err != nil {
 		return err
 	}
 	if *asJSON {
 		return printJSON(updated)
+	}
+	if !changed {
+		fmt.Printf("unchanged %s (%s)\n", updated.URI(), updated.Status)
+		return nil
 	}
 	fmt.Printf("updated %s (%s)\n", updated.URI(), updated.Status)
 	return nil
@@ -712,7 +716,7 @@ func cmdExport(ctx context.Context, args []string) error {
 
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions). Images referenced by an entry's body markdown links become\nits attachments, wherever they sit in the bundle (their location is\npreserved for re-export). An archive wrapped in a single directory is\nunwrapped. Works with any OKF bundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions; entries identical to what is stored are left untouched\nand reported as unchanged). Images referenced by an entry's body markdown links become\nits attachments, wherever they sit in the bundle (their location is\npreserved for re-export). An archive wrapped in a single directory is\nunwrapped. Works with any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	keepRoot := fs.Bool("keep-root", false, "keep a single top-level directory as the type instead of unwrapping it")
@@ -752,7 +756,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	var created, updated int
+	var created, updated, unchanged int
 	for i := range entries {
 		k := &entries[i]
 		if _, err := c.Create(ctx, k); err == nil {
@@ -762,8 +766,14 @@ func cmdImport(ctx context.Context, args []string) error {
 		} else if !isConflict(err) {
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
-		if _, err := c.Update(ctx, k); err != nil {
+		_, changed, err := c.Update(ctx, k)
+		if err != nil {
 			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		if !changed {
+			unchanged++
+			fmt.Printf("unchanged %s\n", k.URI())
+			continue
 		}
 		updated++
 		fmt.Printf("updated %s\n", k.URI())
@@ -780,8 +790,8 @@ func cmdImport(ctx context.Context, args []string) error {
 		}
 		fmt.Printf("attached %s/%s/%s\n", a.Type, a.ID, a.Name)
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d attachments, %d skipped)\n",
-		created+updated, created, updated, len(atts), len(skipped))
+	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped)\n",
+		created+updated+unchanged, created, updated, unchanged, len(atts), len(skipped))
 	return nil
 }
 
@@ -820,8 +830,11 @@ func cmdImportOssie(ctx context.Context, args []string) error {
 	for _, uri := range report.Updated {
 		fmt.Println("updated", uri)
 	}
-	fmt.Printf("imported %d models (%d entries created, %d updated)\n",
-		len(report.Models), len(report.Created), len(report.Updated))
+	for _, uri := range report.Unchanged {
+		fmt.Println("unchanged", uri)
+	}
+	fmt.Printf("imported %d models (%d entries created, %d updated, %d unchanged)\n",
+		len(report.Models), len(report.Created), len(report.Updated), len(report.Unchanged))
 	return nil
 }
 

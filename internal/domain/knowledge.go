@@ -3,8 +3,11 @@
 package domain
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -146,6 +149,32 @@ type Knowledge struct {
 
 // URI returns the canonical reference, e.g. "ochakai://metric/revenue".
 func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type, k.ID) }
+
+// SameContent reports whether o carries the same authored content as k:
+// the fields a writer controls (title, description, tags, status,
+// status_note, links, attrs, body). Server-managed provenance and
+// timestamps (created_*, verified_*, rejected_*, updated_at) and the
+// attachment list are not content. Attrs are compared as canonical JSON,
+// so the same value decoded from YAML (int) and from JSONB (float64)
+// compares equal; values JSON cannot encode compare as different.
+func (k *Knowledge) SameContent(o *Knowledge) bool {
+	return k.Type == o.Type && k.ID == o.ID &&
+		k.Title == o.Title && k.Description == o.Description &&
+		k.Status == o.Status && k.StatusNote == o.StatusNote &&
+		k.Body == o.Body &&
+		slices.Equal(k.Tags, o.Tags) &&
+		slices.Equal(k.Links, o.Links) &&
+		attrsEqual(k.Attrs, o.Attrs)
+}
+
+func attrsEqual(a, b map[string]any) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ja, jb)
+}
 
 // Revision is one entry in an entry's change history: who changed it,
 // how, when, and the full snapshot as of that change. The audit trail

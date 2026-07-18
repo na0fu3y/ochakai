@@ -25,6 +25,9 @@ type Report struct {
 	Models  []string `json:"models"`
 	Created []string `json:"created"`
 	Updated []string `json:"updated"`
+	// Unchanged lists entries whose refreshed definition matched what was
+	// already stored, so nothing was written (no revision).
+	Unchanged []string `json:"unchanged,omitempty"`
 }
 
 // ImportOssie parses Ossie YAML and stores each semantic model plus derived
@@ -103,10 +106,15 @@ func upsertKnowledge(ctx context.Context, svc *service.Service, report *Report, 
 	if k.Description != "" {
 		existing.Description = k.Description
 	}
-	if _, err := svc.Update(ctx, existing, actor); err != nil {
+	_, changed, err := svc.Update(ctx, existing, actor)
+	if err != nil {
 		return err
 	}
-	report.Updated = append(report.Updated, k.URI())
+	if changed {
+		report.Updated = append(report.Updated, k.URI())
+	} else {
+		report.Unchanged = append(report.Unchanged, k.URI())
+	}
 	return nil
 }
 

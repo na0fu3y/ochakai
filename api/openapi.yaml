@@ -185,7 +185,14 @@ paths:
             schema: { $ref: "#/components/schemas/Knowledge" }
       responses:
         "200":
-          description: Updated.
+          description: Updated, or unchanged (see the Ochakai-Unchanged header).
+          headers:
+            Ochakai-Unchanged:
+              description: >
+                Set to "true" when the payload matched the stored content
+                exactly, so nothing was written — no revision, no
+                updated_at bump. Absent on a real update.
+              schema: { type: string, enum: ["true"] }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }

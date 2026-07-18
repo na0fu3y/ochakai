@@ -56,9 +56,10 @@ func TestCompileRequestMatchesServerWire(t *testing.T) {
 
 func TestImportReportMatchesServerWire(t *testing.T) {
 	server := importer.Report{
-		Models:  []string{"sales_analytics"},
-		Created: []string{"metric/revenue"},
-		Updated: []string{"table/orders"},
+		Models:    []string{"sales_analytics"},
+		Created:   []string{"metric/revenue"},
+		Updated:   []string{"table/orders"},
+		Unchanged: []string{"metric/margin"},
 	}
 	data, err := json.Marshal(server)
 	if err != nil {
@@ -69,9 +70,10 @@ func TestImportReportMatchesServerWire(t *testing.T) {
 		t.Fatalf("client cannot decode the server response: %v", err)
 	}
 	want := ImportReport{
-		Models:  []string{"sales_analytics"},
-		Created: []string{"metric/revenue"},
-		Updated: []string{"table/orders"},
+		Models:    []string{"sales_analytics"},
+		Created:   []string{"metric/revenue"},
+		Updated:   []string{"table/orders"},
+		Unchanged: []string{"metric/margin"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("client decoded:\n%+v\nwant:\n%+v", got, want)

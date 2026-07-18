@@ -181,11 +181,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
 		Description: "Update a knowledge entry (full replacement of title/description/tags/status/links/attrs/body). " +
-			"Every change is kept as a revision. Setting status=verified records you as verified_by — " +
+			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
+			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
 			"as rejected_by; put the reason in status_note (also useful when deprecating).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		k, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx))
+		k, _, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}

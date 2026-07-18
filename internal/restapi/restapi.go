@@ -132,10 +132,16 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		k.Type = domain.Type(r.PathValue("type"))
 		k.ID = r.PathValue("id")
-		updated, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()))
+		updated, changed, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)
 			return
+		}
+		// A payload identical to the stored content wrote nothing (no
+		// revision, no updated_at bump); the header lets clients report
+		// "unchanged" without an extra read.
+		if !changed {
+			w.Header().Set("Ochakai-Unchanged", "true")
 		}
 		writeJSON(w, http.StatusOK, updated)
 	})
