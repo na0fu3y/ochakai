@@ -18,7 +18,6 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/blob"
 	"github.com/na0fu3y/ochakai/internal/config"
-	"github.com/na0fu3y/ochakai/internal/connector"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/mcpserver"
@@ -167,17 +166,6 @@ func serve(log *slog.Logger) error {
 		return err
 	}
 	defer svc.Store.Close()
-
-	// Connector mode (design doc 0010): the publicly deployable second
-	// service. Only OAuth + /mcp + health exist; REST and the private
-	// service's trust model (httpauth) are not reachable here.
-	if cfg.Connector != nil {
-		handler := connector.Handler(cfg.Connector, svc.Store, mcpserver.Handler(svc, version), version, log)
-		log.Info("ochakai connector listening", "addr", cfg.Addr, "version", version,
-			"public_url", cfg.Connector.PublicURL, "allowed_domain", cfg.Connector.AllowedDomain,
-			"endpoints", []string{"/mcp", "/oauth/*", "/.well-known/*", "/health"})
-		return runServer(ctx, cfg.Addr, handler)
-	}
 
 	mux := http.NewServeMux()
 	// /health is the canonical health endpoint. /healthz is kept for local

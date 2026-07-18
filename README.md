@@ -72,9 +72,8 @@ Stop hook asks it once per data session to save what it learned
 
 ### MCP
 
-Hosted agents without a shell (claude.ai connectors, Claude Desktop,
-Gemini Enterprise managed agents) connect over MCP, which remains the
-primary interface. Claude Code can use it too:
+Agents without a shell (Claude Desktop, Gemini Enterprise managed
+agents) connect over MCP, which remains the primary interface. Claude Code can use it too:
 
 ```sh
 claude mcp add --transport http ochakai http://localhost:8080/mcp

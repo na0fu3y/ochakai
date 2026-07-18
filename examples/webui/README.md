@@ -54,7 +54,7 @@ deployment stays IAM-restricted and browser users are recorded as
 Without `OCHAKAI_URL` it serves the static page only; the page then calls
 whatever base URL you set via the chip in the top-right corner.
 
-To deploy it on Cloud Run as its own service next to an IAM-restricted
-ochakai — including why it is a separate service and the identity
-trade-offs versus `ochakai ui` — follow
-[deploy/cloudrun/README.md §5b](../../deploy/cloudrun/README.md#5b-deploy-the-sample-web-ui-separate-service-by-design).
+To deploy it on Cloud Run as its own IAP-fronted service next to an
+IAM-restricted ochakai — including why it is a separate service and the
+identity trade-offs versus `ochakai ui` — follow
+[deploy/cloudrun/README.md §5b](../../deploy/cloudrun/README.md#5b-optional-the-sample-web-ui-behind-iap-separate-service-by-design).

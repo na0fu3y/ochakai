@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0010: MCP OAuth コネクタサービス
 
-Status: Accepted(2026-07-18)
+Status: Superseded by [0012](0012-retire-mcp-oauth-connector.md)(2026-07-18 — 実装は撤去。再実装時はこの設計を出発点にする)
 Date: 2026-07-18
 
 ## 1. 目的

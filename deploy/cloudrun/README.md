@@ -303,16 +303,24 @@ curl -X POST "http://localhost:8787/api/v1/compile" \
   -d '{"metrics":["revenue"],"dimensions":["customers.region"],"dialect":"bigquery"}'
 ```
 
-## 5b. Deploy the sample web UI (separate service, by design)
+## 5b. Optional: the sample web UI behind IAP (separate service, by design)
 
 The sample UI ([examples/webui](../../examples/webui)) is **not** part of
-the ochakai image — the core keeps its serving surface minimal. It ships
-as its own tiny service: a static page plus a reverse proxy that attaches
-its service identity (`X-Serverless-Authorization`) to API calls, so
-ochakai stays organization-restricted while the UI is reachable from any
-machine. Browser users are recorded as the webui's service account
-(`agent:ochakai-webui@…`); per-user browser identity needs IAP. (MCP
-clients get per-user identity without the proxy via §5c's connector.)
+the ochakai image — the core keeps its serving surface minimal. For
+personal use it needs no deployment at all: `ochakai ui` serves the same
+page on loopback with your own identity. Deploy this service when people
+who cannot run the Go CLI need browser access.
+
+It ships as its own tiny service: a static page plus a reverse proxy that
+attaches its service identity (`X-Serverless-Authorization`) to API
+calls, so ochakai stays organization-restricted. The webui itself is
+non-public too: [Identity-Aware Proxy](https://cloud.google.com/iap/docs/enabling-cloud-run)
+sits in front, so browsers sign in with their Google account and only
+your organization gets through — no `allUsers` grant anywhere. Note that
+writes through the UI are still recorded as the webui's service account
+(`agent:ochakai-webui@…`), not the browser user; per-user provenance
+would need IAP JWT verification (design doc 0002 §4). MCP and CLI
+clients get per-user identity via the §5 proxy path.
 
 ```sh
 # build & push (from the repository root)
@@ -327,86 +335,28 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=serviceAccount:ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --role=roles/run.invoker
 
-gcloud run deploy ochakai-webui \
+# deploy non-public, with IAP in front
+gcloud services enable iap.googleapis.com
+gcloud beta run deploy ochakai-webui \
   --image=$REGION-docker.pkg.dev/$PROJECT_ID/images/ochakai-webui:0.1 \
-  --region=$REGION --allow-unauthenticated \
+  --region=$REGION --no-allow-unauthenticated --iap \
   --service-account=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --min-instances=0 --max-instances=1 --cpu=1 --memory=256Mi \
   --set-env-vars=OCHAKAI_URL=$OCHAKAI_URL
-```
 
-Open the webui service URL from any machine and search. The UI and API
-are same-origin through the proxy, so nothing else to configure. Note
-the trade-off: the webui itself is public, so anyone who finds its URL
-can read and write through it as the webui's identity. Put IAP in front
-of it if that is not acceptable.
-
-## 5c. Optional: the MCP OAuth connector (claude.ai / ChatGPT, proxyless Claude Code)
-
-claude.ai and ChatGPT connect to MCP servers from their own cloud, so
-they can never pass Cloud Run IAM. The connector
-([design doc 0010](../../docs/design/0010-mcp-oauth-connector.md)) is the
-**same image deployed a second time, publicly**, exposing only `/mcp` +
-OAuth endpoints. Sign-in is delegated to Google and restricted to your
-Workspace domain; the private service from §3 stays exactly as it is.
-Skip this section entirely if nobody needs those clients.
-
-First create a Google OAuth client (this is the one credential in the
-whole deployment; Google offers no API for this — use the console):
-
-1. **APIs & Services → OAuth consent screen**: User Type **Internal**
-   (blocks non-org logins at Google's side, before ochakai's own check).
-2. **Credentials → Create credentials → OAuth client ID**: type
-   **Web application**, authorized redirect URI
-   `https://ochakai-connector-<PROJECT_NUMBER>.<REGION>.run.app/oauth/callback`
-   (Cloud Run's deterministic URL — check it after deploying if unsure).
-
-```sh
+# let IAP invoke the service, and your organization through IAP
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-export CONNECTOR_URL=https://ochakai-connector-$PROJECT_NUMBER.$REGION.run.app
-
-gcloud run deploy ochakai-connector \
-  --image=$IMAGE \
-  --region=$REGION \
-  --service-account=$SERVICE_ACCOUNT \
-  --allow-unauthenticated \
-  --min-instances=0 --max-instances=2 \
-  --cpu=1 --memory=512Mi \
-  --add-cloudsql-instances=$PROJECT_ID:$REGION:ochakai \
-  --set-env-vars="OCHAKAI_DB_IAM_AUTH=true" \
-  --set-env-vars="OCHAKAI_DATABASE_URL=postgres:///ochakai?host=/cloudsql/$PROJECT_ID:$REGION:ochakai&user=$DB_SA_USER" \
-  --set-env-vars="OCHAKAI_CONNECTOR_PUBLIC_URL=$CONNECTOR_URL" \
-  --set-env-vars="OCHAKAI_CONNECTOR_ALLOWED_DOMAIN=your-org.example" \
-  --set-env-vars="OCHAKAI_CONNECTOR_GOOGLE_CLIENT_ID=<client-id>" \
-  --set-secrets="OCHAKAI_CONNECTOR_GOOGLE_CLIENT_SECRET=ochakai-connector-google:latest"
+gcloud run services add-iam-policy-binding ochakai-webui --region=$REGION \
+  --member=serviceAccount:service-$PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com \
+  --role=roles/run.invoker
+gcloud beta iap web add-iam-policy-binding \
+  --resource-type=cloud-run --service=ochakai-webui --region=$REGION \
+  --member=domain:your-org.example --role=roles/iap.httpsResourceAccessor
 ```
 
-(Put the client secret in Secret Manager first:
-`printf '%s' '<secret>' | gcloud secrets create ochakai-connector-google --data-file=-`,
-then grant the service account `roles/secretmanager.secretAccessor` on it.)
-
-Connect from claude.ai: **Settings → Connectors → Add custom connector**
-with URL `$CONNECTOR_URL/mcp` — the OAuth client ID/secret fields stay
-empty (the connector supports CIMD, so no registration is needed).
-ChatGPT custom connectors work the same way. Claude Code can now skip
-the §5 proxy:
-
-```sh
-claude mcp add --transport http ochakai $CONNECTOR_URL/mcp
-```
-
-Notes:
-
-- **This service is public by design** — reachability is controlled by
-  its own OAuth tokens (Google-verified `hd` domain check, hashed
-  storage, refresh rotation), not by IAM. The `--no-allow-unauthenticated`
-  rule in §3 applies to the *private* service only.
-- `--allow-unauthenticated` grants `allUsers`, which **Domain Restricted
-  Sharing blocks**. Exempt just this service (tags + conditional org
-  policy) rather than lifting the policy project-wide.
-- Everyone signs in interactively, so every write is recorded as
-  `human:<email>` — same provenance as the §5 proxy path.
-- The webui (§5b) and REST are not served here; only `/mcp` and OAuth.
+Open the webui service URL: IAP presents the Google sign-in, then the
+page loads. The UI and API are same-origin through the proxy, so nothing
+else to configure.
 
 ## 6. Security hardening checklist
 
@@ -431,13 +381,13 @@ gcloud resource-manager org-policies enable-enforce \
 ```
 
 Keep Domain Restricted Sharing (`iam.allowedPolicyMemberDomains`) on at
-the org level; nothing in this guide needs `allUsers` except the sample
-webui.
+the org level; nothing in this guide needs `allUsers` — every service,
+the IAP-fronted webui included, stays `--no-allow-unauthenticated`.
 
 **Remove the reachable database endpoint**: §2b (private IP only).
 
-**Enforce TLS on direct connections** (connector traffic is always
-mTLS; this covers the authorized-network path):
+**Enforce TLS on direct connections** (Cloud SQL connector traffic is
+always mTLS; this covers the authorized-network path):
 
 ```sh
 gcloud sql instances patch ochakai --ssl-mode=ENCRYPTED_ONLY
@@ -467,12 +417,6 @@ cost; real knowledge deserves them:
 gcloud sql instances patch ochakai --backup --enable-point-in-time-recovery
 ```
 
-**Google login for webui users**: the sample webui is public by design
-(§5b). Putting IAP in front of it requires org-internal Google login in
-the browser (grant `roles/iap.httpsResourceAccessor` to your domain);
-per-user provenance through the webui additionally needs MCP OAuth
-([issue #5](https://github.com/na0fu3y/ochakai/issues/5)).
-
 **Deploy-time image gating**: releases ship SLSA provenance (§8's
 `gh attestation verify`); Binary Authorization can enforce that check
 automatically on every deploy instead of relying on operator diligence.
@@ -483,17 +427,17 @@ trails, enable Cloud SQL Data Access audit logs in the Console — admin
 activity is logged by default.
 
 Of these, the org-policy guardrails, TLS enforcement, and
-password-retirement steps follow standard Google Cloud procedures but —
-like §2b — have not yet been exercised end-to-end by this guide's
-maintainers; report anything that doesn't work as written.
+password-retirement steps — and §5b's IAP commands — follow standard
+Google Cloud procedures but, like §2b, have not yet been exercised
+end-to-end by this guide's maintainers; report anything that doesn't
+work as written.
 
 ## 7. Troubleshooting in security-hardened organizations
 
 - **`allUsers` binding fails with "do not belong to a permitted customer"**:
   the org enforces Domain Restricted Sharing
-  (`iam.allowedPolicyMemberDomains`). The recommended §3 setup never needs
-  `allUsers`, so keep the policy on; only the sample webui
-  require an exception.
+  (`iam.allowedPolicyMemberDomains`). Nothing in this guide needs
+  `allUsers` (the webui goes behind IAP, §5b), so keep the policy on.
 - **`run.app` returns Google's HTML 404 ("That's an error") even though
   the service is Ready**: before suspecting infrastructure, test a real
   application endpoint (e.g. `/api/v1/knowledge?q=x`) and check request
@@ -534,6 +478,18 @@ working against a newer schema.
 
 Version notes:
 
+- **→ 0.9.0 (breaking)**: the MCP OAuth connector service is retired
+  ([design doc 0012](../../docs/design/0012-retire-mcp-oauth-connector.md)).
+  A deployment with `OCHAKAI_CONNECTOR_PUBLIC_URL` set **refuses to
+  start** — deliberately, because that service was publicly invokable
+  and this image would otherwise serve the trust-the-headers private
+  surface on it. Delete the connector service instead of upgrading it
+  (`gcloud run services delete ochakai-connector --region=$REGION`), and
+  clean up its Google OAuth client, the Secret Manager client secret,
+  and any Domain Restricted Sharing exemption. The private service is
+  unaffected; its startup migration drops the now-unused `oauth_*`
+  tables (which the private service never read, so rolling it back
+  afterwards remains safe).
 - **→ 0.8.0 (breaking)**: the v0.3 migration shims are gone. The legacy
   `GET /api/v1/knowledge/{type}/{id}/usage` alias is removed — use
   `GET /api/v1/usage/{type}/{id}`. The startup guard that refused to run
