@@ -341,6 +341,33 @@ func (s *Service) Usage(ctx context.Context, typ domain.Type, id string) (*domai
 	return s.Store.Usage(ctx, typ, id)
 }
 
+// maxOutcomeNote bounds the free-form note recorded with an outcome
+// report; notes live in raw knowledge_event rows (pruned after 180 days).
+const maxOutcomeNote = 2000
+
+// ReportOutcome records a worked/failed report against one entry and
+// returns the updated usage totals. The last edge of the write-back
+// loop: an agent that ran a golden query and got a wrong number can say
+// so, instead of the next agent trusting the same entry blind. Unlike
+// passive usage recording, a failed write is returned — the reporter
+// should know the report was lost.
+func (s *Service) ReportOutcome(ctx context.Context, typ domain.Type, id, outcome, note string) (*domain.Usage, error) {
+	if !domain.ValidOutcome(outcome) {
+		return nil, Invalidf("invalid outcome %q (valid: %s)", outcome, strings.Join(domain.Outcomes, ", "))
+	}
+	if len(note) > maxOutcomeNote {
+		return nil, Invalidf("note exceeds %d bytes", maxOutcomeNote)
+	}
+	if _, err := s.Store.Get(ctx, typ, id); err != nil {
+		return nil, err
+	}
+	actor := httpauth.Actor(ctx)
+	if err := s.Store.RecordOutcome(ctx, outcome, actor, store.EventTarget{Type: typ, ID: id}, note); err != nil {
+		return nil, err
+	}
+	return s.Store.Usage(ctx, typ, id)
+}
+
 // recordUsage writes usage events with the acting caller as provenance.
 // Failures are logged, never returned: usage recording must not fail reads.
 func (s *Service) recordUsage(ctx context.Context, event string, targets []store.EventTarget) {

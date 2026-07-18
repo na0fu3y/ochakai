@@ -131,6 +131,31 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("usage totals wrong: %+v", usage)
 	}
 
+	// Outcome reporting: worked/failed events with a note feed the same
+	// totals (issue #41).
+	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, target[0], "joins dropped 2024 rows"); err != nil {
+		t.Fatalf("RecordOutcome: %v", err)
+	}
+	if err := s.RecordOutcome(ctx, domain.EventWorked, actor, target[0], ""); err != nil {
+		t.Fatalf("RecordOutcome: %v", err)
+	}
+	usage, err = s.Usage(ctx, k.Type, k.ID)
+	if err != nil {
+		t.Fatalf("Usage: %v", err)
+	}
+	if usage.Worked < 1 || usage.Failed < 1 {
+		t.Errorf("outcome totals wrong: %+v", usage)
+	}
+	var note string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT note FROM knowledge_event WHERE knowledge_id = $1 AND event = $2`,
+		k.ID, domain.EventFailed).Scan(&note); err != nil {
+		t.Fatalf("read outcome note: %v", err)
+	}
+	if note != "joins dropped 2024 rows" {
+		t.Errorf("outcome note did not round-trip: %q", note)
+	}
+
 	// ListByVerifiedAt: oldest verification first, rejected excluded by
 	// the default filter.
 	oldAt := time.Now().UTC().Add(-365 * 24 * time.Hour)
@@ -171,6 +196,9 @@ func TestIntegration(t *testing.T) {
 			t.Fatalf("RecordEvents: %v", err)
 		}
 	}
+	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, EventTarget{Type: hot.Type, ID: hot.ID}, ""); err != nil {
+		t.Fatalf("RecordOutcome: %v", err)
+	}
 	feed, err := s.ListByUsage(ctx, Filter{
 		Types:    []domain.Type{domain.TypeInsight},
 		Statuses: []domain.Status{domain.StatusDraft},
@@ -181,8 +209,8 @@ func TestIntegration(t *testing.T) {
 	if len(feed) < 2 || feed[0].ID != hot.ID {
 		t.Errorf("most-searched draft must come first: %+v", feed)
 	}
-	if feed[0].Usage == nil || feed[0].Usage.SearchHits != 3 {
-		t.Errorf("hit must carry usage totals (search_hits=3): %+v", feed[0].Usage)
+	if feed[0].Usage == nil || feed[0].Usage.SearchHits != 3 || feed[0].Usage.Failed != 1 {
+		t.Errorf("hit must carry usage totals (search_hits=3, failed=1): %+v", feed[0].Usage)
 	}
 	if feed[0].Score != 0 {
 		t.Errorf("listing hits carry score 0, got %v", feed[0].Score)

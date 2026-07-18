@@ -799,6 +799,8 @@ async function viewDetail(type, id) {
           <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">search hits</div></div>
           <div class="tile"><div class="num">${u.fetches ?? 0}</div><div class="lbl">fetches</div></div>
           <div class="tile"><div class="num">${u.compiles ?? 0}</div><div class="lbl">compiles</div></div>
+          <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">worked</div></div>
+          <div class="tile"><div class="num">${u.failed ?? 0}</div><div class="lbl">failed</div></div>
         </div>
         <p class="provenance">${u.last_used_at ? 'last used ' + esc(fmtDate(u.last_used_at)) : 'never used'}</p>`;
     },
@@ -962,11 +964,15 @@ function reviewCard(h) {
   const usageBits = (u.search_hits || u.fetches || u.compiles)
     ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0} · compiled ${u.compiles || 0}`
     : 'no usage yet';
+  const outcomeBits = (u.worked || u.failed)
+    ? `${u.failed ? '⚠️ ' : ''}worked ${u.worked || 0} · failed ${u.failed || 0}`
+    : '';
   const meta = [
     `<span class="mono">ochakai://${esc(h.type)}/${esc(h.id)}</span>`,
     who ? esc(who) : '',
     age !== null ? 'created ' + esc(fmtAge(age)) : '',
     usageBits,
+    outcomeBits,
   ].filter(Boolean).join(' · ');
   return `<article class="card" data-type="${esc(h.type)}" data-id="${esc(h.id)}">
     <div class="head">

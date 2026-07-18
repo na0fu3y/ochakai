@@ -401,13 +401,15 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 	// running totals per event live in that table (see usage.go).
 	q := fmt.Sprintf(`
 		SELECT `+qualifyCols("k")+`,
-			u.search_hits, u.fetches, u.compiles, u.last_used_at
+			u.search_hits, u.fetches, u.compiles, u.worked, u.failed, u.last_used_at
 		FROM knowledge k
 		LEFT JOIN LATERAL (
 			SELECT
 				COALESCE(sum(count) FILTER (WHERE event = 'search_hit'), 0) AS search_hits,
 				COALESCE(sum(count) FILTER (WHERE event = 'fetched'), 0)   AS fetches,
 				COALESCE(sum(count) FILTER (WHERE event = 'compiled'), 0)  AS compiles,
+				COALESCE(sum(count) FILTER (WHERE event = 'worked'), 0)    AS worked,
+				COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
 				max(last_at) AS last_used_at
 			FROM knowledge_usage
 			WHERE knowledge_type = k.type AND knowledge_id = k.id
@@ -432,7 +434,7 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 		&h.CreatedBy.Kind, &h.CreatedBy.Name, &verifiedKind, &verifiedName, &h.VerifiedAt,
 		&rejectedKind, &rejectedName, &h.RejectedAt,
 		&links, &attrs, &h.Body, &h.CreatedAt, &h.UpdatedAt,
-		&u.SearchHits, &u.Fetches, &u.Compiles, &u.LastUsedAt)
+		&u.SearchHits, &u.Fetches, &u.Compiles, &u.Worked, &u.Failed, &u.LastUsedAt)
 	if err != nil {
 		return h, err
 	}

@@ -261,6 +261,20 @@ func (c *Client) Usage(ctx context.Context, typ, id string) (*domain.Usage, erro
 	return &u, nil
 }
 
+// ReportOutcome reports whether acting on an entry worked or failed
+// (POST /api/v1/usage/{type}/{id}) and returns the updated totals.
+func (c *Client) ReportOutcome(ctx context.Context, typ, id, outcome, note string) (*domain.Usage, error) {
+	body := map[string]string{"outcome": outcome}
+	if note != "" {
+		body["note"] = note
+	}
+	var u domain.Usage
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/usage/", typ, id), nil, body, &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
 func (c *Client) Compile(ctx context.Context, req CompileRequest) (*CompileResult, error) {
 	var res CompileResult
 	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/compile", nil, req, &res); err != nil {

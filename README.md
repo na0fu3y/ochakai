@@ -31,7 +31,10 @@ for what they still don't do:
   make it are kept as `rejected` with the reason, so agents stop
   re-proposing them — a memory of *no* that verified-answer stores
   elsewhere don't keep. Per-entry usage counts show whether the loop is
-  actually working.
+  actually working, and outcome reports (`report_outcome`: worked /
+  failed) close its last edge — an agent that ran a golden query and got
+  a wrong number says so, instead of the next agent trusting the same
+  entry blind.
 - **Not a memory layer — the other half of one.** Memory layers (mem0,
   Zep, Letta) auto-extract per-user memories with an LLM and inject them
   back, unaudited: nobody reviews what got remembered, and a wrong
@@ -166,6 +169,7 @@ it on Cloud Run as a team-shared service.
 | `update_knowledge` | Update; every change is kept as a revision |
 | `delete_knowledge` | Soft-delete (history retained) |
 | `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
+| `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
 Every entry is also an **MCP resource** addressable by its canonical URI —

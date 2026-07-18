@@ -38,6 +38,12 @@ entries. Search it before writing analytics SQL; write learnings back.
   with your own warehouse access. **Exit 2** means the request is outside
   the supported subset: read the reason on stderr and prefer any suggested
   verified golden queries.
+- `ochakai report <type>/<id> worked|failed [--note "what went wrong"]`
+  — after acting on knowledge (running a golden query, executing compiled
+  SQL), report whether the result was actually correct. `failed` reports
+  flag verified entries for re-verification, so the next agent doesn't
+  trust a stale entry blind. Always report `failed` when a verified entry
+  led you to a wrong number.
 - `ochakai create -f entry.md` — write a learning back (OKF markdown as
   printed by `get`, or JSON; see `ochakai create -h`). Entries start as
   `draft`; your identity is recorded as provenance automatically.

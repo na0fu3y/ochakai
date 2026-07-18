@@ -224,6 +224,40 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Usage" }
         "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: reportOutcome
+      summary: Report an outcome (worked/failed) for a knowledge entry
+      description: >
+        The last edge of the write-back loop: after acting on knowledge
+        (running a golden query, executing compiled SQL), report whether
+        the result was correct. Reports feed the entry's usage totals;
+        failed counts against verified entries flag them for
+        re-verification. The caller's identity is recorded with each
+        report; the optional note travels with the raw event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome:
+                  type: string
+                  enum: [worked, failed]
+                  description: worked = acting on the entry gave a correct result; failed = wrong or unusable.
+                note:
+                  type: string
+                  maxLength: 2000
+                  description: What was run, what went wrong. Recorded with the raw event (pruned with it after 180 days).
+      responses:
+        "200":
+          description: Updated usage totals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Usage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/revisions/{type}/{id}:
     parameters:
       - name: type
@@ -549,6 +583,8 @@ components:
         search_hits: { type: integer, description: Times the entry appeared in search results. }
         fetches: { type: integer, description: Times the entry was fetched individually. }
         compiles: { type: integer, description: Times compile_sql referenced the entry. }
+        worked: { type: integer, description: Outcome reports saying the entry led to a correct result. }
+        failed: { type: integer, description: Outcome reports saying the entry led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
     SearchHit:
       allOf:
