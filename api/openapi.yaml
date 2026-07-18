@@ -258,6 +258,87 @@ paths:
               schema: { $ref: "#/components/schemas/Usage" }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/revisions/{type}/{id}:
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/Type" }
+      - name: id
+        in: path
+        required: true
+        description: Hierarchical IDs keep their slashes as real path separators.
+        schema: { type: string }
+    get:
+      operationId: listKnowledgeRevisions
+      summary: Change history for one knowledge entry
+      description: >
+        Every create/update/delete/attach/detach, newest first, each with
+        who made it, when, and the full snapshot as of that change — the
+        read surface behind "every change kept as a revision". Works for
+        soft-deleted entries too: the audit trail is most interesting
+        exactly when the entry is gone.
+      parameters:
+        - name: limit
+          in: query
+          description: >
+            Default 50, max 200. Out-of-range values fall back to the
+            default; non-integer values are a 400.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Revisions, newest first (never empty — create writes rev 1).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revisions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Revision" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/backlinks/{type}/{id}:
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/Type" }
+      - name: id
+        in: path
+        required: true
+        description: Hierarchical IDs keep their slashes as real path separators.
+        schema: { type: string }
+    get:
+      operationId: listKnowledgeBacklinks
+      summary: Entries whose links point at this entry
+      description: >
+        The reverse edge of links, most recently updated first: the insight
+        that explains a metric links to the metric, not the other way
+        round. get_context already follows this edge when packing
+        companions; here it is exposed directly so UIs can show
+        "linked from" next to an entry's own links. An entry with no
+        backlinks returns an empty list (the target entry itself is not
+        checked for existence).
+      parameters:
+        - name: limit
+          in: query
+          description: >
+            Default 20, max 100. Out-of-range values fall back to the
+            default; non-integer values are a 400.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Live entries linking to this one, most recently updated first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/Knowledge" }
+        "400": { $ref: "#/components/responses/Error" }
   /api/v1/attachments/{type}/{path}:
     parameters:
       - name: type
@@ -518,6 +599,17 @@ components:
                 Usage totals, present only in the sort=usage listing (the
                 draft review feed); absent for search results and the
                 verified_at feed.
+    Revision:
+      type: object
+      description: >
+        One entry in a knowledge entry's change history: who changed it,
+        how, when, and the full snapshot as of that change.
+      properties:
+        rev: { type: integer, description: 1-based, monotonically increasing per entry. }
+        change: { type: string, enum: [create, update, delete, attach, detach] }
+        changed_by: { $ref: "#/components/schemas/Actor" }
+        changed_at: { type: string, format: date-time }
+        snapshot: { $ref: "#/components/schemas/Knowledge" }
     CompileRequest:
       type: object
       required: [metrics]

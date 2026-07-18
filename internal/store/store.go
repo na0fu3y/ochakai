@@ -245,6 +245,36 @@ func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, acto
 	})
 }
 
+// ListRevisions returns an entry's change history, newest first. It
+// reads history, so it works for soft-deleted entries too — the audit
+// trail is most interesting exactly when the entry is gone.
+func (s *Store) ListRevisions(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Revision, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT rev, change, changed_by_kind, changed_by_name, changed_at, snapshot
+		 FROM knowledge_revision WHERE type=$1 AND id=$2 ORDER BY rev DESC LIMIT $3`,
+		typ, id, limit)
+	if err != nil {
+		return nil, err
+	}
+	revs, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Revision, error) {
+		var r domain.Revision
+		var snapshot []byte
+		if err := row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedAt, &snapshot); err != nil {
+			return r, err
+		}
+		return r, json.Unmarshal(snapshot, &r.Snapshot)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(revs) == 0 {
+		// Distinguish "no such entry" from "entry with empty history"
+		// (the latter cannot happen: create always writes rev 1).
+		return nil, ErrNotFound
+	}
+	return revs, nil
+}
+
 func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
 	snapshot, err := json.Marshal(k)
 	if err != nil {
