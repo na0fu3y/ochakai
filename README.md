@@ -37,8 +37,8 @@ curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 
 For Claude Code — and anything else with a shell (headless agents, CI) —
 the recommended interface is the bundled CLI, a thin client of the same
-REST API ([design doc 0004](docs/design/0004-cli.md)): tool schemas don't
-occupy the agent's context (`--help` is read on demand), output composes
+REST API: tool schemas don't occupy the agent's context (`--help` is
+read on demand), output composes
 with pipes, and it resolves Google ID tokens itself, so no proxy process
 is needed against Cloud Run.
 
@@ -88,16 +88,15 @@ proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
 
 Agents write drafts; somebody has to read them. The bundled web UI is
 where a human reviews what agents learned — search and filter by status,
-browse the knowledge as a folder tree (hierarchical IDs are directories,
-[design doc 0014](docs/design/0014-folder-browse.md)),
-read an entry with its links and usage counts, then verify / deprecate /
-reject (with the reason) in one click. It also shows the *verification
+browse the knowledge as a folder tree (hierarchical IDs are
+directories), read an entry with its links and usage counts, then
+verify / deprecate / reject (with the reason) in one click. It also shows the *verification
 age* feed (oldest `verified_at` first) so stale golden queries surface,
 and compiles metrics interactively for debugging semantic models. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
 
-Same page, two identities ([design doc 0006](docs/design/0006-web-ui-serving.md)):
+Same page, two identities:
 `ochakai ui` serves it on loopback acting as *you* (zero deploy, edits
 recorded as `human:<you>`), and `ochakai serve-ui` deploys it as a
 team-shared service — same container image as the server, just
@@ -146,8 +145,7 @@ for what they still don't do:
   [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
   bundles (`ochakai export` / `ochakai import`) — plain markdown + YAML
   frontmatter that lives happily in git. Import accepts any producer's
-  OKF bundle, not just ochakai's own
-  ([design doc 0005](docs/design/0005-okf-compatibility.md)). MIT-licensed
+  OKF bundle, not just ochakai's own. MIT-licensed
   and self-hostable per tenant: your knowledge is never a hostage.
 
 And it stays small by refusing things:
@@ -204,8 +202,7 @@ over time, run them as canaries from your CI:
 These five are recommendations with server behavior attached (compile,
 canaries), not a closed set — any slug works as a type for your own document
 kinds, and IDs may be hierarchical (`query/sales/monthly-revenue`) to
-organize knowledge into directories
-([design doc 0005](docs/design/0005-okf-compatibility.md)).
+organize knowledge into directories.
 
 Entries can carry file attachments — the dashboard screenshot behind an
 insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
@@ -213,9 +210,7 @@ behind a dataset. Accepted formats are the intersection of what Claude
 reads and what Gemini embeds (png/jpeg/webp, pdf, plain text —
 sniffed from the bytes). Search stays text-first (captions in the body),
 attachment bytes live in GCS and are fetched on demand, and attachments
-round-trip through OKF bundles as plain files next to their entry
-([design docs 0008](docs/design/0008-image-attachments.md) and
-[0013](docs/design/0013-attachment-files-gcs-only.md)).
+round-trip through OKF bundles as plain files next to their entry.
 
 ## Configuration
 
@@ -223,7 +218,7 @@ round-trip through OKF bundles as plain files next to their entry
 |---|---|
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
-| `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error ([design doc 0013](docs/design/0013-attachment-files-gcs-only.md)) |
+| `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
 | `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
