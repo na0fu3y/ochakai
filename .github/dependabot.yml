@@ -1,0 +1,16 @@
+# Keeps Go modules, SHA-pinned workflow actions, and the Dockerfile base
+# image current. Security updates are enabled in the repository settings.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
