@@ -156,7 +156,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "get_knowledge",
 		Annotations: readOnly,
 		Description: "Get one knowledge entry by type and id, including its full markdown body, structured attrs, " +
-			"links, and attachment metadata (images the body references — fetch bytes with get_attachment).",
+			"links, and attachment metadata (files the body references: images, PDFs, plain-text data — " +
+			"fetch bytes with get_attachment).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, domain.Type(in.Type), in.ID)
 		if err != nil {

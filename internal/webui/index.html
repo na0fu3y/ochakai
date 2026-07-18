@@ -1352,7 +1352,7 @@ function viewCompile() {
       out.innerHTML = `
         <div class="feed-banner" style="margin-top:.8rem">Imported model${(r.models || []).length > 1 ? 's' : ''}
           <strong>${(r.models || []).map(esc).join(', ')}</strong>.</div>
-        <ul style="color:var(--muted);font-size:.9rem">${list('created', r.created)}${list('updated', r.updated)}</ul>`;
+        <ul style="color:var(--muted);font-size:.9rem">${list('created', r.created)}${list('updated', r.updated)}${list('unchanged', r.unchanged)}</ul>`;
       toast('Model imported.');
     } catch (e) {
       out.innerHTML = `<div class="error-banner">Import failed: ${esc(e.message)}</div>`;

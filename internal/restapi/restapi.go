@@ -233,8 +233,9 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 	})
-	// Attachments (design doc 0008): images attached to an entry, bytes
-	// fetched on demand — entry reads carry metadata only. The path is
+	// Attachments (design docs 0008, 0013): files attached to an entry
+	// (images, PDFs, plain text), bytes fetched on demand — entry reads
+	// carry metadata only. The path is
 	// /attachments/{type}/{id segments...}/{name}; the final segment is
 	// always the filename (attachment names are single segments), so the
 	// wildcard split is unambiguous. Lives outside /knowledge/ for the
@@ -324,8 +325,8 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// GET /api/v1/export — the whole knowledge base as an OKF bundle
-	// (tar.gz of markdown + YAML frontmatter, plus attached images as
-	// plain files). Your knowledge is yours.
+	// (tar.gz of markdown + YAML frontmatter, plus attachment files).
+	// Your knowledge is yours.
 	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
 		entries, err := svc.Store.ListAll(r.Context())
 		if err != nil {

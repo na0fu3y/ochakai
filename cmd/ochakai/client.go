@@ -396,7 +396,7 @@ func cmdReport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai report [flags] <type>/<id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running a golden query or compiled\nSQL, report worked or failed (say what went wrong with --note);\nfailed counts against verified entries flag them for re-verification.\nPrints the entry's updated usage totals.",
 		"  ochakai report query/monthly-revenue worked\n  ochakai report query/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
-	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong")
+	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong (max 2000 bytes)")
 	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
