@@ -162,6 +162,26 @@ func serve(log *slog.Logger) error {
 	}
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /healthz", health)
+	// The server deliberately does not serve the web UI (design doc 0006
+	// §4) — but a bare 404 at / strands newcomers who just ran the compose
+	// file and opened the port. Point them at the real entry points.
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = fmt.Fprintf(w, `ochakai %s — context provider for data agents
+
+This is the API server; it has no pages. Talk to it via:
+
+  REST     /api/v1        (spec: api/openapi.yaml in the repo)
+  MCP      /mcp
+  health   /health
+
+For the web UI, run the bundled proxy on your machine:
+
+  ochakai ui --url <this server's URL>
+
+then open http://127.0.0.1:8098. See also: ochakai --help
+`, version)
+	})
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
 	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
 

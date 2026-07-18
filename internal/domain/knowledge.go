@@ -127,6 +127,17 @@ type Knowledge struct {
 // URI returns the canonical reference, e.g. "ochakai://metric/revenue".
 func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type, k.ID) }
 
+// Revision is one entry in an entry's change history: who changed it,
+// how, when, and the full snapshot as of that change. The audit trail
+// behind "every change kept as a revision".
+type Revision struct {
+	Rev       int       `json:"rev"`
+	Change    string    `json:"change"` // create | update | delete | attach | detach
+	ChangedBy Actor     `json:"changed_by"`
+	ChangedAt time.Time `json:"changed_at"`
+	Snapshot  Knowledge `json:"snapshot"`
+}
+
 // segmentRe matches one path segment. Lowercase is recommended, but case,
 // dots, and underscores are accepted so foreign OKF bundles (table names
 // like GA_sessions_2017) import without renaming. The mandatory leading

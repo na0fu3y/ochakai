@@ -509,3 +509,73 @@ func TestIntegrationAttachments(t *testing.T) {
 		t.Errorf("attachment of a deleted entry = %v, want ErrNotFound", err)
 	}
 }
+
+// ListRevisions returns the full audit trail newest-first, including for
+// soft-deleted entries; an entry that never existed is ErrNotFound.
+func TestIntegrationListRevisions(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-revs-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	k := &domain.Knowledge{
+		Type: domain.TypeTerm, ID: "it-revs-1", Title: "v1",
+		Status: domain.StatusDraft, CreatedBy: actor,
+	}
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+	k.Title = "v2"
+	if err := s.Update(ctx, k, actor); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SoftDelete(ctx, k.Type, k.ID, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	revs, err := s.ListRevisions(ctx, k.Type, k.ID, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range revs {
+		got = append(got, r.Change)
+	}
+	want := []string{"delete", "update", "create"} // newest first
+	if len(got) != len(want) {
+		t.Fatalf("revisions = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("revisions = %v, want %v", got, want)
+		}
+	}
+	if revs[0].Rev != 3 || revs[2].Rev != 1 {
+		t.Errorf("revs = %d..%d, want 3..1", revs[0].Rev, revs[2].Rev)
+	}
+	if revs[1].Snapshot.Title != "v2" || revs[2].Snapshot.Title != "v1" {
+		t.Errorf("snapshot titles = %q, %q; want v2, v1", revs[1].Snapshot.Title, revs[2].Snapshot.Title)
+	}
+	if revs[0].ChangedBy != actor {
+		t.Errorf("changed_by = %+v, want %+v", revs[0].ChangedBy, actor)
+	}
+
+	if _, err := s.ListRevisions(ctx, domain.TypeTerm, "it-revs-never-existed", 50); err != ErrNotFound {
+		t.Errorf("revisions of a nonexistent entry = %v, want ErrNotFound", err)
+	}
+}

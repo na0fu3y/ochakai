@@ -3,11 +3,11 @@
      A single self-contained file: no build step, no framework, no CDN.
      Serve it from anywhere (main.go proxies /api/v1 to ochakai) and it
      covers the human-facing API surface — search, entry details with
-     usage and image attachments, create/edit with the draft → verified
-     workflow, the draft review queue (sort=usage), SQL compilation, and
-     OKF export. (/api/v1/context and the
-     Ossie import are agent/ops surfaces — see api/openapi.yaml.)
-     A starting point for building your own UI. -->
+     usage, revision history, backlinks, and image attachments,
+     create/edit with the draft → verified workflow, the draft review
+     queue (sort=usage), SQL compilation with Ossie model import, and
+     OKF export. (/api/v1/context is an agent surface — see
+     api/openapi.yaml.) A starting point for building your own UI. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -100,7 +100,20 @@
   .explore { display: grid; grid-template-columns: 14rem 1fr; gap: 1.6rem; align-items: start; }
   .explore > section { min-width: 0; }
   .rail { position: sticky; top: 4.6rem; }
-  @media (max-width: 760px) { .explore { grid-template-columns: 1fr; } .rail { position: static; } }
+  /* The rail is a disclosure only on narrow screens: open (summary hidden)
+     on desktop, collapsed by default on mobile so the search box — the
+     primary action — sits at the top instead of below a page of filters. */
+  .rail summary {
+    cursor: pointer; font-weight: 600; font-size: .9rem; padding: .3rem 0;
+    color: var(--muted); list-style: none; display: none;
+  }
+  .rail summary::before { content: '▸ '; }
+  .rail details[open] > summary::before { content: '▾ '; }
+  @media (max-width: 760px) {
+    .explore { grid-template-columns: 1fr; }
+    .rail { position: static; }
+    .rail summary { display: block; }
+  }
   .rail h3 {
     font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
     color: var(--muted); margin: 1.2rem 0 .45rem;
@@ -116,6 +129,9 @@
     border: 1px solid var(--border); border-radius: 8px; padding: .45rem .65rem; width: 100%;
   }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-weak); border-color: var(--accent); }
+  input:disabled, select:disabled, textarea:disabled {
+    background: var(--code-bg); color: var(--muted); cursor: not-allowed;
+  }
   textarea { resize: vertical; }
   /* 16px inputs on touch-sized screens so iOS Safari doesn't zoom on focus. */
   @media (max-width: 800px) {
@@ -162,6 +178,15 @@
     background: var(--accent-weak); color: var(--accent-strong);
   }
   .empty { color: var(--muted); text-align: center; padding: 2.5rem 0; }
+  .weak-matches > summary {
+    cursor: pointer; color: var(--muted); font-size: .88rem; padding: .6rem 0;
+  }
+  .weak-matches .card { opacity: .75; }
+  .truncation-note { color: var(--muted); font-size: .86rem; text-align: center; padding: .8rem 0; }
+  .feed-banner {
+    background: var(--accent-weak); border: 1px solid var(--border); border-radius: 8px;
+    padding: .55rem .9rem; margin-bottom: 1rem; font-size: .92rem; color: var(--accent-strong);
+  }
   .error-banner {
     background: var(--rejected-bg); border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
     border-radius: 8px; padding: .6rem .9rem; margin: .8rem 0; white-space: pre-wrap; word-break: break-word;
@@ -401,7 +426,19 @@ function toast(msg) {
 
 /* ============================== router ============================== */
 
+// Set by the editor while it holds unsaved changes: route() asks before
+// discarding them on hash navigation, beforeunload warns on real navigation.
+let unsaved = null; // () => boolean
+window.addEventListener('beforeunload', e => { if (unsaved && unsaved()) e.preventDefault(); });
+
 function route() {
+  if (unsaved && unsaved() && !confirm('Discard unsaved changes?')) {
+    // Put the URL back; replaceState does not re-fire hashchange.
+    history.replaceState(null, '', route._current || '#/');
+    return;
+  }
+  unsaved = null;
+  route._current = location.hash || '#/';
   const hash = location.hash.replace(/^#\/?/, '');
   const [head, ...rest] = hash.split('/');
   document.querySelectorAll('#topnav a').forEach(a => a.classList.remove('active'));
@@ -430,45 +467,63 @@ window.addEventListener('hashchange', route);
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', staleFeed: false };
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', staleFeed: false, feedAll: false };
+
+// If the viewport grows past the breakpoint while the filter disclosure is
+// collapsed, its summary disappears — reopen it so filters stay reachable.
+matchMedia('(min-width: 761px)').addEventListener('change', e => {
+  const d = document.getElementById('rail-details');
+  if (d && e.matches) d.open = true;
+});
 
 function viewExplore() {
   const typeChecks = KNOWN_TYPES.map(t => `
-    <label class="check"><input type="checkbox" data-type="${t}" ${explore.types.has(t) ? 'checked' : ''}>
+    <label class="check"><input type="checkbox" data-type="${t}" aria-label="type ${t}" ${explore.types.has(t) ? 'checked' : ''}>
       <span class="type-ico">${icon(t)}</span>${t}</label>`).join('');
   const extraTypes = [...explore.types].filter(t => !KNOWN_TYPES.includes(t)).map(t => `
-    <label class="check"><input type="checkbox" data-type="${esc(t)}" checked>
+    <label class="check"><input type="checkbox" data-type="${esc(t)}" aria-label="type ${esc(t)}" checked>
       <span class="type-ico">${icon(t)}</span>${esc(t)}</label>`).join('');
   const statusChecks = STATUSES.map(s => `
-    <label class="check"><input type="checkbox" data-status="${s}" ${explore.statuses.has(s) ? 'checked' : ''}>
+    <label class="check"><input type="checkbox" data-status="${s}" aria-label="status ${s}" ${explore.statuses.has(s) ? 'checked' : ''}>
       <span class="badge ${s}">${s}</span></label>`).join('');
+  // Filters collapse into a disclosure on narrow screens; keep it open on
+  // wide ones (the summary is hidden there, so it could never be reopened).
+  const wide = matchMedia('(min-width: 761px)').matches;
 
   view.innerHTML = `
   <div class="explore">
     <aside class="rail">
-      <h3>Type</h3>
-      ${typeChecks}${extraTypes}
-      <input type="text" id="f-type-extra" placeholder="other type…" style="margin-top:.3rem;font-size:.84rem;padding:.25rem .5rem">
-      <h3>Status</h3>
-      ${statusChecks}
-      <h3>Tag</h3>
-      <input type="text" id="f-tag" placeholder="tag" value="${esc(explore.tag)}" style="font-size:.84rem;padding:.3rem .5rem">
-      <h3>Feed</h3>
-      <label class="check"><input type="checkbox" id="f-stale" ${explore.staleFeed ? 'checked' : ''}> verification age</label>
-      <div class="hint" style="color:var(--muted);font-size:.76rem">Oldest-verified first — the canary feed for re-checking golden queries.</div>
+      <details id="rail-details" ${wide ? 'open' : ''}>
+        <summary>Filters</summary>
+        <h3>Type</h3>
+        ${typeChecks}${extraTypes}
+        <input type="text" id="f-type-extra" placeholder="other type…" aria-label="other type" style="margin-top:.3rem;font-size:.84rem;padding:.25rem .5rem">
+        <h3>Status</h3>
+        ${statusChecks}
+        <h3>Tag</h3>
+        <input type="text" id="f-tag" placeholder="tag" aria-label="tag" value="${esc(explore.tag)}" style="font-size:.84rem;padding:.3rem .5rem">
+        <h3>Feed</h3>
+        <label class="check"><input type="checkbox" id="f-stale" aria-label="verification age feed" ${explore.staleFeed ? 'checked' : ''}> verification age</label>
+        <div class="hint" style="color:var(--muted);font-size:.76rem">Oldest-verified first — the canary feed for re-checking golden queries.</div>
+      </details>
     </aside>
     <section>
-      <div class="searchbox">
-        <input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
-               value="${esc(explore.q)}" ${explore.staleFeed ? 'disabled' : ''} autocomplete="off">
-      </div>
+      ${explore.staleFeed
+        ? `<div class="feed-banner">Verification-age feed — oldest verified first, the canary list for
+           re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
+        : `<div class="searchbox">
+             <input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
+                    value="${esc(explore.q)}" autocomplete="off">
+           </div>`}
       <div id="results"><div class="empty">…</div></div>
     </section>
   </div>`;
 
   const rerun = () => runSearch();
-  $('#q').addEventListener('input', () => { explore.q = $('#q').value; debounce(rerun, 250); });
-  $('#q').focus({ preventScroll: true });
+  $('#q')?.addEventListener('input', () => { explore.q = $('#q').value; debounce(rerun, 250); });
+  // Autofocus is a desktop nicety; on touch screens it pops the keyboard
+  // over the page before the user asked for it.
+  if (matchMedia('(pointer: fine)').matches) $('#q')?.focus({ preventScroll: true });
   document.querySelectorAll('.rail input[data-type]').forEach(cb =>
     cb.addEventListener('change', () => { cb.checked ? explore.types.add(cb.dataset.type) : explore.types.delete(cb.dataset.type); rerun(); }));
   document.querySelectorAll('.rail input[data-status]').forEach(cb =>
@@ -477,7 +532,7 @@ function viewExplore() {
     if (e.key === 'Enter' && e.target.value.trim()) { explore.types.add(e.target.value.trim()); viewExplore(); }
   });
   $('#f-tag').addEventListener('input', () => { explore.tag = $('#f-tag').value.trim(); debounce(rerun, 250); });
-  $('#f-stale').addEventListener('change', () => { explore.staleFeed = $('#f-stale').checked; viewExplore(); });
+  $('#f-stale').addEventListener('change', () => { explore.staleFeed = $('#f-stale').checked; explore.feedAll = false; viewExplore(); });
 
   runSearch();
 }
@@ -486,6 +541,13 @@ function debounce(fn, ms) {
   clearTimeout(debounce._t);
   debounce._t = setTimeout(fn, ms);
 }
+
+// Below this score a lexical hit is almost certainly noise: real matches
+// carry a 0.3 substring bonus, while trigram similarity of unrelated text
+// hovers near the server's 0.05 floor (plus a 0.05 verified boost). Only
+// meaningful in lexical mode — hybrid (RRF) scores live on a ~1/60 scale,
+// detected below by the top score, where no useful floor exists.
+const WEAK_SCORE = 0.15;
 
 async function runSearch() {
   const out = $('#results');
@@ -496,8 +558,10 @@ async function runSearch() {
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
   if (explore.tag) p.append('tag', explore.tag);
-  // The canary feed reads more per page than a search (server default 100).
-  p.set('limit', explore.staleFeed ? '100' : '25');
+  // Search caps at 50 server-side; the canary feed pages larger (100,
+  // expandable to the server max of 1000 via the load-more note).
+  const limit = explore.staleFeed ? (explore.feedAll ? 1000 : 100) : 50;
+  p.set('limit', String(limit));
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
   try {
     const { hits } = await api('/api/v1/knowledge?' + p);
@@ -506,7 +570,30 @@ async function runSearch() {
       out.innerHTML = `<div class="empty">No knowledge found${explore.q ? ' for “' + esc(explore.q) + '”' : ''}.</div>`;
       return;
     }
-    out.innerHTML = hits.map(hitCard).join('');
+    // With a query, split off low-relevance hits so junk doesn't render as
+    // if it matched — semantic/trigram search always returns *something*.
+    let strong = hits, weak = [];
+    if (explore.q && !explore.staleFeed && hits[0].score > 0.05) {
+      strong = hits.filter(h => h.score >= WEAK_SCORE);
+      weak = hits.filter(h => h.score < WEAK_SCORE);
+    }
+    let html = strong.map(hitCard).join('');
+    if (!strong.length) {
+      html = `<div class="empty">No strong matches for “${esc(explore.q)}”.</div>`;
+    }
+    if (weak.length) {
+      html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
+        barely related, probably noise</summary>${weak.map(hitCard).join('')}</details>`;
+    }
+    if (hits.length >= limit) {
+      html += explore.staleFeed && !explore.feedAll
+        ? `<div class="truncation-note">Showing the first ${limit} entries ·
+             <a href="#" id="feed-more">load up to 1000</a></div>`
+        : `<div class="truncation-note">Showing the first ${limit} ${explore.q ? 'matches' : 'entries'}
+             (server cap) — narrow with filters or a more specific query.</div>`;
+    }
+    out.innerHTML = html;
+    $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); explore.feedAll = true; runSearch(); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
     out.innerHTML = `<div class="error-banner">Search failed: ${esc(e.message)}</div>`;
@@ -557,7 +644,9 @@ async function viewDetail(type, id) {
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   // Any transition the API allows is offered here (provenance over
   // authorization, design doc 0002) — only the current status is hidden.
+  // "Mark draft" doubles as the undo for a stray one-click Verify.
   const canVerify = entry.status !== 'verified';
+  const canDraft = entry.status !== 'draft';
   const canDeprecate = entry.status !== 'deprecated';
   const canReject = entry.status !== 'rejected';
   const atts = entry.attachments || [];
@@ -571,6 +660,7 @@ async function viewDetail(type, id) {
       ${tags}
       <span class="actions">
         ${canVerify ? '<button class="btn small primary" id="act-verify">✓ Verify</button>' : ''}
+        ${canDraft ? '<button class="btn small" id="act-draft" title="Back to draft (clears verification / rejection provenance)">Mark draft</button>' : ''}
         ${canDeprecate ? '<button class="btn small" id="act-deprecate">Deprecate</button>' : ''}
         ${canReject ? '<button class="btn small danger" id="act-reject">Reject</button>' : ''}
         <a class="btn small" href="#/edit/${idPath(entry.type, entry.id)}">Edit</a>
@@ -584,7 +674,9 @@ async function viewDetail(type, id) {
       <button data-tab="attrs">Attributes</button>
       <button data-tab="links">Links${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
       <button data-tab="attachments">Attachments${atts.length ? ' (' + atts.length + ')' : ''}</button>
+      <button data-tab="linked">Linked from</button>
       <button data-tab="usage">Usage</button>
+      <button data-tab="history">History</button>
     </div>
     <div id="tab-body"></div>`;
 
@@ -663,7 +755,9 @@ async function viewDetail(type, id) {
         <p class="provenance">png / jpeg / gif / webp, max 5 MiB each, 20 per entry. Reference an image from the
         body (<code>![alt](${esc(lastSeg)}/name.png)</code>) so its caption is searchable and it survives OKF export.</p>`;
     },
+    linked: () => '<div class="empty">…</div>',
     usage: () => '<div class="empty">…</div>',
+    history: () => '<div class="empty">…</div>',
   };
 
   function wireAttachments() {
@@ -695,25 +789,55 @@ async function viewDetail(type, id) {
   }
 
   const body = $('#tab-body');
-  let usageLoaded = false;
+  // Lazily loaded tabs: fetch once on first open, then re-render from the
+  // cached template. A failed fetch shows in place and retries next open.
+  const lazy = {
+    usage: async () => {
+      const u = await api('/api/v1/usage/' + idPath(entry.type, entry.id));
+      return () => `
+        <div class="stat-tiles">
+          <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">search hits</div></div>
+          <div class="tile"><div class="num">${u.fetches ?? 0}</div><div class="lbl">fetches</div></div>
+          <div class="tile"><div class="num">${u.compiles ?? 0}</div><div class="lbl">compiles</div></div>
+        </div>
+        <p class="provenance">${u.last_used_at ? 'last used ' + esc(fmtDate(u.last_used_at)) : 'never used'}</p>`;
+    },
+    linked: async () => {
+      const { entries } = await api('/api/v1/backlinks/' + idPath(entry.type, entry.id) + '?limit=100');
+      return () => (entries && entries.length)
+        ? `<p class="provenance" style="margin:0 0 .8rem">Entries whose links point here — the entry's own links are in the Links tab.</p>`
+          + entries.map(hitCard).join('')
+        : '<div class="empty">Nothing links to this entry yet.</div>';
+    },
+    history: async () => {
+      const { revisions } = await api('/api/v1/revisions/' + idPath(entry.type, entry.id) + '?limit=200');
+      const rows = (revisions || []).map(r => `
+        <tr>
+          <td class="k mono">#${r.rev}</td>
+          <td>
+            <div><strong>${esc(r.change)}</strong> · ${esc(actorStr(r.changed_by))} · ${esc(fmtDate(r.changed_at))}</div>
+            <details><summary style="cursor:pointer;color:var(--muted);font-size:.84rem">snapshot</summary>
+              <pre>${esc(JSON.stringify(r.snapshot, null, 2))}</pre></details>
+          </td>
+        </tr>`).join('');
+      return () => `
+        <p class="provenance" style="margin:0 0 .8rem">Every change, newest first — who made it and the entry as of that change.</p>
+        <table class="kv">${rows}</table>`;
+    },
+  };
   async function showTab(name) {
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     body.innerHTML = tabs[name]();
     if (name === 'attachments') wireAttachments();
-    if (name === 'usage' && !usageLoaded) {
+    if (lazy[name]) {
       try {
-        const u = await api('/api/v1/usage/' + idPath(entry.type, entry.id));
-        usageLoaded = true;
-        tabs.usage = () => `
-          <div class="stat-tiles">
-            <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">search hits</div></div>
-            <div class="tile"><div class="num">${u.fetches ?? 0}</div><div class="lbl">fetches</div></div>
-            <div class="tile"><div class="num">${u.compiles ?? 0}</div><div class="lbl">compiles</div></div>
-          </div>
-          <p class="provenance">${u.last_used_at ? 'last used ' + esc(fmtDate(u.last_used_at)) : 'never used'}</p>`;
-        if (document.querySelector('#tabs button.active')?.dataset.tab === 'usage') body.innerHTML = tabs.usage();
+        tabs[name] = await lazy[name]();
+        delete lazy[name];
+        if (document.querySelector('#tabs button.active')?.dataset.tab === name) body.innerHTML = tabs[name]();
       } catch (e) {
-        body.innerHTML = `<div class="error-banner">Usage unavailable: ${esc(e.message)}</div>`;
+        if (document.querySelector('#tabs button.active')?.dataset.tab === name) {
+          body.innerHTML = `<div class="error-banner">Could not load ${esc(name)}: ${esc(e.message)}</div>`;
+        }
       }
     }
   }
@@ -729,6 +853,7 @@ async function viewDetail(type, id) {
     } catch (e) { toast('Failed: ' + e.message); }
   };
   $('#act-verify')?.addEventListener('click', () => setStatus('verified', false));
+  $('#act-draft')?.addEventListener('click', () => setStatus('draft', false));
   $('#act-deprecate')?.addEventListener('click', () => setStatus('deprecated', true));
   $('#act-reject')?.addEventListener('click', () => setStatus('rejected', true));
   $('#act-delete').addEventListener('click', async () => {
@@ -775,7 +900,7 @@ async function applyStatus(entry, status, askNote) {
 // inventory case (nobody's finding it; a candidate to drop). Sort=usage
 // already sinks these to the bottom; the toggle isolates them.
 const STALE_DAYS = 14;
-const review = { staleOnly: false };
+const review = { staleOnly: false, all: false };
 
 function viewReview() {
   view.innerHTML = `
@@ -804,8 +929,9 @@ async function runReview() {
   const out = $('#review-results');
   if (!out) return;
   const my = runReview._seq = (runReview._seq || 0) + 1;
+  const limit = review.all ? 1000 : 100;
   try {
-    const { hits } = await api('/api/v1/knowledge?sort=usage&status=draft&limit=100');
+    const { hits } = await api('/api/v1/knowledge?sort=usage&status=draft&limit=' + limit);
     if (my !== runReview._seq || out !== $('#review-results')) return; // stale response
     let list = hits || [];
     if (review.staleOnly) list = list.filter(isStaleDraft);
@@ -813,7 +939,14 @@ async function runReview() {
       out.innerHTML = `<div class="empty">${review.staleOnly ? 'No stale drafts — nothing gathering dust.' : 'No drafts awaiting review.'}</div>`;
       return;
     }
-    out.innerHTML = list.map(reviewCard).join('');
+    out.innerHTML = list.map(reviewCard).join('')
+      + ((hits || []).length >= limit
+        ? (review.all
+          ? `<div class="truncation-note">Showing the first ${limit} drafts (server cap).</div>`
+          : `<div class="truncation-note">Showing the first ${limit} drafts ·
+               <a href="#" id="review-more">load up to 1000</a></div>`)
+        : '');
+    $('#review-more')?.addEventListener('click', e => { e.preventDefault(); review.all = true; runReview(); });
     wireReviewActions(out);
   } catch (e) {
     if (my !== runReview._seq || out !== $('#review-results')) return;
@@ -949,6 +1082,10 @@ async function viewEditor(type, id) {
       </p>
     </form>`;
 
+  let dirty = false;
+  $('#editor').addEventListener('input', () => { dirty = true; });
+  unsaved = () => dirty;
+
   $('#editor').addEventListener('submit', async ev => {
     ev.preventDefault();
     const errBox = $('#editor-error');
@@ -977,11 +1114,15 @@ async function viewEditor(type, id) {
       const saved = editing
         ? await api('/api/v1/knowledge/' + idPath(entry.type, entry.id), { method: 'PUT', body: payload })
         : await api('/api/v1/knowledge', { method: 'POST', body: payload });
+      dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
       location.hash = entryHash(saved || payload);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
-      errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}</div>`;
+      const dupLink = !editing && /already exists/.test(e.message)
+        ? ` — <a href="#/k/${idPath(payload.type, payload.id)}">view the existing ${esc(payload.type)}/${esc(payload.id)}</a> (edit it, or pick another ID)`
+        : '';
+      errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
     }
   });
 }
@@ -1040,7 +1181,18 @@ function viewCompile() {
       </div>
       <p><button class="btn primary" type="submit">Compile</button></p>
     </form>
-    <div id="compile-result"></div>`;
+    <div id="compile-result"></div>
+    <div class="section-title" style="margin-top:2.4rem;font-size:1.05rem">Semantic models</div>
+    <p style="color:var(--muted);max-width:46rem;font-size:.92rem">Compile works from imported Apache Ossie semantic
+    models. Import one here (YAML) — re-import refreshes definitions without clobbering human-curated status, tags,
+    and bodies. OKF bundle import stays with the CLI (<code>ochakai import</code>).</p>
+    <div class="toolbar">
+      <input type="file" id="ossie-file" accept=".yaml,.yml,application/yaml" hidden>
+      <button class="btn small" type="button" id="ossie-choose">Choose model YAML…</button>
+      <span class="provenance" id="ossie-chosen" style="margin:0"></span>
+      <button class="btn small primary" type="button" id="ossie-upload">Import</button>
+    </div>
+    <div id="ossie-result"></div>`;
 
   const OPS = ['=', '!=', '>', '>=', '<', '<=', 'in', 'not_in'];
   const filtersBox = $('#c-filters');
@@ -1059,6 +1211,30 @@ function viewCompile() {
   }
   renderFilters();
   $('#c-add-filter').addEventListener('click', () => { c.filters.push({ field: '', op: '=', value: '' }); renderFilters(); });
+
+  const ossieFile = $('#ossie-file');
+  $('#ossie-choose').addEventListener('click', () => ossieFile.click());
+  ossieFile.addEventListener('change', () => {
+    $('#ossie-chosen').textContent = ossieFile.files[0] ? ossieFile.files[0].name : '';
+  });
+  $('#ossie-upload').addEventListener('click', async () => {
+    const f = ossieFile.files[0];
+    if (!f) { toast('Choose a semantic model YAML first.'); return; }
+    const out = $('#ossie-result');
+    out.innerHTML = '<div class="empty">importing…</div>';
+    try {
+      const r = await api('/api/v1/import/ossie', { method: 'POST', raw: f });
+      const list = (label, uris) => (uris && uris.length)
+        ? `<li>${label}: ${uris.map(u => esc(u)).join(', ')}</li>` : '';
+      out.innerHTML = `
+        <div class="feed-banner" style="margin-top:.8rem">Imported model${(r.models || []).length > 1 ? 's' : ''}
+          <strong>${(r.models || []).map(esc).join(', ')}</strong>.</div>
+        <ul style="color:var(--muted);font-size:.9rem">${list('created', r.created)}${list('updated', r.updated)}</ul>`;
+      toast('Model imported.');
+    } catch (e) {
+      out.innerHTML = `<div class="error-banner">Import failed: ${esc(e.message)}</div>`;
+    }
+  });
 
   $('#compile-form').addEventListener('submit', async ev => {
     ev.preventDefault();

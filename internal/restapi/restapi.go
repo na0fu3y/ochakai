@@ -154,6 +154,44 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	}
 	mux.HandleFunc("GET /api/v1/usage/{type}/{id...}", usage)
+
+	// GET /api/v1/revisions/{type}/{id...} — the entry's change history,
+	// newest first: who changed it, how, when, with full snapshots. The
+	// read surface behind "every change kept as a revision"; works for
+	// soft-deleted entries too. Lives outside /knowledge/ for the same
+	// reason /usage does: a suffix after a hierarchical {id...} would be
+	// unroutable.
+	mux.HandleFunc("GET /api/v1/revisions/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		limit, err := queryInt(r.URL.Query(), "limit")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		revs, err := svc.Revisions(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), limit)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
+	})
+
+	// GET /api/v1/backlinks/{type}/{id...} — live entries whose links
+	// point at this entry, most recently updated first. The reverse edge
+	// get_context follows when packing companions, exposed so UIs can
+	// show "linked from" next to an entry's own links.
+	mux.HandleFunc("GET /api/v1/backlinks/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		limit, err := queryInt(r.URL.Query(), "limit")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		entries, err := svc.Backlinks(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), limit)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+	})
 	// Legacy pre-0005 usage path, kept for existing clients. It shadows
 	// GET on entries whose two-segment ID ends in "usage" — the canonical
 	// path above has no such ambiguity.

@@ -312,6 +312,27 @@ func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([
 	return s.Store.ListByUsage(ctx, f, limit)
 }
 
+// Revisions returns an entry's change history, newest first — the
+// audit surface behind "every change kept as a revision". Not a search:
+// no usage is recorded (auditing an entry is not using it).
+func (s *Service) Revisions(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Revision, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	return s.Store.ListRevisions(ctx, typ, id, limit)
+}
+
+// Backlinks lists live entries whose links point at the given entry,
+// most recently updated first — the reverse edge the web UI shows as
+// "linked from" (Context already follows it when packing companions).
+// No usage is recorded: browsing an entry's neighbors is not a search.
+func (s *Service) Backlinks(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Knowledge, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	return s.Store.ListLinkingTo(ctx, typ, id, limit)
+}
+
 // Usage returns usage totals for one entry (404 when the entry is gone).
 func (s *Service) Usage(ctx context.Context, typ domain.Type, id string) (*domain.Usage, error) {
 	if _, err := s.Store.Get(ctx, typ, id); err != nil {
