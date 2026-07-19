@@ -18,7 +18,7 @@ type staticServiceTokens struct {
 func (s staticServiceTokens) token() (string, error) { return s.tok, s.err }
 
 func TestServeUIHandlerServesIndexAndHealth(t *testing.T) {
-	h := serveUIHandler(nil)
+	h := serveUIHandler(http.NotFoundHandler())
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -39,16 +39,14 @@ func TestServeUIHandlerServesIndexAndHealth(t *testing.T) {
 	}
 }
 
-// Without OCHAKAI_URL there is no upstream: the API paths must 404
-// instead of dialing anywhere.
-func TestServeUIHandlerNoProxyIs404(t *testing.T) {
-	h := serveUIHandler(nil)
-	for _, path := range []string{"/api/v1/knowledge", "/mcp"} {
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-		if rec.Code != http.StatusNotFound {
-			t.Errorf("GET %s = %d, want 404", path, rec.Code)
-		}
+// The page always talks to its own origin, so an upstream is not
+// optional: without OCHAKAI_URL serve-ui must refuse to start rather
+// than serve a UI whose every API call would 404.
+func TestServeUIRequiresOchakaiURL(t *testing.T) {
+	t.Setenv("OCHAKAI_URL", "")
+	err := serveUI(slog.New(slog.DiscardHandler))
+	if err == nil || !strings.Contains(err.Error(), "OCHAKAI_URL is required") {
+		t.Errorf("serveUI without OCHAKAI_URL = %v, want an OCHAKAI_URL-required error", err)
 	}
 }
 
