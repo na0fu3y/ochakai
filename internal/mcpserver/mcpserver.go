@@ -38,7 +38,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
 		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
 			"verified golden queries, interpretation knowledge (how to read a metric), " +
-			"glossary terms, and table catalog entries — those five types are recommendations, " +
+			"glossary terms, dataset and table catalog entries, and references (mirrors of " +
+			"external material such as enum definitions or schema docs) — those types are " +
+			"recommendations, " +
 			"and any slug works as a type for your own document kinds. IDs may be hierarchical " +
 			"(slash-separated, e.g. sales/orders) to organize knowledge into directories. " +
 			"It executes no SQL and uses no LLM. " +
@@ -67,8 +69,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		MIMEType: "text/markdown",
 		Description: "A single knowledge entry as an OKF document: YAML frontmatter (title, " +
 			"status, provenance, type-specific attrs) followed by the markdown body and its " +
-			"links. Address by canonical URI, e.g. ochakai://metric/revenue; IDs may be " +
-			"hierarchical (ochakai://query/sales/top-customers). Discover URIs with " +
+			"links. Address by canonical URI, e.g. ochakai://metrics/revenue; IDs may be " +
+			"hierarchical (ochakai://queries/sales/top-customers). Discover URIs with " +
 			"search_knowledge or get_context; get_knowledge returns the same entry as JSON.",
 		URITemplate: "ochakai://{type}/{+id}",
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -99,7 +101,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_knowledge",
 		Annotations: readOnly,
-		Description: "Search the knowledge base across all types (recommended: metric, query, insight, term, table; custom types welcome). " +
+		Description: "Search the knowledge base across all types (recommended: metrics, queries, insights, terms, datasets, tables, references; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
@@ -172,7 +174,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Description: "Create a knowledge entry. Write back what you learned: metric caveats, verified answers, " +
 			"glossary terms. Entries default to draft; your identity is recorded as created_by. " +
 			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
-			"re-proposing knowledge that was already rejected (status_note records why).",
+			"re-proposing knowledge that was already rejected (status_note records why). " +
+			"For tables/datasets/references, set resource to the asset's canonical URI and favor " +
+			"the conventional body sections: # Schema, # Common query patterns, # Citations.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -184,7 +188,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
-		Description: "Update a knowledge entry (full replacement of title/description/tags/status/links/attrs/body). " +
+		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/links/attrs/body). " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
 			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
@@ -271,7 +275,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
 		typ, id, ok := strings.Cut(strings.TrimPrefix(in.Target, "ochakai://"), "/")
 		if !ok || typ == "" || id == "" {
-			return nil, usageOut{}, fmt.Errorf("invalid target %q (want <type>/<id>, e.g. query/monthly-revenue)", in.Target)
+			return nil, usageOut{}, fmt.Errorf("invalid target %q (want <type>/<id>, e.g. queries/monthly-revenue)", in.Target)
 		}
 		u, err := svc.ReportOutcome(ctx, domain.Type(typ), id, in.Outcome, in.Note)
 		if err != nil {
@@ -284,7 +288,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "compile_sql",
 		Annotations: readOnly,
 		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from the " +
-			"imported Ossie semantic model (no LLM involved). Dialects: bigquery (default), ansi. " +
+			"imported Ossie semantic model (no LLM involved). Output is always BigQuery SQL. " +
 			"ochakai does not execute SQL — run the result with your own warehouse tool. " +
 			"Requests outside the supported subset fail with a reason; prefer any returned verified_queries.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in service.CompileRequest) (*mcp.CallToolResult, service.CompileResult, error) {
@@ -314,7 +318,7 @@ func boolPtr(b bool) *bool { return &b }
 
 // parseKnowledgeURI splits a canonical knowledge URI (ochakai://<type>/<id>)
 // into its type and id. Internal slashes stay with the id so hierarchical IDs
-// (ochakai://query/sales/orders) round-trip. ok is false when the URI lacks
+// (ochakai://queries/sales/orders) round-trip. ok is false when the URI lacks
 // the scheme or either segment is empty.
 func parseKnowledgeURI(uri string) (typ, id string, ok bool) {
 	rest, found := strings.CutPrefix(uri, uriScheme)
@@ -335,7 +339,7 @@ type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
 	// rejects it — one of query / sort must be set.
 	Query    string   `json:"query,omitempty" jsonschema:"search text; omit when sort is set"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metric, query, insight, term, table, or any custom slug)"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed) — both mutually exclusive with query"`
@@ -348,7 +352,7 @@ type searchOut struct {
 
 type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metric, query, insight, term, table, or any custom slug)"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
@@ -363,7 +367,7 @@ type contextOut struct {
 }
 
 type getIn struct {
-	Type string `json:"type" jsonschema:"the entry's type slug (metric, query, insight, term, table, or any custom slug)"`
+	Type string `json:"type" jsonschema:"the entry's type slug (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
 	ID   string `json:"id" jsonschema:"the entry's id; / separates segments for hierarchical ids (e.g. sales/orders)"`
 }
 
@@ -372,7 +376,7 @@ type knowledgeOut struct {
 }
 
 type attachmentIn struct {
-	Type string `json:"type" jsonschema:"the entry's type slug (metric, query, insight, term, table, or any custom slug)"`
+	Type string `json:"type" jsonschema:"the entry's type slug (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
 	ID   string `json:"id" jsonschema:"the entry's id (/ separates segments for hierarchical ids)"`
 	Name string `json:"name" jsonschema:"attachment filename, from the entry's attachments metadata"`
 }
@@ -386,7 +390,7 @@ type usageOut struct {
 }
 
 type outcomeIn struct {
-	Target  string `json:"target" jsonschema:"the entry the outcome is about, as <type>/<id> (e.g. query/monthly-revenue; an ochakai:// prefix is tolerated)"`
+	Target  string `json:"target" jsonschema:"the entry the outcome is about, as <type>/<id> (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
 	Outcome string `json:"outcome" jsonschema:"\"worked\" = acting on the entry gave a correct result; \"failed\" = it gave a wrong or unusable one"`
 	Note    string `json:"note,omitempty" jsonschema:"optional context recorded with the report: what was run, what went wrong (max 2000 bytes)"`
 }
@@ -397,14 +401,15 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string         `json:"type" jsonschema:"one slug segment; recommended: metric, query, insight, term, table — any custom slug works"`
+	Type        string         `json:"type" jsonschema:"one slug segment; recommended: metrics, queries, insights, terms, datasets, tables, references — any custom slug works"`
 	ID          string         `json:"id" jsonschema:"slug segments separated by / (hierarchical, e.g. sales/orders); the last segment must not be \"index\""`
 	Title       string         `json:"title"`
 	Description string         `json:"description,omitempty"`
+	Resource    string         `json:"resource,omitempty" jsonschema:"canonical URI of the underlying asset (the table/dataset URI, or for references the external source URL); omit for abstract concepts"`
 	Tags        []string       `json:"tags,omitempty"`
 	Status      string         `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
 	StatusNote  string         `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
-	Links       []domain.Link  `json:"links,omitempty" jsonschema:"typed edges to other entries, e.g. {rel: about, target: metric/revenue}"`
+	Links       []domain.Link  `json:"links,omitempty" jsonschema:"typed edges to other entries, e.g. {rel: about, target: metrics/revenue}"`
 	Attrs       map[string]any `json:"attrs,omitempty" jsonschema:"type-specific structured attributes, e.g. question/sql for a query"`
 	Body        string         `json:"body,omitempty" jsonschema:"markdown body"`
 }
@@ -415,6 +420,7 @@ func (in writeIn) toKnowledge() *domain.Knowledge {
 		ID:          in.ID,
 		Title:       in.Title,
 		Description: in.Description,
+		Resource:    in.Resource,
 		Tags:        in.Tags,
 		Status:      domain.Status(in.Status),
 		StatusNote:  in.StatusNote,

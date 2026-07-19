@@ -15,7 +15,6 @@ import (
 func TestCompletionScriptsStayInSync(t *testing.T) {
 	admin := []string{"serve", "serve-ui", "version"}
 	enums := []string{
-		"bigquery ansi", // --dialect
 		"zsh bash fish", // completion <shell>
 		"verified_at",   // --sort
 	}

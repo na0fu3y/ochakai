@@ -352,7 +352,7 @@ func (c *Client) Export(ctx context.Context) (io.ReadCloser, error) {
 }
 
 // ImportOssie uploads Apache Ossie semantic model YAML verbatim; the
-// server stores each model for compile and derives metric/table
+// server stores each model for compile and derives metrics/table
 // knowledge entries.
 func (c *Client) ImportOssie(ctx context.Context, yamlSrc []byte) (*ImportReport, error) {
 	resp, err := c.doRaw(ctx, http.MethodPost, "/api/v1/import/ossie", nil,

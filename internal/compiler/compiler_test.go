@@ -61,11 +61,11 @@ func testModel(t *testing.T) *Model {
 }
 
 func TestCompileSimpleMetric(t *testing.T) {
-	res, err := Compile(testModel(t), Request{Metrics: []string{"revenue"}, Dialect: "ansi"})
+	res, err := Compile(testModel(t), Request{Metrics: []string{"revenue"}})
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	want := "SELECT\n  SUM(orders.total_price) AS revenue\nFROM shop.core.orders AS orders"
+	want := "SELECT\n  SUM(orders.total_price) AS revenue\nFROM `shop.core.orders` AS orders"
 	if res.SQL != want {
 		t.Errorf("got:\n%s\nwant:\n%s", res.SQL, want)
 	}
@@ -83,7 +83,6 @@ func TestCompileStarJoinWithDimensionsFiltersGrain(t *testing.T) {
 			{Field: "orders.amount", Op: ">", Value: float64(0)},
 		},
 		TimeGrain: &TimeGrain{Field: "orders.ordered_at", Grain: "month"},
-		Dialect:   "bigquery",
 		Limit:     100,
 	})
 	if err != nil {
@@ -114,7 +113,6 @@ func TestCompileUndeclaredFieldPassesThroughWithNote(t *testing.T) {
 		Metrics:    []string{"revenue"},
 		Dimensions: []string{"orders.status"},
 		Filters:    []Filter{{Field: "orders.status", Op: "=", Value: "shipped"}},
-		Dialect:    "ansi",
 	})
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -129,7 +127,6 @@ func TestCompileUndeclaredFieldPassesThroughWithNote(t *testing.T) {
 	declared, err := Compile(testModel(t), Request{
 		Metrics:    []string{"revenue"},
 		Dimensions: []string{"customers.region"},
-		Dialect:    "ansi",
 	})
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -159,7 +156,6 @@ func TestFilterLiteralEscaping(t *testing.T) {
 	res, err := Compile(testModel(t), Request{
 		Metrics: []string{"revenue"},
 		Filters: []Filter{{Field: "customers.region", Op: "=", Value: "J'P"}},
-		Dialect: "ansi",
 	})
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -177,10 +173,21 @@ func TestFilterLiteralEscaping(t *testing.T) {
 	}
 }
 
-func TestCompileUnsupportedDialectFails(t *testing.T) {
-	_, err := Compile(testModel(t), Request{Metrics: []string{"revenue"}, Dialect: "oracle"})
-	if err == nil || !strings.Contains(err.Error(), "unsupported dialect") {
-		t.Fatalf("want dialect error, got %v", err)
+// A BIGQUERY expression wins over the ANSI_SQL fallback when both are
+// declared — the output is always BigQuery SQL (design doc 0016).
+func TestCompilePrefersBigQueryExpression(t *testing.T) {
+	m := testModel(t)
+	for i := range m.Metrics {
+		if m.Metrics[i].Name == "revenue" {
+			m.Metrics[i].Expression = append(Expressions{{Dialect: "BIGQUERY", Expression: "SUM(orders.amount_bq)"}}, m.Metrics[i].Expression...)
+		}
+	}
+	res, err := Compile(m, Request{Metrics: []string{"revenue"}})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if !strings.Contains(res.SQL, "amount_bq") {
+		t.Errorf("BIGQUERY expression not preferred:\n%s", res.SQL)
 	}
 }
 
@@ -226,7 +233,6 @@ func TestUndeclaredBareColumnPassesThrough(t *testing.T) {
 	res, err := Compile(testModel(t), Request{
 		Metrics:    []string{"revenue"},
 		Dimensions: []string{"orders.channel"},
-		Dialect:    "ansi",
 	})
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -250,7 +256,7 @@ func TestExpressionShapes(t *testing.T) {
 			t.Errorf("parse %q: %v", src, err)
 			continue
 		}
-		expr, ok := m.Expression.ForDialect("ANSI_SQL")
+		expr, ok := m.Expression.ForBigQuery()
 		if !ok || expr != "SUM(orders.amount)" {
 			t.Errorf("parse %q: got %q ok=%v", src, expr, ok)
 		}

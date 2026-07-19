@@ -3,8 +3,9 @@ info:
   title: ochakai REST API
   description: >
     ochakai is a context provider for data agents: metric definitions,
-    verified golden queries, interpretation knowledge, glossary terms, and
-    table catalog entries in one knowledge base. The REST API is a superset
+    verified golden queries, interpretation knowledge, glossary terms,
+    dataset and table catalog entries, and references (mirrors of external
+    material) in one knowledge base. The REST API is a superset
     of the MCP tools — the same operations plus bulk export/import, the
     human-facing browse/revisions/backlinks reads, and attachment writes —
     so users can build their own web UIs. ochakai executes no SQL and uses
@@ -222,7 +223,7 @@ paths:
         required: true
         description: >
           Hierarchical IDs keep their slashes as real path separators
-          (GET /api/v1/knowledge/query/sales/monthly-revenue).
+          (GET /api/v1/knowledge/queries/sales/monthly-revenue).
         schema: { type: string }
     get:
       operationId: getKnowledge
@@ -416,7 +417,7 @@ paths:
           "{id}/{name}" — the entry's (possibly hierarchical) ID followed
           by the attachment filename. The final segment is always the
           filename; everything before it is the ID
-          (PUT /api/v1/attachments/insight/revenue-reading/weekly.png).
+          (PUT /api/v1/attachments/insights/revenue-reading/weekly.png).
         schema: { type: string }
     put:
       operationId: putAttachment
@@ -501,7 +502,7 @@ paths:
       summary: Import an Apache Ossie semantic model
       description: >
         Accepts Ossie semantic model YAML verbatim. Each model is stored
-        for compile, and metric/table knowledge entries are derived so
+        for compile, and metrics/table knowledge entries are derived so
         the definitions are searchable. Re-import refreshes definitions
         without clobbering human-curated status, tags, and bodies.
       requestBody:
@@ -574,10 +575,12 @@ components:
     Type:
       type: string
       description: >
-        Any slug segment works as a type — the built-in five (metric, query,
-        insight, term, table) are recommendations with server behavior
-        attached, not a closed set (design doc 0005).
-      examples: [metric, query, insight, term, table, runbook]
+        Any slug segment works as a type — the built-ins (metrics, queries,
+        insights, terms, datasets, tables, references) are recommendations
+        with server behavior attached, not a closed set (design docs 0005,
+        0016). Slugs are plural, matching the OKF knowledge-catalog
+        reference bundles.
+      examples: [metrics, queries, insights, terms, datasets, tables, references, runbook]
       pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
     Status:
       type: string
@@ -609,6 +612,12 @@ components:
           pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}(/[a-zA-Z0-9][a-zA-Z0-9._-]{0,127})*$"
         title: { type: string }
         description: { type: string }
+        resource:
+          type: string
+          description: >
+            Canonical URI of the underlying asset (OKF recommended key): the
+            table/dataset URI, or for references the external source URL.
+            Empty for abstract concepts.
         tags: { type: array, items: { type: string } }
         status: { $ref: "#/components/schemas/Status" }
         status_note:
@@ -713,13 +722,11 @@ components:
           properties:
             field: { type: string, description: "dataset.field (time column)" }
             grain: { type: string, enum: [day, week, month, quarter, year] }
-        dialect: { type: string, enum: [bigquery, ansi], default: bigquery }
         limit: { type: integer }
     CompileResult:
       type: object
       properties:
-        sql: { type: string }
-        dialect: { type: string }
+        sql: { type: string, description: Always BigQuery SQL (design doc 0016). }
         datasets_used: { type: array, items: { type: string } }
         notes: { type: array, items: { type: string } }
         verified_queries:

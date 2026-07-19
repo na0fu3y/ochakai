@@ -151,7 +151,7 @@ func statusList() string {
 func splitRef(s string) (string, string, error) {
 	typ, id, ok := strings.Cut(strings.TrimPrefix(s, "ochakai://"), "/")
 	if !ok || typ == "" || id == "" {
-		return "", "", fmt.Errorf("want <type>/<id> (e.g. metric/revenue), got %q", s)
+		return "", "", fmt.Errorf("want <type>/<id> (e.g. metrics/revenue), got %q", s)
 	}
 	return typ, id, nil
 }
@@ -159,7 +159,7 @@ func splitRef(s string) (string, string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.",
-		"  ochakai search \"gross margin\" --type metric --type term --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type query --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n")
+		"  ochakai search \"gross margin\" --type metrics --type terms --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type queries --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
@@ -214,7 +214,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai browse [flags] [type[/prefix]]\n\nList one level of the ID hierarchy (the folder view of design doc\n0014, the CLI counterpart of the web UI's Browse tab). Without an\nargument, the types with their entry counts; with type (and an\noptional prefix) the subdirectories and entries directly under it.\nDirectories print as \"name/\tcount\", entries as \"segment\tstatus\ttitle\".\nRejected entries are hidden, as in search.",
-		"  ochakai browse\n  ochakai browse query\n  ochakai browse query/sales\n")
+		"  ochakai browse\n  ochakai browse queries\n  ochakai browse queries/sales\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -262,7 +262,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 func cmdContext(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
-		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type query --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n")
+		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type queries --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
@@ -358,7 +358,7 @@ func renderEntry(k *domain.Knowledge) string {
 func cmdUsage(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai usage [flags] <type>/<id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, referenced by compile — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
-		"  ochakai usage query/monthly-revenue\n  ochakai usage metric/revenue --json\n")
+		"  ochakai usage queries/monthly-revenue\n  ochakai usage metrics/revenue --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -395,7 +395,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 func cmdReport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai report [flags] <type>/<id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running a golden query or compiled\nSQL, report worked or failed (say what went wrong with --note);\nfailed counts against verified entries flag them for re-verification.\nPrints the entry's updated usage totals.",
-		"  ochakai report query/monthly-revenue worked\n  ochakai report query/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
+		"  ochakai report queries/monthly-revenue worked\n  ochakai report queries/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
 	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong (max 2000 bytes)")
 	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
 	pos, err := parseArgs(fs, args)
@@ -428,7 +428,7 @@ func cmdReport(ctx context.Context, args []string) error {
 func cmdRevisions(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai revisions [flags] <type>/<id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. Full snapshots are in\nthe JSON output (--json).",
-		"  ochakai revisions metric/revenue\n  ochakai revisions query/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
+		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
 	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response (includes full snapshots)")
 	pos, err := parseArgs(fs, args)
@@ -464,7 +464,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 func cmdBacklinks(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai backlinks [flags] <type>/<id>\n\nList live entries whose links point at this entry, most recently\nupdated first — the reverse edge the web UI shows as \"linked from\"\n(context already follows it when packing companions).\nOutput: uri, status, title — description (one entry per line).",
-		"  ochakai backlinks metric/revenue\n  ochakai backlinks metric/revenue --json | jq '.entries[].id'\n")
+		"  ochakai backlinks metrics/revenue\n  ochakai backlinks metrics/revenue --json | jq '.entries[].id'\n")
 	limit := fs.Int("limit", 0, "max entries (server default 20, max 100)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -504,7 +504,7 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai get [flags] <type>/<id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the\nattachment files themselves (an agent can then read them from disk).",
-		"  ochakai get metric/revenue\n  ochakai get query/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insight/revenue-reading --download ./img\n")
+		"  ochakai get metrics/revenue\n  ochakai get queries/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insights/revenue-reading --download ./img\n")
 	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
 	download := fs.String("download", "", "save the entry's attachments into this directory")
 	pos, err := parseArgs(fs, args)
@@ -565,7 +565,7 @@ func cmdGet(ctx context.Context, args []string) error {
 func cmdAttach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
-		"  ochakai attach insight/revenue-reading weekly.png\n  ochakai attach table/orders seeds.txt\n  ochakai attach table/orders er-diagram.png --name schema.png\n")
+		"  ochakai attach insights/revenue-reading weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
 	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
 	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
 	pos, err := parseArgs(fs, args)
@@ -619,7 +619,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 func cmdDetach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai detach [flags] <type>/<id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
-		"  ochakai detach insight/revenue-reading weekly.png\n")
+		"  ochakai detach insights/revenue-reading weekly.png\n")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -646,7 +646,7 @@ func cmdDetach(ctx context.Context, args []string) error {
 func cmdCreate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai create [flags]\n\nCreate a knowledge entry from -f or stdin. Input is an OKF document\n(--- frontmatter with type/id/title, markdown body — the format\n`ochakai get` prints) or JSON (see api/openapi.yaml). Entries default\nto draft; provenance is recorded from your Google identity.",
-		"  ochakai get insight/revenue-seasonality | sed s/40%/45%/ | ochakai create\n  ochakai create -f entry.md\n")
+		"  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai create\n  ochakai create -f entry.md\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	asJSON := fs.Bool("json", false, "print the created entry as JSON")
 	pos, err := parseArgs(fs, args)
@@ -679,7 +679,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 func cmdUpdate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai update [flags] <type>/<id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\ntype and id come from the argument). Every change is kept as a\nrevision server-side.",
-		"  ochakai get metric/revenue | $EDITOR /dev/stdin | ochakai update metric/revenue\n  ochakai update metric/revenue -f revenue.md\n")
+		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
 	pos, err := parseArgs(fs, args)
@@ -721,7 +721,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai delete [flags] <type>/<id>\n\nSoft-delete a knowledge entry (history is retained server-side).",
-		"  ochakai delete term/obsolete-kpi\n")
+		"  ochakai delete terms/obsolete-kpi\n")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -747,7 +747,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 
 func cmdCompile(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai compile [flags] --metric <name>\n\nDeterministically compile metrics into SQL (never executed, never\nguessed). SQL goes to stdout; notes and related verified golden\nqueries go to stderr — prefer a verified query when it answers the\nquestion. Exit 2 means the request is outside the supported subset;\nthe reason is on stderr.",
+		"Usage: ochakai compile [flags] --metric <name>\n\nDeterministically compile metrics into BigQuery SQL (never executed, never\nguessed). SQL goes to stdout; notes and related verified golden\nqueries go to stderr — prefer a verified query when it answers the\nquestion. Exit 2 means the request is outside the supported subset;\nthe reason is on stderr.",
 		"  ochakai compile --metric revenue --dimension customers.region --grain orders.ordered_at:month\n  ochakai compile --metric revenue --filter \"orders.status = shipped\" > revenue.sql\n")
 	var metrics, dims, filters repeated
 	fs.Var(&metrics, "metric", "metric name (repeatable, required)")
@@ -755,7 +755,6 @@ func cmdCompile(ctx context.Context, args []string) error {
 	fs.Var(&filters, "filter", `filter as "dataset.field op value"; op: = != > >= < <= in not_in (in/not_in take comma-separated values) (repeatable)`)
 	grain := fs.String("grain", "", "time grain as dataset.field:day|week|month|quarter|year")
 	model := fs.String("model", "", "semantic model name (default: resolved from the first metric)")
-	dialect := fs.String("dialect", "", "SQL dialect: bigquery (default) | ansi")
 	limit := fs.Int("limit", 0, "LIMIT clause")
 	asJSON := fs.Bool("json", false, "print the full JSON response")
 	pos, err := parseArgs(fs, args)
@@ -770,7 +769,6 @@ func cmdCompile(ctx context.Context, args []string) error {
 		Model:      *model,
 		Metrics:    metrics,
 		Dimensions: dims,
-		Dialect:    *dialect,
 		Limit:      *limit,
 	}
 	for _, f := range filters {
@@ -928,7 +926,7 @@ func cmdImport(ctx context.Context, args []string) error {
 
 func cmdImportOssie(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import-ossie [flags] <semantic-model.yaml | ->\n\nImport an Apache Ossie semantic model. Each model is stored for\n`compile`, and metric/table knowledge entries are derived so the\ndefinitions are searchable. Re-import refreshes definitions without\nclobbering human-curated status, tags, and bodies.",
+		"Usage: ochakai import-ossie [flags] <semantic-model.yaml | ->\n\nImport an Apache Ossie semantic model. Each model is stored for\n`compile`, and metrics/table knowledge entries are derived so the\ndefinitions are searchable. Re-import refreshes definitions without\nclobbering human-curated status, tags, and bodies.",
 		"  ochakai import-ossie examples/semantic-model.yaml\n")
 	pos, err := parseArgs(fs, args)
 	if err != nil {

@@ -18,21 +18,22 @@ func sample() []domain.Knowledge {
 	verifiedAt := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	return []domain.Knowledge{
 		{
-			Type: domain.TypeInsight, ID: "revenue-seasonality",
+			Type: domain.TypeInsights, ID: "revenue-seasonality",
 			Title: "売上の季節性", Description: "12月は繁忙期",
 			Tags: []string{"sales"}, Status: domain.StatusVerified,
 			CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
 			VerifiedBy: &domain.Actor{Kind: "human", Name: "na0"}, VerifiedAt: &verifiedAt,
-			Links:     []domain.Link{{Rel: "about", Target: "metric/revenue"}},
+			Links:     []domain.Link{{Rel: "about", Target: "metrics/revenue"}},
 			Attrs:     map[string]any{"kind": "seasonality"},
 			Body:      "12月は+40%が通常。",
 			UpdatedAt: verifiedAt,
 		},
 		{
-			Type: domain.TypeTable, ID: "orders",
+			Type: domain.TypeTables, ID: "orders",
 			Title: "orders", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
-			Attrs:     map[string]any{"source": "myproject.shop.orders", "model": "sales_analytics"},
+			Resource:  "myproject.shop.orders",
+			Attrs:     map[string]any{"model": "sales_analytics"},
 			UpdatedAt: verifiedAt,
 		},
 	}
@@ -71,7 +72,7 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 	if !strings.Contains(parts[2], "12月は+40%が通常。") {
 		t.Errorf("body missing:\n%s", parts[2])
 	}
-	if !strings.Contains(parts[2], "- about: [metric/revenue](/metric/revenue.md)") {
+	if !strings.Contains(parts[2], "- about: [metrics/revenue](/metrics/revenue.md)") {
 		t.Errorf("links section missing:\n%s", parts[2])
 	}
 }
@@ -79,7 +80,7 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 func TestDocumentRejectedProvenance(t *testing.T) {
 	rejectedAt := time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC)
 	k := domain.Knowledge{
-		Type: domain.TypeInsight, ID: "dup-insight",
+		Type: domain.TypeInsights, ID: "dup-insight",
 		Title: "重複した知見", Status: domain.StatusRejected,
 		StatusNote: "revenue-seasonality と重複",
 		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
@@ -119,7 +120,7 @@ func TestBundleLayoutAndIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"insight/revenue-seasonality.md", "table/orders.md", "index.md", "insight/index.md", "table/index.md"} {
+	for _, path := range []string{"insights/revenue-seasonality.md", "tables/orders.md", "index.md", "insights/index.md", "tables/index.md"} {
 		if _, ok := files[path]; !ok {
 			t.Errorf("bundle missing %s (have %d files)", path, len(files))
 		}
@@ -127,7 +128,7 @@ func TestBundleLayoutAndIndexes(t *testing.T) {
 	// Index files list their contents with relative links and no
 	// frontmatter (SPEC §6); the root index alone declares okf_version
 	// (§11).
-	typeIdx := string(files["insight/index.md"])
+	typeIdx := string(files["insights/index.md"])
 	if !strings.Contains(typeIdx, "[売上の季節性](revenue-seasonality.md)") {
 		t.Errorf("type index missing concept link:\n%s", typeIdx)
 	}
@@ -135,7 +136,7 @@ func TestBundleLayoutAndIndexes(t *testing.T) {
 		t.Errorf("non-root index must not carry frontmatter:\n%s", typeIdx)
 	}
 	root := string(files["index.md"])
-	if !strings.Contains(root, "[insight/](insight/index.md)") {
+	if !strings.Contains(root, "[insights/](insights/index.md)") {
 		t.Errorf("root index missing type link:\n%s", root)
 	}
 	if !strings.HasPrefix(root, "---\nokf_version: \"0.1\"\n---\n") {

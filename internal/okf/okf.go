@@ -25,11 +25,27 @@ import (
 // Free types have no display mapping and export as themselves — unless the
 // original bundle spelling survives in attrs[AttrOKFType].
 var okfType = map[domain.Type]string{
-	domain.TypeMetric:  "Metric",
-	domain.TypeQuery:   "Golden Query",
-	domain.TypeInsight: "Insight",
-	domain.TypeTerm:    "Glossary Term",
-	domain.TypeTable:   "Table",
+	domain.TypeMetrics:    "Metric",
+	domain.TypeQueries:    "Golden Query",
+	domain.TypeInsights:   "Insight",
+	domain.TypeTerms:      "Glossary Term",
+	domain.TypeDatasets:   "BigQuery Dataset",
+	domain.TypeTables:     "BigQuery Table",
+	domain.TypeReferences: "Reference",
+}
+
+// typeAlias maps accepted alternative frontmatter spellings (compared
+// lowercase) onto the built-ins: the pre-0016 singular slugs, and the
+// generic Table/Dataset names now that the canonical display is the
+// BigQuery-qualified one (design doc 0016 — ochakai is BigQuery-only).
+// Aliases normalize: the original spelling is not preserved.
+var typeAlias = map[string]domain.Type{
+	"metric":  domain.TypeMetrics,
+	"query":   domain.TypeQueries,
+	"insight": domain.TypeInsights,
+	"term":    domain.TypeTerms,
+	"table":   domain.TypeTables,
+	"dataset": domain.TypeDatasets,
 }
 
 // AttrOKFType preserves the original OKF frontmatter type spelling for
@@ -38,13 +54,17 @@ var okfType = map[domain.Type]string{
 // back into the type frontmatter key on export, never exported as an attr.
 const AttrOKFType = "okf_type"
 
-// displayType returns the OKF frontmatter type value for k.
+// displayType returns the OKF frontmatter type value for k. A preserved
+// original spelling wins even on built-in types: with plural built-in
+// slugs matching foreign bundle directories, "tables/orders.md" spelled
+// "BigQuery Table" lands on the built-in tables type and must still
+// re-export its own spelling, not the display name.
 func displayType(k *domain.Knowledge) string {
-	if d, ok := okfType[k.Type]; ok {
-		return d
-	}
 	if s, ok := k.Attrs[AttrOKFType].(string); ok && s != "" {
 		return s
+	}
+	if d, ok := okfType[k.Type]; ok {
+		return d
 	}
 	return string(k.Type)
 }
@@ -59,10 +79,10 @@ const Version = "0.1"
 // (SPEC §4.1), so foreign extension keys round-trip in place.
 type frontmatter struct {
 	Type        string   `yaml:"type"`
+	Resource    string   `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
 	ID          string   `yaml:"id,omitempty"`
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description,omitempty"`
-	Resource    string   `yaml:"resource,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
 	Timestamp   string   `yaml:"timestamp"`
 	Status      string   `yaml:"status"`
@@ -205,6 +225,7 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
 		Type:        displayType(k),
+		Resource:    k.Resource,
 		ID:          k.ID,
 		Title:       k.Title,
 		Description: k.Description,
@@ -213,16 +234,6 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Status:      string(k.Status),
 		StatusNote:  k.StatusNote,
 		CreatedBy:   k.CreatedBy.Kind + ":" + k.CreatedBy.Name,
-	}
-	// "resource" is the canonical URI of the underlying asset. An imported
-	// bundle carries it as attrs["resource"]; for ochakai's own table
-	// entries it is derived from the source attr.
-	if src, ok := k.Attrs["resource"].(string); ok && src != "" {
-		fm.Resource = src
-	} else if k.Type == domain.TypeTable {
-		if src, ok := k.Attrs["source"].(string); ok {
-			fm.Resource = src
-		}
 	}
 	if k.VerifiedBy != nil {
 		fm.VerifiedBy = k.VerifiedBy.Kind + ":" + k.VerifiedBy.Name

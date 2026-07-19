@@ -48,9 +48,9 @@ go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
-ochakai search "revenue" --type metric --status verified
-ochakai get metric/revenue
-ochakai attach insight/revenue-reading weekly.png   # files travel with the entry
+ochakai search "revenue" --type metrics --status verified
+ochakai get metrics/revenue
+ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai compile --metric revenue --grain orders.ordered_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle
@@ -108,7 +108,7 @@ In 2026, serving metric definitions to agents over MCP is table stakes —
 semantic layers, warehouses, and data catalogs all do it. ochakai exists
 for what they still don't do:
 
-- **Interpretation knowledge is a first-class type.** An `insight` entry
+- **Interpretation knowledge is a first-class type.** An `insights` entry
   records the baseline, the seasonality, the caveat, the threshold — the
   tribal knowledge that never fits in a semantic-model YAML and today
   travels by Slack. Your agent gets it in the same search that returns
@@ -174,8 +174,8 @@ And it stays small by refusing things:
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
 Every entry is also an **MCP resource** addressable by its canonical URI —
-`ochakai://{type}/{id}`, e.g. `ochakai://metric/revenue` (IDs may be
-hierarchical, like `ochakai://query/sales/top-customers`). Clients that
+`ochakai://{type}/{id}`, e.g. `ochakai://metrics/revenue` (IDs may be
+hierarchical, like `ochakai://queries/sales/top-customers`). Clients that
 support resource references (`@`-mentions) can pull an entry in as an OKF
 document — frontmatter, body, and links — without a tool call; discovery
 stays with `get_context`/`search_knowledge`. Read tools carry `readOnly`
@@ -193,16 +193,21 @@ over time, run them as canaries from your CI:
 
 | Type | What it holds |
 |---|---|
-| `metric` | Semantic metric definition (Apache Ossie), synonyms |
-| `query` | Golden query: natural-language question + verified SQL |
-| `insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
-| `term` | Glossary term |
-| `table` | Table catalog entry: source, column notes, known issues |
+| `metrics` | Semantic metric definition (Apache Ossie), synonyms |
+| `queries` | Golden query: natural-language question + verified SQL |
+| `insights` | How to read a metric: baselines, seasonality, caveats, thresholds |
+| `terms` | Glossary term |
+| `datasets` | BigQuery dataset catalog entry: a container grouping tables |
+| `tables` | BigQuery table catalog entry: source, column notes, known issues |
+| `references` | Mirror of external material: enum definitions, licenses, schema docs |
 
-These five are recommendations with server behavior attached (compile,
+These are recommendations with server behavior attached (compile,
 canaries), not a closed set — any slug works as a type for your own document
-kinds, and IDs may be hierarchical (`query/sales/monthly-revenue`) to
-organize knowledge into directories.
+kinds, and IDs may be hierarchical (`queries/sales/monthly-revenue`) to
+organize knowledge into directories. Slugs are plural on purpose: exported
+bundles use the same directory layout (`tables/`, `datasets/`,
+`references/`) as the [OKF knowledge-catalog reference bundles](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf/bundles),
+so those bundles import onto the recommended types as-is (design doc 0016).
 
 Entries can carry file attachments — the dashboard screenshot behind an
 insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
