@@ -51,7 +51,7 @@ func TestIntegration(t *testing.T) {
 	if err := s.Create(ctx, k); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertEmbedding(ctx, k.Type, k.ID, "test-model", []float32{1, 0, 0, 0}); err != nil {
+	if err := s.UpsertEmbedding(ctx, k.ID, "test-model", []float32{1, 0, 0, 0}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,7 +88,7 @@ func TestIntegration(t *testing.T) {
 	if err := s.Create(ctx, rej); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Get(ctx, rej.Type, rej.ID)
+	got, err := s.Get(ctx, rej.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestIntegration(t *testing.T) {
 
 	// Usage recording: raw events plus running totals.
 	actor := domain.Actor{Kind: "agent", Name: "claude-code"}
-	target := []EventTarget{{Type: k.Type, ID: k.ID}}
+	target := []string{k.ID}
 	if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, target); err != nil {
 		t.Fatalf("RecordEvents: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestIntegration(t *testing.T) {
 	if err := s.RecordEvents(ctx, domain.EventFetched, actor, target); err != nil {
 		t.Fatalf("RecordEvents: %v", err)
 	}
-	usage, err := s.Usage(ctx, k.Type, k.ID)
+	usage, err := s.Usage(ctx, k.ID)
 	if err != nil {
 		t.Fatalf("Usage: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestIntegration(t *testing.T) {
 	if err := s.RecordOutcome(ctx, domain.EventWorked, actor, target[0], ""); err != nil {
 		t.Fatalf("RecordOutcome: %v", err)
 	}
-	usage, err = s.Usage(ctx, k.Type, k.ID)
+	usage, err = s.Usage(ctx, k.ID)
 	if err != nil {
 		t.Fatalf("Usage: %v", err)
 	}
@@ -194,11 +194,11 @@ func TestIntegration(t *testing.T) {
 		}
 	}
 	for i := 0; i < 3; i++ {
-		if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []EventTarget{{Type: hot.Type, ID: hot.ID}}); err != nil {
+		if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []string{hot.ID}); err != nil {
 			t.Fatalf("RecordEvents: %v", err)
 		}
 	}
-	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, EventTarget{Type: hot.Type, ID: hot.ID}, ""); err != nil {
+	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, hot.ID, ""); err != nil {
 		t.Fatalf("RecordOutcome: %v", err)
 	}
 	feed, err := s.ListByUsage(ctx, Filter{
@@ -256,14 +256,14 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 		Type: domain.TypeTerm, ID: "it-delete-me", Title: "delete me",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
-	_ = s.SoftDelete(ctx, k.Type, k.ID, k.CreatedBy) // clean rerun
+	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy) // clean rerun
 	if err := s.Create(ctx, k); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.Type, k.ID, k.CreatedBy); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy); err != nil {
 		t.Fatalf("SoftDelete without knowledge_embedding: %v", err)
 	}
-	if _, err := s.Get(ctx, k.Type, k.ID); err == nil {
+	if _, err := s.Get(ctx, k.ID); err == nil {
 		t.Error("entry still visible after SoftDelete")
 	}
 }
@@ -295,22 +295,22 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	entries := []*domain.Knowledge{
 		{Type: domain.TypeMetric, ID: "it-link-metric", Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
 		{Type: domain.TypeInsight, ID: "it-link-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "metric/it-link-metric"}}},
+			Links: []domain.Link{{Rel: "explains", Target: "it-link-metric"}}},
 		{Type: domain.TypeInsight, ID: "it-link-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "ochakai://metric/it-link-metric"}}},
+			Links: []domain.Link{{Rel: "explains", Target: "ochakai://it-link-metric"}}},
 		{Type: domain.TypeInsight, ID: "it-link-gone", Title: "deleted link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "metric/it-link-metric"}}},
+			Links: []domain.Link{{Rel: "explains", Target: "it-link-metric"}}},
 	}
 	for _, k := range entries {
 		if err := s.Create(ctx, k); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := s.SoftDelete(ctx, domain.TypeInsight, "it-link-gone", actor); err != nil {
+	if err := s.SoftDelete(ctx, "it-link-gone", actor); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.ListLinkingTo(ctx, domain.TypeMetric, "it-link-metric", 10)
+	got, err := s.ListLinkingTo(ctx, "it-link-metric", 10)
 	if err != nil {
 		t.Fatalf("ListLinkingTo: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		t.Fatalf("create over a live entry = %v, want ErrAlreadyExists", err)
 	}
 
-	if err := s.SoftDelete(ctx, first.Type, first.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, first.ID, actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -377,7 +377,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	if err := s.Create(ctx, second); err != nil {
 		t.Fatalf("create over a soft-deleted entry: %v", err)
 	}
-	got, err := s.Get(ctx, second.Type, second.ID)
+	got, err := s.Get(ctx, second.ID)
 	if err != nil {
 		t.Fatalf("revived entry not readable: %v", err)
 	}
@@ -388,8 +388,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	// The full lineage stays: create, delete, create.
 	var changes []string
 	rows, err := s.pool.Query(ctx,
-		`SELECT change FROM knowledge_revision WHERE type=$1 AND id=$2 ORDER BY rev`,
-		second.Type, second.ID)
+		`SELECT change FROM knowledge_revision WHERE id=$1 ORDER BY rev`, second.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +466,7 @@ func TestIntegrationAttachments(t *testing.T) {
 	}
 
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("fake image bytes")...)
-	att, err := s.PutAttachment(ctx, k.Type, k.ID, "weekly.png", "image/png", "", png, actor)
+	att, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png, actor)
 	if err != nil {
 		t.Fatalf("PutAttachment: %v", err)
 	}
@@ -475,7 +474,7 @@ func TestIntegrationAttachments(t *testing.T) {
 		t.Errorf("attachment metadata wrong: %+v", att)
 	}
 
-	got, data, err := s.GetAttachment(ctx, k.Type, k.ID, "weekly.png")
+	got, data, err := s.GetAttachment(ctx, k.ID, "weekly.png")
 	if err != nil {
 		t.Fatalf("GetAttachment: %v", err)
 	}
@@ -485,10 +484,10 @@ func TestIntegrationAttachments(t *testing.T) {
 
 	// Replace by name: same entry, same name, new bytes.
 	png2 := append([]byte("\x89PNG\r\n\x1a\n"), []byte("updated bytes")...)
-	if _, err := s.PutAttachment(ctx, k.Type, k.ID, "weekly.png", "image/png", "", png2, actor); err != nil {
+	if _, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png2, actor); err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.ListAttachments(ctx, k.Type, k.ID)
+	list, err := s.ListAttachments(ctx, k.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,12 +507,12 @@ func TestIntegrationAttachments(t *testing.T) {
 	}
 
 	// Attach/detach are revisions on the entry.
-	if err := s.DeleteAttachment(ctx, k.Type, k.ID, "weekly.png", actor); err != nil {
+	if err := s.DeleteAttachment(ctx, k.ID, "weekly.png", actor); err != nil {
 		t.Fatalf("DeleteAttachment: %v", err)
 	}
 	var changes []string
 	rows, err := s.pool.Query(ctx,
-		`SELECT change FROM knowledge_revision WHERE type=$1 AND id=$2 ORDER BY rev`, k.Type, k.ID)
+		`SELECT change FROM knowledge_revision WHERE id=$1 ORDER BY rev`, k.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,13 +530,13 @@ func TestIntegrationAttachments(t *testing.T) {
 	}
 
 	// Attachments of soft-deleted entries are unreachable.
-	if _, err := s.PutAttachment(ctx, k.Type, k.ID, "weekly.png", "image/png", "", png, actor); err != nil {
+	if _, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.Type, k.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.GetAttachment(ctx, k.Type, k.ID, "weekly.png"); err != ErrNotFound {
+	if _, _, err := s.GetAttachment(ctx, k.ID, "weekly.png"); err != ErrNotFound {
 		t.Errorf("attachment of a deleted entry = %v, want ErrNotFound", err)
 	}
 }
@@ -576,11 +575,11 @@ func TestIntegrationListRevisions(t *testing.T) {
 	if err := s.Update(ctx, k, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.Type, k.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, actor); err != nil {
 		t.Fatal(err)
 	}
 
-	revs, err := s.ListRevisions(ctx, k.Type, k.ID, 50)
+	revs, err := s.ListRevisions(ctx, k.ID, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -607,7 +606,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 		t.Errorf("changed_by = %+v, want %+v", revs[0].ChangedBy, actor)
 	}
 
-	if _, err := s.ListRevisions(ctx, domain.TypeTerm, "it-revs-never-existed", 50); err != ErrNotFound {
+	if _, err := s.ListRevisions(ctx, "it-revs-never-existed", 50); err != ErrNotFound {
 		t.Errorf("revisions of a nonexistent entry = %v, want ErrNotFound", err)
 	}
 }

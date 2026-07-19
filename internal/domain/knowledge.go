@@ -117,7 +117,7 @@ const (
 // target: "table/orders"}.
 type Link struct {
 	Rel    string `json:"rel"`
-	Target string `json:"target"` // "<type>/<id>"
+	Target string `json:"target"` // the target entry's id (its bundle path)
 }
 
 // Knowledge is the common envelope for all knowledge types. Type-specific
@@ -125,7 +125,7 @@ type Link struct {
 // The envelope maps 1:1 to an OKF document (YAML frontmatter + markdown).
 type Knowledge struct {
 	Type        Type           `json:"type"`
-	ID          string         `json:"id"` // slug, unique within type
+	ID          string         `json:"id"` // full bundle path, the sole key (design doc 0016)
 	Title       string         `json:"title"`
 	Description string         `json:"description,omitempty"`
 	Tags        []string       `json:"tags,omitempty"`
@@ -147,8 +147,9 @@ type Knowledge struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
-// URI returns the canonical reference, e.g. "ochakai://metric/revenue".
-func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type, k.ID) }
+// URI returns the canonical reference, e.g. "ochakai://metric/revenue" —
+// the scheme plus the entry's id (its bundle path, design doc 0016).
+func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s", k.ID) }
 
 // SameContent reports whether o carries the same authored content as k:
 // the fields a writer controls (title, description, tags, status,
@@ -194,9 +195,10 @@ type Revision struct {
 var segmentRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
 // ValidID reports whether id is a valid knowledge ID: slug segments
-// separated by "/", mirroring OKF's hierarchical concept IDs (the bundle
-// path is "<type>/<id>.md"). The final segment must not be "index" — that
-// filename belongs to the generated per-directory index.md.
+// separated by "/", following OKF's "concept ID = file path" rule (the
+// bundle path is "<id>.md", design doc 0016). The final segment must not
+// be "index" or "log" — those filenames belong to OKF's reserved
+// per-directory index.md (generated navigation) and log.md (history).
 func ValidID(id string) bool {
 	if id == "" || len(id) > 512 {
 		return false
@@ -207,7 +209,8 @@ func ValidID(id string) bool {
 			return false
 		}
 	}
-	return segs[len(segs)-1] != "index"
+	last := segs[len(segs)-1]
+	return last != "index" && last != "log"
 }
 
 // ValidIDPrefix reports whether prefix can lead a knowledge ID: empty

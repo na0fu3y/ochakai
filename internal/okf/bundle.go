@@ -11,9 +11,9 @@ import (
 
 // FromBundle is the inverse of Bundle: it reads a path→content map (a
 // bundle directory or an unpacked archive) into knowledge entries.
-// Following OKF's "concept ID = file path" rule, structure wins over
-// frontmatter: the first path segment becomes the type and the remaining
-// segments the hierarchical ID; a frontmatter type spelled differently is
+// Following OKF's "concept ID = file path" rule, the path minus ".md" is
+// the entry's id, verbatim — the layout is the user's (design doc 0016).
+// The type comes from frontmatter alone; a spelling the slug changes is
 // preserved as attrs[AttrOKFType] so re-export reproduces the original.
 // index.md files are navigation that Bundle regenerates, and log.md files
 // are the other OKF-reserved name (update history, SPEC §3) — both are
@@ -24,11 +24,15 @@ import (
 // entry's attachments — attribution is by reference first, so any
 // producer's layout works (design doc 0008); the original path is
 // preserved for re-export. Unreferenced non-markdown files sitting in an
-// entry's canonical namespace ("<type>/<id>/<name>") attach to that entry
+// entry's canonical namespace ("<id>/<name>") attach to that entry
 // (design doc 0013). Anything else that cannot become an entry or an
 // attachment — orphaned non-markdown files, unparsable documents, invalid
 // slugs — is reported in skipped as "path: reason" lines rather than
 // failing the whole bundle.
+//
+// There is no archive unwrapping: `tar czf ga4.tgz ga4/` imports under
+// "ga4/" — the packed shape is the structure, and a wrapper directory is
+// how a bundle keeps its own namespace (design doc 0016 §4.3).
 func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []BundleAttachment, skipped []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -36,7 +40,6 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 	}
 	sort.Strings(paths)
 
-	var docPaths []string // parallel to entries: the bundle path each was read from
 	var nonMarkdown []string
 	for _, p := range paths {
 		clean := path.Clean(strings.TrimPrefix(p, "./"))
@@ -56,12 +59,11 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 			continue
 		}
 		entries = append(entries, *k)
-		docPaths = append(docPaths, clean)
 	}
 
-	concepts := make([]conceptRef, len(entries))
+	concepts := make([]*domain.Knowledge, len(entries))
 	for i := range entries {
-		concepts[i] = conceptRef{k: &entries[i], docPath: docPaths[i]}
+		concepts[i] = &entries[i]
 	}
 	atts, used := resolveAttachments(files, concepts)
 	for _, p := range nonMarkdown {
@@ -70,51 +72,8 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 		}
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Type != entries[j].Type {
-			return entries[i].Type < entries[j].Type
-		}
-		return entries[i].ID < entries[j].ID
-	})
+	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	return entries, atts, skipped
-}
-
-// StripWrapper unwraps a bundle packed inside a single top-level
-// directory, the shape `tar czf bundle.tar.gz ga4/` produces. Without
-// unwrapping, the wrapper name would silently become every entry's type
-// (first path segment = type). A bundle rooted at the archive top —
-// anything with a top-level file, such as the root index.md every real
-// bundle carries — is returned unchanged. The wrapper name is returned so
-// callers can tell the user what happened ("" when nothing was stripped).
-func StripWrapper(files map[string][]byte) (map[string][]byte, string) {
-	root := ""
-	for p := range files {
-		clean := path.Clean(strings.TrimPrefix(p, "./"))
-		if hiddenPath(clean) {
-			continue // tar noise (._*, .DS_Store) must not defeat detection
-		}
-		i := strings.Index(clean, "/")
-		if i < 0 {
-			return files, ""
-		}
-		if root == "" {
-			root = clean[:i]
-		} else if root != clean[:i] {
-			return files, ""
-		}
-	}
-	if root == "" {
-		return files, ""
-	}
-	out := make(map[string][]byte, len(files))
-	for p, content := range files {
-		clean := path.Clean(strings.TrimPrefix(p, "./"))
-		if hiddenPath(clean) {
-			continue
-		}
-		out[strings.TrimPrefix(clean, root+"/")] = content
-	}
-	return out, root
 }
 
 // hiddenPath reports whether any segment of the (cleaned) path starts
@@ -135,36 +94,13 @@ func fromBundleFile(clean string, content []byte) (*domain.Knowledge, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	segs := strings.Split(strings.TrimSuffix(clean, ".md"), "/")
-	if len(segs) == 1 {
-		// A concept at the bundle root has no directory to name its type;
-		// fall back to the frontmatter type (the file moves under that
-		// directory on re-export).
-		if k.Type == "" {
-			return nil, fmt.Errorf("no type: not inside a type directory and frontmatter type %q yields no slug", rawType)
-		}
-		k.ID = segs[0]
-	} else {
-		pathType := domain.Type(segs[0])
-		if !domain.ValidType(pathType) {
-			return nil, fmt.Errorf("directory %q is not a valid type slug", segs[0])
-		}
-		if k.Type != pathType {
-			// The path names the type; keep the frontmatter spelling for
-			// round-trips ("tables/users.md" with "type: Table" exports
-			// back exactly, stored as type "tables").
-			delete(k.Attrs, AttrOKFType)
-			if rawType != "" && rawType != string(pathType) {
-				if k.Attrs == nil {
-					k.Attrs = map[string]any{}
-				}
-				k.Attrs[AttrOKFType] = rawType
-			}
-			k.Type = pathType
-		}
-		k.ID = strings.Join(segs[1:], "/")
+	// Frontmatter is the type's only source: the path no longer claims
+	// one, and OKF requires the key — a file without it is not a concept
+	// (design doc 0016, no guessing).
+	if k.Type == "" {
+		return nil, fmt.Errorf("no type: frontmatter type %q yields no slug (the type key is required; any slug works)", rawType)
 	}
+	k.ID = strings.TrimSuffix(clean, ".md")
 	if !domain.ValidID(k.ID) {
 		return nil, fmt.Errorf("path yields invalid id %q", k.ID)
 	}

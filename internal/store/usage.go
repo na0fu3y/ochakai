@@ -7,40 +7,28 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// EventTarget names one knowledge entry a usage event refers to.
-type EventTarget struct {
-	Type domain.Type
-	ID   string
-}
-
 // eventRetention is how long raw knowledge_event rows are kept. Running
 // totals in knowledge_usage survive pruning, so /usage stays accurate.
 const eventRetention = 180 * 24 * time.Hour
 
 // RecordEvents appends raw usage events and bumps the running totals in a
-// single statement. Callers treat failures as non-fatal: usage recording
-// must never fail a read.
-func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Actor, targets []EventTarget) error {
-	if len(targets) == 0 {
+// single statement. ids name the target entries. Callers treat failures
+// as non-fatal: usage recording must never fail a read.
+func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Actor, ids []string) error {
+	if len(ids) == 0 {
 		return nil
-	}
-	types := make([]string, len(targets))
-	ids := make([]string, len(targets))
-	for i, t := range targets {
-		types[i] = string(t.Type)
-		ids[i] = t.ID
 	}
 	_, err := s.pool.Exec(ctx, `
 		WITH ev AS (
-			INSERT INTO knowledge_event (knowledge_type, knowledge_id, event, actor_kind, actor_name)
-			SELECT t, i, $3, $4, $5 FROM unnest($1::text[], $2::text[]) AS u(t, i)
-			RETURNING knowledge_type, knowledge_id, event
+			INSERT INTO knowledge_event (knowledge_id, event, actor_kind, actor_name)
+			SELECT i, $2, $3, $4 FROM unnest($1::text[]) AS u(i)
+			RETURNING knowledge_id, event
 		)
-		INSERT INTO knowledge_usage (knowledge_type, knowledge_id, event, count, last_at)
-		SELECT knowledge_type, knowledge_id, event, count(*), now() FROM ev GROUP BY 1, 2, 3
-		ON CONFLICT (knowledge_type, knowledge_id, event)
+		INSERT INTO knowledge_usage (knowledge_id, event, count, last_at)
+		SELECT knowledge_id, event, count(*), now() FROM ev GROUP BY 1, 2
+		ON CONFLICT (knowledge_id, event)
 		DO UPDATE SET count = knowledge_usage.count + EXCLUDED.count, last_at = EXCLUDED.last_at`,
-		types, ids, event, actor.Kind, actor.Name)
+		ids, event, actor.Kind, actor.Name)
 	if err != nil {
 		return err
 	}
@@ -53,17 +41,17 @@ func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Act
 // the caller — an outcome report is a deliberate write, not a side
 // effect of a read — so the error is returned for the transport to
 // surface.
-func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Actor, target EventTarget, note string) error {
+func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Actor, id, note string) error {
 	_, err := s.pool.Exec(ctx, `
 		WITH ev AS (
-			INSERT INTO knowledge_event (knowledge_type, knowledge_id, event, actor_kind, actor_name, note)
-			VALUES ($1, $2, $3, $4, $5, $6)
+			INSERT INTO knowledge_event (knowledge_id, event, actor_kind, actor_name, note)
+			VALUES ($1, $2, $3, $4, $5)
 		)
-		INSERT INTO knowledge_usage (knowledge_type, knowledge_id, event, count, last_at)
-		VALUES ($1, $2, $3, 1, now())
-		ON CONFLICT (knowledge_type, knowledge_id, event)
+		INSERT INTO knowledge_usage (knowledge_id, event, count, last_at)
+		VALUES ($1, $2, 1, now())
+		ON CONFLICT (knowledge_id, event)
 		DO UPDATE SET count = knowledge_usage.count + 1, last_at = EXCLUDED.last_at`,
-		target.Type, target.ID, event, actor.Kind, actor.Name, note)
+		id, event, actor.Kind, actor.Name, note)
 	if err != nil {
 		return err
 	}
@@ -87,9 +75,9 @@ func (s *Store) maybePruneEvents(ctx context.Context) {
 }
 
 // Usage returns the running usage totals for one knowledge entry.
-func (s *Store) Usage(ctx context.Context, typ domain.Type, id string) (*domain.Usage, error) {
+func (s *Store) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT event, count, last_at FROM knowledge_usage WHERE knowledge_type = $1 AND knowledge_id = $2`, typ, id)
+		`SELECT event, count, last_at FROM knowledge_usage WHERE knowledge_id = $1`, id)
 	if err != nil {
 		return nil, err
 	}

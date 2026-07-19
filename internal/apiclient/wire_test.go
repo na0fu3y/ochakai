@@ -113,8 +113,7 @@ func TestCompileResultMatchesServerWire(t *testing.T) {
 func TestBrowseResultMatchesServerWire(t *testing.T) {
 	when := time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)
 	server := service.BrowseResult{
-		Types: []store.TypeCount{{Type: domain.TypeMetric, Count: 12}},
-		Dirs:  []store.DirCount{{Name: "sales", Count: 4}},
+		Dirs: []store.DirCount{{Name: "sales", Count: 4}},
 		Entries: []store.BrowseEntry{
 			{Type: domain.TypeQuery, ID: "sales/monthly-revenue", Title: "月次売上",
 				Status: domain.StatusVerified, UpdatedAt: when},
@@ -130,8 +129,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 		t.Fatalf("client cannot decode the server response: %v", err)
 	}
 	want := BrowseResult{
-		Types: []BrowseType{{Type: "metric", Count: 12}},
-		Dirs:  []BrowseDir{{Name: "sales", Count: 4}},
+		Dirs: []BrowseDir{{Name: "sales", Count: 4}},
 		Entries: []BrowseEntry{
 			{Type: "query", ID: "sales/monthly-revenue", Title: "月次売上",
 				Status: domain.StatusVerified, UpdatedAt: when},

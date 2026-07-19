@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0014: フォルダブラウズ
 
-Status: Accepted(2026-07-18 の議論で決定)
+Status: Accepted(2026-07-18 の議論で決定)。API パラメタ(type + prefix → prefix 一本)は [0016](0016-path-addressing.md) §4.7 が改訂
 Date: 2026-07-18
 
 ## 1. 目的

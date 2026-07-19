@@ -33,19 +33,20 @@ func TestParseArgsAllowsFlagsAfterPositionals(t *testing.T) {
 	}
 }
 
-func TestSplitRef(t *testing.T) {
-	for in, want := range map[string][2]string{
-		"metric/revenue":           {"metric", "revenue"},
-		"ochakai://metric/revenue": {"metric", "revenue"},
+func TestParseRef(t *testing.T) {
+	for in, want := range map[string]string{
+		"metric/revenue":           "metric/revenue",
+		"ochakai://metric/revenue": "metric/revenue",
+		"revenue":                  "revenue", // root-level ids are entries too
 	} {
-		typ, id, err := splitRef(in)
-		if err != nil || typ != want[0] || id != want[1] {
-			t.Errorf("splitRef(%q) = %s/%s, %v", in, typ, id, err)
+		id, err := parseRef(in)
+		if err != nil || id != want {
+			t.Errorf("parseRef(%q) = %q, %v; want %q", in, id, err, want)
 		}
 	}
-	for _, bad := range []string{"revenue", "metric/", "/x"} {
-		if _, _, err := splitRef(bad); err == nil {
-			t.Errorf("splitRef(%q) succeeded, want error", bad)
+	for _, bad := range []string{"", "ochakai://"} {
+		if _, err := parseRef(bad); err == nil {
+			t.Errorf("parseRef(%q) succeeded, want error", bad)
 		}
 	}
 }
@@ -179,12 +180,12 @@ func TestRenderContext(t *testing.T) {
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	res := &apiclient.ContextResult{
 		Hits: []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeQuery, ID: "monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue"}, Score: 0.9},
-			{Knowledge: domain.Knowledge{Type: domain.TypeTerm, ID: "arr", Status: domain.StatusDraft, Title: "ARR"}, Score: 0.1},
+			{Knowledge: domain.Knowledge{Type: domain.TypeQuery, ID: "query/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue"}, Score: 0.9},
+			{Knowledge: domain.Knowledge{Type: domain.TypeTerm, ID: "term/arr", Status: domain.StatusDraft, Title: "ARR"}, Score: 0.1},
 		},
 		Entries: []domain.Knowledge{
 			{
-				Type: domain.TypeQuery, ID: "monthly-revenue", Status: domain.StatusVerified,
+				Type: domain.TypeQuery, ID: "query/monthly-revenue", Status: domain.StatusVerified,
 				Title:      "Monthly revenue",
 				CreatedBy:  domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
 				VerifiedBy: &human, VerifiedAt: &now,
@@ -192,7 +193,7 @@ func TestRenderContext(t *testing.T) {
 				Body:  "Use this over compile.",
 			},
 			{
-				Type: domain.TypeInsight, ID: "revenue-seasonality", Status: domain.StatusDraft,
+				Type: domain.TypeInsight, ID: "insight/revenue-seasonality", Status: domain.StatusDraft,
 				Title: "Seasonality", CreatedBy: domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
 				Body: "Q4 peaks ~40% above baseline.",
 			},
@@ -258,12 +259,12 @@ func TestImportReportsUnchanged(t *testing.T) {
 		w.WriteHeader(http.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "already exists"})
 	})
-	mux.HandleFunc("PUT /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		var k domain.Knowledge
 		if err := json.NewDecoder(r.Body).Decode(&k); err != nil {
 			t.Errorf("bad PUT payload: %v", err)
 		}
-		if r.PathValue("id") == "same" {
+		if r.PathValue("id") == "metric/same" {
 			w.Header().Set("Ochakai-Unchanged", "true")
 		}
 		_ = json.NewEncoder(w).Encode(k)

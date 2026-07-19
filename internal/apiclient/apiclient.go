@@ -174,14 +174,10 @@ func (c *Client) Context(ctx context.Context, query string, types, statuses, tag
 }
 
 // Browse lists one level of the ID hierarchy (GET /api/v1/browse,
-// design doc 0014). With typ empty it returns the type list (prefix
-// must be empty too); with a type it returns the subdirectories and
-// entries directly under prefix.
-func (c *Client) Browse(ctx context.Context, typ, prefix string) (*BrowseResult, error) {
+// design docs 0014, 0016): the subdirectories and entries directly
+// under prefix ("" is the root — the top-level segments).
+func (c *Client) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
 	q := url.Values{}
-	if typ != "" {
-		q.Set("type", typ)
-	}
 	if prefix != "" {
 		q.Set("prefix", prefix)
 	}
@@ -193,24 +189,24 @@ func (c *Client) Browse(ctx context.Context, typ, prefix string) (*BrowseResult,
 }
 
 // Revisions fetches an entry's change history, newest first, with full
-// snapshots (GET /api/v1/revisions/{type}/{id}). Works for soft-deleted
+// snapshots (GET /api/v1/revisions/{id}). Works for soft-deleted
 // entries too. limit 0 uses the server default.
-func (c *Client) Revisions(ctx context.Context, typ, id string, limit int) ([]domain.Revision, error) {
+func (c *Client) Revisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	var out struct {
 		Revisions []domain.Revision `json:"revisions"`
 	}
-	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/revisions/", typ, id), limitQuery(limit), nil, &out)
+	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/revisions/", id), limitQuery(limit), nil, &out)
 	return out.Revisions, err
 }
 
 // Backlinks fetches live entries whose links point at the given entry,
-// most recently updated first (GET /api/v1/backlinks/{type}/{id}).
+// most recently updated first (GET /api/v1/backlinks/{id}).
 // limit 0 uses the server default.
-func (c *Client) Backlinks(ctx context.Context, typ, id string, limit int) ([]domain.Knowledge, error) {
+func (c *Client) Backlinks(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
 	var out struct {
 		Entries []domain.Knowledge `json:"entries"`
 	}
-	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/backlinks/", typ, id), limitQuery(limit), nil, &out)
+	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/backlinks/", id), limitQuery(limit), nil, &out)
 	return out.Entries, err
 }
 
@@ -223,9 +219,9 @@ func limitQuery(limit int) url.Values {
 	return url.Values{"limit": {strconv.Itoa(limit)}}
 }
 
-func (c *Client) Get(ctx context.Context, typ, id string) (*domain.Knowledge, error) {
+func (c *Client) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 	var k domain.Knowledge
-	if err := c.doJSON(ctx, http.MethodGet, entryPath(typ, id), nil, nil, &k); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, entryPath(id), nil, nil, &k); err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -239,13 +235,13 @@ func (c *Client) Create(ctx context.Context, k *domain.Knowledge) (*domain.Knowl
 	return &created, nil
 }
 
-// Update replaces the entry at k.Type/k.ID (full replacement; the server
+// Update replaces the entry at k.ID (full replacement; the server
 // keeps every change as a revision). changed=false reports the server
 // wrote nothing because the payload matched the stored content (the
 // Ochakai-Unchanged response header); servers predating the header
 // always report changed=true.
 func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (updated *domain.Knowledge, changed bool, err error) {
-	resp, err := c.do(ctx, http.MethodPut, entryPath(string(k.Type), k.ID), nil, k)
+	resp, err := c.do(ctx, http.MethodPut, entryPath(k.ID), nil, k)
 	if err != nil {
 		return nil, false, err
 	}
@@ -257,21 +253,21 @@ func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (updated *doma
 	return &out, resp.Header.Get("Ochakai-Unchanged") != "true", nil
 }
 
-func (c *Client) Delete(ctx context.Context, typ, id string) error {
-	return c.doJSON(ctx, http.MethodDelete, entryPath(typ, id), nil, nil, nil)
+func (c *Client) Delete(ctx context.Context, id string) error {
+	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
 // Attach uploads data as an attachment of the entry (PUT
-// /api/v1/attachments/{type}/{id}/{name}), replacing any attachment of
+// /api/v1/attachments/{id}/{name}), replacing any attachment of
 // the same name. okfPath preserves a foreign bundle location for
 // round-trips; "" for attachments born here. The server sniffs the media
 // type from the bytes.
-func (c *Client) Attach(ctx context.Context, typ, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
+func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
 	var q url.Values
 	if okfPath != "" {
 		q = url.Values{"okf_path": {okfPath}}
 	}
-	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(typ, id, name), q,
+	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), q,
 		"application/octet-stream", bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -285,10 +281,10 @@ func (c *Client) Attach(ctx context.Context, typ, id, name, okfPath string, data
 }
 
 // Attachment fetches one attachment's bytes and media type (GET
-// /api/v1/attachments/{type}/{id}/{name}). Full metadata travels with
+// /api/v1/attachments/{id}/{name}). Full metadata travels with
 // the entry (Get → Knowledge.Attachments).
-func (c *Client) Attachment(ctx context.Context, typ, id, name string) (data []byte, mediaType string, err error) {
-	resp, err := c.do(ctx, http.MethodGet, attachmentPath(typ, id, name), nil, nil)
+func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, mediaType string, err error) {
+	resp, err := c.do(ctx, http.MethodGet, attachmentPath(id, name), nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -300,34 +296,34 @@ func (c *Client) Attachment(ctx context.Context, typ, id, name string) (data []b
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
-// Detach removes an attachment (DELETE /api/v1/attachments/{type}/{id}/{name}).
-func (c *Client) Detach(ctx context.Context, typ, id, name string) error {
-	return c.doJSON(ctx, http.MethodDelete, attachmentPath(typ, id, name), nil, nil, nil)
+// Detach removes an attachment (DELETE /api/v1/attachments/{id}/{name}).
+func (c *Client) Detach(ctx context.Context, id, name string) error {
+	return c.doJSON(ctx, http.MethodDelete, attachmentPath(id, name), nil, nil, nil)
 }
 
-func attachmentPath(typ, id, name string) string {
-	return escapedPath("/api/v1/attachments/", typ, id) + "/" + url.PathEscape(name)
+func attachmentPath(id, name string) string {
+	return escapedPath("/api/v1/attachments/", id) + "/" + url.PathEscape(name)
 }
 
-// Usage fetches usage totals for one entry (GET /api/v1/usage/{type}/{id}):
+// Usage fetches usage totals for one entry (GET /api/v1/usage/{id}):
 // search hits, fetches, compile references, and last-used time.
-func (c *Client) Usage(ctx context.Context, typ, id string) (*domain.Usage, error) {
+func (c *Client) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 	var u domain.Usage
-	if err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/usage/", typ, id), nil, nil, &u); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/usage/", id), nil, nil, &u); err != nil {
 		return nil, err
 	}
 	return &u, nil
 }
 
 // ReportOutcome reports whether acting on an entry worked or failed
-// (POST /api/v1/usage/{type}/{id}) and returns the updated totals.
-func (c *Client) ReportOutcome(ctx context.Context, typ, id, outcome, note string) (*domain.Usage, error) {
+// (POST /api/v1/usage/{id}) and returns the updated totals.
+func (c *Client) ReportOutcome(ctx context.Context, id, outcome, note string) (*domain.Usage, error) {
 	body := map[string]string{"outcome": outcome}
 	if note != "" {
 		body["note"] = note
 	}
 	var u domain.Usage
-	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/usage/", typ, id), nil, body, &u); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/usage/", id), nil, body, &u); err != nil {
 		return nil, err
 	}
 	return &u, nil
@@ -368,16 +364,17 @@ func (c *Client) ImportOssie(ctx context.Context, yamlSrc []byte) (*ImportReport
 	return &report, nil
 }
 
-// entryPath escapes each ID segment separately: IDs are hierarchical
-// ("sales/orders") and their slashes must stay real path separators.
-func entryPath(typ, id string) string { return escapedPath("/api/v1/knowledge/", typ, id) }
+// entryPath escapes each ID segment separately: the id is a path
+// ("metric/revenue") and its slashes must stay real path separators.
+func entryPath(id string) string { return escapedPath("/api/v1/knowledge/", id) }
 
-func escapedPath(base, typ, id string) string {
+func escapedPath(base, id string) string {
 	var b strings.Builder
 	b.WriteString(base)
-	b.WriteString(url.PathEscape(typ))
-	for seg := range strings.SplitSeq(id, "/") {
-		b.WriteString("/")
+	for i, seg := range strings.Split(id, "/") {
+		if i > 0 {
+			b.WriteString("/")
+		}
 		b.WriteString(url.PathEscape(seg))
 	}
 	return b.String()

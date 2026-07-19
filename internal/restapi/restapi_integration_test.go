@@ -23,8 +23,8 @@ import (
 // real PostgreSQL (skipped unless OCHAKAI_TEST_DATABASE_URL is set; see
 // the store integration test for the docker one-liner): create, read,
 // no-op update (Ochakai-Unchanged), browse, revisions, export, delete.
-// A run-unique custom type keeps reruns and other tests' rows out of the
-// browse assertions.
+// A run-unique top-level id segment (doubling as a custom type) keeps
+// reruns and other tests' rows out of the browse assertions.
 func TestRESTIntegration(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
@@ -44,7 +44,8 @@ func TestRESTIntegration(t *testing.T) {
 	defer srv.Close()
 
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
-	entry := map[string]any{"type": typ, "id": "sales/orders", "title": "REST round trip"}
+	id := typ + "/sales/orders"
+	entry := map[string]any{"type": typ, "id": id, "title": "REST round trip"}
 	payload, _ := json.Marshal(entry)
 
 	// Create.
@@ -77,16 +78,17 @@ func TestRESTIntegration(t *testing.T) {
 			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
 	}
 
-	// Browse: the type root shows the "sales" directory, the prefix level
-	// shows the entry.
+	// Browse: under the run-unique top segment the "sales" directory
+	// shows, and the prefix level shows the entry (with its type as
+	// metadata in the projection).
 	var root service.BrowseResult
-	getJSON(t, srv.URL+"/api/v1/browse?type="+typ, &root)
+	getJSON(t, srv.URL+"/api/v1/browse?prefix="+typ, &root)
 	if len(root.Dirs) != 1 || root.Dirs[0].Name != "sales" || root.Dirs[0].Count != 1 {
 		t.Errorf("browse root = %+v", root)
 	}
 	var level service.BrowseResult
-	getJSON(t, srv.URL+"/api/v1/browse?type="+typ+"&prefix=sales", &level)
-	if len(level.Entries) != 1 || level.Entries[0].ID != "sales/orders" {
+	getJSON(t, srv.URL+"/api/v1/browse?prefix="+typ+"/sales", &level)
+	if len(level.Entries) != 1 || level.Entries[0].ID != id || string(level.Entries[0].Type) != typ {
 		t.Errorf("browse level = %+v", level)
 	}
 

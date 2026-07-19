@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
-	"github.com/na0fu3y/ochakai/internal/store"
 )
 
 // Attachment operations (design docs 0008, 0013). ochakai stores and
@@ -17,7 +16,7 @@ import (
 // attachment of the same name. The media type is sniffed from the bytes,
 // never taken from the caller. okfPath preserves a foreign bundle
 // location for round-trips; "" for attachments born here.
-func (s *Service) Attach(ctx context.Context, typ domain.Type, id, name, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+func (s *Service) Attach(ctx context.Context, id, name, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
 	if !s.Store.HasBlobStore() {
 		return nil, Unsupportedf("attachments are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
 	}
@@ -30,21 +29,21 @@ func (s *Service) Attach(ctx context.Context, typ domain.Type, id, name, okfPath
 	if err != nil {
 		return nil, Invalidf("%v", err)
 	}
-	return s.Store.PutAttachment(ctx, typ, id, name, mediaType, okfPath, data, actor)
+	return s.Store.PutAttachment(ctx, id, name, mediaType, okfPath, data, actor)
 }
 
 // Attachment returns one attachment with its bytes and records a fetch
 // against the owning entry — reading the image is using the knowledge.
-func (s *Service) Attachment(ctx context.Context, typ domain.Type, id, name string) (*domain.Attachment, []byte, error) {
-	att, data, err := s.Store.GetAttachment(ctx, typ, id, name)
+func (s *Service) Attachment(ctx context.Context, id, name string) (*domain.Attachment, []byte, error) {
+	att, data, err := s.Store.GetAttachment(ctx, id, name)
 	if err != nil {
 		return nil, nil, err
 	}
-	s.recordUsage(ctx, domain.EventFetched, []store.EventTarget{{Type: typ, ID: id}})
+	s.recordUsage(ctx, domain.EventFetched, []string{id})
 	return att, data, nil
 }
 
 // Detach removes an attachment (the change is kept as a revision).
-func (s *Service) Detach(ctx context.Context, typ domain.Type, id, name string, actor domain.Actor) error {
-	return s.Store.DeleteAttachment(ctx, typ, id, name, actor)
+func (s *Service) Detach(ctx context.Context, id, name string, actor domain.Actor) error {
+	return s.Store.DeleteAttachment(ctx, id, name, actor)
 }

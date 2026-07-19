@@ -12,16 +12,17 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// Hierarchical IDs become nested directories, and every level gets its own
-// index.md (design doc 0005).
+// The id's segments become nested directories, and every level gets its
+// own index.md. The layout is the user's (design doc 0016): a domain
+// directory and a type directory sit side by side as equals.
 func TestBundleNestedDirectories(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	entries := []domain.Knowledge{
-		{Type: domain.TypeQuery, ID: "sales/monthly-revenue", Title: "月次売上",
+		{Type: domain.TypeQuery, ID: "query/sales/monthly-revenue", Title: "月次売上",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
-		{Type: domain.TypeQuery, ID: "sales/refunds/by-region", Title: "地域別返金",
+		{Type: domain.TypeQuery, ID: "query/sales/refunds/by-region", Title: "地域別返金",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
-		{Type: "runbook", ID: "restore", Title: "リストア手順",
+		{Type: "runbook", ID: "ops/restore", Title: "リストア手順",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
 	}
 	files, err := Bundle(entries)
@@ -29,8 +30,8 @@ func TestBundleNestedDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{
-		"query/sales/monthly-revenue.md", "query/sales/refunds/by-region.md", "runbook/restore.md",
-		"index.md", "query/index.md", "query/sales/index.md", "query/sales/refunds/index.md", "runbook/index.md",
+		"query/sales/monthly-revenue.md", "query/sales/refunds/by-region.md", "ops/restore.md",
+		"index.md", "query/index.md", "query/sales/index.md", "query/sales/refunds/index.md", "ops/index.md",
 	} {
 		if _, ok := files[path]; !ok {
 			t.Errorf("bundle missing %s", path)
@@ -40,10 +41,12 @@ func TestBundleNestedDirectories(t *testing.T) {
 		!strings.Contains(idx, "[月次売上](monthly-revenue.md)") {
 		t.Errorf("nested index wrong:\n%s", idx)
 	}
-	// Recommended types come first in the root index, free types after.
+	// Every index level is alphabetical — no recommended-type priority at
+	// the root (design doc 0016 §4.8): "ops" sorts before "query" even
+	// though query is a built-in type directory.
 	root := string(files["index.md"])
-	if strings.Index(root, "query/") > strings.Index(root, "runbook/") {
-		t.Errorf("root index order wrong:\n%s", root)
+	if strings.Index(root, "ops/") > strings.Index(root, "query/") {
+		t.Errorf("root index must be alphabetical:\n%s", root)
 	}
 }
 
@@ -52,10 +55,10 @@ func TestBundleNestedDirectories(t *testing.T) {
 func TestBundleRoundTrip(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	want := []domain.Knowledge{
-		{Type: "data-contract", ID: "orders", Title: "注文契約", Status: domain.StatusDraft,
+		{Type: "data-contract", ID: "contracts/orders", Title: "注文契約", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
 			Attrs:     map[string]any{AttrOKFType: "Data Contract", "owner": "sales"}, UpdatedAt: now},
-		{Type: domain.TypeQuery, ID: "sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
+		{Type: domain.TypeQuery, ID: "query/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
 			Description: "月ごとの売上",
 			CreatedBy:   domain.Actor{Kind: "human", Name: "na0"},
 			Tags:        []string{"sales"},
@@ -89,10 +92,11 @@ func TestBundleRoundTrip(t *testing.T) {
 	}
 }
 
-// A foreign OKF bundle — free type directories, spelled frontmatter types,
-// non-markdown extras — imports with structure preserved: path wins, the
-// original type spelling survives in attrs, the reserved index.md / log.md
-// files are skipped silently and non-markdown files with a report.
+// A foreign OKF bundle — free layout, spelled frontmatter types,
+// non-markdown extras — imports with structure preserved: the path is the
+// id verbatim, the frontmatter alone names the type (design doc 0016),
+// the reserved index.md / log.md files are skipped silently, and
+// non-markdown files and typeless documents are skipped with a report.
 func TestFromBundleForeign(t *testing.T) {
 	files := map[string][]byte{
 		"index.md":         []byte("# my bundle\n"),
@@ -105,28 +109,28 @@ func TestFromBundleForeign(t *testing.T) {
 		"viz.html":         []byte("<html></html>"),
 	}
 	entries, _, skipped := FromBundle(files)
-	if len(skipped) != 1 || !strings.Contains(skipped[0], "viz.html") {
-		t.Errorf("skipped = %v, want only viz.html", skipped)
+	if len(skipped) != 2 || !strings.Contains(skipped[0], "notes/2026/q3.md") || !strings.Contains(skipped[1], "viz.html") {
+		t.Errorf("skipped = %v, want the typeless document and viz.html", skipped)
 	}
 	byURI := map[string]domain.Knowledge{}
 	for _, e := range entries {
 		byURI[e.URI()] = e
 	}
-	if len(entries) != 3 {
+	if len(entries) != 2 {
 		t.Fatalf("entries = %v", byURI)
 	}
+	// The catalog's own vocabulary lands on ochakai behavior: "Table" is
+	// the built-in table type's display name, so the entry gets type
+	// "table" (and its behaviors) while staying at tables/users.
 	users := byURI["ochakai://tables/users"]
-	if users.Title != "users" || users.Attrs[AttrOKFType] != "Table" {
+	if users.Title != "users" || users.Type != domain.TypeTable || users.Attrs[AttrOKFType] != nil {
 		t.Errorf("tables/users: %+v", users)
 	}
-	if _, ok := byURI["ochakai://datasets/ga4"]; !ok {
-		t.Errorf("datasets/ga4 missing: %v", byURI)
-	}
-	if notes, ok := byURI["ochakai://notes/2026/q3"]; !ok || notes.Title != "Q3 notes" {
-		t.Errorf("hierarchical typeless concept missing: %v", byURI)
+	if ga4, ok := byURI["ochakai://datasets/ga4"]; !ok || ga4.Type != "dataset" {
+		t.Errorf("datasets/ga4 missing or mistyped: %v", byURI)
 	}
 
-	// Re-export writes the original spelling back at the original path.
+	// Re-export writes the same spelling back at the same path.
 	out, err := Bundle(entries)
 	if err != nil {
 		t.Fatal(err)
@@ -201,45 +205,25 @@ func TestFromBundleFixture(t *testing.T) {
 	}
 }
 
-// `tar czf bundle.tar.gz ga4/` wraps the bundle in one directory; without
-// unwrapping, "ga4" would silently become every entry's type.
-func TestStripWrapper(t *testing.T) {
+// `tar czf ga4.tgz ga4/` wraps the bundle in one directory. There is no
+// unwrapping (design doc 0016 §4.3): the wrapper is the bundle's
+// namespace, so every entry imports under "ga4/" — and macOS tar noise
+// (AppleDouble ._* files, .DS_Store) is still skipped silently.
+func TestFromBundleWrappedArchive(t *testing.T) {
 	wrapped := map[string][]byte{
 		"./ga4/index.md":       []byte("# ga4\n"),
-		"ga4/tables/events.md": []byte("---\ntype: BigQuery Table\n---\n"),
-		"._ga4":                []byte("apple double"), // macOS tar noise must not defeat detection
+		"ga4/tables/events.md": []byte("---\ntype: BigQuery Table\ntitle: events\n---\n"),
+		"._ga4":                []byte("apple double"),
 		"ga4/.DS_Store":        []byte("finder noise"),
 	}
-	files, root := StripWrapper(wrapped)
-	if root != "ga4" {
-		t.Fatalf("root = %q, want ga4", root)
+	entries, _, skipped := FromBundle(wrapped)
+	if len(skipped) != 0 {
+		t.Errorf("skipped = %v, want none (hidden files skip silently)", skipped)
 	}
-	if _, ok := files["tables/events.md"]; !ok {
-		t.Errorf("paths not unwrapped: %v", files)
+	if len(entries) != 1 || entries[0].ID != "ga4/tables/events" {
+		t.Fatalf("entries = %+v, want the one entry under the ga4/ namespace", entries)
 	}
-	if len(files) != 2 {
-		t.Errorf("hidden files must be dropped on unwrap: %v", files)
-	}
-	if entries, _, skipped := FromBundle(wrapped); len(skipped) != 0 || len(entries) != 1 {
-		t.Errorf("hidden files must be skipped silently: skipped=%v entries=%d", skipped, len(entries))
-	}
-
-	// A bundle rooted at the top (root index.md is a top-level file) is
-	// left alone.
-	flat := map[string][]byte{
-		"index.md":         []byte("# bundle\n"),
-		"tables/events.md": []byte("---\ntype: BigQuery Table\n---\n"),
-	}
-	if _, root := StripWrapper(flat); root != "" {
-		t.Errorf("flat bundle wrongly unwrapped (root %q)", root)
-	}
-
-	// Two top-level directories: nothing to unwrap.
-	two := map[string][]byte{
-		"metric/a.md": []byte("x"),
-		"table/b.md":  []byte("x"),
-	}
-	if _, root := StripWrapper(two); root != "" {
-		t.Errorf("multi-dir bundle wrongly unwrapped (root %q)", root)
+	if entries[0].Type != "bigquery-table" || entries[0].Attrs[AttrOKFType] != "BigQuery Table" {
+		t.Errorf("type = %q attrs = %v", entries[0].Type, entries[0].Attrs)
 	}
 }

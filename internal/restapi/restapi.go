@@ -77,13 +77,12 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 	})
 
-	// GET /api/v1/browse?type=...&prefix=... — one level of the ID
-	// hierarchy (design doc 0014): without type, the type list; with one,
-	// the subdirectories and entries directly under prefix. The tree view
-	// behind the web UI's Browse tab.
+	// GET /api/v1/browse?prefix=... — one level of the ID hierarchy
+	// (design docs 0014, 0016): the subdirectories and entries directly
+	// under prefix ("" is the root, i.e. the top-level segments). The
+	// tree view behind the web UI's Browse tab.
 	mux.HandleFunc("GET /api/v1/browse", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		res, err := svc.Browse(r.Context(), domain.Type(q.Get("type")), q.Get("prefix"))
+		res, err := svc.Browse(r.Context(), r.URL.Query().Get("prefix"))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -131,10 +130,10 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusCreated, created)
 	})
 
-	// {id...} because IDs are hierarchical ("sales/orders", design doc
-	// 0005) — the wildcard captures the remaining path segments.
-	mux.HandleFunc("GET /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		k, err := svc.Get(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"))
+	// {id...} because the id is the entry's full bundle path (design doc
+	// 0016) — the wildcard captures every segment.
+	mux.HandleFunc("GET /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		k, err := svc.Get(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -142,12 +141,14 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, k)
 	})
 
-	mux.HandleFunc("PUT /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		var k domain.Knowledge
 		if !readJSON(w, r, &k) {
 			return
 		}
-		k.Type = domain.Type(r.PathValue("type"))
+		// The path is the address; the body carries the metadata — type
+		// included, always (no fill-in from the stored entry, design doc
+		// 0016 §4.5).
 		k.ID = r.PathValue("id")
 		updated, changed, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()))
 		if err != nil {
@@ -163,24 +164,23 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, updated)
 	})
 
-	// GET /api/v1/usage/{type}/{id...} — how often the entry was actually
-	// used (search hits, fetches, compiles). The measure of the write-back
+	// GET /api/v1/usage/{id...} — how often the entry was actually used
+	// (search hits, fetches, compiles). The measure of the write-back
 	// loop: draft promotion evidence, staleness signal. Lives outside
 	// /knowledge/ so a "/usage" suffix can never be confused with an ID
 	// segment.
-	usage := func(w http.ResponseWriter, r *http.Request) {
-		u, err := svc.Usage(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"))
+	mux.HandleFunc("GET /api/v1/usage/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		u, err := svc.Usage(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, u)
-	}
-	mux.HandleFunc("GET /api/v1/usage/{type}/{id...}", usage)
+	})
 	// POST reports an outcome (worked/failed) against the entry — the
 	// write half of the same usage resource, so no new API surface is
 	// added (issue #41). Responds with the updated totals.
-	mux.HandleFunc("POST /api/v1/usage/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/usage/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Outcome string `json:"outcome"`
 			Note    string `json:"note"`
@@ -188,7 +188,7 @@ func Handler(svc *service.Service) http.Handler {
 		if !readJSON(w, r, &in) {
 			return
 		}
-		u, err := svc.ReportOutcome(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), in.Outcome, in.Note)
+		u, err := svc.ReportOutcome(r.Context(), r.PathValue("id"), in.Outcome, in.Note)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -196,19 +196,19 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	})
 
-	// GET /api/v1/revisions/{type}/{id...} — the entry's change history,
-	// newest first: who changed it, how, when, with full snapshots. The
-	// read surface behind "every change kept as a revision"; works for
+	// GET /api/v1/revisions/{id...} — the entry's change history, newest
+	// first: who changed it, how, when, with full snapshots. The read
+	// surface behind "every change kept as a revision"; works for
 	// soft-deleted entries too. Lives outside /knowledge/ for the same
 	// reason /usage does: a suffix after a hierarchical {id...} would be
 	// unroutable.
-	mux.HandleFunc("GET /api/v1/revisions/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/revisions/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := queryInt(r.URL.Query(), "limit")
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		revs, err := svc.Revisions(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), limit)
+		revs, err := svc.Revisions(r.Context(), r.PathValue("id"), limit)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -216,17 +216,17 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
 	})
 
-	// GET /api/v1/backlinks/{type}/{id...} — live entries whose links
-	// point at this entry, most recently updated first. The reverse edge
+	// GET /api/v1/backlinks/{id...} — live entries whose links point at
+	// this entry, most recently updated first. The reverse edge
 	// get_context follows when packing companions, exposed so UIs can
 	// show "linked from" next to an entry's own links.
-	mux.HandleFunc("GET /api/v1/backlinks/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/backlinks/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := queryInt(r.URL.Query(), "limit")
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		entries, err := svc.Backlinks(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), limit)
+		entries, err := svc.Backlinks(r.Context(), r.PathValue("id"), limit)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -236,22 +236,22 @@ func Handler(svc *service.Service) http.Handler {
 	// Attachments (design docs 0008, 0013): files attached to an entry
 	// (images, PDFs, plain text), bytes fetched on demand — entry reads
 	// carry metadata only. The path is
-	// /attachments/{type}/{id segments...}/{name}; the final segment is
-	// always the filename (attachment names are single segments), so the
+	// /attachments/{id segments...}/{name}; the final segment is always
+	// the filename (attachment names are single segments), so the
 	// wildcard split is unambiguous. Lives outside /knowledge/ for the
 	// same reason /usage does: a suffix after a hierarchical {id...}
 	// would be unroutable.
-	attachmentRef := func(w http.ResponseWriter, r *http.Request) (domain.Type, string, string, bool) {
+	attachmentRef := func(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 		id, name, ok := splitAttachmentPath(r.PathValue("path"))
 		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid attachment path (want /api/v1/attachments/{type}/{id}/{name})"})
-			return "", "", "", false
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid attachment path (want /api/v1/attachments/{id}/{name})"})
+			return "", "", false
 		}
-		return domain.Type(r.PathValue("type")), id, name, true
+		return id, name, true
 	}
 
-	mux.HandleFunc("PUT /api/v1/attachments/{type}/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		typ, id, name, ok := attachmentRef(w, r)
+	mux.HandleFunc("PUT /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		id, name, ok := attachmentRef(w, r)
 		if !ok {
 			return
 		}
@@ -268,7 +268,7 @@ func Handler(svc *service.Service) http.Handler {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid okf_path (want a clean bundle-relative path)"})
 			return
 		}
-		att, err := svc.Attach(r.Context(), typ, id, name, okfPath, data, httpauth.Actor(r.Context()))
+		att, err := svc.Attach(r.Context(), id, name, okfPath, data, httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -276,12 +276,12 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, att)
 	})
 
-	mux.HandleFunc("GET /api/v1/attachments/{type}/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		typ, id, name, ok := attachmentRef(w, r)
+	mux.HandleFunc("GET /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		id, name, ok := attachmentRef(w, r)
 		if !ok {
 			return
 		}
-		att, data, err := svc.Attachment(r.Context(), typ, id, name)
+		att, data, err := svc.Attachment(r.Context(), id, name)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -303,20 +303,20 @@ func Handler(svc *service.Service) http.Handler {
 		_, _ = w.Write(data)
 	})
 
-	mux.HandleFunc("DELETE /api/v1/attachments/{type}/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		typ, id, name, ok := attachmentRef(w, r)
+	mux.HandleFunc("DELETE /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		id, name, ok := attachmentRef(w, r)
 		if !ok {
 			return
 		}
-		if err := svc.Detach(r.Context(), typ, id, name, httpauth.Actor(r.Context())); err != nil {
+		if err := svc.Detach(r.Context(), id, name, httpauth.Actor(r.Context())); err != nil {
 			writeError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("DELETE /api/v1/knowledge/{type}/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		err := svc.Delete(r.Context(), domain.Type(r.PathValue("type")), r.PathValue("id"), httpauth.Actor(r.Context()))
+	mux.HandleFunc("DELETE /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		err := svc.Delete(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -338,12 +338,12 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		// Attachments go next to their entries: "<type>/<id>/<name>", or
-		// the foreign path they were imported at (okf_path) so original
-		// body links keep working. A foreign path already taken by a
-		// concept document falls back to the canonical layout — identical
-		// content at the same path (the same image referenced by two
-		// entries) is no conflict.
+		// Attachments go next to their entries: "<id>/<name>", or the
+		// foreign path they were imported at (okf_path) so original body
+		// links keep working. A foreign path already taken by a concept
+		// document falls back to the canonical layout — identical content
+		// at the same path (the same image referenced by two entries) is
+		// no conflict.
 		atts, err := svc.Store.ListAllAttachments(r.Context())
 		if err != nil {
 			writeError(w, err)
@@ -351,9 +351,9 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		for i := range atts {
 			a := &atts[i]
-			p := okf.AttachmentPath(a.Type, a.ID, &a.Att)
+			p := okf.AttachmentPath(a.ID, &a.Att)
 			if _, taken := files[p]; taken {
-				p = string(a.Type) + "/" + a.ID + "/" + a.Att.Name
+				p = a.ID + "/" + a.Att.Name
 			}
 			files[p] = a.Data
 		}

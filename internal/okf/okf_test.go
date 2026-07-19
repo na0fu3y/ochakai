@@ -18,7 +18,7 @@ func sample() []domain.Knowledge {
 	verifiedAt := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	return []domain.Knowledge{
 		{
-			Type: domain.TypeInsight, ID: "revenue-seasonality",
+			Type: domain.TypeInsight, ID: "insight/revenue-seasonality",
 			Title: "売上の季節性", Description: "12月は繁忙期",
 			Tags: []string{"sales"}, Status: domain.StatusVerified,
 			CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
@@ -29,7 +29,7 @@ func sample() []domain.Knowledge {
 			UpdatedAt: verifiedAt,
 		},
 		{
-			Type: domain.TypeTable, ID: "orders",
+			Type: domain.TypeTable, ID: "table/orders",
 			Title: "orders", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
 			Attrs:     map[string]any{"source": "myproject.shop.orders", "model": "sales_analytics"},
@@ -68,6 +68,9 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 			t.Errorf("frontmatter %s = %v, want %v", key, fm[key], want)
 		}
 	}
+	if _, ok := fm["id"]; ok {
+		t.Errorf("id must not export — the path is the id (design doc 0016):\n%s", parts[1])
+	}
 	if !strings.Contains(parts[2], "12月は+40%が通常。") {
 		t.Errorf("body missing:\n%s", parts[2])
 	}
@@ -79,7 +82,7 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 func TestDocumentRejectedProvenance(t *testing.T) {
 	rejectedAt := time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC)
 	k := domain.Knowledge{
-		Type: domain.TypeInsight, ID: "dup-insight",
+		Type: domain.TypeInsight, ID: "insight/dup-insight",
 		Title: "重複した知見", Status: domain.StatusRejected,
 		StatusNote: "revenue-seasonality と重複",
 		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},

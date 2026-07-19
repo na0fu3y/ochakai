@@ -174,8 +174,8 @@ And it stays small by refusing things:
 | `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
 
 Every entry is also an **MCP resource** addressable by its canonical URI —
-`ochakai://{type}/{id}`, e.g. `ochakai://metric/revenue` (IDs may be
-hierarchical, like `ochakai://query/sales/top-customers`). Clients that
+`ochakai://` plus its id (the entry's path), e.g. `ochakai://metric/revenue`
+or `ochakai://query/sales/top-customers`. Clients that
 support resource references (`@`-mentions) can pull an entry in as an OKF
 document — frontmatter, body, and links — without a tool call; discovery
 stays with `get_context`/`search_knowledge`. Read tools carry `readOnly`

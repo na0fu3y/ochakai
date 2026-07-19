@@ -17,13 +17,13 @@ import (
 //     whose body links to it, wherever the file sits. Foreign bundles
 //     keep their own layouts.
 //   - ochakai's canonical export layout is the entry-named directory,
-//     "<type>/<id>/<name>" next to "<type>/<id>.md" — everything about
-//     an entry lives in its OKF namespace, and `<id>/<name>` relative
-//     links render on GitHub. Sharing the directory with hierarchical
-//     child entries is harmless: concept parsers ignore non-md files,
-//     and attachment names may not end in .md.
+//     "<id>/<name>" next to "<id>.md" — everything about an entry lives
+//     in its OKF namespace, and `<name>` relative links render on
+//     GitHub. Sharing the directory with hierarchical child entries is
+//     harmless: concept parsers ignore non-md files, and attachment
+//     names may not end in .md.
 //   - The canonical layout also reads backwards (design doc 0013): a
-//     non-markdown file no body references, sitting at "<type>/<id>/<name>"
+//     non-markdown file no body references, sitting at "<id>/<name>"
 //     for an entry in the bundle, attaches to that entry. Data files next
 //     to a concept document — a seeds.txt, an expected-results CSV —
 //     round-trip without requiring a body link.
@@ -33,42 +33,32 @@ import (
 
 // AttachmentPath returns the bundle path for one attachment: its
 // preserved foreign location if it has one, else the canonical layout.
-func AttachmentPath(typ domain.Type, id string, att *domain.Attachment) string {
+func AttachmentPath(id string, att *domain.Attachment) string {
 	if att.OKFPath != "" {
 		return att.OKFPath
 	}
-	return string(typ) + "/" + id + "/" + att.Name
+	return id + "/" + att.Name
 }
 
 // BundleAttachment is one image found in a bundle, attributed to the
 // entry whose body references it.
 type BundleAttachment struct {
-	Type domain.Type
 	ID   string
 	Name string // filename (last segment of Path)
 	Path string // bundle path, preserved as okf_path for round-trips
 	Data []byte
 }
 
-// conceptRef pairs a parsed entry with the bundle path its document was
-// read from — relative body links resolve against that original path,
-// which differs from the canonical "<type>/<id>.md" for concepts at the
-// bundle root.
-type conceptRef struct {
-	k       *domain.Knowledge
-	docPath string
-}
-
 // resolveAttachments walks each entry's body markdown links and collects
 // the bundle files they reference: relative links resolve against the
-// concept document's directory, /-rooted links against the bundle root
-// (both OKF SPEC §5 forms). A second pass attributes by the canonical
-// namespace (design doc 0013): an unreferenced non-markdown file at
-// "<type>/<id>/<name>" attaches to the bundle's entry <type>/<id>. Only
-// files that pass the attachment allowlist (sniffed bytes, not *.md) and
-// fit the size limit attach; everything else is left for the skip report.
+// concept document's directory (its id), /-rooted links against the
+// bundle root (both OKF SPEC §5 forms). A second pass attributes by the
+// canonical namespace (design doc 0013): an unreferenced non-markdown
+// file at "<id>/<name>" attaches to the bundle's entry <id>. Only files
+// that pass the attachment allowlist (sniffed bytes, not *.md) and fit
+// the size limit attach; everything else is left for the skip report.
 // The returned used set holds the consumed bundle paths.
-func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []BundleAttachment, used map[string]bool) {
+func resolveAttachments(files map[string][]byte, concepts []*domain.Knowledge) (atts []BundleAttachment, used map[string]bool) {
 	used = map[string]bool{}
 	index := map[string][]byte{}
 	for p, data := range files {
@@ -88,11 +78,11 @@ func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []
 		}
 		seen[k][name] = true
 		used[p] = true
-		atts = append(atts, BundleAttachment{Type: k.Type, ID: k.ID, Name: name, Path: p, Data: data})
+		atts = append(atts, BundleAttachment{ID: k.ID, Name: name, Path: p, Data: data})
 	}
-	for _, c := range concepts {
-		docDir := path.Dir(c.docPath)
-		for _, target := range bodyLinkTargets(c.k.Body) {
+	for _, k := range concepts {
+		docDir := path.Dir(k.ID)
+		for _, target := range bodyLinkTargets(k.Body) {
 			p, ok := resolveTarget(docDir, target)
 			if !ok {
 				continue
@@ -101,14 +91,14 @@ func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []
 			if !exists || strings.HasSuffix(strings.ToLower(p), ".md") {
 				continue
 			}
-			attach(c.k, p, data)
+			attach(k, p, data)
 		}
 	}
 	// Canonical-namespace pass: reference-driven attribution won, so only
 	// still-unclaimed files are considered, in stable path order.
 	byDir := map[string]*domain.Knowledge{}
-	for _, c := range concepts {
-		byDir[string(c.k.Type)+"/"+c.k.ID] = c.k
+	for _, k := range concepts {
+		byDir[k.ID] = k
 	}
 	rest := make([]string, 0, len(index))
 	for p := range index {
@@ -124,9 +114,6 @@ func resolveAttachments(files map[string][]byte, concepts []conceptRef) (atts []
 		}
 	}
 	sort.Slice(atts, func(i, j int) bool {
-		if atts[i].Type != atts[j].Type {
-			return atts[i].Type < atts[j].Type
-		}
 		if atts[i].ID != atts[j].ID {
 			return atts[i].ID < atts[j].ID
 		}

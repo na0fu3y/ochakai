@@ -147,13 +147,13 @@ func statusList() string {
 	return strings.Join(ss, "|")
 }
 
-// splitRef parses "<type>/<id>" (an "ochakai://" prefix is tolerated).
-func splitRef(s string) (string, string, error) {
-	typ, id, ok := strings.Cut(strings.TrimPrefix(s, "ochakai://"), "/")
-	if !ok || typ == "" || id == "" {
-		return "", "", fmt.Errorf("want <type>/<id> (e.g. metric/revenue), got %q", s)
+// parseRef parses an entry id (an "ochakai://" prefix is tolerated).
+func parseRef(s string) (string, error) {
+	id := strings.TrimPrefix(s, "ochakai://")
+	if id == "" {
+		return "", fmt.Errorf("want an entry id (e.g. metric/revenue), got %q", s)
 	}
-	return typ, id, nil
+	return id, nil
 }
 
 func cmdSearch(ctx context.Context, args []string) error {
@@ -213,8 +213,8 @@ func cmdSearch(ctx context.Context, args []string) error {
 
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai browse [flags] [type[/prefix]]\n\nList one level of the ID hierarchy (the folder view of design doc\n0014, the CLI counterpart of the web UI's Browse tab). Without an\nargument, the types with their entry counts; with type (and an\noptional prefix) the subdirectories and entries directly under it.\nDirectories print as \"name/\tcount\", entries as \"segment\tstatus\ttitle\".\nRejected entries are hidden, as in search.",
-		"  ochakai browse\n  ochakai browse query\n  ochakai browse query/sales\n")
+		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design docs\n0014 and 0016, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their entry\ncounts; with a prefix, the subdirectories and entries directly under\nit. Directories print as \"name/\tcount\", entries as\n\"segment\ttype\tstatus\ttitle\". Rejected entries are hidden, as in search.",
+		"  ochakai browse\n  ochakai browse query\n  ochakai browse ga4/tables\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -224,23 +224,20 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	var typ, prefix string
+	var prefix string
 	if len(pos) == 1 {
-		typ, prefix, _ = strings.Cut(strings.TrimPrefix(pos[0], "ochakai://"), "/")
+		prefix = strings.TrimPrefix(pos[0], "ochakai://")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
 	}
-	res, err := c.Browse(ctx, typ, prefix)
+	res, err := c.Browse(ctx, prefix)
 	if err != nil {
 		return err
 	}
 	if *asJSON {
 		return printJSON(res)
-	}
-	for _, t := range res.Types {
-		fmt.Printf("%s/\t%d\n", t.Type, t.Count)
 	}
 	for _, d := range res.Dirs {
 		fmt.Printf("%s/\t%d\n", d.Name, d.Count)
@@ -251,7 +248,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		if prefix != "" {
 			seg = strings.TrimPrefix(seg, prefix+"/")
 		}
-		fmt.Printf("%s\t%s\t%s\n", seg, e.Status, e.Title)
+		fmt.Printf("%s\t%s\t%s\t%s\n", seg, e.Type, e.Status, e.Title)
 	}
 	if res.Truncated {
 		fmt.Fprintln(os.Stderr, "note: showing the first 1000 entries at this level (server cap)")
@@ -357,7 +354,7 @@ func renderEntry(k *domain.Knowledge) string {
 
 func cmdUsage(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai usage [flags] <type>/<id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, referenced by compile — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
+		"Usage: ochakai usage [flags] <id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, referenced by compile — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
 		"  ochakai usage query/monthly-revenue\n  ochakai usage metric/revenue --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	pos, err := parseArgs(fs, args)
@@ -368,7 +365,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -376,7 +373,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	u, err := c.Usage(ctx, typ, id)
+	u, err := c.Usage(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -394,7 +391,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 
 func cmdReport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai report [flags] <type>/<id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running a golden query or compiled\nSQL, report worked or failed (say what went wrong with --note);\nfailed counts against verified entries flag them for re-verification.\nPrints the entry's updated usage totals.",
+		"Usage: ochakai report [flags] <id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running a golden query or compiled\nSQL, report worked or failed (say what went wrong with --note);\nfailed counts against verified entries flag them for re-verification.\nPrints the entry's updated usage totals.",
 		"  ochakai report query/monthly-revenue worked\n  ochakai report query/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
 	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong (max 2000 bytes)")
 	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
@@ -406,7 +403,7 @@ func cmdReport(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -414,20 +411,20 @@ func cmdReport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	u, err := c.ReportOutcome(ctx, typ, id, pos[1], *note)
+	u, err := c.ReportOutcome(ctx, id, pos[1], *note)
 	if err != nil {
 		return err
 	}
 	if *asJSON {
 		return printJSON(u)
 	}
-	fmt.Printf("reported %s ochakai://%s/%s (worked %d, failed %d)\n", pos[1], typ, id, u.Worked, u.Failed)
+	fmt.Printf("reported %s ochakai://%s (worked %d, failed %d)\n", pos[1], id, u.Worked, u.Failed)
 	return nil
 }
 
 func cmdRevisions(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai revisions [flags] <type>/<id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. Full snapshots are in\nthe JSON output (--json).",
+		"Usage: ochakai revisions [flags] <id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. Full snapshots are in\nthe JSON output (--json).",
 		"  ochakai revisions metric/revenue\n  ochakai revisions query/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
 	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response (includes full snapshots)")
@@ -439,7 +436,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -447,7 +444,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	revs, err := c.Revisions(ctx, typ, id, *limit)
+	revs, err := c.Revisions(ctx, id, *limit)
 	if err != nil {
 		return err
 	}
@@ -463,7 +460,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 
 func cmdBacklinks(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai backlinks [flags] <type>/<id>\n\nList live entries whose links point at this entry, most recently\nupdated first — the reverse edge the web UI shows as \"linked from\"\n(context already follows it when packing companions).\nOutput: uri, status, title — description (one entry per line).",
+		"Usage: ochakai backlinks [flags] <id>\n\nList live entries whose links point at this entry, most recently\nupdated first — the reverse edge the web UI shows as \"linked from\"\n(context already follows it when packing companions).\nOutput: uri, status, title — description (one entry per line).",
 		"  ochakai backlinks metric/revenue\n  ochakai backlinks metric/revenue --json | jq '.entries[].id'\n")
 	limit := fs.Int("limit", 0, "max entries (server default 20, max 100)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
@@ -475,7 +472,7 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -483,7 +480,7 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	entries, err := c.Backlinks(ctx, typ, id, *limit)
+	entries, err := c.Backlinks(ctx, id, *limit)
 	if err != nil {
 		return err
 	}
@@ -503,7 +500,7 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai get [flags] <type>/<id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the\nattachment files themselves (an agent can then read them from disk).",
+		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the\nattachment files themselves (an agent can then read them from disk).",
 		"  ochakai get metric/revenue\n  ochakai get query/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insight/revenue-reading --download ./img\n")
 	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
 	download := fs.String("download", "", "save the entry's attachments into this directory")
@@ -515,7 +512,7 @@ func cmdGet(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -523,7 +520,7 @@ func cmdGet(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	k, err := c.Get(ctx, typ, id)
+	k, err := c.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -532,7 +529,7 @@ func cmdGet(ctx context.Context, args []string) error {
 			return err
 		}
 		for _, att := range k.Attachments {
-			data, _, err := c.Attachment(ctx, typ, id, att.Name)
+			data, _, err := c.Attachment(ctx, id, att.Name)
 			if err != nil {
 				return fmt.Errorf("attachment %s: %w", att.Name, err)
 			}
@@ -555,8 +552,8 @@ func cmdGet(ctx context.Context, args []string) error {
 	}
 	if *download == "" {
 		for _, att := range k.Attachments {
-			fmt.Fprintf(os.Stderr, "attachment: %s (%s, %d bytes) — `ochakai get %s/%s --download DIR` to save\n",
-				att.Name, att.MediaType, att.Size, typ, id)
+			fmt.Fprintf(os.Stderr, "attachment: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
+				att.Name, att.MediaType, att.Size, id)
 		}
 	}
 	return nil
@@ -564,7 +561,7 @@ func cmdGet(ctx context.Context, args []string) error {
 
 func cmdAttach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai attach [flags] <type>/<id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
+		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
 		"  ochakai attach insight/revenue-reading weekly.png\n  ochakai attach table/orders seeds.txt\n  ochakai attach table/orders er-diagram.png --name schema.png\n")
 	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
 	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
@@ -576,7 +573,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -596,7 +593,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 		if attName == "" {
 			attName = filepath.Base(file)
 		}
-		att, err := c.Attach(ctx, typ, id, attName, "", data)
+		att, err := c.Attach(ctx, id, attName, "", data)
 		if err != nil {
 			return fmt.Errorf("%s: %w", file, err)
 		}
@@ -606,7 +603,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 			}
 			continue
 		}
-		fmt.Printf("attached %s/%s/%s (%s, %d bytes)\n", typ, id, att.Name, att.MediaType, att.Size)
+		fmt.Printf("attached %s/%s (%s, %d bytes)\n", id, att.Name, att.MediaType, att.Size)
 		link := fmt.Sprintf("[%s](%s/%s)", att.Name, lastSeg, att.Name)
 		if strings.HasPrefix(att.MediaType, "image/") {
 			link = "!" + link
@@ -618,7 +615,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 
 func cmdDetach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai detach [flags] <type>/<id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
+		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
 		"  ochakai detach insight/revenue-reading weekly.png\n")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -628,7 +625,7 @@ func cmdDetach(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -636,30 +633,35 @@ func cmdDetach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Detach(ctx, typ, id, pos[1]); err != nil {
+	if err := c.Detach(ctx, id, pos[1]); err != nil {
 		return err
 	}
-	fmt.Printf("detached %s/%s/%s\n", typ, id, pos[1])
+	fmt.Printf("detached %s/%s\n", id, pos[1])
 	return nil
 }
 
 func cmdCreate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai create [flags]\n\nCreate a knowledge entry from -f or stdin. Input is an OKF document\n(--- frontmatter with type/id/title, markdown body — the format\n`ochakai get` prints) or JSON (see api/openapi.yaml). Entries default\nto draft; provenance is recorded from your Google identity.",
-		"  ochakai get insight/revenue-seasonality | sed s/40%/45%/ | ochakai create\n  ochakai create -f entry.md\n")
+		"Usage: ochakai create [flags] [id]\n\nCreate a knowledge entry from -f or stdin. Input is an OKF document\n(--- frontmatter with type/title, markdown body — the format\n`ochakai get` prints) or JSON (see api/openapi.yaml). The id is the\nentry's path; pass it as the argument (it overrides an id in the\ninput, and OKF documents carry none — the path is the id). Entries\ndefault to draft; provenance is recorded from your Google identity.",
+		"  ochakai get insight/revenue-seasonality | sed s/40%/45%/ | ochakai create insight/revenue-seasonality-v2\n  ochakai create runbook/restore -f entry.md\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	asJSON := fs.Bool("json", false, "print the created entry as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) != 0 {
+	if len(pos) > 1 {
 		fs.Usage()
 		return errReported
 	}
 	k, err := readEntry(*file)
 	if err != nil {
 		return err
+	}
+	if len(pos) == 1 {
+		if k.ID, err = parseRef(pos[0]); err != nil {
+			return err
+		}
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -678,7 +680,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 
 func cmdUpdate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai update [flags] <type>/<id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\ntype and id come from the argument). Every change is kept as a\nrevision server-side.",
+		"Usage: ochakai update [flags] <id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\nthe id comes from the argument, the type from the input). Every\nchange is kept as a revision server-side.",
 		"  ochakai get metric/revenue | $EDITOR /dev/stdin | ochakai update metric/revenue\n  ochakai update metric/revenue -f revenue.md\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
@@ -690,7 +692,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -698,7 +700,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	k.Type, k.ID = domain.Type(typ), id
+	k.ID = id
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
@@ -720,7 +722,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai delete [flags] <type>/<id>\n\nSoft-delete a knowledge entry (history is retained server-side).",
+		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge entry (history is retained server-side).",
 		"  ochakai delete term/obsolete-kpi\n")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -730,7 +732,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	typ, id, err := splitRef(pos[0])
+	id, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -738,10 +740,10 @@ func cmdDelete(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Delete(ctx, typ, id); err != nil {
+	if err := c.Delete(ctx, id); err != nil {
 		return err
 	}
-	fmt.Printf("deleted ochakai://%s/%s\n", typ, id)
+	fmt.Printf("deleted ochakai://%s\n", id)
 	return nil
 }
 
@@ -847,10 +849,9 @@ func cmdExport(ctx context.Context, args []string) error {
 
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: paths name the entries (first segment = type, rest =\nid), reserved index.md / log.md files are skipped, unknown frontmatter\nkeys are kept as attrs, existing entries are replaced (kept as\nrevisions; entries identical to what is stored are left untouched\nand reported as unchanged). Files referenced by an entry's body markdown links become\nits attachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<type>/<id>/<name>) attach to that entry. An archive\nwrapped in a single directory is unwrapped. Works with any OKF\nbundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, unknown frontmatter keys are kept as attrs, and\nexisting entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
-	keepRoot := fs.Bool("keep-root", false, "keep a single top-level directory as the type instead of unwrapping it")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -863,12 +864,6 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if !*keepRoot {
-		if unwrapped, root := okf.StripWrapper(files); root != "" {
-			fmt.Fprintf(os.Stderr, "note: unwrapped bundle directory %q (pass --keep-root to treat it as the type)\n", root)
-			files = unwrapped
-		}
-	}
 	entries, atts, skipped := okf.FromBundle(files)
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
@@ -878,7 +873,7 @@ func cmdImport(ctx context.Context, args []string) error {
 			fmt.Printf("would import %s\n", entries[i].URI())
 		}
 		for _, a := range atts {
-			fmt.Printf("would attach %s/%s/%s (from %s)\n", a.Type, a.ID, a.Name, a.Path)
+			fmt.Printf("would attach %s/%s (from %s)\n", a.ID, a.Name, a.Path)
 		}
 		fmt.Printf("dry run: %d entries, %d attachments, %d skipped\n", len(entries), len(atts), len(skipped))
 		return nil
@@ -913,13 +908,13 @@ func cmdImport(ctx context.Context, args []string) error {
 		// A file already at the canonical layout needs no okf_path — the
 		// preserved-location rule is for foreign layouts only.
 		okfPath := a.Path
-		if okfPath == fmt.Sprintf("%s/%s/%s", a.Type, a.ID, a.Name) {
+		if okfPath == a.ID+"/"+a.Name {
 			okfPath = ""
 		}
-		if _, err := c.Attach(ctx, string(a.Type), a.ID, a.Name, okfPath, a.Data); err != nil {
-			return fmt.Errorf("attach %s/%s/%s: %w", a.Type, a.ID, a.Name, err)
+		if _, err := c.Attach(ctx, a.ID, a.Name, okfPath, a.Data); err != nil {
+			return fmt.Errorf("attach %s/%s: %w", a.ID, a.Name, err)
 		}
-		fmt.Printf("attached %s/%s/%s\n", a.Type, a.ID, a.Name)
+		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
 	}
 	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped)\n",
 		created+updated+unchanged, created, updated, unchanged, len(atts), len(skipped))

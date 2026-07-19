@@ -52,17 +52,17 @@ func Unsupportedf(format string, args ...any) error {
 
 // --- knowledge CRUD ---
 
-func (s *Service) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
-	k, err := s.Store.Get(ctx, typ, id)
+func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
+	k, err := s.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	// Metadata only — the bytes are a separate, deliberate fetch
 	// (design doc 0008): images are heavy in agent context.
-	if k.Attachments, err = s.Store.ListAttachments(ctx, typ, id); err != nil {
+	if k.Attachments, err = s.Store.ListAttachments(ctx, id); err != nil {
 		return nil, err
 	}
-	s.recordUsage(ctx, domain.EventFetched, []store.EventTarget{{Type: typ, ID: id}})
+	s.recordUsage(ctx, domain.EventFetched, []string{id})
 	return k, nil
 }
 
@@ -91,7 +91,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if err := validate(k); err != nil {
 		return nil, false, err
 	}
-	old, err := s.Store.Get(ctx, k.Type, k.ID)
+	old, err := s.Store.Get(ctx, k.ID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -113,8 +113,8 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	return k, true, nil
 }
 
-func (s *Service) Delete(ctx context.Context, typ domain.Type, id string, actor domain.Actor) error {
-	return s.Store.SoftDelete(ctx, typ, id, actor)
+func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
+	return s.Store.SoftDelete(ctx, id, actor)
 }
 
 // applyVerification stamps verification and rejection provenance. There is
@@ -144,7 +144,7 @@ func validate(k *domain.Knowledge) error {
 		return Invalidf("invalid type %q (one slug segment, e.g. metric; recommended: metric, query, insight, term, table)", k.Type)
 	}
 	if !domain.ValidID(k.ID) {
-		return Invalidf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index")`, k.ID)
+		return Invalidf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index" or "log")`, k.ID)
 	}
 	if strings.TrimSpace(k.Title) == "" {
 		return Invalidf("title is required")
@@ -164,11 +164,11 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, err
 	}
-	targets := make([]store.EventTarget, len(hits))
+	ids := make([]string, len(hits))
 	for i, h := range hits {
-		targets[i] = store.EventTarget{Type: h.Type, ID: h.ID}
+		ids[i] = h.ID
 	}
-	s.recordUsage(ctx, domain.EventSearchHit, targets)
+	s.recordUsage(ctx, domain.EventSearchHit, ids)
 	return hits, nil
 }
 
@@ -248,18 +248,17 @@ func (s *Service) Context(ctx context.Context, query string, f store.Filter, lim
 	seen := map[string]bool{}
 	var entries []domain.Knowledge
 	addFetched := func(k *domain.Knowledge) {
-		key := string(k.Type) + "/" + k.ID
-		if len(entries) >= 2*limit || seen[key] || k.Status == domain.StatusRejected {
+		if len(entries) >= 2*limit || seen[k.ID] || k.Status == domain.StatusRejected {
 			return // rejected companions stay out of the pack
 		}
-		seen[key] = true
+		seen[k.ID] = true
 		entries = append(entries, *k)
 	}
-	add := func(typ domain.Type, id string) {
-		if len(entries) >= 2*limit || seen[string(typ)+"/"+id] {
+	add := func(id string) {
+		if len(entries) >= 2*limit || seen[id] {
 			return
 		}
-		k, err := s.Store.Get(ctx, typ, id)
+		k, err := s.Store.Get(ctx, id)
 		if err != nil {
 			return // deleted targets stay out of the pack
 		}
@@ -269,7 +268,7 @@ func (s *Service) Context(ctx context.Context, query string, f store.Filter, lim
 		if len(entries) >= limit {
 			break
 		}
-		add(h.Type, h.ID)
+		add(h.ID)
 	}
 	// One hop through the primary entries' links, both directions: the
 	// query a metric links to, and the insight that links to the metric
@@ -278,25 +277,22 @@ func (s *Service) Context(ctx context.Context, query string, f store.Filter, lim
 	primaries := len(entries)
 	for i := range primaries {
 		for _, l := range entries[i].Links {
-			typ, id, ok := strings.Cut(strings.TrimPrefix(l.Target, "ochakai://"), "/")
-			if ok {
-				add(domain.Type(typ), id)
-			}
+			add(strings.TrimPrefix(l.Target, "ochakai://"))
 		}
-		linking, err := s.Store.ListLinkingTo(ctx, entries[i].Type, entries[i].ID, 2*limit)
+		linking, err := s.Store.ListLinkingTo(ctx, entries[i].ID, 2*limit)
 		if err != nil {
-			s.Log.Warn("backlink lookup failed", "type", entries[i].Type, "id", entries[i].ID, "error", err)
+			s.Log.Warn("backlink lookup failed", "id", entries[i].ID, "error", err)
 			continue
 		}
 		for j := range linking {
 			addFetched(&linking[j])
 		}
 	}
-	targets := make([]store.EventTarget, len(entries))
+	ids := make([]string, len(entries))
 	for i := range entries {
-		targets[i] = store.EventTarget{Type: entries[i].Type, ID: entries[i].ID}
+		ids[i] = entries[i].ID
 	}
-	s.recordUsage(ctx, domain.EventFetched, targets)
+	s.recordUsage(ctx, domain.EventFetched, ids)
 	return &ContextResult{Hits: hits, Entries: entries}, nil
 }
 
@@ -335,30 +331,30 @@ func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([
 // Revisions returns an entry's change history, newest first — the
 // audit surface behind "every change kept as a revision". Not a search:
 // no usage is recorded (auditing an entry is not using it).
-func (s *Service) Revisions(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Revision, error) {
+func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	return s.Store.ListRevisions(ctx, typ, id, limit)
+	return s.Store.ListRevisions(ctx, id, limit)
 }
 
 // Backlinks lists live entries whose links point at the given entry,
 // most recently updated first — the reverse edge the web UI shows as
 // "linked from" (Context already follows it when packing companions).
 // No usage is recorded: browsing an entry's neighbors is not a search.
-func (s *Service) Backlinks(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Knowledge, error) {
+func (s *Service) Backlinks(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.Store.ListLinkingTo(ctx, typ, id, limit)
+	return s.Store.ListLinkingTo(ctx, id, limit)
 }
 
 // Usage returns usage totals for one entry (404 when the entry is gone).
-func (s *Service) Usage(ctx context.Context, typ domain.Type, id string) (*domain.Usage, error) {
-	if _, err := s.Store.Get(ctx, typ, id); err != nil {
+func (s *Service) Usage(ctx context.Context, id string) (*domain.Usage, error) {
+	if _, err := s.Store.Get(ctx, id); err != nil {
 		return nil, err
 	}
-	return s.Store.Usage(ctx, typ, id)
+	return s.Store.Usage(ctx, id)
 }
 
 // maxOutcomeNote bounds the free-form note recorded with an outcome
@@ -371,30 +367,30 @@ const maxOutcomeNote = 2000
 // so, instead of the next agent trusting the same entry blind. Unlike
 // passive usage recording, a failed write is returned — the reporter
 // should know the report was lost.
-func (s *Service) ReportOutcome(ctx context.Context, typ domain.Type, id, outcome, note string) (*domain.Usage, error) {
+func (s *Service) ReportOutcome(ctx context.Context, id, outcome, note string) (*domain.Usage, error) {
 	if !domain.ValidOutcome(outcome) {
 		return nil, Invalidf("invalid outcome %q (valid: %s)", outcome, strings.Join(domain.Outcomes, ", "))
 	}
 	if len(note) > maxOutcomeNote {
 		return nil, Invalidf("note exceeds %d bytes", maxOutcomeNote)
 	}
-	if _, err := s.Store.Get(ctx, typ, id); err != nil {
+	if _, err := s.Store.Get(ctx, id); err != nil {
 		return nil, err
 	}
 	actor := httpauth.Actor(ctx)
-	if err := s.Store.RecordOutcome(ctx, outcome, actor, store.EventTarget{Type: typ, ID: id}, note); err != nil {
+	if err := s.Store.RecordOutcome(ctx, outcome, actor, id, note); err != nil {
 		return nil, err
 	}
-	return s.Store.Usage(ctx, typ, id)
+	return s.Store.Usage(ctx, id)
 }
 
 // recordUsage writes usage events with the acting caller as provenance.
 // Failures are logged, never returned: usage recording must not fail reads.
-func (s *Service) recordUsage(ctx context.Context, event string, targets []store.EventTarget) {
-	if len(targets) == 0 {
+func (s *Service) recordUsage(ctx context.Context, event string, ids []string) {
+	if len(ids) == 0 {
 		return
 	}
-	if err := s.Store.RecordEvents(ctx, event, httpauth.Actor(ctx), targets); err != nil {
+	if err := s.Store.RecordEvents(ctx, event, httpauth.Actor(ctx), ids); err != nil {
 		s.Log.Warn("usage recording failed", "event", event, "error", err)
 	}
 }
@@ -410,7 +406,7 @@ func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 	byKey := map[string]*entry{}
 	for _, list := range lists {
 		for rank, hit := range list {
-			key := string(hit.Type) + "/" + hit.ID
+			key := hit.ID
 			e, ok := byKey[key]
 			if !ok {
 				e = &entry{hit: hit}
@@ -450,8 +446,8 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 		s.Log.Warn("document embedding failed; entry remains searchable via trigram", "type", k.Type, "id", k.ID, "error", err)
 		return
 	}
-	if err := s.Store.UpsertEmbedding(ctx, k.Type, k.ID, s.Embedder.Model(), vecs[0]); err != nil {
-		s.Log.Warn("storing embedding failed", "type", k.Type, "id", k.ID, "error", err)
+	if err := s.Store.UpsertEmbedding(ctx, k.ID, s.Embedder.Model(), vecs[0]); err != nil {
+		s.Log.Warn("storing embedding failed", "id", k.ID, "error", err)
 	}
 }
 
@@ -494,7 +490,10 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 
 	modelName := req.Model
 	if modelName == "" {
-		k, err := s.Store.Get(ctx, domain.TypeMetric, req.Metrics[0])
+		// Semantic-model metrics are named, not addressed: their knowledge
+		// entries live at the conventional "metric/<name>" path (the
+		// migrated layout, design doc 0016 §4.4).
+		k, err := s.Store.Get(ctx, "metric/"+req.Metrics[0])
 		if err == nil {
 			if m, ok := k.Attrs["model"].(string); ok {
 				modelName = m
@@ -529,16 +528,16 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 		hits = nil
 	}
 
-	targets := make([]store.EventTarget, 0, len(req.Metrics)+len(hits))
+	metricIDs := make([]string, 0, len(req.Metrics))
 	for _, m := range req.Metrics {
-		targets = append(targets, store.EventTarget{Type: domain.TypeMetric, ID: m})
+		metricIDs = append(metricIDs, "metric/"+m)
 	}
-	s.recordUsage(ctx, domain.EventCompiled, targets)
-	queryTargets := make([]store.EventTarget, len(hits))
+	s.recordUsage(ctx, domain.EventCompiled, metricIDs)
+	queryIDs := make([]string, len(hits))
 	for i, h := range hits {
-		queryTargets[i] = store.EventTarget{Type: h.Type, ID: h.ID}
+		queryIDs[i] = h.ID
 	}
-	s.recordUsage(ctx, domain.EventSearchHit, queryTargets)
+	s.recordUsage(ctx, domain.EventSearchHit, queryIDs)
 
 	return &CompileResult{Result: *result, VerifiedQueries: hits}, nil
 }
