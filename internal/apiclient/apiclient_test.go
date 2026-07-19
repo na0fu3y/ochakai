@@ -33,11 +33,11 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeMetric, ID: "revenue", Title: "売上"}, Score: 0.9},
+			{Knowledge: domain.Knowledge{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"}, Score: 0.9},
 		}})
 	})
 	hits, err := c.Search(context.Background(), SearchParams{
-		Query: "revenue", Types: []string{"metric", "term"}, Statuses: []string{"verified"},
+		Query: "revenue", Types: []string{"metrics", "terms"}, Statuses: []string{"verified"},
 		Tags: []string{"core"}, Limit: 5,
 	})
 	if err != nil {
@@ -58,7 +58,7 @@ func TestSearchSortSendsSortParam(t *testing.T) {
 		got = r.URL.Query()
 		// The verified_at feed returns entries without scores.
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.Knowledge{
-			{Type: domain.TypeQuery, ID: "monthly-revenue", Title: "月次売上"},
+			{Type: domain.TypeQueries, ID: "monthly-revenue", Title: "月次売上"},
 		}})
 	})
 	hits, err := c.Search(context.Background(), SearchParams{Sort: "verified_at", Limit: 100})
@@ -80,7 +80,7 @@ func TestSearchUsageSortDecodesUsage(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeInsight, ID: "draft-a", Title: "草案"},
+			{Knowledge: domain.Knowledge{Type: domain.TypeInsights, ID: "draft-a", Title: "草案"},
 				Usage: &domain.Usage{SearchHits: 7, Fetches: 2}},
 		}})
 	})
@@ -105,14 +105,14 @@ func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(BrowseResult{
 			Dirs:    []BrowseDir{{Name: "sales", Count: 4}},
-			Entries: []BrowseEntry{{Type: "query", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusVerified}},
+			Entries: []BrowseEntry{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusVerified}},
 		})
 	})
-	res, err := c.Browse(context.Background(), "query/")
+	res, err := c.Browse(context.Background(), "queries/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Get("prefix") != "query/" {
+	if got.Get("prefix") != "queries/" {
 		t.Errorf("query = %v", got)
 	}
 	if len(res.Dirs) != 1 || res.Dirs[0].Name != "sales" ||
@@ -132,7 +132,7 @@ func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
 func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 	var got url.Values
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/revisions/query/sales/monthly-revenue" {
+		if r.URL.Path != "/api/v1/revisions/queries/sales/monthly-revenue" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		got = r.URL.Query()
@@ -140,7 +140,7 @@ func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 			{Rev: 2, Change: "update", ChangedBy: domain.Actor{Kind: domain.ActorHuman, Name: "na0"}},
 		}})
 	})
-	revs, err := c.Revisions(context.Background(), "query/sales/monthly-revenue", 10)
+	revs, err := c.Revisions(context.Background(), "queries/sales/monthly-revenue", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 	}
 
 	// limit 0 = server default: no limit parameter on the wire.
-	if _, err := c.Revisions(context.Background(), "query/sales/monthly-revenue", 0); err != nil {
+	if _, err := c.Revisions(context.Background(), "queries/sales/monthly-revenue", 0); err != nil {
 		t.Fatal(err)
 	}
 	if got.Has("limit") {
@@ -162,14 +162,14 @@ func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 
 func TestBacklinksHitsCanonicalPathAndDecodesEntries(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/backlinks/metric/revenue" {
+		if r.URL.Path != "/api/v1/backlinks/metrics/revenue" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"entries": []domain.Knowledge{
-			{Type: domain.TypeInsight, ID: "revenue-reading", Title: "売上の読み方"},
+			{Type: domain.TypeInsights, ID: "revenue-reading", Title: "売上の読み方"},
 		}})
 	})
-	entries, err := c.Backlinks(context.Background(), "metric/revenue", 0)
+	entries, err := c.Backlinks(context.Background(), "metrics/revenue", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,12 +180,12 @@ func TestBacklinksHitsCanonicalPathAndDecodesEntries(t *testing.T) {
 
 func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/usage/query/sales/monthly-revenue" {
+		if r.URL.Path != "/api/v1/usage/queries/sales/monthly-revenue" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(domain.Usage{SearchHits: 12, Fetches: 4, Compiles: 2})
 	})
-	u, err := c.Usage(context.Background(), "query/sales/monthly-revenue")
+	u, err := c.Usage(context.Background(), "queries/sales/monthly-revenue")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,14 +197,14 @@ func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 func TestErrorResponsesBecomeAPIErrors(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found: metric/nope"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found: metrics/nope"})
 	})
-	_, err := c.Get(context.Background(), "metric/nope")
+	_, err := c.Get(context.Background(), "metrics/nope")
 	apiErr, ok := err.(*APIError)
 	if !ok {
 		t.Fatalf("err = %T %v, want *APIError", err, err)
 	}
-	if apiErr.StatusCode != http.StatusNotFound || apiErr.Message != "not found: metric/nope" {
+	if apiErr.StatusCode != http.StatusNotFound || apiErr.Message != "not found: metrics/nope" {
 		t.Errorf("apiErr = %+v", apiErr)
 	}
 }
@@ -236,17 +236,17 @@ func TestCreateSendsJSONBodyAndDelete204(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(k)
 		case http.MethodDelete:
-			if r.URL.Path != "/api/v1/knowledge/metric/revenue" {
+			if r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
 				t.Errorf("path = %s", r.URL.Path)
 			}
 			w.WriteHeader(http.StatusNoContent)
 		}
 	})
-	created, err := c.Create(context.Background(), &domain.Knowledge{Type: domain.TypeMetric, ID: "revenue", Title: "売上"})
+	created, err := c.Create(context.Background(), &domain.Knowledge{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"})
 	if err != nil || created.Status != domain.StatusDraft {
 		t.Fatalf("create: %v, %+v", err, created)
 	}
-	if err := c.Delete(context.Background(), "metric/revenue"); err != nil {
+	if err := c.Delete(context.Background(), "metrics/revenue"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -285,19 +285,19 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(ContextResult{
-			Hits:    []domain.SearchHit{{Knowledge: domain.Knowledge{Type: "metric", ID: "revenue"}, Score: 0.8}},
-			Entries: []domain.Knowledge{{Type: "metric", ID: "revenue", Title: "売上"}},
+			Hits:    []domain.SearchHit{{Knowledge: domain.Knowledge{Type: "metrics", ID: "revenue"}, Score: 0.8}},
+			Entries: []domain.Knowledge{{Type: "metrics", ID: "revenue", Title: "売上"}},
 		})
 	})
 	res, err := c.Context(context.Background(), "why did revenue drop",
-		[]string{"metric"}, []string{"verified"}, []string{"core"}, 7, 0.5)
+		[]string{"metrics"}, []string{"verified"}, []string{"core"}, 7, 0.5)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(res.Hits) != 1 || len(res.Entries) != 1 || res.Entries[0].Title != "売上" {
 		t.Errorf("result = %+v", res)
 	}
-	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metric" ||
+	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metrics" ||
 		got.Get("status") != "verified" || got.Get("tag") != "core" ||
 		got.Get("limit") != "7" || got.Get("min_score") != "0.5" {
 		t.Errorf("query = %v", got)
@@ -307,7 +307,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 func TestAttachSendsBytesAndOKFPath(t *testing.T) {
 	body := []byte("attachment bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/attachments/insight/sales/reading/weekly.png" {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/attachments/insights/sales/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		if r.URL.Query().Get("okf_path") != "images/weekly.png" {
@@ -319,7 +319,7 @@ func TestAttachSendsBytesAndOKFPath(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Attachment{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
 	})
-	att, err := c.Attach(context.Background(), "insight/sales/reading", "weekly.png", "images/weekly.png", body)
+	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", "images/weekly.png", body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,13 +330,13 @@ func TestAttachSendsBytesAndOKFPath(t *testing.T) {
 
 func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/attachments/insight/reading/weekly.png" {
+		if r.URL.Path != "/api/v1/attachments/insights/reading/weekly.png" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write([]byte("png bytes"))
 	})
-	data, mediaType, err := c.Attachment(context.Background(), "insight/reading", "weekly.png")
+	data, mediaType, err := c.Attachment(context.Background(), "insights/reading", "weekly.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,12 +349,12 @@ func TestDetachHitsAttachmentPath(t *testing.T) {
 	called := false
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		called = true
-		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/attachments/insight/reading/weekly.png" {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/attachments/insights/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.Detach(context.Background(), "insight/reading", "weekly.png"); err != nil {
+	if err := c.Detach(context.Background(), "insights/reading", "weekly.png"); err != nil {
 		t.Fatal(err)
 	}
 	if !called {
@@ -364,7 +364,7 @@ func TestDetachHitsAttachmentPath(t *testing.T) {
 
 func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/usage/query/monthly-revenue" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/usage/queries/monthly-revenue" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		var in map[string]string
@@ -376,7 +376,7 @@ func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Usage{Worked: 3, Failed: 1})
 	})
-	u, err := c.ReportOutcome(context.Background(), "query/monthly-revenue", "failed", "joins dropped rows")
+	u, err := c.ReportOutcome(context.Background(), "queries/monthly-revenue", "failed", "joins dropped rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +395,7 @@ func TestImportOssieSendsYAMLVerbatim(t *testing.T) {
 		if string(got) != string(src) {
 			t.Errorf("body = %q", got)
 		}
-		_ = json.NewEncoder(w).Encode(ImportReport{Models: []string{"sales"}, Created: []string{"ochakai://metric/revenue"}})
+		_ = json.NewEncoder(w).Encode(ImportReport{Models: []string{"sales"}, Created: []string{"ochakai://metrics/revenue"}})
 	})
 	report, err := c.ImportOssie(context.Background(), src)
 	if err != nil {

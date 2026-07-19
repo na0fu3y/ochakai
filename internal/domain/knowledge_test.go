@@ -56,7 +56,7 @@ func TestValidIDPrefix(t *testing.T) {
 func TestSameContent(t *testing.T) {
 	base := func() *Knowledge {
 		return &Knowledge{
-			Type: TypeMetric, ID: "revenue", Title: "Revenue",
+			Type: TypeMetrics, ID: "revenue", Title: "Revenue",
 			Description: "monthly revenue", Tags: []string{"sales"},
 			Status: StatusVerified, StatusNote: "checked",
 			Links: []Link{{Rel: "defined_in", Target: "model/sales"}},
@@ -108,7 +108,7 @@ func TestSameContent(t *testing.T) {
 }
 
 func TestValidType(t *testing.T) {
-	for _, typ := range []Type{"metric", "runbook", "data-contract", "GA4"} {
+	for _, typ := range []Type{"metrics", "runbook", "data-contract", "GA4"} {
 		if !ValidType(typ) {
 			t.Errorf("ValidType(%q) = false, want true", typ)
 		}
@@ -129,8 +129,8 @@ func TestValidType(t *testing.T) {
 }
 
 func TestToTypesAndToStatuses(t *testing.T) {
-	types := ToTypes([]string{"metric", "custom-type"})
-	if len(types) != 2 || types[0] != TypeMetric || types[1] != Type("custom-type") {
+	types := ToTypes([]string{"metrics", "custom-type"})
+	if len(types) != 2 || types[0] != TypeMetrics || types[1] != Type("custom-type") {
 		t.Errorf("ToTypes = %v", types)
 	}
 	statuses := ToStatuses([]string{"verified", "draft"})

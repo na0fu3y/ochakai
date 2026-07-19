@@ -18,7 +18,7 @@ import (
 // TestImportOssieIntegration exercises the whole ossie import against a
 // real PostgreSQL (skipped unless OCHAKAI_TEST_DATABASE_URL is set; see
 // the store integration test for the docker one-liner): the model is
-// stored for compile, metric/table entries are derived, re-import
+// stored for compile, metrics/table entries are derived, re-import
 // refreshes definitions without clobbering human curation, and an
 // unchanged re-import reports unchanged instead of writing revisions.
 func TestImportOssieIntegration(t *testing.T) {
@@ -45,7 +45,7 @@ func TestImportOssieIntegration(t *testing.T) {
 name: %s
 datasets:
   - name: %s
-    source: shop.orders
+    source: myproject.shop.orders
     description: One row per order.
     fields:
       - name: amount
@@ -67,19 +67,19 @@ metrics:
 		t.Errorf("created = %v, want the metric and table entries", report.Created)
 	}
 
-	metric, err := svc.Get(ctx, "metric/"+metricName)
+	metric, err := svc.Get(ctx, "metrics/"+metricName)
 	if err != nil {
 		t.Fatalf("derived metric entry missing: %v", err)
 	}
 	if metric.Attrs["model"] != modelName {
 		t.Errorf("metric attrs.model = %v, want %s", metric.Attrs["model"], modelName)
 	}
-	table, err := svc.Get(ctx, "table/"+dsName)
+	table, err := svc.Get(ctx, "tables/"+dsName)
 	if err != nil {
 		t.Fatalf("derived table entry missing: %v", err)
 	}
-	if table.Attrs["source"] != "shop.orders" {
-		t.Errorf("table attrs.source = %v", table.Attrs["source"])
+	if table.Resource != "https://bigquery.googleapis.com/v2/projects/myproject/datasets/shop/tables/orders" {
+		t.Errorf("table resource = %q, want the canonical BigQuery URL", table.Resource)
 	}
 
 	// A byte-identical re-import writes nothing.
@@ -108,7 +108,7 @@ metrics:
 	if len(refreshed.Updated) != 1 || !strings.Contains(refreshed.Updated[0], metricName) {
 		t.Errorf("refresh: updated = %v, want the metric entry", refreshed.Updated)
 	}
-	metric, err = svc.Get(ctx, "metric/"+metricName)
+	metric, err = svc.Get(ctx, "metrics/"+metricName)
 	if err != nil {
 		t.Fatal(err)
 	}

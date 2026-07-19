@@ -18,7 +18,6 @@ type CompileRequest struct {
 	Dimensions []string   `json:"dimensions,omitempty"`
 	Filters    []Filter   `json:"filters,omitempty"`
 	TimeGrain  *TimeGrain `json:"time_grain,omitempty"`
-	Dialect    string     `json:"dialect,omitempty"` // "bigquery" (default) | "ansi"
 	Limit      int        `json:"limit,omitempty"`
 }
 
@@ -71,7 +70,6 @@ type BrowseEntry struct {
 
 type CompileResult struct {
 	SQL          string   `json:"sql"`
-	Dialect      string   `json:"dialect"`
 	DatasetsUsed []string `json:"datasets_used"`
 	Notes        []string `json:"notes,omitempty"`
 	// VerifiedQueries are golden queries about the requested metrics;

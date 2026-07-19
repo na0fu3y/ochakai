@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -150,6 +151,138 @@ func TestRESTIntegration(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("get after delete = %d, want 404", resp.StatusCode)
 	}
+}
+
+// TestRESTIntegrationAttachments covers the attachment surface the web
+// UI leans on: hit lists carry attachment metadata (filled in batch),
+// and attachment GETs answer conditional requests from metadata alone
+// (ETag = content hash, If-None-Match → 304).
+func TestRESTIntegrationAttachments(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.UseBlobStore(memBlobStore{})
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(Handler(svc))
+	defer srv.Close()
+
+	typ := fmt.Sprintf("restatt%d", time.Now().UnixNano())
+	payload, _ := json.Marshal(map[string]any{"type": typ, "id": typ + "/reading", "title": "attachment hits"})
+	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("hit thumbnail bytes")...)
+	attURL := srv.URL + "/api/v1/attachments/" + typ + "/reading/weekly.png"
+	req, _ := http.NewRequest(http.MethodPut, attURL, bytes.NewReader(png))
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("attach status = %d", resp.StatusCode)
+	}
+
+	// The listing carries the attachment metadata.
+	var hits struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/knowledge?sort=verified_at&type="+typ, &hits)
+	if len(hits.Hits) != 1 || len(hits.Hits[0].Attachments) != 1 ||
+		hits.Hits[0].Attachments[0].Name != "weekly.png" ||
+		hits.Hits[0].Attachments[0].MediaType != "image/png" {
+		t.Fatalf("hits should carry attachment metadata: %+v", hits.Hits)
+	}
+	sum := hits.Hits[0].Attachments[0].SHA256
+
+	// Plain GET: bytes, content-hash ETag, revalidation policy.
+	resp, err = http.Get(attURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || string(body) != string(png) {
+		t.Fatalf("attachment GET: status = %d, %d bytes", resp.StatusCode, len(body))
+	}
+	if resp.Header.Get("ETag") != `"`+sum+`"` || resp.Header.Get("Cache-Control") != "private, no-cache" {
+		t.Errorf("caching headers = %q / %q", resp.Header.Get("ETag"), resp.Header.Get("Cache-Control"))
+	}
+
+	// Conditional GET with the current hash: 304, no body.
+	req, _ = http.NewRequest(http.MethodGet, attURL, nil)
+	req.Header.Set("If-None-Match", `"`+sum+`"`)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotModified || len(body) != 0 {
+		t.Errorf("conditional GET = %d with %d bytes, want 304 empty", resp.StatusCode, len(body))
+	}
+
+	// A stale hash still gets the bytes.
+	req, _ = http.NewRequest(http.MethodGet, attURL, nil)
+	req.Header.Set("If-None-Match", `"deadbeef"`)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || string(body) != string(png) {
+		t.Errorf("stale conditional GET = %d with %d bytes, want 200 with the file", resp.StatusCode, len(body))
+	}
+
+	// Soft-delete the entry so its attachment row does not stay live in
+	// the shared test database: other packages' tests scan all live
+	// attachments (ListAllAttachments) and resolve bytes from their own
+	// blob stores, while this test's bytes live only in this process.
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/reading", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("cleanup delete status = %d", resp.StatusCode)
+	}
+}
+
+// memBlobStore is a minimal in-memory blob.Store for the attachment
+// round-trip without GCS.
+type memBlobStore map[string][]byte
+
+func (m memBlobStore) Put(_ context.Context, sum, _ string, data []byte) error {
+	if _, ok := m[sum]; !ok {
+		m[sum] = append([]byte(nil), data...)
+	}
+	return nil
+}
+
+func (m memBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
+	data, ok := m[sum]
+	if !ok {
+		return nil, fmt.Errorf("mem blob store: %s not found", sum)
+	}
+	return data, nil
 }
 
 func getJSON(t *testing.T, url string, v any) {

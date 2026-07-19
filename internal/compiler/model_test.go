@@ -31,7 +31,7 @@ func TestModelFromSpecSingleObject(t *testing.T) {
 		t.Errorf("model shape wrong: %d datasets, %d metrics, %d relationships",
 			len(m.Datasets), len(m.Metrics), len(m.Relationships))
 	}
-	expr, ok := m.Metrics[0].Expression.ForDialect("ANSI_SQL")
+	expr, ok := m.Metrics[0].Expression.ForBigQuery()
 	if !ok || expr != "SUM(orders.amount)" {
 		t.Errorf("metric expression = %q, %v", expr, ok)
 	}
@@ -91,7 +91,7 @@ func TestModelFromSpecPlainStringExpression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ModelFromSpec: %v", err)
 	}
-	expr, ok := m.Metrics[0].Expression.ForDialect("ANSI_SQL")
+	expr, ok := m.Metrics[0].Expression.ForBigQuery()
 	if !ok || expr != "COUNT(*)" {
 		t.Errorf("plain string expression = %q, %v", expr, ok)
 	}

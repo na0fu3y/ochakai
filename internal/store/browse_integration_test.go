@@ -42,14 +42,14 @@ func TestIntegrationBrowse(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	mk(domain.TypeQuery, "it-br-sales/monthly", domain.StatusVerified)
-	mk(domain.TypeQuery, "it-br-sales/regions/apac", domain.StatusDraft)
-	mk(domain.TypeQuery, "it-br-top", domain.StatusDraft)
-	mk(domain.TypeQuery, "it-br-rejected", domain.StatusRejected)
+	mk(domain.TypeQueries, "it-br-sales/monthly", domain.StatusVerified)
+	mk(domain.TypeQueries, "it-br-sales/regions/apac", domain.StatusDraft)
+	mk(domain.TypeQueries, "it-br-top", domain.StatusDraft)
+	mk(domain.TypeQueries, "it-br-rejected", domain.StatusRejected)
 	// "_" in the prefix must match literally, not as a LIKE wildcard:
 	// "it-br_x/deep" would match a LIKE pattern built from "it-br-…".
-	mk(domain.TypeQuery, "it-br_x/deep", domain.StatusDraft)
-	mk(domain.TypeMetric, "it-br-revenue", domain.StatusDraft)
+	mk(domain.TypeQueries, "it-br_x/deep", domain.StatusDraft)
+	mk(domain.TypeMetrics, "it-br-revenue", domain.StatusDraft)
 
 	// The root is the top-level segments of the shared test DB; our
 	// directory must be there with its subtree count.
@@ -75,7 +75,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	if len(dirs) != 1 || dirs[0].Name != "regions" || dirs[0].Count != 1 {
 		t.Errorf("dirs = %+v, want regions(1)", dirs)
 	}
-	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" || entries[0].Type != domain.TypeQuery ||
+	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" || entries[0].Type != domain.TypeQueries ||
 		entries[0].Title != "t:it-br-sales/monthly" || entries[0].Status != domain.StatusVerified {
 		t.Errorf("entries = %+v", entries)
 	}

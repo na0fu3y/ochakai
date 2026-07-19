@@ -43,6 +43,36 @@ func (s *Service) Attachment(ctx context.Context, id, name string) (*domain.Atta
 	return att, data, nil
 }
 
+// AttachmentMeta returns one attachment's metadata without its bytes —
+// enough for a conditional GET (ETag = content hash) to answer 304
+// without a blob-store read, and without recording a fetch: a cache
+// revalidation is not a use of the knowledge.
+func (s *Service) AttachmentMeta(ctx context.Context, id, name string) (*domain.Attachment, error) {
+	return s.Store.GetAttachmentMeta(ctx, id, name)
+}
+
+// FillAttachments fills attachment metadata on entries in one batch
+// query. The REST list surfaces (search hits, backlinks) carry it so a
+// UI can render image previews without a fetch per entry; MCP search
+// results stay lean for agent context (design doc 0015).
+func (s *Service) FillAttachments(ctx context.Context, ks []*domain.Knowledge) error {
+	if len(ks) == 0 {
+		return nil
+	}
+	ids := make([]string, len(ks))
+	for i, k := range ks {
+		ids[i] = k.ID
+	}
+	atts, err := s.Store.ListAttachmentsBatch(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, k := range ks {
+		k.Attachments = atts[k.ID]
+	}
+	return nil
+}
+
 // Detach removes an attachment (the change is kept as a revision).
 func (s *Service) Detach(ctx context.Context, id, name string, actor domain.Actor) error {
 	return s.Store.DeleteAttachment(ctx, id, name, actor)

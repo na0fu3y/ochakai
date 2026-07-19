@@ -24,20 +24,20 @@ import (
 func TestParseArgsAllowsFlagsAfterPositionals(t *testing.T) {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	f := fs.String("f", "", "")
-	pos, err := parseArgs(fs, []string{"metric/revenue", "-f", "x.md"})
+	pos, err := parseArgs(fs, []string{"metrics/revenue", "-f", "x.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(pos, []string{"metric/revenue"}) || *f != "x.md" {
+	if !reflect.DeepEqual(pos, []string{"metrics/revenue"}) || *f != "x.md" {
 		t.Errorf("pos = %v, f = %q", pos, *f)
 	}
 }
 
 func TestParseRef(t *testing.T) {
 	for in, want := range map[string]string{
-		"metric/revenue":           "metric/revenue",
-		"ochakai://metric/revenue": "metric/revenue",
-		"revenue":                  "revenue", // root-level ids are entries too
+		"metrics/revenue":           "metrics/revenue",
+		"ochakai://metrics/revenue": "metrics/revenue",
+		"revenue":                   "revenue", // root-level ids are entries too
 	} {
 		id, err := parseRef(in)
 		if err != nil || id != want {
@@ -129,11 +129,11 @@ func tarGz(t *testing.T, files map[string]string) *bytes.Buffer {
 
 func TestExtractTarGzWritesFiles(t *testing.T) {
 	dir := t.TempDir()
-	n, err := extractTarGz(dir, tarGz(t, map[string]string{"metric/revenue.md": "hello", "index.md": "idx"}))
+	n, err := extractTarGz(dir, tarGz(t, map[string]string{"metrics/revenue.md": "hello", "index.md": "idx"}))
 	if err != nil || n != 2 {
 		t.Fatalf("n = %d, err = %v", n, err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "metric", "revenue.md"))
+	data, err := os.ReadFile(filepath.Join(dir, "metrics", "revenue.md"))
 	if err != nil || string(data) != "hello" {
 		t.Errorf("extracted content = %q, %v", data, err)
 	}
@@ -180,12 +180,12 @@ func TestRenderContext(t *testing.T) {
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	res := &apiclient.ContextResult{
 		Hits: []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeQuery, ID: "query/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue"}, Score: 0.9},
-			{Knowledge: domain.Knowledge{Type: domain.TypeTerm, ID: "term/arr", Status: domain.StatusDraft, Title: "ARR"}, Score: 0.1},
+			{Knowledge: domain.Knowledge{Type: domain.TypeQueries, ID: "queries/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue"}, Score: 0.9},
+			{Knowledge: domain.Knowledge{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR"}, Score: 0.1},
 		},
 		Entries: []domain.Knowledge{
 			{
-				Type: domain.TypeQuery, ID: "query/monthly-revenue", Status: domain.StatusVerified,
+				Type: domain.TypeQueries, ID: "queries/monthly-revenue", Status: domain.StatusVerified,
 				Title:      "Monthly revenue",
 				CreatedBy:  domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
 				VerifiedBy: &human, VerifiedAt: &now,
@@ -193,7 +193,7 @@ func TestRenderContext(t *testing.T) {
 				Body:  "Use this over compile.",
 			},
 			{
-				Type: domain.TypeInsight, ID: "insight/revenue-seasonality", Status: domain.StatusDraft,
+				Type: domain.TypeInsights, ID: "insights/revenue-seasonality", Status: domain.StatusDraft,
 				Title: "Seasonality", CreatedBy: domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
 				Body: "Q4 peaks ~40% above baseline.",
 			},
@@ -204,20 +204,20 @@ func TestRenderContext(t *testing.T) {
 	renderContext(&out, res, 0)
 	s := out.String()
 	for _, want := range []string{
-		"## ochakai://query/monthly-revenue (verified) — Monthly revenue",
+		"## ochakai://queries/monthly-revenue (verified) — Monthly revenue",
 		"verified by human:na0 on 2026-06-01; created by agent:claude",
 		"Q: Revenue by month?",
 		"```sql\nSELECT 1\n```",
 		"Use this over compile.",
-		"## ochakai://insight/revenue-seasonality (draft) — Seasonality",
+		"## ochakai://insights/revenue-seasonality (draft) — Seasonality",
 		"Also relevant",
-		"- ochakai://term/arr (draft) — ARR",
+		"- ochakai://terms/arr (draft) — ARR",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("output misses %q:\n%s", want, s)
 		}
 	}
-	if strings.Contains(s, "ochakai://query/monthly-revenue (verified) — Monthly revenue\n- ") {
+	if strings.Contains(s, "ochakai://queries/monthly-revenue (verified) — Monthly revenue\n- ") {
 		t.Error("rendered entries must not repeat in the Also relevant list")
 	}
 
@@ -225,10 +225,10 @@ func TestRenderContext(t *testing.T) {
 	out.Reset()
 	renderContext(&out, res, 10)
 	s = out.String()
-	if !strings.Contains(s, "## ochakai://query/monthly-revenue") {
+	if !strings.Contains(s, "## ochakai://queries/monthly-revenue") {
 		t.Errorf("first entry must render regardless of budget:\n%s", s)
 	}
-	if strings.Contains(s, "## ochakai://insight/revenue-seasonality") {
+	if strings.Contains(s, "## ochakai://insights/revenue-seasonality") {
 		t.Errorf("budget must drop later entries:\n%s", s)
 	}
 	if !strings.Contains(s, "1 more entries beyond --budget") {
@@ -246,10 +246,10 @@ func TestImportReportsUnchanged(t *testing.T) {
 		"same.md": "---\ntype: metric\ntitle: Same\n---\n\nbody\n",
 		"diff.md": "---\ntype: metric\ntitle: Diff\n---\n\nbody\n",
 	} {
-		if err := os.MkdirAll(filepath.Join(dir, "metric"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "metric", name), []byte(doc), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "metrics", name), []byte(doc), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -264,7 +264,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&k); err != nil {
 			t.Errorf("bad PUT payload: %v", err)
 		}
-		if r.PathValue("id") == "metric/same" {
+		if r.PathValue("id") == "metrics/same" {
 			w.Header().Set("Ochakai-Unchanged", "true")
 		}
 		_ = json.NewEncoder(w).Encode(k)
@@ -289,8 +289,8 @@ func TestImportReportsUnchanged(t *testing.T) {
 		t.Fatalf("cmdImport: %v\noutput:\n%s", importErr, out)
 	}
 	for _, want := range []string{
-		"unchanged ochakai://metric/same\n",
-		"updated ochakai://metric/diff\n",
+		"unchanged ochakai://metrics/same\n",
+		"updated ochakai://metrics/diff\n",
 		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 skipped)\n",
 	} {
 		if !strings.Contains(string(out), want) {

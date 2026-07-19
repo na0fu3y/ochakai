@@ -149,15 +149,15 @@ func TestParseKnowledgeURI(t *testing.T) {
 		id  string
 		ok  bool
 	}{
-		{"ochakai://metric/revenue", "metric/revenue", true},
-		{"ochakai://query/sales/top-customers", "query/sales/top-customers", true},
-		{"ochakai://table/GA_sessions_2017", "table/GA_sessions_2017", true},
+		{"ochakai://metrics/revenue", "metrics/revenue", true},
+		{"ochakai://queries/sales/top-customers", "queries/sales/top-customers", true},
+		{"ochakai://tables/GA_sessions_2017", "tables/GA_sessions_2017", true},
 		{"ochakai://overview", "overview", true}, // root-level ids are entries too
 		{"ochakai://", "", false},                // empty id
-		{"ochakai://metric/", "", false},         // empty segment
+		{"ochakai://metrics/", "", false},        // empty segment
 		{"ochakai:///revenue", "", false},        // empty segment
-		{"file:///metric/revenue", "", false},
-		{"metric/revenue", "", false},
+		{"file:///metrics/revenue", "", false},
+		{"metrics/revenue", "", false},
 	}
 	for _, c := range cases {
 		id, ok := parseKnowledgeURI(c.uri)
@@ -206,7 +206,7 @@ func TestResourceTemplateAdvertised(t *testing.T) {
 // not-found before it ever reaches the store.
 func TestReadResourceRejectsMalformedURI(t *testing.T) {
 	cs := connect(t)
-	for _, uri := range []string{"ochakai://metric/", "ochakai:///revenue", "ochakai://"} {
+	for _, uri := range []string{"ochakai://metrics/", "ochakai:///revenue", "ochakai://"} {
 		_, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
 		if err == nil {
 			t.Errorf("ReadResource(%q) succeeded, want not-found error", uri)
@@ -280,8 +280,8 @@ func TestReportOutcomeValidation(t *testing.T) {
 		args       map[string]any
 		wantSubstr string
 	}{
-		{"bad target", map[string]any{"target": "query/", "outcome": "worked"}, "invalid target"},
-		{"bad outcome", map[string]any{"target": "query/q", "outcome": "misleading"}, "invalid outcome"},
+		{"bad target", map[string]any{"target": "queries/", "outcome": "worked"}, "invalid target"},
+		{"bad outcome", map[string]any{"target": "queries/q", "outcome": "misleading"}, "invalid outcome"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

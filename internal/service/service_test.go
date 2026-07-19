@@ -10,7 +10,7 @@ import (
 )
 
 func hit(id string, status domain.Status) domain.SearchHit {
-	return domain.SearchHit{Knowledge: domain.Knowledge{Type: domain.TypeMetric, ID: id, Status: status}}
+	return domain.SearchHit{Knowledge: domain.Knowledge{Type: domain.TypeMetrics, ID: id, Status: status}}
 }
 
 func TestRRFFuseMergesAndRanks(t *testing.T) {
@@ -95,12 +95,12 @@ func TestReportOutcomeValidation(t *testing.T) {
 	ctx := context.Background()
 	var inputErr *InvalidInputError
 
-	_, err := s.ReportOutcome(ctx, "query/q", "misleading", "")
+	_, err := s.ReportOutcome(ctx, "queries/q", "misleading", "")
 	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "invalid outcome") {
 		t.Errorf("unknown outcome: got %v, want an invalid-outcome InvalidInputError", err)
 	}
 
-	_, err = s.ReportOutcome(ctx, "query/q", domain.EventWorked, strings.Repeat("x", maxOutcomeNote+1))
+	_, err = s.ReportOutcome(ctx, "queries/q", domain.EventWorked, strings.Repeat("x", maxOutcomeNote+1))
 	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "note exceeds") {
 		t.Errorf("oversized note: got %v, want a note-exceeds InvalidInputError", err)
 	}

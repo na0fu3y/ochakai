@@ -49,7 +49,7 @@ _ochakai() {
     'report:report an outcome (worked/failed) for an entry'
     'revisions:list the change history of an entry (newest first)'
     'backlinks:list entries whose links point at this one'
-    'compile:compile metrics into SQL'
+    'compile:compile metrics into BigQuery SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
     'import-ossie:import an Apache Ossie semantic model'
@@ -69,7 +69,7 @@ _ochakai() {
   case $words[2] in
     search)
       _arguments \
-        '*--type[filter by type]:type:(metric query insight term table)' \
+        '*--type[filter by type]:type:(metrics queries insights terms datasets tables references)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--sort[list instead of searching: by verification age or by demand]:sort:(verified_at usage)' \
@@ -79,7 +79,7 @@ _ochakai() {
       ;;
     context)
       _arguments \
-        '*--type[filter by type]:type:(metric query insight term table)' \
+        '*--type[filter by type]:type:(metrics queries insights terms datasets tables references)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--limit[max full entries]:limit:' \
@@ -119,7 +119,6 @@ _ochakai() {
         '*--filter[filter as "dataset.field op value"]:filter:' \
         '--grain[time grain as dataset.field\:grain]:grain:' \
         '--model[semantic model name]:model:' \
-        '--dialect[SQL dialect]:dialect:(bigquery ansi)' \
         '--limit[LIMIT clause]:limit:' \
         '--json[print the full JSON response]' \
         '--url[server URL]:url:'
@@ -171,10 +170,9 @@ _ochakai() {
   fi
 
   case $prev in
-    --type|-type) COMPREPLY=($(compgen -W "metric query insight term table" -- "$cur")); return ;;
+    --type|-type) COMPREPLY=($(compgen -W "metrics queries insights terms datasets tables references" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
     --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage" -- "$cur")); return ;;
-    --dialect|-dialect) COMPREPLY=($(compgen -W "bigquery ansi" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
 
@@ -194,7 +192,7 @@ _ochakai() {
     create|update) opts="-f --json --url" ;;
     delete|detach) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
-    compile)       opts="--metric --dimension --filter --grain --model --dialect --limit --json --url" ;;
+    compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
     export)        opts="--url" ;;
     import)        opts="--dry-run --keep-root --url" ;;
     import-ossie)  opts="--url" ;;
@@ -236,7 +234,7 @@ complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for 
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a backlinks -d 'list entries whose links point at this one'
-complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into SQL'
+complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into BigQuery SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
@@ -259,7 +257,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metric query insight term table' -d 'filter by type'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metrics queries insights terms datasets tables references' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage' -d 'list instead of searching: by verification age or by demand'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
@@ -272,7 +270,6 @@ complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dimension -x -d 
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l filter -x -d 'filter as "dataset.field op value"'
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l grain -x -d 'time grain as dataset.field:grain'
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l model -x -d 'semantic model name'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dialect -x -a 'bigquery ansi' -d 'SQL dialect'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

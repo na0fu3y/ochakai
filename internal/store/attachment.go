@@ -142,6 +142,54 @@ func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.Attach
 	return pgx.CollectRows(rows, scanAttachment)
 }
 
+// ListAttachmentsBatch returns attachment metadata for a set of entries
+// in one query, keyed by entry id. Entries without attachments have no
+// key. The callers pass entries they already know are live (search
+// hits, backlinks), so no liveness join is needed.
+func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[string][]domain.Attachment, error) {
+	rows, err := s.pool.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
+		FROM attachment a
+		JOIN blob b ON b.sha256 = a.sha256
+		JOIN unnest($1::text[]) AS want(id) ON a.knowledge_id = want.id
+		ORDER BY a.knowledge_id, a.name`, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]domain.Attachment{}
+	for rows.Next() {
+		var id string
+		var a domain.Attachment
+		if err := rows.Scan(&id, &a.Name, &a.MediaType, &a.Size, &a.SHA256, &a.OKFPath,
+			&a.CreatedBy.Kind, &a.CreatedBy.Name, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out[id] = append(out[id], a)
+	}
+	return out, rows.Err()
+}
+
+// GetAttachmentMeta returns one attachment's metadata without touching
+// the blob store — enough to answer a conditional GET (the ETag is the
+// content hash) before deciding whether the bytes are needed.
+func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain.Attachment, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
+		FROM attachment a
+		JOIN blob b ON b.sha256 = a.sha256
+		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		WHERE a.knowledge_id=$1 AND a.name=$2`, id, name)
+	if err != nil {
+		return nil, err
+	}
+	att, err := pgx.CollectExactlyOneRow(rows, scanAttachment)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &att, nil
+}
+
 // DeleteAttachment removes the entry→blob mapping. The blob itself stays:
 // revisions still name its hash, and content-addressed rows are cheap.
 func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor domain.Actor) error {

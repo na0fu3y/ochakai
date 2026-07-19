@@ -1,5 +1,5 @@
 // Package importer loads Apache Ossie semantic model YAML into ochakai:
-// the spec is stored verbatim for compile_sql, and metric/table knowledge
+// the spec is stored verbatim for compile_sql, and metrics/table knowledge
 // entries are derived so definitions are searchable alongside golden
 // queries, insights, and terms.
 package importer
@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -31,7 +32,7 @@ type Report struct {
 }
 
 // ImportOssie parses Ossie YAML and stores each semantic model plus derived
-// metric/table knowledge. Existing entries keep their status, tags, and
+// metrics/table knowledge. Existing entries keep their status, tags, and
 // body: re-import refreshes definitions without clobbering human curation.
 func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, actor domain.Actor) (*Report, error) {
 	var spec map[string]any
@@ -58,12 +59,12 @@ func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, acto
 		report.Models = append(report.Models, m.Name)
 
 		// Derived entries live at the conventional "<type>/<name>" paths —
-		// where compile_sql resolves metrics by name (design doc 0016 §4.4).
+		// where compile_sql resolves metrics by name (design doc 0017 §4.4).
 		for _, metric := range m.Metrics {
 			attrs := map[string]any{"model": m.Name, "expression": metric.Expression}
 			if err := upsertKnowledge(ctx, svc, report, actor, &domain.Knowledge{
-				Type:        domain.TypeMetric,
-				ID:          "metric/" + slugify(metric.Name),
+				Type:        domain.TypeMetrics,
+				ID:          "metrics/" + slugify(metric.Name),
 				Title:       metric.Name,
 				Description: metric.Description,
 				Attrs:       attrs,
@@ -72,12 +73,13 @@ func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, acto
 			}
 		}
 		for _, ds := range m.Datasets {
-			attrs := map[string]any{"model": m.Name, "source": ds.Source}
+			attrs := map[string]any{"model": m.Name}
 			if err := upsertKnowledge(ctx, svc, report, actor, &domain.Knowledge{
-				Type:        domain.TypeTable,
-				ID:          "table/" + slugify(ds.Name),
+				Type:        domain.TypeTables,
+				ID:          "tables/" + slugify(ds.Name),
 				Title:       ds.Name,
 				Description: ds.Description,
+				Resource:    bqResource(ds.Source),
 				Attrs:       attrs,
 				Links:       []domain.Link{{Rel: "defined_in", Target: "model/" + m.Name}},
 			}); err != nil {
@@ -103,6 +105,9 @@ func upsertKnowledge(ctx context.Context, svc *service.Service, report *Report, 
 	// Refresh the definition; keep human-curated fields.
 	for key, v := range k.Attrs {
 		existing.Attrs[key] = v
+	}
+	if k.Resource != "" {
+		existing.Resource = k.Resource
 	}
 	existing.Title = k.Title
 	if k.Description != "" {
@@ -131,6 +136,19 @@ func toSpecMap(m compiler.Model) (map[string]any, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// bqResource turns a fully-qualified BigQuery source
+// ("project.dataset.table") into the canonical REST resource URL the OKF
+// knowledge-catalog bundles use. A source that is not fully qualified
+// (no project part) has no canonical URL and is kept verbatim.
+func bqResource(source string) string {
+	parts := strings.Split(strings.Trim(source, "`"), ".")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return source
+	}
+	return fmt.Sprintf("https://bigquery.googleapis.com/v2/projects/%s/datasets/%s/tables/%s",
+		parts[0], parts[1], parts[2])
 }
 
 var slugInvalid = regexp.MustCompile(`[^a-z0-9_-]+`)

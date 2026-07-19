@@ -1,4 +1,4 @@
--- Path addressing (design doc 0016): the full bundle path becomes the
+-- Path addressing (design doc 0017): the full bundle path becomes the
 -- sole primary key and type is demoted to entry metadata. Existing ids
 -- are rewritten to '<type>/<id>' — the spelling every serialized
 -- reference (export paths, URIs, link targets, REST paths) already uses,

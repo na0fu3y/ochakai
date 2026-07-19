@@ -141,7 +141,7 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
-		return Invalidf("invalid type %q (one slug segment, e.g. metric; recommended: metric, query, insight, term, table)", k.Type)
+		return Invalidf("invalid type %q (one slug segment, e.g. metrics; recommended: metrics, queries, insights, terms, datasets, tables, references)", k.Type)
 	}
 	if !domain.ValidID(k.ID) {
 		return Invalidf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index" or "log")`, k.ID)
@@ -491,9 +491,9 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 	modelName := req.Model
 	if modelName == "" {
 		// Semantic-model metrics are named, not addressed: their knowledge
-		// entries live at the conventional "metric/<name>" path (the
-		// migrated layout, design doc 0016 §4.4).
-		k, err := s.Store.Get(ctx, "metric/"+req.Metrics[0])
+		// entries live at the conventional "metrics/<name>" path (the
+		// migrated layout, design doc 0017 §4.4).
+		k, err := s.Store.Get(ctx, "metrics/"+req.Metrics[0])
 		if err == nil {
 			if m, ok := k.Attrs["model"].(string); ok {
 				modelName = m
@@ -522,7 +522,7 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 	// Surface verified golden queries about the requested metrics: a human-
 	// checked query beats a compiled one when it answers the question.
 	hits, err := s.Store.SearchLexical(ctx, strings.Join(req.Metrics, " "),
-		store.Filter{Types: []domain.Type{domain.TypeQuery}, Statuses: []domain.Status{domain.StatusVerified}}, 3)
+		store.Filter{Types: []domain.Type{domain.TypeQueries}, Statuses: []domain.Status{domain.StatusVerified}}, 3)
 	if err != nil {
 		s.Log.Warn("verified query lookup failed", "error", err)
 		hits = nil
@@ -530,7 +530,7 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 
 	metricIDs := make([]string, 0, len(req.Metrics))
 	for _, m := range req.Metrics {
-		metricIDs = append(metricIDs, "metric/"+m)
+		metricIDs = append(metricIDs, "metrics/"+m)
 	}
 	s.recordUsage(ctx, domain.EventCompiled, metricIDs)
 	queryIDs := make([]string, len(hits))

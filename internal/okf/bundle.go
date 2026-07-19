@@ -12,7 +12,7 @@ import (
 // FromBundle is the inverse of Bundle: it reads a path→content map (a
 // bundle directory or an unpacked archive) into knowledge entries.
 // Following OKF's "concept ID = file path" rule, the path minus ".md" is
-// the entry's id, verbatim — the layout is the user's (design doc 0016).
+// the entry's id, verbatim — the layout is the user's (design doc 0017).
 // The type comes from frontmatter alone; a spelling the slug changes is
 // preserved as attrs[AttrOKFType] so re-export reproduces the original.
 // index.md files are navigation that Bundle regenerates, and log.md files
@@ -32,7 +32,7 @@ import (
 //
 // There is no archive unwrapping: `tar czf ga4.tgz ga4/` imports under
 // "ga4/" — the packed shape is the structure, and a wrapper directory is
-// how a bundle keeps its own namespace (design doc 0016 §4.3).
+// how a bundle keeps its own namespace (design doc 0017 §4.3).
 func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []BundleAttachment, skipped []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -96,7 +96,7 @@ func fromBundleFile(clean string, content []byte) (*domain.Knowledge, error) {
 	}
 	// Frontmatter is the type's only source: the path no longer claims
 	// one, and OKF requires the key — a file without it is not a concept
-	// (design doc 0016, no guessing).
+	// (design doc 0017, no guessing).
 	if k.Type == "" {
 		return nil, fmt.Errorf("no type: frontmatter type %q yields no slug (the type key is required; any slug works)", rawType)
 	}

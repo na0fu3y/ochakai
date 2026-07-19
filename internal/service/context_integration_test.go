@@ -53,15 +53,15 @@ func TestContextIntegration(t *testing.T) {
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
 	id := uid("ctxit")
-	metricID, queryID, insightID, rejectedID := "metric/"+id+"-revenue", "query/"+id+"-monthly", "insight/"+id+"-reading", "insight/"+id+"-rejected"
+	metricID, queryID, insightID, rejectedID := "metrics/"+id+"-revenue", "queries/"+id+"-monthly", "insights/"+id+"-reading", "insights/"+id+"-rejected"
 	entries := []*domain.Knowledge{
-		{Type: domain.TypeMetric, ID: metricID, Title: id + "-revenue metric",
+		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
 			Status: domain.StatusVerified,
 			Links:  []domain.Link{{Rel: "answered_by", Target: queryID}}},
-		{Type: domain.TypeQuery, ID: queryID, Title: "monthly numbers"},
-		{Type: domain.TypeInsight, ID: insightID, Title: "how to read it",
+		{Type: domain.TypeQueries, ID: queryID, Title: "monthly numbers"},
+		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
 			Links: []domain.Link{{Rel: "explains", Target: "ochakai://" + metricID}}},
-		{Type: domain.TypeInsight, ID: rejectedID, Title: "bad take",
+		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
 			Status: domain.StatusRejected,
 			Links:  []domain.Link{{Rel: "explains", Target: metricID}}},
 	}
@@ -114,7 +114,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 
 	id := uid("usgit")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerm, ID: id, Title: id + " term"}, actor); err != nil {
+		Type: domain.TypeTerms, ID: id, Title: id + " term"}, actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,11 +158,11 @@ func TestCompileIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, k := range []*domain.Knowledge{
-		// The metric entry sits at the conventional "metric/<name>" path,
+		// The metric entry sits at the conventional "metrics/<name>" path,
 		// where Compile resolves semantic-model metrics by name.
-		{Type: domain.TypeMetric, ID: "metric/" + metricName, Title: "compile-test revenue",
+		{Type: domain.TypeMetrics, ID: "metrics/" + metricName, Title: "compile-test revenue",
 			Attrs: map[string]any{"model": modelName}},
-		{Type: domain.TypeQuery, ID: goldenID, Title: metricName + " by month",
+		{Type: domain.TypeQueries, ID: goldenID, Title: metricName + " by month",
 			Status: domain.StatusVerified},
 	} {
 		if _, err := svc.Create(ctx, k, actor); err != nil {
@@ -205,7 +205,7 @@ func TestDeleteIntegration(t *testing.T) {
 
 	id := uid("delit")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerm, ID: id, Title: "to delete"}, actor); err != nil {
+		Type: domain.TypeTerms, ID: id, Title: "to delete"}, actor); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Delete(ctx, id, actor); err != nil {

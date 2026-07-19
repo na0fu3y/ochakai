@@ -22,7 +22,7 @@ func Parse(doc []byte) (*domain.Knowledge, error) {
 		return nil, err
 	}
 	if k.Type == "" {
-		return nil, fmt.Errorf("cannot derive a type slug from %q (any slug works as a type; recommended: metric, query, insight, term, table)", rawType)
+		return nil, fmt.Errorf("cannot derive a type slug from %q (any slug works as a type; recommended: metrics, queries, insights, terms, datasets, tables, references)", rawType)
 	}
 	return k, nil
 }
@@ -77,14 +77,14 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 		}
 		return s, nil
 	}
-	var fm struct{ typ, id, title, description, status, statusNote string }
+	var fm struct{ typ, resource, id, title, description, status, statusNote string }
 	for _, f := range []struct {
 		key string
 		dst *string
 	}{
-		{"type", &fm.typ}, {"id", &fm.id}, {"title", &fm.title},
-		{"description", &fm.description}, {"status", &fm.status},
-		{"status_note", &fm.statusNote},
+		{"type", &fm.typ}, {"resource", &fm.resource}, {"id", &fm.id},
+		{"title", &fm.title}, {"description", &fm.description},
+		{"status", &fm.status}, {"status_note", &fm.statusNote},
 	} {
 		var err error
 		if *f.dst, err = str(f.key); err != nil {
@@ -93,16 +93,27 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 	}
 	var tags []string
 	if v, ok := raw["tags"]; ok && v != nil {
-		list, ok := v.([]any)
-		if !ok {
-			return nil, "", fmt.Errorf("invalid frontmatter: tags is not a list")
-		}
-		for _, t := range list {
-			s, ok := t.(string)
-			if !ok {
-				return nil, "", fmt.Errorf("invalid frontmatter: tags is not a list of strings")
+		switch v := v.(type) {
+		case []any:
+			for _, t := range v {
+				s, ok := t.(string)
+				if !ok {
+					return nil, "", fmt.Errorf("invalid frontmatter: tags is not a list of strings")
+				}
+				tags = append(tags, s)
 			}
-			tags = append(tags, s)
+		case string:
+			// The knowledge-catalog reference bundles sometimes write tags as
+			// one comma-separated string ("tags: sales, orders"); OKF's
+			// permissive consumption model (SPEC §9) says take it, not
+			// reject the document.
+			for _, s := range strings.Split(v, ",") {
+				if s = strings.TrimSpace(s); s != "" {
+					tags = append(tags, s)
+				}
+			}
+		default:
+			return nil, "", fmt.Errorf("invalid frontmatter: tags is not a list")
 		}
 	}
 
@@ -115,7 +126,7 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 	}
 	for key, v := range raw {
 		switch key {
-		case "type", "id", "title", "description", "tags", "status", "status_note":
+		case "type", "resource", "id", "title", "description", "tags", "status", "status_note":
 			// envelope, extracted above
 		case "timestamp", "created_by", "verified_by", "verified_at", "rejected_by", "rejected_at":
 			// server-owned, never from the payload
@@ -134,6 +145,7 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 		ID:          fm.id,
 		Title:       fm.title,
 		Description: fm.description,
+		Resource:    fm.resource,
 		Tags:        tags,
 		Status:      domain.Status(fm.status),
 		StatusNote:  fm.statusNote,
@@ -144,16 +156,21 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 }
 
 // typeFromOKF maps an OKF frontmatter type to an ochakai type. Display
-// values Document writes ("Golden Query") and raw recommended types
-// ("query") map to the built-ins; any other value \u2014 OKF registers no
-// taxonomy \u2014 is slugified into a free type, and when the slug changed the
-// spelling, the original is returned to be preserved as attrs[AttrOKFType].
-// A value no slug can be derived from yields ("", "").
+// values Document writes ("Golden Query", "BigQuery Table"), raw
+// recommended types ("queries"), and the aliases in typeAlias (pre-0016
+// singular slugs, generic Table/Dataset) map to the built-ins; any other
+// value \u2014 OKF registers no taxonomy \u2014 is slugified into a free type, and
+// when the slug changed the spelling, the original is returned to be
+// preserved as attrs[AttrOKFType]. A value no slug can be derived from
+// yields ("", "").
 func typeFromOKF(s string) (typ domain.Type, keepSpelling string) {
 	for t, display := range okfType {
 		if strings.EqualFold(s, display) || s == string(t) {
 			return t, ""
 		}
+	}
+	if t, ok := typeAlias[strings.ToLower(s)]; ok {
+		return t, ""
 	}
 	slug := slugifyType(s)
 	if !domain.ValidType(domain.Type(slug)) {

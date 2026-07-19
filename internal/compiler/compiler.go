@@ -7,45 +7,19 @@ import (
 	"strings"
 )
 
-// Dialect is a compilation target. Ossie dialect keys are mapped internally.
-type Dialect string
-
-const (
-	DialectBigQuery Dialect = "bigquery"
-	DialectANSI     Dialect = "ansi"
-)
-
-func ParseDialect(s string) (Dialect, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "", "ansi", "ansi_sql":
-		return DialectANSI, nil
-	case "bigquery", "bq":
-		return DialectBigQuery, nil
-	default:
-		return "", &Error{Reason: fmt.Sprintf("unsupported dialect %q (supported: bigquery, ansi)", s)}
-	}
-}
-
-func (d Dialect) ossieKey() string {
-	if d == DialectBigQuery {
-		return "BIGQUERY"
-	}
-	return "ANSI_SQL"
-}
-
 // Error is a compilation failure. ochakai never guesses: anything outside
 // the supported subset returns an Error with an actionable reason.
 type Error struct{ Reason string }
 
 func (e *Error) Error() string { return e.Reason }
 
-// Request selects metrics and the shape of the result set.
+// Request selects metrics and the shape of the result set. The output is
+// always BigQuery SQL (design doc 0016: ochakai is BigQuery-only).
 type Request struct {
 	Metrics    []string   `json:"metrics"`              // metric names in the semantic model
 	Dimensions []string   `json:"dimensions,omitempty"` // "dataset.field" group-by columns
 	Filters    []Filter   `json:"filters,omitempty"`
 	TimeGrain  *TimeGrain `json:"time_grain,omitempty"`
-	Dialect    string     `json:"dialect,omitempty"` // "bigquery" (default) | "ansi"
 	Limit      int        `json:"limit,omitempty"`
 }
 
@@ -60,10 +34,9 @@ type TimeGrain struct {
 	Grain string `json:"grain"` // day | week | month | quarter | year
 }
 
-// Result is the compiled SQL plus what it was compiled from.
+// Result is the compiled BigQuery SQL plus what it was compiled from.
 type Result struct {
 	SQL          string   `json:"sql"`
-	Dialect      Dialect  `json:"dialect"`
 	DatasetsUsed []string `json:"datasets_used"`
 	Notes        []string `json:"notes,omitempty"`
 }
@@ -83,10 +56,6 @@ func Compile(m *Model, req Request) (*Result, error) {
 	if len(req.Metrics) == 0 {
 		return nil, &Error{Reason: "at least one metric is required"}
 	}
-	dialect, err := ParseDialect(req.Dialect)
-	if err != nil {
-		return nil, err
-	}
 
 	needed := map[string]bool{} // datasets referenced anywhere
 	var notes []string
@@ -100,11 +69,11 @@ func Compile(m *Model, req Request) (*Result, error) {
 		if metric == nil {
 			return nil, &Error{Reason: fmt.Sprintf("metric %q is not defined in semantic model %q", name, m.Name)}
 		}
-		raw, ok := metric.Expression.ForDialect(dialect.ossieKey())
+		raw, ok := metric.Expression.ForBigQuery()
 		if !ok {
-			return nil, &Error{Reason: fmt.Sprintf("metric %q has no expression for dialect %s or ANSI_SQL", name, dialect.ossieKey())}
+			return nil, &Error{Reason: fmt.Sprintf("metric %q has no BIGQUERY or ANSI_SQL expression", name)}
 		}
-		expr, err := m.rewriteExpr(raw, dialect, needed, &notes)
+		expr, err := m.rewriteExpr(raw, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -115,18 +84,18 @@ func Compile(m *Model, req Request) (*Result, error) {
 	type selectCol struct{ expr, alias string }
 	var groupCols []selectCol
 	if req.TimeGrain != nil {
-		expr, err := m.resolveFieldRef(req.TimeGrain.Field, dialect, needed, &notes)
+		expr, err := m.resolveFieldRef(req.TimeGrain.Field, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
-		truncated, err := truncateByGrain(expr, req.TimeGrain.Grain, dialect)
+		truncated, err := truncateByGrain(expr, req.TimeGrain.Grain)
 		if err != nil {
 			return nil, err
 		}
 		groupCols = append(groupCols, selectCol{expr: truncated, alias: strings.ReplaceAll(req.TimeGrain.Field, ".", "_") + "_" + req.TimeGrain.Grain})
 	}
 	for _, dim := range req.Dimensions {
-		expr, err := m.resolveFieldRef(dim, dialect, needed, &notes)
+		expr, err := m.resolveFieldRef(dim, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +104,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 
 	var whereClauses []string
 	for _, f := range req.Filters {
-		expr, err := m.resolveFieldRef(f.Field, dialect, needed, &notes)
+		expr, err := m.resolveFieldRef(f.Field, needed, &notes)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +119,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 	root := ""
 	if len(metrics) > 0 {
 		// The first dataset referenced by the first metric anchors the join tree.
-		for _, ds := range referencedDatasets(m, mustDialectExpr(m.metric(req.Metrics[0]), dialect)) {
+		for _, ds := range referencedDatasets(m, mustExpr(m.metric(req.Metrics[0]))) {
 			root = ds
 			break
 		}
@@ -164,7 +133,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 	if root == "" {
 		return nil, &Error{Reason: "could not determine a root dataset from the metric expression"}
 	}
-	joins, err := m.resolveJoins(root, needed, dialect)
+	joins, err := m.resolveJoins(root, needed)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +150,7 @@ func Compile(m *Model, req Request) (*Result, error) {
 	}
 	b.WriteString(strings.Join(selects, ",\n"))
 	rootDS := m.dataset(root)
-	b.WriteString(fmt.Sprintf("\nFROM %s AS %s", quoteSource(rootDS.Source, dialect), root))
+	b.WriteString(fmt.Sprintf("\nFROM %s AS %s", quoteSource(rootDS.Source), root))
 	for _, j := range joins {
 		b.WriteString("\n" + j)
 	}
@@ -205,13 +174,13 @@ func Compile(m *Model, req Request) (*Result, error) {
 		datasets = append(datasets, ds)
 	}
 	sort.Strings(datasets)
-	return &Result{SQL: b.String(), Dialect: dialect, DatasetsUsed: datasets, Notes: dedupe(notes)}, nil
+	return &Result{SQL: b.String(), DatasetsUsed: datasets, Notes: dedupe(notes)}, nil
 }
 
 // rewriteExpr replaces every dataset.field reference in an expression with
 // the field's physical expression qualified by the dataset alias, and
 // records referenced datasets.
-func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool, notes *[]string) (string, error) {
+func (m *Model) rewriteExpr(expr string, needed map[string]bool, notes *[]string) (string, error) {
 	var rewriteErr error
 	out := identRe.ReplaceAllStringFunc(expr, func(ref string) string {
 		parts := strings.SplitN(ref, ".", 2)
@@ -221,7 +190,7 @@ func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool
 			return ref
 		}
 		needed[ds.Name] = true
-		resolved, err := m.resolveField(ds, parts[1], dialect, notes)
+		resolved, err := m.resolveField(ds, parts[1], notes)
 		if err != nil {
 			rewriteErr = err
 			return ref
@@ -236,7 +205,7 @@ func (m *Model) rewriteExpr(expr string, dialect Dialect, needed map[string]bool
 
 // resolveFieldRef resolves a "dataset.field" reference used as a dimension,
 // filter, or time grain column.
-func (m *Model) resolveFieldRef(ref string, dialect Dialect, needed map[string]bool, notes *[]string) (string, error) {
+func (m *Model) resolveFieldRef(ref string, needed map[string]bool, notes *[]string) (string, error) {
 	parts := strings.SplitN(ref, ".", 2)
 	if len(parts) != 2 {
 		return "", &Error{Reason: fmt.Sprintf("field reference %q must be dataset.field", ref)}
@@ -246,14 +215,14 @@ func (m *Model) resolveFieldRef(ref string, dialect Dialect, needed map[string]b
 		return "", &Error{Reason: fmt.Sprintf("dataset %q is not defined in semantic model %q", parts[0], m.Name)}
 	}
 	needed[ds.Name] = true
-	return m.resolveField(ds, parts[1], dialect, notes)
+	return m.resolveField(ds, parts[1], notes)
 }
 
 // resolveField maps a logical field to "alias.physical_expr". Unknown names
 // pass through as physical columns (the Ossie draft does not require every
 // column to be declared as a field), with a note so the caller knows the
 // column's existence was taken on trust, not checked against the model.
-func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect, notes *[]string) (string, error) {
+func (m *Model) resolveField(ds *Dataset, name string, notes *[]string) (string, error) {
 	f := ds.field(name)
 	if f == nil {
 		// Undeclared columns pass through as physical columns (the Ossie
@@ -268,9 +237,9 @@ func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect, notes *[
 		*notes = append(*notes, fmt.Sprintf("%s.%s is not declared in semantic model %q; passed through as a physical column", ds.Name, name, m.Name))
 		return ds.Name + "." + name, nil
 	}
-	expr, ok := f.Expression.ForDialect(dialect.ossieKey())
+	expr, ok := f.Expression.ForBigQuery()
 	if !ok {
-		return "", &Error{Reason: fmt.Sprintf("field %s.%s has no expression for dialect %s or ANSI_SQL", ds.Name, name, dialect.ossieKey())}
+		return "", &Error{Reason: fmt.Sprintf("field %s.%s has no BIGQUERY or ANSI_SQL expression", ds.Name, name)}
 	}
 	// Field expressions are relative to their dataset: qualify bare
 	// identifiers with the dataset alias.
@@ -282,7 +251,7 @@ func (m *Model) resolveField(ds *Dataset, name string, dialect Dialect, notes *[
 
 // resolveJoins connects every needed dataset to the root via relationship
 // edges (LEFT JOIN from the fact outward). Unreachable datasets are an error.
-func (m *Model) resolveJoins(root string, needed map[string]bool, dialect Dialect) ([]string, error) {
+func (m *Model) resolveJoins(root string, needed map[string]bool) ([]string, error) {
 	if m.dataset(root) == nil {
 		return nil, &Error{Reason: fmt.Sprintf("dataset %q is not defined in semantic model %q", root, m.Name)}
 	}
@@ -317,7 +286,7 @@ func (m *Model) resolveJoins(root string, needed map[string]bool, dialect Dialec
 			for i := range rel.FromColumns {
 				conds = append(conds, fmt.Sprintf("%s.%s = %s.%s", rel.From, rel.FromColumns[i], rel.To, rel.ToColumns[i]))
 			}
-			joins = append(joins, fmt.Sprintf("LEFT JOIN %s AS %s ON %s", quoteSource(ds.Source, dialect), newDS, strings.Join(conds, " AND ")))
+			joins = append(joins, fmt.Sprintf("LEFT JOIN %s AS %s ON %s", quoteSource(ds.Source), newDS, strings.Join(conds, " AND ")))
 			joined[newDS] = true
 			delete(remaining, newDS)
 			progressed = true
@@ -360,22 +329,18 @@ func referencedDatasets(m *Model, expr string) []string {
 	return out
 }
 
-func mustDialectExpr(metric *Metric, dialect Dialect) string {
-	expr, _ := metric.Expression.ForDialect(dialect.ossieKey())
+func mustExpr(metric *Metric) string {
+	expr, _ := metric.Expression.ForBigQuery()
 	return expr
 }
 
-func truncateByGrain(expr, grain string, dialect Dialect) (string, error) {
+func truncateByGrain(expr, grain string) (string, error) {
 	switch strings.ToLower(grain) {
 	case "day", "week", "month", "quarter", "year":
 	default:
 		return "", &Error{Reason: fmt.Sprintf("unsupported time grain %q (supported: day, week, month, quarter, year)", grain)}
 	}
-	g := strings.ToLower(grain)
-	if dialect == DialectBigQuery {
-		return fmt.Sprintf("DATE_TRUNC(DATE(%s), %s)", expr, strings.ToUpper(g)), nil
-	}
-	return fmt.Sprintf("DATE_TRUNC('%s', %s)", g, expr), nil
+	return fmt.Sprintf("DATE_TRUNC(DATE(%s), %s)", expr, strings.ToUpper(grain)), nil
 }
 
 func renderFilter(expr string, f Filter) (string, error) {
@@ -436,10 +401,8 @@ func renderLiteral(v any) (string, error) {
 	}
 }
 
-// quoteSource quotes a physical source reference (e.g. project.dataset.table).
-func quoteSource(source string, dialect Dialect) string {
-	if dialect == DialectBigQuery {
-		return "`" + source + "`"
-	}
-	return source
+// quoteSource backtick-quotes a physical source reference
+// (e.g. project.dataset.table) the BigQuery way.
+func quoteSource(source string) string {
+	return "`" + source + "`"
 }

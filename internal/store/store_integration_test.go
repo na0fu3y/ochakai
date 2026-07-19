@@ -44,7 +44,7 @@ func TestIntegration(t *testing.T) {
 	}
 
 	k := &domain.Knowledge{
-		Type: domain.TypeMetric, ID: "it-revenue", Title: "売上",
+		Type: domain.TypeMetrics, ID: "it-revenue", Title: "売上",
 		Description: "統合テスト用", Status: domain.StatusVerified,
 		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
@@ -66,7 +66,7 @@ func TestIntegration(t *testing.T) {
 	// The joined vector query must not have ambiguous column references
 	// (knowledge_embedding shares type/id/updated_at with knowledge).
 	vec, err := s.SearchVector(ctx, []float32{1, 0, 0, 0}, Filter{
-		Types: []domain.Type{domain.TypeMetric}, Statuses: []domain.Status{domain.StatusVerified},
+		Types: []domain.Type{domain.TypeMetrics}, Statuses: []domain.Status{domain.StatusVerified},
 	}, 5)
 	if err != nil {
 		t.Fatalf("SearchVector: %v", err)
@@ -79,7 +79,7 @@ func TestIntegration(t *testing.T) {
 	// unless the status filter asks for them.
 	rejectedAt := time.Now().UTC().Truncate(time.Second)
 	rej := &domain.Knowledge{
-		Type: domain.TypeMetric, ID: "it-revenue-dup", Title: "売上(重複)",
+		Type: domain.TypeMetrics, ID: "it-revenue-dup", Title: "売上(重複)",
 		Description: "統合テスト用", Status: domain.StatusRejected,
 		StatusNote: "it-revenue と重複",
 		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
@@ -162,7 +162,7 @@ func TestIntegration(t *testing.T) {
 	// the default filter.
 	oldAt := time.Now().UTC().Add(-365 * 24 * time.Hour)
 	older := &domain.Knowledge{
-		Type: domain.TypeQuery, ID: "it-old-query", Title: "古い検証済みクエリ",
+		Type: domain.TypeQueries, ID: "it-old-query", Title: "古い検証済みクエリ",
 		Status:     domain.StatusVerified,
 		CreatedBy:  domain.Actor{Kind: "human", Name: "test"},
 		VerifiedBy: &domain.Actor{Kind: "human", Name: "test"}, VerifiedAt: &oldAt,
@@ -181,11 +181,11 @@ func TestIntegration(t *testing.T) {
 	// ListByUsage: the draft review feed. Two drafts, unequal demand — the
 	// more-searched one ranks first, and each hit carries its usage totals.
 	hot := &domain.Knowledge{
-		Type: domain.TypeInsight, ID: "it-draft-hot", Title: "よく検索される草案",
+		Type: domain.TypeInsights, ID: "it-draft-hot", Title: "よく検索される草案",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
 	cold := &domain.Knowledge{
-		Type: domain.TypeInsight, ID: "it-draft-cold", Title: "検索されない草案",
+		Type: domain.TypeInsights, ID: "it-draft-cold", Title: "検索されない草案",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
 	for _, d := range []*domain.Knowledge{hot, cold} {
@@ -202,7 +202,7 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("RecordOutcome: %v", err)
 	}
 	feed, err := s.ListByUsage(ctx, Filter{
-		Types:    []domain.Type{domain.TypeInsight},
+		Types:    []domain.Type{domain.TypeInsights},
 		Statuses: []domain.Status{domain.StatusDraft},
 	}, 100)
 	if err != nil {
@@ -253,7 +253,7 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 	}
 
 	k := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-delete-me", Title: "delete me",
+		Type: domain.TypeTerms, ID: "it-delete-me", Title: "delete me",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
 	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy) // clean rerun
@@ -293,12 +293,12 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	entries := []*domain.Knowledge{
-		{Type: domain.TypeMetric, ID: "it-link-metric", Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
-		{Type: domain.TypeInsight, ID: "it-link-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
+		{Type: domain.TypeMetrics, ID: "it-link-metric", Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
+		{Type: domain.TypeInsights, ID: "it-link-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
 			Links: []domain.Link{{Rel: "explains", Target: "it-link-metric"}}},
-		{Type: domain.TypeInsight, ID: "it-link-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
+		{Type: domain.TypeInsights, ID: "it-link-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
 			Links: []domain.Link{{Rel: "explains", Target: "ochakai://it-link-metric"}}},
-		{Type: domain.TypeInsight, ID: "it-link-gone", Title: "deleted link", Status: domain.StatusDraft, CreatedBy: actor,
+		{Type: domain.TypeInsights, ID: "it-link-gone", Title: "deleted link", Status: domain.StatusDraft, CreatedBy: actor,
 			Links: []domain.Link{{Rel: "explains", Target: "it-link-metric"}}},
 	}
 	for _, k := range entries {
@@ -349,7 +349,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	first := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-revive-me", Title: "first life",
+		Type: domain.TypeTerms, ID: "it-revive-me", Title: "first life",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, first); err != nil {
@@ -358,7 +358,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 
 	// Live entry: create must still conflict.
 	dup := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-revive-me", Title: "imposter",
+		Type: domain.TypeTerms, ID: "it-revive-me", Title: "imposter",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, dup); err != ErrAlreadyExists {
@@ -371,7 +371,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 
 	// Soft-deleted entry: create revives it with the new content.
 	second := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-revive-me", Title: "second life",
+		Type: domain.TypeTerms, ID: "it-revive-me", Title: "second life",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
 	if err := s.Create(ctx, second); err != nil {
@@ -412,7 +412,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 
 	// Rejected entries are live: the memory of no is not overwritable.
 	rejected := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-revive-no", Title: "rejected",
+		Type: domain.TypeTerms, ID: "it-revive-no", Title: "rejected",
 		Status: domain.StatusRejected, StatusNote: "duplicate",
 		CreatedBy: actor, RejectedBy: &actor,
 	}
@@ -420,7 +420,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-revive-no", Title: "try again",
+		Type: domain.TypeTerms, ID: "it-revive-no", Title: "try again",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, again); err != ErrAlreadyExists {
@@ -458,7 +458,7 @@ func TestIntegrationAttachments(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	k := &domain.Knowledge{
-		Type: domain.TypeInsight, ID: "it-att-reading", Title: "売上の読み方",
+		Type: domain.TypeInsights, ID: "it-att-reading", Title: "売上の読み方",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, k); err != nil {
@@ -565,7 +565,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	k := &domain.Knowledge{
-		Type: domain.TypeTerm, ID: "it-revs-1", Title: "v1",
+		Type: domain.TypeTerms, ID: "it-revs-1", Title: "v1",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, k); err != nil {

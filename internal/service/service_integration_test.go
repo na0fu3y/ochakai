@@ -41,7 +41,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 
 	entry := func() *domain.Knowledge {
 		return &domain.Knowledge{
-			Type: domain.TypeMetric, ID: id, Title: "売上",
+			Type: domain.TypeMetrics, ID: id, Title: "売上",
 			Description: "統合テスト用", Tags: []string{"sales"},
 			Status: domain.StatusDraft,
 			Links:  []domain.Link{{Rel: "defined_in", Target: "model/sales"}},

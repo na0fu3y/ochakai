@@ -18,9 +18,9 @@ import (
 func TestBundleNestedDirectories(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	entries := []domain.Knowledge{
-		{Type: domain.TypeQuery, ID: "query/sales/monthly-revenue", Title: "月次売上",
+		{Type: domain.TypeQueries, ID: "queries/sales/monthly-revenue", Title: "月次売上",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
-		{Type: domain.TypeQuery, ID: "query/sales/refunds/by-region", Title: "地域別返金",
+		{Type: domain.TypeQueries, ID: "queries/sales/refunds/by-region", Title: "地域別返金",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
 		{Type: "runbook", ID: "ops/restore", Title: "リストア手順",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
@@ -30,14 +30,14 @@ func TestBundleNestedDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range []string{
-		"query/sales/monthly-revenue.md", "query/sales/refunds/by-region.md", "ops/restore.md",
-		"index.md", "query/index.md", "query/sales/index.md", "query/sales/refunds/index.md", "ops/index.md",
+		"queries/sales/monthly-revenue.md", "queries/sales/refunds/by-region.md", "ops/restore.md",
+		"index.md", "queries/index.md", "queries/sales/index.md", "queries/sales/refunds/index.md", "ops/index.md",
 	} {
 		if _, ok := files[path]; !ok {
 			t.Errorf("bundle missing %s", path)
 		}
 	}
-	if idx := string(files["query/sales/index.md"]); !strings.Contains(idx, "[refunds/](refunds/index.md) - 1 concept") ||
+	if idx := string(files["queries/sales/index.md"]); !strings.Contains(idx, "[refunds/](refunds/index.md) - 1 concept") ||
 		!strings.Contains(idx, "[月次売上](monthly-revenue.md)") {
 		t.Errorf("nested index wrong:\n%s", idx)
 	}
@@ -45,7 +45,7 @@ func TestBundleNestedDirectories(t *testing.T) {
 	// the root (design doc 0016 §4.8): "ops" sorts before "query" even
 	// though query is a built-in type directory.
 	root := string(files["index.md"])
-	if strings.Index(root, "ops/") > strings.Index(root, "query/") {
+	if strings.Index(root, "ops/") > strings.Index(root, "queries/") {
 		t.Errorf("root index must be alphabetical:\n%s", root)
 	}
 }
@@ -58,11 +58,11 @@ func TestBundleRoundTrip(t *testing.T) {
 		{Type: "data-contract", ID: "contracts/orders", Title: "注文契約", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
 			Attrs:     map[string]any{AttrOKFType: "Data Contract", "owner": "sales"}, UpdatedAt: now},
-		{Type: domain.TypeQuery, ID: "query/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
+		{Type: domain.TypeQueries, ID: "queries/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
 			Description: "月ごとの売上",
 			CreatedBy:   domain.Actor{Kind: "human", Name: "na0"},
 			Tags:        []string{"sales"},
-			Links:       []domain.Link{{Rel: "measures", Target: "metric/revenue"}},
+			Links:       []domain.Link{{Rel: "measures", Target: "metrics/revenue"}},
 			Attrs:       map[string]any{"sql": "SELECT 1"},
 			Body:        "本文。", UpdatedAt: now},
 	}
@@ -120,23 +120,26 @@ func TestFromBundleForeign(t *testing.T) {
 		t.Fatalf("entries = %v", byURI)
 	}
 	// The catalog's own vocabulary lands on ochakai behavior: "Table" is
-	// the built-in table type's display name, so the entry gets type
-	// "table" (and its behaviors) while staying at tables/users.
+	// an alias of the built-in tables type, so the entry gets type
+	// "tables" (normalized — no okf_type to preserve) while staying at
+	// tables/users.
 	users := byURI["ochakai://tables/users"]
-	if users.Title != "users" || users.Type != domain.TypeTable || users.Attrs[AttrOKFType] != nil {
+	if users.Title != "users" || users.Type != domain.TypeTables || len(users.Attrs) != 0 {
 		t.Errorf("tables/users: %+v", users)
 	}
-	if ga4, ok := byURI["ochakai://datasets/ga4"]; !ok || ga4.Type != "dataset" {
+	if ga4, ok := byURI["ochakai://datasets/ga4"]; !ok || ga4.Type != domain.TypeDatasets {
 		t.Errorf("datasets/ga4 missing or mistyped: %v", byURI)
 	}
 
-	// Re-export writes the same spelling back at the same path.
+	// Generic "Table" is an alias of the built-in tables type: re-export
+	// normalizes it to the canonical BigQuery-qualified display name
+	// (design doc 0016) at the original path.
 	out, err := Bundle(entries)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc := string(out["tables/users.md"]); !strings.Contains(doc, "type: Table") {
-		t.Errorf("re-export lost spelling:\n%s", doc)
+	if doc := string(out["tables/users.md"]); !strings.Contains(doc, "type: BigQuery Table") {
+		t.Errorf("re-export not normalized:\n%s", doc)
 	}
 }
 
@@ -176,9 +179,12 @@ func TestFromBundleFixture(t *testing.T) {
 		byURI[e.URI()] = e
 	}
 	aov := byURI["ochakai://references/metrics/avg_order_value"]
-	if aov.Attrs["resource"] != "https://example.com/metrics/aov" ||
-		aov.Attrs["owner"] != "analytics-team" ||
-		aov.Attrs[AttrOKFType] != "Reference" {
+	if aov.Resource != "https://example.com/metrics/aov" {
+		t.Errorf("references/metrics/avg_order_value resource = %q", aov.Resource)
+	}
+	// "Reference" is the display spelling of the built-in references type,
+	// so only the producer's own extension keys stay in attrs.
+	if aov.Attrs["owner"] != "analytics-team" || aov.Attrs[AttrOKFType] != nil {
 		t.Errorf("references/metrics/avg_order_value attrs = %v", aov.Attrs)
 	}
 	if !strings.Contains(aov.Body, "SUM(order_total)") || !strings.Contains(aov.Body, "# Citations") {
@@ -206,7 +212,7 @@ func TestFromBundleFixture(t *testing.T) {
 }
 
 // `tar czf ga4.tgz ga4/` wraps the bundle in one directory. There is no
-// unwrapping (design doc 0016 §4.3): the wrapper is the bundle's
+// unwrapping (design doc 0017 §4.3): the wrapper is the bundle's
 // namespace, so every entry imports under "ga4/" — and macOS tar noise
 // (AppleDouble ._* files, .DS_Store) is still skipped silently.
 func TestFromBundleWrappedArchive(t *testing.T) {
@@ -223,7 +229,9 @@ func TestFromBundleWrappedArchive(t *testing.T) {
 	if len(entries) != 1 || entries[0].ID != "ga4/tables/events" {
 		t.Fatalf("entries = %+v, want the one entry under the ga4/ namespace", entries)
 	}
-	if entries[0].Type != "bigquery-table" || entries[0].Attrs[AttrOKFType] != "BigQuery Table" {
+	// "BigQuery Table" is the canonical display of the built-in tables
+	// type — the wrapper changes the namespace, never the type.
+	if entries[0].Type != domain.TypeTables || len(entries[0].Attrs) != 0 {
 		t.Errorf("type = %q attrs = %v", entries[0].Type, entries[0].Attrs)
 	}
 }

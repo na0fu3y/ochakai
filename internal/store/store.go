@@ -77,7 +77,7 @@ type Filter struct {
 	Tags     []string
 }
 
-const knowledgeCols = `type, id, title, description, tags, status, status_note,
+const knowledgeCols = `type, id, title, description, resource, tags, status, status_note,
 	created_by_kind, created_by_name, verified_by_kind, verified_by_name, verified_at,
 	rejected_by_kind, rejected_by_name, rejected_at,
 	links, attrs, body, created_at, updated_at`
@@ -89,7 +89,7 @@ const knowledgeCols = `type, id, title, description, tags, status, status_note,
 func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
 	var links, attrs []byte
-	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Tags, &k.Status, &k.StatusNote,
+	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &verifiedKind, &verifiedName, &k.VerifiedAt,
 		&rejectedKind, &rejectedName, &k.RejectedAt,
 		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt}
@@ -179,10 +179,10 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 			ON CONFLICT (id) DO UPDATE SET
 				type=EXCLUDED.type,
-				title=EXCLUDED.title, description=EXCLUDED.description, tags=EXCLUDED.tags,
+				title=EXCLUDED.title, description=EXCLUDED.description, resource=EXCLUDED.resource, tags=EXCLUDED.tags,
 				status=EXCLUDED.status, status_note=EXCLUDED.status_note,
 				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
 				verified_by_kind=EXCLUDED.verified_by_kind, verified_by_name=EXCLUDED.verified_by_name,
@@ -193,7 +193,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 				created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at,
 				deleted_at=NULL
 			WHERE knowledge.deleted_at IS NOT NULL`,
-			k.Type, k.ID, k.Title, k.Description, k.Tags, k.Status, k.StatusNote,
+			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
 			k.CreatedBy.Kind, k.CreatedBy.Name, verifiedKind, verifiedName, k.VerifiedAt,
 			rejectedKind, rejectedName, k.RejectedAt,
 			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt)
@@ -217,12 +217,12 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
-			type=$2, title=$3, description=$4, tags=$5, status=$6, status_note=$7,
-			verified_by_kind=$8, verified_by_name=$9, verified_at=$10,
-			rejected_by_kind=$11, rejected_by_name=$12, rejected_at=$13,
-			links=$14, attrs=$15, body=$16, updated_at=$17
+			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8,
+			verified_by_kind=$9, verified_by_name=$10, verified_at=$11,
+			rejected_by_kind=$12, rejected_by_name=$13, rejected_at=$14,
+			links=$15, attrs=$16, body=$17, updated_at=$18
 			WHERE id=$1 AND deleted_at IS NULL`,
-			k.ID, k.Type, k.Title, k.Description, k.Tags, k.Status, k.StatusNote,
+			k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
 			verifiedKind, verifiedName, k.VerifiedAt,
 			rejectedKind, rejectedName, k.RejectedAt,
 			links, attrs, k.Body, k.UpdatedAt)

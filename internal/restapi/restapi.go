@@ -66,7 +66,7 @@ func Handler(svc *service.Service) http.Handler {
 				writeError(w, err)
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
+			writeHits(w, r, svc, hits)
 			return
 		}
 		hits, err := svc.Search(r.Context(), q.Get("q"), f, limit)
@@ -74,11 +74,11 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
+		writeHits(w, r, svc, hits)
 	})
 
 	// GET /api/v1/browse?prefix=... — one level of the ID hierarchy
-	// (design docs 0014, 0016): the subdirectories and entries directly
+	// (design docs 0014, 0017): the subdirectories and entries directly
 	// under prefix ("" is the root, i.e. the top-level segments). The
 	// tree view behind the web UI's Browse tab.
 	mux.HandleFunc("GET /api/v1/browse", func(w http.ResponseWriter, r *http.Request) {
@@ -231,6 +231,14 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		ptrs := make([]*domain.Knowledge, len(entries))
+		for i := range entries {
+			ptrs[i] = &entries[i]
+		}
+		if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
+			writeError(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 	})
 	// Attachments (design docs 0008, 0013): files attached to an entry
@@ -281,11 +289,32 @@ func Handler(svc *service.Service) http.Handler {
 		if !ok {
 			return
 		}
+		// Conditional GET before touching the blob store: bytes are
+		// content-addressed, so the hash is a perfect ETag, and the web
+		// UI re-renders the same images on every search — a 304 answered
+		// from metadata alone keeps GCS reads and egress off the bill.
+		// no-cache means "revalidate every time", which is required
+		// because the name→content mapping is mutable (replace-by-name).
+		meta, err := svc.AttachmentMeta(r.Context(), id, name)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		etag := `"` + meta.SHA256 + `"`
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Cache-Control", "private, no-cache")
+		if r.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
 		att, data, err := svc.Attachment(r.Context(), id, name)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
+		// Re-stamp from the row the bytes came from, in case the
+		// attachment was replaced between the two reads.
+		w.Header().Set("ETag", `"`+att.SHA256+`"`)
 		ct := att.MediaType
 		// Plain text without a charset invites browser guessing; the sniffer
 		// only passes UTF-8/UTF-16 text through, so declare it.
@@ -298,7 +327,6 @@ func Handler(svc *service.Service) http.Handler {
 		// text/html, no image/svg+xml), but nosniff keeps a browser from
 		// overriding that and interpreting them as anything else.
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("ETag", `"`+att.SHA256+`"`)
 		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
 		_, _ = w.Write(data)
 	})
@@ -367,7 +395,7 @@ func Handler(svc *service.Service) http.Handler {
 
 	// POST /api/v1/import/ossie — import an Apache Ossie semantic model.
 	// The body is the YAML verbatim; models are stored for compile and
-	// metric/table knowledge entries are derived (design doc 0007 moved
+	// metrics/table knowledge entries are derived (design doc 0007 moved
 	// this from a DB-direct admin command to the API).
 	mux.HandleFunc("POST /api/v1/import/ossie", func(w http.ResponseWriter, r *http.Request) {
 		src, ok := readBody(w, r, 4<<20, "semantic model exceeds 4 MiB")
@@ -396,6 +424,21 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	return mux
+}
+
+// writeHits responds with a hit list, attachment metadata filled in one
+// batch — the REST list surface carries it so UIs can render image
+// previews; MCP search results stay lean (design doc 0015).
+func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, hits []domain.SearchHit) {
+	ptrs := make([]*domain.Knowledge, len(hits))
+	for i := range hits {
+		ptrs[i] = &hits[i].Knowledge
+	}
+	if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
