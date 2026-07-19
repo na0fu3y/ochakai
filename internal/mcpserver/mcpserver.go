@@ -105,6 +105,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Annotations: readOnly,
 		Description: "Search the knowledge base across all types (recommended: metrics, queries, insights, terms, datasets, tables, references; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
+			"Attachments count too — filenames and file contents — and a hit is always the owning entry. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +

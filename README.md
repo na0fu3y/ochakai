@@ -215,8 +215,12 @@ Entries can carry file attachments — the dashboard screenshot behind an
 insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
 behind a dataset. Accepted formats are the intersection of what Claude
 reads and what Gemini embeds (png/jpeg/webp, pdf, plain text —
-sniffed from the bytes). Search stays text-first (captions in the body),
-attachment bytes live in GCS and are fetched on demand, and attachments
+sniffed from the bytes). Attachments are searchable: filenames match in
+every search, and contents join hybrid search when embeddings are
+enabled — text with any embedding model, images and PDFs with
+`gemini-embedding-2` — and a hit is always the owning entry (design
+doc 0020).
+Attachment bytes live in GCS and are fetched on demand, and attachments
 round-trip through OKF bundles as plain files next to their entry.
 
 ## Configuration
@@ -227,7 +231,7 @@ round-trip through OKF bundles as plain files next to their entry.
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
 | `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
 | `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
-| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768) |
+| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`); switching models on an existing base leaves old vectors in the old space until entries are re-written (design doc 0020) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
 | `PORT` | Listen port (default `8080`) |
 

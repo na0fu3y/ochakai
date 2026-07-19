@@ -33,10 +33,12 @@ type Config struct {
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
 // (ADC auth, no API keys); see design doc 0001 §4.
+// Model gemini-embedding-2 (locations global/us/eu) also embeds image
+// and PDF attachments for search (design doc 0020).
 type EmbeddingConfig struct {
 	Project  string
-	Location string // e.g. "us-central1" or "global"
-	Model    string // e.g. "gemini-embedding-001"
+	Location string // e.g. "us-central1"; "global" for gemini-embedding-2
+	Model    string // e.g. "gemini-embedding-001" or "gemini-embedding-2"
 	Dim      int    // output dimensionality stored in pgvector
 }
 

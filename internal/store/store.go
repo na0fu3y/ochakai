@@ -287,19 +287,7 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) e
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
 		}
-		// knowledge_embedding only exists once semantic search has been
-		// enabled; a failed statement aborts the whole Postgres transaction,
-		// so tolerate a missing table via a savepoint.
-		sp, err := tx.Begin(ctx)
-		if err != nil {
-			return err
-		}
-		if _, err := sp.Exec(ctx, `DELETE FROM knowledge_embedding WHERE id=$1`, id); err != nil {
-			_ = sp.Rollback(ctx)
-			if !isUndefinedTable(err) {
-				return err
-			}
-		} else if err := sp.Commit(ctx); err != nil {
+		if err := execTolerateMissingTable(ctx, tx, `DELETE FROM knowledge_embedding WHERE id=$1`, id); err != nil {
 			return err
 		}
 		return s.addRevision(ctx, tx, k, "delete", actor)
@@ -349,15 +337,22 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 
 // SearchLexical ranks by trigram similarity with a substring-match floor
 // (trigram alone misses short Japanese terms), verified entries boosted.
+// Attachment filenames join the haystack (design doc 0020): "seeds" finds
+// the entry carrying seeds.txt, embedder or not.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
-	where, args := f.buildWhere("")
+	where, args := f.buildWhere("k.")
 	args = append(args, query)
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
-			SELECT *, similarity(title || ' ' || description || ' ' || array_to_string(tags, ' ') || ' ' || body, $%d)
-				+ CASE WHEN title || ' ' || description || ' ' || body ILIKE '%%' || $%d || '%%' THEN 0.3 ELSE 0 END
-				+ CASE WHEN status = 'verified' THEN 0.05 ELSE 0 END AS score
-			FROM knowledge WHERE %s
+			SELECT k.*, similarity(k.title || ' ' || k.description || ' ' || array_to_string(k.tags, ' ') || ' ' || k.body || ' ' || att.names, $%d)
+				+ CASE WHEN k.title || ' ' || k.description || ' ' || k.body || ' ' || att.names ILIKE '%%' || $%d || '%%' THEN 0.3 ELSE 0 END
+				+ CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS score
+			FROM knowledge k
+			LEFT JOIN LATERAL (
+				SELECT COALESCE(string_agg(a.name, ' '), '') AS names
+				FROM attachment a WHERE a.knowledge_id = k.id
+			) att ON true
+			WHERE %s
 		) ranked
 		WHERE score > 0.05
 		ORDER BY score DESC LIMIT %d`, len(args), len(args), where, limit)
@@ -380,6 +375,30 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit
 		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, len(args), where, len(args), limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
+		return scanHit(row)
+	})
+}
+
+// SearchVectorAttachments ranks entries by their closest attachment
+// embedding (design doc 0020). Each entry appears once, carrying its
+// best attachment's score — attachments never stand alone, so the hit
+// is the owning entry.
+func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, f Filter, limit int) ([]domain.SearchHit, error) {
+	where, args := f.buildWhere("k.")
+	args = append(args, encodeVector(vec))
+	q := fmt.Sprintf(`
+		SELECT `+knowledgeCols+`, score FROM (
+			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
+			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id
+			WHERE %s
+			ORDER BY k.id, e.embedding <=> $%d::vector
+		) best
+		ORDER BY score DESC LIMIT %d`, len(args), where, len(args), limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -506,6 +525,35 @@ func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []flo
 		ON CONFLICT (id) DO UPDATE SET model = $2, embedding = $3::vector, updated_at = now()`,
 		id, model, encodeVector(vec))
 	return err
+}
+
+// UpsertAttachmentEmbedding stores the document embedding for one
+// attachment (design doc 0020).
+func (s *Store) UpsertAttachmentEmbedding(ctx context.Context, id, name, model string, vec []float32) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO attachment_embedding (knowledge_id, name, model, embedding, updated_at)
+		VALUES ($1, $2, $3, $4::vector, now())
+		ON CONFLICT (knowledge_id, name) DO UPDATE SET model = $3, embedding = $4::vector, updated_at = now()`,
+		id, name, model, encodeVector(vec))
+	return err
+}
+
+// execTolerateMissingTable runs sql inside tx, treating an undefined
+// table as a no-op. Embedding tables only exist once semantic search has
+// been enabled, and a failed statement aborts the whole Postgres
+// transaction, so the statement runs under a savepoint.
+func execTolerateMissingTable(ctx context.Context, tx pgx.Tx, sql string, args ...any) error {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := sp.Exec(ctx, sql, args...); err != nil {
+		_ = sp.Rollback(ctx)
+		if !isUndefinedTable(err) {
+			return err
+		}
+		return nil
+	}
+	return sp.Commit(ctx)
 }
 
 func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {

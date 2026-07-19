@@ -15,10 +15,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
+
+// lockLiveAttachments serializes, across the test packages sharing the
+// test database, the tests that hold live attachments or scan them all
+// (OKF export, ListAllAttachments): bytes resolve against each test's
+// own in-memory blob fake, so a foreign live attachment breaks a
+// whole-KB scan. Key shared with the store and service test packages.
+func lockLiveAttachments(t *testing.T, dbURL string) {
+	t.Helper()
+	ctx := context.Background() // outlives t.Context()'s pre-Cleanup cancel
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(0x0c8a1a77)`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close(ctx) }) // closing the session releases the lock
+}
 
 // TestRESTIntegration walks one entry through the REST surface against a
 // real PostgreSQL (skipped unless OCHAKAI_TEST_DATABASE_URL is set; see
@@ -31,6 +51,7 @@ func TestRESTIntegration(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL) // the export step scans every live attachment
 	ctx := t.Context()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -162,6 +183,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL)
 	ctx := t.Context()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {

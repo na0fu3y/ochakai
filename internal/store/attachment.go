@@ -87,6 +87,12 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, okfPath 
 			id, att.Name, att.SHA256, att.OKFPath, actor.Kind, actor.Name, att.CreatedAt); err != nil {
 			return err
 		}
+		// A replaced attachment's vector describes the old bytes; drop it
+		// here and let the service re-embed after commit (design doc 0020).
+		if err := execTolerateMissingTable(ctx, tx,
+			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
+			return err
+		}
 		return s.touchAndRevise(ctx, tx, k, "attach", actor)
 	})
 	if err != nil {
@@ -205,6 +211,10 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 		}
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
+		}
+		if err := execTolerateMissingTable(ctx, tx,
+			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, name); err != nil {
+			return err
 		}
 		return s.touchAndRevise(ctx, tx, k, "detach", actor)
 	})
