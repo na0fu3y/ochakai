@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/embed"
 )
 
 // Attachment operations (design docs 0008, 0013). ochakai stores and
@@ -29,7 +31,55 @@ func (s *Service) Attach(ctx context.Context, id, name, okfPath string, data []b
 	if err != nil {
 		return nil, Invalidf("%v", err)
 	}
-	return s.Store.PutAttachment(ctx, id, name, mediaType, okfPath, data, actor)
+	att, err := s.Store.PutAttachment(ctx, id, name, mediaType, okfPath, data, actor)
+	if err != nil {
+		return nil, err
+	}
+	s.updateAttachmentEmbedding(ctx, id, att, data)
+	return att, nil
+}
+
+// updateAttachmentEmbedding refreshes an attachment's document vector
+// (design doc 0020). Embedding a file is encoding, not interpretation,
+// so the no-interpretation principle above holds. Text embeds via the
+// text path and works on any model; image/PDF bytes need a model that
+// takes file input (gemini-embedding-2) and are skipped otherwise —
+// the file stays findable by name. Failures are logged, not returned:
+// attach must not depend on the embedding provider being up.
+func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att *domain.Attachment, data []byte) {
+	if s.Embedder == nil {
+		return
+	}
+	var vec []float32
+	if att.MediaType == "text/plain" {
+		body := data
+		if len(body) > 4000 {
+			body = body[:4000] // same truncation as the entry body
+		}
+		vecs, err := s.Embedder.Embed(ctx, embed.TaskDocument, []string{att.Name + "\n" + string(body)})
+		if err != nil {
+			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "id", id, "name", att.Name, "error", err)
+			return
+		}
+		vec = vecs[0]
+	} else {
+		fe, ok := s.Embedder.(embed.FileEmbedder)
+		if !ok {
+			return
+		}
+		var err error
+		vec, err = fe.EmbedFile(ctx, att.Name, att.MediaType, data)
+		if errors.Is(err, embed.ErrFileEmbeddingUnsupported) {
+			return // text-only model: findable by name, no noise in the log
+		}
+		if err != nil {
+			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "id", id, "name", att.Name, "error", err)
+			return
+		}
+	}
+	if err := s.Store.UpsertAttachmentEmbedding(ctx, id, att.Name, s.Embedder.Model(), vec); err != nil {
+		s.Log.Warn("storing attachment embedding failed", "id", id, "name", att.Name, "error", err)
+	}
 }
 
 // Attachment returns one attachment with its bytes and records a fetch

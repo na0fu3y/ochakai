@@ -268,10 +268,24 @@ gcloud run services update ochakai --region=$REGION \
 Use `--update-env-vars`, not `--set-env-vars`: the latter **replaces** all
 environment variables and would wipe `OCHAKAI_DATABASE_URL`.
 
-On the next start, ochakai creates the pgvector table and embeds new and
-updated knowledge with `gemini-embedding-001`. Search becomes hybrid
+On the next start, ochakai creates the pgvector tables and embeds new
+and updated knowledge — and newly attached plain-text files (design doc
+0020) — with `gemini-embedding-001`. Search becomes hybrid
 (trigram + vector, reciprocal rank fusion). If Vertex AI is ever
 unavailable, writes and searches degrade gracefully to trigram-only.
+
+To also search image and PDF attachments by content, run the base on
+the multimodal model instead:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_VERTEX_MODEL=gemini-embedding-2,OCHAKAI_VERTEX_LOCATION=global
+```
+
+`gemini-embedding-2` lives in the `global`/`us`/`eu` locations only, and
+all vectors must share one model's space: on an existing base, entries
+and attachments keep their old-model vectors (and stay out of the new
+space) until they are written again (design doc 0020 §2.3).
 
 ## 4b. Attachments require GCS
 

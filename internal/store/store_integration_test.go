@@ -435,6 +435,7 @@ func TestIntegrationAttachments(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

@@ -108,5 +108,18 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 		)`, dim)); err != nil {
 		return fmt.Errorf("create knowledge_embedding: %w", err)
 	}
+	// Attachment vectors (design doc 0020): one row per embedded
+	// attachment, mapped back to the owning entry at search time.
+	if _, err := s.pool.Exec(ctx, fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS attachment_embedding (
+			knowledge_id text NOT NULL,
+			name         text NOT NULL,
+			model        text NOT NULL,
+			embedding    vector(%d) NOT NULL,
+			updated_at   timestamptz NOT NULL DEFAULT now(),
+			PRIMARY KEY (knowledge_id, name)
+		)`, dim)); err != nil {
+		return fmt.Errorf("create attachment_embedding: %w", err)
+	}
 	return nil
 }

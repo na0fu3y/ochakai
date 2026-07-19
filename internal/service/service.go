@@ -223,7 +223,14 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, err
 	}
-	fused := rrfFuse(limit, lexical, vector)
+	// Entries whose attachments match are the third list (design doc
+	// 0020): an entry matching in both body and attachment gains rank
+	// from both, so evidence-backed entries surface first.
+	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], f, limit*2)
+	if err != nil {
+		return nil, err
+	}
+	fused := rrfFuse(limit, lexical, vector, attachments)
 	return fused, nil
 }
 
