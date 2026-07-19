@@ -14,20 +14,24 @@ import (
 
 // Type is the kind of a knowledge entry. Any path-segment slug is a valid
 // type (design doc 0005): the built-in types below are recommendations with
-// server behavior attached (compile_sql reads metrics, resource export reads
-// tables), never a closed set — users' own document types are first-class.
+// server behavior attached (compile_sql reads metrics), never a closed set —
+// users' own document types are first-class. Slugs are plural, matching the
+// knowledge-catalog reference bundles (design doc 0016).
 type Type string
 
 const (
-	TypeMetric  Type = "metric"  // semantic metric definition (Apache Ossie)
-	TypeQuery   Type = "query"   // golden query: question + verified SQL
-	TypeInsight Type = "insight" // how to read a metric: baselines, caveats
-	TypeTerm    Type = "term"    // glossary term
-	TypeTable   Type = "table"   // table catalog entry
+	TypeMetrics    Type = "metrics"    // semantic metric definition (Apache Ossie)
+	TypeQueries    Type = "queries"    // golden query: question + verified SQL
+	TypeInsights   Type = "insights"   // how to read a metric: baselines, caveats
+	TypeTerms      Type = "terms"      // glossary term
+	TypeDatasets   Type = "datasets"   // dataset: a container grouping tables
+	TypeTables     Type = "tables"     // table catalog entry
+	TypeReferences Type = "references" // mirror of external material (enums, licenses, schema docs)
 )
 
-// Types lists the recommended (built-in) knowledge types, in display order.
-var Types = []Type{TypeMetric, TypeQuery, TypeInsight, TypeTerm, TypeTable}
+// Types lists the recommended (built-in) knowledge types, in display order
+// (datasets before tables: a dataset is the container).
+var Types = []Type{TypeMetrics, TypeQueries, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
 
 // BuiltinType reports whether t is one of the recommended types.
 func BuiltinType(t Type) bool {
@@ -114,7 +118,7 @@ const (
 )
 
 // Link is a typed edge to another knowledge entry, e.g. {rel: measures,
-// target: "table/orders"}.
+// target: "tables/orders"}.
 type Link struct {
 	Rel    string `json:"rel"`
 	Target string `json:"target"` // "<type>/<id>"
@@ -128,6 +132,7 @@ type Knowledge struct {
 	ID          string         `json:"id"` // slug, unique within type
 	Title       string         `json:"title"`
 	Description string         `json:"description,omitempty"`
+	Resource    string         `json:"resource,omitempty"` // canonical URI of the underlying asset (OKF recommended key)
 	Tags        []string       `json:"tags,omitempty"`
 	Status      Status         `json:"status"`
 	StatusNote  string         `json:"status_note,omitempty"` // free-form reason for the current status (why rejected/deprecated)
@@ -147,11 +152,11 @@ type Knowledge struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
-// URI returns the canonical reference, e.g. "ochakai://metric/revenue".
+// URI returns the canonical reference, e.g. "ochakai://metrics/revenue".
 func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type, k.ID) }
 
 // SameContent reports whether o carries the same authored content as k:
-// the fields a writer controls (title, description, tags, status,
+// the fields a writer controls (title, description, resource, tags, status,
 // status_note, links, attrs, body). Server-managed provenance and
 // timestamps (created_*, verified_*, rejected_*, updated_at) and the
 // attachment list are not content. Attrs are compared as canonical JSON,
@@ -160,6 +165,7 @@ func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s/%s", k.Type,
 func (k *Knowledge) SameContent(o *Knowledge) bool {
 	return k.Type == o.Type && k.ID == o.ID &&
 		k.Title == o.Title && k.Description == o.Description &&
+		k.Resource == o.Resource &&
 		k.Status == o.Status && k.StatusNote == o.StatusNote &&
 		k.Body == o.Body &&
 		slices.Equal(k.Tags, o.Tags) &&

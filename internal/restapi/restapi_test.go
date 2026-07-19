@@ -53,8 +53,8 @@ func TestBadRequestValidation(t *testing.T) {
 		{"sort with query", "/api/v1/knowledge?sort=verified_at&q=revenue", "cannot be combined"},
 		{"usage sort with query", "/api/v1/knowledge?sort=usage&q=revenue", "cannot be combined"},
 		{"bad search limit", "/api/v1/knowledge?limit=abc", "invalid limit"},
-		{"bad revisions limit", "/api/v1/revisions/metric/revenue?limit=abc", "invalid limit"},
-		{"bad backlinks limit", "/api/v1/backlinks/metric/revenue?limit=1.5", "invalid limit"},
+		{"bad revisions limit", "/api/v1/revisions/metrics/revenue?limit=abc", "invalid limit"},
+		{"bad backlinks limit", "/api/v1/backlinks/metrics/revenue?limit=1.5", "invalid limit"},
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
 		{"bad min_score", "/api/v1/context?q=x&min_score=high", "invalid min_score"},
 		{"browse prefix without type", "/api/v1/browse?prefix=sales", "prefix requires a type"},
@@ -83,7 +83,7 @@ func TestAttachWithoutBlobStore(t *testing.T) {
 	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut,
-		"/api/v1/attachments/insight/revenue/weekly.png", bytes.NewReader(png)))
+		"/api/v1/attachments/insights/revenue/weekly.png", bytes.NewReader(png)))
 	if rec.Code != http.StatusNotImplemented {
 		t.Fatalf("PUT attachment without GCS = %d, want 501 (body: %s)", rec.Code, rec.Body)
 	}
@@ -102,7 +102,7 @@ func TestOversizedBodies(t *testing.T) {
 		size              int
 		wantSubstr        string
 	}{
-		{"attachment", http.MethodPut, "/api/v1/attachments/insight/revenue/weekly.png",
+		{"attachment", http.MethodPut, "/api/v1/attachments/insights/revenue/weekly.png",
 			domain.MaxAttachmentSize + 1, "attachment exceeds"},
 		{"ossie model", http.MethodPost, "/api/v1/import/ossie",
 			4<<20 + 1, "semantic model exceeds"},
@@ -137,7 +137,7 @@ func TestReportOutcomeBadRequests(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/usage/query/monthly-revenue", strings.NewReader(c.body))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/usage/queries/monthly-revenue", strings.NewReader(c.body))
 			h.ServeHTTP(rec, req)
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("POST usage = %d, want 400 (body: %s)", rec.Code, rec.Body)

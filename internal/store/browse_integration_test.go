@@ -42,14 +42,14 @@ func TestIntegrationBrowse(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	mk(domain.TypeQuery, "it-br-sales/monthly", domain.StatusVerified)
-	mk(domain.TypeQuery, "it-br-sales/regions/apac", domain.StatusDraft)
-	mk(domain.TypeQuery, "it-br-top", domain.StatusDraft)
-	mk(domain.TypeQuery, "it-br-rejected", domain.StatusRejected)
+	mk(domain.TypeQueries, "it-br-sales/monthly", domain.StatusVerified)
+	mk(domain.TypeQueries, "it-br-sales/regions/apac", domain.StatusDraft)
+	mk(domain.TypeQueries, "it-br-top", domain.StatusDraft)
+	mk(domain.TypeQueries, "it-br-rejected", domain.StatusRejected)
 	// "_" in the prefix must match literally, not as a LIKE wildcard:
 	// "it-br_x/deep" would match a LIKE pattern built from "it-br-…".
-	mk(domain.TypeQuery, "it-br_x/deep", domain.StatusDraft)
-	mk(domain.TypeMetric, "it-br-revenue", domain.StatusDraft)
+	mk(domain.TypeQueries, "it-br_x/deep", domain.StatusDraft)
+	mk(domain.TypeMetrics, "it-br-revenue", domain.StatusDraft)
 
 	types, err := s.ListTypes(ctx)
 	if err != nil {
@@ -61,11 +61,11 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 	// Counts cover the whole shared test DB; ours set the minimum, and
 	// the rejected entry must not be part of it.
-	if counts[domain.TypeQuery] < 4 || counts[domain.TypeMetric] < 1 {
+	if counts[domain.TypeQueries] < 4 || counts[domain.TypeMetrics] < 1 {
 		t.Errorf("type counts too small: %v", counts)
 	}
 
-	dirs, entries, truncated, err := s.Browse(ctx, domain.TypeQuery, "it-br-sales/")
+	dirs, entries, truncated, err := s.Browse(ctx, domain.TypeQueries, "it-br-sales/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 
 	// The underscore ID lives in its own directory, not under it-br-sales.
-	dirs, entries, _, err = s.Browse(ctx, domain.TypeQuery, "it-br_x/")
+	dirs, entries, _, err = s.Browse(ctx, domain.TypeQueries, "it-br_x/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 
 	// Root of the type: the rejected entry is invisible.
-	_, entries, _, err = s.Browse(ctx, domain.TypeQuery, "")
+	_, entries, _, err = s.Browse(ctx, domain.TypeQueries, "")
 	if err != nil {
 		t.Fatal(err)
 	}

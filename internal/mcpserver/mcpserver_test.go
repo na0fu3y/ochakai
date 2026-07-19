@@ -149,14 +149,14 @@ func TestParseKnowledgeURI(t *testing.T) {
 		typ, id string
 		ok      bool
 	}{
-		{"ochakai://metric/revenue", "metric", "revenue", true},
-		{"ochakai://query/sales/top-customers", "query", "sales/top-customers", true},
-		{"ochakai://table/GA_sessions_2017", "table", "GA_sessions_2017", true},
-		{"ochakai://metric/", "", "", false},  // empty id
+		{"ochakai://metrics/revenue", "metrics", "revenue", true},
+		{"ochakai://queries/sales/top-customers", "queries", "sales/top-customers", true},
+		{"ochakai://tables/GA_sessions_2017", "tables", "GA_sessions_2017", true},
+		{"ochakai://metrics/", "", "", false}, // empty id
 		{"ochakai:///revenue", "", "", false}, // empty type
 		{"ochakai://metric", "", "", false},   // no id segment
-		{"file:///metric/revenue", "", "", false},
-		{"metric/revenue", "", "", false},
+		{"file:///metrics/revenue", "", "", false},
+		{"metrics/revenue", "", "", false},
 	}
 	for _, c := range cases {
 		typ, id, ok := parseKnowledgeURI(c.uri)
@@ -205,7 +205,7 @@ func TestResourceTemplateAdvertised(t *testing.T) {
 // not-found before it ever reaches the store.
 func TestReadResourceRejectsMalformedURI(t *testing.T) {
 	cs := connect(t)
-	for _, uri := range []string{"ochakai://metric/", "ochakai:///revenue"} {
+	for _, uri := range []string{"ochakai://metrics/", "ochakai:///revenue"} {
 		_, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
 		if err == nil {
 			t.Errorf("ReadResource(%q) succeeded, want not-found error", uri)
@@ -280,7 +280,7 @@ func TestReportOutcomeValidation(t *testing.T) {
 		wantSubstr string
 	}{
 		{"bad target", map[string]any{"target": "no-slash", "outcome": "worked"}, "invalid target"},
-		{"bad outcome", map[string]any{"target": "query/q", "outcome": "misleading"}, "invalid outcome"},
+		{"bad outcome", map[string]any{"target": "queries/q", "outcome": "misleading"}, "invalid outcome"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -55,15 +55,15 @@ func TestContextIntegration(t *testing.T) {
 	id := uid("ctxit")
 	metricID, queryID, insightID, rejectedID := id+"-revenue", id+"-monthly", id+"-reading", id+"-rejected"
 	entries := []*domain.Knowledge{
-		{Type: domain.TypeMetric, ID: metricID, Title: metricID + " metric",
+		{Type: domain.TypeMetrics, ID: metricID, Title: metricID + " metric",
 			Status: domain.StatusVerified,
-			Links:  []domain.Link{{Rel: "answered_by", Target: "query/" + queryID}}},
-		{Type: domain.TypeQuery, ID: queryID, Title: "monthly numbers"},
-		{Type: domain.TypeInsight, ID: insightID, Title: "how to read it",
-			Links: []domain.Link{{Rel: "explains", Target: "ochakai://metric/" + metricID}}},
-		{Type: domain.TypeInsight, ID: rejectedID, Title: "bad take",
+			Links:  []domain.Link{{Rel: "answered_by", Target: "queries/" + queryID}}},
+		{Type: domain.TypeQueries, ID: queryID, Title: "monthly numbers"},
+		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
+			Links: []domain.Link{{Rel: "explains", Target: "ochakai://metrics/" + metricID}}},
+		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
 			Status: domain.StatusRejected,
-			Links:  []domain.Link{{Rel: "explains", Target: "metric/" + metricID}}},
+			Links:  []domain.Link{{Rel: "explains", Target: "metrics/" + metricID}}},
 	}
 	for _, k := range entries {
 		if _, err := svc.Create(ctx, k, actor); err != nil {
@@ -79,12 +79,12 @@ func TestContextIntegration(t *testing.T) {
 	for _, e := range res.Entries {
 		got[string(e.Type)+"/"+e.ID] = true
 	}
-	for _, want := range []string{"metric/" + metricID, "query/" + queryID, "insight/" + insightID} {
+	for _, want := range []string{"metrics/" + metricID, "queries/" + queryID, "insights/" + insightID} {
 		if !got[want] {
 			t.Errorf("context pack misses %s; got %v", want, got)
 		}
 	}
-	if got["insight/"+rejectedID] {
+	if got["insights/"+rejectedID] {
 		t.Error("rejected companions must stay out of the pack")
 	}
 
@@ -114,7 +114,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 
 	id := uid("usgit")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerm, ID: id, Title: id + " term"}, actor); err != nil {
+		Type: domain.TypeTerms, ID: id, Title: id + " term"}, actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -125,7 +125,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 	if len(hits) == 0 || hits[0].ID != id {
 		t.Fatalf("search missed the entry: %+v", hits)
 	}
-	u, err := svc.Usage(ctx, domain.TypeTerm, id)
+	u, err := svc.Usage(ctx, domain.TypeTerms, id)
 	if err != nil {
 		t.Fatalf("Usage: %v", err)
 	}
@@ -158,9 +158,9 @@ func TestCompileIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, k := range []*domain.Knowledge{
-		{Type: domain.TypeMetric, ID: metricName, Title: "compile-test revenue",
+		{Type: domain.TypeMetrics, ID: metricName, Title: "compile-test revenue",
 			Attrs: map[string]any{"model": modelName}},
-		{Type: domain.TypeQuery, ID: goldenID, Title: metricName + " by month",
+		{Type: domain.TypeQueries, ID: goldenID, Title: metricName + " by month",
 			Status: domain.StatusVerified},
 	} {
 		if _, err := svc.Create(ctx, k, actor); err != nil {
@@ -203,16 +203,16 @@ func TestDeleteIntegration(t *testing.T) {
 
 	id := uid("delit")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerm, ID: id, Title: "to delete"}, actor); err != nil {
+		Type: domain.TypeTerms, ID: id, Title: "to delete"}, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Delete(ctx, domain.TypeTerm, id, actor); err != nil {
+	if err := svc.Delete(ctx, domain.TypeTerms, id, actor); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := svc.Get(ctx, domain.TypeTerm, id); !errors.Is(err, store.ErrNotFound) {
+	if _, err := svc.Get(ctx, domain.TypeTerms, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("deleted entry still readable: %v", err)
 	}
-	if err := svc.Delete(ctx, domain.TypeTerm, id, actor); !errors.Is(err, store.ErrNotFound) {
+	if err := svc.Delete(ctx, domain.TypeTerms, id, actor); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
 	}
 }

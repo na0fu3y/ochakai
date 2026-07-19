@@ -40,7 +40,7 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	k := &domain.Knowledge{
-		Type: domain.TypeInsight, ID: "it-ext-reading", Title: "GCS一本化テスト",
+		Type: domain.TypeInsights, ID: "it-ext-reading", Title: "GCS一本化テスト",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, k); err != nil {

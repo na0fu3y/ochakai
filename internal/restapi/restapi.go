@@ -367,7 +367,7 @@ func Handler(svc *service.Service) http.Handler {
 
 	// POST /api/v1/import/ossie — import an Apache Ossie semantic model.
 	// The body is the YAML verbatim; models are stored for compile and
-	// metric/table knowledge entries are derived (design doc 0007 moved
+	// metrics/table knowledge entries are derived (design doc 0007 moved
 	// this from a DB-direct admin command to the API).
 	mux.HandleFunc("POST /api/v1/import/ossie", func(w http.ResponseWriter, r *http.Request) {
 		src, ok := readBody(w, r, 4<<20, "semantic model exceeds 4 MiB")

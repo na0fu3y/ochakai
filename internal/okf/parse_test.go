@@ -30,17 +30,11 @@ func TestParseRoundTrip(t *testing.T) {
 		if !reflect.DeepEqual(got.Links, want.Links) {
 			t.Errorf("links = %v, want %v", got.Links, want.Links)
 		}
-		wantAttrs := want.Attrs
-		if want.Type == domain.TypeTable {
-			// The exported document spells the source attr as a top-level
-			// resource: key too; importing keeps what the document says.
-			wantAttrs = map[string]any{"resource": want.Attrs["source"]}
-			for key, v := range want.Attrs {
-				wantAttrs[key] = v
-			}
+		if got.Resource != want.Resource {
+			t.Errorf("resource = %q, want %q", got.Resource, want.Resource)
 		}
-		if !reflect.DeepEqual(got.Attrs, wantAttrs) {
-			t.Errorf("attrs = %v, want %v", got.Attrs, wantAttrs)
+		if !reflect.DeepEqual(got.Attrs, want.Attrs) {
+			t.Errorf("attrs = %v, want %v", got.Attrs, want.Attrs)
 		}
 		if wantBody := "12月は+40%が通常。"; want.Body != "" && got.Body != wantBody {
 			t.Errorf("body = %q, want %q", got.Body, wantBody)
@@ -63,7 +57,7 @@ Body text here.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Type != domain.TypeQuery || k.ID != "monthly-revenue" {
+	if k.Type != domain.TypeQueries || k.ID != "monthly-revenue" {
 		t.Errorf("got %s/%s", k.Type, k.ID)
 	}
 	if k.Attrs["sql"] != "SELECT 1" {
@@ -138,8 +132,10 @@ Body.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Attrs["resource"] != "https://developers.google.com/analytics/bigquery/basic-queries" ||
-		k.Attrs["owner"] != "analytics-team" {
+	if k.Resource != "https://developers.google.com/analytics/bigquery/basic-queries" {
+		t.Errorf("resource not extracted: %q", k.Resource)
+	}
+	if k.Attrs["owner"] != "analytics-team" {
 		t.Errorf("unknown keys not kept: %v", k.Attrs)
 	}
 	for _, serverOwned := range []string{"timestamp", "created_by"} {
@@ -186,7 +182,7 @@ func TestParseNormalizesCRLF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Type != domain.TypeTerm || k.Title != "解約" || k.Body != "本文。" {
+	if k.Type != domain.TypeTerms || k.Title != "解約" || k.Body != "本文。" {
 		t.Errorf("CRLF document mangled: %+v", k)
 	}
 }
@@ -196,5 +192,18 @@ func TestSplitLinksLeavesForeignSectionsAlone(t *testing.T) {
 	gotBody, links := splitLinks(body)
 	if links != nil || gotBody != body {
 		t.Errorf("splitLinks rewrote a non-generated section: body=%q links=%v", gotBody, links)
+	}
+}
+
+// The knowledge-catalog reference bundles sometimes write tags as one
+// comma-separated string; permissive consumption (SPEC §9) accepts it.
+func TestParseScalarTags(t *testing.T) {
+	k, err := Parse([]byte("---\ntype: Dataset\ntitle: SO\ntags: Stack Overflow, public data, community, Q&A\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Stack Overflow", "public data", "community", "Q&A"}
+	if !reflect.DeepEqual(k.Tags, want) {
+		t.Errorf("tags = %v, want %v", k.Tags, want)
 	}
 }

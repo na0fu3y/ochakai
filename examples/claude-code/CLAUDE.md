@@ -21,7 +21,7 @@ entries. Search it before writing analytics SQL; write learnings back.
   entries rank higher), expanded one hop through links so the insight
   explaining a metric arrives with it. Start here; use search/get below
   for precise lookups.
-- `ochakai search "<question or keyword>" [--type metric|query|insight|term|table] [--status verified]`
+- `ochakai search "<question or keyword>" [--type metrics|queries|insights|terms|datasets|tables|references] [--status verified]`
   — one hit per line: score, uri, status, title. Trust `verified` entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
 - `ochakai get <type>/<id>` — full entry as markdown (YAML frontmatter +
@@ -52,7 +52,7 @@ entries. Search it before writing analytics SQL; write learnings back.
   `ochakai import <dir>` loads a bundle back (any OKF bundle works).
 
 Types beyond the five above are welcome (any slug works — e.g.
-`runbook/…`), and IDs may be hierarchical (`query/sales/monthly-revenue`)
+`runbook/…`), and IDs may be hierarchical (`queries/sales/monthly-revenue`)
 to group related knowledge.
 
 When a query you compiled or wrote turns out to be correct and useful,

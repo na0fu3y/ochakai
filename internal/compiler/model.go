@@ -1,6 +1,6 @@
 // Package compiler deterministically compiles metric requests into SQL from
 // Apache Ossie semantic models. Phase 1 scope (design doc §4): single fact
-// table + star joins, BigQuery and ANSI dialects. Requests outside the
+// table + star joins, BigQuery output only (design doc 0016). Requests outside the
 // supported subset fail with a clear error — never a guess.
 package compiler
 
@@ -103,11 +103,13 @@ func (e *Expressions) UnmarshalYAML(unmarshal func(any) error) error {
 	return fmt.Errorf("unsupported expression shape")
 }
 
-// ForDialect returns the expression for the requested Ossie dialect,
-// falling back to ANSI_SQL.
-func (e Expressions) ForDialect(dialect string) (string, bool) {
+// ForBigQuery returns the expression under the Ossie BIGQUERY dialect
+// key, falling back to ANSI_SQL. Compilation targets BigQuery only
+// (design doc 0016) — the fallback is about accepting semantic models
+// whose expressions are declared portably, not about other outputs.
+func (e Expressions) ForBigQuery() (string, bool) {
 	for _, d := range e {
-		if d.Dialect == dialect {
+		if d.Dialect == "BIGQUERY" {
 			return d.Expression, true
 		}
 	}
