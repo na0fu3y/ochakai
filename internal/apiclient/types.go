@@ -13,6 +13,8 @@ import (
 // TestCompileTypesMatchServerWire pins the two shapes together.
 
 type CompileRequest struct {
+	// Model is the id of a models entry (design doc 0018); empty means
+	// resolved from the first metric's entry attrs.model.
 	Model      string     `json:"model,omitempty"`
 	Metrics    []string   `json:"metrics"`
 	Dimensions []string   `json:"dimensions,omitempty"`
@@ -30,15 +32,6 @@ type Filter struct {
 type TimeGrain struct {
 	Field string `json:"field"` // "dataset.field", a time column
 	Grain string `json:"grain"` // day | week | month | quarter | year
-}
-
-// ImportReport is the response of POST /api/v1/import/ossie.
-// TestImportReportMatchesServerWire pins it to importer.Report.
-type ImportReport struct {
-	Models    []string `json:"models"`
-	Created   []string `json:"created"`
-	Updated   []string `json:"updated"`
-	Unchanged []string `json:"unchanged,omitempty"`
 }
 
 // BrowseResult mirrors GET /api/v1/browse (design docs 0014, 0016): one
@@ -72,6 +65,11 @@ type CompileResult struct {
 	SQL          string   `json:"sql"`
 	DatasetsUsed []string `json:"datasets_used"`
 	Notes        []string `json:"notes,omitempty"`
+	// Model is the id of the models entry the SQL was compiled from, and
+	// ModelStatus its verification status — compile does not gate on
+	// status; judge trust from provenance (design doc 0018 §4.3).
+	Model       string        `json:"model"`
+	ModelStatus domain.Status `json:"model_status"`
 	// VerifiedQueries are golden queries about the requested metrics;
 	// prefer one when it answers the question.
 	VerifiedQueries []domain.SearchHit `json:"verified_queries,omitempty"`

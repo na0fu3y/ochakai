@@ -25,11 +25,12 @@ git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up
 ```
 
-Import a semantic model and try a search — everything goes through the
-API, so plain curl works:
+Register the example semantic model — a `models` knowledge entry like any
+other (design doc 0018) — and try a search; everything goes through the
+API, so plain curl works too:
 
 ```sh
-curl -X POST --data-binary @examples/semantic-model.yaml http://localhost:8080/api/v1/import/ossie
+go run ./cmd/ochakai create models/sales-analytics -f examples/semantic-model.md
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
 
@@ -193,6 +194,7 @@ over time, run them as canaries from your CI:
 
 | Type | What it holds |
 |---|---|
+| `models` | Apache Ossie semantic model, spec verbatim — what `compile` reads |
 | `metrics` | Semantic metric definition (Apache Ossie), synonyms |
 | `queries` | Golden query: natural-language question + verified SQL |
 | `insights` | How to read a metric: baselines, seasonality, caveats, thresholds |

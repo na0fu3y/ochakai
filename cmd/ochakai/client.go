@@ -46,8 +46,6 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"whoami":    cmdWhoami,
 	"ui":        cmdUI,
 
-	"import-ossie": cmdImportOssie,
-
 	"completion": cmdCompletion,
 }
 
@@ -756,7 +754,7 @@ func cmdCompile(ctx context.Context, args []string) error {
 	fs.Var(&dims, "dimension", "group-by column as dataset.field (repeatable)")
 	fs.Var(&filters, "filter", `filter as "dataset.field op value"; op: = != > >= < <= in not_in (in/not_in take comma-separated values) (repeatable)`)
 	grain := fs.String("grain", "", "time grain as dataset.field:day|week|month|quarter|year")
-	model := fs.String("model", "", "semantic model name (default: resolved from the first metric)")
+	model := fs.String("model", "", "models entry id, e.g. models/sales (default: resolved from the first metric)")
 	limit := fs.Int("limit", 0, "LIMIT clause")
 	asJSON := fs.Bool("json", false, "print the full JSON response")
 	pos, err := parseArgs(fs, args)
@@ -916,49 +914,6 @@ func cmdImport(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped)\n",
 		created+updated+unchanged, created, updated, unchanged, len(atts), len(skipped))
-	return nil
-}
-
-func cmdImportOssie(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"Usage: ochakai import-ossie [flags] <semantic-model.yaml | ->\n\nImport an Apache Ossie semantic model. Each model is stored for\n`compile`, and metrics/table knowledge entries are derived so the\ndefinitions are searchable. Re-import refreshes definitions without\nclobbering human-curated status, tags, and bodies.",
-		"  ochakai import-ossie examples/semantic-model.yaml\n")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	var src []byte
-	if pos[0] == "-" {
-		src, err = io.ReadAll(os.Stdin)
-	} else {
-		src, err = os.ReadFile(pos[0])
-	}
-	if err != nil {
-		return err
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	report, err := c.ImportOssie(ctx, src)
-	if err != nil {
-		return err
-	}
-	for _, uri := range report.Created {
-		fmt.Println("created", uri)
-	}
-	for _, uri := range report.Updated {
-		fmt.Println("updated", uri)
-	}
-	for _, uri := range report.Unchanged {
-		fmt.Println("unchanged", uri)
-	}
-	fmt.Printf("imported %d models (%d entries created, %d updated, %d unchanged)\n",
-		len(report.Models), len(report.Created), len(report.Updated), len(report.Unchanged))
 	return nil
 }
 

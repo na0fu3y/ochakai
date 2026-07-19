@@ -154,14 +154,16 @@ func TestCompileIntegration(t *testing.T) {
 			"name": metricName, "expression": "SUM(orders.amount)",
 		}},
 	}
-	if err := svc.Store.UpsertSemanticModel(ctx, modelName, spec); err != nil {
-		t.Fatal(err)
-	}
+	modelID := "models/" + modelName
 	for _, k := range []*domain.Knowledge{
-		// The metric entry sits at the conventional "metrics/<name>" path,
-		// where Compile resolves semantic-model metrics by name.
+		// The model is a knowledge entry with the spec in attrs.spec
+		// (design doc 0018); the metric entry sits at the conventional
+		// "metrics/<name>" path, where Compile resolves semantic-model
+		// metrics by name, and names its models entry via attrs.model.
+		{Type: domain.TypeModels, ID: modelID, Title: modelName,
+			Attrs: map[string]any{"spec": spec}},
 		{Type: domain.TypeMetrics, ID: "metrics/" + metricName, Title: "compile-test revenue",
-			Attrs: map[string]any{"model": modelName}},
+			Attrs: map[string]any{"model": modelID}},
 		{Type: domain.TypeQueries, ID: goldenID, Title: metricName + " by month",
 			Status: domain.StatusVerified},
 	} {
@@ -178,6 +180,9 @@ func TestCompileIntegration(t *testing.T) {
 	if !strings.Contains(res.SQL, "SUM(orders.total_price)") {
 		t.Errorf("compiled SQL wrong:\n%s", res.SQL)
 	}
+	if res.Model != modelID || res.ModelStatus != domain.StatusDraft {
+		t.Errorf("model provenance = %q/%q, want %q/draft", res.Model, res.ModelStatus, modelID)
+	}
 	if len(res.VerifiedQueries) == 0 || res.VerifiedQueries[0].ID != goldenID {
 		t.Errorf("verified golden query not surfaced: %+v", res.VerifiedQueries)
 	}
@@ -190,8 +195,19 @@ func TestCompileIntegration(t *testing.T) {
 	if _, err := svc.Compile(ctx, CompileRequest{Model: id + "-missing", Request: compiler.Request{Metrics: []string{metricName}}}); !errors.As(err, &cErr) {
 		t.Errorf("unknown model: want compiler.Error, got %v", err)
 	}
+	if _, err := svc.Compile(ctx, CompileRequest{Model: goldenID, Request: compiler.Request{Metrics: []string{metricName}}}); !errors.As(err, &cErr) {
+		t.Errorf("non-model entry as model: want compiler.Error, got %v", err)
+	}
 	if _, err := svc.Compile(ctx, CompileRequest{}); !errors.As(err, &cErr) {
 		t.Errorf("no metrics: want compiler.Error, got %v", err)
+	}
+
+	// A broken model is rejected when written, not at compile time.
+	var invErr *InvalidInputError
+	if _, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeModels,
+		ID: modelID + "-broken", Title: "broken",
+		Attrs: map[string]any{"spec": map[string]any{"datasets": []any{}}}}, actor); !errors.As(err, &invErr) {
+		t.Errorf("broken model: want invalid input error, got %v", err)
 	}
 }
 

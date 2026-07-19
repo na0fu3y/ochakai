@@ -52,7 +52,6 @@ _ochakai() {
     'compile:compile metrics into BigQuery SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
-    'import-ossie:import an Apache Ossie semantic model'
     'use:pick the server for later commands'
     'whoami:print target server, identity, and reachability'
     'ui:serve the web UI locally, acting as you'
@@ -69,7 +68,7 @@ _ochakai() {
   case $words[2] in
     search)
       _arguments \
-        '*--type[filter by type]:type:(metrics queries insights terms datasets tables references)' \
+        '*--type[filter by type]:type:(models metrics queries insights terms datasets tables references)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--sort[list instead of searching: by verification age or by demand]:sort:(verified_at usage)' \
@@ -79,7 +78,7 @@ _ochakai() {
       ;;
     context)
       _arguments \
-        '*--type[filter by type]:type:(metrics queries insights terms datasets tables references)' \
+        '*--type[filter by type]:type:(models metrics queries insights terms datasets tables references)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--limit[max full entries]:limit:' \
@@ -118,7 +117,7 @@ _ochakai() {
         '*--dimension[group-by column as dataset.field]:dimension:' \
         '*--filter[filter as "dataset.field op value"]:filter:' \
         '--grain[time grain as dataset.field\:grain]:grain:' \
-        '--model[semantic model name]:model:' \
+        '--model[models entry id]:model:' \
         '--limit[LIMIT clause]:limit:' \
         '--json[print the full JSON response]' \
         '--url[server URL]:url:'
@@ -143,9 +142,6 @@ _ochakai() {
     completion)
       _arguments '1:shell:(zsh bash fish)'
       ;;
-    import-ossie)
-      _arguments '--url[server URL]:url:' '1:file:_files'
-      ;;
   esac
 }
 # Sourced: register with compdef. Autoloaded from fpath: this file runs
@@ -165,12 +161,12 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie use whoami ui completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update delete attach detach usage report revisions backlinks compile export import use whoami ui completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
   case $prev in
-    --type|-type) COMPREPLY=($(compgen -W "metrics queries insights terms datasets tables references" -- "$cur")); return ;;
+    --type|-type) COMPREPLY=($(compgen -W "models metrics queries insights terms datasets tables references" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
     --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
@@ -195,7 +191,6 @@ _ochakai() {
     compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
     export)        opts="--url" ;;
     import)        opts="--dry-run --keep-root --url" ;;
-    import-ossie)  opts="--url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
     use)
@@ -237,7 +232,6 @@ complete -c ochakai -n __fish_use_subcommand -a backlinks -d 'list entries whose
 complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into BigQuery SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
-complete -c ochakai -n __fish_use_subcommand -a import-ossie -d 'import an Apache Ossie semantic model'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
 complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
 complete -c ochakai -n __fish_use_subcommand -a ui -d 'serve the web UI locally, acting as you'
@@ -246,18 +240,18 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete attach detach usage report revisions backlinks compile export import import-ossie whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete attach detach usage report revisions backlinks compile export import whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
-complete -c ochakai -n '__fish_seen_subcommand_from import import-ossie' -F
+complete -c ochakai -n '__fish_seen_subcommand_from import' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update attach usage report revisions backlinks compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'metrics queries insights terms datasets tables references' -d 'filter by type'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a 'models metrics queries insights terms datasets tables references' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage' -d 'list instead of searching: by verification age or by demand'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'

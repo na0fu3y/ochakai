@@ -477,32 +477,6 @@ func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []flo
 	return err
 }
 
-func (s *Store) UpsertSemanticModel(ctx context.Context, name string, spec map[string]any) error {
-	specJSON, err := json.Marshal(spec)
-	if err != nil {
-		return err
-	}
-	_, err = s.pool.Exec(ctx, `INSERT INTO semantic_model (name, spec, updated_at) VALUES ($1, $2, now())
-		ON CONFLICT (name) DO UPDATE SET spec = $2, updated_at = now()`, name, specJSON)
-	return err
-}
-
-func (s *Store) GetSemanticModel(ctx context.Context, name string) (map[string]any, error) {
-	var spec []byte
-	err := s.pool.QueryRow(ctx, `SELECT spec FROM semantic_model WHERE name = $1`, name).Scan(&spec)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(spec, &m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
