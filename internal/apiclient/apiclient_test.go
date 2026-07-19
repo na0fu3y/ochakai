@@ -384,4 +384,3 @@ func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 		t.Errorf("usage = %+v", u)
 	}
 }
-
