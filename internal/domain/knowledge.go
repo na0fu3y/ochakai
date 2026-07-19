@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Type is the kind of a knowledge entry. Any path-segment slug is a valid
@@ -45,8 +46,11 @@ func BuiltinType(t Type) bool {
 	return false
 }
 
-// ValidType reports whether t can be a knowledge type: one path segment.
-func ValidType(t Type) bool { return segmentRe.MatchString(string(t)) }
+// ValidType reports whether t can be a knowledge type: one slug segment.
+// Types stay slugs even though ID segments are freer (design doc 0019):
+// they are ochakai vocabulary — spoken in filters, frontmatter, and tool
+// arguments — not file paths.
+func ValidType(t Type) bool { return typeRe.MatchString(string(t)) }
 
 // Status is the verification status of a knowledge entry. deprecated means
 // "was correct, no longer recommended"; rejected means "was never accepted"
@@ -196,13 +200,30 @@ type Revision struct {
 	Snapshot  Knowledge `json:"snapshot"`
 }
 
-// segmentRe matches one path segment. Lowercase is recommended, but case,
-// dots, and underscores are accepted so foreign OKF bundles (table names
-// like GA_sessions_2017) import without renaming. The mandatory leading
-// alphanumeric rules out "." and ".." — IDs stay safe as file paths.
-var segmentRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
+// typeRe matches a type slug: leading alphanumeric, then slug characters.
+// Case, dots, and underscores are accepted so foreign OKF type spellings
+// slugify without loss.
+var typeRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
-// ValidID reports whether id is a valid knowledge ID: slug segments
+// validSegment reports whether s can be one ID path segment. OKF
+// prescribes no character set — a concept ID is a file path, nothing
+// more — so only path safety constrains it (design doc 0019): non-empty
+// valid UTF-8, at most 128 bytes, no control characters, and not
+// starting with "." (which rules out ".", "..", and hidden files, the
+// paths bundle import skips as never-knowledge).
+func validSegment(s string) bool {
+	if s == "" || len(s) > 128 || strings.HasPrefix(s, ".") || !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || r == '/' {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidID reports whether id is a valid knowledge ID: path segments
 // separated by "/", following OKF's "concept ID = file path" rule (the
 // bundle path is "<id>.md", design doc 0017). The final segment must not
 // be "index" or "log" — those filenames belong to OKF's reserved
@@ -213,7 +234,7 @@ func ValidID(id string) bool {
 	}
 	segs := strings.Split(id, "/")
 	for _, s := range segs {
-		if !segmentRe.MatchString(s) {
+		if !validSegment(s) {
 			return false
 		}
 	}
@@ -222,7 +243,7 @@ func ValidID(id string) bool {
 }
 
 // ValidIDPrefix reports whether prefix can lead a knowledge ID: empty
-// (the root) or slug segments separated by "/". Unlike ValidID, a final
+// (the root) or path segments separated by "/". Unlike ValidID, a final
 // "index" segment is fine — it only names a directory here, and the
 // index.md reservation is about a document's own filename.
 func ValidIDPrefix(prefix string) bool {
@@ -233,7 +254,7 @@ func ValidIDPrefix(prefix string) bool {
 		return false
 	}
 	for _, s := range strings.Split(prefix, "/") {
-		if !segmentRe.MatchString(s) {
+		if !validSegment(s) {
 			return false
 		}
 	}

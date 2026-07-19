@@ -135,8 +135,9 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 }
 
 // TestCompileIntegration covers the compile path the unit tests cannot:
-// model resolution from the metric entry's attrs.model, and surfacing
-// verified golden queries next to the SQL.
+// model resolution from the models entries themselves (the one whose
+// spec defines the metric, design doc 0019), and surfacing verified
+// golden queries next to the SQL.
 func TestCompileIntegration(t *testing.T) {
 	ctx := context.Background()
 	svc := newIntegrationService(t, ctx)
@@ -155,14 +156,16 @@ func TestCompileIntegration(t *testing.T) {
 		}},
 	}
 	modelID := "models/" + modelName
+	metricEntryID := "metrics/" + metricName
 	for _, k := range []*domain.Knowledge{
 		// The model is a knowledge entry with the spec in attrs.spec
-		// (design doc 0018); the metric entry sits at the conventional
-		// "metrics/<name>" path, where Compile resolves semantic-model
-		// metrics by name, and names its models entry via attrs.model.
+		// (design doc 0018); Compile resolves the model by scanning models
+		// entries for the one defining the metric (design doc 0019). The
+		// metric entry names its model via attrs.model, which attributes
+		// compile usage to it.
 		{Type: domain.TypeModels, ID: modelID, Title: modelName,
 			Attrs: map[string]any{"spec": spec}},
-		{Type: domain.TypeMetrics, ID: "metrics/" + metricName, Title: "compile-test revenue",
+		{Type: domain.TypeMetrics, ID: metricEntryID, Title: "compile-test revenue",
 			Attrs: map[string]any{"model": modelID}},
 		{Type: domain.TypeQueries, ID: goldenID, Title: metricName + " by month",
 			Status: domain.StatusVerified},
@@ -172,7 +175,7 @@ func TestCompileIntegration(t *testing.T) {
 		}
 	}
 
-	// Model omitted: resolved from the metric entry's attrs.model.
+	// Model omitted: resolved from the models entry defining the metric.
 	res, err := svc.Compile(ctx, CompileRequest{Request: compiler.Request{Metrics: []string{metricName}}})
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
@@ -185,6 +188,43 @@ func TestCompileIntegration(t *testing.T) {
 	}
 	if len(res.VerifiedQueries) == 0 || res.VerifiedQueries[0].ID != goldenID {
 		t.Errorf("verified golden query not surfaced: %+v", res.VerifiedQueries)
+	}
+
+	// Compile usage lands on the model entry and on the metric entry
+	// naming it via attrs.model — and only on entries that exist.
+	for _, target := range []string{modelID, metricEntryID} {
+		u, err := svc.Usage(ctx, target)
+		if err != nil {
+			t.Fatalf("Usage(%s): %v", target, err)
+		}
+		if u.Compiles < 1 {
+			t.Errorf("compiles(%s) = %d, want >= 1", target, u.Compiles)
+		}
+	}
+
+	// A second models entry defining the same metric name makes the
+	// implicit resolution ambiguous; the explicit model still compiles.
+	spec2 := map[string]any{
+		"name": modelName + "_b",
+		"datasets": []any{map[string]any{
+			"name": "orders", "source": "shop.orders_b",
+			"fields": []any{map[string]any{"name": "amount", "expression": "total_price"}},
+		}},
+		"metrics": []any{map[string]any{
+			"name": metricName, "expression": "SUM(orders.amount)",
+		}},
+	}
+	if _, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeModels,
+		ID: modelID + "-b", Title: modelName + "_b",
+		Attrs: map[string]any{"spec": spec2}}, actor); err != nil {
+		t.Fatal(err)
+	}
+	var ambErr *compiler.Error
+	if _, err := svc.Compile(ctx, CompileRequest{Request: compiler.Request{Metrics: []string{metricName}}}); !errors.As(err, &ambErr) || !strings.Contains(ambErr.Reason, modelID+"-b") {
+		t.Errorf("ambiguous model: want compiler.Error naming the candidates, got %v", err)
+	}
+	if _, err := svc.Compile(ctx, CompileRequest{Model: modelID, Request: compiler.Request{Metrics: []string{metricName}}}); err != nil {
+		t.Errorf("explicit model must disambiguate: %v", err)
 	}
 
 	// Unresolvable model and missing metrics are compile refusals, not crashes.

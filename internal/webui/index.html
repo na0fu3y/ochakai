@@ -326,7 +326,9 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-const TYPE_ICONS = { metric: '📊', query: '🧾', insight: '💡', term: '📖', table: '🗃️' };
+// Keys mirror domain.Types (the plural built-in slugs, design doc 0016),
+// in the same display order.
+const TYPE_ICONS = { models: '🧩', metrics: '📊', queries: '🧾', insights: '💡', terms: '📖', datasets: '🗂️', tables: '🗃️', references: '🔖' };
 const icon = t => TYPE_ICONS[t] || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
 const STATUSES = ['draft', 'verified', 'deprecated', 'rejected'];
@@ -697,7 +699,7 @@ function viewBrowse() {
   view.innerHTML = `
   <section class="browse">
     <p class="provenance" style="margin-top:0">Knowledge as a folder tree — an entry's id is its path
-    (<code>query/sales/monthly-revenue</code>, <code>ga4/tables/orders</code>), and its type shows as a badge.
+    (<code>queries/sales/monthly-revenue</code>, <code>ga4/tables/orders</code>), and its type shows as a badge.
     Rejected entries are hidden, as in search.</p>
     <div id="tree"><div class="empty">…</div></div>
   </section>`;
@@ -799,16 +801,16 @@ async function viewDetail(id) {
   const atts = entry.attachments || [];
   // Metrics are the compilable knowledge, so their detail view gets a
   // Compile tab instead of a site-wide compile page. The compiler matches
-  // metrics by their semantic-model name — the entry title, verbatim, for
-  // derived metrics (the ID is a slug of it) — and the model (a models
-  // entry id, design doc 0018) is passed explicitly from attrs.model
-  // since name-based resolution assumes the name and the entry ID
-  // coincide.
+  // metrics by their semantic-model name — conventionally the entry id's
+  // last segment (design doc 0018 §4.4) — and the model (a models entry
+  // id) is seeded from attrs.model when present; left blank, the server
+  // resolves it from the models entry defining the metric (design doc
+  // 0019).
   const compilable = entry.type === 'metrics';
   const cstate = compilable ? {
-    metrics: entry.title,
+    metrics: entry.id.split('/').pop(),
     model: typeof (entry.attrs || {}).model === 'string' ? entry.attrs.model : '',
-    dimensions: '', filters: [], tgField: '', tgGrain: '', dialect: 'bigquery', limit: '',
+    dimensions: '', filters: [], tgField: '', tgGrain: '', limit: '',
   } : null;
 
   view.innerHTML = `
@@ -1191,7 +1193,7 @@ function wireReviewActions(container) {
 
 async function viewEditor(id) {
   const editing = id !== null;
-  let entry = { type: 'insight', id: '', title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
+  let entry = { type: 'insights', id: '', title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
   if (editing) {
     try {
       entry = await api('/api/v1/knowledge/' + idPath(id));
@@ -1211,7 +1213,7 @@ async function viewEditor(id) {
           <label class="top" for="e-type">Type</label>
           <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" required>
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
-          <div class="hint">What the entry is: metric, query, insight, term, table — or any slug of your own.</div>
+          <div class="hint">What the entry is: metrics, queries, insights, terms, datasets, tables, references — or any slug of your own.</div>
         </div>
         <div class="field">
           <label class="top" for="e-id">ID</label>
@@ -1254,8 +1256,8 @@ async function viewEditor(id) {
       </div>
       <div class="field">
         <label class="top" for="e-links">Links</label>
-        <textarea id="e-links" rows="3" class="mono" placeholder="about metric/revenue">${esc(linksText)}</textarea>
-        <div class="hint">One per line: <code>rel type/id</code>.</div>
+        <textarea id="e-links" rows="3" class="mono" placeholder="about metrics/revenue">${esc(linksText)}</textarea>
+        <div class="hint">One per line: <code>rel target-id</code>, e.g. <code>about metrics/revenue</code>.</div>
       </div>
       <div id="editor-error"></div>
       <p>
@@ -1327,7 +1329,7 @@ function compileFormHTML(c) {
         </div>
         <div class="field">
           <label class="top" for="c-model">Model</label>
-          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="models/… (optional — resolved via the metric’s attrs.model)">
+          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="models/… (optional — resolved from the models entry defining the metric)">
         </div>
       </div>
       <div class="field">
@@ -1352,11 +1354,8 @@ function compileFormHTML(c) {
           </div>
         </div>
         <div class="field">
-          <label class="top" for="c-dialect">Dialect / limit</label>
-          <div style="display:flex;gap:.5rem">
-            <select id="c-dialect">${['bigquery', 'ansi'].map(d => `<option ${d === c.dialect ? 'selected' : ''}>${d}</option>`).join('')}</select>
-            <input type="number" id="c-limit" value="${esc(c.limit)}" placeholder="limit" min="1" style="width:7rem">
-          </div>
+          <label class="top" for="c-limit">Limit</label>
+          <input type="number" id="c-limit" value="${esc(c.limit)}" placeholder="limit" min="1" style="width:7rem">
         </div>
       </div>
       <p><button class="btn primary" type="submit">Compile</button></p>
@@ -1388,7 +1387,7 @@ function wireCompileForm(c) {
   const persist = () => {
     c.metrics = $('#c-metrics').value; c.model = $('#c-model').value; c.dimensions = $('#c-dims').value;
     c.tgField = $('#c-tg-field').value; c.tgGrain = $('#c-tg-grain').value;
-    c.dialect = $('#c-dialect').value; c.limit = $('#c-limit').value;
+    c.limit = $('#c-limit').value;
   };
   $('#compile-form').addEventListener('input', persist);
 
@@ -1397,7 +1396,6 @@ function wireCompileForm(c) {
     persist();
     const body = {
       metrics: c.metrics.split(',').map(s => s.trim()).filter(Boolean),
-      dialect: c.dialect,
     };
     if (c.model.trim()) body.model = c.model.trim();
     const dims = c.dimensions.split(',').map(s => s.trim()).filter(Boolean);
@@ -1420,7 +1418,7 @@ function wireCompileForm(c) {
       const golden = (r.verified_queries || []).map(hitCard).join('');
       out.innerHTML = `
         <div class="toolbar" style="margin-top:1.4rem">
-          <strong>Compiled SQL</strong> <span class="badge">${esc(r.dialect || c.dialect)}</span> ${datasets}
+          <strong>Compiled SQL</strong> <span class="badge">BigQuery</span> ${datasets}
           <span class="grow"></span>
           <button class="btn small" id="copy-sql">Copy</button>
         </div>

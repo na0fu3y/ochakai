@@ -48,6 +48,13 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 				}
 			}
 		}
+		// Presence checks cannot catch a removed flag lingering in a
+		// script, so removed surface is pinned by name.
+		for _, gone := range []string{"--keep-root", "--dialect", "import-ossie"} {
+			if strings.Contains(script, gone) {
+				t.Errorf("%s script still offers removed flag/command %q", shell, gone)
+			}
+		}
 	}
 }
 

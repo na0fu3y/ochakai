@@ -542,10 +542,13 @@ components:
           type: string
           description: >
             The entry's bundle path — where it lives (the type says what
-            it is): slug segments separated by "/", the OKF concept ID
-            (design doc 0016). The final segment must not be "index" or
-            "log" (OKF-reserved filenames).
-          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}(/[a-zA-Z0-9][a-zA-Z0-9._-]{0,127})*$"
+            it is): path segments separated by "/", the OKF concept ID
+            (design docs 0016, 0019). OKF prescribes no character set,
+            so only path safety constrains segments: no leading ".",
+            no control characters, at most 128 bytes each (512 total).
+            The final segment must not be "index" or "log"
+            (OKF-reserved filenames).
+          pattern: "^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
         title: { type: string }
         description: { type: string }
         resource:
@@ -644,8 +647,10 @@ components:
         model:
           type: string
           description: >
-            Id of a models entry (e.g. models/sales); optional when the
-            first metric's entry names its model in attrs.model.
+            Id of a models entry (e.g. models/sales). Optional: when
+            omitted, the models entry whose spec defines the first
+            metric is used — if several do, the compile is a 422 asking
+            for model (design doc 0019).
         metrics: { type: array, items: { type: string }, minItems: 1 }
         dimensions:
           type: array

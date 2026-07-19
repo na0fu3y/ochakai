@@ -51,10 +51,10 @@ entries. Search it before writing analytics SQL; write learnings back.
 - `ochakai export <dir>` — snapshot the whole knowledge base as markdown;
   `ochakai import <dir>` loads a bundle back (any OKF bundle works).
 
-Types beyond the five above are welcome (any slug works — e.g.
-`runbook/…`), and IDs may be hierarchical (`queries/sales/monthly-revenue`)
-to group related knowledge.
+Types beyond these are welcome (any slug works — e.g. `runbook/…`), and
+IDs may be hierarchical (`queries/sales/monthly-revenue`) to group
+related knowledge.
 
 When a query you compiled or wrote turns out to be correct and useful,
-save it: `type: query` with `attrs.question` (the natural-language
+save it: `type: queries` with `attrs.question` (the natural-language
 question) and `attrs.sql`. A human can promote it to `verified` later.
