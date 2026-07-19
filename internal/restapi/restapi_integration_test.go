@@ -248,6 +248,20 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || string(body) != string(png) {
 		t.Errorf("stale conditional GET = %d with %d bytes, want 200 with the file", resp.StatusCode, len(body))
 	}
+
+	// Soft-delete the entry so its attachment row does not stay live in
+	// the shared test database: other packages' tests scan all live
+	// attachments (ListAllAttachments) and resolve bytes from their own
+	// blob stores, while this test's bytes live only in this process.
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/reading", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("cleanup delete status = %d", resp.StatusCode)
+	}
 }
 
 // memBlobStore is a minimal in-memory blob.Store for the attachment
