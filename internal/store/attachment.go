@@ -142,6 +142,59 @@ func (s *Store) ListAttachments(ctx context.Context, typ domain.Type, id string)
 	return pgx.CollectRows(rows, scanAttachment)
 }
 
+// ListAttachmentsBatch returns attachment metadata for a set of entries
+// in one query, keyed by "<type>/<id>". Entries without attachments have
+// no key. The callers pass entries they already know are live (search
+// hits, backlinks), so no liveness join is needed.
+func (s *Store) ListAttachmentsBatch(ctx context.Context, types []domain.Type, ids []string) (map[string][]domain.Attachment, error) {
+	ts := make([]string, len(types))
+	for i, t := range types {
+		ts[i] = string(t)
+	}
+	rows, err := s.pool.Query(ctx, `SELECT a.knowledge_type, a.knowledge_id, `+attachmentCols+`
+		FROM attachment a
+		JOIN blob b ON b.sha256 = a.sha256
+		JOIN unnest($1::text[], $2::text[]) AS want(typ, id)
+		  ON a.knowledge_type = want.typ AND a.knowledge_id = want.id
+		ORDER BY a.knowledge_type, a.knowledge_id, a.name`, ts, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]domain.Attachment{}
+	for rows.Next() {
+		var typ, id string
+		var a domain.Attachment
+		if err := rows.Scan(&typ, &id, &a.Name, &a.MediaType, &a.Size, &a.SHA256, &a.OKFPath,
+			&a.CreatedBy.Kind, &a.CreatedBy.Name, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out[typ+"/"+id] = append(out[typ+"/"+id], a)
+	}
+	return out, rows.Err()
+}
+
+// GetAttachmentMeta returns one attachment's metadata without touching
+// the blob store — enough to answer a conditional GET (the ETag is the
+// content hash) before deciding whether the bytes are needed.
+func (s *Store) GetAttachmentMeta(ctx context.Context, typ domain.Type, id, name string) (*domain.Attachment, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
+		FROM attachment a
+		JOIN blob b ON b.sha256 = a.sha256
+		JOIN knowledge k ON k.type = a.knowledge_type AND k.id = a.knowledge_id AND k.deleted_at IS NULL
+		WHERE a.knowledge_type=$1 AND a.knowledge_id=$2 AND a.name=$3`, typ, id, name)
+	if err != nil {
+		return nil, err
+	}
+	att, err := pgx.CollectExactlyOneRow(rows, scanAttachment)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &att, nil
+}
+
 // DeleteAttachment removes the entry→blob mapping. The blob itself stays:
 // revisions still name its hash, and content-addressed rows are cheap.
 func (s *Store) DeleteAttachment(ctx context.Context, typ domain.Type, id, name string, actor domain.Actor) error {

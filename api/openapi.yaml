@@ -463,14 +463,19 @@ paths:
       summary: Fetch attachment bytes
       description: >
         Returns the file bytes with the stored (sniffed) media type; the
-        ETag is the content's SHA-256. Fetching records a usage event
-        against the owning entry.
+        ETag is the content's SHA-256, and a matching If-None-Match gets
+        a 304 answered from metadata alone (no blob read, so repeat
+        renders in a UI cost nothing). Cache-Control is private,
+        no-cache: names are mutable (replace-by-name), so clients
+        revalidate every time. Fetching the bytes records a usage event
+        against the owning entry; a 304 revalidation does not.
       responses:
         "200":
           description: The attachment bytes.
           content:
             "*/*":
               schema: { type: string, format: binary }
+        "304": { description: Not modified (If-None-Match matched the content hash). }
         "404": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteAttachment
@@ -664,6 +669,11 @@ components:
         failed: { type: integer, description: Outcome reports saying the entry led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
     SearchHit:
+      description: >
+        One search or listing result. REST hits carry attachment
+        metadata (filled in batch) so UIs can render image previews
+        without a fetch per entry; MCP search results omit it to keep
+        agent context lean (design doc 0015).
       allOf:
         - $ref: "#/components/schemas/Knowledge"
         - type: object

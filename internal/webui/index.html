@@ -5,11 +5,12 @@
      deployed — both proxy /api/v1 to ochakai; design doc 0006) and it
      covers the human-facing API surface — search, folder browsing,
      entry details with usage, revision history, backlinks, attachments,
-     create/edit with the draft → verified workflow, the draft review
-     queue (sort=usage), SQL compilation (a Compile tab on metric
-     entries), Ossie model import (on the new-entry page), and
-     OKF export. (/api/v1/context is an agent surface — see
-     api/openapi.yaml.) A starting point for building your own UI. -->
+     create/edit with the draft → verified workflow (behind Explore's
+     “＋ New entry” button), the draft review queue (sort=usage), SQL
+     compilation (a Compile tab on metric entries), Ossie model import
+     (on the new-entry page), and OKF export. (/api/v1/context is an
+     agent surface — see api/openapi.yaml.) A starting point for
+     building your own UI. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -159,6 +160,12 @@
     padding: .85rem 1.1rem; margin: 0 0 .7rem; box-shadow: var(--shadow);
   }
   .card:hover { box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .card[data-href] { cursor: pointer; }
+  .card .thumbs { display: flex; gap: .5rem; margin-top: .55rem; flex-wrap: wrap; }
+  .card .thumbs img {
+    height: 4.5rem; max-width: 11rem; object-fit: cover;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
+  }
   .card .head { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
   .card .head a.title { font-weight: 600; font-size: 1.02rem; color: var(--text); }
   .card .head a.title:hover { color: var(--accent-strong); }
@@ -299,7 +306,6 @@
     <a href="#/" data-route="explore">Explore</a>
     <a href="#/browse" data-route="browse">Browse</a>
     <a href="#/review" data-route="review">Review</a>
-    <a href="#/new" data-route="new">New entry</a>
   </nav>
   <span class="spacer"></span>
   <a class="btn small" id="export-link" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
@@ -474,9 +480,12 @@ function route() {
     mark('explore');
     viewDetail(decodeURIComponent(rest[0]), rest.slice(1).map(decodeURIComponent).join('/'));
   } else if (head === 'edit' && rest.length >= 2) {
+    mark('explore');
     viewEditor(decodeURIComponent(rest[0]), rest.slice(1).map(decodeURIComponent).join('/'));
   } else if (head === 'new') {
-    mark('new');
+    // New entry lives behind Explore's “＋ New entry” button, not a
+    // top-level tab — creating knowledge is part of exploring it.
+    mark('explore');
     viewEditor(null, null);
   } else if (head === 'browse') {
     mark('browse');
@@ -490,6 +499,18 @@ function route() {
   }
 }
 window.addEventListener('hashchange', route);
+
+// Result cards navigate on a click anywhere in them, not just the title.
+// A click on a control (link, button, form field) keeps its own behavior,
+// a click that selected text (copying the SQL or the ochakai:// URI) is
+// not a navigation, and the title stays a real link for keyboard tabbing
+// and open-in-new-tab.
+view.addEventListener('click', e => {
+  const card = e.target.closest('.card[data-href]');
+  if (!card || e.target.closest('a, button, input, textarea, select, label, summary')) return;
+  if (getSelection().toString()) return;
+  location.hash = card.dataset.href;
+});
 
 /* ============================== explore ============================== */
 
@@ -535,13 +556,14 @@ function viewExplore() {
       </details>
     </aside>
     <section>
-      ${explore.staleFeed
-        ? `<div class="feed-banner">Verification-age feed — oldest verified first, the canary list for
-           re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
-        : `<div class="searchbox">
-             <input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
-                    value="${esc(explore.q)}" autocomplete="off">
-           </div>`}
+      <div class="searchbox">
+        ${explore.staleFeed
+          ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Verification-age feed — oldest verified first,
+             the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
+          : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
+                    value="${esc(explore.q)}" autocomplete="off">`}
+        <a class="btn" href="#/new" title="Create a knowledge entry, or import an Ossie semantic model">＋ New entry</a>
+      </div>
       <div id="results"><div class="empty">…</div></div>
     </section>
   </div>`;
@@ -627,6 +649,18 @@ async function runSearch() {
   }
 }
 
+// Image attachments as small previews on a result card. The metadata
+// rides along on REST hits; the bytes are separate GETs the browser
+// caches (ETag revalidation — repeat renders cost a 304, not a
+// re-download).
+function cardThumbs(h) {
+  const imgs = (h.attachments || []).filter(a => (a.media_type || '').startsWith('image/')).slice(0, 4);
+  if (!imgs.length) return '';
+  const src = a => baseURL() + '/api/v1/attachments/' + idPath(h.type, h.id) + '/' + encodeURIComponent(a.name);
+  return `<div class="thumbs">${imgs.map(a =>
+    `<img src="${src(a)}" alt="${esc(a.name)}" title="${esc(a.name)}" loading="lazy">`).join('')}</div>`;
+}
+
 function hitCard(h) {
   const tags = (h.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const who = actorStr(h.status === 'verified' ? h.verified_by || h.created_by : h.created_by);
@@ -636,7 +670,7 @@ function hitCard(h) {
     h.verified_at ? 'verified ' + esc(fmtDate(h.verified_at)) : (h.updated_at ? 'updated ' + esc(fmtDate(h.updated_at)) : ''),
   ].filter(Boolean).join(' · ');
   const sql = h.attrs && h.attrs.sql ? `<pre>${esc(h.attrs.sql)}</pre>` : '';
-  return `<article class="card">
+  return `<article class="card" data-href="${entryHash(h)}">
     <div class="head">
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}">${esc(h.title)}</a>
@@ -646,6 +680,7 @@ function hitCard(h) {
     <div class="meta">${meta}</div>
     ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
     ${sql}
+    ${cardThumbs(h)}
   </article>`;
 }
 
@@ -1110,7 +1145,7 @@ function reviewCard(h) {
     usageBits,
     outcomeBits,
   ].filter(Boolean).join(' · ');
-  return `<article class="card" data-type="${esc(h.type)}" data-id="${esc(h.id)}">
+  return `<article class="card" data-type="${esc(h.type)}" data-id="${esc(h.id)}" data-href="${entryHash(h)}">
     <div class="head">
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}">${esc(h.title)}</a>
@@ -1124,6 +1159,7 @@ function reviewCard(h) {
     </div>
     <div class="meta">${meta}</div>
     ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
+    ${cardThumbs(h)}
   </article>`;
 }
 
