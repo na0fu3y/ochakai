@@ -333,7 +333,6 @@
     <a href="#/review" data-route="review">Review</a>
   </nav>
   <span class="spacer"></span>
-  <a class="btn small" id="export-link" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
 </header>
 <div class="shell">
   <aside class="sidebar">
@@ -852,7 +851,8 @@ function viewHome() {
     </div>
     <p style="color:var(--muted);font-size:.9rem">
       <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
-      <a href="#/new">＋ New entry</a>
+      <a href="#/new">＋ New entry</a> ·
+      <a href="${BASE}/api/v1/export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
     </p>`;
   $('#home-q').addEventListener('keydown', e => {
     if (e.key === 'Enter') { explore.q = e.target.value; location.hash = '#/search'; }
@@ -1531,8 +1531,6 @@ function wireCompileForm(c) {
 }
 
 /* ============================== boot ============================== */
-
-$('#export-link').href = BASE + '/api/v1/export';
 
 // The sidebar disclosure mirrors the filter rail: forced open on wide
 // screens (its summary is hidden there), collapsed by default on mobile.
