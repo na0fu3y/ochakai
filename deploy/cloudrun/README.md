@@ -306,13 +306,14 @@ attachments again; keep the var set from then on.
 
 ## 5. Load a semantic model and connect Claude Code
 
-Import Apache Ossie semantic models through the API. The CLI resolves
-Google ID tokens itself from your gcloud login, so no Cloud SQL proxy
-or authorized network is needed — `$OCHAKAI_URL` was exported when the
-service was deployed above:
+Register a semantic model as a `models` knowledge entry (design doc
+0018) through the API. The CLI resolves Google ID tokens itself from
+your gcloud login, so no Cloud SQL proxy or authorized network is
+needed — `$OCHAKAI_URL` was exported when the service was deployed
+above:
 
 ```sh
-go run github.com/na0fu3y/ochakai/cmd/ochakai@latest import-ossie examples/semantic-model.yaml
+go run github.com/na0fu3y/ochakai/cmd/ochakai@latest create models/sales-analytics -f examples/semantic-model.md
 ```
 
 Connect Claude Code — with the Cloud Run proxy running, no headers, no

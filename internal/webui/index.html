@@ -7,10 +7,9 @@
      entry details with usage, revision history, backlinks, attachments,
      create/edit with the draft → verified workflow (behind Explore's
      “＋ New entry” button), the draft review queue (sort=usage), SQL
-     compilation (a Compile tab on metric entries), Ossie model import
-     (on the new-entry page), and OKF export. (/api/v1/context is an
-     agent surface — see api/openapi.yaml.) A starting point for
-     building your own UI. -->
+     compilation (a Compile tab on metric entries), and OKF export.
+     (/api/v1/context is an agent surface — see api/openapi.yaml.)
+     A starting point for building your own UI. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -563,7 +562,7 @@ function viewExplore() {
              the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
           : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                     value="${esc(explore.q)}" autocomplete="off">`}
-        <a class="btn" href="#/new" title="Create a knowledge entry, or import an Ossie semantic model">＋ New entry</a>
+        <a class="btn" href="#/new" title="Create a knowledge entry">＋ New entry</a>
       </div>
       <div id="results"><div class="empty">…</div></div>
     </section>
@@ -801,10 +800,11 @@ async function viewDetail(id) {
   // Metrics are the compilable knowledge, so their detail view gets a
   // Compile tab instead of a site-wide compile page. The compiler matches
   // metrics by their semantic-model name — the entry title, verbatim, for
-  // imported metrics (the ID is a slug of it) — and the model is passed
-  // explicitly from attrs.model since name-based resolution assumes the
-  // name and the entry ID coincide.
-  const compilable = entry.type === 'metric';
+  // derived metrics (the ID is a slug of it) — and the model (a models
+  // entry id, design doc 0018) is passed explicitly from attrs.model
+  // since name-based resolution assumes the name and the entry ID
+  // coincide.
+  const compilable = entry.type === 'metrics';
   const cstate = compilable ? {
     metrics: entry.title,
     model: typeof (entry.attrs || {}).model === 'string' ? entry.attrs.model : '',
@@ -928,8 +928,8 @@ async function viewDetail(id) {
   };
   if (compilable) {
     tabs.compile = () => `
-      <p class="provenance" style="margin:0 0 1rem">Deterministically compiles this metric from its imported
-      semantic model — ochakai never executes SQL and never guesses. Verified golden queries about the metrics
+      <p class="provenance" style="margin:0 0 1rem">Deterministically compiles this metric from its semantic
+      model (a models entry) — ochakai never executes SQL and never guesses. Verified golden queries about the metrics
       are returned alongside; prefer them when they answer the question.</p>
       ${compileFormHTML(cstate)}`;
   }
@@ -1263,21 +1263,7 @@ async function viewEditor(id) {
         <a class="btn" href="${editing ? '#/k/' + idPath(entry.id) : '#/'}">Cancel</a>
       </p>
     </form>
-    ${editing ? '' : `
-    <div class="section-title" style="margin-top:2.4rem;font-size:1.05rem">Or import a semantic model</div>
-    <p style="color:var(--muted);max-width:46rem;font-size:.92rem">Importing an Apache Ossie semantic model (YAML)
-    creates its metric and table entries; each metric's detail view then offers a Compile tab. Re-import refreshes
-    definitions without clobbering human-curated status, tags, and bodies. OKF bundle import stays with the CLI
-    (<code>ochakai import</code>).</p>
-    <div class="toolbar">
-      <input type="file" id="ossie-file" accept=".yaml,.yml,application/yaml" hidden>
-      <button class="btn small" type="button" id="ossie-choose">Choose model YAML…</button>
-      <span class="provenance" id="ossie-chosen" style="margin:0"></span>
-      <button class="btn small primary" type="button" id="ossie-upload">Import</button>
-    </div>
-    <div id="ossie-result"></div>`}`;
-
-  if (!editing) wireOssieImport();
+    `;
 
   let dirty = false;
   $('#editor').addEventListener('input', () => { dirty = true; });
@@ -1324,34 +1310,6 @@ async function viewEditor(id) {
   });
 }
 
-// Ossie semantic model import (design doc 0013) — offered on the new-entry
-// page, since importing is another way to create knowledge entries.
-function wireOssieImport() {
-  const ossieFile = $('#ossie-file');
-  $('#ossie-choose').addEventListener('click', () => ossieFile.click());
-  ossieFile.addEventListener('change', () => {
-    $('#ossie-chosen').textContent = ossieFile.files[0] ? ossieFile.files[0].name : '';
-  });
-  $('#ossie-upload').addEventListener('click', async () => {
-    const f = ossieFile.files[0];
-    if (!f) { toast('Choose a semantic model YAML first.'); return; }
-    const out = $('#ossie-result');
-    out.innerHTML = '<div class="empty">importing…</div>';
-    try {
-      const r = await api('/api/v1/import/ossie', { method: 'POST', raw: f });
-      const list = (label, uris) => (uris && uris.length)
-        ? `<li>${label}: ${uris.map(u => esc(u)).join(', ')}</li>` : '';
-      out.innerHTML = `
-        <div class="feed-banner" style="margin-top:.8rem">Imported model${(r.models || []).length > 1 ? 's' : ''}
-          <strong>${(r.models || []).map(esc).join(', ')}</strong>.</div>
-        <ul style="color:var(--muted);font-size:.9rem">${list('created', r.created)}${list('updated', r.updated)}${list('unchanged', r.unchanged)}</ul>`;
-      toast('Model imported.');
-    } catch (e) {
-      out.innerHTML = `<div class="error-banner">Import failed: ${esc(e.message)}</div>`;
-    }
-  });
-}
-
 /* ============================== compile ============================== */
 
 // The compile form renders inside the Compile tab of a metric's detail
@@ -1369,7 +1327,7 @@ function compileFormHTML(c) {
         </div>
         <div class="field">
           <label class="top" for="c-model">Model</label>
-          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="(optional — resolved via the metric’s links)">
+          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="models/… (optional — resolved via the metric’s attrs.model)">
         </div>
       </div>
       <div class="field">

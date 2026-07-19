@@ -186,3 +186,149 @@ func TestMigrationLegacyData(t *testing.T) {
 		}
 	}
 }
+
+// TestMigrationSemanticModelEntries verifies 0012 against rows shaped the
+// way a pre-0012 server wrote them: a semantic_model table row, a metric
+// entry whose attrs.model is the bare model name, and a table entry whose
+// defined_in link targets 'model/<name>'. Same scratch-schema technique
+// as TestMigrationLegacyData, on the post-0011 shape.
+func TestMigrationSemanticModelEntries(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA mig12_scratch`,
+		`SET LOCAL search_path TO mig12_scratch`,
+		// The post-0011 shapes, reduced to the columns 0012 touches.
+		`CREATE TABLE knowledge (
+			type text NOT NULL, id text NOT NULL PRIMARY KEY, title text NOT NULL,
+			description text NOT NULL DEFAULT '',
+			status text NOT NULL DEFAULT 'draft', status_note text NOT NULL DEFAULT '',
+			created_by_kind text NOT NULL, created_by_name text NOT NULL,
+			links jsonb NOT NULL DEFAULT '[]', attrs jsonb NOT NULL DEFAULT '{}',
+			created_at timestamptz NOT NULL DEFAULT now(),
+			updated_at timestamptz NOT NULL DEFAULT now())`,
+		`CREATE TABLE knowledge_revision (
+			id text NOT NULL, rev integer NOT NULL, change text NOT NULL,
+			changed_by_kind text NOT NULL, changed_by_name text NOT NULL,
+			snapshot jsonb NOT NULL, changed_at timestamptz NOT NULL DEFAULT now(),
+			PRIMARY KEY (id, rev))`,
+		`CREATE TABLE semantic_model (
+			name text NOT NULL PRIMARY KEY, spec jsonb NOT NULL,
+			updated_at timestamptz NOT NULL DEFAULT now())`,
+		`INSERT INTO semantic_model (name, spec) VALUES
+			('sales', '{"name":"sales","description":"Sales star schema","datasets":[{"name":"orders"}]}')`,
+		`INSERT INTO knowledge (type, id, title, created_by_kind, created_by_name, links, attrs) VALUES
+			('metrics', 'metrics/revenue', '売上', 'human', 't', '[]',
+			 '{"model":"sales","expression":"SUM(orders.amount)"}'),
+			('tables', 'tables/orders', 'orders', 'human', 't',
+			 '[{"rel":"defined_in","target":"model/sales"}]', '{"model":"sales"}')`,
+		`INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, snapshot) VALUES
+			('metrics/revenue', 1, 'create', 'human', 't',
+			 '{"type":"metrics","id":"metrics/revenue","attrs":{"model":"sales"}}'),
+			('tables/orders', 1, 'create', 'human', 't',
+			 '{"type":"tables","id":"tables/orders","links":[{"rel":"defined_in","target":"model/sales"}]}')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0012_semantic_model_entries.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0012: %v", err)
+	}
+
+	// The model row: a draft models entry with the spec verbatim in
+	// attrs.spec and migration provenance.
+	var typ, title, desc, status, createdBy string
+	var attrs []byte
+	if err := tx.QueryRow(ctx,
+		`SELECT type, title, description, status, created_by_name, attrs
+		   FROM knowledge WHERE id = 'models/sales'`).
+		Scan(&typ, &title, &desc, &status, &createdBy, &attrs); err != nil {
+		t.Fatalf("model row not at models/sales: %v", err)
+	}
+	if typ != "models" || title != "sales" || desc != "Sales star schema" ||
+		status != "draft" || createdBy != "migration-0012" {
+		t.Errorf("model row = %s %s %q %s %s", typ, title, desc, status, createdBy)
+	}
+	var am map[string]any
+	if err := json.Unmarshal(attrs, &am); err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := am["spec"].(map[string]any)
+	if spec == nil || spec["name"] != "sales" {
+		t.Errorf("attrs.spec not verbatim: %s", attrs)
+	}
+
+	// Its create revision reads back as a consistent snapshot.
+	var snapshot []byte
+	if err := tx.QueryRow(ctx,
+		`SELECT snapshot FROM knowledge_revision WHERE id = 'models/sales' AND rev = 1`).
+		Scan(&snapshot); err != nil {
+		t.Fatalf("model create revision missing: %v", err)
+	}
+	var snap domain.Knowledge
+	if err := json.Unmarshal(snapshot, &snap); err != nil {
+		t.Fatalf("model snapshot does not read as knowledge: %v\n%s", err, snapshot)
+	}
+	if snap.Type != "models" || snap.ID != "models/sales" || snap.CreatedBy.Name != "migration-0012" {
+		t.Errorf("model snapshot = %s", snapshot)
+	}
+
+	// attrs.model became the models entry id, in the live row and the
+	// revision snapshot.
+	for _, q := range []string{
+		`SELECT attrs->>'model' FROM knowledge WHERE id = 'metrics/revenue'`,
+		`SELECT snapshot->'attrs'->>'model' FROM knowledge_revision WHERE id = 'metrics/revenue'`,
+	} {
+		var model string
+		if err := tx.QueryRow(ctx, q).Scan(&model); err != nil {
+			t.Fatal(err)
+		}
+		if model != "models/sales" {
+			t.Errorf("%s = %q, want models/sales", q, model)
+		}
+	}
+
+	// The defined_in link target gained its real entry, live and in history.
+	for _, q := range []string{
+		`SELECT links->0->>'target' FROM knowledge WHERE id = 'tables/orders'`,
+		`SELECT snapshot->'links'->0->>'target' FROM knowledge_revision WHERE id = 'tables/orders'`,
+	} {
+		var target string
+		if err := tx.QueryRow(ctx, q).Scan(&target); err != nil {
+			t.Fatal(err)
+		}
+		if target != "models/sales" {
+			t.Errorf("%s = %q, want models/sales", q, target)
+		}
+	}
+
+	var gone *string
+	if err := tx.QueryRow(ctx,
+		`SELECT to_regclass('mig12_scratch.semantic_model')::text`).Scan(&gone); err != nil {
+		t.Fatal(err)
+	}
+	if gone != nil {
+		t.Errorf("semantic_model table still exists as %s", *gone)
+	}
+}

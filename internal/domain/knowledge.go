@@ -20,6 +20,7 @@ import (
 type Type string
 
 const (
+	TypeModels     Type = "models"     // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018)
 	TypeMetrics    Type = "metrics"    // semantic metric definition (Apache Ossie)
 	TypeQueries    Type = "queries"    // golden query: question + verified SQL
 	TypeInsights   Type = "insights"   // how to read a metric: baselines, caveats
@@ -30,8 +31,9 @@ const (
 )
 
 // Types lists the recommended (built-in) knowledge types, in display order
-// (datasets before tables: a dataset is the container).
-var Types = []Type{TypeMetrics, TypeQueries, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
+// (containers before their contents: models define metrics, datasets
+// group tables).
+var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
 
 // BuiltinType reports whether t is one of the recommended types.
 func BuiltinType(t Type) bool {

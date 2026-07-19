@@ -152,6 +152,29 @@ func validate(k *domain.Knowledge) error {
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
 		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
 	}
+	if k.Type == domain.TypeModels {
+		return validateModel(k)
+	}
+	return nil
+}
+
+// validateModel is the write-time guard behind type=models entries
+// (design doc 0018 §4.2): compile_sql promises deterministic compilation
+// from a validated document, so a broken model is rejected when written,
+// not when someone asks for SQL. The spec is kept verbatim; only the
+// parts the compiler reads are checked.
+func validateModel(k *domain.Knowledge) error {
+	spec, ok := k.Attrs["spec"].(map[string]any)
+	if !ok {
+		return Invalidf("a models entry carries its Ossie semantic model object in attrs.spec")
+	}
+	m, err := compiler.ModelFromSpec(spec)
+	if err != nil {
+		return Invalidf("invalid semantic model in attrs.spec: %v", err)
+	}
+	if err := m.Validate(); err != nil {
+		return Invalidf("invalid semantic model in attrs.spec: %v", err)
+	}
 	return nil
 }
 
@@ -468,18 +491,24 @@ func embeddingText(k *domain.Knowledge) string {
 
 // --- compile ---
 
-// CompileRequest wraps a compiler request with the semantic model reference.
-// Model may be empty when the first metric's knowledge entry links to its
-// model via attrs.model.
+// CompileRequest wraps a compiler request with the semantic model
+// reference: the id of a models entry (design doc 0018). Model may be
+// empty when the first metric's knowledge entry names its model entry
+// via attrs.model.
 type CompileRequest struct {
 	Model string `json:"model,omitempty"`
 	compiler.Request
 }
 
 // CompileResult carries the SQL plus verified golden queries related to the
-// requested metrics, which clients should prefer when applicable.
+// requested metrics, which clients should prefer when applicable. Model and
+// ModelStatus identify the models entry the SQL came from — compile does
+// not gate on status (design doc 0018 §4.3); the caller judges from
+// provenance.
 type CompileResult struct {
 	compiler.Result
+	Model           string             `json:"model"`
+	ModelStatus     domain.Status      `json:"model_status"`
 	VerifiedQueries []domain.SearchHit `json:"verified_queries,omitempty"`
 }
 
@@ -488,29 +517,34 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 		return nil, &compiler.Error{Reason: "at least one metric is required"}
 	}
 
-	modelName := req.Model
-	if modelName == "" {
+	modelID := req.Model
+	if modelID == "" {
 		// Semantic-model metrics are named, not addressed: their knowledge
 		// entries live at the conventional "metrics/<name>" path (the
-		// migrated layout, design doc 0017 §4.4).
+		// migrated layout, design doc 0017 §4.4) and name their models
+		// entry via attrs.model (design doc 0018 §4.4).
 		k, err := s.Store.Get(ctx, "metrics/"+req.Metrics[0])
 		if err == nil {
 			if m, ok := k.Attrs["model"].(string); ok {
-				modelName = m
+				modelID = m
 			}
 		}
-		if modelName == "" {
-			return nil, &compiler.Error{Reason: fmt.Sprintf("cannot resolve a semantic model for metric %q; pass model explicitly or import one with `ochakai import-ossie`", req.Metrics[0])}
+		if modelID == "" {
+			return nil, &compiler.Error{Reason: fmt.Sprintf("cannot resolve a semantic model for metric %q; pass model (a models entry id) explicitly, or create metrics/%s with attrs.model naming the models entry", req.Metrics[0], req.Metrics[0])}
 		}
 	}
-	spec, err := s.Store.GetSemanticModel(ctx, modelName)
+	entry, err := s.Store.Get(ctx, modelID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return nil, &compiler.Error{Reason: fmt.Sprintf("semantic model %q is not imported", modelName)}
+			return nil, &compiler.Error{Reason: fmt.Sprintf("semantic model entry %q does not exist; create a models entry with the Ossie model object in attrs.spec", modelID)}
 		}
 		return nil, err
 	}
-	model, err := compiler.ModelFromSpec(spec, modelName)
+	spec, _ := entry.Attrs["spec"].(map[string]any)
+	if entry.Type != domain.TypeModels || spec == nil {
+		return nil, &compiler.Error{Reason: fmt.Sprintf("%q is not a semantic model entry (want type models with the Ossie model object in attrs.spec)", modelID)}
+	}
+	model, err := compiler.ModelFromSpec(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -528,10 +562,13 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 		hits = nil
 	}
 
-	metricIDs := make([]string, 0, len(req.Metrics))
+	// The models entry is counted alongside the metrics: compiles are its
+	// usage signal too (a verified model nobody compiles from is stale).
+	metricIDs := make([]string, 0, len(req.Metrics)+1)
 	for _, m := range req.Metrics {
 		metricIDs = append(metricIDs, "metrics/"+m)
 	}
+	metricIDs = append(metricIDs, entry.ID)
 	s.recordUsage(ctx, domain.EventCompiled, metricIDs)
 	queryIDs := make([]string, len(hits))
 	for i, h := range hits {
@@ -539,5 +576,5 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 	}
 	s.recordUsage(ctx, domain.EventSearchHit, queryIDs)
 
-	return &CompileResult{Result: *result, VerifiedQueries: hits}, nil
+	return &CompileResult{Result: *result, Model: entry.ID, ModelStatus: entry.Status, VerifiedQueries: hits}, nil
 }

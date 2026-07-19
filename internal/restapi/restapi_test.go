@@ -102,8 +102,6 @@ func TestOversizedBodies(t *testing.T) {
 	}{
 		{"attachment", http.MethodPut, "/api/v1/attachments/insights/revenue/weekly.png",
 			domain.MaxAttachmentSize + 1, "attachment exceeds"},
-		{"ossie model", http.MethodPost, "/api/v1/import/ossie",
-			4<<20 + 1, "semantic model exceeds"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

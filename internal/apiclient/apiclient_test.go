@@ -385,23 +385,3 @@ func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 	}
 }
 
-func TestImportOssieSendsYAMLVerbatim(t *testing.T) {
-	src := []byte("name: sales\nmetrics: []\n")
-	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/import/ossie" {
-			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
-		got, _ := io.ReadAll(r.Body)
-		if string(got) != string(src) {
-			t.Errorf("body = %q", got)
-		}
-		_ = json.NewEncoder(w).Encode(ImportReport{Models: []string{"sales"}, Created: []string{"ochakai://metrics/revenue"}})
-	})
-	report, err := c.ImportOssie(context.Background(), src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(report.Models) != 1 || report.Models[0] != "sales" || len(report.Created) != 1 {
-		t.Errorf("report = %+v", report)
-	}
-}

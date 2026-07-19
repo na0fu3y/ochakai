@@ -7,8 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// specMap mimics the real path a spec takes into ModelFromSpec /
-// ModelsFromSpec: YAML → map[string]any (importer), stored as JSONB,
+// specMap mimics the real path a spec takes into ModelFromSpec: YAML →
+// map[string]any (the client filling attrs.spec), stored as JSONB,
 // decoded back to map[string]any (store).
 func specMap(t *testing.T, src string) map[string]any {
 	t.Helper()
@@ -19,8 +19,8 @@ func specMap(t *testing.T, src string) map[string]any {
 	return spec
 }
 
-func TestModelFromSpecSingleObject(t *testing.T) {
-	m, err := ModelFromSpec(specMap(t, testModelYAML), "")
+func TestModelFromSpec(t *testing.T) {
+	m, err := ModelFromSpec(specMap(t, testModelYAML))
 	if err != nil {
 		t.Fatalf("ModelFromSpec: %v", err)
 	}
@@ -37,62 +37,55 @@ func TestModelFromSpecSingleObject(t *testing.T) {
 	}
 }
 
-// The top-level document shape wraps models in a semantic_model list;
-// name selects one, and an empty name means the first.
-func TestModelFromSpecDocumentShape(t *testing.T) {
-	doc := "semantic_model:\n" +
-		"  - name: alpha\n    metrics:\n      - name: m1\n        expression: SUM(x)\n" +
-		"  - name: beta\n    metrics:\n      - name: m2\n        expression: SUM(y)\n"
-	spec := specMap(t, doc)
-
-	m, err := ModelFromSpec(spec, "beta")
-	if err != nil {
-		t.Fatalf("ModelFromSpec(beta): %v", err)
-	}
-	if m.Name != "beta" {
-		t.Errorf("name = %q, want beta", m.Name)
-	}
-
-	first, err := ModelFromSpec(spec, "")
-	if err != nil {
-		t.Fatalf("ModelFromSpec(empty name): %v", err)
-	}
-	if first.Name != "alpha" {
-		t.Errorf("empty name should select the first model, got %q", first.Name)
-	}
-
-	if _, err := ModelFromSpec(spec, "missing"); err == nil ||
-		!strings.Contains(err.Error(), "not found") {
-		t.Errorf("unknown name should fail with not found, got %v", err)
-	}
-}
-
-func TestModelsFromSpecShapes(t *testing.T) {
-	single, err := ModelsFromSpec(specMap(t, testModelYAML))
-	if err != nil || len(single) != 1 || single[0].Name != "sales_analytics" {
-		t.Errorf("single object: models = %+v, err = %v", single, err)
-	}
-
-	doc := "semantic_model:\n  - name: alpha\n  - name: beta\n"
-	many, err := ModelsFromSpec(specMap(t, doc))
-	if err != nil || len(many) != 2 || many[0].Name != "alpha" || many[1].Name != "beta" {
-		t.Errorf("document shape: models = %+v, err = %v", many, err)
-	}
-
-	if _, err := ModelsFromSpec(specMap(t, "just: garbage\n")); err == nil {
-		t.Error("a nameless non-model document must be rejected")
-	}
-}
-
 // A plain-string expression (the shortest Ossie shape) must parse as an
 // ANSI_SQL expression through the YAML → JSON round-trip.
 func TestModelFromSpecPlainStringExpression(t *testing.T) {
-	m, err := ModelFromSpec(specMap(t, "name: mini\nmetrics:\n  - name: n\n    expression: COUNT(*)\n"), "")
+	m, err := ModelFromSpec(specMap(t, "name: mini\nmetrics:\n  - name: n\n    expression: COUNT(*)\n"))
 	if err != nil {
 		t.Fatalf("ModelFromSpec: %v", err)
 	}
 	expr, ok := m.Metrics[0].Expression.ForBigQuery()
 	if !ok || expr != "COUNT(*)" {
 		t.Errorf("plain string expression = %q, %v", expr, ok)
+	}
+}
+
+// Validate is the write-time guard behind models entries (design doc
+// 0018 §4.2): the example model passes, and each structural defect is
+// named in the error. Join and primary-key columns are physical columns,
+// so a join on an undeclared column is fine.
+func TestModelValidate(t *testing.T) {
+	m, err := ModelFromSpec(specMap(t, testModelYAML))
+	if err != nil {
+		t.Fatalf("ModelFromSpec: %v", err)
+	}
+	if err := m.Validate(); err != nil {
+		t.Errorf("example model must validate, got %v", err)
+	}
+
+	cases := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{"missing name", "datasets:\n  - name: d\n", "name is required"},
+		{"no datasets", "name: m\nmetrics:\n  - name: n\n    expression: COUNT(*)\n", "no datasets"},
+		{"duplicate dataset", "name: m\ndatasets:\n  - name: d\n  - name: d\n", "duplicate dataset"},
+		{"nameless field", "name: m\ndatasets:\n  - name: d\n    fields:\n      - expression: x\n", "field without a name"},
+		{"duplicate field", "name: m\ndatasets:\n  - name: d\n    fields:\n      - name: f\n        expression: x\n      - name: f\n        expression: y\n", "duplicate field"},
+		{"duplicate metric", "name: m\ndatasets:\n  - name: d\nmetrics:\n  - name: n\n    expression: COUNT(*)\n  - name: n\n    expression: COUNT(*)\n", "duplicate metric"},
+		{"unknown join dataset", "name: m\ndatasets:\n  - name: d\nrelationships:\n  - name: r\n    from: d\n    to: nowhere\n    from_columns: [a]\n    to_columns: [b]\n", `unknown dataset "nowhere"`},
+		{"mismatched join columns", "name: m\ndatasets:\n  - name: d\n  - name: e\nrelationships:\n  - name: r\n    from: d\n    to: e\n    from_columns: [a, b]\n    to_columns: [c]\n", "matching from_columns and to_columns"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m, err := ModelFromSpec(specMap(t, c.yaml))
+			if err != nil {
+				t.Fatalf("ModelFromSpec: %v", err)
+			}
+			if err := m.Validate(); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("Validate = %v, want error mentioning %q", err, c.want)
+			}
+		})
 	}
 }

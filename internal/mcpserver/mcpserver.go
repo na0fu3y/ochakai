@@ -36,11 +36,11 @@ func Handler(svc *service.Service, version string) http.Handler {
 
 func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
-		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
-			"verified golden queries, interpretation knowledge (how to read a metric), " +
-			"glossary terms, dataset and table catalog entries, and references (mirrors of " +
-			"external material such as enum definitions or schema docs) — those types are " +
-			"recommendations, and any slug works as a type for your own document kinds. " +
+		Instructions: "ochakai is a context provider for data agents: semantic models, " +
+			"metric definitions, verified golden queries, interpretation knowledge (how to " +
+			"read a metric), glossary terms, dataset and table catalog entries, and references " +
+			"(mirrors of external material such as enum definitions or schema docs) — those " +
+			"types are recommendations, and any slug works as a type for your own document kinds. " +
 			"An entry's id is its path: slash-separated segments (e.g. metrics/revenue, " +
 			"ga4/tables/orders) forming directories. Place together what should be read " +
 			"together; the type is metadata, not a location. " +
@@ -178,7 +178,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
 			"re-proposing knowledge that was already rejected (status_note records why). " +
 			"For tables/datasets/references, set resource to the asset's canonical URI and favor " +
-			"the conventional body sections: # Schema, # Common query patterns, # Citations.",
+			"the conventional body sections: # Schema, # Common query patterns, # Citations. " +
+			"A semantic model is a models entry with the Apache Ossie model object in attrs.spec " +
+			"(one entry per model; validated on write). After creating one, create a metrics/<name> " +
+			"entry per metric with attrs.model naming the models entry's id and attrs.expression " +
+			"holding the expression, so compile_sql can resolve the model and the definitions are " +
+			"searchable; give table entries a defined_in link to the models entry.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -289,8 +294,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "compile_sql",
 		Annotations: readOnly,
-		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from the " +
-			"imported Ossie semantic model (no LLM involved). Output is always BigQuery SQL. " +
+		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from a " +
+			"semantic model — a models entry holding the Ossie model object in attrs.spec (no LLM " +
+			"involved). model is the entry's id, resolved from the first metric's attrs.model when " +
+			"omitted; the result names the models entry and its status — judge trust from its " +
+			"provenance. Output is always BigQuery SQL. " +
 			"ochakai does not execute SQL — run the result with your own warehouse tool. " +
 			"Requests outside the supported subset fail with a reason; prefer any returned verified_queries.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in service.CompileRequest) (*mcp.CallToolResult, service.CompileResult, error) {

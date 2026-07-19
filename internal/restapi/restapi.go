@@ -1,11 +1,11 @@
 // Package restapi serves /api/v1 so users can build their own web UIs
 // (the bundled one lives in internal/webui). It is a superset of the MCP tools:
-// the same knowledge/search/usage/compile operations plus bulk endpoints
-// (export, import/ossie) that make no sense as agent tool calls, and
-// human-facing endpoints (browse, revisions, backlinks) that stay off
-// MCP by design (agents get search/get_context instead; design doc
-// 0015 records the per-surface policy). The CLI covers this whole
-// surface; the spec is committed at api/openapi.yaml.
+// the same knowledge/search/usage/compile operations plus the bulk export
+// endpoint that makes no sense as an agent tool call, and human-facing
+// endpoints (browse, revisions, backlinks) that stay off MCP by design
+// (agents get search/get_context instead; design doc 0015 records the
+// per-surface policy). The CLI covers this whole surface; the spec is
+// committed at api/openapi.yaml.
 package restapi
 
 import (
@@ -23,7 +23,6 @@ import (
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
-	"github.com/na0fu3y/ochakai/internal/importer"
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -391,23 +390,6 @@ func Handler(svc *service.Service) http.Handler {
 			// Headers already sent; nothing to do but log via server.
 			return
 		}
-	})
-
-	// POST /api/v1/import/ossie — import an Apache Ossie semantic model.
-	// The body is the YAML verbatim; models are stored for compile and
-	// metrics/table knowledge entries are derived (design doc 0007 moved
-	// this from a DB-direct admin command to the API).
-	mux.HandleFunc("POST /api/v1/import/ossie", func(w http.ResponseWriter, r *http.Request) {
-		src, ok := readBody(w, r, 4<<20, "semantic model exceeds 4 MiB")
-		if !ok {
-			return
-		}
-		report, err := importer.ImportOssie(r.Context(), svc, src, httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, report)
 	})
 
 	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {

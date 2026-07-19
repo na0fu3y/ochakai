@@ -16,7 +16,7 @@ docker compose -f deploy/compose.yaml up
 Seed it and poke around:
 
 ```sh
-go run ./cmd/ochakai import-ossie examples/semantic-model.yaml
+go run ./cmd/ochakai create models/sales-analytics -f examples/semantic-model.md
 go run ./cmd/ochakai use http://localhost:8080
 go run ./cmd/ochakai search "revenue"
 ```

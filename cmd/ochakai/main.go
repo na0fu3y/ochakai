@@ -102,7 +102,6 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   compile --metric <m>    compile metrics into BigQuery SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
-  import-ossie <file>     import an Apache Ossie semantic model
   ui                      serve the web UI locally, acting as you (no deploy)
 
 Server commands (run as deployed services, configured by environment):

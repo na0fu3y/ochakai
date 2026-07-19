@@ -25,6 +25,7 @@ import (
 // Free types have no display mapping and export as themselves — unless the
 // original bundle spelling survives in attrs[AttrOKFType].
 var okfType = map[domain.Type]string{
+	domain.TypeModels:     "Semantic Model",
 	domain.TypeMetrics:    "Metric",
 	domain.TypeQueries:    "Golden Query",
 	domain.TypeInsights:   "Insight",
@@ -40,6 +41,7 @@ var okfType = map[domain.Type]string{
 // BigQuery-qualified one (design doc 0016 — ochakai is BigQuery-only).
 // Aliases normalize: the original spelling is not preserved.
 var typeAlias = map[string]domain.Type{
+	"model":   domain.TypeModels,
 	"metric":  domain.TypeMetrics,
 	"query":   domain.TypeQueries,
 	"insight": domain.TypeInsights,

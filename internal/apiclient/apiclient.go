@@ -347,23 +347,6 @@ func (c *Client) Export(ctx context.Context) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-// ImportOssie uploads Apache Ossie semantic model YAML verbatim; the
-// server stores each model for compile and derives metrics/table
-// knowledge entries.
-func (c *Client) ImportOssie(ctx context.Context, yamlSrc []byte) (*ImportReport, error) {
-	resp, err := c.doRaw(ctx, http.MethodPost, "/api/v1/import/ossie", nil,
-		"application/yaml", bytes.NewReader(yamlSrc))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var report ImportReport
-	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
-		return nil, err
-	}
-	return &report, nil
-}
-
 // entryPath escapes each ID segment separately: the id is a path
 // ("metric/revenue") and its slashes must stay real path separators.
 func entryPath(id string) string { return escapedPath("/api/v1/knowledge/", id) }

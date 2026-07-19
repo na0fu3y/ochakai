@@ -2,11 +2,11 @@ openapi: 3.1.0
 info:
   title: ochakai REST API
   description: >
-    ochakai is a context provider for data agents: metric definitions,
-    verified golden queries, interpretation knowledge, glossary terms,
-    dataset and table catalog entries, and references (mirrors of external
-    material) in one knowledge base. The REST API is a superset
-    of the MCP tools — the same operations plus bulk export/import, the
+    ochakai is a context provider for data agents: semantic models, metric
+    definitions, verified golden queries, interpretation knowledge, glossary
+    terms, dataset and table catalog entries, and references (mirrors of
+    external material) in one knowledge base. The REST API is a superset
+    of the MCP tools — the same operations plus bulk export, the
     human-facing browse/revisions/backlinks reads, and attachment writes —
     so users can build their own web UIs. ochakai executes no SQL and uses
     no LLM.
@@ -472,55 +472,13 @@ paths:
           content:
             application/gzip:
               schema: { type: string, format: binary }
-  /api/v1/import/ossie:
-    post:
-      operationId: importOssie
-      summary: Import an Apache Ossie semantic model
-      description: >
-        Accepts Ossie semantic model YAML verbatim. Each model is stored
-        for compile, and metrics/table knowledge entries are derived so
-        the definitions are searchable. Re-import refreshes definitions
-        without clobbering human-curated status, tags, and bodies.
-      requestBody:
-        required: true
-        content:
-          application/yaml:
-            schema: { type: string }
-      responses:
-        "200":
-          description: Import report.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  models:
-                    type: array
-                    items: { type: string }
-                    description: Semantic model names stored.
-                  created:
-                    type: array
-                    items: { type: string }
-                    description: URIs of knowledge entries created.
-                  updated:
-                    type: array
-                    items: { type: string }
-                    description: URIs of knowledge entries refreshed.
-                  unchanged:
-                    type: array
-                    items: { type: string }
-                    description: >
-                      URIs of entries whose refreshed definition matched
-                      what was already stored, so nothing was written (no
-                      revision). Absent when empty.
-        "400": { $ref: "#/components/responses/Error" }
-        "413": { $ref: "#/components/responses/Error" }
   /api/v1/compile:
     post:
       operationId: compileSQL
       summary: Deterministically compile metrics into SQL
       description: >
-        Compiles from the imported Ossie semantic model. ochakai never
+        Compiles from a semantic model — a models entry holding the Ossie
+        model object in attrs.spec (design doc 0018). ochakai never
         executes the SQL and never guesses: requests outside the supported
         subset (single fact + star joins) return 422 with a reason. Any
         verified golden queries about the metrics are returned alongside and
@@ -551,12 +509,12 @@ components:
     Type:
       type: string
       description: >
-        Any slug segment works as a type — the built-ins (metrics, queries,
-        insights, terms, datasets, tables, references) are recommendations
-        with server behavior attached, not a closed set (design docs 0005,
-        0016). Slugs are plural, matching the OKF knowledge-catalog
-        reference bundles.
-      examples: [metrics, queries, insights, terms, datasets, tables, references, runbook]
+        Any slug segment works as a type — the built-ins (models, metrics,
+        queries, insights, terms, datasets, tables, references) are
+        recommendations with server behavior attached, not a closed set
+        (design docs 0005, 0016, 0018). Slugs are plural, matching the OKF
+        knowledge-catalog reference bundles.
+      examples: [models, metrics, queries, insights, terms, datasets, tables, references, runbook]
       pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
     Status:
       type: string
@@ -685,7 +643,9 @@ components:
       properties:
         model:
           type: string
-          description: Semantic model name; optional when the first metric's knowledge entry links to its model.
+          description: >
+            Id of a models entry (e.g. models/sales); optional when the
+            first metric's entry names its model in attrs.model.
         metrics: { type: array, items: { type: string }, minItems: 1 }
         dimensions:
           type: array
@@ -712,6 +672,14 @@ components:
         sql: { type: string, description: Always BigQuery SQL (design doc 0016). }
         datasets_used: { type: array, items: { type: string } }
         notes: { type: array, items: { type: string } }
+        model:
+          type: string
+          description: Id of the models entry the SQL was compiled from.
+        model_status:
+          $ref: "#/components/schemas/Status"
+          description: >
+            The models entry's verification status. Compile does not gate
+            on status — judge trust from provenance (design doc 0018).
         verified_queries:
           type: array
           description: Verified golden queries about the requested metrics; prefer these when applicable.

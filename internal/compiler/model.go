@@ -148,29 +148,14 @@ func (d *Dataset) field(name string) *Field {
 	return nil
 }
 
-// ModelFromSpec reads a stored semantic model spec (JSON round-trip of the
-// imported YAML). It accepts either a single model object or the top-level
-// {semantic_model: [...]} document shape, in which case name selects the
-// model (empty name means the only model).
-func ModelFromSpec(spec map[string]any, name string) (*Model, error) {
+// ModelFromSpec reads a stored semantic model spec (the JSON-safe map held
+// in a models entry's attrs.spec, design doc 0018). One entry is one model:
+// the multi-model {semantic_model: [...]} document shape is a source-file
+// layout, split by the client before entries are created.
+func ModelFromSpec(spec map[string]any) (*Model, error) {
 	raw, err := json.Marshal(spec)
 	if err != nil {
 		return nil, err
-	}
-	var doc struct {
-		SemanticModel []json.RawMessage `json:"semantic_model"`
-	}
-	if err := json.Unmarshal(raw, &doc); err == nil && len(doc.SemanticModel) > 0 {
-		for _, rm := range doc.SemanticModel {
-			var m Model
-			if err := json.Unmarshal(rm, &m); err != nil {
-				return nil, fmt.Errorf("parse semantic model: %w", err)
-			}
-			if name == "" || m.Name == name {
-				return &m, nil
-			}
-		}
-		return nil, fmt.Errorf("semantic model %q not found in document", name)
 	}
 	var m Model
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -179,24 +164,62 @@ func ModelFromSpec(spec map[string]any, name string) (*Model, error) {
 	return &m, nil
 }
 
-// ModelsFromSpec reads every model in a spec document (either a single
-// model object or {semantic_model: [...]}).
-func ModelsFromSpec(spec map[string]any) ([]Model, error) {
-	raw, err := json.Marshal(spec)
-	if err != nil {
-		return nil, err
+// Validate checks a model's structural integrity — the write-time guard
+// behind type=models entries (design doc 0018 §4.2): names present and
+// unique, relationships joining datasets that exist with matched column
+// counts. Join and primary-key columns are physical columns, not modeled
+// fields, so their existence cannot be checked here; request-dependent
+// concerns (dialect choice, the supported compile subset) stay
+// compile-time errors.
+func (m *Model) Validate() error {
+	if m.Name == "" {
+		return fmt.Errorf("model name is required")
 	}
-	var doc struct {
-		SemanticModel []Model `json:"semantic_model"`
+	if len(m.Datasets) == 0 {
+		return fmt.Errorf("model %q has no datasets", m.Name)
 	}
-	if err := json.Unmarshal(raw, &doc); err == nil && len(doc.SemanticModel) > 0 {
-		return doc.SemanticModel, nil
+	seenDS := map[string]bool{}
+	for _, ds := range m.Datasets {
+		if ds.Name == "" {
+			return fmt.Errorf("dataset without a name")
+		}
+		if seenDS[ds.Name] {
+			return fmt.Errorf("duplicate dataset %q", ds.Name)
+		}
+		seenDS[ds.Name] = true
+		seenF := map[string]bool{}
+		for _, f := range ds.Fields {
+			if f.Name == "" {
+				return fmt.Errorf("dataset %q has a field without a name", ds.Name)
+			}
+			if seenF[f.Name] {
+				return fmt.Errorf("dataset %q has duplicate field %q", ds.Name, f.Name)
+			}
+			seenF[f.Name] = true
+		}
 	}
-	var m Model
-	if err := json.Unmarshal(raw, &m); err != nil || m.Name == "" {
-		return nil, fmt.Errorf("document is neither a semantic model nor {semantic_model: [...]}")
+	seenM := map[string]bool{}
+	for _, mt := range m.Metrics {
+		if mt.Name == "" {
+			return fmt.Errorf("metric without a name")
+		}
+		if seenM[mt.Name] {
+			return fmt.Errorf("duplicate metric %q", mt.Name)
+		}
+		seenM[mt.Name] = true
 	}
-	return []Model{m}, nil
+	for _, r := range m.Relationships {
+		if m.dataset(r.From) == nil {
+			return fmt.Errorf("relationship %q joins unknown dataset %q", r.Name, r.From)
+		}
+		if m.dataset(r.To) == nil {
+			return fmt.Errorf("relationship %q joins unknown dataset %q", r.Name, r.To)
+		}
+		if len(r.FromColumns) == 0 || len(r.FromColumns) != len(r.ToColumns) {
+			return fmt.Errorf("relationship %q needs matching from_columns and to_columns", r.Name)
+		}
+	}
+	return nil
 }
 
 func truncate(s string, n int) string {

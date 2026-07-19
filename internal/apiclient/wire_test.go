@@ -8,7 +8,6 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
-	"github.com/na0fu3y/ochakai/internal/importer"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
@@ -21,7 +20,7 @@ import (
 
 func TestCompileRequestMatchesServerWire(t *testing.T) {
 	req := CompileRequest{
-		Model:      "sales_analytics",
+		Model:      "models/sales-analytics",
 		Metrics:    []string{"revenue"},
 		Dimensions: []string{"orders.region"},
 		Filters: []Filter{
@@ -39,7 +38,7 @@ func TestCompileRequestMatchesServerWire(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("server cannot decode the client request: %v", err)
 	}
-	want := service.CompileRequest{Model: "sales_analytics", Request: compiler.Request{
+	want := service.CompileRequest{Model: "models/sales-analytics", Request: compiler.Request{
 		Metrics:    []string{"revenue"},
 		Dimensions: []string{"orders.region"},
 		Filters: []compiler.Filter{
@@ -54,32 +53,6 @@ func TestCompileRequestMatchesServerWire(t *testing.T) {
 	}
 }
 
-func TestImportReportMatchesServerWire(t *testing.T) {
-	server := importer.Report{
-		Models:    []string{"sales_analytics"},
-		Created:   []string{"metrics/revenue"},
-		Updated:   []string{"tables/orders"},
-		Unchanged: []string{"metrics/margin"},
-	}
-	data, err := json.Marshal(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got ImportReport
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("client cannot decode the server response: %v", err)
-	}
-	want := ImportReport{
-		Models:    []string{"sales_analytics"},
-		Created:   []string{"metrics/revenue"},
-		Updated:   []string{"tables/orders"},
-		Unchanged: []string{"metrics/margin"},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("client decoded:\n%+v\nwant:\n%+v", got, want)
-	}
-}
-
 func TestCompileResultMatchesServerWire(t *testing.T) {
 	server := service.CompileResult{
 		Result: compiler.Result{
@@ -87,6 +60,8 @@ func TestCompileResultMatchesServerWire(t *testing.T) {
 			DatasetsUsed: []string{"orders"},
 			Notes:        []string{"a note"},
 		},
+		Model:       "models/sales-analytics",
+		ModelStatus: domain.StatusVerified,
 		VerifiedQueries: []domain.SearchHit{
 			{Knowledge: domain.Knowledge{Type: domain.TypeQueries, ID: "q1", Title: "Q"}, Score: 0.7},
 		},
@@ -102,6 +77,7 @@ func TestCompileResultMatchesServerWire(t *testing.T) {
 	if got.SQL != "SELECT 1" ||
 		!reflect.DeepEqual(got.DatasetsUsed, []string{"orders"}) ||
 		!reflect.DeepEqual(got.Notes, []string{"a note"}) ||
+		got.Model != "models/sales-analytics" || got.ModelStatus != domain.StatusVerified ||
 		len(got.VerifiedQueries) != 1 || got.VerifiedQueries[0].ID != "q1" {
 		t.Errorf("client decoded: %+v", got)
 	}
