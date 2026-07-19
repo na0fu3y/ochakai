@@ -162,6 +162,37 @@ func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]doma
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
+// ListModelsDefiningMetric returns live models entries whose spec defines
+// the named metric (attrs.spec.metrics[].name), ordered by id. This is
+// compile-time model resolution when no model id is passed (design doc
+// 0019): the model is the source of truth for its metrics, and entries
+// live wherever the user put them.
+func (s *Store) ListModelsDefiningMetric(ctx context.Context, metric string) ([]domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge
+		 WHERE deleted_at IS NULL AND type = $1
+		   AND attrs->'spec'->'metrics' @> jsonb_build_array(jsonb_build_object('name', $2::text))
+		 ORDER BY id`, domain.TypeModels, metric)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
+}
+
+// ListMetricEntryIDs returns the ids of live metrics entries that name
+// the given models entry via attrs.model — the entries compile usage is
+// attributed to (design doc 0019).
+func (s *Store) ListMetricEntryIDs(ctx context.Context, modelID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id FROM knowledge
+		 WHERE deleted_at IS NULL AND type = $1 AND attrs->>'model' = $2
+		 ORDER BY id`, domain.TypeMetrics, modelID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
 // Create inserts a new entry. A live entry with the same id is
 // ErrAlreadyExists — including rejected ones, so the memory of no
 // survives. A soft-deleted entry is revived instead: the ID would

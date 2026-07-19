@@ -64,8 +64,11 @@ Register it:
 ochakai create models/sales-analytics -f examples/semantic-model.md
 ```
 
-Then create a `metrics/<name>` entry per metric — `attrs.model` naming
-this entry's id, `attrs.expression` holding the expression — so
-`compile_sql` resolves the model and the definitions are searchable.
+`compile_sql` resolves the model from this entry itself (the models
+entry whose spec defines the requested metric; pass `model` explicitly
+when several models define the same metric name). Then create an entry
+per metric — conventionally `metrics/<name>`, with `attrs.model` naming
+this entry's id and `attrs.expression` holding the expression — so the
+definitions are searchable and compile usage is attributed to them.
 An agent connected to ochakai can do this from the spec; asking it to
 "register examples/semantic-model.md and its metrics" is enough.

@@ -330,7 +330,7 @@ Smoke test over REST (through the proxy, also tokenless):
 ```sh
 curl "http://localhost:8787/api/v1/knowledge?q=revenue"
 curl -X POST "http://localhost:8787/api/v1/compile" \
-  -d '{"metrics":["revenue"],"dimensions":["customers.region"],"dialect":"bigquery"}'
+  -d '{"metrics":["revenue"],"dimensions":["customers.region"]}'
 ```
 
 ## 5b. Optional: the team web UI behind IAP (separate service, by design)

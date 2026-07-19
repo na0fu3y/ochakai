@@ -180,10 +180,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"For tables/datasets/references, set resource to the asset's canonical URI and favor " +
 			"the conventional body sections: # Schema, # Common query patterns, # Citations. " +
 			"A semantic model is a models entry with the Apache Ossie model object in attrs.spec " +
-			"(one entry per model; validated on write). After creating one, create a metrics/<name> " +
-			"entry per metric with attrs.model naming the models entry's id and attrs.expression " +
-			"holding the expression, so compile_sql can resolve the model and the definitions are " +
-			"searchable; give table entries a defined_in link to the models entry.",
+			"(one entry per model; validated on write) — compile_sql resolves models from these entries " +
+			"directly. After creating one, create an entry per metric (last id segment = the metric " +
+			"name, e.g. metrics/<name>) with attrs.model naming the models entry's id and " +
+			"attrs.expression holding the expression, so the definitions are searchable and compile " +
+			"usage is attributed to them; give table entries a defined_in link to the models entry.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -296,8 +297,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Annotations: readOnly,
 		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from a " +
 			"semantic model — a models entry holding the Ossie model object in attrs.spec (no LLM " +
-			"involved). model is the entry's id, resolved from the first metric's attrs.model when " +
-			"omitted; the result names the models entry and its status — judge trust from its " +
+			"involved). model is the entry's id; when omitted, the models entry whose spec defines " +
+			"the first metric is used (if several do, the compile fails and asks for model). The " +
+			"result names the models entry and its status — judge trust from its " +
 			"provenance. Output is always BigQuery SQL. " +
 			"ochakai does not execute SQL — run the result with your own warehouse tool. " +
 			"Requests outside the supported subset fail with a reason; prefer any returned verified_queries.",

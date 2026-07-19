@@ -11,6 +11,10 @@ func TestValidID(t *testing.T) {
 		"revenue", "monthly-revenue", "sales/orders", "a/b/c",
 		"GA_sessions_2017", "notes/2026/q3", "v1.2", "sales/index-page",
 		"index/foo", "log/foo", // "index"/"log" are only reserved as the final segment
+		// OKF prescribes no character set (design doc 0019): underscores
+		// lead BigQuery hidden datasets, and foreign bundles may use any
+		// language or spaces in filenames.
+		"_intraday/events", "tables/_yesterday", "用語/売上", "notes/My Notes",
 	}
 	for _, id := range valid {
 		if !ValidID(id) {
@@ -18,8 +22,9 @@ func TestValidID(t *testing.T) {
 		}
 	}
 	invalid := []string{
-		"", "/", "a/", "/a", "a//b", "日本語", "a b", "../etc", "a/../b",
+		"", "/", "a/", "/a", "a//b", "../etc", "a/../b",
 		".hidden", "a/.hidden", "index", "sales/index", "log", "sales/log",
+		"a\x00b", "a\tb", "\xff", // control characters and invalid UTF-8 stay out
 		strings.Repeat("a", 129), "a/" + strings.Repeat("b/", 300),
 	}
 	for _, id := range invalid {
@@ -32,7 +37,7 @@ func TestValidID(t *testing.T) {
 func TestValidIDPrefix(t *testing.T) {
 	valid := []string{
 		"", "sales", "sales/orders", "index", "a/index", // "index" only names a directory here
-		"GA_sessions_2017", "notes/2026",
+		"GA_sessions_2017", "notes/2026", "_intraday", "用語",
 	}
 	for _, p := range valid {
 		if !ValidIDPrefix(p) {
@@ -40,7 +45,7 @@ func TestValidIDPrefix(t *testing.T) {
 		}
 	}
 	invalid := []string{
-		"/", "a/", "/a", "a//b", "日本語", "a b", "../etc", ".hidden",
+		"/", "a/", "/a", "a//b", "../etc", ".hidden", "a\x00b",
 		strings.Repeat("a", 129), strings.Repeat("a/", 300) + "a",
 	}
 	for _, p := range invalid {

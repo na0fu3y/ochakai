@@ -50,7 +50,7 @@ ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type metrics --status verified
-ochakai get metrics/revenue
+ochakai get models/sales-analytics
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai compile --metric revenue --grain orders.ordered_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz

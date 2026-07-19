@@ -126,7 +126,7 @@ _ochakai() {
       _arguments '--url[server URL]:url:' '1:directory:_files -/'
       ;;
     import)
-      _arguments '--dry-run[parse and list, write nothing]' '--keep-root[keep a single top-level directory as the type]' '--url[server URL]:url:' '1:bundle:_files'
+      _arguments '--dry-run[parse and list, write nothing]' '--url[server URL]:url:' '1:bundle:_files'
       ;;
     use)
       local -a servers
@@ -190,7 +190,7 @@ _ochakai() {
     attach)        opts="--name --json --url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
     export)        opts="--url" ;;
-    import)        opts="--dry-run --keep-root --url" ;;
+    import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
     use)
@@ -243,7 +243,6 @@ complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete attach detach usage report revisions backlinks compile export import whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
-complete -c ochakai -n '__fish_seen_subcommand_from import' -l keep-root -d 'keep a single top-level directory as the type'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update attach usage report revisions backlinks compile whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
@@ -263,7 +262,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from compile' -l metric -x -d 'me
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dimension -x -d 'group-by column as dataset.field'
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l filter -x -d 'filter as "dataset.field op value"'
 complete -c ochakai -n '__fish_seen_subcommand_from compile' -l grain -x -d 'time grain as dataset.field:grain'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l model -x -d 'semantic model name'
+complete -c ochakai -n '__fish_seen_subcommand_from compile' -l model -x -d 'models entry id'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

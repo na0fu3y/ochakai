@@ -51,11 +51,13 @@ var attachmentMediaTypes = map[string]bool{
 }
 
 // ValidAttachmentName reports whether name can be an attachment filename:
-// one path segment (so it embeds in bundle paths and URLs unchanged), not
-// markdown — a ".md" attachment could masquerade as a concept document in
-// an exported bundle (index.md / log.md fall out of the same rule).
+// one path segment (so it embeds in bundle paths and URLs unchanged, with
+// the same path-safety-only character rule as ID segments, design doc
+// 0019), not markdown — a ".md" attachment could masquerade as a concept
+// document in an exported bundle (index.md / log.md fall out of the same
+// rule).
 func ValidAttachmentName(name string) bool {
-	return segmentRe.MatchString(name) && !strings.HasSuffix(strings.ToLower(name), ".md")
+	return validSegment(name) && !strings.HasSuffix(strings.ToLower(name), ".md")
 }
 
 // DetectAttachmentMediaType sniffs data's media type and checks it against

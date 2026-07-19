@@ -306,19 +306,19 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 		}
 		fmt.Fprint(w, sec)
 		written += len(sec)
-		rendered[string(k.Type)+"/"+k.ID] = true
+		rendered[k.ID] = true
 	}
 	if omitted > 0 {
 		fmt.Fprintf(w, "(%d more entries beyond --budget; raise it or `ochakai get` them)\n", omitted)
 	}
 	var rest []string
 	for _, h := range res.Hits {
-		if !rendered[string(h.Type)+"/"+h.ID] {
+		if !rendered[h.ID] {
 			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.Title))
 		}
 	}
 	if len(rest) > 0 {
-		fmt.Fprintf(w, "\nAlso relevant (`ochakai get <type>/<id>` for the full entry):\n%s\n", strings.Join(rest, "\n"))
+		fmt.Fprintf(w, "\nAlso relevant (`ochakai get <id>` for the full entry):\n%s\n", strings.Join(rest, "\n"))
 	}
 }
 
@@ -754,7 +754,7 @@ func cmdCompile(ctx context.Context, args []string) error {
 	fs.Var(&dims, "dimension", "group-by column as dataset.field (repeatable)")
 	fs.Var(&filters, "filter", `filter as "dataset.field op value"; op: = != > >= < <= in not_in (in/not_in take comma-separated values) (repeatable)`)
 	grain := fs.String("grain", "", "time grain as dataset.field:day|week|month|quarter|year")
-	model := fs.String("model", "", "models entry id, e.g. models/sales (default: resolved from the first metric)")
+	model := fs.String("model", "", "models entry id, e.g. models/sales (default: the models entry defining the first metric; required when several do)")
 	limit := fs.Int("limit", 0, "LIMIT clause")
 	asJSON := fs.Bool("json", false, "print the full JSON response")
 	pos, err := parseArgs(fs, args)
@@ -845,7 +845,7 @@ func cmdExport(ctx context.Context, args []string) error {
 
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, unknown frontmatter keys are kept as attrs, and\nexisting entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, unknown frontmatter keys are kept as attrs, and\nexisting entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. a models entry whose\nspec fails validation — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	pos, err := parseArgs(fs, args)
@@ -878,18 +878,35 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	// A 400 is the server's judgment on one document (e.g. a models entry
+	// whose spec fails write-time validation) — skip and report it like a
+	// parse failure, instead of aborting the bundle halfway (design doc
+	// 0019). Anything else (auth, network, 5xx) still aborts.
 	var created, updated, unchanged int
+	rejected := map[string]bool{}
+	skipEntry := func(k *domain.Knowledge, err error) {
+		rejected[k.ID] = true
+		skipped = append(skipped, k.ID+".md: rejected by the server: "+err.Error())
+		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+	}
 	for i := range entries {
 		k := &entries[i]
 		if _, err := c.Create(ctx, k); err == nil {
 			created++
 			fmt.Printf("created %s\n", k.URI())
 			continue
+		} else if isInvalid(err) {
+			skipEntry(k, err)
+			continue
 		} else if !isConflict(err) {
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
 		_, changed, err := c.Update(ctx, k)
 		if err != nil {
+			if isInvalid(err) {
+				skipEntry(k, err)
+				continue
+			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
 		if !changed {
@@ -900,7 +917,13 @@ func cmdImport(ctx context.Context, args []string) error {
 		updated++
 		fmt.Printf("updated %s\n", k.URI())
 	}
+	attached := 0
 	for _, a := range atts {
+		if rejected[a.ID] {
+			skipped = append(skipped, a.Path+": its entry "+a.ID+" was not imported")
+			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+			continue
+		}
 		// A file already at the canonical layout needs no okf_path — the
 		// preserved-location rule is for foreign layouts only.
 		okfPath := a.Path
@@ -910,11 +933,19 @@ func cmdImport(ctx context.Context, args []string) error {
 		if _, err := c.Attach(ctx, a.ID, a.Name, okfPath, a.Data); err != nil {
 			return fmt.Errorf("attach %s/%s: %w", a.ID, a.Name, err)
 		}
+		attached++
 		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
 	}
 	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped)\n",
-		created+updated+unchanged, created, updated, unchanged, len(atts), len(skipped))
+		created+updated+unchanged, created, updated, unchanged, attached, len(skipped))
 	return nil
+}
+
+// isInvalid reports a 400: the server understood the request and judged
+// this one document invalid — a per-file verdict, not a broken pipeline.
+func isInvalid(err error) bool {
+	var apiErr *apiclient.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest
 }
 
 func isConflict(err error) bool {

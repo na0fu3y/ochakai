@@ -144,7 +144,7 @@ func validate(k *domain.Knowledge) error {
 		return Invalidf("invalid type %q (one slug segment, e.g. metrics; recommended: metrics, queries, insights, terms, datasets, tables, references)", k.Type)
 	}
 	if !domain.ValidID(k.ID) {
-		return Invalidf(`invalid id %q (slug segments separated by "/", e.g. sales/orders; the last segment must not be "index" or "log")`, k.ID)
+		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)
 	}
 	if strings.TrimSpace(k.Title) == "" {
 		return Invalidf("title is required")
@@ -493,8 +493,8 @@ func embeddingText(k *domain.Knowledge) string {
 
 // CompileRequest wraps a compiler request with the semantic model
 // reference: the id of a models entry (design doc 0018). Model may be
-// empty when the first metric's knowledge entry names its model entry
-// via attrs.model.
+// empty when exactly one models entry's spec defines the first metric
+// (design doc 0019) — pass it to disambiguate.
 type CompileRequest struct {
 	Model string `json:"model,omitempty"`
 	compiler.Request
@@ -517,32 +517,41 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 		return nil, &compiler.Error{Reason: "at least one metric is required"}
 	}
 
-	modelID := req.Model
-	if modelID == "" {
-		// Semantic-model metrics are named, not addressed: their knowledge
-		// entries live at the conventional "metrics/<name>" path (the
-		// migrated layout, design doc 0017 §4.4) and name their models
-		// entry via attrs.model (design doc 0018 §4.4).
-		k, err := s.Store.Get(ctx, "metrics/"+req.Metrics[0])
-		if err == nil {
-			if m, ok := k.Attrs["model"].(string); ok {
-				modelID = m
+	var entry *domain.Knowledge
+	if req.Model != "" {
+		e, err := s.Store.Get(ctx, req.Model)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return nil, &compiler.Error{Reason: fmt.Sprintf("semantic model entry %q does not exist; create a models entry with the Ossie model object in attrs.spec", req.Model)}
 			}
+			return nil, err
 		}
-		if modelID == "" {
-			return nil, &compiler.Error{Reason: fmt.Sprintf("cannot resolve a semantic model for metric %q; pass model (a models entry id) explicitly, or create metrics/%s with attrs.model naming the models entry", req.Metrics[0], req.Metrics[0])}
+		entry = e
+	} else {
+		// The model is the source of truth for its metrics (design doc
+		// 0018), so resolution scans the models entries themselves — no
+		// path convention involved; entries live wherever the user put
+		// them (design docs 0017, 0019). Ambiguity is the caller's call.
+		candidates, err := s.Store.ListModelsDefiningMetric(ctx, req.Metrics[0])
+		if err != nil {
+			return nil, err
 		}
-	}
-	entry, err := s.Store.Get(ctx, modelID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return nil, &compiler.Error{Reason: fmt.Sprintf("semantic model entry %q does not exist; create a models entry with the Ossie model object in attrs.spec", modelID)}
+		switch len(candidates) {
+		case 1:
+			entry = &candidates[0]
+		case 0:
+			return nil, &compiler.Error{Reason: fmt.Sprintf("no models entry defines metric %q; create one with the Ossie model object in attrs.spec, or pass model (a models entry id) explicitly", req.Metrics[0])}
+		default:
+			ids := make([]string, len(candidates))
+			for i := range candidates {
+				ids[i] = candidates[i].ID
+			}
+			return nil, &compiler.Error{Reason: fmt.Sprintf("metric %q is defined by %d models entries (%s); pass model to pick one", req.Metrics[0], len(candidates), strings.Join(ids, ", "))}
 		}
-		return nil, err
 	}
 	spec, _ := entry.Attrs["spec"].(map[string]any)
 	if entry.Type != domain.TypeModels || spec == nil {
-		return nil, &compiler.Error{Reason: fmt.Sprintf("%q is not a semantic model entry (want type models with the Ossie model object in attrs.spec)", modelID)}
+		return nil, &compiler.Error{Reason: fmt.Sprintf("%q is not a semantic model entry (want type models with the Ossie model object in attrs.spec)", entry.ID)}
 	}
 	model, err := compiler.ModelFromSpec(spec)
 	if err != nil {
@@ -562,14 +571,26 @@ func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResu
 		hits = nil
 	}
 
-	// The models entry is counted alongside the metrics: compiles are its
-	// usage signal too (a verified model nobody compiles from is stale).
-	metricIDs := make([]string, 0, len(req.Metrics)+1)
-	for _, m := range req.Metrics {
-		metricIDs = append(metricIDs, "metrics/"+m)
+	// The models entry is counted, plus the metrics entries that name it
+	// via attrs.model (matched to the requested metric names by their
+	// id's last segment): compiles are their usage signal too (a verified
+	// model nobody compiles from is stale). Only entries that exist are
+	// counted — no ghost usage rows for unregistered metric names.
+	usageIDs := []string{entry.ID}
+	if metricEntryIDs, err := s.Store.ListMetricEntryIDs(ctx, entry.ID); err != nil {
+		s.Log.Warn("metric entry lookup failed", "model", entry.ID, "error", err)
+	} else {
+		requested := make(map[string]bool, len(req.Metrics))
+		for _, m := range req.Metrics {
+			requested[m] = true
+		}
+		for _, id := range metricEntryIDs {
+			if requested[id[strings.LastIndex(id, "/")+1:]] {
+				usageIDs = append(usageIDs, id)
+			}
+		}
 	}
-	metricIDs = append(metricIDs, entry.ID)
-	s.recordUsage(ctx, domain.EventCompiled, metricIDs)
+	s.recordUsage(ctx, domain.EventCompiled, usageIDs)
 	queryIDs := make([]string, len(hits))
 	for i, h := range hits {
 		queryIDs[i] = h.ID
