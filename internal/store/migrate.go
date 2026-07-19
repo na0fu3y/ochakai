@@ -78,12 +78,10 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 	// ANN index; this also keeps dimensions above index limits usable.
 	if _, err := s.pool.Exec(ctx, fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS knowledge_embedding (
-			type       text NOT NULL,
-			id         text NOT NULL,
+			id         text NOT NULL PRIMARY KEY,
 			model      text NOT NULL,
 			embedding  vector(%d) NOT NULL,
-			updated_at timestamptz NOT NULL DEFAULT now(),
-			PRIMARY KEY (type, id)
+			updated_at timestamptz NOT NULL DEFAULT now()
 		)`, dim)); err != nil {
 		return fmt.Errorf("create knowledge_embedding: %w", err)
 	}

@@ -1,9 +1,9 @@
 // Package okf exports the knowledge base as an Open Knowledge Format
 // bundle (https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf):
 // a directory of markdown files with YAML frontmatter, one concept per
-// knowledge entry, grouped by type, with index.md files for progressive
-// disclosure. Your knowledge is yours — bundles are plain files that live
-// happily in git.
+// knowledge entry at its id's path (the layout is the user's, design doc
+// 0017), with index.md files for progressive disclosure. Your knowledge
+// is yours — bundles are plain files that live happily in git.
 package okf
 
 import (
@@ -80,7 +80,6 @@ const Version = "0.1"
 type frontmatter struct {
 	Type        string   `yaml:"type"`
 	Resource    string   `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
-	ID          string   `yaml:"id,omitempty"`
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
@@ -105,17 +104,12 @@ var reservedKeys = map[string]bool{
 	AttrOKFType: true,
 }
 
-// Bundle renders every entry into a path→content map. Paths follow
-// "<type>/<id>.md" so the OKF concept ID matches ochakai's type/id, and
-// hierarchical IDs ("sales/orders") become nested directories. Every
-// directory level gets an index.md for progressive disclosure.
+// Bundle renders every entry into a path→content map. The path is
+// "<id>.md" — the OKF concept ID is ochakai's id, and its segments are
+// the directories. Every directory level gets an index.md for
+// progressive disclosure.
 func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Type != entries[j].Type {
-			return entries[i].Type < entries[j].Type
-		}
-		return entries[i].ID < entries[j].ID
-	})
+	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 
 	files := map[string][]byte{}
 	root := &dir{}
@@ -124,8 +118,8 @@ func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", k.URI(), err)
 		}
-		files[fmt.Sprintf("%s/%s.md", k.Type, k.ID)] = doc
-		root.insert(strings.Split(string(k.Type)+"/"+k.ID, "/"), k)
+		files[k.ID+".md"] = doc
+		root.insert(strings.Split(k.ID, "/"), k)
 	}
 	root.writeIndexes(files, "")
 	return files, nil
@@ -160,29 +154,16 @@ func (d *dir) insert(segs []string, k domain.Knowledge) {
 	sub.insert(segs[1:], k)
 }
 
-// subdirNames orders subdirectories: at the root, the recommended types in
-// their display order first, then everything else alphabetically.
-func (d *dir) subdirNames(atRoot bool) []string {
+// subdirNames lists subdirectories alphabetically — every level the
+// same, with no special root ordering (the root is no longer a type
+// listing, design doc 0017).
+func (d *dir) subdirNames() []string {
 	names := make([]string, 0, len(d.subdirs))
 	for n := range d.subdirs {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	if !atRoot {
-		return names
-	}
-	ordered := make([]string, 0, len(names))
-	for _, t := range domain.Types {
-		if _, ok := d.subdirs[string(t)]; ok {
-			ordered = append(ordered, string(t))
-		}
-	}
-	for _, n := range names {
-		if !domain.BuiltinType(domain.Type(n)) {
-			ordered = append(ordered, n)
-		}
-	}
-	return ordered
+	return names
 }
 
 // writeIndexes emits index.md for this directory and recurses. prefix is
@@ -197,7 +178,7 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 	} else {
 		fmt.Fprintf(&b, "# %s\n\n", strings.TrimSuffix(prefix, "/"))
 	}
-	for _, name := range d.subdirNames(prefix == "") {
+	for _, name := range d.subdirNames() {
 		noun := "concepts"
 		if d.subdirs[name].count == 1 {
 			noun = "concept"
@@ -226,7 +207,6 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
 		Type:        displayType(k),
 		Resource:    k.Resource,
-		ID:          k.ID,
 		Title:       k.Title,
 		Description: k.Description,
 		Tags:        k.Tags,

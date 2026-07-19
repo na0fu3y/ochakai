@@ -108,11 +108,11 @@ func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
 			Entries: []BrowseEntry{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusVerified}},
 		})
 	})
-	res, err := c.Browse(context.Background(), "queries", "")
+	res, err := c.Browse(context.Background(), "queries/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Get("type") != "queries" || got.Has("prefix") {
+	if got.Get("prefix") != "queries/" {
 		t.Errorf("query = %v", got)
 	}
 	if len(res.Dirs) != 1 || res.Dirs[0].Name != "sales" ||
@@ -121,19 +121,11 @@ func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
 	}
 
 	// Root level: no parameters at all.
-	if _, err := c.Browse(context.Background(), "", ""); err != nil {
+	if _, err := c.Browse(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 0 {
 		t.Errorf("root query = %v, want empty", got)
-	}
-
-	// A prefix scopes within the type.
-	if _, err := c.Browse(context.Background(), "queries", "sales/"); err != nil {
-		t.Fatal(err)
-	}
-	if got.Get("type") != "queries" || got.Get("prefix") != "sales/" {
-		t.Errorf("prefixed query = %v", got)
 	}
 }
 
@@ -148,7 +140,7 @@ func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 			{Rev: 2, Change: "update", ChangedBy: domain.Actor{Kind: domain.ActorHuman, Name: "na0"}},
 		}})
 	})
-	revs, err := c.Revisions(context.Background(), "queries", "sales/monthly-revenue", 10)
+	revs, err := c.Revisions(context.Background(), "queries/sales/monthly-revenue", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +152,7 @@ func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 	}
 
 	// limit 0 = server default: no limit parameter on the wire.
-	if _, err := c.Revisions(context.Background(), "queries", "sales/monthly-revenue", 0); err != nil {
+	if _, err := c.Revisions(context.Background(), "queries/sales/monthly-revenue", 0); err != nil {
 		t.Fatal(err)
 	}
 	if got.Has("limit") {
@@ -177,7 +169,7 @@ func TestBacklinksHitsCanonicalPathAndDecodesEntries(t *testing.T) {
 			{Type: domain.TypeInsights, ID: "revenue-reading", Title: "売上の読み方"},
 		}})
 	})
-	entries, err := c.Backlinks(context.Background(), "metrics", "revenue", 0)
+	entries, err := c.Backlinks(context.Background(), "metrics/revenue", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +185,7 @@ func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Usage{SearchHits: 12, Fetches: 4, Compiles: 2})
 	})
-	u, err := c.Usage(context.Background(), "queries", "sales/monthly-revenue")
+	u, err := c.Usage(context.Background(), "queries/sales/monthly-revenue")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +199,7 @@ func TestErrorResponsesBecomeAPIErrors(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found: metrics/nope"})
 	})
-	_, err := c.Get(context.Background(), "metrics", "nope")
+	_, err := c.Get(context.Background(), "metrics/nope")
 	apiErr, ok := err.(*APIError)
 	if !ok {
 		t.Fatalf("err = %T %v, want *APIError", err, err)
@@ -254,7 +246,7 @@ func TestCreateSendsJSONBodyAndDelete204(t *testing.T) {
 	if err != nil || created.Status != domain.StatusDraft {
 		t.Fatalf("create: %v, %+v", err, created)
 	}
-	if err := c.Delete(context.Background(), "metrics", "revenue"); err != nil {
+	if err := c.Delete(context.Background(), "metrics/revenue"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -327,7 +319,7 @@ func TestAttachSendsBytesAndOKFPath(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Attachment{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
 	})
-	att, err := c.Attach(context.Background(), "insights", "sales/reading", "weekly.png", "images/weekly.png", body)
+	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", "images/weekly.png", body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +336,7 @@ func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write([]byte("png bytes"))
 	})
-	data, mediaType, err := c.Attachment(context.Background(), "insights", "reading", "weekly.png")
+	data, mediaType, err := c.Attachment(context.Background(), "insights/reading", "weekly.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +354,7 @@ func TestDetachHitsAttachmentPath(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.Detach(context.Background(), "insights", "reading", "weekly.png"); err != nil {
+	if err := c.Detach(context.Background(), "insights/reading", "weekly.png"); err != nil {
 		t.Fatal(err)
 	}
 	if !called {
@@ -384,7 +376,7 @@ func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Usage{Worked: 3, Failed: 1})
 	})
-	u, err := c.ReportOutcome(context.Background(), "queries", "monthly-revenue", "failed", "joins dropped rows")
+	u, err := c.ReportOutcome(context.Background(), "queries/monthly-revenue", "failed", "joins dropped rows")
 	if err != nil {
 		t.Fatal(err)
 	}

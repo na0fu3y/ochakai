@@ -60,14 +60,14 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 
 	// Attach → the bytes live in the blob store, metadata in the blob row.
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("gcs only bytes")...)
-	att, err := s.PutAttachment(ctx, k.Type, k.ID, "chart.png", "image/png", "", png, actor)
+	att, err := s.PutAttachment(ctx, k.ID, "chart.png", "image/png", "", png, actor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := fake.m[att.SHA256]; !ok {
 		t.Error("attach should upload to the blob store")
 	}
-	if _, data, err := s.GetAttachment(ctx, k.Type, k.ID, "chart.png"); err != nil || string(data) != string(png) {
+	if _, data, err := s.GetAttachment(ctx, k.ID, "chart.png"); err != nil || string(data) != string(png) {
 		t.Errorf("attachment did not round-trip: %v", err)
 	}
 
@@ -92,11 +92,11 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer bare.Close()
-	if _, err := bare.PutAttachment(ctx, k.Type, k.ID, "other.png", "image/png", "", png, actor); err == nil ||
+	if _, err := bare.PutAttachment(ctx, k.ID, "other.png", "image/png", "", png, actor); err == nil ||
 		!strings.Contains(err.Error(), "OCHAKAI_GCS_BUCKET") {
 		t.Errorf("attach without a blob store = %v, want config hint", err)
 	}
-	if _, _, err := bare.GetAttachment(ctx, k.Type, k.ID, "chart.png"); err == nil ||
+	if _, _, err := bare.GetAttachment(ctx, k.ID, "chart.png"); err == nil ||
 		!strings.Contains(err.Error(), "OCHAKAI_GCS_BUCKET") {
 		t.Errorf("read without a blob store = %v, want config hint", err)
 	}

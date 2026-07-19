@@ -24,12 +24,12 @@ entries. Search it before writing analytics SQL; write learnings back.
 - `ochakai search "<question or keyword>" [--type metrics|queries|insights|terms|datasets|tables|references] [--status verified]`
   — one hit per line: score, uri, status, title. Trust `verified` entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
-- `ochakai get <type>/<id>` — full entry as markdown (YAML frontmatter +
+- `ochakai get <id>` — full entry as markdown (YAML frontmatter +
   body). Follow the `# Links` section to related entries. If stderr lists
   attachments (dashboard screenshots, ER diagrams), fetch them with
-  `ochakai get <type>/<id> --download <dir>` and Read the saved files when
+  `ochakai get <id> --download <dir>` and Read the saved files when
   the body's image references matter to the question.
-- `ochakai attach <type>/<id> <file>` — attach a file to an entry
+- `ochakai attach <id> <file>` — attach a file to an entry
   (png/jpeg/webp, pdf, plain text; reference it from the body so the
   caption is searchable). If you learn something by looking at an
   attachment, write it into the body with `ochakai update` — knowledge
@@ -39,7 +39,7 @@ entries. Search it before writing analytics SQL; write learnings back.
   with your own warehouse access. **Exit 2** means the request is outside
   the supported subset: read the reason on stderr and prefer any suggested
   verified golden queries.
-- `ochakai report <type>/<id> worked|failed [--note "what went wrong"]`
+- `ochakai report <id> worked|failed [--note "what went wrong"]`
   — after acting on knowledge (running a golden query, executing compiled
   SQL), report whether the result was actually correct. `failed` reports
   flag verified entries for re-verification, so the next agent doesn't

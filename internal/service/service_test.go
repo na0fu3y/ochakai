@@ -95,12 +95,12 @@ func TestReportOutcomeValidation(t *testing.T) {
 	ctx := context.Background()
 	var inputErr *InvalidInputError
 
-	_, err := s.ReportOutcome(ctx, domain.TypeQueries, "q", "misleading", "")
+	_, err := s.ReportOutcome(ctx, "queries/q", "misleading", "")
 	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "invalid outcome") {
 		t.Errorf("unknown outcome: got %v, want an invalid-outcome InvalidInputError", err)
 	}
 
-	_, err = s.ReportOutcome(ctx, domain.TypeQueries, "q", domain.EventWorked, strings.Repeat("x", maxOutcomeNote+1))
+	_, err = s.ReportOutcome(ctx, "queries/q", domain.EventWorked, strings.Repeat("x", maxOutcomeNote+1))
 	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "note exceeds") {
 		t.Errorf("oversized note: got %v, want a note-exceeds InvalidInputError", err)
 	}
@@ -146,6 +146,7 @@ func TestValidateRejectsBadInput(t *testing.T) {
 		"bad type":    func(k *domain.Knowledge) { k.Type = "no/slash" },
 		"bad id":      func(k *domain.Knowledge) { k.ID = "UPPER//bad" },
 		"index id":    func(k *domain.Knowledge) { k.ID = "sales/index" },
+		"log id":      func(k *domain.Knowledge) { k.ID = "sales/log" },
 		"empty title": func(k *domain.Knowledge) { k.Title = "   " },
 		"bad status":  func(k *domain.Knowledge) { k.Status = "published" },
 	} {

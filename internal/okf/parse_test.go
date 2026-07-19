@@ -20,7 +20,13 @@ func TestParseRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%s): %v", want.URI(), err)
 		}
-		if got.Type != want.Type || got.ID != want.ID || got.Title != want.Title ||
+		// The id is the entry's path, not part of the document (design doc
+		// 0016): the exported frontmatter carries no id key, and the parsed
+		// document leaves ID for the caller's address to fill in.
+		if got.ID != "" {
+			t.Errorf("Parse invented an id: %q", got.ID)
+		}
+		if got.Type != want.Type || got.Title != want.Title ||
 			got.Description != want.Description || got.Status != want.Status {
 			t.Errorf("envelope mismatch: got %+v, want %+v", got, want)
 		}

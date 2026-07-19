@@ -53,17 +53,17 @@ func TestContextIntegration(t *testing.T) {
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
 	id := uid("ctxit")
-	metricID, queryID, insightID, rejectedID := id+"-revenue", id+"-monthly", id+"-reading", id+"-rejected"
+	metricID, queryID, insightID, rejectedID := "metrics/"+id+"-revenue", "queries/"+id+"-monthly", "insights/"+id+"-reading", "insights/"+id+"-rejected"
 	entries := []*domain.Knowledge{
-		{Type: domain.TypeMetrics, ID: metricID, Title: metricID + " metric",
+		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
 			Status: domain.StatusVerified,
-			Links:  []domain.Link{{Rel: "answered_by", Target: "queries/" + queryID}}},
+			Links:  []domain.Link{{Rel: "answered_by", Target: queryID}}},
 		{Type: domain.TypeQueries, ID: queryID, Title: "monthly numbers"},
 		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
-			Links: []domain.Link{{Rel: "explains", Target: "ochakai://metrics/" + metricID}}},
+			Links: []domain.Link{{Rel: "explains", Target: "ochakai://" + metricID}}},
 		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
 			Status: domain.StatusRejected,
-			Links:  []domain.Link{{Rel: "explains", Target: "metrics/" + metricID}}},
+			Links:  []domain.Link{{Rel: "explains", Target: metricID}}},
 	}
 	for _, k := range entries {
 		if _, err := svc.Create(ctx, k, actor); err != nil {
@@ -71,25 +71,25 @@ func TestContextIntegration(t *testing.T) {
 		}
 	}
 
-	res, err := svc.Context(ctx, metricID, store.Filter{}, 5, 0)
+	res, err := svc.Context(ctx, id+"-revenue", store.Filter{}, 5, 0)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
 	got := map[string]bool{}
 	for _, e := range res.Entries {
-		got[string(e.Type)+"/"+e.ID] = true
+		got[e.ID] = true
 	}
-	for _, want := range []string{"metrics/" + metricID, "queries/" + queryID, "insights/" + insightID} {
+	for _, want := range []string{metricID, queryID, insightID} {
 		if !got[want] {
 			t.Errorf("context pack misses %s; got %v", want, got)
 		}
 	}
-	if got["insights/"+rejectedID] {
+	if got[rejectedID] {
 		t.Error("rejected companions must stay out of the pack")
 	}
 
 	// A prohibitive min_score empties the pack instead of shipping junk.
-	filtered, err := svc.Context(ctx, metricID, store.Filter{}, 5, 1e9)
+	filtered, err := svc.Context(ctx, id+"-revenue", store.Filter{}, 5, 1e9)
 	if err != nil {
 		t.Fatalf("Context with min_score: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 	if len(hits) == 0 || hits[0].ID != id {
 		t.Fatalf("search missed the entry: %+v", hits)
 	}
-	u, err := svc.Usage(ctx, domain.TypeTerms, id)
+	u, err := svc.Usage(ctx, id)
 	if err != nil {
 		t.Fatalf("Usage: %v", err)
 	}
@@ -158,7 +158,9 @@ func TestCompileIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, k := range []*domain.Knowledge{
-		{Type: domain.TypeMetrics, ID: metricName, Title: "compile-test revenue",
+		// The metric entry sits at the conventional "metrics/<name>" path,
+		// where Compile resolves semantic-model metrics by name.
+		{Type: domain.TypeMetrics, ID: "metrics/" + metricName, Title: "compile-test revenue",
 			Attrs: map[string]any{"model": modelName}},
 		{Type: domain.TypeQueries, ID: goldenID, Title: metricName + " by month",
 			Status: domain.StatusVerified},
@@ -206,13 +208,13 @@ func TestDeleteIntegration(t *testing.T) {
 		Type: domain.TypeTerms, ID: id, Title: "to delete"}, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Delete(ctx, domain.TypeTerms, id, actor); err != nil {
+	if err := svc.Delete(ctx, id, actor); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := svc.Get(ctx, domain.TypeTerms, id); !errors.Is(err, store.ErrNotFound) {
+	if _, err := svc.Get(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("deleted entry still readable: %v", err)
 	}
-	if err := svc.Delete(ctx, domain.TypeTerms, id, actor); !errors.Is(err, store.ErrNotFound) {
+	if err := svc.Delete(ctx, id, actor); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
 	}
 }

@@ -67,14 +67,14 @@ metrics:
 		t.Errorf("created = %v, want the metric and table entries", report.Created)
 	}
 
-	metric, err := svc.Get(ctx, domain.TypeMetrics, metricName)
+	metric, err := svc.Get(ctx, "metrics/"+metricName)
 	if err != nil {
 		t.Fatalf("derived metric entry missing: %v", err)
 	}
 	if metric.Attrs["model"] != modelName {
 		t.Errorf("metric attrs.model = %v, want %s", metric.Attrs["model"], modelName)
 	}
-	table, err := svc.Get(ctx, domain.TypeTables, dsName)
+	table, err := svc.Get(ctx, "tables/"+dsName)
 	if err != nil {
 		t.Fatalf("derived table entry missing: %v", err)
 	}
@@ -108,7 +108,7 @@ metrics:
 	if len(refreshed.Updated) != 1 || !strings.Contains(refreshed.Updated[0], metricName) {
 		t.Errorf("refresh: updated = %v, want the metric entry", refreshed.Updated)
 	}
-	metric, err = svc.Get(ctx, domain.TypeMetrics, metricName)
+	metric, err = svc.Get(ctx, "metrics/"+metricName)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -58,11 +58,13 @@ func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, acto
 		}
 		report.Models = append(report.Models, m.Name)
 
+		// Derived entries live at the conventional "<type>/<name>" paths —
+		// where compile_sql resolves metrics by name (design doc 0017 §4.4).
 		for _, metric := range m.Metrics {
 			attrs := map[string]any{"model": m.Name, "expression": metric.Expression}
 			if err := upsertKnowledge(ctx, svc, report, actor, &domain.Knowledge{
 				Type:        domain.TypeMetrics,
-				ID:          slugify(metric.Name),
+				ID:          "metrics/" + slugify(metric.Name),
 				Title:       metric.Name,
 				Description: metric.Description,
 				Attrs:       attrs,
@@ -74,7 +76,7 @@ func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, acto
 			attrs := map[string]any{"model": m.Name}
 			if err := upsertKnowledge(ctx, svc, report, actor, &domain.Knowledge{
 				Type:        domain.TypeTables,
-				ID:          slugify(ds.Name),
+				ID:          "tables/" + slugify(ds.Name),
 				Title:       ds.Name,
 				Description: ds.Description,
 				Resource:    bqResource(ds.Source),
@@ -89,7 +91,7 @@ func ImportOssie(ctx context.Context, svc *service.Service, yamlSrc []byte, acto
 }
 
 func upsertKnowledge(ctx context.Context, svc *service.Service, report *Report, actor domain.Actor, k *domain.Knowledge) error {
-	existing, err := svc.Get(ctx, k.Type, k.ID)
+	existing, err := svc.Get(ctx, k.ID)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		if _, err := svc.Create(ctx, k, actor); err != nil {

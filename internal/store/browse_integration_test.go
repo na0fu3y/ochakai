@@ -8,9 +8,9 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// Browse (design doc 0014): types with counts at the root, then one
-// level of dirs and entries per call; rejected entries invisible, and
-// prefix matching by string (an ID with "_" must not act as a LIKE
+// Browse (design docs 0014, 0016): one level of dirs and entries per
+// call, rooted at the top-level segments; rejected entries invisible,
+// and prefix matching by string (an ID with "_" must not act as a LIKE
 // wildcard).
 func TestIntegrationBrowse(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
@@ -51,21 +51,21 @@ func TestIntegrationBrowse(t *testing.T) {
 	mk(domain.TypeQueries, "it-br_x/deep", domain.StatusDraft)
 	mk(domain.TypeMetrics, "it-br-revenue", domain.StatusDraft)
 
-	types, err := s.ListTypes(ctx)
+	// The root is the top-level segments of the shared test DB; our
+	// directory must be there with its subtree count.
+	rootDirs, _, _, err := s.Browse(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts := map[domain.Type]int{}
-	for _, tc := range types {
-		counts[tc.Type] = tc.Count
+	rootCounts := map[string]int{}
+	for _, d := range rootDirs {
+		rootCounts[d.Name] = d.Count
 	}
-	// Counts cover the whole shared test DB; ours set the minimum, and
-	// the rejected entry must not be part of it.
-	if counts[domain.TypeQueries] < 4 || counts[domain.TypeMetrics] < 1 {
-		t.Errorf("type counts too small: %v", counts)
+	if rootCounts["it-br-sales"] != 2 || rootCounts["it-br_x"] != 1 {
+		t.Errorf("root dir counts wrong: %v", rootCounts)
 	}
 
-	dirs, entries, truncated, err := s.Browse(ctx, domain.TypeQueries, "it-br-sales/")
+	dirs, entries, truncated, err := s.Browse(ctx, "it-br-sales/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,13 +75,13 @@ func TestIntegrationBrowse(t *testing.T) {
 	if len(dirs) != 1 || dirs[0].Name != "regions" || dirs[0].Count != 1 {
 		t.Errorf("dirs = %+v, want regions(1)", dirs)
 	}
-	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" ||
+	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" || entries[0].Type != domain.TypeQueries ||
 		entries[0].Title != "t:it-br-sales/monthly" || entries[0].Status != domain.StatusVerified {
 		t.Errorf("entries = %+v", entries)
 	}
 
 	// The underscore ID lives in its own directory, not under it-br-sales.
-	dirs, entries, _, err = s.Browse(ctx, domain.TypeQueries, "it-br_x/")
+	dirs, entries, _, err = s.Browse(ctx, "it-br_x/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +89,8 @@ func TestIntegrationBrowse(t *testing.T) {
 		t.Errorf("underscore prefix: dirs=%+v entries=%+v", dirs, entries)
 	}
 
-	// Root of the type: the rejected entry is invisible.
-	_, entries, _, err = s.Browse(ctx, domain.TypeQueries, "")
+	// Root level: the rejected entry is invisible.
+	_, entries, _, err = s.Browse(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}

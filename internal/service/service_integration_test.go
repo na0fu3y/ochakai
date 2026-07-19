@@ -55,7 +55,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 	// Read the baseline back through the store: PostgreSQL timestamptz is
 	// microsecond precision, so the Create return value's nanosecond
 	// time.Now() would never equal a value round-tripped through the DB.
-	created, err := svc.Get(ctx, domain.TypeMetrics, id)
+	created, err := svc.Get(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 	if !got.UpdatedAt.Equal(created.UpdatedAt) {
 		t.Errorf("no-op update bumped updated_at: %v -> %v", created.UpdatedAt, got.UpdatedAt)
 	}
-	revs, err := svc.Revisions(ctx, domain.TypeMetrics, id, 10)
+	revs, err := svc.Revisions(ctx, id, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 	if !got.UpdatedAt.After(created.UpdatedAt) {
 		t.Errorf("real update did not bump updated_at: %v", got.UpdatedAt)
 	}
-	if revs, err = svc.Revisions(ctx, domain.TypeMetrics, id, 10); err != nil {
+	if revs, err = svc.Revisions(ctx, id, 10); err != nil {
 		t.Fatal(err)
 	}
 	if len(revs) != 2 || revs[0].Change != "update" {

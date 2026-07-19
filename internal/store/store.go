@@ -128,9 +128,9 @@ func actorPtrs(a *domain.Actor) (kind, name *string) {
 	return &a.Kind, &a.Name
 }
 
-func (s *Store) Get(ctx context.Context, typ domain.Type, id string) (*domain.Knowledge, error) {
+func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge WHERE type = $1 AND id = $2 AND deleted_at IS NULL`, typ, id)
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -144,18 +144,17 @@ func (s *Store) Get(ctx context.Context, typ domain.Type, id string) (*domain.Kn
 	return &k, nil
 }
 
-// ListLinkingTo returns live entries whose links point at "<type>/<id>",
-// most recently updated first. This is the reverse edge Context needs:
-// the insight that explains a metric links to the metric, not the other
-// way round. Both bare and ochakai:// target forms match.
-func (s *Store) ListLinkingTo(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Knowledge, error) {
-	target := string(typ) + "/" + id
+// ListLinkingTo returns live entries whose links point at id, most
+// recently updated first. This is the reverse edge Context needs: the
+// insight that explains a metric links to the metric, not the other way
+// round. Both bare and ochakai:// target forms match.
+func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+knowledgeCols+` FROM knowledge
 		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2)
 		 ORDER BY updated_at DESC LIMIT $3`,
-		fmt.Sprintf(`[{"target": %q}]`, target),
-		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+target),
+		fmt.Sprintf(`[{"target": %q}]`, id),
+		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+id),
 		limit)
 	if err != nil {
 		return nil, err
@@ -163,7 +162,7 @@ func (s *Store) ListLinkingTo(ctx context.Context, typ domain.Type, id string, l
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
-// Create inserts a new entry. A live entry with the same type/id is
+// Create inserts a new entry. A live entry with the same id is
 // ErrAlreadyExists — including rejected ones, so the memory of no
 // survives. A soft-deleted entry is revived instead: the ID would
 // otherwise be dead forever (the row still owns the primary key while
@@ -181,7 +180,8 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-			ON CONFLICT (type, id) DO UPDATE SET
+			ON CONFLICT (id) DO UPDATE SET
+				type=EXCLUDED.type,
 				title=EXCLUDED.title, description=EXCLUDED.description, resource=EXCLUDED.resource, tags=EXCLUDED.tags,
 				status=EXCLUDED.status, status_note=EXCLUDED.status_note,
 				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
@@ -217,12 +217,12 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
-			title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8,
+			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8,
 			verified_by_kind=$9, verified_by_name=$10, verified_at=$11,
 			rejected_by_kind=$12, rejected_by_name=$13, rejected_at=$14,
 			links=$15, attrs=$16, body=$17, updated_at=$18
-			WHERE type=$1 AND id=$2 AND deleted_at IS NULL`,
-			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
+			WHERE id=$1 AND deleted_at IS NULL`,
+			k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
 			verifiedKind, verifiedName, k.VerifiedAt,
 			rejectedKind, rejectedName, k.RejectedAt,
 			links, attrs, k.Body, k.UpdatedAt)
@@ -237,10 +237,10 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 }
 
 // SoftDelete hides an entry from reads while keeping full history.
-// Create on the same type/id revives it.
-func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, actor domain.Actor) error {
+// Create on the same id revives it.
+func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
-		k, err := s.Get(ctx, typ, id)
+		k, err := s.Get(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -249,7 +249,7 @@ func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, acto
 		// not record a second "delete" revision.
 		tag, err := tx.Exec(ctx,
 			`UPDATE knowledge SET deleted_at = now(), updated_at = now()
-			 WHERE type=$1 AND id=$2 AND deleted_at IS NULL`, typ, id)
+			 WHERE id=$1 AND deleted_at IS NULL`, id)
 		if err != nil {
 			return err
 		}
@@ -263,7 +263,7 @@ func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, acto
 		if err != nil {
 			return err
 		}
-		if _, err := sp.Exec(ctx, `DELETE FROM knowledge_embedding WHERE type=$1 AND id=$2`, typ, id); err != nil {
+		if _, err := sp.Exec(ctx, `DELETE FROM knowledge_embedding WHERE id=$1`, id); err != nil {
 			_ = sp.Rollback(ctx)
 			if !isUndefinedTable(err) {
 				return err
@@ -278,11 +278,11 @@ func (s *Store) SoftDelete(ctx context.Context, typ domain.Type, id string, acto
 // ListRevisions returns an entry's change history, newest first. It
 // reads history, so it works for soft-deleted entries too — the audit
 // trail is most interesting exactly when the entry is gone.
-func (s *Store) ListRevisions(ctx context.Context, typ domain.Type, id string, limit int) ([]domain.Revision, error) {
+func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT rev, change, changed_by_kind, changed_by_name, changed_at, snapshot
-		 FROM knowledge_revision WHERE type=$1 AND id=$2 ORDER BY rev DESC LIMIT $3`,
-		typ, id, limit)
+		 FROM knowledge_revision WHERE id=$1 ORDER BY rev DESC LIMIT $2`,
+		id, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -310,9 +310,9 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (type, id, rev, change, changed_by_kind, changed_by_name, snapshot)
-		VALUES ($1, $2, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE type=$1 AND id=$2), $3, $4, $5, $6)`,
-		k.Type, k.ID, change, actor.Kind, actor.Name, snapshot)
+	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, snapshot)
+		VALUES ($1, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE id=$1), $2, $3, $4, $5)`,
+		k.ID, change, actor.Kind, actor.Name, snapshot)
 	return err
 }
 
@@ -341,12 +341,12 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 
 // SearchVector ranks by cosine distance against stored embeddings.
 func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit int) ([]domain.SearchHit, error) {
-	// Columns must be qualified: knowledge_embedding shares type/id/updated_at.
+	// Columns must be qualified: knowledge_embedding shares id/updated_at.
 	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
 	q := fmt.Sprintf(`
 		SELECT `+qualifyCols("k")+`, 1 - (e.embedding <=> $%d::vector) AS score
-		FROM knowledge k JOIN knowledge_embedding e ON k.type = e.type AND k.id = e.id
+		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, len(args), where, len(args), limit)
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -398,7 +398,7 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
 	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
-		ORDER BY verified_at ASC NULLS LAST, type, id LIMIT %d`, where, limit)
+		ORDER BY verified_at ASC NULLS LAST, id LIMIT %d`, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -429,10 +429,10 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 				COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
 				max(last_at) AS last_used_at
 			FROM knowledge_usage
-			WHERE knowledge_type = k.type AND knowledge_id = k.id
+			WHERE knowledge_id = k.id
 		) u ON true
 		WHERE %s
-		ORDER BY u.search_hits DESC, k.created_at ASC, k.type, k.id LIMIT %d`, where, limit)
+		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -457,11 +457,11 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	return h, nil
 }
 
-// ListAll returns every non-deleted entry, ordered by type then id.
-// Used by the OKF exporter.
+// ListAll returns every non-deleted entry, ordered by id. Used by the
+// OKF exporter.
 func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge WHERE deleted_at IS NULL ORDER BY type, id`)
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE deleted_at IS NULL ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -469,11 +469,11 @@ func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
 }
 
 // UpsertEmbedding stores the document embedding for a knowledge entry.
-func (s *Store) UpsertEmbedding(ctx context.Context, typ domain.Type, id, model string, vec []float32) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (type, id, model, embedding, updated_at)
-		VALUES ($1, $2, $3, $4::vector, now())
-		ON CONFLICT (type, id) DO UPDATE SET model = $3, embedding = $4::vector, updated_at = now()`,
-		typ, id, model, encodeVector(vec))
+func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []float32) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (id, model, embedding, updated_at)
+		VALUES ($1, $2, $3::vector, now())
+		ON CONFLICT (id) DO UPDATE SET model = $2, embedding = $3::vector, updated_at = now()`,
+		id, model, encodeVector(vec))
 	return err
 }
 

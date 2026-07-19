@@ -40,9 +40,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"verified golden queries, interpretation knowledge (how to read a metric), " +
 			"glossary terms, dataset and table catalog entries, and references (mirrors of " +
 			"external material such as enum definitions or schema docs) — those types are " +
-			"recommendations, " +
-			"and any slug works as a type for your own document kinds. IDs may be hierarchical " +
-			"(slash-separated, e.g. sales/orders) to organize knowledge into directories. " +
+			"recommendations, and any slug works as a type for your own document kinds. " +
+			"An entry's id is its path: slash-separated segments (e.g. metrics/revenue, " +
+			"ga4/tables/orders) forming directories. Place together what should be read " +
+			"together; the type is metadata, not a location. " +
 			"It executes no SQL and uses no LLM. " +
 			"Before answering a data question, call get_context once — it returns the relevant " +
 			"entries in full, links expanded. " +
@@ -61,24 +62,25 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	// canonical ochakai:// URI. Only the template is advertised — enumerating
 	// every entry in resources/list would flood the client, so discovery stays
 	// with search_knowledge/get_context and the URI is the addressing scheme.
-	// {+id} (RFC 6570 reserved expansion) lets hierarchical, slash-separated
-	// IDs match; a plain {id} would stop at the first slash.
+	// {+id} (RFC 6570 reserved expansion) lets the slash-separated id match;
+	// a plain {id} would stop at the first slash.
 	s.AddResourceTemplate(&mcp.ResourceTemplate{
 		Name:     "knowledge",
 		Title:    "Knowledge entry",
 		MIMEType: "text/markdown",
 		Description: "A single knowledge entry as an OKF document: YAML frontmatter (title, " +
 			"status, provenance, type-specific attrs) followed by the markdown body and its " +
-			"links. Address by canonical URI, e.g. ochakai://metrics/revenue; IDs may be " +
-			"hierarchical (ochakai://queries/sales/top-customers). Discover URIs with " +
-			"search_knowledge or get_context; get_knowledge returns the same entry as JSON.",
-		URITemplate: "ochakai://{type}/{+id}",
+			"links. Address by canonical URI — the scheme plus the entry's id (its path), " +
+			"e.g. ochakai://metrics/revenue or ochakai://queries/sales/top-customers. Discover " +
+			"URIs with search_knowledge or get_context; get_knowledge returns the same entry " +
+			"as JSON.",
+		URITemplate: "ochakai://{+id}",
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		typ, id, ok := parseKnowledgeURI(req.Params.URI)
+		id, ok := parseKnowledgeURI(req.Params.URI)
 		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		k, err := svc.Get(ctx, domain.Type(typ), id)
+		k, err := svc.Get(ctx, id)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return nil, mcp.ResourceNotFoundError(req.Params.URI)
@@ -157,11 +159,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_knowledge",
 		Annotations: readOnly,
-		Description: "Get one knowledge entry by type and id, including its full markdown body, structured attrs, " +
+		Description: "Get one knowledge entry by id, including its full markdown body, structured attrs, " +
 			"links, and attachment metadata (files the body references: images, PDFs, plain-text data — " +
 			"fetch bytes with get_attachment).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		k, err := svc.Get(ctx, domain.Type(in.Type), in.ID)
+		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
@@ -205,12 +207,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "delete_knowledge",
 		Annotations: destructive,
 		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
-			"create_knowledge on the same type/id revives it.",
+			"create_knowledge on the same id revives it.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
-		if err := svc.Delete(ctx, domain.Type(in.Type), in.ID, httpauth.Actor(ctx)); err != nil {
+		if err := svc.Delete(ctx, in.ID, httpauth.Actor(ctx)); err != nil {
 			return nil, deleteOut{}, err
 		}
-		return nil, deleteOut{Deleted: true, URI: fmt.Sprintf("ochakai://%s/%s", in.Type, in.ID)}, nil
+		return nil, deleteOut{Deleted: true, URI: uriScheme + in.ID}, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -224,7 +226,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"if you learn something from one, write it back into the entry's body with " +
 			"update_knowledge so the knowledge becomes searchable text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
-		att, data, err := svc.Attachment(ctx, domain.Type(in.Type), in.ID, in.Name)
+		att, data, err := svc.Attachment(ctx, in.ID, in.Name)
 		if err != nil {
 			return nil, attachmentOut{}, err
 		}
@@ -239,7 +241,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			content = &mcp.TextContent{Text: string(data)}
 		default:
 			content = &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
-				URI:      fmt.Sprintf("ochakai://%s/%s/attachments/%s", in.Type, in.ID, att.Name),
+				URI:      fmt.Sprintf("ochakai://%s/attachments/%s", in.ID, att.Name),
 				MIMEType: att.MediaType,
 				Blob:     data,
 			}}
@@ -256,7 +258,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
 			"and a staleness signal for verified entries that stopped being used.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, usageOut, error) {
-		u, err := svc.Usage(ctx, domain.Type(in.Type), in.ID)
+		u, err := svc.Usage(ctx, in.ID)
 		if err != nil {
 			return nil, usageOut{}, err
 		}
@@ -273,11 +275,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"against verified entries flag them for re-verification. Your identity is recorded " +
 			"with each report. Returns the entry's updated usage totals.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
-		typ, id, ok := strings.Cut(strings.TrimPrefix(in.Target, "ochakai://"), "/")
-		if !ok || typ == "" || id == "" {
-			return nil, usageOut{}, fmt.Errorf("invalid target %q (want <type>/<id>, e.g. queries/monthly-revenue)", in.Target)
+		id := strings.TrimPrefix(in.Target, uriScheme)
+		if !domain.ValidID(id) {
+			return nil, usageOut{}, fmt.Errorf("invalid target %q (want the entry's id, e.g. queries/monthly-revenue)", in.Target)
 		}
-		u, err := svc.ReportOutcome(ctx, domain.Type(typ), id, in.Outcome, in.Note)
+		u, err := svc.ReportOutcome(ctx, id, in.Outcome, in.Note)
 		if err != nil {
 			return nil, usageOut{}, err
 		}
@@ -316,20 +318,16 @@ var (
 
 func boolPtr(b bool) *bool { return &b }
 
-// parseKnowledgeURI splits a canonical knowledge URI (ochakai://<type>/<id>)
-// into its type and id. Internal slashes stay with the id so hierarchical IDs
-// (ochakai://queries/sales/orders) round-trip. ok is false when the URI lacks
-// the scheme or either segment is empty.
-func parseKnowledgeURI(uri string) (typ, id string, ok bool) {
-	rest, found := strings.CutPrefix(uri, uriScheme)
-	if !found {
-		return "", "", false
+// parseKnowledgeURI extracts the entry id from a canonical knowledge URI
+// (ochakai://<id>). ok is false when the URI lacks the scheme or what
+// follows is not a valid id (empty, or with an empty/invalid segment) —
+// malformed URIs are rejected before any store lookup.
+func parseKnowledgeURI(uri string) (id string, ok bool) {
+	id, found := strings.CutPrefix(uri, uriScheme)
+	if !found || !domain.ValidID(id) {
+		return "", false
 	}
-	typ, id, ok = strings.Cut(rest, "/")
-	if !ok || typ == "" || id == "" {
-		return "", "", false
-	}
-	return typ, id, true
+	return id, true
 }
 
 // The jsonschema tags spell out the numeric contracts (defaults, maxima,
@@ -367,8 +365,7 @@ type contextOut struct {
 }
 
 type getIn struct {
-	Type string `json:"type" jsonschema:"the entry's type slug (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
-	ID   string `json:"id" jsonschema:"the entry's id; / separates segments for hierarchical ids (e.g. sales/orders)"`
+	ID string `json:"id" jsonschema:"the entry's id — its path: slug segments separated by / (e.g. metrics/revenue, ga4/tables/orders)"`
 }
 
 type knowledgeOut struct {
@@ -376,8 +373,7 @@ type knowledgeOut struct {
 }
 
 type attachmentIn struct {
-	Type string `json:"type" jsonschema:"the entry's type slug (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
-	ID   string `json:"id" jsonschema:"the entry's id (/ separates segments for hierarchical ids)"`
+	ID   string `json:"id" jsonschema:"the entry's id (its path, e.g. metrics/revenue)"`
 	Name string `json:"name" jsonschema:"attachment filename, from the entry's attachments metadata"`
 }
 
@@ -390,7 +386,7 @@ type usageOut struct {
 }
 
 type outcomeIn struct {
-	Target  string `json:"target" jsonschema:"the entry the outcome is about, as <type>/<id> (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
+	Target  string `json:"target" jsonschema:"the id of the entry the outcome is about (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
 	Outcome string `json:"outcome" jsonschema:"\"worked\" = acting on the entry gave a correct result; \"failed\" = it gave a wrong or unusable one"`
 	Note    string `json:"note,omitempty" jsonschema:"optional context recorded with the report: what was run, what went wrong (max 2000 bytes)"`
 }
@@ -401,8 +397,8 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string         `json:"type" jsonschema:"one slug segment; recommended: metrics, queries, insights, terms, datasets, tables, references — any custom slug works"`
-	ID          string         `json:"id" jsonschema:"slug segments separated by / (hierarchical, e.g. sales/orders); the last segment must not be \"index\""`
+	Type        string         `json:"type" jsonschema:"what the entry is: one slug segment; recommended: metrics, queries, insights, terms, datasets, tables, references — any custom slug works"`
+	ID          string         `json:"id" jsonschema:"where the entry lives: its full path, slug segments separated by / (e.g. metrics/revenue, sales/orders); place together what should be read together; the last segment must not be \"index\" or \"log\""`
 	Title       string         `json:"title"`
 	Description string         `json:"description,omitempty"`
 	Resource    string         `json:"resource,omitempty" jsonschema:"canonical URI of the underlying asset (the table/dataset URI, or for references the external source URL); omit for abstract concepts"`

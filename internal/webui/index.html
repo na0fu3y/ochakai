@@ -359,11 +359,12 @@ function fmtSize(n) {
   if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
   return (n / (1024 * 1024)).toFixed(1) + ' MB';
 }
-// URL path for an entry; hierarchical IDs keep their slashes.
-function idPath(type, id) {
-  return encodeURIComponent(type) + '/' + String(id).split('/').map(encodeURIComponent).join('/');
+// URL path for an entry; the id is a path and its slashes stay real
+// separators (design doc 0016).
+function idPath(id) {
+  return String(id).split('/').map(encodeURIComponent).join('/');
 }
-const entryHash = e => '#/k/' + idPath(e.type, e.id);
+const entryHash = e => '#/k/' + idPath(e.id);
 
 /* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
 // resolveImg maps an image reference from the body to a URL (the detail
@@ -476,17 +477,17 @@ function route() {
   const [head, ...rest] = hash.split('/');
   document.querySelectorAll('#topnav a').forEach(a => a.classList.remove('active'));
   const mark = r => { const a = document.querySelector(`#topnav a[data-route="${r}"]`); if (a) a.classList.add('active'); };
-  if (head === 'k' && rest.length >= 2) {
+  if (head === 'k' && rest.length >= 1) {
     mark('explore');
-    viewDetail(decodeURIComponent(rest[0]), rest.slice(1).map(decodeURIComponent).join('/'));
-  } else if (head === 'edit' && rest.length >= 2) {
+    viewDetail(rest.map(decodeURIComponent).join('/'));
+  } else if (head === 'edit' && rest.length >= 1) {
     mark('explore');
-    viewEditor(decodeURIComponent(rest[0]), rest.slice(1).map(decodeURIComponent).join('/'));
+    viewEditor(rest.map(decodeURIComponent).join('/'));
   } else if (head === 'new') {
     // New entry lives behind Explore's “＋ New entry” button, not a
     // top-level tab — creating knowledge is part of exploring it.
     mark('explore');
-    viewEditor(null, null);
+    viewEditor(null);
   } else if (head === 'browse') {
     mark('browse');
     viewBrowse();
@@ -656,7 +657,7 @@ async function runSearch() {
 function cardThumbs(h) {
   const imgs = (h.attachments || []).filter(a => (a.media_type || '').startsWith('image/')).slice(0, 4);
   if (!imgs.length) return '';
-  const src = a => baseURL() + '/api/v1/attachments/' + idPath(h.type, h.id) + '/' + encodeURIComponent(a.name);
+  const src = a => baseURL() + '/api/v1/attachments/' + idPath(h.id) + '/' + encodeURIComponent(a.name);
   return `<div class="thumbs">${imgs.map(a =>
     `<img src="${src(a)}" alt="${esc(a.name)}" title="${esc(a.name)}" loading="lazy">`).join('')}</div>`;
 }
@@ -665,7 +666,7 @@ function hitCard(h) {
   const tags = (h.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const who = actorStr(h.status === 'verified' ? h.verified_by || h.created_by : h.created_by);
   const meta = [
-    `<span class="mono">ochakai://${esc(h.type)}/${esc(h.id)}</span>`,
+    `<span class="mono">ochakai://${esc(h.id)}</span>`,
     who ? esc(who) : '',
     h.verified_at ? 'verified ' + esc(fmtDate(h.verified_at)) : (h.updated_at ? 'updated ' + esc(fmtDate(h.updated_at)) : ''),
   ].filter(Boolean).join(' · ');
@@ -686,41 +687,54 @@ function hitCard(h) {
 
 /* ============================== browse ============================== */
 
-// The folder view of hierarchical IDs (design doc 0014): types at the
-// root, then ID segments as directories, loaded one level per request.
-// Expanded nodes survive navigation within the session and are restored
-// (re-fetched) when the tab is reopened.
-const browse = { open: new Set() }; // keys: type + ' ' + prefix
+// The folder view of the ID hierarchy (design docs 0014, 0016): the
+// id's segments are directories, loaded one level per request; the
+// root is the top-level segments. Expanded nodes survive navigation
+// within the session and are restored (re-fetched) when the tab is
+// reopened.
+const browse = { open: new Set() }; // keys: prefix
 
 function viewBrowse() {
   view.innerHTML = `
   <section class="browse">
-    <p class="provenance" style="margin-top:0">Knowledge as a folder tree — types at the root, hierarchical IDs
-    (<code>query/sales/monthly-revenue</code>) as directories. Rejected entries are hidden, as in search.</p>
+    <p class="provenance" style="margin-top:0">Knowledge as a folder tree — an entry's id is its path
+    (<code>query/sales/monthly-revenue</code>, <code>ga4/tables/orders</code>), and its type shows as a badge.
+    Rejected entries are hidden, as in search.</p>
     <div id="tree"><div class="empty">…</div></div>
   </section>`;
   const tree = $('#tree');
   api('/api/v1/browse').then(res => {
     if (tree !== $('#tree')) return; // navigated away
-    const types = res.types || [];
-    if (!types.length) {
-      tree.innerHTML = '<div class="empty">No knowledge yet.</div>';
-      return;
-    }
-    tree.innerHTML = types.map(t => nodeHTML(t.type, '', `<span class="type-ico">${icon(t.type)}</span>` +
-      `<span class="dir-name">${esc(t.type)}</span>`, t.count)).join('');
+    const html = levelHTML(res, '');
+    tree.innerHTML = html || '<div class="empty">No knowledge yet.</div>';
     wireNodes(tree);
   }).catch(e => {
     if (tree === $('#tree')) tree.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;
   });
 }
 
-function nodeHTML(type, prefix, label, count) {
-  const key = type + ' ' + prefix;
-  return `<details class="node" data-type="${esc(type)}" data-prefix="${esc(prefix)}" ${browse.open.has(key) ? 'open' : ''}>
+function nodeHTML(prefix, label, count) {
+  return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
     <summary>${label}<span class="count">${count}</span></summary>
     <div class="children"><div class="empty">…</div></div>
   </details>`;
+}
+
+// levelHTML renders one browse response: subdirectories, then the
+// entries at this level (with their type as icon + badge).
+function levelHTML(res, prefix) {
+  const dirs = (res.dirs || []).map(dir => nodeHTML(prefix + dir.name + '/',
+    `<span class="type-ico">📁</span><span class="dir-name mono">${esc(dir.name)}/</span>`, dir.count)).join('');
+  const entries = (res.entries || []).map(e => {
+    const seg = e.id.slice(prefix.length);
+    return `<a class="tree-entry" href="#/k/${idPath(e.id)}">
+      <span class="type-ico" title="${esc(e.type)}">${icon(e.type)}</span>
+      <span class="mono">${esc(seg)}</span>
+      <span class="entry-title">${esc(e.title)}</span>
+      <span class="badge ${esc(e.status)}">${esc(e.status)}</span>
+    </a>`;
+  }).join('');
+  return dirs + entries;
 }
 
 // wireNodes attaches lazy loading to every not-yet-wired node under
@@ -728,7 +742,7 @@ function nodeHTML(type, prefix, label, count) {
 function wireNodes(root) {
   root.querySelectorAll('details.node:not([data-wired])').forEach(d => {
     d.dataset.wired = '1';
-    const key = d.dataset.type + ' ' + d.dataset.prefix;
+    const key = d.dataset.prefix;
     const load = () => loadNode(d);
     d.addEventListener('toggle', () => {
       d.open ? browse.open.add(key) : browse.open.delete(key);
@@ -741,23 +755,14 @@ function wireNodes(root) {
 async function loadNode(d) {
   d.dataset.loaded = '1';
   const box = d.querySelector(':scope > .children');
-  const type = d.dataset.type, prefix = d.dataset.prefix;
+  const prefix = d.dataset.prefix;
   try {
-    const res = await api(`/api/v1/browse?type=${encodeURIComponent(type)}&prefix=${encodeURIComponent(prefix)}`);
-    const dirs = (res.dirs || []).map(dir => nodeHTML(type, prefix + dir.name + '/',
-      `<span class="type-ico">📁</span><span class="dir-name mono">${esc(dir.name)}/</span>`, dir.count)).join('');
-    const entries = (res.entries || []).map(e => {
-      const seg = e.id.slice(prefix.length);
-      return `<a class="tree-entry" href="#/k/${idPath(e.type, e.id)}">
-        <span class="mono">${esc(seg)}</span>
-        <span class="entry-title">${esc(e.title)}</span>
-        <span class="badge ${esc(e.status)}">${esc(e.status)}</span>
-      </a>`;
-    }).join('');
+    const res = await api(`/api/v1/browse?prefix=${encodeURIComponent(prefix)}`);
+    const body = levelHTML(res, prefix);
     const note = res.truncated
       ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
          better split into subdirectories.</div>` : '';
-    box.innerHTML = (dirs + entries + note) || '<div class="empty">Empty.</div>';
+    box.innerHTML = (body + note) || '<div class="empty">Empty.</div>';
     wireNodes(box);
   } catch (e) {
     delete d.dataset.loaded; // reopen retries
@@ -767,13 +772,13 @@ async function loadNode(d) {
 
 /* ============================== detail ============================== */
 
-async function viewDetail(type, id) {
+async function viewDetail(id) {
   view.innerHTML = '<div class="empty">…</div>';
   let entry;
   try {
-    entry = await api('/api/v1/knowledge/' + idPath(type, id));
+    entry = await api('/api/v1/knowledge/' + idPath(id));
   } catch (e) {
-    view.innerHTML = `<div class="error-banner">Could not load ${esc(type)}/${esc(id)}: ${esc(e.message)}</div>`;
+    view.innerHTML = `<div class="error-banner">Could not load ${esc(id)}: ${esc(e.message)}</div>`;
     return;
   }
 
@@ -807,7 +812,7 @@ async function viewDetail(type, id) {
   } : null;
 
   view.innerHTML = `
-    <nav class="crumbs mono"><a href="#/">knowledge</a> / ${esc(entry.type)} / ${esc(entry.id)}</nav>
+    <nav class="crumbs mono"><a href="#/">knowledge</a> / ${esc(entry.id)} <span class="badge">${esc(entry.type)}</span></nav>
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(entry.title)}</h1>
@@ -818,7 +823,7 @@ async function viewDetail(type, id) {
         ${canDraft ? '<button class="btn small" id="act-draft" title="Back to draft (clears verification / rejection provenance)">Mark draft</button>' : ''}
         ${canDeprecate ? '<button class="btn small" id="act-deprecate">Deprecate</button>' : ''}
         ${canReject ? '<button class="btn small danger" id="act-reject">Reject</button>' : ''}
-        <a class="btn small" href="#/edit/${idPath(entry.type, entry.id)}">Edit</a>
+        <a class="btn small" href="#/edit/${idPath(entry.id)}">Edit</a>
         <button class="btn small danger" id="act-delete">Delete</button>
       </span>
     </div>
@@ -838,11 +843,10 @@ async function viewDetail(type, id) {
 
   // Attachment paths and image resolution (design doc 0008). Body links
   // are OKF bundle references: relative to the entry document's directory
-  // ("<type>/<id parent>/"), or bundle-root when they start with "/".
+  // (the id's parent), or bundle-root when they start with "/".
   const lastSeg = entry.id.split('/').pop();
-  const idParent = entry.id.includes('/') ? entry.id.slice(0, entry.id.lastIndexOf('/')) : '';
-  const docDir = entry.type + (idParent ? '/' + idParent : '');
-  const attPath = name => '/api/v1/attachments/' + idPath(entry.type, entry.id) + '/' + encodeURIComponent(name);
+  const docDir = entry.id.includes('/') ? entry.id.slice(0, entry.id.lastIndexOf('/')) : '';
+  const attPath = name => '/api/v1/attachments/' + idPath(entry.id) + '/' + encodeURIComponent(name);
   const attURL = name => baseURL() + attPath(name);
   const normalize = p => {
     const out = [];
@@ -853,8 +857,8 @@ async function viewDetail(type, id) {
     return out.join('/');
   };
   const resolveImg = ref => {
-    const p = normalize(ref.startsWith('/') ? ref : docDir + '/' + ref);
-    const canonical = a => entry.type + '/' + entry.id + '/' + a.name;
+    const p = normalize(ref.startsWith('/') ? ref : (docDir ? docDir + '/' : '') + ref);
+    const canonical = a => entry.id + '/' + a.name;
     let hit = atts.find(a => p === (a.okf_path || canonical(a)) || p === canonical(a));
     // Forgiving fallback: names are unique within the entry, so a filename
     // match resolves references written against a layout we don't know.
@@ -883,8 +887,8 @@ async function viewDetail(type, id) {
       const links = entry.links || [];
       if (!links.length) return '<div class="empty">No links to other entries.</div>';
       return '<table class="kv">' + links.map(l => {
-        const seg = String(l.target || '').split('/');
-        const href = seg.length >= 2 ? '#/k/' + idPath(seg[0], seg.slice(1).join('/')) : null;
+        const target = String(l.target || '').replace(/^ochakai:\/\//, '');
+        const href = target ? '#/k/' + idPath(target) : null;
         return `<tr><td class="k">${esc(l.rel)}</td>
           <td>${href ? `<a class="mono" href="${href}">${esc(l.target)}</a>` : `<span class="mono">${esc(l.target)}</span>`}</td></tr>`;
       }).join('') + '</table>';
@@ -944,7 +948,7 @@ async function viewDetail(type, id) {
           await api(attPath(f.name), { method: 'PUT', raw: f });
         }
         toast(files.length > 1 ? `Attached ${files.length} files.` : 'Attached.');
-        viewDetail(entry.type, entry.id);
+        viewDetail(entry.id);
       } catch (e) { toast('Attach failed: ' + e.message); }
     });
     body.querySelectorAll('[data-detach]').forEach(b => b.addEventListener('click', async () => {
@@ -953,7 +957,7 @@ async function viewDetail(type, id) {
       try {
         await api(attPath(name), { method: 'DELETE' });
         toast('Detached.');
-        viewDetail(entry.type, entry.id);
+        viewDetail(entry.id);
       } catch (e) { toast('Detach failed: ' + e.message); }
     }));
   }
@@ -963,7 +967,7 @@ async function viewDetail(type, id) {
   // cached template. A failed fetch shows in place and retries next open.
   const lazy = {
     usage: async () => {
-      const u = await api('/api/v1/usage/' + idPath(entry.type, entry.id));
+      const u = await api('/api/v1/usage/' + idPath(entry.id));
       return () => `
         <div class="stat-tiles">
           <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">search hits</div></div>
@@ -975,14 +979,14 @@ async function viewDetail(type, id) {
         <p class="provenance">${u.last_used_at ? 'last used ' + esc(fmtDate(u.last_used_at)) : 'never used'}</p>`;
     },
     linked: async () => {
-      const { entries } = await api('/api/v1/backlinks/' + idPath(entry.type, entry.id) + '?limit=100');
+      const { entries } = await api('/api/v1/backlinks/' + idPath(entry.id) + '?limit=100');
       return () => (entries && entries.length)
         ? `<p class="provenance" style="margin:0 0 .8rem">Entries whose links point here — the entry's own links are in the Links tab.</p>`
           + entries.map(hitCard).join('')
         : '<div class="empty">Nothing links to this entry yet.</div>';
     },
     history: async () => {
-      const { revisions } = await api('/api/v1/revisions/' + idPath(entry.type, entry.id) + '?limit=200');
+      const { revisions } = await api('/api/v1/revisions/' + idPath(entry.id) + '?limit=200');
       const rows = (revisions || []).map(r => `
         <tr>
           <td class="k mono">#${r.rev}</td>
@@ -1021,7 +1025,7 @@ async function viewDetail(type, id) {
     try {
       if (await applyStatus(entry, status, askNote)) {
         toast(`Marked ${status}.`);
-        viewDetail(entry.type, entry.id);
+        viewDetail(entry.id);
       }
     } catch (e) { toast('Failed: ' + e.message); }
   };
@@ -1030,9 +1034,9 @@ async function viewDetail(type, id) {
   $('#act-deprecate')?.addEventListener('click', () => setStatus('deprecated', true));
   $('#act-reject')?.addEventListener('click', () => setStatus('rejected', true));
   $('#act-delete').addEventListener('click', async () => {
-    if (!confirm(`Soft-delete ${entry.type}/${entry.id}? Revision history is retained.`)) return;
+    if (!confirm(`Soft-delete ${entry.id}? Revision history is retained.`)) return;
     try {
-      await api('/api/v1/knowledge/' + idPath(entry.type, entry.id), { method: 'DELETE' });
+      await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'DELETE' });
       toast('Deleted.');
       location.hash = '#/';
     } catch (e) { toast('Failed: ' + e.message); }
@@ -1063,7 +1067,7 @@ async function applyStatus(entry, status, askNote) {
   const payload = editablePayload(entry);
   payload.status = status;
   if (note !== undefined) payload.status_note = note;
-  await api('/api/v1/knowledge/' + idPath(entry.type, entry.id), { method: 'PUT', body: payload });
+  await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'PUT', body: payload });
   return true;
 }
 
@@ -1139,13 +1143,13 @@ function reviewCard(h) {
     ? `${u.failed ? '⚠️ ' : ''}worked ${u.worked || 0} · failed ${u.failed || 0}`
     : '';
   const meta = [
-    `<span class="mono">ochakai://${esc(h.type)}/${esc(h.id)}</span>`,
+    `<span class="mono">ochakai://${esc(h.id)}</span>`,
     who ? esc(who) : '',
     age !== null ? 'created ' + esc(fmtAge(age)) : '',
     usageBits,
     outcomeBits,
   ].filter(Boolean).join(' · ');
-  return `<article class="card" data-type="${esc(h.type)}" data-id="${esc(h.id)}" data-href="${entryHash(h)}">
+  return `<article class="card" data-id="${esc(h.id)}" data-href="${entryHash(h)}">
     <div class="head">
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}">${esc(h.title)}</a>
@@ -1165,14 +1169,14 @@ function reviewCard(h) {
 
 function wireReviewActions(container) {
   container.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
-    const card = btn.closest('[data-type]');
+    const card = btn.closest('[data-id]');
     const status = btn.dataset.act === 'verify' ? 'verified' : 'rejected';
     // Re-fetch the current entry before a full-replacement PUT: the list
     // row may be stale, and status_note aside, we must not clobber a body
     // edited since the queue loaded.
     let entry;
     try {
-      entry = await api('/api/v1/knowledge/' + idPath(card.dataset.type, card.dataset.id));
+      entry = await api('/api/v1/knowledge/' + idPath(card.dataset.id));
     } catch (e) { toast('Load failed: ' + e.message); return; }
     try {
       if (await applyStatus(entry, status, status === 'rejected')) {
@@ -1185,14 +1189,14 @@ function wireReviewActions(container) {
 
 /* ============================== editor ============================== */
 
-async function viewEditor(type, id) {
-  const editing = type !== null;
+async function viewEditor(id) {
+  const editing = id !== null;
   let entry = { type: 'insight', id: '', title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
   if (editing) {
     try {
-      entry = await api('/api/v1/knowledge/' + idPath(type, id));
+      entry = await api('/api/v1/knowledge/' + idPath(id));
     } catch (e) {
-      view.innerHTML = `<div class="error-banner">Could not load ${esc(type)}/${esc(id)}: ${esc(e.message)}</div>`;
+      view.innerHTML = `<div class="error-banner">Could not load ${esc(id)}: ${esc(e.message)}</div>`;
       return;
     }
   }
@@ -1200,20 +1204,20 @@ async function viewEditor(type, id) {
   const attrsText = entry.attrs && Object.keys(entry.attrs).length ? JSON.stringify(entry.attrs, null, 2) : '';
 
   view.innerHTML = `
-    <div class="section-title">${editing ? `Edit ${esc(entry.type)}/${esc(entry.id)}` : 'New knowledge entry'}</div>
+    <div class="section-title">${editing ? `Edit ${esc(entry.id)}` : 'New knowledge entry'}</div>
     <form class="form" id="editor">
       <div class="row">
         <div class="field">
           <label class="top" for="e-type">Type</label>
-          <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" ${editing ? 'disabled' : ''} required>
+          <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" required>
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
-          <div class="hint">metric, query, insight, term, table — or any slug of your own.</div>
+          <div class="hint">What the entry is: metric, query, insight, term, table — or any slug of your own.</div>
         </div>
         <div class="field">
           <label class="top" for="e-id">ID</label>
           <input type="text" id="e-id" class="mono" value="${esc(entry.id)}" ${editing ? 'disabled' : ''}
                  placeholder="sales/monthly-revenue" required>
-          <div class="hint">Slug segments separated by “/” (hierarchical, like OKF concept IDs).</div>
+          <div class="hint">Where the entry lives: its path — slug segments separated by “/” (the OKF concept ID). Place together what should be read together.</div>
         </div>
       </div>
       <div class="field">
@@ -1256,7 +1260,7 @@ async function viewEditor(type, id) {
       <div id="editor-error"></div>
       <p>
         <button class="btn primary" type="submit">${editing ? 'Save' : 'Create draft'}</button>
-        <a class="btn" href="${editing ? '#/k/' + idPath(entry.type, entry.id) : '#/'}">Cancel</a>
+        <a class="btn" href="${editing ? '#/k/' + idPath(entry.id) : '#/'}">Cancel</a>
       </p>
     </form>
     ${editing ? '' : `
@@ -1284,7 +1288,7 @@ async function viewEditor(type, id) {
     const errBox = $('#editor-error');
     errBox.innerHTML = '';
     const payload = {
-      type: editing ? entry.type : $('#e-type').value.trim(),
+      type: $('#e-type').value.trim(),
       id: editing ? entry.id : $('#e-id').value.trim(),
       title: $('#e-title').value.trim(),
       description: $('#e-desc').value.trim(),
@@ -1305,7 +1309,7 @@ async function viewEditor(type, id) {
     if (links.length) payload.links = links;
     try {
       const saved = editing
-        ? await api('/api/v1/knowledge/' + idPath(entry.type, entry.id), { method: 'PUT', body: payload })
+        ? await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'PUT', body: payload })
         : await api('/api/v1/knowledge', { method: 'POST', body: payload });
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
@@ -1313,7 +1317,7 @@ async function viewEditor(type, id) {
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
       const dupLink = !editing && /already exists/.test(e.message)
-        ? ` — <a href="#/k/${idPath(payload.type, payload.id)}">view the existing ${esc(payload.type)}/${esc(payload.id)}</a> (edit it, or pick another ID)`
+        ? ` — <a href="#/k/${idPath(payload.id)}">view the existing ${esc(payload.id)}</a> (edit it, or pick another ID)`
         : '';
       errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
     }

@@ -34,7 +34,7 @@ func TestFromBundleAttachments(t *testing.T) {
 	}
 	got := map[string]string{}
 	for _, a := range atts {
-		got[string(a.Type)+"/"+a.ID+"/"+a.Name] = a.Path
+		got[a.ID+"/"+a.Name] = a.Path
 	}
 	want := map[string]string{
 		"insights/revenue-reading/weekly.png": "insights/revenue-reading/weekly.png",
@@ -50,8 +50,8 @@ func TestFromBundleAttachments(t *testing.T) {
 	}
 }
 
-// A concept at the bundle root resolves relative links against the root,
-// not against the canonical type directory it will move to on re-export.
+// A concept at the bundle root resolves relative links against the root
+// — where it also stays on re-export (design doc 0016).
 func TestFromBundleRootConceptAttachment(t *testing.T) {
 	files := map[string][]byte{
 		"overview.md":   []byte("---\ntype: Insight\ntitle: overview\n---\n\n![chart](img/chart.png)\n"),
@@ -97,7 +97,7 @@ func TestFromBundleFileAttachments(t *testing.T) {
 	_, atts, skipped := FromBundle(files)
 	got := map[string]string{}
 	for _, a := range atts {
-		got[string(a.Type)+"/"+a.ID+"/"+a.Name] = a.Path
+		got[a.ID+"/"+a.Name] = a.Path
 	}
 	want := map[string]string{
 		"tables/orders/seeds.txt": "data/seeds.txt",
@@ -129,7 +129,7 @@ func TestFromBundleNamespaceAttribution(t *testing.T) {
 	}
 	got := map[string]string{}
 	for _, a := range atts {
-		got[string(a.Type)+"/"+a.ID+"/"+a.Name] = a.Path
+		got[a.ID+"/"+a.Name] = a.Path
 	}
 	want := map[string]string{
 		"tables/orders/er.png":    "tables/orders/er.png",
@@ -151,7 +151,7 @@ func TestFromBundleNamespaceHierarchicalID(t *testing.T) {
 		"queries/sales/monthly/expected.txt": []byte("month,revenue\n2026-01,100\n"),
 	}
 	_, atts, skipped := FromBundle(files)
-	if len(atts) != 1 || atts[0].ID != "sales/monthly" || atts[0].Name != "expected.txt" {
+	if len(atts) != 1 || atts[0].ID != "queries/sales/monthly" || atts[0].Name != "expected.txt" {
 		t.Fatalf("atts = %+v", atts)
 	}
 	if len(skipped) != 0 {
@@ -161,11 +161,11 @@ func TestFromBundleNamespaceHierarchicalID(t *testing.T) {
 
 func TestAttachmentPath(t *testing.T) {
 	native := &domain.Attachment{Name: "weekly.png"}
-	if p := AttachmentPath(domain.TypeInsights, "sales/revenue-reading", native); p != "insights/sales/revenue-reading/weekly.png" {
+	if p := AttachmentPath("insights/sales/revenue-reading", native); p != "insights/sales/revenue-reading/weekly.png" {
 		t.Errorf("canonical path = %q", p)
 	}
 	foreign := &domain.Attachment{Name: "er.png", OKFPath: "diagrams/er.png"}
-	if p := AttachmentPath(domain.TypeTables, "orders", foreign); p != "diagrams/er.png" {
+	if p := AttachmentPath("tables/orders", foreign); p != "diagrams/er.png" {
 		t.Errorf("foreign path = %q", p)
 	}
 }

@@ -41,22 +41,14 @@ type ImportReport struct {
 	Unchanged []string `json:"unchanged,omitempty"`
 }
 
-// BrowseResult mirrors GET /api/v1/browse (design doc 0014): one level
-// of the ID hierarchy. At the root (no type) Types carries the type
-// list; inside a type, Dirs and Entries carry what sits directly under
-// the prefix. TestBrowseResultMatchesServerWire pins it to
-// service.BrowseResult.
+// BrowseResult mirrors GET /api/v1/browse (design docs 0014, 0016): one
+// level of the ID hierarchy — the subdirectories and entries directly
+// under the prefix ("" is the root). TestBrowseResultMatchesServerWire
+// pins it to service.BrowseResult.
 type BrowseResult struct {
-	Types     []BrowseType  `json:"types,omitempty"`
 	Dirs      []BrowseDir   `json:"dirs,omitempty"`
 	Entries   []BrowseEntry `json:"entries,omitempty"`
 	Truncated bool          `json:"truncated,omitempty"`
-}
-
-// BrowseType is one type with its live-entry count — the root level.
-type BrowseType struct {
-	Type  string `json:"type"`
-	Count int    `json:"count"`
 }
 
 // BrowseDir is one subdirectory (ID segment) with the number of entries

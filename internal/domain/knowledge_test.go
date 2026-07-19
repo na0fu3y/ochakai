@@ -10,7 +10,7 @@ func TestValidID(t *testing.T) {
 	valid := []string{
 		"revenue", "monthly-revenue", "sales/orders", "a/b/c",
 		"GA_sessions_2017", "notes/2026/q3", "v1.2", "sales/index-page",
-		"index/foo", // "index" is only reserved as the final segment
+		"index/foo", "log/foo", // "index"/"log" are only reserved as the final segment
 	}
 	for _, id := range valid {
 		if !ValidID(id) {
@@ -19,7 +19,7 @@ func TestValidID(t *testing.T) {
 	}
 	invalid := []string{
 		"", "/", "a/", "/a", "a//b", "日本語", "a b", "../etc", "a/../b",
-		".hidden", "a/.hidden", "index", "sales/index",
+		".hidden", "a/.hidden", "index", "sales/index", "log", "sales/log",
 		strings.Repeat("a", 129), "a/" + strings.Repeat("b/", 300),
 	}
 	for _, id := range invalid {

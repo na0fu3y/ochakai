@@ -140,29 +140,30 @@ func TestSearchSortValidation(t *testing.T) {
 	}
 }
 
-// TestParseKnowledgeURI pins the URI splitter feeding the resource template:
-// hierarchical IDs keep their slashes, and malformed URIs are rejected before
-// any store lookup.
+// TestParseKnowledgeURI pins the URI parser feeding the resource
+// template: the id is everything after the scheme (slashes are path
+// separators), and malformed URIs are rejected before any store lookup.
 func TestParseKnowledgeURI(t *testing.T) {
 	cases := []struct {
-		uri     string
-		typ, id string
-		ok      bool
+		uri string
+		id  string
+		ok  bool
 	}{
-		{"ochakai://metrics/revenue", "metrics", "revenue", true},
-		{"ochakai://queries/sales/top-customers", "queries", "sales/top-customers", true},
-		{"ochakai://tables/GA_sessions_2017", "tables", "GA_sessions_2017", true},
-		{"ochakai://metrics/", "", "", false}, // empty id
-		{"ochakai:///revenue", "", "", false}, // empty type
-		{"ochakai://metric", "", "", false},   // no id segment
-		{"file:///metrics/revenue", "", "", false},
-		{"metrics/revenue", "", "", false},
+		{"ochakai://metrics/revenue", "metrics/revenue", true},
+		{"ochakai://queries/sales/top-customers", "queries/sales/top-customers", true},
+		{"ochakai://tables/GA_sessions_2017", "tables/GA_sessions_2017", true},
+		{"ochakai://overview", "overview", true}, // root-level ids are entries too
+		{"ochakai://", "", false},                // empty id
+		{"ochakai://metrics/", "", false},        // empty segment
+		{"ochakai:///revenue", "", false},        // empty segment
+		{"file:///metrics/revenue", "", false},
+		{"metrics/revenue", "", false},
 	}
 	for _, c := range cases {
-		typ, id, ok := parseKnowledgeURI(c.uri)
-		if typ != c.typ || id != c.id || ok != c.ok {
-			t.Errorf("parseKnowledgeURI(%q) = (%q, %q, %v), want (%q, %q, %v)",
-				c.uri, typ, id, ok, c.typ, c.id, c.ok)
+		id, ok := parseKnowledgeURI(c.uri)
+		if id != c.id || ok != c.ok {
+			t.Errorf("parseKnowledgeURI(%q) = (%q, %v), want (%q, %v)",
+				c.uri, id, ok, c.id, c.ok)
 		}
 	}
 }
@@ -182,10 +183,10 @@ func TestResourceTemplateAdvertised(t *testing.T) {
 		t.Fatalf("got %d resource templates, want 1", len(tmpls.ResourceTemplates))
 	}
 	rt := tmpls.ResourceTemplates[0]
-	// {+id} (reserved expansion) is what lets hierarchical IDs match; a plain
-	// {id} would stop at the first slash.
-	if rt.URITemplate != "ochakai://{type}/{+id}" {
-		t.Errorf("URITemplate = %q, want ochakai://{type}/{+id}", rt.URITemplate)
+	// {+id} (reserved expansion) is what lets the slash-separated id match;
+	// a plain {id} would stop at the first slash.
+	if rt.URITemplate != "ochakai://{+id}" {
+		t.Errorf("URITemplate = %q, want ochakai://{+id}", rt.URITemplate)
 	}
 	if rt.MIMEType != "text/markdown" {
 		t.Errorf("MIMEType = %q, want text/markdown", rt.MIMEType)
@@ -205,7 +206,7 @@ func TestResourceTemplateAdvertised(t *testing.T) {
 // not-found before it ever reaches the store.
 func TestReadResourceRejectsMalformedURI(t *testing.T) {
 	cs := connect(t)
-	for _, uri := range []string{"ochakai://metrics/", "ochakai:///revenue"} {
+	for _, uri := range []string{"ochakai://metrics/", "ochakai:///revenue", "ochakai://"} {
 		_, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri})
 		if err == nil {
 			t.Errorf("ReadResource(%q) succeeded, want not-found error", uri)
@@ -270,8 +271,8 @@ func TestToolAnnotations(t *testing.T) {
 }
 
 // TestReportOutcomeValidation pins the tool's input checks: a target
-// that is not <type>/<id> and an unknown outcome are tool errors (not
-// transport failures), and both fire before any store access.
+// that is not a valid entry id and an unknown outcome are tool errors
+// (not transport failures), and both fire before any store access.
 func TestReportOutcomeValidation(t *testing.T) {
 	cs := connect(t)
 	cases := []struct {
@@ -279,7 +280,7 @@ func TestReportOutcomeValidation(t *testing.T) {
 		args       map[string]any
 		wantSubstr string
 	}{
-		{"bad target", map[string]any{"target": "no-slash", "outcome": "worked"}, "invalid target"},
+		{"bad target", map[string]any{"target": "queries/", "outcome": "worked"}, "invalid target"},
 		{"bad outcome", map[string]any{"target": "queries/q", "outcome": "misleading"}, "invalid outcome"},
 	}
 	for _, c := range cases {
