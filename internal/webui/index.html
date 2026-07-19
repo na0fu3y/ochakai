@@ -1,13 +1,14 @@
 <!doctype html>
 <!-- The bundled web UI for the ochakai REST API (api/openapi.yaml).
      A single self-contained file: no build step, no framework, no CDN.
-     Serve it from anywhere (`ochakai ui` locally, `ochakai serve-ui`
-     deployed — both proxy /api/v1 to ochakai; design doc 0006) and it
-     covers the human-facing API surface — search, folder browsing,
-     entry details with usage, revision history, backlinks, attachments,
-     create/edit with the draft → verified workflow (behind Explore's
-     “＋ New entry” button), the draft review queue (sort=usage), SQL
-     compilation (a Compile tab on metric entries), and OKF export.
+     Served by `ochakai ui` (loopback) and `ochakai serve-ui` (deployed) —
+     both proxy /api/v1 to ochakai, and the page always talks to its own
+     origin (design doc 0006). It covers the human-facing API surface —
+     a persistent knowledge tree as the primary navigation (an entry's id
+     is its path, design docs 0014/0016), search, entry details with
+     usage, revision history, backlinks, attachments, create/edit with
+     the draft → verified workflow, the draft review queue (sort=usage),
+     SQL compilation (a Compile tab on metric entries), and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -87,18 +88,42 @@
     .topbar { flex-wrap: wrap; height: auto; padding-top: .55rem; gap: .5rem .8rem; }
     .topnav { order: 10; flex-basis: 100%; align-self: auto; overflow-x: auto; }
     .topnav a { padding: .1rem .8rem .5rem; }
-    .server-chip { flex: 0 1 auto; min-width: 3rem; }
   }
   .topbar .spacer { flex: 1; }
-  .server-chip {
-    font-size: .8rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px;
-    padding: .2rem .7rem; background: none; cursor: pointer; font-family: inherit;
-    max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .server-chip:hover { border-color: var(--accent); color: var(--text); }
 
-  /* ---- layout ---- */
-  main { max-width: 68rem; margin: 0 auto; padding: 1.4rem 1.2rem 4rem; }
+  /* ---- layout: persistent tree sidebar + content pane ---- */
+  .shell { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
+  .sidebar {
+    background: var(--surface); border-right: 1px solid var(--border);
+    position: sticky; top: 3.3rem; height: calc(100vh - 3.3rem); overflow-y: auto;
+    padding: .8rem .7rem 2rem; font-size: .9rem;
+  }
+  /* Like the filter rail, the sidebar is a disclosure only on narrow
+     screens: always open (summary hidden) on desktop, collapsed by
+     default on mobile so content isn't pushed below a page of tree. */
+  .sidebar summary {
+    cursor: pointer; font-weight: 600; font-size: .9rem; padding: .3rem 0;
+    color: var(--muted); list-style: none; display: none;
+  }
+  .sidebar summary::before { content: '▸ '; }
+  .sidebar details[open] > summary::before { content: '▾ '; }
+  .side-head { display: flex; align-items: center; gap: .4rem; margin-bottom: .5rem; }
+  .side-head .lbl {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); font-weight: 600; flex: 1;
+  }
+  @media (max-width: 800px) {
+    .shell { display: block; }
+    .sidebar {
+      position: static; height: auto; border-right: none;
+      border-bottom: 1px solid var(--border); padding: .6rem 1.2rem;
+    }
+    .sidebar summary { display: block; }
+    /* The summary already says Knowledge; keep just the buttons. */
+    .side-head .lbl { display: none; }
+    .side-head { justify-content: flex-end; }
+  }
+  main { max-width: 62rem; margin: 0 auto; width: 100%; padding: 1.4rem 1.2rem 4rem; }
   .explore { display: grid; grid-template-columns: 14rem 1fr; gap: 1.6rem; align-items: start; }
   .explore > section { min-width: 0; }
   .rail { position: sticky; top: 4.6rem; }
@@ -259,6 +284,8 @@
   .browse .tree-entry:hover { background: var(--code-bg); text-decoration: none; }
   .browse .tree-entry .entry-title { color: var(--muted); }
   .browse .tree-entry:hover .entry-title { color: var(--text); }
+  .browse .tree-entry.active { background: var(--accent-weak); }
+  .browse .tree-entry.active .entry-title { color: var(--text); }
 
   /* ---- attachments ---- */
   .att-card { display: flex; gap: 1rem; align-items: flex-start; }
@@ -302,15 +329,25 @@
 <header class="topbar">
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
-    <a href="#/" data-route="explore">Explore</a>
-    <a href="#/browse" data-route="browse">Browse</a>
+    <a href="#/search" data-route="search">Search</a>
     <a href="#/review" data-route="review">Review</a>
   </nav>
   <span class="spacer"></span>
-  <a class="btn small" id="export-link" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
-  <button class="server-chip mono" id="server-chip" title="ochakai base URL (click to change)"></button>
 </header>
-<main id="view"></main>
+<div class="shell">
+  <aside class="sidebar">
+    <details id="side-details">
+      <summary>Knowledge tree</summary>
+      <div class="side-head">
+        <span class="lbl">Knowledge</span>
+        <button class="btn small" id="tree-refresh" title="Reload the tree">↻</button>
+        <a class="btn small" href="#/new" title="Create a knowledge entry">＋</a>
+      </div>
+      <div id="tree" class="browse"><div class="empty">…</div></div>
+    </details>
+  </aside>
+  <main id="view"></main>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -414,22 +451,12 @@ function md(src, resolveImg) {
 
 /* ============================== api ============================== */
 
-function baseURL() {
-  return (localStorage.getItem('ochakai.base') ||
-    (location.protocol.startsWith('http') ? location.origin : 'http://localhost:8080')).replace(/\/$/, '');
-}
-function refreshServerChip() {
-  $('#server-chip').textContent = baseURL();
-  $('#export-link').href = baseURL() + '/api/v1/export';
-}
-$('#server-chip').addEventListener('click', () => {
-  const v = prompt('ochakai base URL', baseURL());
-  if (v !== null) {
-    localStorage.setItem('ochakai.base', v.trim().replace(/\/$/, ''));
-    refreshServerChip();
-    route();
-  }
-});
+// The page always talks to its own origin — both serving paths
+// (`ochakai ui`, `ochakai serve-ui`) proxy /api/v1 with the right
+// credentials (design doc 0006), so a configurable base URL could only
+// break that. Opened as a plain file (development), it targets a local
+// `ochakai serve`.
+const BASE = location.protocol.startsWith('http') ? location.origin : 'http://localhost:8080';
 
 async function api(path, opts = {}) {
   const init = { method: opts.method || 'GET' };
@@ -439,7 +466,7 @@ async function api(path, opts = {}) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(opts.body);
   }
-  const res = await fetch(baseURL() + path, init);
+  const res = await fetch(BASE + path, init);
   if (!res.ok) {
     let msg = res.status + ' ' + res.statusText;
     try {
@@ -479,26 +506,27 @@ function route() {
   document.querySelectorAll('#topnav a').forEach(a => a.classList.remove('active'));
   const mark = r => { const a = document.querySelector(`#topnav a[data-route="${r}"]`); if (a) a.classList.add('active'); };
   if (head === 'k' && rest.length >= 1) {
-    mark('explore');
     viewDetail(rest.map(decodeURIComponent).join('/'));
   } else if (head === 'edit' && rest.length >= 1) {
-    mark('explore');
     viewEditor(rest.map(decodeURIComponent).join('/'));
   } else if (head === 'new') {
-    // New entry lives behind Explore's “＋ New entry” button, not a
+    // New entry lives in the sidebar's “＋” and the search view, not a
     // top-level tab — creating knowledge is part of exploring it.
-    mark('explore');
     viewEditor(null);
   } else if (head === 'browse') {
-    mark('browse');
-    viewBrowse();
+    // Legacy route from when the tree was a tab; it is the sidebar now.
+    location.replace('#/');
+    return;
   } else if (head === 'review') {
     mark('review');
     viewReview();
-  } else {
-    mark('explore');
+  } else if (head === 'search') {
+    mark('search');
     viewExplore();
+  } else {
+    viewHome();
   }
+  markTreeSelection();
 }
 window.addEventListener('hashchange', route);
 
@@ -658,7 +686,7 @@ async function runSearch() {
 function cardThumbs(h) {
   const imgs = (h.attachments || []).filter(a => (a.media_type || '').startsWith('image/')).slice(0, 4);
   if (!imgs.length) return '';
-  const src = a => baseURL() + '/api/v1/attachments/' + idPath(h.id) + '/' + encodeURIComponent(a.name);
+  const src = a => BASE + '/api/v1/attachments/' + idPath(h.id) + '/' + encodeURIComponent(a.name);
   return `<div class="thumbs">${imgs.map(a =>
     `<img src="${src(a)}" alt="${esc(a.name)}" title="${esc(a.name)}" loading="lazy">`).join('')}</div>`;
 }
@@ -686,33 +714,34 @@ function hitCard(h) {
   </article>`;
 }
 
-/* ============================== browse ============================== */
+/* ============================== sidebar tree ============================== */
 
-// The folder view of the ID hierarchy (design docs 0014, 0016): the
-// id's segments are directories, loaded one level per request; the
-// root is the top-level segments. Expanded nodes survive navigation
-// within the session and are restored (re-fetched) when the tab is
-// reopened.
+// The folder view of the ID hierarchy (design docs 0014, 0016) is the
+// primary navigation: a persistent sidebar where the id's segments are
+// directories, loaded one level per request; the root is the top-level
+// segments. Expanded nodes survive navigation within the session and
+// are restored (re-fetched) on a tree refresh.
 const browse = { open: new Set() }; // keys: prefix
 
-function viewBrowse() {
-  view.innerHTML = `
-  <section class="browse">
-    <p class="provenance" style="margin-top:0">Knowledge as a folder tree — an entry's id is its path
-    (<code>queries/sales/monthly-revenue</code>, <code>ga4/tables/orders</code>), and its type shows as a badge.
-    Rejected entries are hidden, as in search.</p>
-    <div id="tree"><div class="empty">…</div></div>
-  </section>`;
+// refreshTree (re)loads the root level; wireNodes then reloads every
+// node restored as open. Called at boot, from the ↻ button, and after
+// writes that change what the tree shows (create, delete, status).
+async function refreshTree() {
   const tree = $('#tree');
-  api('/api/v1/browse').then(res => {
-    if (tree !== $('#tree')) return; // navigated away
-    const html = levelHTML(res, '');
-    tree.innerHTML = html || '<div class="empty">No knowledge yet.</div>';
+  try {
+    const res = await api('/api/v1/browse');
+    tree.innerHTML = levelHTML(res, '') || '<div class="empty">No knowledge yet.</div>';
     wireNodes(tree);
-  }).catch(e => {
-    if (tree === $('#tree')) tree.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;
-  });
+    // A deep link may have rendered before the tree existed (boot) or
+    // before this refresh; re-reveal the current entry in the new tree.
+    const m = location.hash.match(/^#\/(?:k|edit)\/(.+)$/);
+    if (m) revealInTree(m[1].split('/').map(decodeURIComponent).join('/'));
+    else markTreeSelection();
+  } catch (e) {
+    tree.innerHTML = `<div class="error-banner">Tree failed: ${esc(e.message)}</div>`;
+  }
 }
+$('#tree-refresh').addEventListener('click', refreshTree);
 
 function nodeHTML(prefix, label, count) {
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
@@ -728,7 +757,7 @@ function levelHTML(res, prefix) {
     `<span class="type-ico">📁</span><span class="dir-name mono">${esc(dir.name)}/</span>`, dir.count)).join('');
   const entries = (res.entries || []).map(e => {
     const seg = e.id.slice(prefix.length);
-    return `<a class="tree-entry" href="#/k/${idPath(e.id)}">
+    return `<a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}">
       <span class="type-ico" title="${esc(e.type)}">${icon(e.type)}</span>
       <span class="mono">${esc(seg)}</span>
       <span class="entry-title">${esc(e.title)}</span>
@@ -744,36 +773,98 @@ function wireNodes(root) {
   root.querySelectorAll('details.node:not([data-wired])').forEach(d => {
     d.dataset.wired = '1';
     const key = d.dataset.prefix;
-    const load = () => loadNode(d);
     d.addEventListener('toggle', () => {
       d.open ? browse.open.add(key) : browse.open.delete(key);
-      if (d.open && !d.dataset.loaded) load();
+      if (d.open) loadNode(d);
     });
-    if (d.open) load();
+    if (d.open) loadNode(d);
   });
 }
 
-async function loadNode(d) {
-  d.dataset.loaded = '1';
-  const box = d.querySelector(':scope > .children');
-  const prefix = d.dataset.prefix;
-  try {
-    const res = await api(`/api/v1/browse?prefix=${encodeURIComponent(prefix)}`);
-    const body = levelHTML(res, prefix);
-    const note = res.truncated
-      ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
-         better split into subdirectories.</div>` : '';
-    box.innerHTML = (body + note) || '<div class="empty">Empty.</div>';
-    wireNodes(box);
-  } catch (e) {
-    delete d.dataset.loaded; // reopen retries
-    box.innerHTML = `<div class="error-banner">Load failed: ${esc(e.message)}</div>`;
+// loadNode fetches a node's children once; the in-flight promise is
+// kept on the element so revealInTree can await a load it didn't start.
+// A failed load clears both, so reopening (or revealing) retries.
+function loadNode(d) {
+  if (d._load) return d._load;
+  d._load = (async () => {
+    const box = d.querySelector(':scope > .children');
+    const prefix = d.dataset.prefix;
+    try {
+      const res = await api(`/api/v1/browse?prefix=${encodeURIComponent(prefix)}`);
+      const body = levelHTML(res, prefix);
+      const note = res.truncated
+        ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
+           better split into subdirectories.</div>` : '';
+      box.innerHTML = (body + note) || '<div class="empty">Empty.</div>';
+      wireNodes(box);
+      markTreeSelection();
+    } catch (e) {
+      d._load = null; // reopen retries
+      box.innerHTML = `<div class="error-banner">Load failed: ${esc(e.message)}</div>`;
+    }
+  })();
+  return d._load;
+}
+
+// revealInTree expands the tree along an entry's ancestor directories
+// (loading each level as needed) so the current entry is visible and
+// highlighted — the tree always shows where in the hierarchy you are.
+async function revealInTree(id) {
+  const segs = String(id).split('/');
+  let prefix = '';
+  for (let i = 0; i < segs.length - 1; i++) {
+    prefix += segs[i] + '/';
+    const p = prefix;
+    const d = [...document.querySelectorAll('#tree details.node')].find(n => n.dataset.prefix === p);
+    if (!d) return; // parent level not present (yet) — nothing to reveal
+    if (!d.open) d.open = true; // its toggle listener records the state
+    await loadNode(d);
   }
+  markTreeSelection();
+}
+
+// markTreeSelection highlights the tree entry for the route currently
+// shown (detail or its editor), if that part of the tree is loaded.
+function markTreeSelection() {
+  const m = location.hash.match(/^#\/(?:k|edit)\/(.+)$/);
+  const id = m ? m[1].split('/').map(decodeURIComponent).join('/') : null;
+  let active = null;
+  document.querySelectorAll('#tree .tree-entry').forEach(a => {
+    const on = a.dataset.id === id;
+    a.classList.toggle('active', on);
+    if (on) active = a;
+  });
+  active?.scrollIntoView({ block: 'nearest' });
+}
+
+/* ============================== home ============================== */
+
+function viewHome() {
+  view.innerHTML = `
+    <div class="section-title" style="font-size:1.5rem">🍵 ochakai</div>
+    <p style="color:var(--muted);max-width:42rem">Knowledge is a folder tree — an entry's id is its path
+    (<code>queries/sales/monthly-revenue</code>), so the tree in the sidebar is the way in: place together
+    what should be read together, and browse it like documentation. Search when you don't know where to look.</p>
+    <div class="searchbox" style="max-width:36rem">
+      <input type="text" id="home-q" placeholder="Search metrics, golden queries, insights, terms, tables…" autocomplete="off">
+      <a class="btn" id="home-go" href="#/search">Search</a>
+    </div>
+    <p style="color:var(--muted);font-size:.9rem">
+      <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
+      <a href="#/new">＋ New entry</a> ·
+      <a href="${BASE}/api/v1/export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
+    </p>`;
+  $('#home-q').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { explore.q = e.target.value; location.hash = '#/search'; }
+  });
+  $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
+  if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
 }
 
 /* ============================== detail ============================== */
 
 async function viewDetail(id) {
+  revealInTree(id); // in parallel with the entry fetch; harmless on 404
   view.innerHTML = '<div class="empty">…</div>';
   let entry;
   try {
@@ -849,7 +940,7 @@ async function viewDetail(id) {
   const lastSeg = entry.id.split('/').pop();
   const docDir = entry.id.includes('/') ? entry.id.slice(0, entry.id.lastIndexOf('/')) : '';
   const attPath = name => '/api/v1/attachments/' + idPath(entry.id) + '/' + encodeURIComponent(name);
-  const attURL = name => baseURL() + attPath(name);
+  const attURL = name => BASE + attPath(name);
   const normalize = p => {
     const out = [];
     for (const seg of p.split('/')) {
@@ -1027,6 +1118,7 @@ async function viewDetail(id) {
     try {
       if (await applyStatus(entry, status, askNote)) {
         toast(`Marked ${status}.`);
+        refreshTree(); // the tree shows status badges
         viewDetail(entry.id);
       }
     } catch (e) { toast('Failed: ' + e.message); }
@@ -1040,6 +1132,7 @@ async function viewDetail(id) {
     try {
       await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'DELETE' });
       toast('Deleted.');
+      refreshTree();
       location.hash = '#/';
     } catch (e) { toast('Failed: ' + e.message); }
   });
@@ -1183,6 +1276,7 @@ function wireReviewActions(container) {
     try {
       if (await applyStatus(entry, status, status === 'rejected')) {
         toast(`Marked ${status}.`);
+        refreshTree(); // the tree shows status badges (and hides rejected)
         runReview();
       }
     } catch (e) { toast('Failed: ' + e.message); }
@@ -1301,6 +1395,7 @@ async function viewEditor(id) {
         : await api('/api/v1/knowledge', { method: 'POST', body: payload });
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
+      refreshTree();
       location.hash = entryHash(saved || payload);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
@@ -1437,7 +1532,13 @@ function wireCompileForm(c) {
 
 /* ============================== boot ============================== */
 
-refreshServerChip();
+// The sidebar disclosure mirrors the filter rail: forced open on wide
+// screens (its summary is hidden there), collapsed by default on mobile.
+const sideDetails = $('#side-details');
+sideDetails.open = matchMedia('(min-width: 801px)').matches;
+matchMedia('(min-width: 801px)').addEventListener('change', e => { if (e.matches) sideDetails.open = true; });
+
+refreshTree();
 route();
 </script>
 </body>

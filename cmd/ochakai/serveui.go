@@ -8,8 +8,9 @@
 // identity (agent:<sa-email>). Same image as `serve`: deploy it with
 // `--args=serve-ui` (deploy guide §5b).
 //
-// Without OCHAKAI_URL it serves the static page only (the page then
-// calls whatever base URL the user enters, e.g. a local ochakai).
+// OCHAKAI_URL is required: the page always talks to its own origin
+// (design doc 0006 rev. 2026-07-19), so without an upstream there is
+// nothing to serve.
 //
 // Unlike `ochakai ui` this binds all interfaces and acts as the service,
 // never as a person — access control is the deployment's job (Cloud Run
@@ -39,18 +40,16 @@ func serveUI(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	var handler http.Handler
-	if target := os.Getenv("OCHAKAI_URL"); target != "" {
-		u, err := url.Parse(target)
-		if err != nil {
-			return fmt.Errorf("invalid OCHAKAI_URL %q: %w", target, err)
-		}
-		handler = serveUIHandler(newServiceProxy(u, &metadataTokenSource{audience: target}, log))
-		log.Info("proxying to ochakai", "target", target)
-	} else {
-		handler = serveUIHandler(nil)
-		log.Info("no OCHAKAI_URL; serving the static page only")
+	target := os.Getenv("OCHAKAI_URL")
+	if target == "" {
+		return fmt.Errorf("OCHAKAI_URL is required: the UI talks to its own origin, so serve-ui needs an ochakai server to proxy to")
 	}
+	u, err := url.Parse(target)
+	if err != nil {
+		return fmt.Errorf("invalid OCHAKAI_URL %q: %w", target, err)
+	}
+	handler := serveUIHandler(newServiceProxy(u, &metadataTokenSource{audience: target}, log))
+	log.Info("proxying to ochakai", "target", target)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -61,8 +60,7 @@ func serveUI(log *slog.Logger) error {
 }
 
 // serveUIHandler serves the embedded page at / plus /health, and routes
-// /api/v1 and /mcp through proxy (nil = no upstream configured: the API
-// paths 404 and the page talks to whatever base URL the user enters).
+// /api/v1 and /mcp through proxy.
 func serveUIHandler(proxy http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
@@ -72,10 +70,8 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(webui.Index)
 	})
-	if proxy != nil {
-		mux.Handle("/api/v1/", proxy)
-		mux.Handle("/mcp", proxy)
-	}
+	mux.Handle("/api/v1/", proxy)
+	mux.Handle("/mcp", proxy)
 	return mux
 }
 

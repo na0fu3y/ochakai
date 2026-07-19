@@ -3,8 +3,12 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
@@ -330,5 +334,105 @@ func TestMigrationSemanticModelEntries(t *testing.T) {
 	}
 	if gone != nil {
 		t.Errorf("semantic_model table still exists as %s", *gone)
+	}
+}
+
+// TestMigrateConcurrent reproduces the boot race: several processes
+// (server instances starting at once, or parallel test binaries sharing
+// a database) calling Migrate against the same unmigrated database.
+// Without the advisory lock, two of them can both see a migration as
+// unapplied and both apply it — the second failing (or rewriting data
+// twice) against the schema the first already changed.
+//
+// The scratch-transaction technique above cannot express this (the race
+// needs separate sessions), so it uses a run-unique schema instead. Its
+// search_path keeps public second: the pg_trgm operator class stays
+// resolvable while every unqualified table reference binds to the
+// scoped schema first.
+func TestMigrateConcurrent(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+
+	admin, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	// Ensure the extension lives in public before any scoped Migrate
+	// runs 0001's CREATE EXTENSION — on a fresh database it would
+	// otherwise install into the scoped schema and vanish with the
+	// cleanup below, breaking later runs in public.
+	if _, err := admin.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pg_trgm`); err != nil {
+		t.Fatal(err)
+	}
+	schema := fmt.Sprintf("migrate_race_%d", time.Now().UnixNano())
+	if _, err := admin.pool.Exec(ctx, `CREATE SCHEMA `+schema); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := admin.pool.Exec(context.Background(), `DROP SCHEMA `+schema+` CASCADE`); err != nil {
+			t.Errorf("drop schema %s: %v", schema, err)
+		}
+	}()
+
+	sep := "?"
+	if strings.Contains(dbURL, "?") {
+		sep = "&"
+	}
+	scopedURL := dbURL + sep + "options=-csearch_path%3D" + schema + ",public"
+
+	// knowledge_embedding is created outside versioned migrations (only
+	// when semantic search is configured), and 0010/0011 probe for it
+	// with an unqualified to_regclass that would otherwise leak through
+	// search_path to public's already-migrated table. Pre-create it in
+	// the scoped schema in its pre-0010 shape — which also makes those
+	// migration branches run deterministically here.
+	scoped, err := New(ctx, scopedURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(scoped.Close)
+	if _, err := scoped.pool.Exec(ctx, `CREATE TABLE knowledge_embedding (
+		type text NOT NULL, id text NOT NULL, model text, PRIMARY KEY (type, id))`); err != nil {
+		t.Fatal(err)
+	}
+
+	const racers = 4
+	var wg sync.WaitGroup
+	errs := make([]error, racers)
+	for i := range racers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, err := New(ctx, scopedURL, false)
+			if err != nil {
+				errs[i] = fmt.Errorf("dial: %w", err)
+				return
+			}
+			defer s.Close()
+			errs[i] = s.Migrate(ctx, 0)
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("concurrent Migrate %d: %v", i, err)
+		}
+	}
+
+	// The winner applied every migration exactly once; the rest saw them
+	// as applied and did nothing. Either way the scoped schema must end
+	// migrated: spot-check a table the chain creates and reshapes.
+	var n int
+	if err := scoped.pool.QueryRow(ctx,
+		`SELECT count(*) FROM information_schema.tables
+		  WHERE table_schema = $1 AND table_name = 'knowledge'`, schema).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("knowledge table in %s: got %d, want 1", schema, n)
 	}
 }
