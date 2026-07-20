@@ -506,19 +506,40 @@ function crumbTrail(dirs, leaf) {
 // resolveImg maps an image reference from the body to a URL (the detail
 // view resolves entry-relative references to attachment URLs); references
 // it cannot resolve stay literal text rather than rendering broken images.
-function md(src, resolveImg) {
+// resolveEntry does the same for links to other entries — the edges the
+// server derives from this very text (design doc 0024) — returning a
+// route or null.
+function md(src, resolveImg, resolveEntry) {
   const lines = String(src ?? '').split('\n');
   let out = '', inCode = false, inList = null, para = [];
   const img = (m, alt, ref) => {
     const url = /^https?:/.test(ref) ? ref : resolveImg && resolveImg(ref);
     return url ? `<img src="${url}" alt="${alt}" loading="lazy">` : m;
   };
-  const inline = s => esc(s)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
+  // An http(s) target leaves the app; anything else is a bundle reference,
+  // and becomes a link exactly when it names an entry.
+  const link = (m, text, ref) => {
+    if (/^https?:/.test(ref)) return `<a href="${ref}" target="_blank" rel="noopener">${text}</a>`;
+    const route = resolveEntry && resolveEntry(ref);
+    return route ? `<a href="${route}">${text}</a>` : m;
+  };
+  // Everything after the code-span pass is applied outside <code> only:
+  // markup shown as an example is text, not markup. That is also the rule
+  // the server's link extraction follows (design doc 0024), so what reads
+  // as a link here is exactly what became an edge there.
+  const outsideCode = (html, fn) =>
+    html.split(/(<code>[\s\S]*?<\/code>)/).map((part, i) => i % 2 ? part : fn(part)).join('');
+  const inline = s => outsideCode(esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'), t => t
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|\W)\*([^*\n]+)\*(?=\W|$)/g, '$1<em>$2</em>')
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, img)
-    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, link)
+    // Bare and autolinked ochakai:// references, which carry no anchor
+    // text and read as the target's last segment.
+    .replace(/(?:&lt;)?(ochakai:\/\/[^\s&<>()[\]"']+)(?:&gt;)?/g, (m, uri) => {
+      const route = resolveEntry && resolveEntry(uri);
+      return route ? `<a href="${route}">${uri.split('/').pop()}</a>` : m;
+    }));
   const flushPara = () => { if (para.length) { out += '<p>' + inline(para.join(' ')) + '</p>'; para = []; } };
   const flushList = () => { if (inList) { out += `</${inList}>`; inList = null; } };
   for (const line of lines) {
@@ -1239,11 +1260,29 @@ async function viewDetail(id) {
     hit = hit || atts.find(a => a.name === ref.split('/').pop());
     return hit ? attURL(hit.name) : null;
   };
+  // Links to other entries, resolved the way the server derives them from
+  // this same body (design doc 0024): bundle-absolute "/x/y.md", relative
+  // "./y.md" against the document's directory, or the canonical URI. A
+  // reference to anything else — an attachment, an external URL, an
+  // anchor — is not an entry link and stays literal text.
+  const resolveEntry = ref => {
+    const target = String(ref).split(/[#?]/)[0];
+    if (!target) return null;
+    let id;
+    if (target.startsWith('ochakai://')) id = normalize(target.slice('ochakai://'.length));
+    else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) return null; // some other scheme
+    else if (!target.endsWith('.md')) return null; // an attachment, not an entry
+    else {
+      const rel = target.slice(0, -'.md'.length);
+      id = normalize(rel.startsWith('/') ? rel : (docDir ? docDir + '/' : '') + rel);
+    }
+    return id ? '#/k/' + idPath(id) : null;
+  };
 
   const tabs = {
     overview: () => `
       ${entry.description ? `<p style="font-size:1.02rem">${esc(entry.description)}</p>` : ''}
-      ${entry.body ? `<div class="md">${md(entry.body, resolveImg)}</div>` : ''}
+      ${entry.body ? `<div class="md">${md(entry.body, resolveImg, resolveEntry)}</div>` : ''}
       ${!entry.description && !entry.body ? '<div class="empty">No description or body.</div>' : ''}`,
     attrs: () => {
       const attrs = entry.attrs || {};
