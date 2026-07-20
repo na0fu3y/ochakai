@@ -137,7 +137,7 @@ type Link struct {
 // The envelope maps 1:1 to an OKF document (YAML frontmatter + markdown).
 type Knowledge struct {
 	Type        Type           `json:"type"`
-	ID          string         `json:"id"` // full bundle path, the sole key (design doc 0017)
+	ID          string         `json:"id"`              // full bundle path, the sole key (design doc 0017)
 	Title       string         `json:"title,omitempty"` // display-name override; empty means the id's last segment is the name (design doc 0022)
 	Description string         `json:"description,omitempty"`
 	Resource    string         `json:"resource,omitempty"` // canonical URI of the underlying asset (OKF recommended key)
