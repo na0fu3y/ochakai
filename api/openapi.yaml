@@ -250,6 +250,43 @@ paths:
       responses:
         "204": { description: Deleted. }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/move:
+    post:
+      operationId: moveKnowledge
+      summary: Move (rename) a knowledge entry to a new id
+      description: >
+        The id is the address (design doc 0017), so a move carries
+        everything keyed by it along in one transaction — revisions,
+        usage, attachments, embeddings — and rewrites inbound references
+        (link targets in both bare and ochakai:// forms, and attrs.model)
+        so nothing breaks (design doc 0021). The destination must be a
+        fresh id: a live or soft-deleted entry there already owns that
+        address and its history. Lives at its own top-level path for the
+        same reason /usage and /revisions do — a suffix after the
+        hierarchical id could be confused with an ID segment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to]
+              properties:
+                from:
+                  type: string
+                  description: The entry's current id.
+                to:
+                  type: string
+                  description: The new id (bundle path).
+      responses:
+        "200":
+          description: The moved entry, now at its new id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
       - name: id
@@ -636,7 +673,7 @@ components:
         how, when, and the full snapshot as of that change.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per entry. }
-        change: { type: string, enum: [create, update, delete, attach, detach] }
+        change: { type: string, enum: [create, update, delete, move, attach, detach] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         snapshot: { $ref: "#/components/schemas/Knowledge" }

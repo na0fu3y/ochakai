@@ -294,6 +294,123 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) e
 	})
 }
 
+// Move renames an entry to a new id. The id is the address (design doc
+// 0017), so everything keyed by it follows in one transaction — the row,
+// its revisions, attachments, usage, events, and embeddings — and live
+// entries that reference the old id (link targets in both bare and
+// ochakai:// forms, and attrs.model) are rewritten so no reference
+// breaks. Attachment bytes never move: blobs are content-addressed
+// (design doc 0011). The destination must be a fresh id — a row there,
+// even soft-deleted, already owns that address and its revision history.
+func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Actor) (*domain.Knowledge, error) {
+	k, err := s.Get(ctx, oldID)
+	if err != nil {
+		return nil, err
+	}
+	k.UpdatedAt = time.Now().UTC()
+	err = s.withTx(ctx, func(tx pgx.Tx) error {
+		var taken bool
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM knowledge WHERE id=$1)`, newID).Scan(&taken); err != nil {
+			return err
+		}
+		if taken {
+			return ErrAlreadyExists
+		}
+		// deleted_at IS NULL guards the race with a concurrent delete,
+		// exactly as in SoftDelete: the Get above ran outside this
+		// transaction.
+		tag, err := tx.Exec(ctx,
+			`UPDATE knowledge SET id=$2, updated_at=$3 WHERE id=$1 AND deleted_at IS NULL`,
+			oldID, newID, k.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		for _, q := range []string{
+			`UPDATE knowledge_revision SET id=$2 WHERE id=$1`,
+			`UPDATE attachment SET knowledge_id=$2 WHERE knowledge_id=$1`,
+			`UPDATE knowledge_usage SET knowledge_id=$2 WHERE knowledge_id=$1`,
+			`UPDATE knowledge_event SET knowledge_id=$2 WHERE knowledge_id=$1`,
+		} {
+			if _, err := tx.Exec(ctx, q, oldID, newID); err != nil {
+				return err
+			}
+		}
+		// Embedding tables exist only once semantic search has been
+		// enabled; the embedding text does not include the id, so
+		// re-keying is enough — no re-embed.
+		for _, q := range []string{
+			`UPDATE knowledge_embedding SET id=$2 WHERE id=$1`,
+			`UPDATE attachment_embedding SET knowledge_id=$2 WHERE knowledge_id=$1`,
+		} {
+			if err := execTolerateMissingTable(ctx, tx, q, oldID, newID); err != nil {
+				return err
+			}
+		}
+		if err := s.rewriteReferences(ctx, tx, oldID, newID, actor); err != nil {
+			return err
+		}
+		k.ID = newID
+		return s.addRevision(ctx, tx, k, "move", actor)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
+}
+
+// rewriteReferences updates live entries that reference oldID — link
+// targets (bare and ochakai:// forms) and attrs.model (design doc 0019)
+// — each rewrite recorded as an "update" revision. Runs after the rename
+// itself, so a self-referencing entry (already at newID) is covered too.
+func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID string, actor domain.Actor) error {
+	rows, err := tx.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge
+		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3)`,
+		fmt.Sprintf(`[{"target": %q}]`, oldID),
+		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+oldID),
+		oldID)
+	if err != nil {
+		return err
+	}
+	referrers, err := pgx.CollectRows(rows, scanKnowledge)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for i := range referrers {
+		r := &referrers[i]
+		for j, l := range r.Links {
+			switch l.Target {
+			case oldID:
+				r.Links[j].Target = newID
+			case "ochakai://" + oldID:
+				r.Links[j].Target = "ochakai://" + newID
+			}
+		}
+		if m, ok := r.Attrs["model"].(string); ok && m == oldID {
+			r.Attrs["model"] = newID
+		}
+		links, attrs, err := marshalJSONFields(r)
+		if err != nil {
+			return err
+		}
+		r.UpdatedAt = now
+		if _, err := tx.Exec(ctx,
+			`UPDATE knowledge SET links=$2, attrs=$3, updated_at=$4 WHERE id=$1`,
+			r.ID, links, attrs, r.UpdatedAt); err != nil {
+			return err
+		}
+		if err := s.addRevision(ctx, tx, r, "update", actor); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ListRevisions returns an entry's change history, newest first. It
 // reads history, so it works for soft-deleted entries too — the audit
 // trail is most interesting exactly when the entry is gone.
