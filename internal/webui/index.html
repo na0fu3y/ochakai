@@ -439,6 +439,9 @@ function idPath(id) {
   return String(id).split('/').map(encodeURIComponent).join('/');
 }
 const entryHash = e => '#/k/' + idPath(e.id);
+// Display name: the title when set, else the id's last segment — with
+// title optional, the filename usually is the name (design doc 0022).
+const displayTitle = e => e.title || String(e.id).split('/').pop();
 
 /* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
 // resolveImg maps an image reference from the body to a URL (the detail
@@ -734,7 +737,7 @@ function hitCard(h) {
   return `<article class="card" data-href="${entryHash(h)}">
     <div class="head">
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
-      <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(h.title)}</a>
+      <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
       <span class="badge ${esc(h.status)}">${esc(h.status)}</span>
       ${tags}
     </div>
@@ -795,7 +798,7 @@ function levelHTML(res, prefix) {
     <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="true"
        title="${esc(e.id)} · ${esc(e.status)}">
       <span class="type-ico" title="${esc(e.type)}">${icon(e.type)}</span>
-      <span class="entry-title">${esc(e.title)}</span>
+      <span class="entry-title">${esc(displayTitle(e))}</span>
       ${e.status === 'verified' ? '' : `<span class="status-dot ${esc(e.status)}" title="${esc(e.status)}"></span>`}
     </a>`).join('');
   return dirs + entries;
@@ -1018,7 +1021,7 @@ async function viewDetail(id) {
     <nav class="crumbs mono"><a href="#/" title="Home">/</a> ${esc(entry.id)} <span class="badge">${esc(entry.type)}</span></nav>
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
-      <h1>${esc(entry.title)}</h1>
+      <h1>${esc(displayTitle(entry))}</h1>
       <span class="badge ${esc(entry.status)}">${esc(entry.status)}</span>
       ${tags}
       <span class="actions">
@@ -1384,7 +1387,7 @@ function reviewCard(h) {
   return `<article class="card" data-id="${esc(h.id)}" data-href="${entryHash(h)}">
     <div class="head">
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
-      <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(h.title)}</a>
+      <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
       <span class="badge draft">draft</span>
       ${isStaleDraft(h) ? '<span class="badge" title="0 search hits and idle — a candidate to drop">🕸️ stale</span>' : ''}
       ${tags}
@@ -1422,8 +1425,8 @@ function wireReviewActions(container) {
 
 /* ============================== editor ============================== */
 
-// prefix (create only) seeds the ID field with a directory — the
-// per-directory ＋ in the tree routes here as #/new/<prefix>/.
+// prefix (create only) seeds the Folder field — the per-directory ＋
+// in the tree routes here as #/new/<prefix>/.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
   let entry = { type: 'insights', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
@@ -1438,6 +1441,27 @@ async function viewEditor(id, prefix = '') {
   const linksText = (entry.links || []).map(l => `${l.rel} ${l.target}`).join('\n');
   const attrsText = entry.attrs && Object.keys(entry.attrs).length ? JSON.stringify(entry.attrs, null, 2) : '';
 
+  // The create form asks for folder + file name and assembles the id
+  // (design doc 0022): the filename is the entry's name unless a title
+  // overrides it. The server's address stays the id alone — assembly is
+  // the client's job.
+  const seedFolder = prefix.replace(/\/+$/, '');
+  const idFields = editing ? `
+        <div class="field">
+          <label class="top" for="e-id">ID</label>
+          <input type="text" id="e-id" class="mono" value="${esc(entry.id)}" disabled>
+          <div class="hint">Where the entry lives (move it from the entry page).</div>
+        </div>` : `
+        <div class="field">
+          <label class="top" for="e-folder">Folder</label>
+          <input type="text" id="e-folder" class="mono" value="${esc(seedFolder)}" placeholder="sales">
+          <div class="hint">Directories separated by “/”; empty for the root. Place together what should be read together.</div>
+        </div>
+        <div class="field">
+          <label class="top" for="e-name">File name</label>
+          <input type="text" id="e-name" class="mono" placeholder="monthly-revenue" required>
+          <div class="hint">The entry's name (the id's last segment), e.g. 売上 or monthly-revenue.</div>
+        </div>`;
   view.innerHTML = `
     <div class="section-title">${editing ? `Edit ${esc(entry.id)}` : 'New knowledge entry'}</div>
     <form class="form" id="editor">
@@ -1448,16 +1472,12 @@ async function viewEditor(id, prefix = '') {
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
           <div class="hint">What the entry is: metrics, queries, insights, terms, datasets, tables, references — or any slug of your own.</div>
         </div>
-        <div class="field">
-          <label class="top" for="e-id">ID</label>
-          <input type="text" id="e-id" class="mono" value="${esc(entry.id)}" ${editing ? 'disabled' : ''}
-                 placeholder="sales/monthly-revenue" required>
-          <div class="hint">Where the entry lives: its path — slug segments separated by “/” (the OKF concept ID). Place together what should be read together.</div>
-        </div>
+        ${idFields}
       </div>
       <div class="field">
         <label class="top" for="e-title">Title</label>
-        <input type="text" id="e-title" value="${esc(entry.title)}" required>
+        <input type="text" id="e-title" value="${esc(entry.title || '')}">
+        <div class="hint">Optional — the file name is the display name; set a title only when that isn't enough.</div>
       </div>
       <div class="field">
         <label class="top" for="e-desc">Description</label>
@@ -1504,21 +1524,19 @@ async function viewEditor(id, prefix = '') {
   $('#editor').addEventListener('input', () => { dirty = true; });
   unsaved = () => dirty;
 
-  // Arriving from a directory's ＋: the ID is seeded with the prefix, so
-  // put the cursor right after it — only the slug is left to type.
-  if (!editing && prefix) {
-    const idInput = $('#e-id');
-    idInput.focus({ preventScroll: true });
-    idInput.setSelectionRange(idInput.value.length, idInput.value.length);
-  }
+  // Arriving from a directory's ＋: the folder is already seeded, so
+  // only the file name is left to type.
+  if (!editing && prefix) $('#e-name').focus({ preventScroll: true });
 
   $('#editor').addEventListener('submit', async ev => {
     ev.preventDefault();
     const errBox = $('#editor-error');
     errBox.innerHTML = '';
+    const folder = editing ? '' : $('#e-folder').value.trim().replace(/^\/+|\/+$/g, '');
+    const name = editing ? '' : $('#e-name').value.trim();
     const payload = {
       type: $('#e-type').value.trim(),
-      id: editing ? entry.id : $('#e-id').value.trim(),
+      id: editing ? entry.id : (folder ? folder + '/' + name : name),
       title: $('#e-title').value.trim(),
       description: $('#e-desc').value.trim(),
       tags: $('#e-tags').value.split(',').map(s => s.trim()).filter(Boolean),

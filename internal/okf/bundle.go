@@ -42,7 +42,7 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 
 	var nonMarkdown []string
 	for _, p := range paths {
-		clean := path.Clean(strings.TrimPrefix(p, "./"))
+		clean := cleanPath(p)
 		if hiddenPath(clean) {
 			continue
 		}
@@ -67,13 +67,21 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 	}
 	atts, used := resolveAttachments(files, concepts)
 	for _, p := range nonMarkdown {
-		if !used[path.Clean(strings.TrimPrefix(p, "./"))] {
+		if !used[cleanPath(p)] {
 			skipped = append(skipped, p+": not a markdown concept (referenced by no entry body, and not in an entry's directory)")
 		}
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	return entries, atts, skipped
+}
+
+// cleanPath canonicalizes one bundle path: relative prefix stripped,
+// path.Clean'd, and NFC-normalized (design doc 0022) — macOS
+// filesystems hand names back NFD-decomposed, and the same visible path
+// must yield the same entry id and attachment references.
+func cleanPath(p string) string {
+	return domain.Normalize(path.Clean(strings.TrimPrefix(p, "./")))
 }
 
 // hiddenPath reports whether any segment of the (cleaned) path starts

@@ -181,12 +181,20 @@ func TestIntegration(t *testing.T) {
 
 	// ListByUsage: the draft review feed. Two drafts, unequal demand — the
 	// more-searched one ranks first, and each hit carries its usage totals.
+	// The feed is scoped by a tag only these two carry: the test database is
+	// shared with the other packages' integration tests, which leave live
+	// insight drafts behind (run-unique ids, no cleanup) that this filter
+	// would otherwise rank against — and those accumulate search hits of
+	// their own now that ids are searchable (design doc 0022).
+	const feedTag = "it-usage-feed"
 	hot := &domain.Knowledge{
 		Type: domain.TypeInsights, ID: "it-draft-hot", Title: "よく検索される草案",
+		Tags:   []string{feedTag},
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
 	cold := &domain.Knowledge{
 		Type: domain.TypeInsights, ID: "it-draft-cold", Title: "検索されない草案",
+		Tags:   []string{feedTag},
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
 	for _, d := range []*domain.Knowledge{hot, cold} {
@@ -205,6 +213,7 @@ func TestIntegration(t *testing.T) {
 	feed, err := s.ListByUsage(ctx, Filter{
 		Types:    []domain.Type{domain.TypeInsights},
 		Statuses: []domain.Status{domain.StatusDraft},
+		Tags:     []string{feedTag},
 	}, 100)
 	if err != nil {
 		t.Fatalf("ListByUsage: %v", err)

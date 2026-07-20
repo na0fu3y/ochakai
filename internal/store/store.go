@@ -455,14 +455,16 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 // SearchLexical ranks by trigram similarity with a substring-match floor
 // (trigram alone misses short Japanese terms), verified entries boosted.
 // Attachment filenames join the haystack (design doc 0020): "seeds" finds
-// the entry carrying seeds.txt, embedder or not.
+// the entry carrying seeds.txt, embedder or not. So does the id (design
+// doc 0022): with title optional, the filename may be the entry's only
+// name.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	args = append(args, query)
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
-			SELECT k.*, similarity(k.title || ' ' || k.description || ' ' || array_to_string(k.tags, ' ') || ' ' || k.body || ' ' || att.names, $%d)
-				+ CASE WHEN k.title || ' ' || k.description || ' ' || k.body || ' ' || att.names ILIKE '%%' || $%d || '%%' THEN 0.3 ELSE 0 END
+			SELECT k.*, similarity(k.id || ' ' || k.title || ' ' || k.description || ' ' || array_to_string(k.tags, ' ') || ' ' || k.body || ' ' || att.names, $%d)
+				+ CASE WHEN k.id || ' ' || k.title || ' ' || k.description || ' ' || k.body || ' ' || att.names ILIKE '%%' || $%d || '%%' THEN 0.3 ELSE 0 END
 				+ CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS score
 			FROM knowledge k
 			LEFT JOIN LATERAL (

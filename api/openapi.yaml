@@ -572,7 +572,7 @@ components:
         target: { type: string, description: The target entry's id (its bundle path). }
     Knowledge:
       type: object
-      required: [type, id, title]
+      required: [type, id]
       properties:
         type: { $ref: "#/components/schemas/Type" }
         id:
@@ -584,9 +584,15 @@ components:
             so only path safety constrains segments: no leading ".",
             no control characters, at most 128 bytes each (512 total).
             The final segment must not be "index" or "log"
-            (OKF-reserved filenames).
+            (OKF-reserved filenames). Stored NFC-normalized, as are
+            link targets and attachment names (design doc 0022).
           pattern: "^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
-        title: { type: string }
+        title:
+          type: string
+          description: >
+            Display-name override; optional (design doc 0022). When
+            empty or omitted, the id's last segment (the filename) is
+            the entry's name.
         description: { type: string }
         resource:
           type: string

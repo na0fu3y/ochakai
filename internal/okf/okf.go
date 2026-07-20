@@ -82,7 +82,7 @@ const Version = "0.1"
 type frontmatter struct {
 	Type        string   `yaml:"type"`
 	Resource    string   `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
-	Title       string   `yaml:"title"`
+	Title       string   `yaml:"title,omitempty"`    // empty means the filename is the name (design doc 0022) — omitted, so titleless documents round-trip unchanged
 	Description string   `yaml:"description,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
 	Timestamp   string   `yaml:"timestamp"`

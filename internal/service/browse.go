@@ -26,7 +26,7 @@ type BrowseResult struct {
 // and entries directly under prefix ("" is the root). prefix accepts
 // "a/b" or "a/b/".
 func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
-	prefix = strings.TrimSuffix(prefix, "/")
+	prefix = domain.Normalize(strings.TrimSuffix(prefix, "/"))
 	if !domain.ValidIDPrefix(prefix) {
 		return nil, Invalidf(`invalid prefix %q (slug segments separated by "/")`, prefix)
 	}

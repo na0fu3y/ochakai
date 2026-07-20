@@ -55,6 +55,34 @@ func TestValidIDPrefix(t *testing.T) {
 	}
 }
 
+// Title is a display-name override (design doc 0022): absent, the id's
+// last segment is the name.
+func TestDisplayTitle(t *testing.T) {
+	k := &Knowledge{ID: "insights/サンプル"}
+	if got := k.DisplayTitle(); got != "サンプル" {
+		t.Errorf("DisplayTitle() = %q, want the last id segment", got)
+	}
+	k.Title = "書き添えた題"
+	if got := k.DisplayTitle(); got != "書き添えた題" {
+		t.Errorf("DisplayTitle() = %q, want the title override", got)
+	}
+	if got := DisplayTitle("", "revenue"); got != "revenue" {
+		t.Errorf("DisplayTitle root-level = %q, want the id itself", got)
+	}
+}
+
+// Normalize pins NFC as the stored form of byte-compared keys (design
+// doc 0022): macOS filesystems hand paths back NFD-decomposed.
+func TestNormalize(t *testing.T) {
+	nfd := "サンプル" // プ decomposed into フ + combining handakuten
+	if got := Normalize(nfd); got != "サンプル" {
+		t.Errorf("Normalize(%q) = %q, want the composed spelling", nfd, got)
+	}
+	if got := Normalize("sales/orders"); got != "sales/orders" {
+		t.Errorf("Normalize left ASCII changed: %q", got)
+	}
+}
+
 // TestSameContent pins the no-op-update predicate: authored content
 // decides, server-managed provenance and timestamps never do, and attrs
 // compare by value across decoders (YAML ints vs JSON float64s).

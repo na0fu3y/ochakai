@@ -92,6 +92,56 @@ func TestBundleRoundTrip(t *testing.T) {
 	}
 }
 
+// Title is optional (design doc 0022): a titleless document imports as
+// a titleless entry and re-exports without a title line — the filename
+// is the name, and the document round-trips unchanged. The generated
+// index.md falls back to the filename for its link text.
+func TestBundleTitleOptional(t *testing.T) {
+	files := map[string][]byte{
+		"insights/サンプル.md": []byte("---\ntype: insights\n---\n\n本文。\n"),
+	}
+	entries, _, skipped := FromBundle(files)
+	if len(skipped) != 0 {
+		t.Fatalf("skipped %v", skipped)
+	}
+	if len(entries) != 1 || entries[0].ID != "insights/サンプル" || entries[0].Title != "" {
+		t.Fatalf("entries = %+v, want one titleless insights/サンプル", entries)
+	}
+	out, err := Bundle(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(out["insights/サンプル.md"])
+	if strings.Contains(doc, "title:") {
+		t.Errorf("re-export must omit the empty title:\n%s", doc)
+	}
+	if idx := string(out["insights/index.md"]); !strings.Contains(idx, "[サンプル](サンプル.md)") {
+		t.Errorf("index link must fall back to the filename:\n%s", idx)
+	}
+}
+
+// macOS filesystems hand paths back NFD-decomposed; the bundle path,
+// the body link, and the attachment file must all converge on the same
+// NFC spelling (design doc 0022).
+func TestFromBundleNFCPaths(t *testing.T) {
+	nfd := "サンプル" // "サンプル" with the handakuten decomposed
+	files := map[string][]byte{
+		"insights/" + nfd + ".md": []byte("---\ntype: insights\ntitle: t\n---\n\n" +
+			"![chart](" + nfd + "/chart.png)\n"),
+		"insights/" + nfd + "/chart.png": pngBytes(),
+	}
+	entries, atts, skipped := FromBundle(files)
+	if len(skipped) != 0 {
+		t.Fatalf("skipped %v", skipped)
+	}
+	if len(entries) != 1 || entries[0].ID != "insights/サンプル" {
+		t.Fatalf("entries = %+v, want the NFC id insights/サンプル", entries)
+	}
+	if len(atts) != 1 || atts[0].ID != "insights/サンプル" || atts[0].Name != "chart.png" {
+		t.Fatalf("atts = %+v, want chart.png attributed to the NFC id", atts)
+	}
+}
+
 // A foreign OKF bundle — free layout, spelled frontmatter types,
 // non-markdown extras — imports with structure preserved: the path is the
 // id verbatim, the frontmatter alone names the type (design doc 0016),
