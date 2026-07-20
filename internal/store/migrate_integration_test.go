@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -118,11 +120,18 @@ func TestMigrationLegacyData(t *testing.T) {
 	if typ != "metrics" || resource != "https://example.com/rev" {
 		t.Errorf("type = %q resource = %q", typ, resource)
 	}
-	var lk []domain.Link
+	// The legacy {rel, target} shape, which is what 0010/0011 operate on —
+	// links only lose rel in 0015 (design doc 0024), which runs later and
+	// is not part of this chain.
+	type legacyLink struct {
+		Rel    string `json:"rel"`
+		Target string `json:"target"`
+	}
+	var lk []legacyLink
 	if err := json.Unmarshal(links, &lk); err != nil {
 		t.Fatal(err)
 	}
-	wantLinks := []domain.Link{
+	wantLinks := []legacyLink{
 		{Rel: "about", Target: "queries/mig-q"},
 		{Rel: "cites", Target: "ochakai://tables/mig-orders"},
 	}
@@ -435,4 +444,129 @@ func TestMigrateConcurrent(t *testing.T) {
 	if n != 1 {
 		t.Errorf("knowledge table in %s: got %d, want 1", schema, n)
 	}
+}
+
+// TestMigrationLinksIntoBody covers 0015 (design doc 0024): links used to
+// be authored as a field, so they exist independently of the prose. The
+// migration writes them back into the body — the old rel becoming the
+// anchor text — before the column turns into something derived from the
+// body, which is the only way those edges survive the next write.
+func TestMigrationLinksIntoBody(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA links_scratch`,
+		`SET LOCAL search_path TO links_scratch`,
+		`CREATE TABLE knowledge (
+			id text PRIMARY KEY, body text NOT NULL DEFAULT '',
+			links jsonb NOT NULL DEFAULT '[]',
+			updated_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz)`,
+		`INSERT INTO knowledge (id, body, links) VALUES
+			('insights/a', 'Existing prose.',
+			 '[{"rel":"about","target":"metrics/revenue"},{"rel":"cites","target":"ochakai://tables/orders"}]'),
+			('insights/empty-body', '',
+			 '[{"rel":"","target":"metrics/revenue"}]'),
+			('insights/no-links', 'Just prose.', '[]'),
+			('insights/deleted', 'Gone.', '[{"rel":"about","target":"metrics/revenue"}]')`,
+		`UPDATE knowledge SET deleted_at = now() WHERE id = 'insights/deleted'`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0015_links_from_body.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0015: %v", err)
+	}
+
+	for _, tc := range []struct {
+		id, wantBody string
+		wantLinks    []domain.Link
+	}{
+		{
+			id: "insights/a",
+			wantBody: "Existing prose.\n\n# Links\n\n" +
+				"- [about](/metrics/revenue.md)\n- [cites](/tables/orders.md)",
+			wantLinks: []domain.Link{
+				{Target: "metrics/revenue", Text: "about"},
+				{Target: "tables/orders", Text: "cites"},
+			},
+		}, {
+			// An empty rel falls back to the target's last segment, so no
+			// link renders as "[]()".
+			id:        "insights/empty-body",
+			wantBody:  "# Links\n\n- [revenue](/metrics/revenue.md)",
+			wantLinks: []domain.Link{{Target: "metrics/revenue", Text: "revenue"}},
+		}, {
+			id:        "insights/no-links",
+			wantBody:  "Just prose.",
+			wantLinks: []domain.Link{},
+		}, {
+			// Soft-deleted entries keep the shape they were deleted in.
+			id:        "insights/deleted",
+			wantBody:  "Gone.",
+			wantLinks: []domain.Link{{Target: "metrics/revenue"}},
+		},
+	} {
+		var body string
+		var raw []byte
+		if err := tx.QueryRow(ctx,
+			`SELECT body, links FROM knowledge WHERE id = $1`, tc.id).Scan(&body, &raw); err != nil {
+			t.Fatalf("%s: %v", tc.id, err)
+		}
+		if body != tc.wantBody {
+			t.Errorf("%s body =\n%q\nwant\n%q", tc.id, body, tc.wantBody)
+		}
+		if tc.id == "insights/deleted" {
+			continue // its links keep the legacy {rel, target} shape
+		}
+		got := []domain.Link{}
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatal(err)
+		}
+		sortLinks(got)
+		want := append([]domain.Link{}, tc.wantLinks...)
+		sortLinks(want)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s links = %v, want %v", tc.id, got, want)
+		}
+		// The written-back body must derive exactly the links stored.
+		derived := domain.LinksFromBody(tc.id, body)
+		if derived == nil {
+			derived = []domain.Link{}
+		}
+		sortLinks(derived)
+		if !reflect.DeepEqual(derived, want) {
+			t.Errorf("%s: body derives %v, but the column holds %v", tc.id, derived, want)
+		}
+	}
+}
+
+func sortLinks(l []domain.Link) {
+	sort.Slice(l, func(i, j int) bool {
+		if l[i].Target != l[j].Target {
+			return l[i].Target < l[j].Target
+		}
+		return l[i].Text < l[j].Text
+	})
 }

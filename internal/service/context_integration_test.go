@@ -57,13 +57,13 @@ func TestContextIntegration(t *testing.T) {
 	entries := []*domain.Knowledge{
 		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
 			Status: domain.StatusVerified,
-			Links:  []domain.Link{{Rel: "answered_by", Target: queryID}}},
+			Body:   "Answered by [the monthly query](/" + queryID + ".md)."},
 		{Type: domain.TypeQueries, ID: queryID, Title: "monthly numbers"},
 		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
-			Links: []domain.Link{{Rel: "explains", Target: "ochakai://" + metricID}}},
+			Body: "Explains ochakai://" + metricID + "."},
 		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
 			Status: domain.StatusRejected,
-			Links:  []domain.Link{{Rel: "explains", Target: metricID}}},
+			Body:   "Explains [the metric](/" + metricID + ".md)."},
 	}
 	for _, k := range entries {
 		if _, err := svc.Create(ctx, k, actor); err != nil {

@@ -33,8 +33,10 @@ func TestParseRoundTrip(t *testing.T) {
 		if !reflect.DeepEqual(got.Tags, want.Tags) {
 			t.Errorf("tags = %v, want %v", got.Tags, want.Tags)
 		}
-		if !reflect.DeepEqual(got.Links, want.Links) {
-			t.Errorf("links = %v, want %v", got.Links, want.Links)
+		// Parse reads no links: they are derived from the body when the
+		// entry is written (design doc 0024).
+		if got.Links != nil {
+			t.Errorf("Parse invented links: %v", got.Links)
 		}
 		if got.Resource != want.Resource {
 			t.Errorf("resource = %q, want %q", got.Resource, want.Resource)
@@ -42,7 +44,7 @@ func TestParseRoundTrip(t *testing.T) {
 		if !reflect.DeepEqual(got.Attrs, want.Attrs) {
 			t.Errorf("attrs = %v, want %v", got.Attrs, want.Attrs)
 		}
-		if wantBody := "12月は+40%が通常。"; want.Body != "" && got.Body != wantBody {
+		if wantBody := "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。"; want.Body != "" && got.Body != wantBody {
 			t.Errorf("body = %q, want %q", got.Body, wantBody)
 		}
 	}
@@ -195,11 +197,20 @@ func TestParseNormalizesCRLF(t *testing.T) {
 	}
 }
 
-func TestSplitLinksLeavesForeignSectionsAlone(t *testing.T) {
+func TestParseKeepsLinksSectionAsBody(t *testing.T) {
+	// A "# Links" section used to be folded out of the body into
+	// structured links. It is ordinary prose now (design doc 0024) — the
+	// links inside it are found by the same extraction as any other.
 	body := "Intro.\n\n# Links\n\nSee [the dashboard](https://example.com) for details."
-	gotBody, links := splitLinks(body)
-	if links != nil || gotBody != body {
-		t.Errorf("splitLinks rewrote a non-generated section: body=%q links=%v", gotBody, links)
+	got, err := Parse([]byte("---\ntype: Insight\n---\n\n" + body + "\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got.Body != body {
+		t.Errorf("body = %q, want %q", got.Body, body)
+	}
+	if got.Links != nil {
+		t.Errorf("Parse invented links: %v", got.Links)
 	}
 }
 

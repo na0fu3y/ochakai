@@ -92,7 +92,7 @@ func TestSameContent(t *testing.T) {
 			Type: TypeMetrics, ID: "revenue", Title: "Revenue",
 			Description: "monthly revenue", Tags: []string{"sales"},
 			Status: StatusVerified, StatusNote: "checked",
-			Links: []Link{{Rel: "defined_in", Target: "model/sales"}},
+			Links: []Link{{Target: "model/sales", Text: "sales model"}},
 			Attrs: map[string]any{"threshold": 5, "model": "sales"},
 			Body:  "Sum of order totals.",
 		}

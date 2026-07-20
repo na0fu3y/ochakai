@@ -64,7 +64,6 @@ func TestBundleRoundTrip(t *testing.T) {
 			Description: "月ごとの売上",
 			CreatedBy:   domain.Actor{Kind: "human", Name: "na0"},
 			Tags:        []string{"sales"},
-			Links:       []domain.Link{{Rel: "measures", Target: "metrics/revenue"}},
 			Attrs:       map[string]any{"sql": "SELECT 1"},
 			Body:        "本文。", UpdatedAt: now},
 	}
@@ -85,8 +84,10 @@ func TestBundleRoundTrip(t *testing.T) {
 			g.Status != w.Status || g.Body != w.Body {
 			t.Errorf("entry %d envelope: got %+v, want %+v", i, g, w)
 		}
-		if !reflect.DeepEqual(g.Links, w.Links) {
-			t.Errorf("entry %d links = %v, want %v", i, g.Links, w.Links)
+		// Import reads no links; the write path derives them from the body
+		// (design doc 0024).
+		if g.Links != nil {
+			t.Errorf("entry %d: import invented links %v", i, g.Links)
 		}
 		if !reflect.DeepEqual(g.Attrs, w.Attrs) {
 			t.Errorf("entry %d attrs = %v, want %v", i, g.Attrs, w.Attrs)

@@ -305,11 +305,11 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	entries := []*domain.Knowledge{
 		{Type: domain.TypeMetrics, ID: "it-link-metric", Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
 		{Type: domain.TypeInsights, ID: "it-link-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "it-link-metric"}}},
+			Links: []domain.Link{{Target: "it-link-metric", Text: "explains"}}},
 		{Type: domain.TypeInsights, ID: "it-link-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "ochakai://it-link-metric"}}},
+			Links: []domain.Link{{Target: "ochakai://it-link-metric", Text: "explains"}}},
 		{Type: domain.TypeInsights, ID: "it-link-gone", Title: "deleted link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "it-link-metric"}}},
+			Links: []domain.Link{{Target: "it-link-metric", Text: "explains"}}},
 	}
 	for _, k := range entries {
 		if err := s.Create(ctx, k); err != nil {
@@ -368,9 +368,11 @@ func TestIntegrationMove(t *testing.T) {
 	entries := []*domain.Knowledge{
 		{Type: domain.TypeMetrics, ID: "it-move-src/metric", Title: "target", Status: domain.StatusVerified, CreatedBy: actor},
 		{Type: domain.TypeInsights, ID: "it-move-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "it-move-src/metric"}}},
+			Body:  "Explains [the metric](/it-move-src/metric.md).",
+			Links: []domain.Link{{Target: "it-move-src/metric", Text: "the metric"}}},
 		{Type: domain.TypeInsights, ID: "it-move-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Rel: "explains", Target: "ochakai://it-move-src/metric"}}},
+			Body:  "Explains ochakai://it-move-src/metric further.",
+			Links: []domain.Link{{Target: "it-move-src/metric", Text: ""}}},
 		{Type: domain.TypeMetrics, ID: "it-move-attrs", Title: "attrs.model ref", Status: domain.StatusDraft, CreatedBy: actor,
 			Attrs: map[string]any{"model": "it-move-src/metric"}},
 		{Type: domain.TypeInsights, ID: "it-move-taken", Title: "occupies destination", Status: domain.StatusDraft, CreatedBy: actor},
@@ -439,17 +441,23 @@ func TestIntegrationMove(t *testing.T) {
 		t.Errorf("embedding did not follow: %v, %v", embedded, err)
 	}
 
-	// Inbound references rewritten, each as a revision.
-	for id, want := range map[string]string{
-		"it-move-bare": "it-move-dst/metric",
-		"it-move-uri":  "ochakai://it-move-dst/metric",
+	// Inbound references rewritten in the body — the links column follows
+	// because it is derived from it (design doc 0024) — each as a
+	// revision. Targets are stored bare; the body keeps the notation its
+	// author used.
+	for id, wantBody := range map[string]string{
+		"it-move-bare": "Explains [the metric](/it-move-dst/metric.md).",
+		"it-move-uri":  "Explains ochakai://it-move-dst/metric further.",
 	} {
 		k, err := s.Get(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(k.Links) != 1 || k.Links[0].Target != want {
-			t.Errorf("%s links after move: %+v, want target %s", id, k.Links, want)
+		if k.Body != wantBody {
+			t.Errorf("%s body after move: %q, want %q", id, k.Body, wantBody)
+		}
+		if len(k.Links) != 1 || k.Links[0].Target != "it-move-dst/metric" {
+			t.Errorf("%s links after move: %+v, want target it-move-dst/metric", id, k.Links)
 		}
 		revs, err := s.ListRevisions(ctx, id, 10)
 		if err != nil || len(revs) < 2 || revs[0].Change != "update" {

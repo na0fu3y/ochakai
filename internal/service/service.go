@@ -72,6 +72,7 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 	if err := validate(k); err != nil {
 		return nil, err
 	}
+	deriveLinks(k)
 	if k.Status == "" {
 		k.Status = domain.StatusDraft
 	}
@@ -94,6 +95,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if err := validate(k); err != nil {
 		return nil, false, err
 	}
+	deriveLinks(k)
 	old, err := s.Store.Get(ctx, k.ID)
 	if err != nil {
 		return nil, false, err
@@ -157,18 +159,29 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 	}
 }
 
-// normalizeKeys rewrites a write payload's byte-compared keys — the id,
-// the link targets, and the type — into NFC (design doc 0022); content
-// fields are kept as written. The type joined them in 0023: it is free
-// text now, so a foreign bundle can carry a non-ASCII type, and it is
-// compared byte-wise behind search filters. A recommended type also
-// settles on its canonical spelling, so storage holds one casing.
+// normalizeKeys rewrites a write payload's byte-compared keys — the id
+// and the type — into NFC (design doc 0022); content fields are kept as
+// written. The type joined them in 0023: it is free text now, so a
+// foreign bundle can carry a non-ASCII type, and it is compared byte-wise
+// behind search filters. A recommended type also settles on its canonical
+// spelling, so storage holds one casing.
+//
+// Links are not normalized here because they are not read from the
+// payload at all — deriveLinks recomputes them from the body, normalizing
+// each target on the way (design doc 0024).
 func normalizeKeys(k *domain.Knowledge) {
 	k.ID = domain.Normalize(k.ID)
 	k.Type = domain.CanonicalType(domain.Type(strings.TrimSpace(domain.Normalize(string(k.Type)))))
-	for i := range k.Links {
-		k.Links[i].Target = domain.Normalize(k.Links[i].Target)
-	}
+}
+
+// deriveLinks replaces whatever links the payload carried with the ones
+// the body actually contains. The body is the sole source of edges
+// (design doc 0024): a writer links by writing a markdown link, and the
+// links column is a derived index that backlinks and get_context read.
+// Called on every write path, so no route can store links the body does
+// not back.
+func deriveLinks(k *domain.Knowledge) {
+	k.Links = domain.LinksFromBody(k.ID, k.Body)
 }
 
 func validate(k *domain.Knowledge) error {

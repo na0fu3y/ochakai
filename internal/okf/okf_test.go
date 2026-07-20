@@ -23,9 +23,8 @@ func sample() []domain.Knowledge {
 			Tags: []string{"sales"}, Status: domain.StatusVerified,
 			CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
 			VerifiedBy: &domain.Actor{Kind: "human", Name: "na0"}, VerifiedAt: &verifiedAt,
-			Links:     []domain.Link{{Rel: "about", Target: "metrics/revenue"}},
 			Attrs:     map[string]any{"kind": "seasonality"},
-			Body:      "12月は+40%が通常。",
+			Body:      "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
 			UpdatedAt: verifiedAt,
 		},
 		{
@@ -75,8 +74,14 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 	if !strings.Contains(parts[2], "12月は+40%が通常。") {
 		t.Errorf("body missing:\n%s", parts[2])
 	}
-	if !strings.Contains(parts[2], "- about: [metrics/revenue](/metrics/revenue.md)") {
-		t.Errorf("links section missing:\n%s", parts[2])
+	// Links live in the body and nowhere else (design doc 0024): the link
+	// is there because the author wrote it, and Document adds no section
+	// of its own that a re-import would read a second time.
+	if !strings.Contains(parts[2], "[売上](/metrics/revenue.md)") {
+		t.Errorf("body link missing:\n%s", parts[2])
+	}
+	if strings.Contains(parts[2], "# Links") {
+		t.Errorf("Document must not generate a links section (design doc 0024):\n%s", parts[2])
 	}
 }
 

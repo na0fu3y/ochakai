@@ -362,17 +362,25 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 	return k, nil
 }
 
-// rewriteReferences updates live entries that reference oldID — link
-// targets (bare and ochakai:// forms) and attrs.model (design doc 0019)
-// — each rewrite recorded as an "update" revision. Runs after the rename
-// itself, so a self-referencing entry (already at newID) is covered too.
+// rewriteReferences updates live entries that reference oldID — the
+// markdown links in their body, and attrs.model (design doc 0019) — each
+// rewrite recorded as an "update" revision. Runs after the rename itself,
+// so a self-referencing entry (already at newID) is covered too.
+//
+// The body is what gets rewritten: links are derived from it (design doc
+// 0024), so repairing the links column alone would leave the author's
+// prose pointing at an id that no longer exists. The links column is then
+// re-derived from the repaired body.
+//
+// Candidates come from the links column, which still holds the pre-move
+// derivation and so is an accurate index of who refers to oldID.
 func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID string, actor domain.Actor) error {
 	rows, err := tx.Query(ctx,
 		`SELECT `+knowledgeCols+` FROM knowledge
-		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3)`,
+		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)`,
 		fmt.Sprintf(`[{"target": %q}]`, oldID),
 		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+oldID),
-		oldID)
+		oldID, newID)
 	if err != nil {
 		return err
 	}
@@ -383,25 +391,31 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 	now := time.Now().UTC()
 	for i := range referrers {
 		r := &referrers[i]
-		for j, l := range r.Links {
-			switch l.Target {
-			case oldID:
-				r.Links[j].Target = newID
-			case "ochakai://" + oldID:
-				r.Links[j].Target = "ochakai://" + newID
-			}
+		// The moved entry resolves its own relative links against its old
+		// directory, so it is rewritten as if it still lived at oldID.
+		from := r.ID
+		if r.ID == newID {
+			from = oldID
 		}
+		body := domain.RewriteBodyLinks(from, r.Body, oldID, newID)
+		modelMoved := false
 		if m, ok := r.Attrs["model"].(string); ok && m == oldID {
 			r.Attrs["model"] = newID
+			modelMoved = true
 		}
+		if body == r.Body && !modelMoved {
+			continue // matched the links index but nothing to repair
+		}
+		r.Body = body
+		r.Links = domain.LinksFromBody(r.ID, r.Body)
 		links, attrs, err := marshalJSONFields(r)
 		if err != nil {
 			return err
 		}
 		r.UpdatedAt = now
 		if _, err := tx.Exec(ctx,
-			`UPDATE knowledge SET links=$2, attrs=$3, updated_at=$4 WHERE id=$1`,
-			r.ID, links, attrs, r.UpdatedAt); err != nil {
+			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5 WHERE id=$1`,
+			r.ID, links, attrs, r.Body, r.UpdatedAt); err != nil {
 			return err
 		}
 		if err := s.addRevision(ctx, tx, r, "update", actor); err != nil {

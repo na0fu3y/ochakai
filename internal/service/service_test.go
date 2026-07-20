@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -169,24 +170,42 @@ func TestValidateRejectsBadInput(t *testing.T) {
 	}
 }
 
-// A write payload's byte-compared keys — the id and the link targets —
-// are stored NFC (design doc 0022); content fields stay as written.
+// A write payload's byte-compared keys — the id, and the link targets
+// derived from the body — are stored NFC (design doc 0022); content
+// fields stay as written.
 func TestNormalizeKeys(t *testing.T) {
 	nfd := "サンプル" // NFD spelling of サンプル
 	k := &domain.Knowledge{
 		ID:    "insights/" + nfd,
 		Title: nfd,
-		Links: []domain.Link{{Rel: "about", Target: "terms/" + nfd}},
+		Body:  "[用語](/terms/" + nfd + ".md) を参照。",
 	}
 	normalizeKeys(k)
+	deriveLinks(k)
 	if k.ID != "insights/サンプル" {
 		t.Errorf("ID = %q, want NFC", k.ID)
 	}
-	if k.Links[0].Target != "terms/サンプル" {
-		t.Errorf("link target = %q, want NFC", k.Links[0].Target)
+	if len(k.Links) != 1 || k.Links[0].Target != "terms/サンプル" {
+		t.Errorf("links = %v, want one NFC target terms/サンプル", k.Links)
 	}
 	if k.Title != nfd {
 		t.Errorf("title changed to %q; content must stay as written", k.Title)
+	}
+}
+
+// Links are derived from the body, so a payload that carries them has
+// them discarded (design doc 0024) — no route can store an edge the
+// prose does not back.
+func TestDeriveLinksIgnoresPayloadLinks(t *testing.T) {
+	k := &domain.Knowledge{
+		ID:    "insights/a",
+		Links: []domain.Link{{Target: "metrics/invented"}},
+		Body:  "See [revenue](/metrics/revenue.md).",
+	}
+	deriveLinks(k)
+	want := []domain.Link{{Target: "metrics/revenue", Text: "revenue"}}
+	if !reflect.DeepEqual(k.Links, want) {
+		t.Errorf("links = %v, want %v", k.Links, want)
 	}
 }
 
