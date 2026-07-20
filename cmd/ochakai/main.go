@@ -93,6 +93,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   create [-f file]        create an entry from OKF markdown or JSON
   update <type>/<id>      replace an entry (every change kept as a revision)
   delete <type>/<id>      soft-delete an entry (history retained)
+  move <id> <new-id>      move (rename) an entry; references are rewritten
   attach <type>/<id> <f>  attach files to an entry (png/jpeg/webp/pdf/text)
   detach <type>/<id> <n>  remove an attachment
   usage <type>/<id>       show usage totals (search hits, fetches, compiles, outcomes)

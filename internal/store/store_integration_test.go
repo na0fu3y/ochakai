@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -320,6 +321,148 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	}
 	if len(got) != 2 || !ids["it-link-bare"] || !ids["it-link-uri"] {
 		t.Errorf("ListLinkingTo = %v, want it-link-bare and it-link-uri", ids)
+	}
+}
+
+// Move rewrites the id everywhere it is recorded — the row, revisions,
+// attachments, usage, embeddings — and rewrites inbound references (link
+// targets in both forms, attrs.model) so nothing breaks. The destination
+// must be a fresh id, even against a soft-deleted row.
+func TestIntegrationMove(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	lockLiveAttachments(t, dbURL) // the attachment rides a fake blob store other packages' export scans can't read
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	s.UseBlobStore(newFakeBlobStore())
+	for _, table := range []string{"knowledge", "knowledge_revision", "knowledge_embedding"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-move-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"knowledge_event", "knowledge_usage", "attachment"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE knowledge_id LIKE 'it-move-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	entries := []*domain.Knowledge{
+		{Type: domain.TypeMetrics, ID: "it-move-src/metric", Title: "target", Status: domain.StatusVerified, CreatedBy: actor},
+		{Type: domain.TypeInsights, ID: "it-move-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
+			Links: []domain.Link{{Rel: "explains", Target: "it-move-src/metric"}}},
+		{Type: domain.TypeInsights, ID: "it-move-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
+			Links: []domain.Link{{Rel: "explains", Target: "ochakai://it-move-src/metric"}}},
+		{Type: domain.TypeMetrics, ID: "it-move-attrs", Title: "attrs.model ref", Status: domain.StatusDraft, CreatedBy: actor,
+			Attrs: map[string]any{"model": "it-move-src/metric"}},
+		{Type: domain.TypeInsights, ID: "it-move-taken", Title: "occupies destination", Status: domain.StatusDraft, CreatedBy: actor},
+	}
+	for _, k := range entries {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.PutAttachment(ctx, "it-move-src/metric", "chart.png", "image/png", "", []byte("png"), actor); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertEmbedding(ctx, "it-move-src/metric", "test-model", []float32{1, 0, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{"it-move-src/metric"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Occupied destinations refuse, live or soft-deleted.
+	if _, err := s.Move(ctx, "it-move-src/metric", "it-move-taken", actor); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
+	}
+	if err := s.SoftDelete(ctx, "it-move-taken", actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Move(ctx, "it-move-src/metric", "it-move-taken", actor); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("move onto a soft-deleted entry: got %v, want ErrAlreadyExists", err)
+	}
+
+	moved, err := s.Move(ctx, "it-move-src/metric", "it-move-dst/metric", actor)
+	if err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if moved.ID != "it-move-dst/metric" {
+		t.Errorf("moved.ID = %q", moved.ID)
+	}
+	if _, err := s.Get(ctx, "it-move-src/metric"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("old id still resolves: %v", err)
+	}
+	if _, err := s.Get(ctx, "it-move-dst/metric"); err != nil {
+		t.Errorf("new id does not resolve: %v", err)
+	}
+
+	// History follows: create + move under the new id.
+	revs, err := s.ListRevisions(ctx, "it-move-dst/metric", 10)
+	if err != nil {
+		t.Fatalf("ListRevisions: %v", err)
+	}
+	if len(revs) < 2 || revs[0].Change != "move" {
+		t.Errorf("revisions after move: %+v", revs)
+	}
+
+	// Attachments and usage follow.
+	atts, err := s.ListAttachments(ctx, "it-move-dst/metric")
+	if err != nil || len(atts) != 1 || atts[0].Name != "chart.png" {
+		t.Errorf("attachments after move: %v, %v", atts, err)
+	}
+	usage, err := s.Usage(ctx, "it-move-dst/metric")
+	if err != nil || usage.Fetches < 1 {
+		t.Errorf("usage after move: %+v, %v", usage, err)
+	}
+	var embedded bool
+	if err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM knowledge_embedding WHERE id='it-move-dst/metric')`).Scan(&embedded); err != nil || !embedded {
+		t.Errorf("embedding did not follow: %v, %v", embedded, err)
+	}
+
+	// Inbound references rewritten, each as a revision.
+	for id, want := range map[string]string{
+		"it-move-bare": "it-move-dst/metric",
+		"it-move-uri":  "ochakai://it-move-dst/metric",
+	} {
+		k, err := s.Get(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(k.Links) != 1 || k.Links[0].Target != want {
+			t.Errorf("%s links after move: %+v, want target %s", id, k.Links, want)
+		}
+		revs, err := s.ListRevisions(ctx, id, 10)
+		if err != nil || len(revs) < 2 || revs[0].Change != "update" {
+			t.Errorf("%s should carry an update revision for the rewrite: %+v, %v", id, revs, err)
+		}
+	}
+	ka, err := s.Get(ctx, "it-move-attrs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ka.Attrs["model"] != "it-move-dst/metric" {
+		t.Errorf("attrs.model after move: %v", ka.Attrs["model"])
+	}
+	backlinks, err := s.ListLinkingTo(ctx, "it-move-dst/metric", 10)
+	if err != nil || len(backlinks) != 2 {
+		t.Errorf("backlinks after move: %d, %v", len(backlinks), err)
+	}
+
+	// Leave no live attachment behind: its bytes exist only in this
+	// test's fake blob store, and export scans every live attachment.
+	if err := s.DeleteAttachment(ctx, "it-move-dst/metric", "chart.png", actor); err != nil {
+		t.Fatalf("cleanup DeleteAttachment: %v", err)
 	}
 }
 

@@ -117,6 +117,20 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 	return s.Store.SoftDelete(ctx, id, actor)
 }
 
+// Move renames an entry to newID, carrying every id-keyed record along
+// (revisions, usage, attachments, embeddings) and rewriting inbound
+// references so nothing breaks (design doc 0021). Moving to the current
+// id is a no-op read.
+func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor) (*domain.Knowledge, error) {
+	if !domain.ValidID(newID) {
+		return nil, Invalidf(`invalid destination id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, newID)
+	}
+	if newID == id {
+		return s.Store.Get(ctx, id)
+	}
+	return s.Store.Move(ctx, id, newID, actor)
+}
+
 // applyVerification stamps verification and rejection provenance. There is
 // no promotion restriction (design doc 0002): anyone who can reach ochakai
 // may verify or reject, and verified_by / rejected_by record who did —

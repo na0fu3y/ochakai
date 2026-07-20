@@ -164,12 +164,12 @@ func TestScalar(t *testing.T) {
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "delete", "attach", "detach", "usage", "report", "revisions", "backlinks", "compile", "export", "import", "use", "whoami", "ui", "completion"} {
+	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "delete", "move", "attach", "detach", "usage", "report", "revisions", "backlinks", "compile", "export", "import", "use", "whoami", "ui", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 20 {
+	if len(clientCommands) != 21 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest

@@ -43,6 +43,7 @@ _ochakai() {
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
     'delete:soft-delete an entry'
+    'move:move (rename) an entry; references are rewritten'
     'attach:attach files to an entry'
     'detach:remove an attachment'
     'usage:show usage totals for an entry'
@@ -105,7 +106,7 @@ _ochakai() {
     create|update)
       _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
-    delete|detach)
+    delete|detach|move)
       _arguments '--url[server URL]:url:'
       ;;
     attach)
@@ -161,7 +162,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update delete attach detach usage report revisions backlinks compile export import use whoami ui completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update delete move attach detach usage report revisions backlinks compile export import use whoami ui completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -186,7 +187,7 @@ _ochakai() {
       fi
       opts="--note --json --url" ;;
     create|update) opts="-f --json --url" ;;
-    delete|detach) opts="--url" ;;
+    delete|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
     export)        opts="--url" ;;
@@ -223,6 +224,7 @@ complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OK
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
+complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) an entry; references are rewritten'
 complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to an entry'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
@@ -240,7 +242,7 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete attach detach usage report revisions backlinks compile export import whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete move attach detach usage report revisions backlinks compile export import whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F

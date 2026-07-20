@@ -351,6 +351,29 @@ func Handler(svc *service.Service) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	// POST /api/v1/move {"from": ..., "to": ...} — rename an entry: the
+	// id is the address (design doc 0017), so the move carries revisions,
+	// usage, and attachments along and rewrites inbound references (link
+	// targets, attrs.model) so nothing breaks (design doc 0021). Its own
+	// top-level path for the same reason /usage and /revisions have one:
+	// a suffix after the hierarchical {id...} wildcard could be confused
+	// with an ID segment.
+	mux.HandleFunc("POST /api/v1/move", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		moved, err := svc.Move(r.Context(), in.From, in.To, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, moved)
+	})
+
 	// GET /api/v1/export — the whole knowledge base as an OKF bundle
 	// (tar.gz of markdown + YAML frontmatter, plus attachment files).
 	// Your knowledge is yours.

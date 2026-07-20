@@ -257,6 +257,21 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
+// Move renames the entry at id to newID (POST /api/v1/move). The server
+// carries revisions, usage, and attachments along and rewrites inbound
+// references so nothing breaks (design doc 0021).
+func (c *Client) Move(ctx context.Context, id, newID string) (*domain.Knowledge, error) {
+	in := struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}{id, newID}
+	var moved domain.Knowledge
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/move", nil, in, &moved); err != nil {
+		return nil, err
+	}
+	return &moved, nil
+}
+
 // Attach uploads data as an attachment of the entry (PUT
 // /api/v1/attachments/{id}/{name}), replacing any attachment of
 // the same name. okfPath preserves a foreign bundle location for

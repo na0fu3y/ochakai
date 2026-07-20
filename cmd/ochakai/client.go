@@ -33,6 +33,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"create":    cmdCreate,
 	"update":    cmdUpdate,
 	"delete":    cmdDelete,
+	"move":      cmdMove,
 	"attach":    cmdAttach,
 	"detach":    cmdDetach,
 	"usage":     cmdUsage,
@@ -742,6 +743,38 @@ func cmdDelete(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("deleted ochakai://%s\n", id)
+	return nil
+}
+
+func cmdMove(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge entry to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, attrs.model)\nare rewritten so nothing breaks.",
+		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 2 {
+		fs.Usage()
+		return errReported
+	}
+	id, err := parseRef(pos[0])
+	if err != nil {
+		return err
+	}
+	newID, err := parseRef(pos[1])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	moved, err := c.Move(ctx, id, newID)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("moved ochakai://%s -> %s\n", id, moved.URI())
 	return nil
 }
 
