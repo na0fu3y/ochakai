@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -15,22 +14,23 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// Type is the kind of a knowledge entry. Any path-segment slug is a valid
+// Type is the kind of a knowledge entry. Any single-line string is a valid
 // type (design doc 0005): the built-in types below are recommendations with
 // server behavior attached (compile_sql reads metrics), never a closed set —
-// users' own document types are first-class. Slugs are plural, matching the
-// knowledge-catalog reference bundles (design doc 0016).
+// users' own document types are first-class. The values are the OKF type
+// vocabulary verbatim, so import and export are identity on the type key
+// (design doc 0023).
 type Type string
 
 const (
-	TypeModels     Type = "models"     // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018)
-	TypeMetrics    Type = "metrics"    // semantic metric definition (Apache Ossie)
-	TypeQueries    Type = "queries"    // golden query: question + verified SQL
-	TypeInsights   Type = "insights"   // how to read a metric: baselines, caveats
-	TypeTerms      Type = "terms"      // glossary term
-	TypeDatasets   Type = "datasets"   // dataset: a container grouping tables
-	TypeTables     Type = "tables"     // table catalog entry
-	TypeReferences Type = "references" // mirror of external material (enums, licenses, schema docs)
+	TypeModels     Type = "Semantic Model"   // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018)
+	TypeMetrics    Type = "Metric"           // semantic metric definition (Apache Ossie)
+	TypeQueries    Type = "Golden Query"     // golden query: question + verified SQL
+	TypeInsights   Type = "Insight"          // how to read a metric: baselines, caveats
+	TypeTerms      Type = "Glossary Term"    // glossary term
+	TypeDatasets   Type = "BigQuery Dataset" // dataset: a container grouping tables
+	TypeTables     Type = "BigQuery Table"   // table catalog entry
+	TypeReferences Type = "Reference"        // mirror of external material (enums, licenses, schema docs)
 )
 
 // Types lists the recommended (built-in) knowledge types, in display order
@@ -38,21 +38,53 @@ const (
 // group tables).
 var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
 
-// BuiltinType reports whether t is one of the recommended types.
+// BuiltinType reports whether t is one of the recommended types, matched
+// the same case-insensitive way filters are (EqualType).
 func BuiltinType(t Type) bool {
 	for _, v := range Types {
-		if t == v {
+		if EqualType(t, v) {
 			return true
 		}
 	}
 	return false
 }
 
-// ValidType reports whether t can be a knowledge type: one slug segment.
-// Types stay slugs even though ID segments are freer (design doc 0019):
-// they are ochakai vocabulary — spoken in filters, frontmatter, and tool
-// arguments — not file paths.
-func ValidType(t Type) bool { return typeRe.MatchString(string(t)) }
+// CanonicalType returns the built-in spelling of t when t names one
+// (however it was cased), else t unchanged. Write paths use it so the
+// recommended types have one spelling in storage while callers may write
+// them in any case.
+func CanonicalType(t Type) Type {
+	for _, v := range Types {
+		if EqualType(t, v) {
+			return v
+		}
+	}
+	return t
+}
+
+// ValidType reports whether t can be a knowledge type: one non-empty line,
+// no "/" so a type never reads as an address, within 128 bytes. Types are
+// the OKF vocabulary verbatim (design doc 0023) — "BigQuery Table", not a
+// slug — and OKF registers no taxonomy, so the spelling is the meaning.
+// They are ochakai vocabulary spoken in filters, frontmatter, and tool
+// arguments, never file paths, so a space is fine but a separator is not.
+func ValidType(t Type) bool {
+	s := strings.TrimSpace(string(t))
+	if s == "" || len(s) > 128 || strings.Contains(s, "/") {
+		return false
+	}
+	return strings.IndexFunc(s, func(r rune) bool {
+		return r == '\n' || r == '\r' || (r < 0x20) || r == 0x7f
+	}) < 0
+}
+
+// EqualType reports whether two types name the same kind. Types are
+// matched case-insensitively (design doc 0023 §3.3) so a filter written
+// "bigquery table" finds entries stored as "BigQuery Table"; the stored
+// spelling is always the one the writer used.
+func EqualType(a, b Type) bool {
+	return strings.EqualFold(strings.TrimSpace(string(a)), strings.TrimSpace(string(b)))
+}
 
 // Status is the verification status of a knowledge entry. deprecated means
 // "was correct, no longer recommended"; rejected means "was never accepted"
@@ -226,11 +258,6 @@ type Revision struct {
 	ChangedAt time.Time `json:"changed_at"`
 	Snapshot  Knowledge `json:"snapshot"`
 }
-
-// typeRe matches a type slug: leading alphanumeric, then slug characters.
-// Case, dots, and underscores are accepted so foreign OKF type spellings
-// slugify without loss.
-var typeRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
 // validSegment reports whether s can be one ID path segment. OKF
 // prescribes no character set — a concept ID is a file path, nothing

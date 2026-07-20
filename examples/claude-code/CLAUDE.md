@@ -21,7 +21,7 @@ entries. Search it before writing analytics SQL; write learnings back.
   entries rank higher), expanded one hop through links so the insight
   explaining a metric arrives with it. Start here; use search/get below
   for precise lookups.
-- `ochakai search "<question or keyword>" [--type metrics|queries|insights|terms|datasets|tables|references] [--status verified]`
+- `ochakai search "<question or keyword>" [--type Metric|'Golden Query'|Insight|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|Reference] [--status verified]`
   — one hit per line: score, uri, status, title. Trust `verified` entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
 - `ochakai get <id>` — full entry as markdown (YAML frontmatter +
@@ -56,5 +56,5 @@ IDs may be hierarchical (`queries/sales/monthly-revenue`) to group
 related knowledge.
 
 When a query you compiled or wrote turns out to be correct and useful,
-save it: `type: queries` with `attrs.question` (the natural-language
+save it: `type: Golden Query` with `attrs.question` (the natural-language
 question) and `attrs.sql`. A human can promote it to `verified` later.

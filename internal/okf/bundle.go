@@ -13,8 +13,9 @@ import (
 // bundle directory or an unpacked archive) into knowledge entries.
 // Following OKF's "concept ID = file path" rule, the path minus ".md" is
 // the entry's id, verbatim — the layout is the user's (design doc 0017).
-// The type comes from frontmatter alone; a spelling the slug changes is
-// preserved as attrs[AttrOKFType] so re-export reproduces the original.
+// The type comes from frontmatter alone, verbatim — ochakai's types are
+// the OKF vocabulary, so a foreign spelling needs no preservation to
+// re-export unchanged (design doc 0023).
 // index.md files are navigation that Bundle regenerates, and log.md files
 // are the other OKF-reserved name (update history, SPEC §3) — both are
 // skipped silently, as are hidden paths (.git trees, macOS tar's
@@ -27,7 +28,7 @@ import (
 // entry's canonical namespace ("<id>/<name>") attach to that entry
 // (design doc 0013). Anything else that cannot become an entry or an
 // attachment — orphaned non-markdown files, unparsable documents, invalid
-// slugs — is reported in skipped as "path: reason" lines rather than
+// ids — is reported in skipped as "path: reason" lines rather than
 // failing the whole bundle.
 //
 // There is no archive unwrapping: `tar czf ga4.tgz ga4/` imports under
@@ -106,7 +107,7 @@ func fromBundleFile(clean string, content []byte) (*domain.Knowledge, error) {
 	// one, and OKF requires the key — a file without it is not a concept
 	// (design doc 0017, no guessing).
 	if k.Type == "" {
-		return nil, fmt.Errorf("no type: frontmatter type %q yields no slug (the type key is required; any slug works)", rawType)
+		return nil, fmt.Errorf("no type: frontmatter type %q is unusable (the type key is required; any single-line value works)", rawType)
 	}
 	k.ID = strings.TrimSuffix(clean, ".md")
 	if !domain.ValidID(k.ID) {

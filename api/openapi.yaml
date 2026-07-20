@@ -547,13 +547,15 @@ components:
     Type:
       type: string
       description: >
-        Any slug segment works as a type — the built-ins (models, metrics,
-        queries, insights, terms, datasets, tables, references) are
-        recommendations with server behavior attached, not a closed set
-        (design docs 0005, 0016, 0018). Slugs are plural, matching the OKF
-        knowledge-catalog reference bundles.
-      examples: [models, metrics, queries, insights, terms, datasets, tables, references, runbook]
-      pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
+        The OKF type vocabulary, verbatim — the built-ins (Semantic Model,
+        Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset,
+        BigQuery Table, Reference) are recommendations with server behavior
+        attached, not a closed set (design docs 0005, 0018, 0023). Any
+        single-line value works as a type; OKF registers no taxonomy, so
+        the spelling is the meaning and it round-trips unchanged. Matching
+        is case-insensitive; the spelling you write is the one stored.
+      examples: [Semantic Model, Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
+      pattern: "^[^/\\r\\n]{1,128}$"
     Status:
       type: string
       description: >

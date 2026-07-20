@@ -157,11 +157,15 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 	}
 }
 
-// normalizeKeys rewrites a write payload's byte-compared keys — the id
-// and the link targets — into NFC (design doc 0022); content fields are
-// kept as written.
+// normalizeKeys rewrites a write payload's byte-compared keys — the id,
+// the link targets, and the type — into NFC (design doc 0022); content
+// fields are kept as written. The type joined them in 0023: it is free
+// text now, so a foreign bundle can carry a non-ASCII type, and it is
+// compared byte-wise behind search filters. A recommended type also
+// settles on its canonical spelling, so storage holds one casing.
 func normalizeKeys(k *domain.Knowledge) {
 	k.ID = domain.Normalize(k.ID)
+	k.Type = domain.CanonicalType(domain.Type(strings.TrimSpace(domain.Normalize(string(k.Type)))))
 	for i := range k.Links {
 		k.Links[i].Target = domain.Normalize(k.Links[i].Target)
 	}
@@ -169,7 +173,7 @@ func normalizeKeys(k *domain.Knowledge) {
 
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
-		return Invalidf("invalid type %q (one slug segment, e.g. metrics; recommended: metrics, queries, insights, terms, datasets, tables, references)", k.Type)
+		return Invalidf(`invalid type %q (one line, no "/", up to 128 bytes; recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference)`, k.Type)
 	}
 	if !domain.ValidID(k.ID) {
 		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)

@@ -25,7 +25,7 @@ git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up
 ```
 
-Register the example semantic model — a `models` knowledge entry like any
+Register the example semantic model — a `Semantic Model` knowledge entry like any
 other (design doc 0018) — and try a search; everything goes through the
 API, so plain curl works too:
 
@@ -49,7 +49,7 @@ go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
-ochakai search "revenue" --type metrics --status verified
+ochakai search "revenue" --type Metric --status verified
 ochakai get models/sales-analytics
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai compile --metric revenue --grain orders.ordered_at:month
@@ -109,7 +109,7 @@ In 2026, serving metric definitions to agents over MCP is table stakes —
 semantic layers, warehouses, and data catalogs all do it. ochakai exists
 for what they still don't do:
 
-- **Interpretation knowledge is a first-class type.** An `insights` entry
+- **Interpretation knowledge is a first-class type.** An `Insight` entry
   records the baseline, the seasonality, the caveat, the threshold — the
   tribal knowledge that never fits in a semantic-model YAML and today
   travels by Slack. Your agent gets it in the same search that returns
@@ -194,22 +194,26 @@ over time, run them as canaries from your CI:
 
 | Type | What it holds |
 |---|---|
-| `models` | Apache Ossie semantic model, spec verbatim — what `compile` reads |
-| `metrics` | Semantic metric definition (Apache Ossie), synonyms |
-| `queries` | Golden query: natural-language question + verified SQL |
-| `insights` | How to read a metric: baselines, seasonality, caveats, thresholds |
-| `terms` | Glossary term |
-| `datasets` | BigQuery dataset catalog entry: a container grouping tables |
-| `tables` | BigQuery table catalog entry: source, column notes, known issues |
-| `references` | Mirror of external material: enum definitions, licenses, schema docs |
+| `Semantic Model` | Apache Ossie semantic model, spec verbatim — what `compile` reads |
+| `Metric` | Semantic metric definition (Apache Ossie), synonyms |
+| `Golden Query` | Golden query: natural-language question + verified SQL |
+| `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
+| `Glossary Term` | Glossary term |
+| `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
+| `BigQuery Table` | BigQuery table catalog entry: source, column notes, known issues |
+| `Reference` | Mirror of external material: enum definitions, licenses, schema docs |
 
 These are recommendations with server behavior attached (compile,
-canaries), not a closed set — any slug works as a type for your own document
-kinds, and IDs may be hierarchical (`queries/sales/monthly-revenue`) to
-organize knowledge into directories. Slugs are plural on purpose: exported
-bundles use the same directory layout (`tables/`, `datasets/`,
-`references/`) as the [OKF knowledge-catalog reference bundles](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf/bundles),
-so those bundles import onto the recommended types as-is (design doc 0016).
+canaries), not a closed set — any single-line value works as a type for your
+own document kinds, and IDs may be hierarchical
+(`queries/sales/monthly-revenue`) to organize knowledge into directories.
+The type values are the [OKF knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf/bundles)
+vocabulary verbatim: OKF registers no taxonomy, so the spelling is the
+meaning, and a bundle's types survive an import/export round-trip unchanged
+with no translation layer (design doc 0023). Matching is case-insensitive;
+the spelling you write is the one stored. A type is not an address — the
+directory layout of an exported bundle comes from entry IDs alone (design
+doc 0017), so you are free to organize files however you like.
 
 Entries can carry file attachments — the dashboard screenshot behind an
 insight, the ER diagram behind a table entry, the seeds.txt or spec PDF

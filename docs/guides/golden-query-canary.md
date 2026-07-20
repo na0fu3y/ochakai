@@ -14,7 +14,7 @@
 ### 1. 列挙 — 再検証が古い順に取り出す
 
 ```sh
-ochakai search --sort verified_at --type queries --status verified --limit 100 --json \
+ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100 --json \
   | jq -r '.hits[] | [.id, .verified_at, .attrs.sql] | @tsv'
 ```
 
@@ -36,7 +36,7 @@ ochakai はこの工程に関与しない。
 |---|---|
 | 実行エラー(テーブル・カラム消失など) | **失敗** — スキーマ変更でクエリが壊れた |
 | 行数・主要集計値が前回から閾値超の変動 | **警告** — データ変質か定義ドリフト |
-| `metrics` 型に対応するクエリなら、`POST /api/v1/compile` の出力とも突き合わせ | 乖離があれば **警告** — セマンティック定義とゴールデンクエリがずれている |
+| `Metric` 型に対応するクエリなら、`POST /api/v1/compile` の出力とも突き合わせ | 乖離があれば **警告** — セマンティック定義とゴールデンクエリがずれている |
 | 正常 | 再検証として記録(→ 4) |
 
 ### 4. 書き戻し — 認可ではなく記録で
@@ -44,7 +44,7 @@ ochakai はこの工程に関与しない。
 - **正常だった**: `update_knowledge` で `status: verified` のまま更新すると、
   実行者が `verified_by`・現在時刻が `verified_at` に再スタンプされ、
   次回の `sort=verified_at` で後ろに回る。
-- **失敗・警告**: 対象ナレッジへ `insights`(`kind: caveat`)を draft で作成するか、
+- **失敗・警告**: 対象ナレッジへ `Insight`(`kind: caveat`)を draft で作成するか、
   `status: deprecated` + `status_note`(理由)への変更を提案する。判断は人間が
   provenance を見て行う。誤りと確定した場合は `status: rejected` + `status_note`。
 - **どちらの場合も成果を記録する**: `ochakai report queries/<id> worked` /

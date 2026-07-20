@@ -409,8 +409,12 @@ function esc(s) {
 
 // Keys mirror domain.Types (the plural built-in slugs, design doc 0016),
 // in the same display order.
-const TYPE_ICONS = { models: '🧩', metrics: '📊', queries: '🧾', insights: '💡', terms: '📖', datasets: '🗂️', tables: '🗃️', references: '🔖' };
-const icon = t => TYPE_ICONS[t] || '📄';
+// Keys are the OKF type vocabulary, which is what the server stores
+// (design doc 0023). Lookup is case-insensitive to match the server's
+// filter matching — the stored spelling is whatever the writer used.
+const TYPE_ICONS = { 'Semantic Model': '🧩', 'Metric': '📊', 'Golden Query': '🧾', 'Insight': '💡', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'Reference': '🔖' };
+const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
+const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
 const STATUSES = ['draft', 'verified', 'deprecated', 'rejected'];
 
@@ -1579,7 +1583,7 @@ async function viewEditor(id, prefix = '') {
           <label class="top" for="e-type">Type</label>
           <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" required>
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
-          <div class="hint">What the entry is: metrics, queries, insights, terms, datasets, tables, references — or any slug of your own.</div>
+          <div class="hint">What the entry is: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — or any type of your own.</div>
         </div>
         ${idFields}
       </div>

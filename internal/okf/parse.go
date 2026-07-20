@@ -22,15 +22,14 @@ func Parse(doc []byte) (*domain.Knowledge, error) {
 		return nil, err
 	}
 	if k.Type == "" {
-		return nil, fmt.Errorf("cannot derive a type slug from %q (any slug works as a type; recommended: metrics, queries, insights, terms, datasets, tables, references)", rawType)
+		return nil, fmt.Errorf(`unusable type %q (one line, no "/", up to 128 bytes; recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference)`, rawType)
 	}
 	return k, nil
 }
 
 // parseDoc parses one OKF document, also returning the frontmatter type
-// verbatim so bundle import can preserve the original spelling when the
-// bundle path names the type differently. k.Type is "" when no type slug
-// could be derived \u2014 the caller decides whether path context fills it in.
+// verbatim so the caller can report an unusable one. k.Type is "" when the
+// frontmatter carries no type a knowledge entry can hold.
 //
 // Frontmatter keys fall into three groups. Envelope keys (type, id, title,
 // description, tags, status, status_note) map to Knowledge fields.
@@ -134,9 +133,10 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 			setAttr(key, v)
 		}
 	}
-	typ, keepSpelling := typeFromOKF(fm.typ)
-	if keepSpelling != "" {
-		setAttr(AttrOKFType, keepSpelling)
+	// The frontmatter type is the type, verbatim (design doc 0023).
+	typ := domain.Type(strings.TrimSpace(fm.typ))
+	if !domain.ValidType(typ) {
+		typ = ""
 	}
 
 	trimmedBody, links := splitLinks(strings.TrimSpace(body))
@@ -153,54 +153,6 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, error) {
 		Attrs:       attrs,
 		Body:        trimmedBody,
 	}, fm.typ, nil
-}
-
-// typeFromOKF maps an OKF frontmatter type to an ochakai type. Display
-// values Document writes ("Golden Query", "BigQuery Table"), raw
-// recommended types ("queries"), and the aliases in typeAlias (pre-0016
-// singular slugs, generic Table/Dataset) map to the built-ins; any other
-// value \u2014 OKF registers no taxonomy \u2014 is slugified into a free type, and
-// when the slug changed the spelling, the original is returned to be
-// preserved as attrs[AttrOKFType]. A value no slug can be derived from
-// yields ("", "").
-func typeFromOKF(s string) (typ domain.Type, keepSpelling string) {
-	for t, display := range okfType {
-		if strings.EqualFold(s, display) || s == string(t) {
-			return t, ""
-		}
-	}
-	if t, ok := typeAlias[strings.ToLower(s)]; ok {
-		return t, ""
-	}
-	slug := slugifyType(s)
-	if !domain.ValidType(domain.Type(slug)) {
-		return "", ""
-	}
-	if slug == s {
-		return domain.Type(slug), ""
-	}
-	return domain.Type(slug), s
-}
-
-// slugifyType lowercases a free OKF type value and replaces runs of
-// characters a slug segment cannot hold with "-" ("Data Contract" \u2192
-// "data-contract").
-func slugifyType(s string) string {
-	var b strings.Builder
-	pending := false
-	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
-			if pending && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			pending = false
-			b.WriteRune(r)
-		default:
-			pending = true
-		}
-	}
-	return strings.TrimRight(b.String(), "-")
 }
 
 var linkLineRe = regexp.MustCompile(`^- ([^:\s]+): \[([^\]]+)\]\([^)]*\)$`)

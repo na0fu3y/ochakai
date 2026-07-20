@@ -20,56 +20,12 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// okfType maps ochakai's recommended knowledge types to descriptive OKF
-// type values (OKF registers no taxonomy; values should be self-explanatory).
-// Free types have no display mapping and export as themselves — unless the
-// original bundle spelling survives in attrs[AttrOKFType].
-var okfType = map[domain.Type]string{
-	domain.TypeModels:     "Semantic Model",
-	domain.TypeMetrics:    "Metric",
-	domain.TypeQueries:    "Golden Query",
-	domain.TypeInsights:   "Insight",
-	domain.TypeTerms:      "Glossary Term",
-	domain.TypeDatasets:   "BigQuery Dataset",
-	domain.TypeTables:     "BigQuery Table",
-	domain.TypeReferences: "Reference",
-}
-
-// typeAlias maps accepted alternative frontmatter spellings (compared
-// lowercase) onto the built-ins: the pre-0016 singular slugs, and the
-// generic Table/Dataset names now that the canonical display is the
-// BigQuery-qualified one (design doc 0016 — ochakai is BigQuery-only).
-// Aliases normalize: the original spelling is not preserved.
-var typeAlias = map[string]domain.Type{
-	"model":   domain.TypeModels,
-	"metric":  domain.TypeMetrics,
-	"query":   domain.TypeQueries,
-	"insight": domain.TypeInsights,
-	"term":    domain.TypeTerms,
-	"table":   domain.TypeTables,
-	"dataset": domain.TypeDatasets,
-}
-
-// AttrOKFType preserves the original OKF frontmatter type spelling for
-// imported free types (e.g. "Data Contract" stored under type
-// "data-contract"), so a bundle round-trips byte-for-byte. It is folded
-// back into the type frontmatter key on export, never exported as an attr.
-const AttrOKFType = "okf_type"
-
-// displayType returns the OKF frontmatter type value for k. A preserved
-// original spelling wins even on built-in types: with plural built-in
-// slugs matching foreign bundle directories, "tables/orders.md" spelled
-// "BigQuery Table" lands on the built-in tables type and must still
-// re-export its own spelling, not the display name.
-func displayType(k *domain.Knowledge) string {
-	if s, ok := k.Attrs[AttrOKFType].(string); ok && s != "" {
-		return s
-	}
-	if d, ok := okfType[k.Type]; ok {
-		return d
-	}
-	return string(k.Type)
-}
+// The type key needs no translation here: ochakai's types are the OKF
+// vocabulary verbatim ("BigQuery Table", not a slug), so export writes
+// k.Type and import reads it back unchanged (design doc 0023). The
+// mapping table, the alias table, the slugifier, and the okf_type
+// spelling-preservation attr that earlier revisions needed are all gone —
+// nothing is lost on the way out, so nothing has to be restored.
 
 // Version is the OKF spec version ochakai produces, declared in the
 // bundle-root index.md (SPEC §11).
@@ -103,7 +59,6 @@ var reservedKeys = map[string]bool{
 	"resource": true, "tags": true, "timestamp": true, "status": true,
 	"status_note": true, "created_by": true, "verified_by": true,
 	"verified_at": true, "rejected_by": true, "rejected_at": true,
-	AttrOKFType: true,
 }
 
 // Bundle renders every entry into a path→content map. The path is
@@ -207,7 +162,7 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 // Document renders one knowledge entry as an OKF concept document.
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
-		Type:        displayType(k),
+		Type:        string(k.Type),
 		Resource:    k.Resource,
 		Title:       k.Title,
 		Description: k.Description,
