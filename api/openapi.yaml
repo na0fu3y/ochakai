@@ -570,9 +570,17 @@ components:
         name: { type: string }
     Link:
       type: object
+      description: >
+        An edge to another entry, derived from a markdown link in the body.
+        Links are untyped: OKF SPEC §5 leaves the kind of relationship to the
+        surrounding prose.
       properties:
-        rel: { type: string }
         target: { type: string, description: The target entry's id (its bundle path). }
+        text:
+          type: string
+          description: >
+            The anchor text the body used. Absent for a bare ochakai:// reference,
+            in which case the target's last segment reads as the name.
     Knowledge:
       type: object
       required: [type, id]
@@ -613,11 +621,23 @@ components:
         verified_at: { type: string, format: date-time, readOnly: true }
         rejected_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         rejected_at: { type: string, format: date-time, readOnly: true }
-        links: { type: array, items: { $ref: "#/components/schemas/Link" } }
+        links:
+          type: array
+          items: { $ref: "#/components/schemas/Link" }
+          readOnly: true
+          description: >
+            Derived from the markdown links in body, recomputed on every write —
+            sending links has no effect. Bundle-absolute (/metrics/revenue.md),
+            relative (./revenue.md), and ochakai:// targets are all read;
+            http(s) URLs and non-.md files are not (the latter are attachments).
         attrs:
           type: object
           description: Type-specific structured attributes (e.g. question/sql for query, model/expression for metric).
-        body: { type: string, description: Markdown body. }
+        body:
+          type: string
+          description: >
+            Markdown body. Links to other entries live here: write a markdown link
+            to the target's path and it becomes an edge, and a backlink the other way.
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }

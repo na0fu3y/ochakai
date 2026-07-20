@@ -178,7 +178,7 @@ Every entry is also an **MCP resource** addressable by its canonical URI —
 `ochakai://` plus its id (the entry's path), e.g. `ochakai://metrics/revenue`
 or `ochakai://queries/sales/top-customers`. Clients that
 support resource references (`@`-mentions) can pull an entry in as an OKF
-document — frontmatter, body, and links — without a tool call; discovery
+document — frontmatter and body — without a tool call; discovery
 stays with `get_context`/`search_knowledge`. Read tools carry `readOnly`
 annotations and `delete_knowledge` a `destructive` one, so client
 auto-approval policies work without parsing descriptions.
@@ -214,6 +214,18 @@ with no translation layer (design doc 0023). Matching is case-insensitive;
 the spelling you write is the one stored. A type is not an address — the
 directory layout of an exported bundle comes from entry IDs alone (design
 doc 0017), so you are free to organize files however you like.
+
+Entries relate to each other through **the markdown links in their body**
+— there is no links field to fill in. Write `[revenue](/metrics/revenue.md)`
+in the prose and the entry links to `metrics/revenue`; the target gains a
+backlink, and `get_context` expands the edge in both directions. Relative
+paths (`./gross.md`) and canonical URIs (`ochakai://metrics/revenue`, bare
+or in a link) work too. This is OKF SPEC §5 taken at its word: a link
+asserts a relationship, and what kind of relationship it is comes from the
+surrounding prose, so ochakai stores no relationship type of its own
+(design doc 0024). Links in code blocks are examples, not edges, and are
+skipped. Renaming an entry rewrites the links pointing at it, prose
+included.
 
 Entries can carry file attachments — the dashboard screenshot behind an
 insight, the ER diagram behind a table entry, the seeds.txt or spec PDF

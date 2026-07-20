@@ -157,11 +157,24 @@ const (
 	ActorAgent = "agent"
 )
 
-// Link is a typed edge to another knowledge entry, e.g. {rel: measures,
-// target: "tables/orders"}.
+// Link is an edge to another knowledge entry, derived from a markdown
+// link in the body — never authored as a field (design doc 0024). Links
+// are untyped: OKF SPEC §5 leaves the kind of relationship to the
+// surrounding prose, so all ochakai keeps is where the link points and
+// what it was called.
 type Link struct {
-	Rel    string `json:"rel"`
-	Target string `json:"target"` // the target entry's id (its bundle path)
+	Target string `json:"target"`         // the target entry's id (its bundle path)
+	Text   string `json:"text,omitempty"` // the anchor text; empty for a bare ochakai:// reference
+}
+
+// DisplayText returns how the link should read: its anchor text when the
+// body gave one, else the target's last segment — the same "filename is
+// the name" fallback titles use (design doc 0022).
+func (l Link) DisplayText() string {
+	if l.Text != "" {
+		return l.Text
+	}
+	return DisplayTitle("", l.Target)
 }
 
 // Knowledge is the common envelope for all knowledge types. Type-specific

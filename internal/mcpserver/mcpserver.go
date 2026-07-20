@@ -185,7 +185,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"directly. After creating one, create an entry per metric (last id segment = the metric " +
 			"name, e.g. metrics/<name>) with attrs.model naming the Semantic Model entry's id and " +
 			"attrs.expression holding the expression, so the definitions are searchable and compile " +
-			"usage is attributed to them; give table entries a defined_in link to the Semantic Model entry.",
+			"usage is attributed to them; have table entries link to the Semantic Model entry from their body. " +
+			"Links are never a field: write a markdown link to the other entry's path in body — " +
+			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -197,8 +199,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
-		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/links/attrs/body — " +
+		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/attrs/body — " +
 			"an omitted title clears it, making the filename the name). " +
+			"Links are not a field: they come from the markdown links in body, so keep the ones you want to keep. " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
 			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
@@ -417,9 +420,8 @@ type writeIn struct {
 	Tags        []string       `json:"tags,omitempty"`
 	Status      string         `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
 	StatusNote  string         `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
-	Links       []domain.Link  `json:"links,omitempty" jsonschema:"typed edges to other entries, e.g. {rel: about, target: metrics/revenue}"`
 	Attrs       map[string]any `json:"attrs,omitempty" jsonschema:"type-specific structured attributes, e.g. question/sql for a query"`
-	Body        string         `json:"body,omitempty" jsonschema:"markdown body"`
+	Body        string         `json:"body,omitempty" jsonschema:"markdown body; link to other entries by writing a markdown link to their path — [revenue](/metrics/revenue.md) — and those links become the entry's links"`
 }
 
 func (in writeIn) toKnowledge() *domain.Knowledge {
@@ -432,7 +434,6 @@ func (in writeIn) toKnowledge() *domain.Knowledge {
 		Tags:        in.Tags,
 		Status:      domain.Status(in.Status),
 		StatusNote:  in.StatusNote,
-		Links:       in.Links,
 		Attrs:       in.Attrs,
 		Body:        in.Body,
 	}

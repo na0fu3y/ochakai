@@ -1248,14 +1248,18 @@ async function viewDetail(id) {
         return `<tr><td class="k mono">${esc(k)}</td><td>${rendered}</td></tr>`;
       }).join('') + '</table>';
     },
+    // Read-only: links come from the body's markdown links (design doc
+    // 0024), so the body editor is where they are changed.
     links: () => {
       const links = entry.links || [];
-      if (!links.length) return '<div class="empty">No links to other entries.</div>';
-      return '<table class="kv">' + links.map(l => {
+      if (!links.length) return '<div class="empty">The body links to no other entries yet.</div>';
+      return `<p class="provenance" style="margin:0 0 .8rem">Taken from the markdown links in the body — edit the body to change them.</p>`
+        + '<table class="kv">' + links.map(l => {
         const target = String(l.target || '').replace(/^ochakai:\/\//, '');
         const href = target ? '#/k/' + idPath(target) : null;
-        return `<tr><td class="k">${esc(l.rel)}</td>
-          <td>${href ? `<a class="mono" href="${href}">${esc(l.target)}</a>` : `<span class="mono">${esc(l.target)}</span>`}</td></tr>`;
+        const text = l.text || target.split('/').pop() || target;
+        return `<tr><td class="k">${esc(text)}</td>
+          <td>${href ? `<a class="mono" href="${href}">${esc(target)}</a>` : `<span class="mono">${esc(target)}</span>`}</td></tr>`;
       }).join('') + '</table>';
     },
     attachments: () => {
@@ -1434,9 +1438,11 @@ async function viewDetail(id) {
 }
 
 // The writable subset of a Knowledge entry (PUT is a full replacement).
+// links is not in it — the server derives links from body (design doc
+// 0024) and ignores whatever a payload carries.
 function editablePayload(e) {
   const p = { type: e.type, id: e.id, title: e.title };
-  for (const k of ['description', 'tags', 'status', 'status_note', 'links', 'attrs', 'body']) {
+  for (const k of ['description', 'tags', 'status', 'status_note', 'attrs', 'body']) {
     if (e[k] !== undefined && e[k] !== null) p[k] = e[k];
   }
   return p;
@@ -1580,7 +1586,7 @@ function wireReviewActions(container) {
 // in the tree routes here as #/new/<prefix>/.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
-  let entry = { type: 'insights', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
+  let entry = { type: 'insights', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', attrs: {}, body: '' };
   if (editing) {
     try {
       entry = await api('/api/v1/knowledge/' + idPath(id));
@@ -1589,7 +1595,6 @@ async function viewEditor(id, prefix = '') {
       return;
     }
   }
-  const linksText = (entry.links || []).map(l => `${l.rel} ${l.target}`).join('\n');
   const attrsText = entry.attrs && Object.keys(entry.attrs).length ? JSON.stringify(entry.attrs, null, 2) : '';
 
   // The create form asks for folder + file name and assembles the id
@@ -1652,16 +1657,12 @@ async function viewEditor(id, prefix = '') {
       <div class="field">
         <label class="top" for="e-body">Body (markdown)</label>
         <textarea id="e-body" rows="10" class="mono">${esc(entry.body || '')}</textarea>
+        <div class="hint">Link to another entry with a markdown link to its path — <code>[revenue](/metrics/revenue.md)</code>. Those links become the entry's links, and a backlink on the other side.</div>
       </div>
       <div class="field">
         <label class="top" for="e-attrs">Attributes (JSON)</label>
         <textarea id="e-attrs" rows="6" class="mono" placeholder='{"question": "…", "sql": "SELECT …"}'>${esc(attrsText)}</textarea>
         <div class="hint">Type-specific structured attributes, e.g. question/sql for a query.</div>
-      </div>
-      <div class="field">
-        <label class="top" for="e-links">Links</label>
-        <textarea id="e-links" rows="3" class="mono" placeholder="about metrics/revenue">${esc(linksText)}</textarea>
-        <div class="hint">One per line: <code>rel target-id</code>, e.g. <code>about metrics/revenue</code>.</div>
       </div>
       <div id="editor-error"></div>
       <p>
@@ -1700,11 +1701,8 @@ async function viewEditor(id, prefix = '') {
       try { payload.attrs = JSON.parse(attrsRaw); }
       catch (e) { errBox.innerHTML = `<div class="error-banner">Attributes is not valid JSON: ${esc(e.message)}</div>`; return; }
     }
-    const links = $('#e-links').value.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
-      const sp = line.indexOf(' ');
-      return sp > 0 ? { rel: line.slice(0, sp), target: line.slice(sp + 1).trim() } : { rel: 'related', target: line };
-    });
-    if (links.length) payload.links = links;
+    // No links in the payload: the server derives them from the body
+    // (design doc 0024).
     try {
       const saved = editing
         ? await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'PUT', body: payload })

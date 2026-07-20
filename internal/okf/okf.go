@@ -209,14 +209,11 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	b.Write(fmYAML)
 	b.Write(exYAML)
 	b.WriteString("---\n")
+	// Links are not rendered: they are derived from the body's markdown
+	// links (design doc 0024), so they are already in the text below.
+	// Writing a "# Links" section here would duplicate them on re-import.
 	if body := strings.TrimSpace(k.Body); body != "" {
 		b.WriteString("\n" + body + "\n")
-	}
-	if len(k.Links) > 0 {
-		b.WriteString("\n# Links\n\n")
-		for _, l := range k.Links {
-			b.WriteString(fmt.Sprintf("- %s: [%s](/%s.md)\n", l.Rel, l.Target, l.Target))
-		}
 	}
 	return []byte(b.String()), nil
 }

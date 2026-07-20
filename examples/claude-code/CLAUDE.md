@@ -25,7 +25,9 @@ entries. Search it before writing analytics SQL; write learnings back.
   — one hit per line: score, uri, status, title. Trust `verified` entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
 - `ochakai get <id>` — full entry as markdown (YAML frontmatter +
-  body). Follow the `# Links` section to related entries. If stderr lists
+  body). Follow the body's markdown links to related entries — a link to
+  another entry's path, `[revenue](/metrics/revenue.md)`, is how entries
+  relate, and writing one is how you create a relationship. If stderr lists
   attachments (dashboard screenshots, ER diagrams), fetch them with
   `ochakai get <id> --download <dir>` and Read the saved files when
   the body's image references matter to the question.
