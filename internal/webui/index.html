@@ -484,22 +484,20 @@ const displayTitle = e => e.title || String(e.id).split('/').pop();
 // URL for a directory's index page; accepts "a/b" or "a/b/".
 const dirHash = p => '#/dir/' + idPath(String(p).replace(/\/+$/, ''));
 
-// crumbTrail renders an id or directory path as a breadcrumb: every
-// ancestor directory links to its index page, the root "/" goes home
-// (which shows the root index), and the last segment — the current
-// page — stays plain text. A separator belongs to the directory it
-// closes ("insights/"), so the whole crumb is one click target.
-function crumbTrail(segs) {
+// crumbTrail renders a breadcrumb of directories: each links to its
+// index page and the root "/" goes home (which shows the root index). A
+// separator belongs to the directory it closes ("insights/"), so the
+// whole crumb is one click target. `leaf` is the current page's own
+// segment, shown as plain text — a directory page names itself that way,
+// while an entry's breadcrumb stops at its folder (the entry's own name
+// is right below it, as the heading).
+function crumbTrail(dirs, leaf) {
   let prefix = '', out = '<a href="#/" title="Root index">/</a>';
-  segs.forEach((s, i) => {
-    if (i < segs.length - 1) {
-      prefix += s + '/';
-      out += `<a href="${dirHash(prefix)}">${esc(s)}/</a>`;
-    } else {
-      out += esc(s);
-    }
-  });
-  return out;
+  for (const d of dirs) {
+    prefix += d + '/';
+    out += `<a href="${dirHash(prefix)}">${esc(d)}/</a>`;
+  }
+  return leaf === undefined ? out : out + esc(leaf);
 }
 
 /* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
@@ -820,6 +818,14 @@ function hitCard(h) {
 // are restored (re-fetched) on a tree refresh.
 const browse = { open: new Set() }; // keys: prefix
 
+// knownDirs are the directory prefixes the tree has loaded, plus the
+// root — the completions offered where a destination path is typed.
+function knownDirs() {
+  const dirs = new Set(['']);
+  document.querySelectorAll('#tree details.node').forEach(d => dirs.add(d.dataset.prefix));
+  return [...dirs].sort();
+}
+
 // refreshTree (re)loads the root level; wireNodes then reloads every
 // node restored as open. Called at boot, from the ↻ button, and after
 // writes that change what the tree shows (create, delete, status).
@@ -1087,8 +1093,9 @@ function viewDir(rawPrefix) {
   const prefix = clean ? clean + '/' : '';
   revealInTree(prefix); // expand the tree to (and including) this directory
   const newHref = '#/new/' + (clean ? idPath(clean) + '/' : '');
+  const segs = clean ? clean.split('/') : [];
   view.innerHTML = `
-    <nav class="crumbs mono">${crumbTrail(clean ? clean.split('/') : [])}</nav>
+    <nav class="crumbs mono">${crumbTrail(segs.slice(0, -1), segs.at(-1))}</nav>
     <div class="toolbar">
       <div class="section-title" style="margin:0"><span class="type-ico">📁</span> <span class="mono">/${esc(prefix)}</span></div>
       <span class="grow"></span>
@@ -1159,7 +1166,7 @@ async function viewDetail(id) {
   } : null;
 
   view.innerHTML = `
-    <nav class="crumbs mono">${crumbTrail(entry.id.split('/'))} <span class="badge">${esc(entry.type)}</span></nav>
+    <nav class="crumbs mono">${crumbTrail(entry.id.split('/').slice(0, -1))} <span class="badge">${esc(entry.type)}</span></nav>
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(displayTitle(entry))}</h1>
@@ -1411,9 +1418,7 @@ async function viewDetail(id) {
     closeMenu();
     $('#move-panel').style.display = '';
     const last = entry.id.split('/').pop();
-    const dirs = new Set(['']);
-    document.querySelectorAll('#tree details.node').forEach(d => dirs.add(d.dataset.prefix));
-    $('#move-dirs').innerHTML = [...dirs].sort().map(p => `<option value="${esc(p + last)}">`).join('');
+    $('#move-dirs').innerHTML = knownDirs().map(p => `<option value="${esc(p + last)}">`).join('');
     $('#move-to').focus();
   });
   $('#move-cancel').addEventListener('click', () => { $('#move-panel').style.display = 'none'; });
@@ -1576,7 +1581,7 @@ function wireReviewActions(container) {
 
 /* ============================== editor ============================== */
 
-// prefix (create only) seeds the Folder field — the per-directory ＋
+// prefix (create only) seeds the ID field — the per-directory ＋
 // in the tree routes here as #/new/<prefix>/.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
@@ -1592,26 +1597,21 @@ async function viewEditor(id, prefix = '') {
   const linksText = (entry.links || []).map(l => `${l.rel} ${l.target}`).join('\n');
   const attrsText = entry.attrs && Object.keys(entry.attrs).length ? JSON.stringify(entry.attrs, null, 2) : '';
 
-  // The create form asks for folder + file name and assembles the id
-  // (design doc 0022): the filename is the entry's name unless a title
-  // overrides it. The server's address stays the id alone — assembly is
-  // the client's job.
-  const seedFolder = prefix.replace(/\/+$/, '');
-  const idFields = editing ? `
+  // The id is one field, the way the address is one string (design doc
+  // 0016) and the way the Move panel already takes it. Its last segment
+  // is the entry's name unless a title overrides it (design doc 0022).
+  // No datalist here, unlike Move: a focused input that gains one makes
+  // Chrome scroll the page to seat the suggestion popup, and this form
+  // focuses the field itself.
+  const idField = `
         <div class="field">
           <label class="top" for="e-id">ID</label>
-          <input type="text" id="e-id" class="mono" value="${esc(entry.id)}" disabled>
-          <div class="hint">Where the entry lives (move it from the entry page).</div>
-        </div>` : `
-        <div class="field">
-          <label class="top" for="e-folder">Folder</label>
-          <input type="text" id="e-folder" class="mono" value="${esc(seedFolder)}" placeholder="sales">
-          <div class="hint">Directories separated by “/”; empty for the root. Place together what should be read together.</div>
-        </div>
-        <div class="field">
-          <label class="top" for="e-name">File name</label>
-          <input type="text" id="e-name" class="mono" placeholder="monthly-revenue" required>
-          <div class="hint">The entry's name (the id's last segment), e.g. 売上 or monthly-revenue.</div>
+          <input type="text" id="e-id" class="mono" value="${esc(editing ? entry.id : prefix)}"
+                 placeholder="sales/monthly-revenue"
+                 ${editing ? 'disabled' : 'required'}>
+          <div class="hint">${editing
+            ? 'Where the entry lives (move it from the entry page).'
+            : 'The full path, directories separated by “/”. The last segment is the entry’s name, e.g. 売上 or monthly-revenue; place together what should be read together.'}</div>
         </div>`;
   view.innerHTML = `
     <div class="section-title">${editing ? `Edit ${esc(entry.id)}` : 'New knowledge entry'}</div>
@@ -1623,7 +1623,7 @@ async function viewEditor(id, prefix = '') {
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
           <div class="hint">What the entry is: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — or any type of your own.</div>
         </div>
-        ${idFields}
+        ${idField}
       </div>
       <div class="field">
         <label class="top" for="e-title">Title</label>
@@ -1675,19 +1675,35 @@ async function viewEditor(id, prefix = '') {
   $('#editor').addEventListener('input', () => { dirty = true; });
   unsaved = () => dirty;
 
-  // Arriving from a directory's ＋: the folder is already seeded, so
-  // only the file name is left to type.
-  if (!editing && prefix) $('#e-name').focus({ preventScroll: true });
+  // Creating: put the caret past the folder the ＋ seeded, so only the
+  // name is left to type. Deferred by a tick — focusing a field this
+  // form just wrote scrolls the page, preventScroll notwithstanding.
+  if (!editing) {
+    setTimeout(() => {
+      const idBox = $('#e-id');
+      if (!idBox) return; // navigated away
+      idBox.focus({ preventScroll: true });
+      idBox.setSelectionRange(idBox.value.length, idBox.value.length);
+    });
+  }
 
   $('#editor').addEventListener('submit', async ev => {
     ev.preventDefault();
     const errBox = $('#editor-error');
     errBox.innerHTML = '';
-    const folder = editing ? '' : $('#e-folder').value.trim().replace(/^\/+|\/+$/g, '');
-    const name = editing ? '' : $('#e-name').value.trim();
+    // A leading "/" is dropped (ids are relative), but a trailing one is
+    // not: the ＋ seeds the field with a folder, so "insights/" means the
+    // name is still missing — trimming it would quietly create a root
+    // entry called "insights" instead.
+    const newID = editing ? '' : $('#e-id').value.trim().replace(/^\/+/, '');
+    if (!editing && (!newID || newID.endsWith('/'))) {
+      errBox.innerHTML = '<div class="error-banner">ID needs a name after the folder, e.g. <code>insights/aov-baseline</code>.</div>';
+      $('#e-id').focus();
+      return;
+    }
     const payload = {
       type: $('#e-type').value.trim(),
-      id: editing ? entry.id : (folder ? folder + '/' + name : name),
+      id: editing ? entry.id : newID,
       title: $('#e-title').value.trim(),
       description: $('#e-desc').value.trim(),
       tags: $('#e-tags').value.split(',').map(s => s.trim()).filter(Boolean),
