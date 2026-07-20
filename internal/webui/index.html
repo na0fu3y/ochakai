@@ -224,6 +224,17 @@
   .badge.verified { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
   .badge.deprecated { color: var(--deprecated-fg); background: var(--deprecated-bg); border-color: var(--deprecated-bd); }
   .badge.rejected { color: var(--rejected-fg); background: var(--rejected-bg); border-color: var(--rejected-bd); }
+  /* The status badge doubles as its own picker: one control shows the
+     status and changes it, where four transition buttons used to sit.
+     The select sits transparent over the label so the pill hugs the
+     current status instead of the widest option ("deprecated"). */
+  .badge.status-pick { position: relative; display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; }
+  .badge.status-pick::after { content: '▾'; font-size: .65rem; opacity: .7; }
+  .badge.status-pick select {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; appearance: none; -webkit-appearance: none; border: 0; padding: 0;
+  }
+  .badge.status-pick:focus-within { outline: 2px solid var(--accent-weak); }
   .tag {
     border-radius: 999px; padding: .04rem .55rem; font-size: .76rem;
     background: var(--accent-weak); color: var(--accent-strong);
@@ -249,6 +260,21 @@
   .detail-head { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
   .detail-head h1 { font-size: 1.45rem; margin: 0; }
   .detail-head .actions { margin-left: auto; display: flex; gap: .45rem; flex-wrap: wrap; }
+  /* Edit stays a button; the rarer Move / Delete live behind ⋯. */
+  .menu { position: relative; }
+  .menu > summary { list-style: none; }
+  .menu > summary::-webkit-details-marker { display: none; }
+  .menu-body {
+    position: absolute; right: 0; top: calc(100% + .3rem); z-index: 30; min-width: 9rem;
+    display: flex; flex-direction: column; padding: .25rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-hover);
+  }
+  .menu-body button {
+    font: inherit; text-align: left; cursor: pointer; background: none; border: 0;
+    border-radius: 6px; padding: .35rem .55rem; color: var(--text); white-space: nowrap;
+  }
+  .menu-body button:hover { background: var(--accent-weak); color: var(--accent-strong); }
+  .menu-body button.danger:hover { background: var(--rejected-bg); color: var(--rejected-fg); }
   .provenance { color: var(--muted); font-size: .84rem; margin: .45rem 0 0; }
   .status-note {
     margin-top: .7rem; border-left: 3px solid var(--border); padding: .1rem .8rem;
@@ -461,13 +487,14 @@ const dirHash = p => '#/dir/' + idPath(String(p).replace(/\/+$/, ''));
 // crumbTrail renders an id or directory path as a breadcrumb: every
 // ancestor directory links to its index page, the root "/" goes home
 // (which shows the root index), and the last segment — the current
-// page — stays plain text.
+// page — stays plain text. A separator belongs to the directory it
+// closes ("insights/"), so the whole crumb is one click target.
 function crumbTrail(segs) {
   let prefix = '', out = '<a href="#/" title="Root index">/</a>';
   segs.forEach((s, i) => {
     if (i < segs.length - 1) {
       prefix += s + '/';
-      out += `<a href="${dirHash(prefix)}">${esc(s)}</a>/`;
+      out += `<a href="${dirHash(prefix)}">${esc(s)}/</a>`;
     } else {
       out += esc(s);
     }
@@ -927,6 +954,14 @@ function markTreeSelection() {
   active?.scrollIntoView({ block: 'nearest' });
 }
 
+// An open ⋯ menu closes on any click outside it, and on Escape.
+document.addEventListener('click', e => {
+  document.querySelectorAll('details.menu[open]').forEach(m => { if (!m.contains(e.target)) m.open = false; });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('details.menu[open]').forEach(m => { m.open = false; });
+});
+
 /* ============================== move ============================== */
 
 // moveEntry renames an entry (POST /api/v1/move) — the server carries
@@ -1108,13 +1143,6 @@ async function viewDetail(id) {
   ].filter(Boolean).join(' · ');
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
-  // Any transition the API allows is offered here (provenance over
-  // authorization, design doc 0002) — only the current status is hidden.
-  // "Mark draft" doubles as the undo for a stray one-click Verify.
-  const canVerify = entry.status !== 'verified';
-  const canDraft = entry.status !== 'draft';
-  const canDeprecate = entry.status !== 'deprecated';
-  const canReject = entry.status !== 'rejected';
   const atts = entry.attachments || [];
   // Metrics are the compilable knowledge, so their detail view gets a
   // Compile tab instead of a site-wide compile page. The compiler matches
@@ -1135,16 +1163,22 @@ async function viewDetail(id) {
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(displayTitle(entry))}</h1>
-      <span class="badge ${esc(entry.status)}">${esc(entry.status)}</span>
+      <span class="badge status-pick ${esc(entry.status)}" title="Change status">
+        <span aria-hidden="true">${esc(entry.status)}</span>
+        <select id="act-status" aria-label="status">
+          ${STATUSES.map(s => `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </span>
       ${tags}
       <span class="actions">
-        ${canVerify ? '<button class="btn small primary" id="act-verify">✓ Verify</button>' : ''}
-        ${canDraft ? '<button class="btn small" id="act-draft" title="Back to draft (clears verification / rejection provenance)">Mark draft</button>' : ''}
-        ${canDeprecate ? '<button class="btn small" id="act-deprecate">Deprecate</button>' : ''}
-        ${canReject ? '<button class="btn small danger" id="act-reject">Reject</button>' : ''}
         <a class="btn small" href="#/edit/${idPath(entry.id)}">Edit</a>
-        <button class="btn small" id="act-move" title="Move to another path (references are rewritten)">Move</button>
-        <button class="btn small danger" id="act-delete">Delete</button>
+        <details class="menu" id="more-menu">
+          <summary class="btn small" title="More actions" aria-label="More actions">⋯</summary>
+          <div class="menu-body">
+            <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
+            <button class="danger" id="act-delete">Delete…</button>
+          </div>
+        </details>
       </span>
     </div>
     <div class="provenance">${esc(prov)}</div>
@@ -1352,23 +1386,30 @@ async function viewDetail(id) {
   document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   showTab('overview');
 
-  const setStatus = async (status, askNote) => {
+  // Status is a picker, not a row of transition buttons: any transition
+  // the API allows is offered (provenance over authorization, design doc
+  // 0002), and picking "draft" again undoes a stray verify. Deprecate and
+  // reject ask for a reason; a cancelled prompt puts the picker back.
+  const statusPick = $('#act-status');
+  statusPick.addEventListener('change', async () => {
+    const status = statusPick.value;
     try {
-      if (await applyStatus(entry, status, askNote)) {
+      if (await applyStatus(entry, status, status === 'deprecated' || status === 'rejected')) {
         toast(`Marked ${status}.`);
         refreshTree(); // the tree shows status badges
         viewDetail(entry.id);
+        return;
       }
     } catch (e) { toast('Failed: ' + e.message); }
-  };
+    statusPick.value = entry.status;
+  });
   // The Move panel: a destination input seeded with the current path,
   // with every directory the tree has loaded (plus the root) offered as
   // a completion — pick one or edit the path directly.
+  const closeMenu = () => { $('#more-menu').open = false; };
   $('#act-move').addEventListener('click', () => {
-    const panel = $('#move-panel');
-    const show = panel.style.display === 'none';
-    panel.style.display = show ? '' : 'none';
-    if (!show) return;
+    closeMenu();
+    $('#move-panel').style.display = '';
     const last = entry.id.split('/').pop();
     const dirs = new Set(['']);
     document.querySelectorAll('#tree details.node').forEach(d => dirs.add(d.dataset.prefix));
@@ -1380,11 +1421,8 @@ async function viewDetail(id) {
   $('#move-to').addEventListener('keydown', e => {
     if (e.key === 'Enter') moveEntry(entry.id, $('#move-to').value.trim());
   });
-  $('#act-verify')?.addEventListener('click', () => setStatus('verified', false));
-  $('#act-draft')?.addEventListener('click', () => setStatus('draft', false));
-  $('#act-deprecate')?.addEventListener('click', () => setStatus('deprecated', true));
-  $('#act-reject')?.addEventListener('click', () => setStatus('rejected', true));
   $('#act-delete').addEventListener('click', async () => {
+    closeMenu();
     if (!confirm(`Soft-delete ${entry.id}? Revision history is retained.`)) return;
     try {
       await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'DELETE' });
