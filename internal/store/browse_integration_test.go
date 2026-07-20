@@ -37,7 +37,7 @@ func TestIntegrationBrowse(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	mk := func(typ domain.Type, id string, status domain.Status) {
-		k := &domain.Knowledge{Type: typ, ID: id, Title: "t:" + id, Status: status, CreatedBy: actor}
+		k := &domain.Knowledge{Type: typ, ID: id, Title: "t:" + id, Description: "d:" + id, Status: status, CreatedBy: actor}
 		if err := s.Create(ctx, k); err != nil {
 			t.Fatal(err)
 		}
@@ -76,7 +76,8 @@ func TestIntegrationBrowse(t *testing.T) {
 		t.Errorf("dirs = %+v, want regions(1)", dirs)
 	}
 	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" || entries[0].Type != domain.TypeQueries ||
-		entries[0].Title != "t:it-br-sales/monthly" || entries[0].Status != domain.StatusVerified {
+		entries[0].Title != "t:it-br-sales/monthly" || entries[0].Description != "d:it-br-sales/monthly" ||
+		entries[0].Status != domain.StatusVerified {
 		t.Errorf("entries = %+v", entries)
 	}
 

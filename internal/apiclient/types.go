@@ -52,13 +52,15 @@ type BrowseDir struct {
 }
 
 // BrowseEntry is the light projection of an entry in a tree listing:
-// no body, no links, no attrs.
+// no body, no links, no attrs. Description rides along so a directory
+// listing can render as an index page.
 type BrowseEntry struct {
-	Type      string        `json:"type"`
-	ID        string        `json:"id"`
-	Title     string        `json:"title"`
-	Status    domain.Status `json:"status"`
-	UpdatedAt time.Time     `json:"updated_at"`
+	Type        string        `json:"type"`
+	ID          string        `json:"id"`
+	Title       string        `json:"title,omitempty"` // empty means the id's last segment (design doc 0022)
+	Description string        `json:"description,omitempty"`
+	Status      domain.Status `json:"status"`
+	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
 type CompileResult struct {

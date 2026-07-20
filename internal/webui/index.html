@@ -5,7 +5,9 @@
      both proxy /api/v1 to ochakai, and the page always talks to its own
      origin (design doc 0006). It covers the human-facing API surface —
      a persistent knowledge tree as the primary navigation (an entry's id
-     is its path, design docs 0014/0016), search, entry details with
+     is its path, design docs 0014/0016), directory index pages (each
+     tree level rendered like the OKF export's index.md — subdirectories
+     with counts, entries with descriptions), search, entry details with
      usage, revision history, backlinks, attachments, create/edit with
      the draft → verified workflow, move with reference rewriting (a Move
      action and tree drag & drop), the draft review queue (sort=usage),
@@ -292,6 +294,12 @@
     margin-left: .85rem; padding-left: .7rem; border-left: 1px solid var(--border);
   }
   .browse .dir-name { overflow-wrap: anywhere; }
+  /* The directory name links to its index page but reads as a tree row,
+     not a link; the row highlights when its index page is the current
+     route, like .tree-entry.active. */
+  .browse a.dir-name { color: inherit; }
+  .browse a.dir-name:hover { color: var(--accent-strong); }
+  .browse details.node > summary.active { background: var(--accent-weak); }
   .browse .count { color: var(--muted); font-size: .78rem; }
   /* “New entry here” on a directory row — revealed on hover so the tree
      stays quiet; the router prefills the editor's ID with the prefix. */
@@ -443,6 +451,26 @@ const entryHash = e => '#/k/' + idPath(e.id);
 // title optional, the filename usually is the name (design doc 0022).
 const displayTitle = e => e.title || String(e.id).split('/').pop();
 
+// URL for a directory's index page; accepts "a/b" or "a/b/".
+const dirHash = p => '#/dir/' + idPath(String(p).replace(/\/+$/, ''));
+
+// crumbTrail renders an id or directory path as a breadcrumb: every
+// ancestor directory links to its index page, the root "/" goes home
+// (which shows the root index), and the last segment — the current
+// page — stays plain text.
+function crumbTrail(segs) {
+  let prefix = '', out = '<a href="#/" title="Root index">/</a>';
+  segs.forEach((s, i) => {
+    if (i < segs.length - 1) {
+      prefix += s + '/';
+      out += `<a href="${dirHash(prefix)}">${esc(s)}</a>/`;
+    } else {
+      out += esc(s);
+    }
+  });
+  return out;
+}
+
 /* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
 // resolveImg maps an image reference from the body to a URL (the detail
 // view resolves entry-relative references to attachment URLs); references
@@ -546,6 +574,11 @@ function route() {
   const mark = r => { const a = document.querySelector(`#topnav a[data-route="${r}"]`); if (a) a.classList.add('active'); };
   if (head === 'k' && rest.length >= 1) {
     viewDetail(rest.map(decodeURIComponent).join('/'));
+  } else if (head === 'dir') {
+    // A directory's index page — the web rendering of the index.md the
+    // OKF export generates at every level. #/dir/ (the root) shows the
+    // same listing the home page carries.
+    viewDir(rest.map(decodeURIComponent).join('/'));
   } else if (head === 'edit' && rest.length >= 1) {
     viewEditor(rest.map(decodeURIComponent).join('/'));
   } else if (head === 'new') {
@@ -766,9 +799,13 @@ async function refreshTree() {
     tree.innerHTML = levelHTML(res, '') || '<div class="empty">No knowledge yet.</div>';
     wireNodes(tree);
     // A deep link may have rendered before the tree existed (boot) or
-    // before this refresh; re-reveal the current entry in the new tree.
+    // before this refresh; re-reveal the current entry or directory in
+    // the new tree (a trailing slash makes revealInTree expand the
+    // directory itself, not just its ancestors).
     const m = location.hash.match(/^#\/(?:k|edit)\/(.+)$/);
+    const dm = location.hash.match(/^#\/dir\/(.+)$/);
     if (m) revealInTree(m[1].split('/').map(decodeURIComponent).join('/'));
+    else if (dm) revealInTree(dm[1].split('/').map(decodeURIComponent).join('/').replace(/\/*$/, '/'));
     else markTreeSelection();
   } catch (e) {
     tree.innerHTML = `<div class="error-banner">Tree failed: ${esc(e.message)}</div>`;
@@ -789,11 +826,14 @@ function nodeHTML(prefix, label, count) {
 
 // levelHTML renders one browse response: subdirectories, then the
 // entries at this level — title-first with a short status hint; the id
-// and full status ride in the tooltip. Entries are draggable: dropping
-// one on a directory moves it there (references rewritten server-side).
+// and full status ride in the tooltip. A directory's name is a link to
+// its index page (the ▸ marker and the rest of the row still toggle
+// expansion). Entries are draggable: dropping one on a directory moves
+// it there (references rewritten server-side).
 function levelHTML(res, prefix) {
   const dirs = (res.dirs || []).map(dir => nodeHTML(prefix + dir.name + '/',
-    `<span class="type-ico">📁</span><span class="dir-name mono">${esc(dir.name)}/</span>`, dir.count)).join('');
+    `<span class="type-ico">📁</span><a class="dir-name mono" href="${dirHash(prefix + dir.name)}"
+       title="Open the index of ${esc(prefix + dir.name)}/">${esc(dir.name)}/</a>`, dir.count)).join('');
   const entries = (res.entries || []).map(e => `
     <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="true"
        title="${esc(e.id)} · ${esc(e.status)}">
@@ -860,8 +900,9 @@ async function revealInTree(id) {
   markTreeSelection();
 }
 
-// markTreeSelection highlights the tree entry for the route currently
-// shown (detail or its editor), if that part of the tree is loaded.
+// markTreeSelection highlights the tree row for the route currently
+// shown — an entry (detail or its editor) or a directory's index page —
+// if that part of the tree is loaded.
 function markTreeSelection() {
   const m = location.hash.match(/^#\/(?:k|edit)\/(.+)$/);
   const id = m ? m[1].split('/').map(decodeURIComponent).join('/') : null;
@@ -870,6 +911,14 @@ function markTreeSelection() {
     const on = a.dataset.id === id;
     a.classList.toggle('active', on);
     if (on) active = a;
+  });
+  const dm = location.hash.match(/^#\/dir\/(.+)$/);
+  const dirPrefix = dm ? dm[1].split('/').map(decodeURIComponent).join('/').replace(/\/*$/, '/') : null;
+  document.querySelectorAll('#tree details.node').forEach(d => {
+    const on = d.dataset.prefix === dirPrefix;
+    const sum = d.querySelector(':scope > summary');
+    sum.classList.toggle('active', on);
+    if (on) active = sum;
   });
   active?.scrollIntoView({ block: 'nearest' });
 }
@@ -905,8 +954,12 @@ async function moveEntry(from, to) {
 // move it there, keeping its last segment.
 {
   const tree = $('#tree');
+  // Links inside a directory row (the per-directory ＋ and the name's
+  // index-page link) must not toggle the node — preventDefault stops
+  // both the summary toggle and native link navigation, so route via
+  // the hash. The directory view then reveals (and expands) its node.
   tree.addEventListener('click', e => {
-    const a = e.target.closest('.node-new');
+    const a = e.target.closest('.node-new, a.dir-name');
     if (!a) return;
     e.preventDefault();
     location.hash = a.getAttribute('href');
@@ -950,7 +1003,61 @@ async function moveEntry(from, to) {
   });
 }
 
-/* ============================== home ============================== */
+/* ============================== home & directory index ============================== */
+
+// A directory rendered as a page: the web counterpart of the index.md
+// the OKF export writes at every level (progressive disclosure) —
+// subdirectories with their entry counts, then the entries at this
+// level with title and description. The home page shows the root level
+// below its intro, so "/" and "#/dir/<prefix>" read the same way.
+
+function dirCard(prefix, d) {
+  const href = dirHash(prefix + d.name);
+  const noun = d.count === 1 ? 'entry' : 'entries';
+  return `<article class="card" data-href="${href}">
+    <div class="head">
+      <span class="type-ico">📁</span>
+      <a class="title mono" href="${href}">${esc(d.name)}/</a>
+      <span class="count">${d.count} ${noun}</span>
+    </div>
+  </article>`;
+}
+
+// loadDirIndex fetches one browse level and renders it into container
+// (which the caller seeded with a placeholder). Entry cards reuse the
+// search result card — browse entries carry no attrs/attachments, so
+// they render as title, status, and description.
+async function loadDirIndex(container, prefix, emptyText) {
+  try {
+    const res = await api('/api/v1/browse' + (prefix ? '?prefix=' + encodeURIComponent(prefix) : ''));
+    if (!container.isConnected) return; // navigated away while loading
+    const dirs = (res.dirs || []).map(d => dirCard(prefix, d)).join('');
+    const entries = (res.entries || []).map(hitCard).join('');
+    const note = res.truncated
+      ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
+         better split into subdirectories.</div>` : '';
+    container.innerHTML = (dirs + entries + note) || `<div class="empty">${emptyText}</div>`;
+  } catch (e) {
+    if (!container.isConnected) return;
+    container.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;
+  }
+}
+
+function viewDir(rawPrefix) {
+  const clean = rawPrefix.replace(/\/+$/, '');
+  const prefix = clean ? clean + '/' : '';
+  revealInTree(prefix); // expand the tree to (and including) this directory
+  const newHref = '#/new/' + (clean ? idPath(clean) + '/' : '');
+  view.innerHTML = `
+    <nav class="crumbs mono">${crumbTrail(clean ? clean.split('/') : [])}</nav>
+    <div class="toolbar">
+      <div class="section-title" style="margin:0"><span class="type-ico">📁</span> <span class="mono">/${esc(prefix)}</span></div>
+      <span class="grow"></span>
+      <a class="btn small" href="${newHref}" title="Create a knowledge entry in ${esc(prefix) || 'the root'}">＋ New entry here</a>
+    </div>
+    <div id="dir-index"><div class="empty">…</div></div>`;
+  loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the entries in them.');
+}
 
 function viewHome() {
   view.innerHTML = `
@@ -966,12 +1073,14 @@ function viewHome() {
       <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
       <a href="#/new">＋ New entry</a> ·
       <a href="${BASE}/api/v1/export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
-    </p>`;
+    </p>
+    <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
   $('#home-q').addEventListener('keydown', e => {
     if (e.key === 'Enter') { explore.q = e.target.value; location.hash = '#/search'; }
   });
   $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
   if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
+  loadDirIndex($('#home-index'), '', 'No knowledge yet — create the first entry.');
 }
 
 /* ============================== detail ============================== */
@@ -1018,7 +1127,7 @@ async function viewDetail(id) {
   } : null;
 
   view.innerHTML = `
-    <nav class="crumbs mono"><a href="#/" title="Home">/</a> ${esc(entry.id)} <span class="badge">${esc(entry.type)}</span></nav>
+    <nav class="crumbs mono">${crumbTrail(entry.id.split('/'))} <span class="badge">${esc(entry.type)}</span></nav>
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(displayTitle(entry))}</h1>
