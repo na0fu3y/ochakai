@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Type is the kind of a knowledge entry. Any path-segment slug is a valid
@@ -136,7 +138,7 @@ type Link struct {
 type Knowledge struct {
 	Type        Type           `json:"type"`
 	ID          string         `json:"id"` // full bundle path, the sole key (design doc 0017)
-	Title       string         `json:"title"`
+	Title       string         `json:"title,omitempty"` // display-name override; empty means the id's last segment is the name (design doc 0022)
 	Description string         `json:"description,omitempty"`
 	Resource    string         `json:"resource,omitempty"` // canonical URI of the underlying asset (OKF recommended key)
 	Tags        []string       `json:"tags,omitempty"`
@@ -161,6 +163,31 @@ type Knowledge struct {
 // URI returns the canonical reference, e.g. "ochakai://metrics/revenue" —
 // the scheme plus the entry's id (its bundle path, design doc 0017).
 func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s", k.ID) }
+
+// DisplayTitle returns the entry's display name: the title when one is
+// set, else the id's final segment — with title optional (design doc
+// 0022), the filename usually is the name.
+func (k *Knowledge) DisplayTitle() string { return DisplayTitle(k.Title, k.ID) }
+
+// DisplayTitle is the package-level form for projections that carry
+// title and id without a full Knowledge (browse entries).
+func DisplayTitle(title, id string) string {
+	if title != "" {
+		return title
+	}
+	if i := strings.LastIndexByte(id, '/'); i >= 0 {
+		return id[i+1:]
+	}
+	return id
+}
+
+// Normalize returns s in Unicode NFC. IDs, link targets, attachment
+// names, and search queries are compared byte-wise against stored text,
+// and macOS filesystems hand paths back NFD-decomposed — the same
+// visible path must land on the same entry, so every boundary that
+// accepts one normalizes first (design doc 0022). Bodies and titles are
+// content, not keys, and are kept as written.
+func Normalize(s string) string { return norm.NFC.String(s) }
 
 // SameContent reports whether o carries the same authored content as k:
 // the fields a writer controls (title, description, resource, tags, status,

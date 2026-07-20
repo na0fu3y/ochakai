@@ -145,13 +145,19 @@ func TestValidateRejectsBadInput(t *testing.T) {
 	if err := validate(base()); err != nil {
 		t.Errorf("valid entry rejected: %v", err)
 	}
+	// Title is optional (design doc 0022): the id's last segment is the
+	// display name when it is absent.
+	titleless := base()
+	titleless.Title = ""
+	if err := validate(titleless); err != nil {
+		t.Errorf("titleless entry rejected: %v", err)
+	}
 	for name, mutate := range map[string]func(*domain.Knowledge){
-		"bad type":    func(k *domain.Knowledge) { k.Type = "no/slash" },
-		"bad id":      func(k *domain.Knowledge) { k.ID = "UPPER//bad" },
-		"index id":    func(k *domain.Knowledge) { k.ID = "sales/index" },
-		"log id":      func(k *domain.Knowledge) { k.ID = "sales/log" },
-		"empty title": func(k *domain.Knowledge) { k.Title = "   " },
-		"bad status":  func(k *domain.Knowledge) { k.Status = "published" },
+		"bad type":   func(k *domain.Knowledge) { k.Type = "no/slash" },
+		"bad id":     func(k *domain.Knowledge) { k.ID = "UPPER//bad" },
+		"index id":   func(k *domain.Knowledge) { k.ID = "sales/index" },
+		"log id":     func(k *domain.Knowledge) { k.ID = "sales/log" },
+		"bad status": func(k *domain.Knowledge) { k.Status = "published" },
 	} {
 		k := base()
 		mutate(k)
@@ -160,6 +166,27 @@ func TestValidateRejectsBadInput(t *testing.T) {
 		if err == nil || !errors.As(err, &invalid) {
 			t.Errorf("%s: want InvalidInputError, got %v", name, err)
 		}
+	}
+}
+
+// A write payload's byte-compared keys — the id and the link targets —
+// are stored NFC (design doc 0022); content fields stay as written.
+func TestNormalizeKeys(t *testing.T) {
+	nfd := "サンプル" // NFD spelling of サンプル
+	k := &domain.Knowledge{
+		ID:    "insights/" + nfd,
+		Title: nfd,
+		Links: []domain.Link{{Rel: "about", Target: "terms/" + nfd}},
+	}
+	normalizeKeys(k)
+	if k.ID != "insights/サンプル" {
+		t.Errorf("ID = %q, want NFC", k.ID)
+	}
+	if k.Links[0].Target != "terms/サンプル" {
+		t.Errorf("link target = %q, want NFC", k.Links[0].Target)
+	}
+	if k.Title != nfd {
+		t.Errorf("title changed to %q; content must stay as written", k.Title)
 	}
 }
 

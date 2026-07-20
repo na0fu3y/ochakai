@@ -30,7 +30,7 @@ type DirCount struct {
 type BrowseEntry struct {
 	Type      domain.Type   `json:"type"`
 	ID        string        `json:"id"`
-	Title     string        `json:"title"`
+	Title     string        `json:"title,omitempty"` // display-name override; empty means the id's last segment (design doc 0022)
 	Status    domain.Status `json:"status"`
 	UpdatedAt time.Time     `json:"updated_at"`
 }

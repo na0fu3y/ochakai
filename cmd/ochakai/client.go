@@ -201,7 +201,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 				lead = strconv.FormatInt(h.Usage.SearchHits, 10)
 			}
 		}
-		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.Title)
+		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.DisplayTitle())
 		if h.Description != "" {
 			line += " — " + h.Description
 		}
@@ -247,7 +247,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		if prefix != "" {
 			seg = strings.TrimPrefix(seg, prefix+"/")
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\n", seg, e.Type, e.Status, e.Title)
+		fmt.Printf("%s\t%s\t%s\t%s\n", seg, e.Type, e.Status, domain.DisplayTitle(e.Title, e.ID))
 	}
 	if res.Truncated {
 		fmt.Fprintln(os.Stderr, "note: showing the first 1000 entries at this level (server cap)")
@@ -315,7 +315,7 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 	var rest []string
 	for _, h := range res.Hits {
 		if !rendered[h.ID] {
-			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.Title))
+			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.DisplayTitle()))
 		}
 	}
 	if len(rest) > 0 {
@@ -325,7 +325,7 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 
 func renderEntry(k *domain.Knowledge) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%s) — %s\n", k.URI(), k.Status, k.Title)
+	fmt.Fprintf(&b, "## %s (%s) — %s\n", k.URI(), k.Status, k.DisplayTitle())
 	prov := fmt.Sprintf("created by %s:%s", k.CreatedBy.Kind, k.CreatedBy.Name)
 	if k.VerifiedBy != nil && k.VerifiedAt != nil {
 		prov = fmt.Sprintf("verified by %s:%s on %s; %s",
@@ -641,7 +641,7 @@ func cmdDetach(ctx context.Context, args []string) error {
 
 func cmdCreate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai create [flags] [id]\n\nCreate a knowledge entry from -f or stdin. Input is an OKF document\n(--- frontmatter with type/title, markdown body — the format\n`ochakai get` prints) or JSON (see api/openapi.yaml). The id is the\nentry's path; pass it as the argument (it overrides an id in the\ninput, and OKF documents carry none — the path is the id). Entries\ndefault to draft; provenance is recorded from your Google identity.",
+		"Usage: ochakai create [flags] [id]\n\nCreate a knowledge entry from -f or stdin. Input is an OKF document\n(--- frontmatter with type, markdown body — the format `ochakai get`\nprints; title is optional, the id's last segment is the display name\nwhen it is absent) or JSON (see api/openapi.yaml). The id is the\nentry's path; pass it as the argument (it overrides an id in the\ninput, and OKF documents carry none — the path is the id). Entries\ndefault to draft; provenance is recorded from your Google identity.",
 		"  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai create insights/revenue-seasonality-v2\n  ochakai create runbook/restore -f entry.md\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	asJSON := fs.Bool("json", false, "print the created entry as JSON")
@@ -833,7 +833,7 @@ func cmdCompile(ctx context.Context, args []string) error {
 		fmt.Fprintln(os.Stderr, "note:", n)
 	}
 	for _, q := range res.VerifiedQueries {
-		label := q.Title
+		label := q.DisplayTitle()
 		if question, ok := q.Attrs["question"].(string); ok && question != "" {
 			label = question
 		}

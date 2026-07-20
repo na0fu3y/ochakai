@@ -53,6 +53,7 @@ func Unsupportedf(format string, args ...any) error {
 // --- knowledge CRUD ---
 
 func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
+	id = domain.Normalize(id)
 	k, err := s.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -67,6 +68,7 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 }
 
 func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
+	normalizeKeys(k)
 	if err := validate(k); err != nil {
 		return nil, err
 	}
@@ -88,6 +90,7 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 // changed" — recurring bundle imports and agents re-saving what they
 // just read must not bury real history under identical snapshots.
 func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (updated *domain.Knowledge, changed bool, err error) {
+	normalizeKeys(k)
 	if err := validate(k); err != nil {
 		return nil, false, err
 	}
@@ -114,7 +117,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 }
 
 func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
-	return s.Store.SoftDelete(ctx, id, actor)
+	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }
 
 // Move renames an entry to newID, carrying every id-keyed record along
@@ -122,6 +125,7 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 // references so nothing breaks (design doc 0021). Moving to the current
 // id is a no-op read.
 func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor) (*domain.Knowledge, error) {
+	id, newID = domain.Normalize(id), domain.Normalize(newID)
 	if !domain.ValidID(newID) {
 		return nil, Invalidf(`invalid destination id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, newID)
 	}
@@ -153,15 +157,22 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 	}
 }
 
+// normalizeKeys rewrites a write payload's byte-compared keys — the id
+// and the link targets — into NFC (design doc 0022); content fields are
+// kept as written.
+func normalizeKeys(k *domain.Knowledge) {
+	k.ID = domain.Normalize(k.ID)
+	for i := range k.Links {
+		k.Links[i].Target = domain.Normalize(k.Links[i].Target)
+	}
+}
+
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
 		return Invalidf("invalid type %q (one slug segment, e.g. metrics; recommended: metrics, queries, insights, terms, datasets, tables, references)", k.Type)
 	}
 	if !domain.ValidID(k.ID) {
 		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)
-	}
-	if strings.TrimSpace(k.Title) == "" {
-		return Invalidf("title is required")
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
 		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
@@ -197,6 +208,9 @@ func validateModel(k *domain.Knowledge) error {
 // Search runs trigram search, and when an embedder is configured, fuses it
 // with vector search via reciprocal rank fusion.
 func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	// Stored text is NFC (design doc 0022); an NFD query (pasted from a
+	// macOS path) must still match it byte-wise.
+	query = domain.Normalize(query)
 	hits, err := s.search(ctx, query, f, limit)
 	if err != nil {
 		return nil, err
@@ -379,7 +393,7 @@ func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	return s.Store.ListRevisions(ctx, id, limit)
+	return s.Store.ListRevisions(ctx, domain.Normalize(id), limit)
 }
 
 // Backlinks lists live entries whose links point at the given entry,
@@ -390,11 +404,12 @@ func (s *Service) Backlinks(ctx context.Context, id string, limit int) ([]domain
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	return s.Store.ListLinkingTo(ctx, id, limit)
+	return s.Store.ListLinkingTo(ctx, domain.Normalize(id), limit)
 }
 
 // Usage returns usage totals for one entry (404 when the entry is gone).
 func (s *Service) Usage(ctx context.Context, id string) (*domain.Usage, error) {
+	id = domain.Normalize(id)
 	if _, err := s.Store.Get(ctx, id); err != nil {
 		return nil, err
 	}
@@ -412,6 +427,7 @@ const maxOutcomeNote = 2000
 // passive usage recording, a failed write is returned — the reporter
 // should know the report was lost.
 func (s *Service) ReportOutcome(ctx context.Context, id, outcome, note string) (*domain.Usage, error) {
+	id = domain.Normalize(id)
 	if !domain.ValidOutcome(outcome) {
 		return nil, Invalidf("invalid outcome %q (valid: %s)", outcome, strings.Join(domain.Outcomes, ", "))
 	}
@@ -497,8 +513,10 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 
 // embeddingText builds the document text to embed: envelope fields plus the
 // golden query question, body truncated to keep within model input limits.
+// The id leads (design doc 0022): with title optional, the filename may be
+// the entry's only name, and the path carries the domain hierarchy.
 func embeddingText(k *domain.Knowledge) string {
-	parts := []string{k.Title, k.Description, strings.Join(k.Tags, " ")}
+	parts := []string{k.ID, k.Title, k.Description, strings.Join(k.Tags, " ")}
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
 	}

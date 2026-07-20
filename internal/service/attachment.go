@@ -19,6 +19,7 @@ import (
 // never taken from the caller. okfPath preserves a foreign bundle
 // location for round-trips; "" for attachments born here.
 func (s *Service) Attach(ctx context.Context, id, name, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+	id, name, okfPath = domain.Normalize(id), domain.Normalize(name), domain.Normalize(okfPath)
 	if !s.Store.HasBlobStore() {
 		return nil, Unsupportedf("attachments are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
 	}
@@ -85,6 +86,7 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 // Attachment returns one attachment with its bytes and records a fetch
 // against the owning entry — reading the image is using the knowledge.
 func (s *Service) Attachment(ctx context.Context, id, name string) (*domain.Attachment, []byte, error) {
+	id, name = domain.Normalize(id), domain.Normalize(name)
 	att, data, err := s.Store.GetAttachment(ctx, id, name)
 	if err != nil {
 		return nil, nil, err
@@ -98,7 +100,7 @@ func (s *Service) Attachment(ctx context.Context, id, name string) (*domain.Atta
 // without a blob-store read, and without recording a fetch: a cache
 // revalidation is not a use of the knowledge.
 func (s *Service) AttachmentMeta(ctx context.Context, id, name string) (*domain.Attachment, error) {
-	return s.Store.GetAttachmentMeta(ctx, id, name)
+	return s.Store.GetAttachmentMeta(ctx, domain.Normalize(id), domain.Normalize(name))
 }
 
 // FillAttachments fills attachment metadata on entries in one batch
@@ -125,5 +127,5 @@ func (s *Service) FillAttachments(ctx context.Context, ks []*domain.Knowledge) e
 
 // Detach removes an attachment (the change is kept as a revision).
 func (s *Service) Detach(ctx context.Context, id, name string, actor domain.Actor) error {
-	return s.Store.DeleteAttachment(ctx, id, name, actor)
+	return s.Store.DeleteAttachment(ctx, domain.Normalize(id), domain.Normalize(name), actor)
 }

@@ -62,7 +62,7 @@ func resolveAttachments(files map[string][]byte, concepts []*domain.Knowledge) (
 	used = map[string]bool{}
 	index := map[string][]byte{}
 	for p, data := range files {
-		index[path.Clean(strings.TrimPrefix(p, "./"))] = data
+		index[cleanPath(p)] = data
 	}
 	seen := map[*domain.Knowledge]map[string]bool{}
 	attach := func(k *domain.Knowledge, p string, data []byte) {
@@ -175,5 +175,7 @@ func resolveTarget(docDir, target string) (string, bool) {
 	if p == "." || strings.HasPrefix(p, "../") {
 		return "", false
 	}
-	return p, true
+	// A body written on macOS can spell the target NFD while the bundle
+	// index is NFC — same visible path, same attachment.
+	return domain.Normalize(p), true
 }

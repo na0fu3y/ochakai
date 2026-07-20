@@ -197,7 +197,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
-		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/links/attrs/body). " +
+		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/links/attrs/body — " +
+			"an omitted title clears it, making the filename the name). " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
 			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
@@ -409,8 +410,8 @@ type deleteOut struct {
 
 type writeIn struct {
 	Type        string         `json:"type" jsonschema:"what the entry is: one slug segment; recommended: metrics, queries, insights, terms, datasets, tables, references — any custom slug works"`
-	ID          string         `json:"id" jsonschema:"where the entry lives: its full path, slug segments separated by / (e.g. metrics/revenue, sales/orders); place together what should be read together; the last segment must not be \"index\" or \"log\""`
-	Title       string         `json:"title"`
+	ID          string         `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
+	Title       string         `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
 	Description string         `json:"description,omitempty"`
 	Resource    string         `json:"resource,omitempty" jsonschema:"canonical URI of the underlying asset (the table/dataset URI, or for references the external source URL); omit for abstract concepts"`
 	Tags        []string       `json:"tags,omitempty"`
