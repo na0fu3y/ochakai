@@ -559,8 +559,15 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 	conds := []string{prefix + "deleted_at IS NULL"}
 	var args []any
 	if len(f.Types) > 0 {
-		args = append(args, f.Types)
-		conds = append(conds, fmt.Sprintf("%stype = ANY($%d)", prefix, len(args)))
+		// Types match case-insensitively (design doc 0023 §3.3): the stored
+		// spelling is whatever the writer used, so both sides fold. There is
+		// no index on type, so lower() costs nothing here.
+		folded := make([]string, len(f.Types))
+		for i, t := range f.Types {
+			folded[i] = domain.FoldType(t)
+		}
+		args = append(args, folded)
+		conds = append(conds, fmt.Sprintf("lower(%stype) = ANY($%d)", prefix, len(args)))
 	}
 	if len(f.Statuses) > 0 {
 		args = append(args, f.Statuses)

@@ -190,6 +190,26 @@ func TestTypeMatchingIsCaseInsensitive(t *testing.T) {
 	}
 }
 
+// FoldType is the same rule in the form the store needs: one comparison
+// key per kind, so a filter can be matched against a folded column.
+func TestFoldType(t *testing.T) {
+	if got := FoldType("  BigQuery Table "); got != "bigquery table" {
+		t.Errorf("FoldType = %q, want %q", got, "bigquery table")
+	}
+	// Free types fold too — the tolerance is not limited to the built-ins.
+	if FoldType("DATA CONTRACT") != FoldType("Data Contract") {
+		t.Error("FoldType must fold a free type")
+	}
+	if FoldType("BigQuery Tables") == FoldType(TypeTables) {
+		t.Error("FoldType must keep distinct types distinct")
+	}
+	// The key is NFC, matching how the write path stores the type, so a
+	// decomposed filter still lands on the stored row (design doc 0022).
+	if FoldType("\u30bf\u3099") != FoldType("\u30c0") { // decomposed vs composed
+		t.Error("FoldType must normalize to NFC")
+	}
+}
+
 func TestToTypesAndToStatuses(t *testing.T) {
 	types := ToTypes([]string{"Metric", "custom-type"})
 	if len(types) != 2 || types[0] != TypeMetrics || types[1] != Type("custom-type") {

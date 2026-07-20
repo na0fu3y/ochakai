@@ -162,9 +162,11 @@ func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, 
 // normalizeKeys rewrites a write payload's byte-compared keys — the id
 // and the type — into NFC (design doc 0022); content fields are kept as
 // written. The type joined them in 0023: it is free text now, so a
-// foreign bundle can carry a non-ASCII type, and it is compared byte-wise
-// behind search filters. A recommended type also settles on its canonical
-// spelling, so storage holds one casing.
+// foreign bundle can carry a non-ASCII type, and search filters compare
+// against it. Filters fold case themselves (domain.FoldType), but not
+// width or accent composition — so the type is stored NFC and trimmed,
+// leaving lower() enough to fold the column. A recommended type also
+// settles on its canonical spelling, so storage holds one casing.
 //
 // Links are not normalized here because they are not read from the
 // payload at all — deriveLinks recomputes them from the body, normalizing

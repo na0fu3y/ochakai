@@ -39,7 +39,8 @@ const (
 var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
 
 // BuiltinType reports whether t is one of the recommended types, matched
-// the same case-insensitive way filters are (EqualType).
+// case-insensitively (EqualType), the same way search filters match
+// (FoldType).
 func BuiltinType(t Type) bool {
 	for _, v := range Types {
 		if EqualType(t, v) {
@@ -83,7 +84,23 @@ func ValidType(t Type) bool {
 // "bigquery table" finds entries stored as "BigQuery Table"; the stored
 // spelling is always the one the writer used.
 func EqualType(a, b Type) bool {
-	return strings.EqualFold(strings.TrimSpace(string(a)), strings.TrimSpace(string(b)))
+	return FoldType(a) == FoldType(b)
+}
+
+// FoldType returns the comparison key for t: NFC-normalized, trimmed, and
+// lowercased. It is the matching half of design doc 0023 §3.3 ("照合は
+// 大小文字非依存、保存は原表記") in the form storage needs — a value to
+// compare against a folded column, rather than the pairwise EqualType.
+// Free types fold too: §3.3 widens the tolerance to every entry point and
+// every comparison, not just the recommended eight.
+//
+// The store folds the column with SQL lower(), which agrees with this for
+// ASCII and for the ordinary cased letters types are written in. The two
+// can disagree on exotic Unicode case pairs (final sigma, dotted I under a
+// Turkish collation); a type that hinges on those is beyond what either
+// side promises.
+func FoldType(t Type) string {
+	return strings.ToLower(strings.TrimSpace(Normalize(string(t))))
 }
 
 // Status is the verification status of a knowledge entry. deprecated means
