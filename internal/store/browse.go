@@ -26,13 +26,16 @@ type DirCount struct {
 
 // BrowseEntry is the light projection of an entry for tree listings:
 // no body, no links, no attrs. Type rides along as display metadata
-// (the tree itself is pure path).
+// (the tree itself is pure path), and Description so a directory
+// listing can render as an index page — the same title-plus-description
+// lines the OKF export's index.md files carry.
 type BrowseEntry struct {
-	Type      domain.Type   `json:"type"`
-	ID        string        `json:"id"`
-	Title     string        `json:"title,omitempty"` // display-name override; empty means the id's last segment (design doc 0022)
-	Status    domain.Status `json:"status"`
-	UpdatedAt time.Time     `json:"updated_at"`
+	Type        domain.Type   `json:"type"`
+	ID          string        `json:"id"`
+	Title       string        `json:"title,omitempty"` // display-name override; empty means the id's last segment (design doc 0022)
+	Description string        `json:"description,omitempty"`
+	Status      domain.Status `json:"status"`
+	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
 // browseNotRejected mirrors Filter's default: rejected entries are
@@ -71,7 +74,7 @@ func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, ent
 		return nil, nil, false, err
 	}
 	rows, err = s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT type, id, title, status, updated_at
+		SELECT type, id, title, description, status, updated_at
 		FROM knowledge
 		WHERE `+browseNotRejected+`
 		  AND left(id, length($1::text)) = $1
@@ -82,7 +85,7 @@ func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, ent
 	}
 	entries, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BrowseEntry, error) {
 		var e BrowseEntry
-		err := row.Scan(&e.Type, &e.ID, &e.Title, &e.Status, &e.UpdatedAt)
+		err := row.Scan(&e.Type, &e.ID, &e.Title, &e.Description, &e.Status, &e.UpdatedAt)
 		return e, err
 	})
 	if err != nil {

@@ -138,7 +138,8 @@ paths:
                       properties:
                         type: { $ref: "#/components/schemas/Type" }
                         id: { type: string }
-                        title: { type: string }
+                        title: { type: string, description: "Absent when the id's last segment is the name (design doc 0022)." }
+                        description: { type: string, description: The one-line summary, so a directory listing can render as an index page. }
                         status: { $ref: "#/components/schemas/Status" }
                         updated_at: { type: string, format: date-time }
                   truncated:

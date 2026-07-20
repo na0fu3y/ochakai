@@ -89,7 +89,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 		Dirs: []store.DirCount{{Name: "sales", Count: 4}},
 		Entries: []store.BrowseEntry{
 			{Type: domain.TypeQueries, ID: "sales/monthly-revenue", Title: "月次売上",
-				Status: domain.StatusVerified, UpdatedAt: when},
+				Description: "月次の確定売上", Status: domain.StatusVerified, UpdatedAt: when},
 		},
 		Truncated: true,
 	}
@@ -105,7 +105,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 		Dirs: []BrowseDir{{Name: "sales", Count: 4}},
 		Entries: []BrowseEntry{
 			{Type: "queries", ID: "sales/monthly-revenue", Title: "月次売上",
-				Status: domain.StatusVerified, UpdatedAt: when},
+				Description: "月次の確定売上", Status: domain.StatusVerified, UpdatedAt: when},
 		},
 		Truncated: true,
 	}
