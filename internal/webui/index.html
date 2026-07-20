@@ -433,8 +433,6 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Keys mirror domain.Types (the plural built-in slugs, design doc 0016),
-// in the same display order.
 // Keys are the OKF type vocabulary, which is what the server stores
 // (design doc 0023). Lookup is case-insensitive to match the server's
 // filter matching — the stored spelling is whatever the writer used.
@@ -442,6 +440,10 @@ const TYPE_ICONS = { 'Semantic Model': '🧩', 'Metric': '📊', 'Golden Query':
 const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
+// Mirrors domain.EqualType: two types name the same kind regardless of
+// case or surrounding space, since the stored spelling is the writer's.
+const sameType = (a, b) =>
+  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 const STATUSES = ['draft', 'verified', 'deprecated', 'rejected'];
 
 function fmtDate(s) {
@@ -1144,14 +1146,14 @@ async function viewDetail(id) {
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const atts = entry.attachments || [];
-  // Metrics are the compilable knowledge, so their detail view gets a
-  // Compile tab instead of a site-wide compile page. The compiler matches
+  // Metric entries are the compilable knowledge, so their detail view gets
+  // a Compile tab instead of a site-wide compile page. The compiler matches
   // metrics by their semantic-model name — conventionally the entry id's
-  // last segment (design doc 0018 §4.4) — and the model (a models entry
-  // id) is seeded from attrs.model when present; left blank, the server
-  // resolves it from the models entry defining the metric (design doc
-  // 0019).
-  const compilable = entry.type === 'metrics';
+  // last segment (design doc 0018 §4.4) — and the model (a Semantic Model
+  // entry id) is seeded from attrs.model when present; left blank, the
+  // server resolves it from the Semantic Model entry defining the metric
+  // (design doc 0019).
+  const compilable = sameType(entry.type, 'Metric');
   const cstate = compilable ? {
     metrics: entry.id.split('/').pop(),
     model: typeof (entry.attrs || {}).model === 'string' ? entry.attrs.model : '',
@@ -1580,7 +1582,7 @@ function wireReviewActions(container) {
 // in the tree routes here as #/new/<prefix>/.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
-  let entry = { type: 'insights', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
+  let entry = { type: 'Insight', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', links: [], attrs: {}, body: '' };
   if (editing) {
     try {
       entry = await api('/api/v1/knowledge/' + idPath(id));
@@ -1725,10 +1727,10 @@ async function viewEditor(id, prefix = '') {
 
 /* ============================== compile ============================== */
 
-// The compile form renders inside the Compile tab of a metric's detail
-// view (metrics are the compilable knowledge; the model resolves via the
-// metric's attrs.model). State is per-view, seeded from the metric, and
-// written back on every input so it survives tab switches.
+// The compile form renders inside the Compile tab of a Metric entry's
+// detail view (metrics are the compilable knowledge; the model resolves
+// via the metric's attrs.model). State is per-view, seeded from the
+// metric, and written back on every input so it survives tab switches.
 function compileFormHTML(c) {
   return `
     <form class="form" id="compile-form">
@@ -1740,7 +1742,7 @@ function compileFormHTML(c) {
         </div>
         <div class="field">
           <label class="top" for="c-model">Model</label>
-          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="models/… (optional — resolved from the models entry defining the metric)">
+          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="models/… (optional — resolved from the Semantic Model entry defining the metric)">
         </div>
       </div>
       <div class="field">
