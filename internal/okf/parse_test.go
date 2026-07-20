@@ -79,8 +79,8 @@ func TestParseRejectsGarbage(t *testing.T) {
 		"just markdown, no frontmatter",
 		"---\ntype: metric\n",             // unterminated
 		"---\ntitle: x\n---\n",            // no type at all
-		"---\ntype: a/b\ntitle: x\n---\n",  // reads as an address
-		"---\ntype: \ntitle: x\n---\n",     // empty
+		"---\ntype: a/b\ntitle: x\n---\n", // reads as an address
+		"---\ntype: \ntitle: x\n---\n",    // empty
 		"---\ntype: [a]\ntitle: x\n---\n", // type is not a string
 	} {
 		if _, err := Parse([]byte(doc)); err == nil {
