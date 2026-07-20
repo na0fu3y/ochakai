@@ -114,6 +114,46 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("status=rejected filter should return the rejected entry: %+v", only)
 	}
 
+	// Type filters match case-insensitively while storage keeps the written
+	// spelling (design doc 0023 §3.3). Typing a type with spaces at a shell
+	// is the burden this is meant to relieve, so it has to hold for a free
+	// type too — not only for the recommended eight, which the write path
+	// canonicalizes anyway.
+	free := &domain.Knowledge{
+		Type: "Data Contract", ID: "it-contract", Title: "売上契約",
+		Description: "統合テスト用", Status: domain.StatusVerified,
+		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
+	}
+	if err := s.Create(ctx, free); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		typ  domain.Type
+		want string
+	}{
+		{"Metric", k.ID}, {"metric", k.ID}, {"METRIC", k.ID},
+		{"Data Contract", free.ID}, {"data contract", free.ID}, {"DATA CONTRACT", free.ID},
+	} {
+		hits, err := s.SearchLexical(ctx, "売上", Filter{Types: []domain.Type{tc.typ}}, 10)
+		if err != nil {
+			t.Fatalf("SearchLexical(type=%q): %v", tc.typ, err)
+		}
+		found := false
+		for _, h := range hits {
+			found = found || h.ID == tc.want
+		}
+		if !found {
+			t.Errorf("type=%q must find %q, got %d hits", tc.typ, tc.want, len(hits))
+		}
+	}
+	// A type that only differs by case must not be stored as a second
+	// spelling by this test's own writes.
+	if got, err := s.Get(ctx, free.ID); err != nil {
+		t.Fatal(err)
+	} else if got.Type != "Data Contract" {
+		t.Errorf("stored spelling = %q, want the spelling as written", got.Type)
+	}
+
 	// Usage recording: raw events plus running totals.
 	actor := domain.Actor{Kind: "agent", Name: "claude-code"}
 	target := []string{k.ID}
