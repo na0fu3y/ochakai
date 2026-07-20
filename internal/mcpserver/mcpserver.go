@@ -103,7 +103,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_knowledge",
 		Annotations: readOnly,
-		Description: "Search the knowledge base across all types (recommended: metrics, queries, insights, terms, datasets, tables, references; custom types welcome). " +
+		Description: "Search the knowledge base across all types (recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Attachments count too — filenames and file contents — and a hit is always the owning entry. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
@@ -178,14 +178,14 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"glossary terms. Entries default to draft; your identity is recorded as created_by. " +
 			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
 			"re-proposing knowledge that was already rejected (status_note records why). " +
-			"For tables/datasets/references, set resource to the asset's canonical URI and favor " +
+			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
 			"the conventional body sections: # Schema, # Common query patterns, # Citations. " +
-			"A semantic model is a models entry with the Apache Ossie model object in attrs.spec " +
+			"A semantic model is a \"Semantic Model\" entry with the Apache Ossie model object in attrs.spec " +
 			"(one entry per model; validated on write) — compile_sql resolves models from these entries " +
 			"directly. After creating one, create an entry per metric (last id segment = the metric " +
-			"name, e.g. metrics/<name>) with attrs.model naming the models entry's id and " +
+			"name, e.g. metrics/<name>) with attrs.model naming the Semantic Model entry's id and " +
 			"attrs.expression holding the expression, so the definitions are searchable and compile " +
-			"usage is attributed to them; give table entries a defined_in link to the models entry.",
+			"usage is attributed to them; give table entries a defined_in link to the Semantic Model entry.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
@@ -298,10 +298,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "compile_sql",
 		Annotations: readOnly,
 		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from a " +
-			"semantic model — a models entry holding the Ossie model object in attrs.spec (no LLM " +
-			"involved). model is the entry's id; when omitted, the models entry whose spec defines " +
+			"semantic model — a \"Semantic Model\" entry holding the Ossie model object in attrs.spec (no LLM " +
+			"involved). model is the entry's id; when omitted, the Semantic Model entry whose spec defines " +
 			"the first metric is used (if several do, the compile fails and asks for model). The " +
-			"result names the models entry and its status — judge trust from its " +
+			"result names the Semantic Model entry and its status — judge trust from its " +
 			"provenance. Output is always BigQuery SQL. " +
 			"ochakai does not execute SQL — run the result with your own warehouse tool. " +
 			"Requests outside the supported subset fail with a reason; prefer any returned verified_queries.",
@@ -349,7 +349,7 @@ type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
 	// rejects it — one of query / sort must be set.
 	Query    string   `json:"query,omitempty" jsonschema:"search text; omit when sort is set"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed) — both mutually exclusive with query"`
@@ -362,7 +362,7 @@ type searchOut struct {
 
 type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (metrics, queries, insights, terms, datasets, tables, references, or any custom slug)"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
@@ -409,7 +409,7 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string         `json:"type" jsonschema:"what the entry is: one slug segment; recommended: metrics, queries, insights, terms, datasets, tables, references — any custom slug works"`
+	Type        string         `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — any custom type works"`
 	ID          string         `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
 	Title       string         `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
 	Description string         `json:"description,omitempty"`

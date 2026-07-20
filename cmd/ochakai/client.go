@@ -158,7 +158,7 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.",
-		"  ochakai search \"gross margin\" --type metrics --type terms --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type queries --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n")
+		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
@@ -258,7 +258,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 func cmdContext(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
-		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type queries --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n")
+		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Golden Query' --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")

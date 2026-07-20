@@ -141,12 +141,20 @@ func TestSameContent(t *testing.T) {
 }
 
 func TestValidType(t *testing.T) {
-	for _, typ := range []Type{"metrics", "runbook", "data-contract", "GA4"} {
+	// Types are the OKF vocabulary verbatim (design doc 0023), so spaces,
+	// case, and non-ASCII are all ordinary — a type is spoken vocabulary,
+	// not a path.
+	for _, typ := range []Type{
+		"BigQuery Table", "Golden Query", "runbook", "data-contract", "GA4",
+		"日本語", "Data Contract", ".hidden",
+	} {
 		if !ValidType(typ) {
 			t.Errorf("ValidType(%q) = false, want true", typ)
 		}
 	}
-	for _, typ := range []Type{"", "a/b", "日本語", ".hidden", "a b"} {
+	// Rejected: empty, anything that reads as an address, control
+	// characters, and over 128 bytes.
+	for _, typ := range []Type{"", "   ", "a/b", "a\nb", "a\rb", "a\x00b", Type(strings.Repeat("x", 129))} {
 		if ValidType(typ) {
 			t.Errorf("ValidType(%q) = true, want false", typ)
 		}
@@ -161,8 +169,29 @@ func TestValidType(t *testing.T) {
 	}
 }
 
+// Filters match types case-insensitively so a caller need not reproduce
+// the exact casing, while storage keeps the spelling the writer used
+// (design doc 0023 §3.3).
+func TestTypeMatchingIsCaseInsensitive(t *testing.T) {
+	if !EqualType("bigquery table", TypeTables) || !EqualType("  BIGQUERY TABLE  ", TypeTables) {
+		t.Error("EqualType must ignore case and surrounding space")
+	}
+	if EqualType("BigQuery Tables", TypeTables) {
+		t.Error("EqualType must not match a different type")
+	}
+	if !BuiltinType("golden query") {
+		t.Error(`BuiltinType("golden query") = false, want true`)
+	}
+	if got := CanonicalType("bigquery dataset"); got != TypeDatasets {
+		t.Errorf("CanonicalType = %q, want %q", got, TypeDatasets)
+	}
+	if got := CanonicalType("Data Contract"); got != Type("Data Contract") {
+		t.Errorf("CanonicalType must leave a free type alone, got %q", got)
+	}
+}
+
 func TestToTypesAndToStatuses(t *testing.T) {
-	types := ToTypes([]string{"metrics", "custom-type"})
+	types := ToTypes([]string{"Metric", "custom-type"})
 	if len(types) != 2 || types[0] != TypeMetrics || types[1] != Type("custom-type") {
 		t.Errorf("ToTypes = %v", types)
 	}

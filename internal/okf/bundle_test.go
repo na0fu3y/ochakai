@@ -55,9 +55,11 @@ func TestBundleNestedDirectories(t *testing.T) {
 func TestBundleRoundTrip(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	want := []domain.Knowledge{
-		{Type: "data-contract", ID: "contracts/orders", Title: "注文契約", Status: domain.StatusDraft,
+		// A free type keeps its authored spelling with no preservation
+		// attr: the type is stored verbatim (design doc 0023).
+		{Type: "Data Contract", ID: "contracts/orders", Title: "注文契約", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
-			Attrs:     map[string]any{AttrOKFType: "Data Contract", "owner": "sales"}, UpdatedAt: now},
+			Attrs:     map[string]any{"owner": "sales"}, UpdatedAt: now},
 		{Type: domain.TypeQueries, ID: "queries/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
 			Description: "月ごとの売上",
 			CreatedBy:   domain.Actor{Kind: "human", Name: "na0"},
@@ -98,7 +100,7 @@ func TestBundleRoundTrip(t *testing.T) {
 // index.md falls back to the filename for its link text.
 func TestBundleTitleOptional(t *testing.T) {
 	files := map[string][]byte{
-		"insights/サンプル.md": []byte("---\ntype: insights\n---\n\n本文。\n"),
+		"insights/サンプル.md": []byte("---\ntype: Insight\n---\n\n本文。\n"),
 	}
 	entries, _, skipped := FromBundle(files)
 	if len(skipped) != 0 {
@@ -126,7 +128,7 @@ func TestBundleTitleOptional(t *testing.T) {
 func TestFromBundleNFCPaths(t *testing.T) {
 	nfd := "サンプル" // "サンプル" with the handakuten decomposed
 	files := map[string][]byte{
-		"insights/" + nfd + ".md": []byte("---\ntype: insights\ntitle: t\n---\n\n" +
+		"insights/" + nfd + ".md": []byte("---\ntype: Insight\ntitle: t\n---\n\n" +
 			"![chart](" + nfd + "/chart.png)\n"),
 		"insights/" + nfd + "/chart.png": pngBytes(),
 	}
@@ -169,27 +171,27 @@ func TestFromBundleForeign(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("entries = %v", byURI)
 	}
-	// The catalog's own vocabulary lands on ochakai behavior: "Table" is
-	// an alias of the built-in tables type, so the entry gets type
-	// "tables" (normalized — no okf_type to preserve) while staying at
-	// tables/users.
+	// There are no type aliases (design doc 0023 §3.5): a foreign
+	// spelling is neither rejected nor rewritten, it simply is the type.
+	// "Table" is a free type — distinct from the recommended "BigQuery
+	// Table" — and the entry stays at tables/users either way.
 	users := byURI["ochakai://tables/users"]
-	if users.Title != "users" || users.Type != domain.TypeTables || len(users.Attrs) != 0 {
+	if users.Title != "users" || users.Type != domain.Type("Table") || len(users.Attrs) != 0 {
 		t.Errorf("tables/users: %+v", users)
 	}
-	if ga4, ok := byURI["ochakai://datasets/ga4"]; !ok || ga4.Type != domain.TypeDatasets {
+	if ga4, ok := byURI["ochakai://datasets/ga4"]; !ok || ga4.Type != domain.Type("dataset") {
 		t.Errorf("datasets/ga4 missing or mistyped: %v", byURI)
 	}
 
-	// Generic "Table" is an alias of the built-in tables type: re-export
-	// normalizes it to the canonical BigQuery-qualified display name
-	// (design doc 0016) at the original path.
+	// Import and export are identity on the type key: what came in as
+	// "Table" goes back out as "Table", at the original path, with no
+	// preservation attr in between.
 	out, err := Bundle(entries)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if doc := string(out["tables/users.md"]); !strings.Contains(doc, "type: BigQuery Table") {
-		t.Errorf("re-export not normalized:\n%s", doc)
+	if doc := string(out["tables/users.md"]); !strings.Contains(doc, "type: Table\n") {
+		t.Errorf("re-export did not reproduce the authored type:\n%s", doc)
 	}
 }
 
@@ -232,9 +234,10 @@ func TestFromBundleFixture(t *testing.T) {
 	if aov.Resource != "https://example.com/metrics/aov" {
 		t.Errorf("references/metrics/avg_order_value resource = %q", aov.Resource)
 	}
-	// "Reference" is the display spelling of the built-in references type,
-	// so only the producer's own extension keys stay in attrs.
-	if aov.Attrs["owner"] != "analytics-team" || aov.Attrs[AttrOKFType] != nil {
+	// "Reference" is the built-in type's own spelling, so attrs carry
+	// only the producer's extension keys — nothing is stashed there to
+	// rebuild the type on the way out (design doc 0023).
+	if aov.Attrs["owner"] != "analytics-team" || aov.Attrs["okf_type"] != nil {
 		t.Errorf("references/metrics/avg_order_value attrs = %v", aov.Attrs)
 	}
 	if !strings.Contains(aov.Body, "SUM(order_total)") || !strings.Contains(aov.Body, "# Citations") {
@@ -279,8 +282,8 @@ func TestFromBundleWrappedArchive(t *testing.T) {
 	if len(entries) != 1 || entries[0].ID != "ga4/tables/events" {
 		t.Fatalf("entries = %+v, want the one entry under the ga4/ namespace", entries)
 	}
-	// "BigQuery Table" is the canonical display of the built-in tables
-	// type — the wrapper changes the namespace, never the type.
+	// "BigQuery Table" is the built-in table type itself — the wrapper
+	// changes the namespace, never the type.
 	if entries[0].Type != domain.TypeTables || len(entries[0].Attrs) != 0 {
 		t.Errorf("type = %q attrs = %v", entries[0].Type, entries[0].Attrs)
 	}

@@ -104,7 +104,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 	want := BrowseResult{
 		Dirs: []BrowseDir{{Name: "sales", Count: 4}},
 		Entries: []BrowseEntry{
-			{Type: "queries", ID: "sales/monthly-revenue", Title: "月次売上",
+			{Type: "Golden Query", ID: "sales/monthly-revenue", Title: "月次売上",
 				Description: "月次の確定売上", Status: domain.StatusVerified, UpdatedAt: when},
 		},
 		Truncated: true,

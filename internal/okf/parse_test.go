@@ -50,7 +50,7 @@ func TestParseRoundTrip(t *testing.T) {
 
 func TestParseAcceptsRawTypeAndHandWrittenDoc(t *testing.T) {
 	k, err := Parse([]byte(`---
-type: query
+type: Golden Query
 id: monthly-revenue
 title: 月次売上
 status: draft
@@ -79,7 +79,8 @@ func TestParseRejectsGarbage(t *testing.T) {
 		"just markdown, no frontmatter",
 		"---\ntype: metric\n",             // unterminated
 		"---\ntitle: x\n---\n",            // no type at all
-		"---\ntype: ♥♥\ntitle: x\n---\n",  // no slug can be derived
+		"---\ntype: a/b\ntitle: x\n---\n",  // reads as an address
+		"---\ntype: \ntitle: x\n---\n",     // empty
 		"---\ntype: [a]\ntitle: x\n---\n", // type is not a string
 	} {
 		if _, err := Parse([]byte(doc)); err == nil {
@@ -88,23 +89,24 @@ func TestParseRejectsGarbage(t *testing.T) {
 	}
 }
 
-// Free types are first-class (design doc 0005): any slug is accepted
-// verbatim, and a non-slug spelling is slugified with the original kept in
-// attrs.okf_type so the document round-trips.
+// Free types are first-class (design doc 0005) and are stored verbatim
+// (design doc 0023): a multi-word spelling is neither slugified nor
+// stashed in a preservation attr, so the document round-trips because
+// nothing was changed in the first place.
 func TestParseFreeTypes(t *testing.T) {
 	k, err := Parse([]byte("---\ntype: runbook\nid: restore-backup\ntitle: リストア手順\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Type != "runbook" || k.Attrs[AttrOKFType] != nil {
-		t.Errorf("slug type: got type=%q attrs=%v", k.Type, k.Attrs)
+	if k.Type != "runbook" || len(k.Attrs) != 0 {
+		t.Errorf("one-word type: got type=%q attrs=%v", k.Type, k.Attrs)
 	}
 
 	k, err = Parse([]byte("---\ntype: Data Contract\nid: orders-contract\ntitle: 注文契約\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Type != "data-contract" || k.Attrs[AttrOKFType] != "Data Contract" {
+	if k.Type != "Data Contract" || len(k.Attrs) != 0 {
 		t.Errorf("spelled type: got type=%q attrs=%v", k.Type, k.Attrs)
 	}
 
@@ -115,8 +117,8 @@ func TestParseFreeTypes(t *testing.T) {
 	if !strings.Contains(string(doc), "type: Data Contract") {
 		t.Errorf("original spelling lost on export:\n%s", doc)
 	}
-	if strings.Contains(string(doc), AttrOKFType) {
-		t.Errorf("okf_type must fold into the type key, not export as an attr:\n%s", doc)
+	if strings.Contains(string(doc), "okf_type") {
+		t.Errorf("no preservation attr should exist any more:\n%s", doc)
 	}
 }
 
@@ -184,7 +186,7 @@ func TestParseStatusNoteRoundTrip(t *testing.T) {
 }
 
 func TestParseNormalizesCRLF(t *testing.T) {
-	k, err := Parse([]byte("---\r\ntype: term\r\nid: churn\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
+	k, err := Parse([]byte("---\r\ntype: Glossary Term\r\nid: churn\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
