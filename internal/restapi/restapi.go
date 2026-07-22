@@ -47,8 +47,8 @@ func Handler(svc *service.Service) http.Handler {
 			Tags:     q["tag"],
 		}
 		if sort := q.Get("sort"); sort != "" {
-			if sort != "verified_at" && sort != "usage" {
-				writeError(w, service.Invalidf("invalid sort (valid: verified_at, usage)"))
+			if sort != "verified_at" && sort != "usage" && sort != "failed" {
+				writeError(w, service.Invalidf("invalid sort (valid: verified_at, usage, failed)"))
 				return
 			}
 			if q.Get("q") != "" {
@@ -56,9 +56,12 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 			var hits []domain.SearchHit
-			if sort == "usage" {
+			switch sort {
+			case "usage":
 				hits, err = svc.ListByUsage(r.Context(), f, limit)
-			} else {
+			case "failed":
+				hits, err = svc.ListByFailed(r.Context(), f, limit)
+			default:
 				hits, err = svc.ListByVerifiedAt(r.Context(), f, limit)
 			}
 			if err != nil {

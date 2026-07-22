@@ -52,6 +52,7 @@ func TestBadRequestValidation(t *testing.T) {
 		{"invalid sort", "/api/v1/knowledge?sort=created_at", "invalid sort"},
 		{"sort with query", "/api/v1/knowledge?sort=verified_at&q=revenue", "cannot be combined"},
 		{"usage sort with query", "/api/v1/knowledge?sort=usage&q=revenue", "cannot be combined"},
+		{"failed sort with query", "/api/v1/knowledge?sort=failed&q=revenue", "cannot be combined"},
 		{"bad search limit", "/api/v1/knowledge?limit=abc", "invalid limit"},
 		{"bad revisions limit", "/api/v1/revisions/metrics/revenue?limit=abc", "invalid limit"},
 		{"bad backlinks limit", "/api/v1/backlinks/metrics/revenue?limit=1.5", "invalid limit"},

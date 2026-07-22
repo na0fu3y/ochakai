@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -278,6 +279,65 @@ func TestIntegration(t *testing.T) {
 	}
 	if !sawCold {
 		t.Error("ListByUsage must include never-used drafts (the inventory tail)")
+	}
+
+	// ListByFailed: the re-verification feed (design doc 0025). Only entries
+	// with a failed outcome report appear, most failures first; ties broken
+	// by fewest worked, then verification age (oldest first, never-verified
+	// last). Scoped by a unique tag for the same shared-DB reason as above.
+	const failTag = "it-failed-feed"
+	verifiedAt := time.Now().UTC().Add(-30 * 24 * time.Hour)
+	newFail := func(id, title string, status domain.Status, verified bool) *domain.Knowledge {
+		k := &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: title, Tags: []string{failTag},
+			Status: status, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
+		}
+		if verified {
+			k.VerifiedBy = &domain.Actor{Kind: "human", Name: "test"}
+			k.VerifiedAt = &verifiedAt
+		}
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+		return k
+	}
+	loud := newFail("it-fail-loud", "3回失敗した検証済み", domain.StatusVerified, true)
+	quiet := newFail("it-fail-quiet", "1回失敗した検証済み", domain.StatusVerified, true)
+	draftFail := newFail("it-fail-draft", "1回失敗した草案", domain.StatusDraft, false)
+	clean := newFail("it-fail-clean", "失敗のない検証済み", domain.StatusVerified, true)
+	for i := 0; i < 3; i++ {
+		if err := s.RecordOutcome(ctx, domain.EventFailed, actor, loud.ID, ""); err != nil {
+			t.Fatalf("RecordOutcome: %v", err)
+		}
+	}
+	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, quiet.ID, ""); err != nil {
+		t.Fatalf("RecordOutcome: %v", err)
+	}
+	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, draftFail.ID, ""); err != nil {
+		t.Fatalf("RecordOutcome: %v", err)
+	}
+	failFeed, err := s.ListByFailed(ctx, Filter{Tags: []string{failTag}}, 100)
+	if err != nil {
+		t.Fatalf("ListByFailed: %v", err)
+	}
+	gotIDs := make([]string, len(failFeed))
+	for i, h := range failFeed {
+		gotIDs[i] = h.ID
+	}
+	wantIDs := []string{loud.ID, quiet.ID, draftFail.ID}
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Errorf("ListByFailed order = %v, want %v (most failures first; verified before draft on a tie)", gotIDs, wantIDs)
+	}
+	if len(failFeed) > 0 && (failFeed[0].Usage == nil || failFeed[0].Usage.Failed != 3) {
+		t.Errorf("worst entry must carry usage totals (failed=3): %+v", failFeed[0].Usage)
+	}
+	if len(failFeed) > 0 && failFeed[0].Score != 0 {
+		t.Errorf("listing hits carry score 0, got %v", failFeed[0].Score)
+	}
+	for _, h := range failFeed {
+		if h.ID == clean.ID {
+			t.Error("ListByFailed must exclude entries with no failed reports")
+		}
 	}
 }
 

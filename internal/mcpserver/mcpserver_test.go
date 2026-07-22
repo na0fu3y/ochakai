@@ -104,7 +104,7 @@ func TestLimitContractsInSchema(t *testing.T) {
 
 // TestSearchSortValidation mirrors the CLI and REST rules: a search query
 // combined with a sort mode is an error (not silently ignored), and an
-// unknown sort is rejected — for both verified_at and usage.
+// unknown sort is rejected — for verified_at, usage, and failed.
 func TestSearchSortValidation(t *testing.T) {
 	cs := connect(t)
 	cases := []struct {
@@ -114,6 +114,7 @@ func TestSearchSortValidation(t *testing.T) {
 	}{
 		{"verified_at with query", map[string]any{"sort": "verified_at", "query": "revenue"}, "cannot be combined"},
 		{"usage with query", map[string]any{"sort": "usage", "query": "revenue"}, "cannot be combined"},
+		{"failed with query", map[string]any{"sort": "failed", "query": "revenue"}, "cannot be combined"},
 		{"invalid sort", map[string]any{"sort": "created_at"}, "invalid sort"},
 	}
 	for _, c := range cases {

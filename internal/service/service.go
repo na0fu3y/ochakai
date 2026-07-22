@@ -405,6 +405,20 @@ func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([
 	return s.Store.ListByUsage(ctx, f, limit)
 }
 
+// ListByFailed lists entries with failed outcome reports, worst first —
+// the re-verification feed (design doc 0025): in-force knowledge that
+// callers report is producing wrong results, the evidence-based
+// counterpart to the verified_at feed. A healthy base yields an empty
+// feed. Not a search: no usage is recorded (triaging the queue must not
+// inflate the signal it ranks by). Each hit carries its usage totals;
+// score is 0, keeping the wire shape of a search across all list modes.
+func (s *Service) ListByFailed(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	return s.Store.ListByFailed(ctx, f, limit)
+}
+
 // Revisions returns an entry's change history, newest first — the
 // audit surface behind "every change kept as a revision". Not a search:
 // no usage is recorded (auditing an entry is not using it).

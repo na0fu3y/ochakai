@@ -91,9 +91,12 @@ Agents write drafts; somebody has to read them. The bundled web UI is
 where a human reviews what agents learned — search and filter by status,
 browse the knowledge as a folder tree (hierarchical IDs are
 directories), read an entry with its links and usage counts, then
-verify / deprecate / reject (with the reason) in one click. It also shows the *verification
+verify / deprecate / reject (with the reason) in one click. Two feeds
+put the re-verification queue in front of that reviewer: a *verification
 age* feed (oldest `verified_at` first) so stale golden queries surface,
-and compiles metrics interactively for debugging semantic models. One
+and a *needs review* feed (`sort=failed`) that lists the entries agents
+reported wrong, worst first. It also compiles metrics interactively for
+debugging semantic models. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
 
@@ -114,17 +117,23 @@ for what they still don't do:
   tribal knowledge that never fits in a semantic-model YAML and today
   travels by Slack. Your agent gets it in the same search that returns
   the metric definition.
-- **A write-back loop with a memory.** Agents are encouraged to write
-  learnings back; entries start as drafts and a human promotes them to
-  `verified`, with provenance (who wrote it, who verified it, when) on
-  every entry and every change kept as a revision. Proposals that don't
-  make it are kept as `rejected` with the reason, so agents stop
+- **A write-back loop with a memory.** The division of labor is the whole
+  design: agents draft the breadth (the cheap, always-on encoding of what
+  they learn), and a human verifies the judgment-heavy core — the same
+  "agents draft, humans verify" split that keeps a knowledge base from
+  rotting into a graveyard. Entries start as drafts and a human promotes
+  them to `verified`, with provenance (who wrote it, who verified it,
+  when) on every entry and every change kept as a revision. Proposals that
+  don't make it are kept as `rejected` with the reason, so agents stop
   re-proposing them — a memory of *no* that verified-answer stores
-  elsewhere don't keep. Per-entry usage counts show whether the loop is
-  actually working, and outcome reports (`report_outcome`: worked /
-  failed) close its last edge — an agent that ran a golden query and got
-  a wrong number says so, instead of the next agent trusting the same
-  entry blind.
+  elsewhere don't keep. And the loop closes: per-entry usage counts show
+  whether it's working, a *verification-age* feed surfaces knowledge that
+  has gone too long unchecked (time-based staleness), and outcome reports
+  (`report_outcome`: worked / failed) add the evidence-based half — an
+  agent that ran a golden query and got a wrong number says so, and the
+  entry rises in a *re-verification* feed (`sort=failed`) for a human or
+  agent to re-check, instead of the next agent trusting the same entry
+  blind (design doc 0025).
 - **Not a memory layer — the other half of one.** Memory layers (mem0,
   Zep, Letta) auto-extract per-user memories with an LLM and inject them
   back, unaudited: nobody reviews what got remembered, and a wrong

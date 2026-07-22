@@ -72,7 +72,7 @@ _ochakai() {
         '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
-        '--sort[list instead of searching: by verification age or by demand]:sort:(verified_at usage)' \
+        '--sort[list instead of searching: by verification age, demand, or failed reports]:sort:(verified_at usage failed)' \
         '--limit[max results]:limit:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
@@ -169,7 +169,7 @@ _ochakai() {
   case $prev in
     --type|-type) COMPREPLY=($(compgen -W "'Semantic Model' Metric 'Golden Query' Insight 'Glossary Term' 'BigQuery Dataset' 'BigQuery Table' Reference" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
-    --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage" -- "$cur")); return ;;
+    --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
 
@@ -254,7 +254,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attac
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '"Semantic Model" Metric "Golden Query" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage' -d 'list instead of searching: by verification age or by demand'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed' -d 'list instead of searching: by verification age, demand, or failed reports'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks compile' -l limit -x -d 'max results / LIMIT clause'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'

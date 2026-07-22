@@ -596,6 +596,23 @@ func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]do
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
+// usageLateral aggregates a knowledge entry's per-event running totals
+// (see usage.go) in one pass, exposing them as u.search_hits … u.failed and
+// u.last_used_at. Shared by the usage-carrying list feeds (ListByUsage,
+// ListByFailed), which select the same projection but order it differently.
+const usageLateral = `
+	LEFT JOIN LATERAL (
+		SELECT
+			COALESCE(sum(count) FILTER (WHERE event = 'search_hit'), 0) AS search_hits,
+			COALESCE(sum(count) FILTER (WHERE event = 'fetched'), 0)   AS fetches,
+			COALESCE(sum(count) FILTER (WHERE event = 'compiled'), 0)  AS compiles,
+			COALESCE(sum(count) FILTER (WHERE event = 'worked'), 0)    AS worked,
+			COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
+			max(last_at) AS last_used_at
+		FROM knowledge_usage
+		WHERE knowledge_id = k.id
+	) u ON true`
+
 // ListByUsage returns filtered entries ordered by demand, most-searched
 // first: search_hits descending, then oldest-created (created_at ascending)
 // as the tiebreak. This is the draft review feed — the promotion queue at
@@ -604,25 +621,37 @@ func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]do
 // caller renders the signal without a per-entry round trip. Score is 0.
 func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
-	// Conditional aggregation over knowledge_usage in one lateral pass:
-	// running totals per event live in that table (see usage.go).
 	q := fmt.Sprintf(`
 		SELECT `+qualifyCols("k")+`,
 			u.search_hits, u.fetches, u.compiles, u.worked, u.failed, u.last_used_at
-		FROM knowledge k
-		LEFT JOIN LATERAL (
-			SELECT
-				COALESCE(sum(count) FILTER (WHERE event = 'search_hit'), 0) AS search_hits,
-				COALESCE(sum(count) FILTER (WHERE event = 'fetched'), 0)   AS fetches,
-				COALESCE(sum(count) FILTER (WHERE event = 'compiled'), 0)  AS compiles,
-				COALESCE(sum(count) FILTER (WHERE event = 'worked'), 0)    AS worked,
-				COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
-				max(last_at) AS last_used_at
-			FROM knowledge_usage
-			WHERE knowledge_id = k.id
-		) u ON true
+		FROM knowledge k`+usageLateral+`
 		WHERE %s
 		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanUsageHit)
+}
+
+// ListByFailed returns filtered entries that callers have reported wrong,
+// worst first — the re-verification feed (design doc 0025). It is the
+// evidence-based counterpart to the verified_at feed's time-based
+// staleness: only entries with a failed outcome report appear (u.failed > 0),
+// so a healthy base yields an empty feed. Ordering: most failures first,
+// ties broken by fewest corroborating "worked" reports, then verification
+// age (oldest first, never-verified drafts last), then id — verified
+// knowledge being reported wrong outranks a failing draft. Each hit carries
+// its usage totals so the reviewer sees the worked/failed evidence inline;
+// score is 0.
+func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
+	where, args := f.buildWhere("k.")
+	q := fmt.Sprintf(`
+		SELECT `+qualifyCols("k")+`,
+			u.search_hits, u.fetches, u.compiles, u.worked, u.failed, u.last_used_at
+		FROM knowledge k`+usageLateral+`
+		WHERE %s AND u.failed > 0
+		ORDER BY u.failed DESC, u.worked ASC, k.verified_at ASC NULLS LAST, k.id LIMIT %d`, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
