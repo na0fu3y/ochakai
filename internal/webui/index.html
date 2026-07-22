@@ -671,7 +671,7 @@ view.addEventListener('click', e => {
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', staleFeed: false, feedAll: false };
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', staleFeed: false, failedFeed: false, feedAll: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -699,6 +699,10 @@ function viewExplore() {
       ${explore.staleFeed
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Verification-age feed — oldest verified first,
            the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
+        : explore.failedFeed
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — entries reported wrong
+           (report_outcome failed), worst first; empty when nothing was reported wrong.
+           Uncheck <strong>needs review</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
       <a class="btn" href="#/new" title="Create a knowledge entry">＋ New entry</a>
@@ -715,6 +719,8 @@ function viewExplore() {
         <span class="fb-sep"></span>
         <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
           type="checkbox" id="f-stale" aria-label="verification age feed" ${explore.staleFeed ? 'checked' : ''}>verification age</label>
+        <label class="chip" title="Entries reported wrong (report_outcome failed), worst first — the re-verification feed"><input
+          type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>needs review</label>
       </div>
     </details>
     <div id="results"><div class="empty">…</div></div>
@@ -733,7 +739,8 @@ function viewExplore() {
     if (e.key === 'Enter' && e.target.value.trim()) { explore.types.add(e.target.value.trim()); viewExplore(); }
   });
   $('#f-tag').addEventListener('input', () => { explore.tag = $('#f-tag').value.trim(); debounce(rerun, 250); });
-  $('#f-stale').addEventListener('change', () => { explore.staleFeed = $('#f-stale').checked; explore.feedAll = false; viewExplore(); });
+  $('#f-stale').addEventListener('change', () => { explore.staleFeed = $('#f-stale').checked; if (explore.staleFeed) explore.failedFeed = false; explore.feedAll = false; viewExplore(); });
+  $('#f-failed').addEventListener('change', () => { explore.failedFeed = $('#f-failed').checked; if (explore.failedFeed) explore.staleFeed = false; explore.feedAll = false; viewExplore(); });
 
   runSearch();
 }
@@ -754,14 +761,16 @@ async function runSearch() {
   const out = $('#results');
   if (!out) return;
   const p = new URLSearchParams();
+  const isFeed = explore.staleFeed || explore.failedFeed;
   if (explore.staleFeed) p.set('sort', 'verified_at');
+  else if (explore.failedFeed) p.set('sort', 'failed');
   else if (explore.q) p.set('q', explore.q);
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
   if (explore.tag) p.append('tag', explore.tag);
-  // Search caps at 50 server-side; the canary feed pages larger (100,
-  // expandable to the server max of 1000 via the load-more note).
-  const limit = explore.staleFeed ? (explore.feedAll ? 1000 : 100) : 50;
+  // Search caps at 50 server-side; the feeds page larger (100, expandable
+  // to the server max of 1000 via the load-more note).
+  const limit = isFeed ? (explore.feedAll ? 1000 : 100) : 50;
   p.set('limit', String(limit));
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
   try {
@@ -774,7 +783,7 @@ async function runSearch() {
     // With a query, split off low-relevance hits so junk doesn't render as
     // if it matched — semantic/trigram search always returns *something*.
     let strong = hits, weak = [];
-    if (explore.q && !explore.staleFeed && hits[0].score > 0.05) {
+    if (explore.q && !isFeed && hits[0].score > 0.05) {
       strong = hits.filter(h => h.score >= WEAK_SCORE);
       weak = hits.filter(h => h.score < WEAK_SCORE);
     }
@@ -787,7 +796,7 @@ async function runSearch() {
         barely related, probably noise</summary>${weak.map(hitCard).join('')}</details>`;
     }
     if (hits.length >= limit) {
-      html += explore.staleFeed && !explore.feedAll
+      html += isFeed && !explore.feedAll
         ? `<div class="truncation-note">Showing the first ${limit} entries ·
              <a href="#" id="feed-more">load up to 1000</a></div>`
         : `<div class="truncation-note">Showing the first ${limit} ${explore.q ? 'matches' : 'entries'}

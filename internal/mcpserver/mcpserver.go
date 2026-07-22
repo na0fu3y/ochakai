@@ -112,19 +112,24 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
 			"golden-query canary runs and for finding stale verified knowledge. With sort=\"usage\" it " +
 			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
-			"each hit carries its usage totals — the draft review/promotion feed.",
+			"each hit carries its usage totals — the draft review/promotion feed. With sort=\"failed\" it " +
+			"lists entries callers reported wrong (report_outcome failed), worst first — the re-verification " +
+			"feed; empty when nothing was reported wrong.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags}
 		if in.Sort != "" {
-			if in.Sort != "verified_at" && in.Sort != "usage" {
-				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at, usage)", in.Sort)
+			if in.Sort != "verified_at" && in.Sort != "usage" && in.Sort != "failed" {
+				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at, usage, failed)", in.Sort)
 			}
 			if in.Query != "" {
 				return nil, searchOut{}, fmt.Errorf("sort=%s lists entries; it cannot be combined with a search query", in.Sort)
 			}
 			list := svc.ListByVerifiedAt
-			if in.Sort == "usage" {
+			switch in.Sort {
+			case "usage":
 				list = svc.ListByUsage
+			case "failed":
+				list = svc.ListByFailed
 			}
 			hits, err := list(ctx, f, in.Limit)
 			if err != nil {
@@ -355,7 +360,7 @@ type searchIn struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed) — both mutually exclusive with query"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed) — all mutually exclusive with query"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
 

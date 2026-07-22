@@ -51,7 +51,12 @@ ochakai はこの工程に関与しない。
   `ochakai report queries/<id> failed --note "何が起きたか"`(REST:
   `POST /api/v1/usage/queries/<id>`、MCP: `report_outcome`)。worked / failed の
   累計が `/usage` に出るので、failed が積んだ verified エントリは
-  再検証の優先対象として拾える。
+  再検証の優先対象として拾える。**`sort=failed` の再検証フィード**
+  (`ochakai search --sort failed --status verified`、REST:
+  `GET /api/v1/knowledge?sort=failed`、MCP: `search_knowledge` の
+  `sort: "failed"`)が、誤りと報告された順(失敗数の多い順)に列挙する。
+  時間ベースの `sort=verified_at` を補う証拠ベースの入口である
+  (設計ドキュメント 0025)。
 
 ## CI スニペット(GitHub Actions + BigQuery)
 

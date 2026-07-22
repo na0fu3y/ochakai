@@ -15,8 +15,8 @@ import (
 func TestCompletionScriptsStayInSync(t *testing.T) {
 	admin := []string{"serve", "serve-ui", "version"}
 	enums := []string{
-		"zsh bash fish", // completion <shell>
-		"verified_at",   // --sort
+		"zsh bash fish",      // completion <shell>
+		"verified_at failed", // --sort
 	}
 	enums = append(enums, domain.Outcomes...) // report <outcome>
 	for _, typ := range domain.Types {
