@@ -440,6 +440,64 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	}
 }
 
+// SearchLexical's substring floor must treat the query literally: a query
+// of "%" or "_" is not an ILIKE wildcard. Before the escaping fix, "%"
+// matched every entry and boosted them all; "_" matched any single
+// character. Here only the entry that literally contains "%" may surface.
+func TestIntegrationSearchLexicalWildcardEscape(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-wild-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	plain := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-wild-plain", Title: "純増収益",
+		Description: "特殊文字を含まない", Status: domain.StatusDraft, CreatedBy: actor}
+	pct := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-wild-pct", Title: "解約率は5%以内",
+		Description: "パーセント記号を含む", Status: domain.StatusDraft, CreatedBy: actor}
+	for _, k := range []*domain.Knowledge{plain, pct} {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// "%" is a literal search now: it may match only the entry containing
+	// one, never the plain entry via a wildcard-driven +0.3 boost.
+	hits, err := s.SearchLexical(ctx, "%", Filter{}, 10)
+	if err != nil {
+		t.Fatalf("SearchLexical(%q): %v", "%", err)
+	}
+	for _, h := range hits {
+		if h.ID == "it-wild-plain" {
+			t.Errorf(`"%%" matched it-wild-plain — ILIKE wildcard not escaped: %+v`, hits)
+		}
+	}
+	// "_" likewise must not match an entry that contains no underscore.
+	hits, err = s.SearchLexical(ctx, "_", Filter{}, 10)
+	if err != nil {
+		t.Fatalf("SearchLexical(%q): %v", "_", err)
+	}
+	for _, h := range hits {
+		if h.ID == "it-wild-plain" || h.ID == "it-wild-pct" {
+			t.Errorf(`"_" matched %s — ILIKE wildcard not escaped: %+v`, h.ID, hits)
+		}
+	}
+}
+
 // RecordEvents buffers off the read path (design doc 0025 §11): totals are
 // invisible until a flush, and Close drains the buffer so a clean shutdown
 // loses nothing.
