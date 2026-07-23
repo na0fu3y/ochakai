@@ -167,6 +167,10 @@ func TestIntegration(t *testing.T) {
 	if err := s.RecordEvents(ctx, domain.EventFetched, actor, target); err != nil {
 		t.Fatalf("RecordEvents: %v", err)
 	}
+	// RecordEvents buffers; force the write before reading totals back.
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatalf("FlushUsage: %v", err)
+	}
 	usage, err := s.Usage(ctx, k.ID)
 	if err != nil {
 		t.Fatalf("Usage: %v", err)
@@ -250,6 +254,9 @@ func TestIntegration(t *testing.T) {
 	}
 	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, hot.ID, ""); err != nil {
 		t.Fatalf("RecordOutcome: %v", err)
+	}
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatalf("FlushUsage: %v", err)
 	}
 	feed, err := s.ListByUsage(ctx, Filter{
 		Types:    []domain.Type{domain.TypeInsights},
@@ -433,6 +440,62 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	}
 }
 
+// RecordEvents buffers off the read path (design doc 0025 §11): totals are
+// invisible until a flush, and Close drains the buffer so a clean shutdown
+// loses nothing.
+func TestIntegrationUsageBuffering(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-buf-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id LIKE 'it-buf-%'`); err != nil {
+		t.Fatal(err)
+	}
+
+	actor := domain.Actor{Kind: "agent", Name: "claude-code"}
+	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-buf-metric", Title: "計測",
+		Status: domain.StatusDraft, CreatedBy: actor}
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []string{k.ID}); err != nil {
+		t.Fatalf("RecordEvents: %v", err)
+	}
+	// Before a flush the event is only in memory — no total yet.
+	if u, err := s.Usage(ctx, k.ID); err != nil {
+		t.Fatal(err)
+	} else if u.SearchHits != 0 {
+		t.Errorf("event should be buffered, not yet counted: %+v", u)
+	}
+	// Close must drain the buffer.
+	s.Close()
+
+	s2, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	if u, err := s2.Usage(ctx, k.ID); err != nil {
+		t.Fatal(err)
+	} else if u.SearchHits != 1 {
+		t.Errorf("Close did not flush the buffered event: %+v", u)
+	}
+}
+
 // Move rewrites the id everywhere it is recorded — the row, revisions,
 // attachments, usage, embeddings — and rewrites inbound references (link
 // targets in both forms, attrs.model) so nothing breaks. The destination
@@ -490,6 +553,11 @@ func TestIntegrationMove(t *testing.T) {
 	}
 	if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{"it-move-src/metric"}); err != nil {
 		t.Fatal(err)
+	}
+	// Flush before Move so the event is persisted under the old id and the
+	// move carries it (RecordEvents now buffers, design doc 0025 §11).
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatalf("FlushUsage: %v", err)
 	}
 
 	// Occupied destinations refuse, live or soft-deleted.

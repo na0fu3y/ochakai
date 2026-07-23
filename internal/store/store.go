@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,15 @@ type Store struct {
 	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64
+
+	// Usage events buffer in memory and flush on a timer so recording
+	// never touches the read path (design doc 0025 §11). usageBuf is
+	// guarded by usageMu; the flush loop stops on flushStop and drains
+	// once more before flushWG releases (see New/Close, usage.go).
+	usageMu   sync.Mutex
+	usageBuf  []usageEvent
+	flushStop chan struct{}
+	flushWG   sync.WaitGroup
 }
 
 // UseBlobStore routes attachment bytes to b (design doc 0013). Call
@@ -65,10 +75,23 @@ func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) 
 		pool.Close()
 		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
-	return &Store{pool: pool}, nil
+	s := &Store{pool: pool, flushStop: make(chan struct{})}
+	s.flushWG.Add(1)
+	go s.usageFlushLoop()
+	return s, nil
 }
 
-func (s *Store) Close() { s.pool.Close() }
+// Close stops the usage flush loop (draining the buffer one last time) and
+// releases the connection pool. Buffered events that have not yet flushed
+// are lost only if the process dies before Close — usage is a best-effort
+// statistic (design doc 0025 §10).
+func (s *Store) Close() {
+	if s.flushStop != nil {
+		close(s.flushStop)
+		s.flushWG.Wait()
+	}
+	s.pool.Close()
+}
 
 // Filter narrows search and list operations.
 type Filter struct {
