@@ -45,11 +45,11 @@ func TestBuildWhereFoldsFreeTypes(t *testing.T) {
 // covers the effect on real rows; this pins the escaping itself.
 func TestEscapeLike(t *testing.T) {
 	cases := map[string]string{
-		"売上":      "売上",
-		"a%b":     `a\%b`,
-		"a_b":     `a\_b`,
-		`a\b`:     `a\\b`,
-		`100%_\`:  `100\%\_\\`,
+		"売上":     "売上",
+		"a%b":    `a\%b`,
+		"a_b":    `a\_b`,
+		`a\b`:    `a\\b`,
+		`100%_\`: `100\%\_\\`,
 	}
 	for in, want := range cases {
 		if got := escapeLike(in); got != want {
