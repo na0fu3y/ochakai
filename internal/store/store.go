@@ -26,6 +26,15 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 // (design doc 0025 §11). The entry exists — a missing entry is ErrNotFound.
 var ErrConflict = errors.New("knowledge changed since it was read")
 
+// nowStored is the current UTC time truncated to the microsecond precision
+// PostgreSQL timestamptz stores. Setting entity timestamps from it means an
+// in-memory updated_at always equals the value that round-trips through the
+// database — the invariant the ETag/If-Match optimistic lock depends on
+// (design doc 0025 §11): time.Now()'s nanoseconds would otherwise make the
+// value returned by a write differ from the stored one on nanosecond-
+// resolution clocks (Linux), breaking a client's next conditional update.
+func nowStored() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
+
 type Store struct {
 	pool *pgxpool.Pool
 	// blobs holds attachment bytes (GCS, design doc 0013); metadata stays
@@ -205,7 +214,7 @@ func (s *Store) ListMetricEntryIDs(ctx context.Context, modelID string) ([]strin
 // Update refuses deleted rows), and its history stays in the revisions
 // either way.
 func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
-	now := time.Now().UTC()
+	now := nowStored()
 	k.CreatedAt, k.UpdatedAt = now, now
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		links, attrs, err := marshalJSONFields(k)
@@ -250,7 +259,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 // read-modify-write race that silently lost updates. A nil ifMatch keeps
 // the prior last-write-wins behavior for callers that do not opt in.
 func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) error {
-	k.UpdatedAt = time.Now().UTC()
+	k.UpdatedAt = nowStored()
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		links, attrs, err := marshalJSONFields(k)
 		if err != nil {
@@ -336,7 +345,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 	if err != nil {
 		return nil, err
 	}
-	k.UpdatedAt = time.Now().UTC()
+	k.UpdatedAt = nowStored()
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		var taken bool
 		if err := tx.QueryRow(ctx,
@@ -417,7 +426,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
+	now := nowStored()
 	for i := range referrers {
 		r := &referrers[i]
 		// The moved entry resolves its own relative links against its old
