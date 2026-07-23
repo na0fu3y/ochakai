@@ -901,7 +901,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 		t.Fatal(err)
 	}
 	k.Title = "v2"
-	if err := s.Update(ctx, k, actor); err != nil {
+	if err := s.Update(ctx, k, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SoftDelete(ctx, k.ID, actor); err != nil {

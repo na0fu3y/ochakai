@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -25,6 +26,7 @@ func TestWriteErrorStatuses(t *testing.T) {
 	}{
 		{"not found", store.ErrNotFound, http.StatusNotFound},
 		{"already exists", store.ErrAlreadyExists, http.StatusConflict},
+		{"if-match conflict", store.ErrConflict, http.StatusPreconditionFailed},
 		{"compile refusal", &compiler.Error{Reason: "outside the subset"}, http.StatusUnprocessableEntity},
 		{"invalid input", service.Invalidf("title is required"), http.StatusBadRequest},
 		{"unsupported", service.Unsupportedf("attachments need GCS"), http.StatusNotImplemented},
@@ -143,5 +145,45 @@ func TestReportOutcomeBadRequests(t *testing.T) {
 				t.Errorf("body %q does not mention %q", rec.Body, c.wantSubstr)
 			}
 		})
+	}
+}
+
+// TestETagRoundTrip pins the ETag/If-Match wire format: etagOf quotes the
+// updated_at, and parseIfMatch reads it (and "*", and absence) back — so a
+// value from a response header is accepted verbatim on the next request.
+func TestETagRoundTrip(t *testing.T) {
+	updated := time.Date(2026, 7, 24, 1, 2, 3, 456789000, time.UTC)
+	k := &domain.Knowledge{ID: "metrics/x", UpdatedAt: updated}
+	etag := etagOf(k)
+	if etag != `"2026-07-24T01:02:03.456789Z"` {
+		t.Fatalf("etagOf = %s", etag)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x", nil)
+	req.Header.Set("If-Match", etag)
+	got, err := parseIfMatch(req)
+	if err != nil {
+		t.Fatalf("parseIfMatch: %v", err)
+	}
+	if got == nil || !got.Equal(updated) {
+		t.Errorf("parseIfMatch(%s) = %v, want %v", etag, got, updated)
+	}
+
+	// Absent and "*" carry no version precondition.
+	for _, v := range []string{"", "*"} {
+		r := httptest.NewRequest(http.MethodPut, "/x", nil)
+		if v != "" {
+			r.Header.Set("If-Match", v)
+		}
+		if p, err := parseIfMatch(r); err != nil || p != nil {
+			t.Errorf("parseIfMatch(If-Match:%q) = %v, %v; want nil, nil", v, p, err)
+		}
+	}
+
+	// A non-ETag value is a client error, not a silent no-precondition.
+	r := httptest.NewRequest(http.MethodPut, "/x", nil)
+	r.Header.Set("If-Match", `"not-a-timestamp"`)
+	if _, err := parseIfMatch(r); err == nil {
+		t.Error("malformed If-Match must be an error")
 	}
 }
