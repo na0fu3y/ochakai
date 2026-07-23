@@ -535,11 +535,19 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 // name.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	// The trigram term takes the raw query; the substring floor takes a
+	// separate, escaped LIKE pattern. Without escaping, a query containing
+	// '%' or '_' is read as an ILIKE wildcard — '%' matches every entry and
+	// hands them all the +0.3 boost, flattening the ranking (and '_' matches
+	// any one character). similarity() is unaffected; only the ILIKE floor.
 	args = append(args, query)
+	simParam := len(args)
+	args = append(args, "%"+escapeLike(query)+"%")
+	likeParam := len(args)
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
 			SELECT k.*, similarity(k.id || ' ' || k.title || ' ' || k.description || ' ' || array_to_string(k.tags, ' ') || ' ' || k.body || ' ' || att.names, $%d)
-				+ CASE WHEN k.id || ' ' || k.title || ' ' || k.description || ' ' || k.body || ' ' || att.names ILIKE '%%' || $%d || '%%' THEN 0.3 ELSE 0 END
+				+ CASE WHEN k.id || ' ' || k.title || ' ' || k.description || ' ' || k.body || ' ' || att.names ILIKE $%d THEN 0.3 ELSE 0 END
 				+ CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS score
 			FROM knowledge k
 			LEFT JOIN LATERAL (
@@ -549,7 +557,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 			WHERE %s
 		) ranked
 		WHERE score > 0.05
-		ORDER BY score DESC LIMIT %d`, len(args), len(args), where, limit)
+		ORDER BY score DESC LIMIT %d`, simParam, likeParam, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -824,6 +832,13 @@ func qualifyCols(alias string) string {
 		cols[i] = alias + "." + strings.TrimSpace(c)
 	}
 	return strings.Join(cols, ", ")
+}
+
+// escapeLike neutralizes the LIKE/ILIKE pattern metacharacters '%' and '_'
+// in a user query so it matches literally. PostgreSQL's default LIKE escape
+// character is the backslash, so the backslash itself is escaped first.
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 // encodeVector renders a pgvector literal like "[0.1,0.2]".
