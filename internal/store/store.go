@@ -21,6 +21,11 @@ import (
 var ErrNotFound = errors.New("knowledge not found")
 var ErrAlreadyExists = errors.New("knowledge already exists")
 
+// ErrConflict is returned by Update when an If-Match precondition does not
+// match the stored revision: the entry changed since the caller read it
+// (design doc 0025 §11). The entry exists — a missing entry is ErrNotFound.
+var ErrConflict = errors.New("knowledge changed since it was read")
+
 type Store struct {
 	pool *pgxpool.Pool
 	// blobs holds attachment bytes (GCS, design doc 0013); metadata stays
@@ -238,7 +243,13 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 	})
 }
 
-func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor) error {
+// Update writes k over the live entry with the same id. When ifMatch is
+// non-nil, the write is conditional on the stored updated_at equalling it
+// (optimistic concurrency, design doc 0025 §11): a mismatch means the entry
+// changed since the caller read it and returns ErrConflict, closing the
+// read-modify-write race that silently lost updates. A nil ifMatch keeps
+// the prior last-write-wins behavior for callers that do not opt in.
+func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) error {
 	k.UpdatedAt = time.Now().UTC()
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		links, attrs, err := marshalJSONFields(k)
@@ -247,20 +258,38 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		}
 		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
+		cond := ""
+		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
+			verifiedKind, verifiedName, k.VerifiedAt,
+			rejectedKind, rejectedName, k.RejectedAt,
+			links, attrs, k.Body, k.UpdatedAt}
+		if ifMatch != nil {
+			args = append(args, ifMatch.UTC())
+			cond = fmt.Sprintf(" AND updated_at=$%d", len(args))
+		}
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8,
 			verified_by_kind=$9, verified_by_name=$10, verified_at=$11,
 			rejected_by_kind=$12, rejected_by_name=$13, rejected_at=$14,
 			links=$15, attrs=$16, body=$17, updated_at=$18
-			WHERE id=$1 AND deleted_at IS NULL`,
-			k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
-			verifiedKind, verifiedName, k.VerifiedAt,
-			rejectedKind, rejectedName, k.RejectedAt,
-			links, attrs, k.Body, k.UpdatedAt)
+			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
+			// No row matched. With a precondition, tell a live-but-changed
+			// entry (ErrConflict) apart from a missing one (ErrNotFound).
+			if ifMatch != nil {
+				var live bool
+				if err := tx.QueryRow(ctx,
+					`SELECT EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)`,
+					k.ID).Scan(&live); err != nil {
+					return err
+				}
+				if live {
+					return ErrConflict
+				}
+			}
 			return ErrNotFound
 		}
 		return s.addRevision(ctx, tx, k, "update", actor)

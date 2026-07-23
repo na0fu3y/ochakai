@@ -212,7 +212,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
 			"as rejected_by; put the reason in status_note (also useful when deprecating).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		k, _, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx))
+		// MCP has no conditional-update channel; it does not opt into the
+		// If-Match precondition (nil), keeping last-write-wins here.
+		k, _, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx), nil)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}

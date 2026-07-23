@@ -90,7 +90,14 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 // are the audit trail of changes and updated_at means "content last
 // changed" — recurring bundle imports and agents re-saving what they
 // just read must not bury real history under identical snapshots.
-func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (updated *domain.Knowledge, changed bool, err error) {
+//
+// ifMatch is an optional optimistic-concurrency precondition (design doc
+// 0025 §11): when non-nil it is the updated_at the caller based the edit
+// on, and an entry that has changed since — whether before this call's
+// read, or in the read-modify-write window below — yields store.ErrConflict
+// rather than silently clobbering the other write. nil keeps the prior
+// last-write-wins behavior for callers that do not opt in.
+func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) (updated *domain.Knowledge, changed bool, err error) {
 	normalizeKeys(k)
 	if err := validate(k); err != nil {
 		return nil, false, err
@@ -99,6 +106,11 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	old, err := s.Store.Get(ctx, k.ID)
 	if err != nil {
 		return nil, false, err
+	}
+	// The caller's version is already stale if the stored entry moved on
+	// between their read and ours — reject before doing any work.
+	if ifMatch != nil && !old.UpdatedAt.Equal(ifMatch.UTC()) {
+		return nil, false, store.ErrConflict
 	}
 	if k.Status == "" {
 		k.Status = old.Status
@@ -111,7 +123,9 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 		return old, false, nil
 	}
 	s.applyVerification(k, old, actor)
-	if err := s.Store.Update(ctx, k, actor); err != nil {
+	// Pass the precondition through so the write is also guarded against a
+	// concurrent update landing between the Get above and the write.
+	if err := s.Store.Update(ctx, k, actor, ifMatch); err != nil {
 		return nil, false, err
 	}
 	s.updateEmbedding(ctx, k)

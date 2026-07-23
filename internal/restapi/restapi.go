@@ -140,6 +140,9 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		// The ETag is the entry's version: a client can echo it in If-Match
+		// on a later PUT to update only if nothing changed meanwhile.
+		w.Header().Set("ETag", etagOf(k))
 		writeJSON(w, http.StatusOK, k)
 	})
 
@@ -148,11 +151,19 @@ func Handler(svc *service.Service) http.Handler {
 		if !readJSON(w, r, &k) {
 			return
 		}
+		// If-Match is an optional optimistic-concurrency precondition: its
+		// value is the ETag from a prior read. Absent means last-write-wins
+		// (design doc 0025 §11); malformed is a client error.
+		ifMatch, err := parseIfMatch(r)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed If-Match: " + err.Error()})
+			return
+		}
 		// The path is the address; the body carries the metadata — type
 		// included, always (no fill-in from the stored entry, design doc
 		// 0016 §4.5).
 		k.ID = r.PathValue("id")
-		updated, changed, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()))
+		updated, changed, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()), ifMatch)
 		if err != nil {
 			writeError(w, err)
 			return
@@ -163,6 +174,7 @@ func Handler(svc *service.Service) http.Handler {
 		if !changed {
 			w.Header().Set("Ochakai-Unchanged", "true")
 		}
+		w.Header().Set("ETag", etagOf(updated))
 		writeJSON(w, http.StatusOK, updated)
 	})
 
@@ -489,6 +501,9 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		status = http.StatusNotFound
+	case errors.Is(err, store.ErrConflict):
+		// The If-Match precondition failed: the entry changed since read.
+		status = http.StatusPreconditionFailed
 	case errors.Is(err, store.ErrAlreadyExists):
 		status = http.StatusConflict
 	case errors.As(err, &compileErr):
@@ -499,6 +514,29 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusNotImplemented
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// etagOf renders an entry's version as an ETag: its updated_at in
+// RFC3339Nano, quoted. A client echoes it in If-Match to update
+// conditionally (design doc 0025 §11).
+func etagOf(k *domain.Knowledge) string {
+	return `"` + k.UpdatedAt.UTC().Format(time.RFC3339Nano) + `"`
+}
+
+// parseIfMatch reads an optional If-Match precondition. Absent or "*" means
+// no version precondition (the update still requires the entry to exist).
+// A quoted value is our entry ETag — the RFC3339Nano updated_at. A value
+// that is neither is a client error.
+func parseIfMatch(r *http.Request) (*time.Time, error) {
+	v := strings.TrimSpace(r.Header.Get("If-Match"))
+	if v == "" || v == "*" {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, strings.Trim(v, `"`))
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
 // queryInt and queryFloat parse optional numeric query parameters,
