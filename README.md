@@ -117,11 +117,8 @@ for what they still don't do:
   tribal knowledge that never fits in a semantic-model YAML and today
   travels by Slack. Your agent gets it in the same search that returns
   the metric definition.
-- **A write-back loop with a memory.** The division of labor is the whole
-  design: agents draft the breadth (the cheap, always-on encoding of what
-  they learn), and a human verifies the judgment-heavy core — the same
-  "agents draft, humans verify" split that keeps a knowledge base from
-  rotting into a graveyard. Entries start as drafts and a human promotes
+- **A write-back loop with a memory.** Agents are encouraged to write
+  learnings back; entries start as drafts and a human promotes
   them to `verified`, with provenance (who wrote it, who verified it,
   when) on every entry and every change kept as a revision. Proposals that
   don't make it are kept as `rejected` with the reason, so agents stop
@@ -134,6 +131,20 @@ for what they still don't do:
   entry rises in a *re-verification* feed (`sort=failed`) for a human or
   agent to re-check, instead of the next agent trusting the same entry
   blind (design doc 0025).
+- **No forward-deployed engineers, by design.** Encoding what your data
+  means is labor, and it doesn't vanish — the only question is *who* does
+  it. Palantir's answer is forward-deployed engineers who hand-build an
+  ontology on-site; the dbt and warehouse-native answer is self-serve,
+  folding curation into the engineering workflow that already ships the
+  data. ochakai's bet is a third path: the agent *is* the forward-deployed
+  labor — it drafts the breadth every time it learns something — and a
+  human verifies the judgment-heavy core, which is what keeps a knowledge
+  base from rotting into a stale, confidently-wrong graveyard. No FDE army
+  and no dedicated data steward: the smallest team that sustains a living
+  knowledge base is one reviewer already in the loop, with the gate built
+  into the workflow they already run — the bundled
+  [hooks](examples/claude-code) and the CI
+  [canary](docs/guides/golden-query-canary.md).
 - **Not a memory layer — the other half of one.** Memory layers (mem0,
   Zep, Letta) auto-extract per-user memories with an LLM and inject them
   back, unaudited: nobody reviews what got remembered, and a wrong
