@@ -125,6 +125,10 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 	if len(hits) == 0 || hits[0].ID != id {
 		t.Fatalf("search missed the entry: %+v", hits)
 	}
+	// Usage recording buffers off the read path (design doc 0025 §11).
+	if err := svc.Store.FlushUsage(ctx); err != nil {
+		t.Fatalf("FlushUsage: %v", err)
+	}
 	u, err := svc.Usage(ctx, id)
 	if err != nil {
 		t.Fatalf("Usage: %v", err)
@@ -192,6 +196,9 @@ func TestCompileIntegration(t *testing.T) {
 
 	// Compile usage lands on the model entry and on the metric entry
 	// naming it via attrs.model — and only on entries that exist.
+	if err := svc.Store.FlushUsage(ctx); err != nil {
+		t.Fatalf("FlushUsage: %v", err)
+	}
 	for _, target := range []string{modelID, metricEntryID} {
 		u, err := svc.Usage(ctx, target)
 		if err != nil {
