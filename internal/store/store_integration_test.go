@@ -14,6 +14,21 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
+// hitScore returns the score of id among hits, or -1 when it is absent.
+// Assertions go through this rather than indexing hits[0]: the test
+// database is shared by every package (see CONTRIBUTING), so another
+// test's entry can legitimately tie or outrank this one, and a search
+// test that assumes it owns the corpus fails for reasons that have
+// nothing to do with search.
+func hitScore(hits []domain.SearchHit, id string) float64 {
+	for _, h := range hits {
+		if h.ID == id {
+			return h.Score
+		}
+	}
+	return -1
+}
+
 // TestIntegration exercises the store against a real PostgreSQL with
 // pgvector. Skipped unless OCHAKAI_TEST_DATABASE_URL is set, e.g.:
 //
@@ -58,11 +73,11 @@ func TestIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lex, err := s.SearchLexical(ctx, "売上", Filter{}, 5)
+	lex, err := s.SearchLexical(ctx, "売上", Filter{}, 20)
 	if err != nil {
 		t.Fatalf("SearchLexical: %v", err)
 	}
-	if len(lex) == 0 || lex[0].ID != "it-revenue" {
+	if hitScore(lex, "it-revenue") < 0 {
 		t.Errorf("lexical search missed the entry: %+v", lex)
 	}
 
@@ -70,12 +85,12 @@ func TestIntegration(t *testing.T) {
 	// (knowledge_embedding shares type/id/updated_at with knowledge).
 	vec, err := s.SearchVector(ctx, []float32{1, 0, 0, 0}, Filter{
 		Types: []domain.Type{domain.TypeMetrics}, Statuses: []domain.Status{domain.StatusVerified},
-	}, 5)
+	}, 20)
 	if err != nil {
 		t.Fatalf("SearchVector: %v", err)
 	}
-	if len(vec) == 0 || vec[0].ID != "it-revenue" || vec[0].Score < 0.99 {
-		t.Errorf("vector search wrong result: %+v", vec)
+	if score := hitScore(vec, "it-revenue"); score < 0.99 {
+		t.Errorf("vector search wrong result (score %v): %+v", score, vec)
 	}
 
 	// Rejected entries: provenance round-trips, and search excludes them

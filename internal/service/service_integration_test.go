@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -304,38 +305,46 @@ func TestReembedIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
 
-	// Nothing to do while the model is unchanged.
-	res, err := svc.Reembed(ctx, 500)
-	if err != nil {
-		t.Fatalf("Reembed: %v", err)
+	// Assertions are about this entry, not about counts: the test database
+	// is shared by every package, so a corpus-wide pass legitimately picks
+	// up whatever else happens to be unembedded.
+	unembedded := func(t *testing.T, model string) bool {
+		t.Helper()
+		ids, err := svc.Store.ListUnembedded(ctx, model, 5000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.Contains(ids, id)
 	}
-	if res.Failed != 0 {
-		t.Errorf("unchanged model: %+v", res)
-	}
-	settled := res.Embedded
 
-	// Switch models: every entry's vector is now in a space nothing
-	// queries, and only a reembed notices.
+	if unembedded(t, "test-embedder-v1") {
+		t.Error("writing the entry should have embedded it")
+	}
+
+	// Switch models: the entry's vector is now in a space nothing queries,
+	// and nothing but a reembed notices (design doc 0020).
 	svc.Embedder = &fixedEmbedder{model: "test-embedder-v2", dim: 4}
-	res, err = svc.Reembed(ctx, 500)
+	if !unembedded(t, "test-embedder-v2") {
+		t.Fatal("a model change must leave the old vector behind")
+	}
+
+	res, err := svc.Reembed(ctx, 5000)
 	if err != nil {
 		t.Fatalf("Reembed after a model change: %v", err)
 	}
-	if res.Embedded == 0 {
-		t.Fatalf("a model change left nothing to reembed: %+v", res)
+	if res.Embedded == 0 || res.Failed != 0 {
+		t.Fatalf("reembed did nothing useful: %+v", res)
 	}
-	if res.Failed != 0 {
-		t.Errorf("reembed reported failures: %+v", res)
+	if unembedded(t, "test-embedder-v2") {
+		t.Error("reembed left the entry without a vector for the new model")
 	}
 
-	// And it is idempotent: the second pass finds the work already done.
-	again, err := svc.Reembed(ctx, 500)
-	if err != nil {
+	// And it is idempotent: a second pass finds this entry already done.
+	if _, err := svc.Reembed(ctx, 5000); err != nil {
 		t.Fatal(err)
 	}
-	if again.Embedded >= res.Embedded {
-		t.Errorf("reembed is not idempotent: %d then %d (baseline %d)",
-			res.Embedded, again.Embedded, settled)
+	if unembedded(t, "test-embedder-v2") {
+		t.Error("a second pass unembedded the entry")
 	}
 }
 
