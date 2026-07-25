@@ -23,7 +23,7 @@ paths:
   /api/v1/knowledge:
     get:
       operationId: searchKnowledge
-      summary: Search knowledge (trigram, plus hybrid vector search when configured)
+      summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
         Rejected entries are excluded unless the status filter explicitly
         includes rejected (so agents can check for already-rejected proposals).
@@ -189,9 +189,10 @@ paths:
           description: >
             Drop hits scoring below this before expansion, for callers that
             inject the pack automatically and prefer nothing over junk.
-            Scores are search-mode dependent and uncalibrated (trigram
-            similarity plus boosts vs RRF rank fusion) — calibrate against
-            your own corpus before use. Non-numeric values are a 400.
+            Scores are search-mode dependent and uncalibrated
+            (matched-fragment weight plus boosts vs RRF rank fusion) —
+            calibrate against your own corpus before use. Non-numeric
+            values are a 400.
           schema: { type: number, default: 0 }
         - name: budget
           in: query
