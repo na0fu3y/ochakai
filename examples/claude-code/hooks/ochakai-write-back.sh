@@ -28,5 +28,5 @@ grep -qiE 'SELECT|ochakai|bigquery|warehouse' "$transcript" || exit 0
 
 jq -n '{
   decision: "block",
-  reason: "Before finishing: this session did data work. If a query you wrote proved correct and reusable, or you learned how to read a metric (a baseline, a seasonality, a caveat), write it back to ochakai — search first (including --status rejected) to avoid re-proposing, then `ochakai create` (type: query with attrs.question + attrs.sql, or type: insight). If nothing durable was learned, finish now without creating anything — do not invent knowledge."
+  reason: "Before finishing: this session did data work. If a query you wrote proved correct and reusable, or you learned how to read a metric (a baseline, a seasonality, a caveat), write it back to ochakai — search first (including --status rejected) to avoid re-proposing, then `ochakai create <path>` (type \"Golden Query\" with attrs.question + attrs.sql, or type \"Insight\"). If nothing durable was learned, finish now without creating anything — do not invent knowledge."
 }'

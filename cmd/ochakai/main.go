@@ -89,17 +89,17 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   search [query]          search knowledge; verified entries rank higher
   browse [type[/prefix]]  list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
-  get <type>/<id>         print one entry as an OKF document
-  create [-f file]        create an entry from OKF markdown or JSON
-  update <type>/<id>      replace an entry (every change kept as a revision)
-  delete <type>/<id>      soft-delete an entry (history retained)
+  get <id>                print one entry as an OKF document
+  create [id] [-f file]   create an entry from OKF markdown or JSON
+  update <id>             replace an entry (every change kept as a revision)
+  delete <id>             soft-delete an entry (history retained)
   move <id> <new-id>      move (rename) an entry; references are rewritten
-  attach <type>/<id> <f>  attach files to an entry (png/jpeg/webp/pdf/text)
-  detach <type>/<id> <n>  remove an attachment
-  usage <type>/<id>       show usage totals (search hits, fetches, compiles, outcomes)
-  report <type>/<id> <o>  report an outcome: worked | failed (--note for why)
-  revisions <type>/<id>   list an entry's change history (newest first)
-  backlinks <type>/<id>   list entries whose links point at this one
+  attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
+  detach <id> <name>      remove an attachment
+  usage <id>              show usage totals (search hits, fetches, compiles, outcomes)
+  report <id> <outcome>   report an outcome: worked | failed (--note for why)
+  revisions <id>          list an entry's change history (newest first)
+  backlinks <id>          list entries whose links point at this one
   compile --metric <m>    compile metrics into BigQuery SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)

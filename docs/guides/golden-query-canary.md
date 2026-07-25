@@ -19,7 +19,7 @@ ochakai search --sort verified_at --type 'Golden Query' --status verified --limi
 ```
 
 REST 直接なら
-`GET /api/v1/knowledge?type=query&status=verified&sort=verified_at&limit=100`、
+`GET /api/v1/knowledge?type=Golden%20Query&status=verified&sort=verified_at&limit=100`、
 MCP なら `search_knowledge` の `sort: "verified_at"` が同じフィードを返す。
 `sort=verified_at` は検証日時の古い順(未検証は最後)に返す。「90 日以上
 再検証されていない verified query」がカナリアの起点になる。OKF エクスポート
@@ -79,7 +79,7 @@ jobs:
         run: |
           TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
           curl -s -H "Authorization: Bearer $TOKEN" \
-            "$OCHAKAI_URL/api/v1/knowledge?type=query&status=verified&sort=verified_at&limit=50" \
+            "$OCHAKAI_URL/api/v1/knowledge?type=Golden%20Query&status=verified&sort=verified_at&limit=50" \
           | jq -c '.hits[]' | while read -r hit; do
               id=$(jq -r .id <<<"$hit")
               sql=$(jq -r .attrs.sql <<<"$hit")
