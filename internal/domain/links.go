@@ -122,6 +122,14 @@ var schemeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 // proseLines returns the body's lines with fenced code blocks dropped and
 // inline code spans blanked, so links that appear only as documentation
 // examples are not read as edges (design doc 0024 §3.4).
+//
+// Fences and code spans only: an indented code block (four spaces) reads
+// as prose, and a link inside one becomes an edge. Detecting indentation
+// as code means deciding whether a four-space line is a code block or the
+// continuation of a list item, and getting that wrong in the other
+// direction drops an edge the author meant — a link that is missing is
+// worse than an example that is counted, because nothing in the entry
+// shows it is gone.
 func proseLines(body string) []string {
 	var out []string
 	var fence string

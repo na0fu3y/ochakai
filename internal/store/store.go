@@ -709,8 +709,9 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	return err
 }
 
-// maxQueryFragments bounds how many pieces a query is split into, so a
-// pasted paragraph cannot turn one search into a hundred index probes.
+// maxQueryFragments bounds how many pieces a query is split into: every
+// fragment is another ILIKE term on the same scan, and a pasted paragraph
+// would otherwise put a hundred of them there.
 const maxQueryFragments = 24
 
 // queryFragments splits a search query into the pieces a document might
@@ -870,9 +871,11 @@ func contentChar(r rune) bool {
 // the verified boost. An entry containing none of the fragments is not a
 // result — the floor is "matched something", not a magic number.
 //
-// Every term of that is a substring test against one column, which is
-// what the GIN trigram index serves, so the candidate predicate and the
-// score read the same expressions (migration 0016). Fragment matching
+// Every term of that is a substring test against one column, so the
+// candidate predicate and the score read the same expressions, and the
+// GIN trigram index serves the ones it can — patterns of three characters
+// or more (migration 0016; two-character Japanese windows are answered by
+// a scan, see queryFragments). Fragment matching
 // replaced a similarity()/`%` pair that could not work: `%` is true only
 // above pg_trgm.similarity_threshold (0.3) and a real query never scores
 // that against a real document, so the candidate set was whatever the

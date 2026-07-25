@@ -91,6 +91,16 @@ func TestLinksFromBodySkipsCode(t *testing.T) {
 
 // A "# Links" section is ordinary prose now: its links are read like any
 // other, and its non-entry links are ignored like any other.
+// Fenced and inline code are skipped; indented code is not. Pinned so the
+// gap is a decision rather than a surprise (see proseLines).
+func TestLinksFromBodyIndentedCodeIsRead(t *testing.T) {
+	body := "Example:\n\n    [r](/metrics/revenue.md)\n"
+	links := LinksFromBody("insights/a", body)
+	if len(links) != 1 || links[0].Target != "metrics/revenue" {
+		t.Errorf("links = %+v, want the indented link read as prose", links)
+	}
+}
+
 func TestLinksFromBodyReadsLegacyLinksSection(t *testing.T) {
 	body := "Intro.\n\n# Links\n\n- [about](/metrics/revenue.md)\n- [the dashboard](https://example.com)\n"
 	want := []Link{{Target: "metrics/revenue", Text: "about"}}

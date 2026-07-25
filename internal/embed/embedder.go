@@ -1,5 +1,5 @@
 // Package embed provides text embeddings for hybrid search. Embeddings are
-// opt-in: without a configured provider, ochakai serves trigram-only search
+// opt-in: without a configured provider, ochakai serves lexical-only search
 // and never calls out of the network. Encoders are deterministic and do no
 // interpretation, so this does not conflict with the no-LLM principle.
 package embed

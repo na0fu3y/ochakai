@@ -416,7 +416,7 @@ type searchOut struct {
 
 // contextIn deliberately omits min_score, which the REST surface still
 // carries. A score floor is only usable once calibrated against a corpus
-// in a known search mode (trigram vs hybrid RRF), and an agent cannot
+// in a known search mode (lexical vs hybrid RRF), and an agent cannot
 // calibrate anything — offering it here spends tool-schema context on a
 // parameter whose own documentation says to leave it alone. What an agent
 // actually needs to bound a response is budget.

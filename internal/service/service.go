@@ -377,8 +377,8 @@ func validateModel(k *domain.Knowledge) error {
 
 // --- search ---
 
-// Search runs trigram search, and when an embedder is configured, fuses it
-// with vector search via reciprocal rank fusion.
+// Search runs lexical search, and when an embedder is configured, fuses
+// it with vector search via reciprocal rank fusion.
 func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	// Stored text is NFC (design doc 0022); an NFD query (pasted from a
 	// macOS path) must still match it byte-wise.
@@ -413,7 +413,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	vecs, err := s.Embedder.Embed(ctx, embed.TaskQuery, []string{query})
 	if err != nil {
 		// Degrade to lexical-only rather than failing the search.
-		s.Log.Warn("query embedding failed; falling back to trigram-only", "error", err)
+		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
 		if len(lexical) > limit {
 			lexical = lexical[:limit]
 		}
@@ -467,7 +467,7 @@ type ContextRequest struct {
 // req.MinScore drops hits scoring below it before expansion, for callers
 // that inject the pack automatically (hooks) and prefer nothing over
 // junk. It defaults to 0 (off) because scores are search-mode dependent
-// and uncalibrated: trigram similarity plus boosts in lexical mode, RRF
+// and uncalibrated: matched-fragment weight plus boosts in lexical mode, RRF
 // rank fusion (~0.02 scale) in hybrid mode — a floor meaningful in one
 // mode is nonsense in the other.
 //
@@ -831,7 +831,7 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	}
 	vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
 	if err != nil {
-		s.Log.Warn("document embedding failed; entry remains searchable via trigram", "type", k.Type, "id", k.ID, "error", err)
+		s.Log.Warn("document embedding failed; entry remains findable by the lexical half of search", "type", k.Type, "id", k.ID, "error", err)
 		return
 	}
 	if err := s.Store.UpsertEmbedding(ctx, k.ID, s.Embedder.Model(), vecs[0]); err != nil {
