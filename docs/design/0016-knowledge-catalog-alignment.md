@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0016: knowledge-catalog リファレンスバンドルへの準拠
 
-Status: Accepted(2026-07-19 の議論で決定)
+Status: Accepted(2026-07-19 の議論で決定)。推奨タイプの複数形スラグは [0023](0023-okf-type-vocabulary.md) が OKF 表示名そのものに置き換え(カタログ準拠の残り — `resource` の封筒フィールド化など — は有効)
 Date: 2026-07-19
 
 ## 1. 目的

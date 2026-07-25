@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0008: 画像添付
 
-Status: Accepted(2026-07-17 の議論で決定)
+Status: Superseded in part by [0011](0011-gcs-attachment-storage.md) / [0013](0013-attachment-files-gcs-only.md)(バイト列の bytea 保存は GCS のみに、対象は画像限定から任意ファイル形式に。「原本ではなく根拠」の位置づけとエクスポート正準レイアウトは有効)
 Date: 2026-07-17
 
 ## 1. 目的
