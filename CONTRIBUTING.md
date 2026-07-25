@@ -44,10 +44,28 @@ OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go 
 ## Design docs
 
 Architecture decisions live in [docs/design](docs/design) as numbered
-documents (mostly Japanese). A change that alters an accepted decision —
-new interface, new dependency on a Google Cloud service, a change to the
-auth model — should update the relevant doc or add a new one in the same
+documents (mostly Japanese). Start from the
+[index](docs/design/README.md), which groups them by area and marks
+which ones describe the current state. A change that alters an accepted
+decision — new interface, new dependency on a Google Cloud service, a
+change to the auth model — should add a new numbered doc in the same
 PR. Small fixes and additions within existing decisions don't need one.
+
+Docs are immutable decision records; the incremental history lives in
+them and in PRs. What the repo must keep readable is the *current*
+state per area, so when a design doc lands:
+
+- Take the next free number. Gaps are fine — proposals that never land
+  stay in their PRs.
+- Update the `Status:` header of every older doc the new one supersedes
+  or amends, linking to the new number (see 0011 or 0018 for the style).
+- Update [docs/design/README.md](docs/design/README.md): add the new
+  doc to its area with a one-line summary, and adjust the status notes
+  of the docs it amends.
+- Avoid amendment chains. If the new decision would be the second
+  partial amendment stacked on the same doc, don't add another diff:
+  write it as a full replacement that states the area's whole current
+  picture and mark the older docs Superseded.
 
 Two decisions worth knowing before proposing features:
 
