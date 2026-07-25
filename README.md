@@ -308,7 +308,9 @@ matched-fragment weight plus boosts in the lexical-only mode, RRF rank
 fusion (~0.02 scale) in the hybrid one. Treat them as an ordering, not a
 measure — `min_score` is for callers who have calibrated against their own
 corpus, which is why the MCP surface does not offer it. To bound a
-response, use `budget` instead.
+response, use `budget` instead: it caps the whole payload — the entries
+delivered in full and the `outline` rows naming the rest — so what comes
+back fits what you asked for.
 
 ## Configuration
 
