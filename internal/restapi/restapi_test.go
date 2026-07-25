@@ -42,14 +42,18 @@ func TestWriteErrorStatuses(t *testing.T) {
 }
 
 // TestBadRequestValidation exercises the parameter checks that fail before
-// any service call: malformed numbers are rejected instead of silently
-// treated as unset, and q cannot be combined with sort (matching the CLI).
+// any store access: malformed numbers are rejected instead of silently
+// treated as unset, q cannot be combined with sort (matching the CLI), and
+// a search without a query is a 400, not zero-fragment SQL handed to
+// Postgres.
 func TestBadRequestValidation(t *testing.T) {
 	h := Handler(&service.Service{})
 	cases := []struct {
 		name, url, wantSubstr string
 	}{
 		{"invalid sort", "/api/v1/knowledge?sort=created_at", "invalid sort"},
+		{"neither q nor sort", "/api/v1/knowledge", "needs a query"},
+		{"whitespace query", "/api/v1/knowledge?q=%20%09", "needs a query"},
 		{"sort with query", "/api/v1/knowledge?sort=verified_at&q=revenue", "cannot be combined"},
 		{"usage sort with query", "/api/v1/knowledge?sort=usage&q=revenue", "cannot be combined"},
 		{"failed sort with query", "/api/v1/knowledge?sort=failed&q=revenue", "cannot be combined"},

@@ -15,6 +15,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
+	"github.com/na0fu3y/ochakai/internal/store"
 )
 
 func hit(id string, status domain.Status) domain.SearchHit {
@@ -92,6 +93,22 @@ func TestRRFFuseLimit(t *testing.T) {
 	}
 	if got := len(rrfFuse(2, list)); got != 2 {
 		t.Errorf("want limit 2, got %d", got)
+	}
+}
+
+// TestSearchRejectsEmptyQuery pins the guard that fires before any store
+// access: an empty or whitespace-only query is a client error
+// (InvalidInputError → 400). SearchLexical splits the query into
+// fragments and an empty query yields none, so without the guard it
+// builds zero-fragment SQL and every surface got a Postgres 500.
+func TestSearchRejectsEmptyQuery(t *testing.T) {
+	s := &Service{}
+	var inputErr *InvalidInputError
+	for _, q := range []string{"", "   ", " \t\n", "　"} {
+		_, err := s.Search(context.Background(), q, store.Filter{}, 10)
+		if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "needs a query") {
+			t.Errorf("query %q: got %v, want a needs-a-query InvalidInputError", q, err)
+		}
 	}
 }
 

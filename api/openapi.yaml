@@ -39,10 +39,12 @@ paths:
         drops out once it is verified after its last failure report
         (POST /api/v1/verify/{id}), so a base that is kept up shows an
         empty feed.
-        q and sort are mutually exclusive; combining them is a 400.
+        Exactly one of q and sort is required: combining them is a 400,
+        and so is omitting both (searching needs a query to rank by).
       parameters:
         - name: q
           in: query
+          description: Search text. Required unless sort is set.
           schema: { type: string }
         - name: sort
           in: query

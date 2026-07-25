@@ -763,7 +763,11 @@ async function runSearch() {
   const isFeed = explore.staleFeed || explore.failedFeed;
   if (explore.staleFeed) p.set('sort', 'verified_at');
   else if (explore.failedFeed) p.set('sort', 'failed');
-  else if (explore.q) p.set('q', explore.q);
+  else if (explore.q.trim()) p.set('q', explore.q);
+  // No query typed yet (or only whitespace): the landing view lists by
+  // demand instead of searching — an empty q is a 400 (searching needs
+  // a query to rank by).
+  else p.set('sort', 'usage');
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
   if (explore.tag) p.append('tag', explore.tag);

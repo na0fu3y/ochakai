@@ -359,6 +359,12 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	// Stored text is NFC (design doc 0022); an NFD query (pasted from a
 	// macOS path) must still match it byte-wise.
 	query = domain.Normalize(query)
+	// An empty query has nothing to rank by: SearchLexical splits the
+	// query into fragments and gets none, so guard here — once, for
+	// every surface — and point the caller at the listing modes.
+	if strings.TrimSpace(query) == "" {
+		return nil, Invalidf("search needs a query; use sort=verified_at, usage, or failed to list entries without one")
+	}
 	hits, err := s.search(ctx, query, f, limit)
 	if err != nil {
 		return nil, err
