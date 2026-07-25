@@ -9,6 +9,7 @@
 package restapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -450,9 +451,21 @@ func Handler(svc *service.Service) http.Handler {
 	// so a backup can copy them from there far more cheaply than through
 	// this endpoint.
 	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
+		// Every read below comes from one snapshot. Streaming means the id
+		// list, the attachment metadata and the entries are read at
+		// different moments, and a write landing between them produces an
+		// archive that disagrees with its own index — an index.md naming a
+		// file that is not there, an entry that moved appearing twice or
+		// not at all. The archive would look fine.
+		snap, err := svc.Store.BeginExport(r.Context())
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		defer snap.Close(context.WithoutCancel(r.Context()))
 		// index.md files need every id, but only the id, title and
 		// description — never a body.
-		rows, err := svc.Store.ListAllIndexRows(r.Context())
+		rows, err := snap.IndexRows(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return
@@ -461,7 +474,7 @@ func Handler(svc *service.Service) http.Handler {
 		var atts []store.ExportAttachment
 		if withAttachments {
 			// Metadata only; bytes are pulled one attachment at a time below.
-			if atts, err = svc.Store.ListAllAttachmentMeta(r.Context()); err != nil {
+			if atts, err = snap.AttachmentMeta(r.Context()); err != nil {
 				writeError(w, err)
 				return
 			}
@@ -492,8 +505,10 @@ func Handler(svc *service.Service) http.Handler {
 			written[p] = true
 			return nil
 		}
-		// Sorted so a backup taken twice from the same content produces the
-		// same archive: map iteration order is not an ordering.
+		// Sorted so the archive's file order is stable across runs: map
+		// iteration order is not an ordering. The bytes still differ run to
+		// run — every tar header carries the export's timestamp — so this
+		// buys a diffable listing, not a checksum.
 		indexPaths := make([]string, 0, len(indexes))
 		for path := range indexes {
 			indexPaths = append(indexPaths, path)
@@ -509,7 +524,7 @@ func Handler(svc *service.Service) http.Handler {
 		// connection held for the length of the download.
 		for start := 0; start < len(ids); start += exportBatch {
 			end := min(start+exportBatch, len(ids))
-			batch, err := svc.Store.ListByIDs(r.Context(), ids[start:end])
+			batch, err := snap.ListByIDs(r.Context(), ids[start:end])
 			if err != nil {
 				fail(fmt.Sprintf("entries %d-%d", start, end), err)
 				return

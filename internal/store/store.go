@@ -1134,37 +1134,6 @@ func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
-// ListAllIndexRows returns every live entry with only the fields the
-// bundle's index.md files are rendered from — id, type, title,
-// description. The bodies are the bulk of a knowledge base, and the
-// indexes need none of them, so the exporter reads this first and pulls
-// the documents themselves in batches (ListByIDs).
-func (s *Store) ListAllIndexRows(ctx context.Context) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT type, id, title, description FROM knowledge WHERE deleted_at IS NULL ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Knowledge, error) {
-		var k domain.Knowledge
-		err := row.Scan(&k.Type, &k.ID, &k.Title, &k.Description)
-		return k, err
-	})
-}
-
-// ListByIDs returns the named live entries in id order. The exporter walks
-// the id list in batches so that neither the whole knowledge base nor a
-// pool connection is held for the length of a download.
-func (s *Store) ListByIDs(ctx context.Context, ids []string) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge
-		 WHERE deleted_at IS NULL AND id = ANY($1) ORDER BY id`, ids)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
-}
-
 // ListUnembedded returns the ids of live entries with no vector for the
 // named model, oldest first, up to limit. That covers both halves of the
 // same gap: entries written before semantic search was configured (there
