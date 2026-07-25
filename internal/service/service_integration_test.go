@@ -274,6 +274,86 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Errorf("the rejection and its reason must survive: %+v", stored)
 		}
 	})
+
+	// Closing the delete step is not enough: a tombstone that already
+	// exists — deleted before the rule, or deleted from a human surface as
+	// housekeeping — is revived in place by Create, status_note included.
+	t.Run("a curated tombstone cannot be revived", func(t *testing.T) {
+		for status, wantAdvice := range map[domain.Status]string{
+			domain.StatusRejected:   "status_note",
+			domain.StatusVerified:   "different id",
+			domain.StatusDeprecated: "no longer recommended",
+		} {
+			id := "queries/" + uid("guard-tomb-"+string(status))
+			k, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: "ruled on then deleted",
+				StatusNote: "duplicate of an existing golden query",
+			}, actor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			setStatus(t, k, status, human)
+			// A human deletes it: legitimate on the REST/CLI surfaces.
+			if err := svc.Delete(ctx, id, human); err != nil {
+				t.Fatal(err)
+			}
+			err = svc.RefuseIfRevivingCurated(ctx, id)
+			var invalid *InvalidInputError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("reviving a deleted %s entry: got %v, want a refusal", status, err)
+			}
+			if !strings.Contains(err.Error(), wantAdvice) {
+				t.Errorf("%s refusal does not offer %q: %v", status, wantAdvice, err)
+			}
+			// The human surfaces still revive it, ruling and all.
+			revived, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: "revived by a human"}, human)
+			if err != nil {
+				t.Fatalf("a human surface must still be able to reuse the id: %v", err)
+			}
+			t.Cleanup(func() { _ = svc.Delete(ctx, revived.ID, human) })
+		}
+	})
+
+	// A draft tombstone is not a ruling: reviving an abandoned draft is
+	// what create-on-a-deleted-id is for.
+	t.Run("a draft tombstone stays revivable", func(t *testing.T) {
+		id := "queries/" + uid("guard-tomb-draft")
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "abandoned draft"}, actor); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Delete(ctx, id, actor); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
+			t.Fatalf("a deleted draft must stay revivable: %v", err)
+		}
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "second attempt"}, actor); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+	})
+
+	// A free id is not a refusal, and neither is a live one: Create's own
+	// ErrAlreadyExists covers that case.
+	t.Run("free and live ids are untouched", func(t *testing.T) {
+		if err := svc.RefuseIfRevivingCurated(ctx, "queries/"+uid("guard-tomb-free")); err != nil {
+			t.Errorf("free id: %v", err)
+		}
+		id := "queries/" + uid("guard-tomb-live")
+		k, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "live"}, actor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		setStatus(t, k, domain.StatusRejected, human)
+		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
+			t.Errorf("live entry: %v", err)
+		}
+	})
 }
 
 // Reembed closes the gap between "semantic search is configured" and

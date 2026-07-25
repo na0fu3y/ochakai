@@ -181,6 +181,52 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Tim
 		"entries from the web UI or CLI.", op, id, k.Status, instead)
 }
 
+// RefuseIfRevivingCurated reports an error when id names a soft-deleted
+// entry that was ruled on — verified, rejected or deprecated — before it
+// was deleted. For surfaces that must not overwrite a ruling in place,
+// create is the second way to do it: Create revives a tombstone (ON
+// CONFLICT ... WHERE deleted_at IS NOT NULL) with the incoming status and
+// status_note, so the reason an entry was turned down is replaced by a
+// fresh draft, and the entry that comes back looks like it was never
+// judged.
+//
+// RefuseIfCurated cannot see this: the row it reads is not live. Closing
+// the delete step alone (design doc 0015 §3.1) leaves every tombstone that
+// already exists — deleted before that rule, deleted from the REST/CLI
+// surfaces where deleting a rejection is legitimate housekeeping — still
+// revivable in one call. A draft tombstone stays revivable: nobody ruled
+// on it, and reviving an abandoned draft is how a create on a deleted id
+// is supposed to work.
+func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error {
+	k, err := s.Store.GetTombstone(ctx, domain.Normalize(id))
+	if errors.Is(err, store.ErrNotFound) {
+		// A free id, or a live entry — Create's own ErrAlreadyExists
+		// covers the second case.
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var instead string
+	switch k.Status {
+	case domain.StatusRejected:
+		instead = "The rejection is the record of a decision and status_note says why; read it " +
+			"(search_knowledge with status=rejected) before proposing this again. If you disagree, " +
+			"create_knowledge a new entry at a different id and let a human judge it."
+	case domain.StatusVerified:
+		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
+			"different id and let a human judge it against the history this id still holds."
+	case domain.StatusDeprecated:
+		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
+			"reviving, create_knowledge a draft at a different id that says why."
+	default:
+		return nil
+	}
+	return Invalidf("cannot create %s from this surface: the id holds a deleted %s entry, and "+
+		"creating here would revive it as a fresh draft, replacing that ruling. %s A human reuses "+
+		"the id from the web UI or CLI.", id, k.Status, instead)
+}
+
 func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }

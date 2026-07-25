@@ -387,6 +387,10 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 	want := map[string][]string{
 		"update_knowledge": {"verified, rejected, or deprecated", "report_outcome failed", "create_knowledge"},
 		"delete_knowledge": {"verified, rejected, or deprecated", "erase the record of why"},
+		// Reviving a curated tombstone is the third way to overwrite a
+		// ruling, and an agent that only learns of it from an error has
+		// already written the draft (design doc 0015 §3.1).
+		"create_knowledge": {"deleted can be reused", "verified, rejected, deprecated", "different id"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]
