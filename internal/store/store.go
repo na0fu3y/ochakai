@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -621,15 +622,25 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 		return err
 	}
 	now := nowStored()
+	movedDirs := path.Dir(oldID) != path.Dir(newID)
 	for i := range referrers {
 		r := &referrers[i]
 		// The moved entry resolves its own relative links against its old
 		// directory, so it is rewritten as if it still lived at oldID.
 		from := r.ID
+		body := r.Body
 		if r.ID == newID {
 			from = oldID
+			// Its own outbound relative links point at the old directory,
+			// and links are derived from the body against the entry's
+			// current id: left alone, "./gross.md" silently starts meaning
+			// a different entry (or none) the next time this row is
+			// written. Absolute is the form a move cannot reinterpret.
+			if movedDirs {
+				body = domain.AbsolutizeBodyLinks(oldID, body)
+			}
 		}
-		body := domain.RewriteBodyLinks(from, r.Body, oldID, newID)
+		body = domain.RewriteBodyLinks(from, body, oldID, newID)
 		modelMoved := false
 		if m, ok := r.Attrs["model"].(string); ok && m == oldID {
 			r.Attrs["model"] = newID

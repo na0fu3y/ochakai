@@ -1579,3 +1579,73 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Errorf("verification must be recorded as a revision, got %+v", revs)
 	}
 }
+
+// A move rewrites the links that point at the moved entry — and must also
+// keep the moved entry's own outbound links pointing where they pointed.
+// Relative targets are resolved against the entry's id, so changing the
+// directory silently re-aims them (design doc 0024 §3.5).
+func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-relmove%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	const neighbour = "it-relmove-src/gross"
+	const mover = "it-relmove-src/revenue"
+	const dest = "it-relmove-dst/revenue"
+	for _, k := range []*domain.Knowledge{
+		{Type: domain.TypeMetrics, ID: neighbour, Title: "gross", Status: domain.StatusDraft, CreatedBy: actor},
+		{Type: domain.TypeMetrics, ID: mover, Title: "revenue", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "Net of [gross](./gross.md).",
+			Links: []domain.Link{{Target: neighbour, Text: "gross"}}},
+	} {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"knowledge", "knowledge_revision"} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-relmove%'`)
+		}
+	})
+
+	if _, err := s.Move(ctx, mover, dest, actor); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.Get(ctx, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moved.Links) != 1 || moved.Links[0].Target != neighbour {
+		t.Errorf("the moved entry's edge moved with it: %+v", moved.Links)
+	}
+	// The stored links column and what the body says must agree: the
+	// column is a derivation, and the next write re-derives it.
+	derived := domain.LinksFromBody(moved.ID, moved.Body)
+	if len(derived) != 1 || derived[0].Target != neighbour {
+		t.Errorf("body re-derives to %+v, want a link to %s (body: %q)", derived, neighbour, moved.Body)
+	}
+	// Backlinks are the same edge read the other way round.
+	back, err := s.ListLinkingTo(ctx, neighbour, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(back) != 1 || back[0].ID != dest {
+		t.Errorf("backlinks from %s = %+v, want the moved entry", neighbour, back)
+	}
+}
