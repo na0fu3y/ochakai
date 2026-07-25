@@ -122,7 +122,7 @@ func TestEmbeddingText(t *testing.T) {
 		Attrs:       map[string]any{"question": "monthly revenue?"},
 		Body:        "body text",
 	}
-	got := embeddingText(k)
+	got := embeddingText(k, embed.ConservativeInputBytes)
 	for _, want := range []string{"Revenue", "total sales", "finance kpi", "monthly revenue?", "body text"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("embeddingText misses %q:\n%s", want, got)
@@ -133,10 +133,10 @@ func TestEmbeddingText(t *testing.T) {
 // The body is truncated to stay within embedding-model input limits;
 // the envelope fields must survive untouched.
 func TestEmbeddingTextTruncatesBody(t *testing.T) {
-	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", maxEmbedBytes+1000)}
-	got := embeddingText(k)
-	if len(got) > maxEmbedBytes {
-		t.Errorf("embeddingText length = %d, want capped at %d", len(got), maxEmbedBytes)
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", embed.ConservativeInputBytes+1000)}
+	got := embeddingText(k, embed.ConservativeInputBytes)
+	if len(got) > embed.ConservativeInputBytes {
+		t.Errorf("embeddingText length = %d, want capped at %d", len(got), embed.ConservativeInputBytes)
 	}
 	if !strings.HasPrefix(got, "T") {
 		t.Errorf("title must lead the text: %q", got[:20])
@@ -149,14 +149,14 @@ func TestEmbeddingTextTruncatesBody(t *testing.T) {
 func TestEmbeddingTextTruncatesOnRuneBoundary(t *testing.T) {
 	// 2001 characters * 3 bytes = 6003 bytes: the cap falls mid-character.
 	k := &domain.Knowledge{Body: strings.Repeat("売", 2001)}
-	got := embeddingText(k)
+	got := embeddingText(k, embed.ConservativeInputBytes)
 	if !utf8.ValidString(got) {
 		t.Errorf("embeddingText produced invalid UTF-8 (length %d)", len(got))
 	}
-	if len(got) > maxEmbedBytes {
-		t.Errorf("embeddingText length = %d, want <= %d", len(got), maxEmbedBytes)
+	if len(got) > embed.ConservativeInputBytes {
+		t.Errorf("embeddingText length = %d, want <= %d", len(got), embed.ConservativeInputBytes)
 	}
-	if want := maxEmbedBytes / 3 * 3; len(got) != want {
+	if want := embed.ConservativeInputBytes / 3 * 3; len(got) != want {
 		t.Errorf("embeddingText length = %d, want %d (whole characters only)", len(got), want)
 	}
 }
@@ -171,12 +171,40 @@ func TestEmbeddingTextCapsTheWholeText(t *testing.T) {
 		Description: strings.Repeat("d", 2000),
 		Tags:        []string{strings.Repeat("g", 500)},
 		Attrs:       map[string]any{"question": strings.Repeat("q", 2000)},
-		Body:        strings.Repeat("b", maxEmbedBytes),
+		Body:        strings.Repeat("b", embed.ConservativeInputBytes),
 	}
-	if got := len(embeddingText(k)); got > maxEmbedBytes {
-		t.Errorf("embeddingText length = %d, want the whole text capped at %d", got, maxEmbedBytes)
+	if got := len(embeddingText(k, embed.ConservativeInputBytes)); got > embed.ConservativeInputBytes {
+		t.Errorf("embeddingText length = %d, want the whole text capped at %d", got, embed.ConservativeInputBytes)
 	}
 }
+
+// The window is a property of the model. Handing gemini-embedding-2's
+// 8192-token input the budget sized for a 2048-token model throws away
+// three quarters of it, and the entry embeds fine while carrying less of
+// itself — a loss nothing reports.
+func TestEmbedBytesFollowsTheModel(t *testing.T) {
+	conservative := &Service{Embedder: &shrinkEmbedder{}}
+	if got := conservative.embedBytes(); got != embed.ConservativeInputBytes {
+		t.Errorf("an embedder that does not say = %d, want the floor %d", got, embed.ConservativeInputBytes)
+	}
+	roomy := &Service{Embedder: limitedEmbedder{bytes: 20000}}
+	if got := roomy.embedBytes(); got != 20000 {
+		t.Errorf("an embedder that says = %d, want 20000", got)
+	}
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", 30000)}
+	if got := len(embeddingText(k, roomy.embedBytes())); got != 20000 {
+		t.Errorf("text capped at %d, want the model's 20000", got)
+	}
+}
+
+// limitedEmbedder reports an input window, like Vertex does.
+type limitedEmbedder struct{ bytes int }
+
+func (limitedEmbedder) Model() string { return "fake-roomy" }
+func (limitedEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) ([][]float32, error) {
+	return make([][]float32, len(texts)), nil
+}
+func (e limitedEmbedder) MaxInputBytes() int { return e.bytes }
 
 func TestTruncateUTF8(t *testing.T) {
 	for _, tc := range []struct {
@@ -308,7 +336,11 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	}
 	small := entry("insights/small", 100)
 	big := entry("insights/big", 5000)
+	// Room for the small entry plus the row that names the big one: the
+	// outline is inside the budget, so "room for one entry" has to include
+	// what saying "and there was another" costs.
 	one := serializedSize(&small)
+	oneAndARow := one + jsonSize(outlineRow(&big, serializedSize(&big))) + 10
 
 	t.Run("no budget keeps everything", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 0)
@@ -318,7 +350,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	})
 
 	t.Run("overflow becomes an outline row", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, one+10)
+		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want only the small entry in full, got %d", len(kept))
 		}
@@ -337,7 +369,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// entire budget. A prefix cut would let it starve everything below it;
 	// greedy packing keeps the rest and names the giant.
 	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{big, small}, one+10)
+		kept, outline := packWithinBudget([]domain.Knowledge{big, small}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want the small entry delivered behind the giant, got %+v", kept)
 		}
@@ -348,11 +380,45 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 
 	// Budgets below one entry outline everything rather than shipping a
 	// fragment: an empty entries list with a populated outline is a usable
-	// answer, a half-entry is not.
+	// answer, a half-entry is not. Naming everything is also the floor —
+	// a caller cannot raise a budget for entries it never heard about.
 	t.Run("a budget below one entry outlines everything", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 1)
 		if len(kept) != 0 || len(outline) != 2 {
 			t.Errorf("want everything outlined, got %d kept / %d outlined", len(kept), len(outline))
+		}
+	})
+
+	// The budget governs the response, not half of it. An outline row
+	// carries a description — unbounded on the entry — so a budget that
+	// only counted delivered entries left the actual payload unbounded.
+	t.Run("the outline is inside the budget", func(t *testing.T) {
+		wordy := make([]domain.Knowledge, 6)
+		for i := range wordy {
+			wordy[i] = entry(fmt.Sprintf("insights/wordy-%d", i), 900)
+			wordy[i].Description = strings.Repeat("長い説明。", 400) // ~6 kB each
+		}
+		const budget = 4000
+		kept, outline := packWithinBudget(wordy, budget)
+		total := 0
+		for i := range kept {
+			total += serializedSize(&kept[i])
+		}
+		for _, row := range outline {
+			total += jsonSize(row)
+		}
+		if total > budget {
+			t.Errorf("response = %d bytes over a budget of %d (%d kept, %d outlined)",
+				total, budget, len(kept), len(outline))
+		}
+		if len(kept)+len(outline) != len(wordy) {
+			t.Errorf("every entry must be delivered or named: %d kept, %d outlined, want %d total",
+				len(kept), len(outline), len(wordy))
+		}
+		for _, row := range outline {
+			if len(row.Description) > outlineDescriptionBytes {
+				t.Errorf("outline description = %d bytes, want <= %d", len(row.Description), outlineDescriptionBytes)
+			}
 		}
 	})
 

@@ -122,6 +122,14 @@ var schemeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 // proseLines returns the body's lines with fenced code blocks dropped and
 // inline code spans blanked, so links that appear only as documentation
 // examples are not read as edges (design doc 0024 §3.4).
+//
+// Fences and code spans only: an indented code block (four spaces) reads
+// as prose, and a link inside one becomes an edge. Detecting indentation
+// as code means deciding whether a four-space line is a code block or the
+// continuation of a list item, and getting that wrong in the other
+// direction drops an edge the author meant — a link that is missing is
+// worse than an example that is counted, because nothing in the entry
+// shows it is gone.
 func proseLines(body string) []string {
 	var out []string
 	var fence string
@@ -152,17 +160,62 @@ func proseLines(body string) []string {
 // normalizing to absolute is the one predictable outcome (design doc
 // 0024 §3.5).
 func RewriteBodyLinks(id, body, oldID, newID string) string {
-	if body == "" {
-		return body
-	}
-	rewriteTarget := func(target string) string {
+	return rewriteBody(body, func(target string) string {
+		target, frag := splitFragment(target)
 		if resolveTarget(id, target) != oldID {
-			return target
+			return target + frag
 		}
 		if strings.HasPrefix(target, "ochakai://") {
-			return "ochakai://" + newID
+			return "ochakai://" + newID + frag
 		}
-		return "/" + newID + ".md"
+		return "/" + newID + ".md" + frag
+	})
+}
+
+// AbsolutizeBodyLinks rewrites the body's relative links into
+// bundle-absolute form, resolved as if the body still lived at id.
+//
+// This is what a move owes the entry that moved. Links are derived from
+// the body against the entry's own id (design doc 0024), so a relative
+// target reads differently the moment the entry changes directory:
+// "./gross.md" in metrics/revenue means metrics/gross, and the same three
+// words in insights/revenue mean insights/gross. Nothing in the body
+// changed, so nothing looks wrong — the edge just points somewhere else,
+// or nowhere, the next time the entry is written.
+//
+// Absolute is the one form a move cannot reinterpret, which is the same
+// reasoning 0024 §3.5 applies to the links that point at a moved entry.
+// Targets that already carry a fragment keep it.
+func AbsolutizeBodyLinks(id, body string) string {
+	return rewriteBody(body, func(target string) string {
+		path, frag := splitFragment(target)
+		if path == "" || strings.HasPrefix(path, "/") || schemeRe.MatchString(path) {
+			return target // already absolute, or not an entry link at all
+		}
+		resolved := resolveTarget(id, path)
+		if resolved == "" {
+			return target
+		}
+		return "/" + resolved + ".md" + frag
+	})
+}
+
+// splitFragment separates a link target from its "#anchor" or "?query"
+// tail, which a rewrite must carry over rather than drop.
+func splitFragment(target string) (path, frag string) {
+	if i := strings.IndexAny(target, "#?"); i >= 0 {
+		return target[:i], target[i:]
+	}
+	return target, ""
+}
+
+// rewriteBody applies rewriteTarget to every link target in the body's
+// prose, leaving fenced code blocks and inline code spans alone — the
+// same reading LinksFromBody gives them, so a rewrite never invents an
+// edge an example was not.
+func rewriteBody(body string, rewriteTarget func(string) string) string {
+	if body == "" {
+		return body
 	}
 	var b strings.Builder
 	var fence string

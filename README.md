@@ -51,6 +51,7 @@ ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type Metric --status verified
 ochakai get queries/monthly-revenue
+ochakai verify metrics/revenue      # promotes a draft — and re-affirms a verified entry, clearing the review feeds
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle (a client-side loop — see below)
@@ -94,7 +95,10 @@ verify / deprecate / reject (with the reason) in one click. Two feeds
 put the re-verification queue in front of that reviewer: a *verification
 age* feed (oldest `verified_at` first) so stale golden queries surface,
 and a *needs review* feed (`sort=failed`) that lists the entries agents
-reported wrong, worst first. One
+reported wrong, worst first. Both empty the same way: re-verifying an
+entry — "I checked it again and it is still right" — stamps a fresh
+`verified_at` and takes it out of either feed, so the queues are
+something a reviewer can finish rather than a ledger that only grows. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
 
@@ -128,7 +132,8 @@ for what they still don't do:
   agent that ran a golden query and got a wrong number says so, and the
   entry rises in a *re-verification* feed (`sort=failed`) for a human or
   agent to re-check, instead of the next agent trusting the same entry
-  blind (design doc 0025).
+  blind. Re-checking is itself recorded (`ochakai verify`, or the web
+  UI's Verify), which is what empties the feed (design doc 0025).
 - **No forward-deployed engineers, by design.** Encoding what your data
   means is labor, and it doesn't vanish — the only question is *who* does
   it. Palantir's answer is forward-deployed engineers who hand-build an
@@ -255,8 +260,10 @@ paths (`./gross.md`) and canonical URIs (`ochakai://metrics/revenue`, bare
 or in a link) work too. This is OKF SPEC §5 taken at its word: a link
 asserts a relationship, and what kind of relationship it is comes from the
 surrounding prose, so ochakai stores no relationship type of its own
-(design doc 0024). Links in code blocks are examples, not edges, and are
-skipped. Renaming an entry rewrites the links pointing at it, prose
+(design doc 0024). Links inside fenced code blocks (``` or ~~~) and
+inline `` `code spans` `` are examples, not edges, and are skipped —
+indented code is not detected, so a link four spaces deep is read as
+prose. Renaming an entry rewrites the links pointing at it, prose
 included.
 
 Entries can carry file attachments — the dashboard screenshot behind an
@@ -297,7 +304,9 @@ matched-fragment weight plus boosts in the lexical-only mode, RRF rank
 fusion (~0.02 scale) in the hybrid one. Treat them as an ordering, not a
 measure — `min_score` is for callers who have calibrated against their own
 corpus, which is why the MCP surface does not offer it. To bound a
-response, use `budget` instead.
+response, use `budget` instead: it caps the whole payload — the entries
+delivered in full and the `outline` rows naming the rest — so what comes
+back fits what you asked for.
 
 ## Configuration
 
@@ -306,8 +315,8 @@ response, use `budget` instead.
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
 | `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
-| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys. **Recommended for Japanese knowledge bases** (see below) |
-| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`). Vectors are written when an entry is written, so enabling this on an existing base — or changing the model — leaves entries unembedded until you run `ochakai reembed` (design doc 0020). Dimensions above 2000 exceed pgvector's indexing limit, so those deployments fall back to an exact scan |
+| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, lexical-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys. **Recommended for Japanese knowledge bases** (see below) |
+| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`). Vectors are written when an entry is written, so enabling this on an existing base — or changing the model — leaves entries unembedded until you run `ochakai reembed` (design doc 0020). Dimensions above 2000 exceed pgvector's indexing limit, so those deployments fall back to an exact scan. Changing `OCHAKAI_EMBEDDING_DIM` on a base that already holds vectors is refused at startup, with the two ways out: put it back, or drop the vector tables and re-embed |
 | `OCHAKAI_DELEGATING_CALLERS` | Comma-separated caller identities allowed to forward an end user's identity with `X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp` (`*` for any authenticated caller). For applications that embed ochakai and serve many people — without it, every one of their users collapses into the application's one service account. Both identities are recorded (`human:tanaka@… via agent:app-sa@…`), never just the forwarded one. Default: empty, delegation off; a header from an unlisted caller is a 403, not a silent downgrade (design doc 0027) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
 | `PORT` | Listen port (default `8080`) |

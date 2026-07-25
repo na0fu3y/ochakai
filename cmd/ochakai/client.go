@@ -32,6 +32,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"get":       cmdGet,
 	"create":    cmdCreate,
 	"update":    cmdUpdate,
+	"verify":    cmdVerify,
 	"delete":    cmdDelete,
 	"purge":     cmdPurge,
 	"reembed":   cmdReembed,
@@ -153,7 +154,7 @@ func parseRef(s string) (string, error) {
 
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries reported wrong (report_outcome\nfailed), worst first — the re-verification feed; output leads with the\nfailed count. Empty when nothing was reported wrong.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --status verified            # re-verification queue\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -720,6 +721,38 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	return nil
 }
 
+// cmdVerify records a verification. Re-verifying an entry that is already
+// verified is the point as much as promoting a draft: it is how a review
+// feed empties (design doc 0025 §6), and `update` cannot express it —
+// an unchanged payload writes nothing and verified_at is carried over.
+func cmdVerify(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai verify [flags] <id>\n\nRecord a verification against the entry as it stands: you become\nverified_by and verified_at is stamped now. Promotes a draft, and\nre-affirms an entry that is already verified — which is what takes it\nout of the verification-age and needs-review feeds.",
+		"  ochakai verify metrics/revenue\n")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	id, err := parseRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	k, err := c.Verify(ctx, id)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("verified ochakai://%s by %s\n", k.ID, k.VerifiedBy)
+	return nil
+}
+
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge entry (history is retained server-side).",
@@ -785,10 +818,11 @@ func cmdPurge(ctx context.Context, args []string) error {
 // be rewritten.
 func cmdReembed(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai reembed [flags]\n\nEmbed entries that have no vector for the configured model — entries\nwritten before semantic search was enabled, or before the model was\nchanged. Bounded per run; repeat until \"missing\" reaches 0.",
-		"  ochakai reembed\n  ochakai reembed --limit 2000\n")
-	limit := fs.Int("limit", 0, "max entries to embed in this pass (server default 500)")
-	asJSON := fs.Bool("json", false, "print the raw JSON response")
+		"Usage: ochakai reembed [flags]\n\nEmbed entries that have no vector for the configured model — entries\nwritten before semantic search was enabled, or before the model was\nchanged. Runs bounded passes until nothing is left, so it can be started\nonce and left alone.",
+		"  ochakai reembed\n  ochakai reembed --limit 50   # smaller passes, e.g. behind a short request timeout\n  ochakai reembed --once       # one pass, then report what is left\n")
+	limit := fs.Int("limit", 0, "max entries to embed per pass (server default 200)")
+	once := fs.Bool("once", false, "run a single pass instead of continuing until nothing is left")
+	asJSON := fs.Bool("json", false, "print the raw JSON response of each pass")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -801,16 +835,41 @@ func cmdReembed(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := c.Reembed(ctx, *limit)
-	if err != nil {
-		return err
+	// One pass is one HTTP request and one entry is one call to the
+	// embedding provider, so a pass has to stay well inside the server's
+	// request timeout — which makes "run it until it is done" the client's
+	// job. Looping here also means an operator types one command instead
+	// of watching a number and deciding when to stop.
+	var embedded, failed int
+	for pass := 1; ; pass++ {
+		res, err := c.Reembed(ctx, *limit)
+		if err != nil {
+			return err
+		}
+		embedded += res.Embedded
+		failed += res.Failed
+		if *asJSON {
+			if err := printJSON(res); err != nil {
+				return err
+			}
+		} else {
+			fmt.Printf("pass %d: embedded %d, failed %d, still missing %d\n",
+				pass, res.Embedded, res.Failed, res.Missing)
+		}
+		if *once || res.Missing == 0 {
+			break
+		}
+		if res.Embedded == 0 {
+			// Every entry left is one the provider refuses. Another pass
+			// would fetch the same ids and fail the same way.
+			fmt.Fprintf(os.Stderr,
+				"stopping: %d entries still missing and no progress this pass; see the server log for why\n",
+				res.Missing)
+			return errReported
+		}
 	}
-	if *asJSON {
-		return printJSON(res)
-	}
-	fmt.Printf("embedded %d, failed %d, still missing %d\n", res.Embedded, res.Failed, res.Missing)
-	if res.Missing > 0 {
-		fmt.Fprintln(os.Stderr, "run again to continue")
+	if !*asJSON {
+		fmt.Printf("done: embedded %d, failed %d\n", embedded, failed)
 	}
 	return nil
 }

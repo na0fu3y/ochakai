@@ -3,8 +3,11 @@ package store
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"sort"
+
+	"github.com/jackc/pgx/v5"
 )
 
 //go:embed migrations/*.sql
@@ -119,7 +122,47 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 		)`, dim)); err != nil {
 		return fmt.Errorf("create attachment_embedding: %w", err)
 	}
+	if err := s.checkEmbeddingDim(ctx, dim); err != nil {
+		return err
+	}
 	return s.migrateVectorIndexes(ctx, dim)
+}
+
+// checkEmbeddingDim refuses to serve when the configured dimension is not
+// the one the vector columns were created with.
+//
+// CREATE TABLE IF NOT EXISTS keeps the old column, so changing
+// OCHAKAI_EMBEDDING_DIM on a base that already has vectors used to start
+// cleanly and break everything downstream: every embedding write fails
+// with a warning nobody reads, and every search fails outright, because
+// the query vector cannot be compared against a column of another width.
+// `ochakai reembed`, which the deploy guide points at for a model change,
+// fails on every entry for the same reason. There is no recovery this can
+// perform on its own — the old vectors are in a space nothing queries any
+// more, and dropping them is the operator's call — so it says exactly
+// that and stops.
+func (s *Store) checkEmbeddingDim(ctx context.Context, dim int) error {
+	var stored int
+	// to_regclass rather than a cast: the cast raises when the table is
+	// absent, and "absent" is the one case with nothing to disagree about.
+	err := s.pool.QueryRow(ctx,
+		`SELECT atttypmod FROM pg_attribute
+		 WHERE attrelid = to_regclass('knowledge_embedding') AND attname = 'embedding'`).
+		Scan(&stored)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read the stored embedding dimension: %w", err)
+	}
+	if stored == dim {
+		return nil
+	}
+	return fmt.Errorf("knowledge_embedding.embedding is vector(%d) but OCHAKAI_EMBEDDING_DIM is %d: "+
+		"the stored vectors are in a space nothing would query, so writes and searches would both fail. "+
+		"Set OCHAKAI_EMBEDDING_DIM back to %d, or drop the old vectors and rebuild them "+
+		"(DROP TABLE knowledge_embedding, attachment_embedding; restart; ochakai reembed)",
+		stored, dim, stored)
 }
 
 // hnswMaxDim is pgvector's indexing limit for the vector type. Above it

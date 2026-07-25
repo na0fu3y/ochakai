@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -192,6 +193,27 @@ func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 	return &k, nil
 }
 
+// GetTombstone returns the soft-deleted entry holding id, or ErrNotFound
+// when the id is free or live. Create revives such a row in place
+// (ON CONFLICT ... WHERE deleted_at IS NOT NULL), overwriting its status
+// and status_note, so a surface that must not overwrite a ruling has to
+// be able to see the ruling a tombstone still carries.
+func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND deleted_at IS NOT NULL`, id)
+	if err != nil {
+		return nil, err
+	}
+	k, err := pgx.CollectExactlyOneRow(rows, scanKnowledge)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
 // ListLinkingTo returns live entries whose links point at id, most
 // recently updated first. This is the reverse edge Context needs: the
 // insight that explains a metric links to the metric, not the other way
@@ -308,6 +330,65 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		}
 		return s.addRevision(ctx, tx, k, "update", actor)
 	})
+}
+
+// Verify records that a reviewer vouched for the entry as it stands:
+// status becomes verified and verified_by/verified_at are stamped now,
+// even when the entry was already verified.
+//
+// Update cannot express this. It carries verified_at over from the stored
+// entry whenever the status was already verified, and writes nothing at
+// all when the content is unchanged (SameContent) — so "I looked at this
+// again and it is still right" had nowhere to land, and both review feeds
+// had no exit: the verification-age feed reads verified_at, and the
+// re-verification feed lists entries whose last failure report is newer
+// than it (design doc 0025 §6).
+//
+// A rejection is cleared, mirroring the status transitions Update makes:
+// an entry cannot be both vouched for and turned down.
+//
+// The timestamp comes from the database, not from nowStored: the feed
+// compares it against the last failure report, which RecordOutcome stamps
+// with the database's now(). Two clocks a millisecond apart are enough to
+// hide a report that arrived after the verification, or to keep one that
+// arrived before it — so both sides read the same clock, and RETURNING
+// hands back exactly what was stored (the ETag invariant nowStored exists
+// for).
+func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+	var k *domain.Knowledge
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if k, err = s.Get(ctx, id); err != nil {
+			return err
+		}
+		var verifiedAt, updatedAt time.Time
+		// deleted_at IS NULL guards the race with a concurrent delete, as
+		// in SoftDelete: the Get above ran outside this transaction.
+		err = tx.QueryRow(ctx, `UPDATE knowledge SET
+			status='verified',
+			verified_by_kind=$2, verified_by_name=$3, verified_by_via=$4, verified_at=now(),
+			rejected_by_kind=NULL, rejected_by_name=NULL, rejected_by_via='', rejected_at=NULL,
+			updated_at=now()
+			WHERE id=$1 AND deleted_at IS NULL
+			RETURNING verified_at, updated_at`,
+			id, actor.Kind, actor.Name, actor.Via).Scan(&verifiedAt, &updatedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		verifiedAt = verifiedAt.UTC()
+		k.Status = domain.StatusVerified
+		k.VerifiedBy, k.VerifiedAt = &actor, &verifiedAt
+		k.RejectedBy, k.RejectedAt = nil, nil
+		k.UpdatedAt = updatedAt.UTC()
+		return s.addRevision(ctx, tx, k, "verify", actor)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
 }
 
 // SoftDelete hides an entry from reads while keeping full history.
@@ -510,15 +591,25 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 		return err
 	}
 	now := nowStored()
+	movedDirs := path.Dir(oldID) != path.Dir(newID)
 	for i := range referrers {
 		r := &referrers[i]
 		// The moved entry resolves its own relative links against its old
 		// directory, so it is rewritten as if it still lived at oldID.
 		from := r.ID
+		body := r.Body
 		if r.ID == newID {
 			from = oldID
+			// Its own outbound relative links point at the old directory,
+			// and links are derived from the body against the entry's
+			// current id: left alone, "./gross.md" silently starts meaning
+			// a different entry (or none) the next time this row is
+			// written. Absolute is the form a move cannot reinterpret.
+			if movedDirs {
+				body = domain.AbsolutizeBodyLinks(oldID, body)
+			}
 		}
-		body := domain.RewriteBodyLinks(from, r.Body, oldID, newID)
+		body = domain.RewriteBodyLinks(from, body, oldID, newID)
 		modelMoved := false
 		if m, ok := r.Attrs["model"].(string); ok && m == oldID {
 			r.Attrs["model"] = newID
@@ -587,8 +678,9 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	return err
 }
 
-// maxQueryFragments bounds how many pieces a query is split into, so a
-// pasted paragraph cannot turn one search into a hundred index probes.
+// maxQueryFragments bounds how many pieces a query is split into: every
+// fragment is another ILIKE term on the same scan, and a pasted paragraph
+// would otherwise put a hundred of them there.
 const maxQueryFragments = 24
 
 // queryFragments splits a search query into the pieces a document might
@@ -748,9 +840,11 @@ func contentChar(r rune) bool {
 // the verified boost. An entry containing none of the fragments is not a
 // result — the floor is "matched something", not a magic number.
 //
-// Every term of that is a substring test against one column, which is
-// what the GIN trigram index serves, so the candidate predicate and the
-// score read the same expressions (migration 0016). Fragment matching
+// Every term of that is a substring test against one column, so the
+// candidate predicate and the score read the same expressions, and the
+// GIN trigram index serves the ones it can — patterns of three characters
+// or more (migration 0016; two-character Japanese windows are answered by
+// a scan, see queryFragments). Fragment matching
 // replaced a similarity()/`%` pair that could not work: `%` is true only
 // above pg_trgm.similarity_threshold (0.3) and a real query never scores
 // that against a real document, so the candidate set was whatever the
@@ -921,6 +1015,7 @@ const usageLateral = `
 			COALESCE(sum(count) FILTER (WHERE event = 'fetched'), 0)   AS fetches,
 			COALESCE(sum(count) FILTER (WHERE event = 'worked'), 0)    AS worked,
 			COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
+			max(last_at) FILTER (WHERE event = 'failed')                AS last_failed_at,
 			max(last_at) AS last_used_at
 		FROM knowledge_usage
 		WHERE knowledge_id = k.id
@@ -947,16 +1042,25 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 	return pgx.CollectRows(rows, scanUsageHit)
 }
 
-// ListByFailed returns filtered entries that callers have reported wrong,
-// worst first — the re-verification feed (design doc 0025). It is the
-// evidence-based counterpart to the verified_at feed's time-based
-// staleness: only entries with a failed outcome report appear (u.failed > 0),
-// so a healthy base yields an empty feed. Ordering: most failures first,
-// ties broken by fewest corroborating "worked" reports, then verification
-// age (oldest first, never-verified drafts last), then id — verified
-// knowledge being reported wrong outranks a failing draft. Each hit carries
-// its usage totals so the reviewer sees the worked/failed evidence inline;
-// score is 0.
+// ListByFailed returns filtered entries whose failure reports are still
+// unanswered, worst first — the re-verification feed (design doc 0025).
+// It is the evidence-based counterpart to the verified_at feed's
+// time-based staleness, so a healthy base yields an empty feed.
+//
+// "Still unanswered" is the difference between a queue and a ledger. The
+// totals in knowledge_usage only ever grow, so ranking by them alone left
+// an entry in the feed forever: a reviewer who checked it, found it right
+// and re-verified it saw it sitting at the top the next morning, and the
+// queue could only lengthen. An entry drops out once it is verified after
+// its last failure report (Verify, or a promotion from draft) — or once
+// it is rejected, which the default status filter already hides.
+// Never-verified entries stay: a failing draft has had no ruling at all.
+//
+// Ordering stays on the lifetime failure count: presence answers "is this
+// unresolved", ranking answers "how bad has this been". Ties break on
+// fewest corroborating "worked" reports, then verification age (oldest
+// first, never-verified last), then id. Each hit carries its usage totals
+// so the reviewer sees the worked/failed evidence inline; score is 0.
 func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
@@ -964,6 +1068,7 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s AND u.failed > 0
+			AND (k.verified_at IS NULL OR u.last_failed_at > k.verified_at)
 		ORDER BY u.failed DESC, u.worked ASC, k.verified_at ASC NULLS LAST, k.id LIMIT %d`, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -994,37 +1099,6 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+knowledgeCols+` FROM knowledge WHERE deleted_at IS NULL ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
-}
-
-// ListAllIndexRows returns every live entry with only the fields the
-// bundle's index.md files are rendered from — id, type, title,
-// description. The bodies are the bulk of a knowledge base, and the
-// indexes need none of them, so the exporter reads this first and pulls
-// the documents themselves in batches (ListByIDs).
-func (s *Store) ListAllIndexRows(ctx context.Context) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT type, id, title, description FROM knowledge WHERE deleted_at IS NULL ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Knowledge, error) {
-		var k domain.Knowledge
-		err := row.Scan(&k.Type, &k.ID, &k.Title, &k.Description)
-		return k, err
-	})
-}
-
-// ListByIDs returns the named live entries in id order. The exporter walks
-// the id list in batches so that neither the whole knowledge base nor a
-// pool connection is held for the length of a download.
-func (s *Store) ListByIDs(ctx context.Context, ids []string) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge
-		 WHERE deleted_at IS NULL AND id = ANY($1) ORDER BY id`, ids)
 	if err != nil {
 		return nil, err
 	}

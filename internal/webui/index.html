@@ -699,8 +699,8 @@ function viewExplore() {
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Verification-age feed — oldest verified first,
            the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
         : explore.failedFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — entries reported wrong
-           (report_outcome failed), worst first; empty when nothing was reported wrong.
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — entries whose failure reports
+           (report_outcome failed) are still unanswered, worst first. Verifying one takes it out of the feed.
            Uncheck <strong>needs review</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
@@ -718,7 +718,7 @@ function viewExplore() {
         <span class="fb-sep"></span>
         <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
           type="checkbox" id="f-stale" aria-label="verification age feed" ${explore.staleFeed ? 'checked' : ''}>verification age</label>
-        <label class="chip" title="Entries reported wrong (report_outcome failed), worst first — the re-verification feed"><input
+        <label class="chip" title="Entries reported wrong (report_outcome failed) and not verified since — the re-verification feed"><input
           type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>needs review</label>
       </div>
     </details>
@@ -1200,6 +1200,9 @@ async function viewDetail(id) {
         <details class="menu" id="more-menu">
           <summary class="btn small" title="More actions" aria-label="More actions">⋯</summary>
           <div class="menu-body">
+            ${entry.status === 'verified'
+              ? `<button id="act-reverify" title="Checked again and still right — stamps verified_at now, which is what clears the review feeds">Re-verify</button>`
+              : ''}
             <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
             <button class="danger" id="act-delete">Delete…</button>
           </div>
@@ -1444,6 +1447,14 @@ async function viewDetail(id) {
   // with every directory the tree has loaded (plus the root) offered as
   // a completion — pick one or edit the path directly.
   const closeMenu = () => { $('#more-menu').open = false; };
+  $('#act-reverify')?.addEventListener('click', async () => {
+    closeMenu();
+    try {
+      await verifyEntry(entry.id);
+      toast('Re-verified.');
+      viewDetail(entry.id);
+    } catch (e) { toast('Failed: ' + e.message); }
+  });
   $('#act-move').addEventListener('click', () => {
     closeMenu();
     $('#move-panel').style.display = '';
@@ -1486,6 +1497,11 @@ function editablePayload(e) {
 // review queue; the entry may be a full Knowledge or a SearchHit (which
 // embeds one), since both carry the writable fields.
 async function applyStatus(entry, status, askNote) {
+  // Verification has its own endpoint. A full-replacement PUT carries the
+  // stored verified_at over and writes nothing when the content matches,
+  // so it cannot record "checked again, still right" — the act that
+  // empties both review feeds (design doc 0025 §6).
+  if (status === 'verified') return verifyEntry(entry.id);
   let note;
   if (askNote) {
     note = prompt(`Why ${status}? (recorded as status_note so agents stop re-proposing it)`, entry.status_note || '');
@@ -1495,6 +1511,14 @@ async function applyStatus(entry, status, askNote) {
   payload.status = status;
   if (note !== undefined) payload.status_note = note;
   await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'PUT', body: payload });
+  return true;
+}
+
+// verifyEntry stamps a fresh verification: the reviewer as verified_by,
+// verified_at now. Promoting a draft and re-affirming a verified entry are
+// the same call.
+async function verifyEntry(id) {
+  await api('/api/v1/verify/' + idPath(id), { method: 'POST' });
   return true;
 }
 

@@ -292,7 +292,7 @@ more step. Vectors are written when an entry is written, so everything
 loaded beforehand has none and hybrid search stays quietly lexical-only:
 
 ```sh
-ochakai reembed            # repeat while it reports entries still missing
+ochakai reembed            # bounded passes until nothing is left
 ```
 
 `reembed` is the only endpoint that spends money on your behalf — each
@@ -304,6 +304,17 @@ nothing to do calls nothing), but it is worth knowing before granting
 
 The same applies after changing `OCHAKAI_VERTEX_MODEL`: the old vectors
 are in a space nothing queries any more (design doc 0020).
+
+If the new model also changes `OCHAKAI_EMBEDDING_DIM`, the service refuses
+to start: the vector columns were created at the old width, so writes and
+searches would both fail against them and `reembed` could not repair
+anything. Put the setting back, or drop the old vectors and rebuild:
+
+```sh
+# psql: DROP TABLE knowledge_embedding, attachment_embedding;
+# then redeploy with the new dimension and:
+ochakai reembed
+```
 
 ## 4b. Attachments require GCS
 

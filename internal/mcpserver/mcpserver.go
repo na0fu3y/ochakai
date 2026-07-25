@@ -203,8 +203,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"name, e.g. metrics/<name>) with attrs.expression holding the expression, so the " +
 			"definitions are searchable on their own; have table entries link to the Semantic Model entry from their body. " +
 			"Links are never a field: write a markdown link to the other entry's path in body — " +
-			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink).",
+			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink). " +
+			"An id whose entry was deleted can be reused, which revives it as your draft — unless a human had " +
+			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
+			"different id instead.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+		// Creating on a soft-deleted id revives that row in place, status
+		// and status_note included — the other way to overwrite a ruling
+		// from a surface with no If-Match channel, and the one the update
+		// and delete guards cannot see (design doc 0015 §3.1).
+		if err := svc.RefuseIfRevivingCurated(ctx, in.ID); err != nil {
+			return nil, knowledgeOut{}, err
+		}
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
 			return nil, knowledgeOut{}, err
@@ -385,7 +395,7 @@ type searchOut struct {
 
 // contextIn deliberately omits min_score, which the REST surface still
 // carries. A score floor is only usable once calibrated against a corpus
-// in a known search mode (trigram vs hybrid RRF), and an agent cannot
+// in a known search mode (lexical vs hybrid RRF), and an agent cannot
 // calibrate anything — offering it here spends tool-schema context on a
 // parameter whose own documentation says to leave it alone. What an agent
 // actually needs to bound a response is budget.
@@ -395,7 +405,7 @@ type contextIn struct {
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of entries returned in full (default 12000); entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge. Raise it when you need whole entries, lower it when context is tight"`
+	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the response body (default 12000); entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows are counted against the same budget. Raise it when you need whole entries, lower it when context is tight"`
 }
 
 type contextOut struct {

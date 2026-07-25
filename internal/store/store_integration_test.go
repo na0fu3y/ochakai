@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
@@ -367,7 +369,14 @@ func TestIntegration(t *testing.T) {
 // SoftDelete must survive a database where semantic search was never
 // enabled: knowledge_embedding does not exist, and the failed DELETE used
 // to abort the surrounding transaction (25P02) before the revision insert.
-func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
+//
+// execTolerateMissingTable is the mechanism, and it is exercised here
+// against a table that never exists rather than by dropping the real one.
+// The test database is shared by every package (CONTRIBUTING), so dropping
+// knowledge_embedding threw away the vectors of whatever else was running
+// — and those tests then failed somewhere else entirely, a reembed pass
+// reporting work it had just done as still missing.
+func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
@@ -378,13 +387,24 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil { // trigram-only: no embedding table
-		t.Fatal(err)
-	}
-	if _, err := s.pool.Exec(ctx, `DROP TABLE IF EXISTS knowledge_embedding`); err != nil {
+	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
 
+	// A missing table must leave the transaction usable: without the
+	// helper, the failed statement poisons everything after it.
+	if err := s.withTx(ctx, func(tx pgx.Tx) error {
+		if err := execTolerateMissingTable(ctx, tx,
+			`DELETE FROM it_never_created WHERE id=$1`, "x"); err != nil {
+			return err
+		}
+		var one int
+		return tx.QueryRow(ctx, `SELECT 1`).Scan(&one)
+	}); err != nil {
+		t.Fatalf("a missing table must not abort the transaction: %v", err)
+	}
+
+	// The caller that depends on it, end to end.
 	k := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: "it-delete-me", Title: "delete me",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
@@ -394,7 +414,7 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy); err != nil {
-		t.Fatalf("SoftDelete without knowledge_embedding: %v", err)
+		t.Fatalf("SoftDelete: %v", err)
 	}
 	if _, err := s.Get(ctx, k.ID); err == nil {
 		t.Error("entry still visible after SoftDelete")
@@ -1469,5 +1489,249 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 	}
 	if rank(hits, target) >= 0 || rank(hits, decoy) >= 0 {
 		t.Errorf("unrelated query matched a planted entry (%d hits)", len(hits))
+	}
+}
+
+// Verify is the exit from both review feeds (design doc 0025 §6). It
+// stamps a fresh verified_at even when the entry is already verified —
+// which Update cannot do — and an entry whose last failure report predates
+// that stamp leaves the re-verification feed.
+func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	const id = "it-verify-feed"
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"knowledge_event", "knowledge_usage"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE knowledge_id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.com"}
+	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
+	k := &domain.Knowledge{Type: domain.TypeQueries, ID: id, Title: "月次売上",
+		Status: domain.StatusDraft, CreatedBy: agent}
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+
+	verified, err := s.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if verified.Status != domain.StatusVerified || verified.VerifiedAt == nil {
+		t.Fatalf("Verify did not promote: status=%q verified_at=%v", verified.Status, verified.VerifiedAt)
+	}
+	first := *verified.VerifiedAt
+
+	// An agent runs the query, gets a wrong number, and says so. The entry
+	// is now in the re-verification feed.
+	if err := s.RecordOutcome(ctx, domain.EventFailed, agent, id, "returned last month"); err != nil {
+		t.Fatal(err)
+	}
+	inFeed := func() bool {
+		hits, err := s.ListByFailed(ctx, Filter{}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(hits, func(h domain.SearchHit) bool { return h.ID == id })
+	}
+	if !inFeed() {
+		t.Fatal("a failed report should put the entry in the re-verification feed")
+	}
+
+	// An Update that changes nothing cannot answer the report: it writes
+	// nothing at all, which is exactly why Verify exists.
+	same := *verified
+	if err := s.Update(ctx, &same, human, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !inFeed() {
+		t.Error("an update must not silently clear the feed")
+	}
+
+	// Re-verifying does.
+	again, err := s.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatalf("re-Verify: %v", err)
+	}
+	if again.VerifiedAt == nil || !again.VerifiedAt.After(first) {
+		t.Fatalf("re-verification did not refresh verified_at: %v -> %v", first, again.VerifiedAt)
+	}
+	if inFeed() {
+		t.Error("an entry verified after its last failure report must leave the feed")
+	}
+	// The lifetime total is untouched: presence in the feed says
+	// "unresolved", the count says "how bad it has been".
+	if u, err := s.Usage(ctx, id); err != nil {
+		t.Fatal(err)
+	} else if u.Failed != 1 {
+		t.Errorf("verification must not rewrite usage totals: failed=%d, want 1", u.Failed)
+	}
+
+	// A fresh failure brings it back.
+	if err := s.RecordOutcome(ctx, domain.EventFailed, agent, id, "still wrong"); err != nil {
+		t.Fatal(err)
+	}
+	if !inFeed() {
+		t.Error("a failure newer than the verification must reopen the entry")
+	}
+
+	revs, err := s.ListRevisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) == 0 || revs[0].Change != "verify" {
+		t.Errorf("verification must be recorded as a revision, got %+v", revs)
+	}
+}
+
+// A move rewrites the links that point at the moved entry — and must also
+// keep the moved entry's own outbound links pointing where they pointed.
+// Relative targets are resolved against the entry's id, so changing the
+// directory silently re-aims them (design doc 0024 §3.5).
+func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-relmove%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	const neighbour = "it-relmove-src/gross"
+	const mover = "it-relmove-src/revenue"
+	const dest = "it-relmove-dst/revenue"
+	for _, k := range []*domain.Knowledge{
+		{Type: domain.TypeMetrics, ID: neighbour, Title: "gross", Status: domain.StatusDraft, CreatedBy: actor},
+		{Type: domain.TypeMetrics, ID: mover, Title: "revenue", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "Net of [gross](./gross.md).",
+			Links: []domain.Link{{Target: neighbour, Text: "gross"}}},
+	} {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"knowledge", "knowledge_revision"} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-relmove%'`)
+		}
+	})
+
+	if _, err := s.Move(ctx, mover, dest, actor); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.Get(ctx, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moved.Links) != 1 || moved.Links[0].Target != neighbour {
+		t.Errorf("the moved entry's edge moved with it: %+v", moved.Links)
+	}
+	// The stored links column and what the body says must agree: the
+	// column is a derivation, and the next write re-derives it.
+	derived := domain.LinksFromBody(moved.ID, moved.Body)
+	if len(derived) != 1 || derived[0].Target != neighbour {
+		t.Errorf("body re-derives to %+v, want a link to %s (body: %q)", derived, neighbour, moved.Body)
+	}
+	// Backlinks are the same edge read the other way round.
+	back, err := s.ListLinkingTo(ctx, neighbour, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(back) != 1 || back[0].ID != dest {
+		t.Errorf("backlinks from %s = %+v, want the moved entry", neighbour, back)
+	}
+}
+
+// An export is streamed, so its reads happen at different moments. The
+// snapshot is what keeps the archive a picture of one instant: an entry
+// deleted after the id list was taken still has to be in the bundle the
+// index promises, or the archive contradicts itself.
+func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	const doomed = "it-exportsnap/doomed"
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-exportsnap%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	if err := s.Create(ctx, &domain.Knowledge{Type: domain.TypeInsights, ID: doomed,
+		Title: "deleted mid-export", Status: domain.StatusDraft, CreatedBy: actor}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"knowledge", "knowledge_revision"} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-exportsnap%'`)
+		}
+	})
+
+	snap, err := s.BeginExport(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Close(ctx)
+	rows, err := snap.IndexRows(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(rows, func(k domain.Knowledge) bool { return k.ID == doomed }) {
+		t.Fatalf("%s missing from the index rows", doomed)
+	}
+
+	// The world moves on while the archive is being written.
+	if err := s.SoftDelete(ctx, doomed, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := snap.ListByIDs(ctx, []string{doomed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].ID != doomed {
+		t.Errorf("the entry the index promised is missing from the bundle: %+v", entries)
+	}
+	// And the snapshot is only the export's: the live database has moved.
+	if _, err := s.Get(ctx, doomed); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get after delete = %v, want ErrNotFound", err)
 	}
 }

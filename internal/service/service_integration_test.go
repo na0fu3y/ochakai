@@ -274,6 +274,86 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Errorf("the rejection and its reason must survive: %+v", stored)
 		}
 	})
+
+	// Closing the delete step is not enough: a tombstone that already
+	// exists — deleted before the rule, or deleted from a human surface as
+	// housekeeping — is revived in place by Create, status_note included.
+	t.Run("a curated tombstone cannot be revived", func(t *testing.T) {
+		for status, wantAdvice := range map[domain.Status]string{
+			domain.StatusRejected:   "status_note",
+			domain.StatusVerified:   "different id",
+			domain.StatusDeprecated: "no longer recommended",
+		} {
+			id := "queries/" + uid("guard-tomb-"+string(status))
+			k, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: "ruled on then deleted",
+				StatusNote: "duplicate of an existing golden query",
+			}, actor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			setStatus(t, k, status, human)
+			// A human deletes it: legitimate on the REST/CLI surfaces.
+			if err := svc.Delete(ctx, id, human); err != nil {
+				t.Fatal(err)
+			}
+			err = svc.RefuseIfRevivingCurated(ctx, id)
+			var invalid *InvalidInputError
+			if !errors.As(err, &invalid) {
+				t.Fatalf("reviving a deleted %s entry: got %v, want a refusal", status, err)
+			}
+			if !strings.Contains(err.Error(), wantAdvice) {
+				t.Errorf("%s refusal does not offer %q: %v", status, wantAdvice, err)
+			}
+			// The human surfaces still revive it, ruling and all.
+			revived, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: "revived by a human"}, human)
+			if err != nil {
+				t.Fatalf("a human surface must still be able to reuse the id: %v", err)
+			}
+			t.Cleanup(func() { _ = svc.Delete(ctx, revived.ID, human) })
+		}
+	})
+
+	// A draft tombstone is not a ruling: reviving an abandoned draft is
+	// what create-on-a-deleted-id is for.
+	t.Run("a draft tombstone stays revivable", func(t *testing.T) {
+		id := "queries/" + uid("guard-tomb-draft")
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "abandoned draft"}, actor); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Delete(ctx, id, actor); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
+			t.Fatalf("a deleted draft must stay revivable: %v", err)
+		}
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "second attempt"}, actor); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+	})
+
+	// A free id is not a refusal, and neither is a live one: Create's own
+	// ErrAlreadyExists covers that case.
+	t.Run("free and live ids are untouched", func(t *testing.T) {
+		if err := svc.RefuseIfRevivingCurated(ctx, "queries/"+uid("guard-tomb-free")); err != nil {
+			t.Errorf("free id: %v", err)
+		}
+		id := "queries/" + uid("guard-tomb-live")
+		k, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "live"}, actor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		setStatus(t, k, domain.StatusRejected, human)
+		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
+			t.Errorf("live entry: %v", err)
+		}
+	})
 }
 
 // Reembed closes the gap between "semantic search is configured" and
@@ -332,8 +412,11 @@ func TestReembedIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reembed after a model change: %v", err)
 	}
-	if res.Embedded == 0 || res.Failed != 0 {
-		t.Fatalf("reembed did nothing useful: %+v", res)
+	// Only Embedded is assertable here: a corpus-wide pass runs over
+	// whatever the other packages have in the shared database, including
+	// entries they delete while it runs (counted as Failed).
+	if res.Embedded == 0 {
+		t.Fatalf("reembed did nothing: %+v", res)
 	}
 	if unembedded(t, "test-embedder-v2") {
 		t.Error("reembed left the entry without a vector for the new model")
@@ -347,9 +430,12 @@ func TestReembedIntegration(t *testing.T) {
 	if unembedded(t, "test-embedder-v2") {
 		t.Error("a second pass unembedded the entry")
 	}
-	if done.Missing != 0 {
-		t.Errorf("nothing is left, but Missing = %d", done.Missing)
-	}
+	// Missing is corpus-wide and the database is shared, so an entry
+	// another package creates between the pass and the count is
+	// legitimately still missing — nothing to assert from here. That the
+	// count does not subtract the pass's own work is pinned by
+	// TestReembedReportsWhatIsLeft, where the corpus is measured first.
+	_ = done
 }
 
 // Missing is the number the operator acts on: it decides whether to run
@@ -394,8 +480,13 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	if res.Embedded != 2 {
 		t.Fatalf("bounded pass embedded %d, want 2", res.Embedded)
 	}
-	if want := total - 2; res.Missing != want {
-		t.Errorf("Missing = %d, want %d (%d unembedded, %d done)", res.Missing, want, total, res.Embedded)
+	// A lower bound, not an equality: the test database is shared by every
+	// package (CONTRIBUTING), so entries can appear between the count above
+	// and the one Reembed takes after the pass. What must hold is that the
+	// pass does not report its own work as still missing — the bug this
+	// covers subtracted it twice.
+	if want := total - 2; res.Missing < want {
+		t.Errorf("Missing = %d, want at least %d (%d unembedded, %d done)", res.Missing, want, total, res.Embedded)
 	}
 	if res.Missing == 0 {
 		t.Error("a bounded pass over a larger corpus reported nothing left")

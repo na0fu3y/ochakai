@@ -53,14 +53,15 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 	}
 	var vec []float32
 	if att.MediaType == "text/plain" {
+		max := s.embedBytes()
 		head := data
-		if len(head) > maxEmbedBytes {
-			head = head[:maxEmbedBytes] // cap before the copy
+		if len(head) > max {
+			head = head[:max] // cap before the copy
 		}
 		// truncateUTF8 still runs on the capped slice: the cut above may
 		// have landed inside a character.
-		body := truncateUTF8(string(head), maxEmbedBytes)
-		vecs, err := s.embedDocument(ctx, truncateUTF8(att.Name+"\n"+body, maxEmbedBytes))
+		body := truncateUTF8(string(head), max)
+		vecs, err := s.embedDocument(ctx, truncateUTF8(att.Name+"\n"+body, max))
 		if err != nil {
 			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "id", id, "name", att.Name, "error", err)
 			return

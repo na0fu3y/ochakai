@@ -180,8 +180,79 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Tim
 		"entries from the web UI or CLI.", op, id, k.Status, instead)
 }
 
+// RefuseIfRevivingCurated reports an error when id names a soft-deleted
+// entry that was ruled on — verified, rejected or deprecated — before it
+// was deleted. For surfaces that must not overwrite a ruling in place,
+// create is the second way to do it: Create revives a tombstone (ON
+// CONFLICT ... WHERE deleted_at IS NOT NULL) with the incoming status and
+// status_note, so the reason an entry was turned down is replaced by a
+// fresh draft, and the entry that comes back looks like it was never
+// judged.
+//
+// RefuseIfCurated cannot see this: the row it reads is not live. Closing
+// the delete step alone (design doc 0015 §3.1) leaves every tombstone that
+// already exists — deleted before that rule, deleted from the REST/CLI
+// surfaces where deleting a rejection is legitimate housekeeping — still
+// revivable in one call. A draft tombstone stays revivable: nobody ruled
+// on it, and reviving an abandoned draft is how a create on a deleted id
+// is supposed to work.
+func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error {
+	k, err := s.Store.GetTombstone(ctx, domain.Normalize(id))
+	if errors.Is(err, store.ErrNotFound) {
+		// A free id, or a live entry — Create's own ErrAlreadyExists
+		// covers the second case.
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var instead string
+	switch k.Status {
+	case domain.StatusRejected:
+		instead = "The rejection is the record of a decision and status_note says why; read it " +
+			"(search_knowledge with status=rejected) before proposing this again. If you disagree, " +
+			"create_knowledge a new entry at a different id and let a human judge it."
+	case domain.StatusVerified:
+		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
+			"different id and let a human judge it against the history this id still holds."
+	case domain.StatusDeprecated:
+		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
+			"reviving, create_knowledge a draft at a different id that says why."
+	default:
+		return nil
+	}
+	return Invalidf("cannot create %s from this surface: the id holds a deleted %s entry, and "+
+		"creating here would revive it as a fresh draft, replacing that ruling. %s A human reuses "+
+		"the id from the web UI or CLI.", id, k.Status, instead)
+}
+
 func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
+}
+
+// Verify records a verification against the entry as it stands: the
+// reviewer becomes verified_by and verified_at is now, whether the entry
+// was a draft being promoted or a verified entry being re-checked.
+//
+// The second case is the one Update could not express, and without it
+// neither review feed had an exit (design doc 0025 §6): a reviewer who
+// re-read a verified entry and found it still correct had no way to say
+// so, so it stayed at the top of the verification-age feed, and an entry
+// that was reported wrong and then fixed stayed in the re-verification
+// feed for good. A queue nobody can empty stops being read.
+//
+// Not an MCP tool. Verification is the human ruling the write-back loop
+// turns on; an agent's route to the same effect is create_knowledge with
+// status verified, which records the agent as verified_by (design docs
+// 0002, 0015 §3.1).
+func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+	id = domain.Normalize(id)
+	k, err := s.Store.Verify(ctx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	s.Log.Info("knowledge verified", "id", id, "actor", actor.String())
+	return k, nil
 }
 
 // Purge hard-deletes an already soft-deleted entry, freeing its id for a
@@ -282,8 +353,8 @@ func validate(k *domain.Knowledge) error {
 
 // --- search ---
 
-// Search runs trigram search, and when an embedder is configured, fuses it
-// with vector search via reciprocal rank fusion.
+// Search runs lexical search, and when an embedder is configured, fuses
+// it with vector search via reciprocal rank fusion.
 func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	// Stored text is NFC (design doc 0022); an NFD query (pasted from a
 	// macOS path) must still match it byte-wise.
@@ -318,7 +389,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	vecs, err := s.Embedder.Embed(ctx, embed.TaskQuery, []string{query})
 	if err != nil {
 		// Degrade to lexical-only rather than failing the search.
-		s.Log.Warn("query embedding failed; falling back to trigram-only", "error", err)
+		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
 		if len(lexical) > limit {
 			lexical = lexical[:limit]
 		}
@@ -351,7 +422,9 @@ type ContextResult struct {
 }
 
 // ContextRequest is the input to Context. Budget caps the serialized size
-// of the entries returned in full; 0 means no cap.
+// of the response — the entries returned in full and the outline rows
+// naming the rest, which carry a description and are not free; 0 means no
+// cap.
 type ContextRequest struct {
 	Query    string
 	Filter   store.Filter
@@ -370,7 +443,7 @@ type ContextRequest struct {
 // req.MinScore drops hits scoring below it before expansion, for callers
 // that inject the pack automatically (hooks) and prefer nothing over
 // junk. It defaults to 0 (off) because scores are search-mode dependent
-// and uncalibrated: trigram similarity plus boosts in lexical mode, RRF
+// and uncalibrated: matched-fragment weight plus boosts in lexical mode, RRF
 // rank fusion (~0.02 scale) in hybrid mode — a floor meaningful in one
 // mode is nonsense in the other.
 //
@@ -467,27 +540,86 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 // otherwise starve everything below it. An entry larger than the whole
 // budget always becomes an outline row, even at rank 1 — the caller sees
 // its size and can fetch it deliberately.
+//
+// The outline is inside the budget, not on top of it. Naming what was left
+// out costs bytes too, and an outline row carries a description, which is
+// unbounded on an entry: a budget that governed only the delivered entries
+// left the response as a whole ungoverned, which is the thing callers
+// actually have to fit in a context window. So rows are counted, their
+// descriptions are capped, and entries are demoted from the bottom of the
+// ranking until the two halves fit together.
+//
+// The floor is the outline of everything: a request whose budget cannot
+// even hold the names of what matched gets those names anyway. Silently
+// dropping entries the caller never hears about is worse than a response
+// slightly over budget, and the caller can raise the budget only if it
+// knows there was something there.
 func packWithinBudget(entries []domain.Knowledge, budget int) ([]domain.Knowledge, []domain.ContextOutline) {
 	if budget <= 0 {
 		return entries, nil
 	}
-	kept := make([]domain.Knowledge, 0, len(entries))
-	var outline []domain.ContextOutline
-	used := 0
+	sizes := make([]int, len(entries))
+	rows := make([]domain.ContextOutline, len(entries))
+	rowSizes := make([]int, len(entries))
+	deliver := make([]bool, len(entries))
 	for i := range entries {
-		k := &entries[i]
-		size := serializedSize(k)
-		if used+size <= budget {
-			kept = append(kept, *k)
-			used += size
+		sizes[i] = serializedSize(&entries[i])
+		rows[i] = outlineRow(&entries[i], sizes[i])
+		rowSizes[i] = jsonSize(rows[i])
+	}
+	used, outlineBytes := 0, 0
+	for i := range entries {
+		if used+sizes[i] <= budget {
+			deliver[i] = true
+			used += sizes[i]
 			continue
 		}
-		outline = append(outline, domain.ContextOutline{
-			ID: k.ID, Type: k.Type, Title: k.DisplayTitle(),
-			Description: k.Description, Status: k.Status, Bytes: size,
-		})
+		outlineBytes += rowSizes[i]
+	}
+	// Demote from the bottom of the ranking until the outline the skipped
+	// entries cost fits alongside what was kept. Each demotion frees the
+	// entry's bytes and pays for its row, which is strictly smaller — the
+	// guard is there so a pathological entry cannot spin this loop.
+	for used+outlineBytes > budget {
+		last := -1
+		for i := range deliver {
+			if deliver[i] {
+				last = i
+			}
+		}
+		if last < 0 || sizes[last] <= rowSizes[last] {
+			break
+		}
+		deliver[last] = false
+		used -= sizes[last]
+		outlineBytes += rowSizes[last]
+	}
+	kept := make([]domain.Knowledge, 0, len(entries))
+	var outline []domain.ContextOutline
+	for i := range entries {
+		if deliver[i] {
+			kept = append(kept, entries[i])
+			continue
+		}
+		outline = append(outline, rows[i])
 	}
 	return kept, outline
+}
+
+// outlineDescriptionBytes caps the description an outline row carries.
+// The description is what makes a row worth reading — it is the caller's
+// only basis for spending a round trip — but nothing bounds it on the
+// entry, so one entry with a page-long description could outweigh the
+// budget on its own. Enough for a sentence or two; the rest is what the
+// fetch is for.
+const outlineDescriptionBytes = 200
+
+func outlineRow(k *domain.Knowledge, size int) domain.ContextOutline {
+	return domain.ContextOutline{
+		ID: k.ID, Type: k.Type, Title: k.DisplayTitle(),
+		Description: truncateUTF8(k.Description, outlineDescriptionBytes),
+		Status:      k.Status, Bytes: size,
+	}
 }
 
 // serializedSize is what the entry costs on the wire — attrs included. A
@@ -497,6 +629,15 @@ func serializedSize(k *domain.Knowledge) int {
 	b, err := json.Marshal(k)
 	if err != nil {
 		return len(k.Body) // unreachable in practice; never drop on a marshal quirk
+	}
+	return len(b)
+}
+
+// jsonSize is what any part of the response costs on the wire.
+func jsonSize(v any) int {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return 0
 	}
 	return len(b)
 }
@@ -533,13 +674,15 @@ func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([
 	return s.Store.ListByUsage(ctx, f, limit)
 }
 
-// ListByFailed lists entries with failed outcome reports, worst first —
-// the re-verification feed (design doc 0025): in-force knowledge that
-// callers report is producing wrong results, the evidence-based
-// counterpart to the verified_at feed. A healthy base yields an empty
-// feed. Not a search: no usage is recorded (triaging the queue must not
-// inflate the signal it ranks by). Each hit carries its usage totals;
-// score is 0, keeping the wire shape of a search across all list modes.
+// ListByFailed lists entries whose failure reports are still unanswered,
+// worst first — the re-verification feed (design doc 0025): in-force
+// knowledge that callers report is producing wrong results, the
+// evidence-based counterpart to the verified_at feed. Verifying an entry
+// (or rejecting it) takes it out of the feed, so a base that is kept up
+// yields an empty one. Not a search: no usage is recorded (triaging the
+// queue must not inflate the signal it ranks by). Each hit carries its
+// usage totals; score is 0, keeping the wire shape of a search across all
+// list modes.
 func (s *Service) ListByFailed(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
@@ -662,9 +805,9 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	if s.Embedder == nil {
 		return
 	}
-	vecs, err := s.embedDocument(ctx, embeddingText(k))
+	vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
 	if err != nil {
-		s.Log.Warn("document embedding failed; entry remains searchable via trigram", "type", k.Type, "id", k.ID, "error", err)
+		s.Log.Warn("document embedding failed; entry remains findable by the lexical half of search", "type", k.Type, "id", k.ID, "error", err)
 		return
 	}
 	if err := s.Store.UpsertEmbedding(ctx, k.ID, s.Embedder.Model(), vecs[0]); err != nil {
@@ -672,24 +815,28 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	}
 }
 
-// maxEmbedBytes caps the text handed to the embedding model. The real
-// limit is tokens (2048 for gemini-embedding-001), and UTF-8 bytes track
-// tokens across scripts far better than characters do — but only
-// roughly, and the ratio is worst where it matters most: Japanese runs
-// three bytes per character and can approach one token per character, so
-// 6000 bytes is 2000 characters and possibly 2000 tokens. Against a 2048
-// limit that is not headroom, it is a coin flip.
+// embedBytes is how much text this deployment's model can be handed.
 //
-// So the cap covers the whole text, envelope included (the id, title,
-// description, tags and question used to ride on top of the body's
-// budget), and sits at 5000 bytes — comfortably inside the window even
-// at one token per character. English pays for that in unused budget,
-// which is the right trade: an overrun does not degrade the embedding,
-// it removes the entry from vector search entirely.
+// The real limit is tokens, and UTF-8 bytes track tokens across scripts
+// far better than characters do — but only roughly, and the ratio is
+// worst where it matters most: Japanese runs three bytes per character
+// and can approach one token per character. So the cap is deliberately
+// conservative, covers the whole text (envelope included), and comes from
+// the model rather than from a constant: the window it has to fit inside
+// is a property of the model, and applying the smallest model's budget to
+// a model with four times the window throws away three quarters of it —
+// silently, since an entry truncated for no reason still embeds fine and
+// just carries less of itself.
 //
-// The estimate is still an estimate, so embedDocument retries shorter
-// rather than trusting it.
-const maxEmbedBytes = 5000
+// A provider that does not say (any embedder but Vertex, including the
+// fakes in tests) gets the conservative floor. The estimate is still an
+// estimate, so embedDocument retries shorter rather than trusting it.
+func (s *Service) embedBytes() int {
+	if l, ok := s.Embedder.(embed.InputLimited); ok {
+		return l.MaxInputBytes()
+	}
+	return embed.ConservativeInputBytes
+}
 
 // ReembedResult reports what a Reembed pass did. Missing is how many
 // entries still have no vector once the pass is over — the number that
@@ -700,6 +847,21 @@ type ReembedResult struct {
 	Failed   int `json:"failed"`
 	Missing  int `json:"missing"`
 }
+
+// A reembed pass is one HTTP request, and one entry is one call to the
+// embedding provider — gemini-embedding-001 takes a single text per
+// request, so the passes are sequential by construction. At a few hundred
+// milliseconds each, a pass of 500 is minutes of request time, and Cloud
+// Run's default request timeout is 300 seconds: a "bounded" pass that
+// cannot finish inside a request is not bounded, it just fails late and
+// reports nothing (the work it did is still written).
+//
+// So a pass is sized to finish, and the CLI repeats it until nothing is
+// left. The ceiling is for operators who know their own timeout.
+const (
+	defaultReembedPass = 200
+	maxReembedPass     = 5000
+)
 
 // Reembed fills in the vectors that entry writes never produced. Vectors
 // are written on create and update only, so a base loaded before
@@ -714,8 +876,8 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 	if s.Embedder == nil {
 		return nil, Unsupportedf("semantic search is not configured: set OCHAKAI_VERTEX_PROJECT")
 	}
-	if limit <= 0 || limit > 5000 {
-		limit = 500
+	if limit <= 0 || limit > maxReembedPass {
+		limit = defaultReembedPass
 	}
 	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), limit)
 	if err != nil {
@@ -729,7 +891,7 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 			s.Log.Warn("reembed: entry disappeared", "id", id, "error", err)
 			continue
 		}
-		vecs, err := s.embedDocument(ctx, embeddingText(k))
+		vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
 		if err != nil {
 			res.Failed++
 			s.Log.Warn("reembed: embedding failed", "id", id, "error", err)
@@ -787,7 +949,7 @@ func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, 
 // golden query question, body truncated to keep within model input limits.
 // The id leads (design doc 0022): with title optional, the filename may be
 // the entry's only name, and the path carries the domain hierarchy.
-func embeddingText(k *domain.Knowledge) string {
+func embeddingText(k *domain.Knowledge, max int) string {
 	parts := []string{k.ID, k.Title, k.Description, strings.Join(k.Tags, " ")}
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
@@ -796,7 +958,7 @@ func embeddingText(k *domain.Knowledge) string {
 	// The cap covers the joined text: an entry whose envelope is long
 	// (a deep path, a paragraph of description) must not push the total
 	// past the window just because the body fit on its own.
-	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), maxEmbedBytes)
+	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), max)
 }
 
 // truncateUTF8 caps s at max bytes and then drops a trailing partial rune.

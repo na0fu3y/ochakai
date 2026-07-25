@@ -259,6 +259,19 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
+// Verify records a verification against the entry as it stands (POST
+// /api/v1/verify/{id}): the caller becomes verified_by and verified_at is
+// stamped now. It promotes a draft and re-affirms an already-verified
+// entry alike — the second is what takes an entry out of the review feeds
+// (design doc 0025 §6), and Update cannot do it.
+func (c *Client) Verify(ctx context.Context, id string) (*domain.Knowledge, error) {
+	var k domain.Knowledge
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, nil, &k); err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
 // Purge hard-deletes an entry that is already soft-deleted, freeing its
 // id (DELETE ...?purge=true). A live entry is a 409: delete it first.
 func (c *Client) Purge(ctx context.Context, id string) error {
@@ -329,7 +342,7 @@ func attachmentPath(id, name string) string {
 }
 
 // Usage fetches usage totals for one entry (GET /api/v1/usage/{id}):
-// search hits, fetches, compile references, and last-used time.
+// search hits, fetches, outcome reports, and last-used time.
 func (c *Client) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 	var u domain.Usage
 	if err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/usage/", id), nil, nil, &u); err != nil {
@@ -374,7 +387,10 @@ type ReembedResult struct {
 }
 
 // Reembed fills in vectors for entries that have none for the configured
-// model (POST /api/v1/reembed). limit 0 uses the server default.
+// model (POST /api/v1/reembed). limit 0 uses the server default. One
+// pass is bounded: Missing reports what is still left, and the caller
+// repeats (see cmdReembed) rather than asking for a pass that cannot
+// finish inside a request timeout.
 func (c *Client) Reembed(ctx context.Context, limit int) (*ReembedResult, error) {
 	var out ReembedResult
 	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/reembed", limitQuery(limit), nil, &out); err != nil {

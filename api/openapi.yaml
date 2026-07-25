@@ -23,7 +23,7 @@ paths:
   /api/v1/knowledge:
     get:
       operationId: searchKnowledge
-      summary: Search knowledge (trigram, plus hybrid vector search when configured)
+      summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
         Rejected entries are excluded unless the status filter explicitly
         includes rejected (so agents can check for already-rejected proposals).
@@ -33,9 +33,12 @@ paths:
         With sort=usage it lists by demand (most search_hits first, never-used
         oldest-first at the bottom) and each hit carries its usage totals —
         the draft review/promotion feed.
-        With sort=failed it lists entries reported wrong (report_outcome
-        failed), worst first, and each hit carries its usage totals — the
-        re-verification feed; empty when nothing was reported wrong.
+        With sort=failed it lists entries whose failure reports
+        (report_outcome failed) are still unanswered, worst first, and each
+        hit carries its usage totals — the re-verification feed. An entry
+        drops out once it is verified after its last failure report
+        (POST /api/v1/verify/{id}), so a base that is kept up shows an
+        empty feed.
         q and sort are mutually exclusive; combining them is a 400.
       parameters:
         - name: q
@@ -186,21 +189,26 @@ paths:
           description: >
             Drop hits scoring below this before expansion, for callers that
             inject the pack automatically and prefer nothing over junk.
-            Scores are search-mode dependent and uncalibrated (trigram
-            similarity plus boosts vs RRF rank fusion) — calibrate against
-            your own corpus before use. Non-numeric values are a 400.
+            Scores are search-mode dependent and uncalibrated
+            (matched-fragment weight plus boosts vs RRF rank fusion) —
+            calibrate against your own corpus before use. Non-numeric
+            values are a 400.
           schema: { type: number, default: 0 }
         - name: budget
           in: query
           description: >
-            Cap the serialized bytes of entries returned in full. Entries
-            past the cap are listed under `outline` instead — an entry is
-            delivered whole or not at all, never truncated. Packing is
-            greedy, so one oversized entry high in the ranking does not
-            starve the rest. Defaults to 0 (no cap) here; the MCP
-            get_context tool defaults it on, because an agent's context
-            window is the scarce resource and an embedding host will not
-            set it.
+            Cap the serialized bytes of the response. Entries past the
+            cap are listed under `outline` instead — an entry is delivered
+            whole or not at all, never truncated — and those rows count
+            against the same cap, because naming what was left out is not
+            free (an outline row carries a description). Packing is greedy,
+            so one oversized entry high in the ranking does not starve the
+            rest. The floor is the outline of everything that matched: a
+            budget too small even for the names still gets them, since a
+            caller cannot raise a budget for entries it never heard about.
+            Defaults to 0 (no cap) here; the MCP get_context tool defaults
+            it on, because an agent's context window is the scarce resource
+            and an embedding host will not set it.
           schema: { type: integer, default: 0 }
       responses:
         "200":
@@ -332,6 +340,39 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/verify/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The entry's id; slashes are real path separators.
+        schema: { type: string }
+    post:
+      operationId: verifyKnowledge
+      summary: Record a verification against the entry as it stands
+      description: >
+        The caller becomes verified_by and verified_at is stamped now,
+        whether the entry was a draft being promoted or an entry that was
+        already verified being re-affirmed. The second case is why this
+        endpoint exists: PUT carries the stored verified_at over and writes
+        nothing at all when the content is unchanged, so "checked again,
+        still right" could not be recorded — and both review feeds
+        (sort=verified_at, sort=failed) had no exit (design doc 0025 §12).
+        A rejection is cleared. Not an MCP tool: verification is the human
+        ruling the write-back loop turns on. Lives at its own top-level
+        path for the same reason /usage does — a suffix after the
+        hierarchical id could be confused with an ID segment.
+      responses:
+        "200":
+          description: The verified entry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+          headers:
+            ETag:
+              schema: { type: string }
+              description: The entry's version, usable as If-Match on a later update.
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
       - name: id
@@ -602,13 +643,17 @@ paths:
         more (design doc 0020). This fills the gap.
 
 
-        Bounded per call — repeat while `missing` is above zero. A
-        provider failure on one entry is counted, not fatal. 501 when
-        semantic search is not configured.
+        Bounded per call — repeat while `missing` is above zero; the CLI
+        (`ochakai reembed`) does that for you. One entry is one call to
+        the embedding provider and the calls are sequential, so the
+        default pass is sized to finish well inside a request timeout
+        (Cloud Run's default is 300s); raise `limit` only if you know
+        yours. A provider failure on one entry is counted, not fatal. 501
+        when semantic search is not configured.
       parameters:
         - name: limit
           in: query
-          schema: { type: integer, default: 500, maximum: 5000 }
+          schema: { type: integer, default: 200, maximum: 5000 }
       responses:
         "200":
           description: What the pass did.

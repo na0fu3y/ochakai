@@ -639,3 +639,39 @@ func TestIntegrationVectorIndexes(t *testing.T) {
 		t.Errorf("migrateVectorIndexes above the dimension limit: %v", err)
 	}
 }
+
+// Changing OCHAKAI_EMBEDDING_DIM on a base that already holds vectors is
+// not something the schema can absorb: CREATE TABLE IF NOT EXISTS keeps
+// the old column, every write then fails on the width, and every search
+// fails outright because the query vector cannot be compared against it.
+// Startup says so instead of booting into that.
+func TestIntegrationEmbeddingDimChangeIsRefused(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.Migrate(ctx, 8)
+	if err == nil {
+		t.Fatal("a changed embedding dimension must refuse to start")
+	}
+	for _, want := range []string{"vector(4)", "8", "OCHAKAI_EMBEDDING_DIM", "reembed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not mention %q: %v", want, err)
+		}
+	}
+	// The configured dimension still starts, so this is not a one-way door
+	// for an operator who puts the setting back.
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Errorf("re-running with the stored dimension: %v", err)
+	}
+}

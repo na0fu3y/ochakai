@@ -42,6 +42,7 @@ _ochakai() {
     'get:print one entry as an OKF document'
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
+    'verify:record a verification (also re-affirms a verified entry)'
     'delete:soft-delete an entry'
     'purge:hard-delete a soft-deleted entry, freeing its id'
     'reembed:embed entries that have no vector for the configured model'
@@ -107,14 +108,14 @@ _ochakai() {
     create|update)
       _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
-    delete|purge|detach|move)
+    verify|delete|purge|detach|move)
       _arguments '--url[server URL]:url:'
       ;;
     attach)
       _arguments '--name[attachment name]:name:' '--json[print the attachment metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
       ;;
     reembed)
-      _arguments '--limit[max entries per pass]:limit:' '--json[print JSON]' '--url[server URL]:url:'
+      _arguments '--limit[max entries per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     export)
       _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
@@ -155,7 +156,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update verify delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -180,9 +181,9 @@ _ochakai() {
       fi
       opts="--note --json --url" ;;
     create|update) opts="-f --json --url" ;;
-    delete|purge|detach|move) opts="--url" ;;
+    verify|delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
-    reembed)       opts="--url --limit --json" ;;
+    reembed)       opts="--url --limit --once --json" ;;
     export)        opts="--url --no-attachments" ;;
     import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
@@ -216,6 +217,7 @@ complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read be
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
+complete -c ochakai -n __fish_use_subcommand -a verify -d 'record a verification (also re-affirms a verified entry)'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
 complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted entry, freeing its id'
 complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed entries that have no vector for the configured model'
@@ -236,7 +238,7 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete purge move attach detach usage report revisions backlinks export import whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify delete purge move attach detach usage report revisions backlinks export import whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
@@ -252,6 +254,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verif
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
+complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'

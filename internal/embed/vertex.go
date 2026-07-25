@@ -53,6 +53,22 @@ func NewVertex(ctx context.Context, project, location, model string, dim int) (*
 
 func (v *Vertex) Model() string { return v.model }
 
+// MaxInputBytes is the text budget for this model's input window, in
+// UTF-8 bytes: 2048 tokens for gemini-embedding-001, 8192 for
+// gemini-embedding-2. Bytes are the unit because the token count is not
+// knowable here and bytes track it across scripts better than characters
+// do; the ratio used is the worst case (Japanese, three bytes and up to
+// one token per character), so the budget is roughly a third of the
+// window in bytes. English leaves most of it unused, which is the right
+// way round — an overrun removes the entry from vector search, while
+// unused budget costs nothing.
+func (v *Vertex) MaxInputBytes() int {
+	if v.embedContent {
+		return 20000 // gemini-embedding-2: 8192 tokens
+	}
+	return ConservativeInputBytes // gemini-embedding-001: 2048 tokens
+}
+
 // vertexHost maps a location to its API host: regional locations get a
 // regional host, while global and the us/eu multi-regions (where
 // gemini-embedding-2 lives) use the plain one.
