@@ -1012,6 +1012,18 @@ func (s *Store) ListUnembedded(ctx context.Context, model string, limit int) ([]
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
+// CountUnembedded counts the live entries with no vector for the named
+// model. Reembed reports it so a bounded pass cannot be mistaken for a
+// finished one.
+func (s *Store) CountUnembedded(ctx context.Context, model string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge k
+		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
+		 WHERE k.deleted_at IS NULL AND e.id IS NULL`, model).Scan(&n)
+	return n, err
+}
+
 // UpsertEmbedding stores the document embedding for a knowledge entry.
 func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []float32) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (id, model, embedding, updated_at)
