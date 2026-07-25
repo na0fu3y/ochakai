@@ -188,10 +188,20 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 // Purge hard-deletes an already soft-deleted entry, freeing its id for a
 // move (design doc 0021: Move cannot revive a tombstone the way Create
 // can). Not an MCP tool: this is the one operation that destroys history,
-// so it belongs to the human surfaces (design doc 0015). No actor is
-// recorded because nothing survives to record it on.
-func (s *Service) Purge(ctx context.Context, id string) error {
-	return s.Store.Purge(ctx, domain.Normalize(id))
+// so it belongs to the human surfaces (design doc 0015).
+//
+// Which surface exposes it is not the same as who can reach it — ochakai
+// has no authorization, so any caller that reaches the REST API can purge.
+// The actor is therefore recorded twice over: in knowledge_purge, the one
+// table a purge does not touch, and in the log. An operation that leaves
+// no trace has no place in a product whose value is provenance.
+func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) error {
+	id = domain.Normalize(id)
+	if err := s.Store.Purge(ctx, id, actor); err != nil {
+		return err
+	}
+	s.Log.Info("knowledge purged", "id", id, "actor", actor.String())
+	return nil
 }
 
 // Move renames an entry to newID, carrying every id-keyed record along

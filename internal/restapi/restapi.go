@@ -380,7 +380,7 @@ func Handler(svc *service.Service) http.Handler {
 	mux.HandleFunc("DELETE /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if r.URL.Query().Get("purge") == "true" {
-			err = svc.Purge(r.Context(), r.PathValue("id"))
+			err = svc.Purge(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
 		} else {
 			err = svc.Delete(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
 		}

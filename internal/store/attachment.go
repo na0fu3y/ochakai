@@ -198,6 +198,8 @@ func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain
 
 // DeleteAttachment removes the entry→blob mapping. The blob itself stays:
 // revisions still name its hash, and content-addressed rows are cheap.
+// Nothing reclaims a blob that no revision names any more — there is no
+// sweep, so the bucket only grows.
 func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor domain.Actor) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		k, err := s.Get(ctx, id)

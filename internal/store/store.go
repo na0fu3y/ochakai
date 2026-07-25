@@ -381,8 +381,14 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) e
 //
 // Attachment bytes are left in the blob store, as DeleteAttachment leaves
 // them: blobs are content-addressed and shared between entries, so
-// reclaiming them is a separate sweep, not a side effect of one purge.
-func (s *Store) Purge(ctx context.Context, id string) error {
+// reclaiming them cannot be a side effect of one purge. No sweep that
+// reclaims them exists yet — GCS grows monotonically, and an operator who
+// cares has to write the sweep themselves.
+//
+// The purge itself is recorded in knowledge_purge (migration 0018), which
+// is the one table it does not touch: the entry is gone, but the fact
+// that someone destroyed it is not.
+func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		var deleted bool
 		err := tx.QueryRow(ctx,
@@ -395,6 +401,15 @@ func (s *Store) Purge(ctx context.Context, id string) error {
 		}
 		if !deleted {
 			return ErrNotDeleted
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO knowledge_purge
+			(id, type, title, revisions, purged_by_kind, purged_by_name, purged_by_via)
+			SELECT k.id, k.type, k.title,
+			       (SELECT count(*) FROM knowledge_revision r WHERE r.id = k.id),
+			       $2, $3, $4
+			  FROM knowledge k WHERE k.id = $1`,
+			id, actor.Kind, actor.Name, actor.Via); err != nil {
+			return err
 		}
 		for _, q := range []string{
 			`DELETE FROM attachment WHERE knowledge_id=$1`,
