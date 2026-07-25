@@ -2,6 +2,8 @@ package httpauth
 
 import (
 	"encoding/base64"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -177,5 +179,45 @@ func TestDelegate(t *testing.T) {
 				t.Errorf("status = %d, want 400", status)
 			}
 		})
+	}
+}
+
+// Local development is where an embedding host's delegation gets written,
+// so the header has to work there. Ignoring it would hide a malformed
+// header until the first deployment, which is the silent downgrade design
+// doc 0027 §5.2 exists to prevent — just relocated to the place it is
+// hardest to notice.
+func TestInsecureDevHonorsDelegation(t *testing.T) {
+	srv := httptest.NewServer(Middleware(&config.Config{InsecureDev: true},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, Actor(r.Context()).String())
+		})))
+	defer srv.Close()
+
+	get := func(t *testing.T, header string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
+		if header != "" {
+			req.Header.Set(OnBehalfOfHeader, header)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+
+	if _, got := get(t, ""); got != "human:anonymous" {
+		t.Errorf("without the header: got %q, want human:anonymous", got)
+	}
+	_, got := get(t, "human:tanaka@example.co.jp")
+	if want := "human:tanaka@example.co.jp via human:anonymous"; got != want {
+		t.Errorf("with the header: got %q, want %q", got, want)
+	}
+	// A malformed header must fail here, where the developer can see it.
+	if status, _ := get(t, "tanaka@example.co.jp"); status != http.StatusBadRequest {
+		t.Errorf("malformed header status = %d, want 400", status)
 	}
 }
