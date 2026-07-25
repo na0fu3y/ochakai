@@ -98,11 +98,10 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   move <id> <new-id>      move (rename) an entry; references are rewritten
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
-  usage <id>              show usage totals (search hits, fetches, compiles, outcomes)
+  usage <id>              show usage totals (search hits, fetches, outcomes)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   backlinks <id>          list entries whose links point at this one
-  compile --metric <m>    compile metrics into BigQuery SQL (exit 2 = outside subset)
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)

@@ -48,7 +48,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Before answering a data question, call get_context once — it returns the relevant " +
 			"entries in full, links expanded. " +
 			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
-			"After acting on knowledge (running a golden query, using a compiled SQL), report " +
+			"After acting on knowledge (running a golden query, writing SQL from a metric definition), report " +
 			"whether it actually worked with report_outcome — failed reports are how stale " +
 			"verified knowledge gets caught. " +
 			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
@@ -199,11 +199,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
 			"the conventional body sections: # Schema, # Common query patterns, # Citations. " +
 			"A semantic model is a \"Semantic Model\" entry with the Apache Ossie model object in attrs.spec " +
-			"(one entry per model; validated on write) — compile_sql resolves models from these entries " +
-			"directly. After creating one, create an entry per metric (last id segment = the metric " +
-			"name, e.g. metrics/<name>) with attrs.model naming the Semantic Model entry's id and " +
-			"attrs.expression holding the expression, so the definitions are searchable and compile " +
-			"usage is attributed to them; have table entries link to the Semantic Model entry from their body. " +
+			"(one entry per model). Give each metric its own entry too (last id segment = the metric " +
+			"name, e.g. metrics/<name>) with attrs.expression holding the expression, so the " +
+			"definitions are searchable on their own; have table entries link to the Semantic Model entry from their body. " +
 			"Links are never a field: write a markdown link to the other entry's path in body — " +
 			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
@@ -306,7 +304,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "get_knowledge_usage",
 		Annotations: readOnly,
 		Description: "Usage totals for one knowledge entry: how often it appeared in search results, " +
-			"was fetched individually, or was referenced by compile_sql, with last_used_at. " +
+			"was fetched individually, and how it was reported to have worked, with last_used_at. " +
 			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
 			"and a staleness signal for verified entries that stopped being used.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, usageOut, error) {
@@ -321,7 +319,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "report_outcome",
 		Annotations: nonDestructive,
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
-			"write-back loop. After running a golden query or a compiled SQL, report worked " +
+			"write-back loop. After running a golden query or SQL you wrote from an entry, report worked " +
 			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
 			"Reports feed the entry's usage totals (get_knowledge_usage), where failed counts " +
 			"against verified entries flag them for re-verification. Your identity is recorded " +
@@ -338,30 +336,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		return nil, usageOut{Usage: *u}, nil
 	})
 
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "compile_sql",
-		Annotations: readOnly,
-		Description: "Deterministically compile metrics + dimensions + filters + time_grain into SQL from a " +
-			"semantic model — a \"Semantic Model\" entry holding the Ossie model object in attrs.spec (no LLM " +
-			"involved). model is the entry's id; when omitted, the Semantic Model entry whose spec defines " +
-			"the first metric is used (if several do, the compile fails and asks for model). The " +
-			"result names the Semantic Model entry and its status — judge trust from its " +
-			"provenance. Output is always BigQuery SQL. " +
-			"ochakai does not execute SQL — run the result with your own warehouse tool. " +
-			"Requests outside the supported subset fail with a reason; prefer any returned verified_queries.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in service.CompileRequest) (*mcp.CallToolResult, service.CompileResult, error) {
-		res, err := svc.Compile(ctx, in)
-		if err != nil {
-			return nil, service.CompileResult{}, err
-		}
-		return nil, *res, nil
-	})
-
 	return s
 }
 
 // Tool annotations let clients apply auto-approval policies without reading
-// prose. readOnlyHint here describes the knowledge domain: search/get/compile
+// prose. readOnlyHint here describes the knowledge domain: search/get
 // never change an entry (they may bump usage counters — telemetry the hint
 // deliberately ignores). Writes are non-destructive because history is kept as
 // revisions; only delete is flagged destructive. The values are immutable and

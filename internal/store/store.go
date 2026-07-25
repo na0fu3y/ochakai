@@ -210,37 +210,6 @@ func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]doma
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
-// ListModelsDefiningMetric returns live models entries whose spec defines
-// the named metric (attrs.spec.metrics[].name), ordered by id. This is
-// compile-time model resolution when no model id is passed (design doc
-// 0019): the model is the source of truth for its metrics, and entries
-// live wherever the user put them.
-func (s *Store) ListModelsDefiningMetric(ctx context.Context, metric string) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge
-		 WHERE deleted_at IS NULL AND type = $1
-		   AND attrs->'spec'->'metrics' @> jsonb_build_array(jsonb_build_object('name', $2::text))
-		 ORDER BY id`, domain.TypeModels, metric)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
-}
-
-// ListMetricEntryIDs returns the ids of live metrics entries that name
-// the given models entry via attrs.model — the entries compile usage is
-// attributed to (design doc 0019).
-func (s *Store) ListMetricEntryIDs(ctx context.Context, modelID string) ([]string, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id FROM knowledge
-		 WHERE deleted_at IS NULL AND type = $1 AND attrs->>'model' = $2
-		 ORDER BY id`, domain.TypeMetrics, modelID)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowTo[string])
-}
-
 // Create inserts a new entry. A live entry with the same id is
 // ErrAlreadyExists — including rejected ones, so the memory of no
 // survives. A soft-deleted entry is revived instead: the ID would
@@ -950,7 +919,6 @@ const usageLateral = `
 		SELECT
 			COALESCE(sum(count) FILTER (WHERE event = 'search_hit'), 0) AS search_hits,
 			COALESCE(sum(count) FILTER (WHERE event = 'fetched'), 0)   AS fetches,
-			COALESCE(sum(count) FILTER (WHERE event = 'compiled'), 0)  AS compiles,
 			COALESCE(sum(count) FILTER (WHERE event = 'worked'), 0)    AS worked,
 			COALESCE(sum(count) FILTER (WHERE event = 'failed'), 0)    AS failed,
 			max(last_at) AS last_used_at
@@ -968,7 +936,7 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
 		SELECT `+qualifyCols("k")+`,
-			u.search_hits, u.fetches, u.compiles, u.worked, u.failed, u.last_used_at
+			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s
 		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, limit)
@@ -993,7 +961,7 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
 		SELECT `+qualifyCols("k")+`,
-			u.search_hits, u.fetches, u.compiles, u.worked, u.failed, u.last_used_at
+			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s AND u.failed > 0
 		ORDER BY u.failed DESC, u.worked ASC, k.verified_at ASC NULLS LAST, k.id LIMIT %d`, where, limit)
@@ -1011,7 +979,7 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var u domain.Usage
 	dests, finish := knowledgeDest(&h.Knowledge)
 	if err := row.Scan(append(dests,
-		&u.SearchHits, &u.Fetches, &u.Compiles, &u.Worked, &u.Failed, &u.LastUsedAt)...); err != nil {
+		&u.SearchHits, &u.Fetches, &u.Worked, &u.Failed, &u.LastUsedAt)...); err != nil {
 		return h, err
 	}
 	if err := finish(); err != nil {

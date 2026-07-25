@@ -84,9 +84,7 @@ func (c *Client) Health(ctx context.Context) error {
 	return resp.Body.Close()
 }
 
-// APIError is a non-2xx response from the server. A 422 from compile
-// means the request was understood and refused (outside the supported
-// subset) — the CLI maps it to exit code 2.
+// APIError is a non-2xx response from the server.
 type APIError struct {
 	StatusCode int
 	Message    string
@@ -352,14 +350,6 @@ func (c *Client) ReportOutcome(ctx context.Context, id, outcome, note string) (*
 		return nil, err
 	}
 	return &u, nil
-}
-
-func (c *Client) Compile(ctx context.Context, req CompileRequest) (*CompileResult, error) {
-	var res CompileResult
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/compile", nil, req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
 }
 
 // Export streams the knowledge base as an OKF tar.gz bundle. The caller

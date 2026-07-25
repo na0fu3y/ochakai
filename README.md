@@ -25,12 +25,12 @@ git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up
 ```
 
-Register the example semantic model — a `Semantic Model` knowledge entry like any
-other (design doc 0018) — and try a search; everything goes through the
-API, so plain curl works too:
+Register the example golden query — a knowledge entry like any other —
+and try a search; everything goes through the API, so plain curl works
+too:
 
 ```sh
-go run ./cmd/ochakai create models/sales-analytics -f examples/semantic-model.md
+go run ./cmd/ochakai create queries/monthly-revenue -f examples/golden-query.md
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
 
@@ -50,13 +50,11 @@ ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type Metric --status verified
-ochakai get models/sales-analytics
+ochakai get queries/monthly-revenue
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle (a client-side loop — see below)
 ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (no deploy)
-
-ochakai compile --metric revenue --grain orders.ordered_at:month  # optional: deterministic SQL from a Semantic Model
 ```
 
 `ochakai use` saves the selection locally (name more servers with
@@ -96,8 +94,7 @@ verify / deprecate / reject (with the reason) in one click. Two feeds
 put the re-verification queue in front of that reviewer: a *verification
 age* feed (oldest `verified_at` first) so stale golden queries surface,
 and a *needs review* feed (`sort=failed`) that lists the entries agents
-reported wrong, worst first. It also compiles metrics interactively for
-debugging semantic models. One
+reported wrong, worst first. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
 
@@ -194,18 +191,11 @@ And it stays small by refusing things:
 | `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
 
-One more tool, `compile_sql`, is **optional** and off the list above on
-purpose: metrics + dimensions + filters + time grain → BigQuery SQL,
-deterministically, from a `Semantic Model` entry's spec. It answers metric
-× grain × filter combinations nobody has asked before, which is real but
-narrower than it sounds — what an agent usually needs is the verified
-query and the caveat around it, both of which arrive from `get_context`.
-It also carries the largest tool schema here, and tool schemas are agent
-context. Embedding hosts should leave it out of their allowed-tools list
-unless they want compilation; nothing else degrades. What stays
-first-class either way is `Model.Validate()`: a `Metric` is checked
-against its model on write, which is what makes a metric an executable
-specification rather than a paragraph.
+Every one of these is a knowledge operation: ochakai never executes SQL
+and never calls an LLM. `compile_sql` — deterministic SQL generation from
+a semantic model — existed until 0.13.0 and was retired (design doc 0028):
+what an agent actually needs is the verified query and the caveat around
+it, and both arrive from `get_context`.
 
 Every entry is also an **MCP resource** addressable by its canonical URI —
 `ochakai://` plus its id (the entry's path), e.g. `ochakai://metrics/revenue`
@@ -237,7 +227,7 @@ over time, run them as canaries from your CI:
 
 | Type | What it holds |
 |---|---|
-| `Semantic Model` | Apache Ossie semantic model, spec verbatim — validates its metrics, and feeds the optional `compile` |
+| `Semantic Model` | Apache Ossie semantic model, spec verbatim in `attrs.spec` |
 | `Metric` | Semantic metric definition (Apache Ossie), synonyms |
 | `Golden Query` | Golden query: natural-language question + verified SQL |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
@@ -246,8 +236,7 @@ over time, run them as canaries from your CI:
 | `BigQuery Table` | BigQuery table catalog entry: source, column notes, known issues |
 | `Reference` | Mirror of external material: enum definitions, licenses, schema docs |
 
-These are recommendations with server behavior attached (compile,
-canaries), not a closed set — any single-line value works as a type for your
+These are recommendations, not a closed set — any single-line value works as a type for your
 own document kinds, and IDs may be hierarchical
 (`queries/sales/monthly-revenue`) to organize knowledge into directories.
 The type values are the [OKF knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf/bundles)

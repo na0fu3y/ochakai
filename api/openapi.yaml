@@ -344,7 +344,7 @@ paths:
       summary: Usage totals for one knowledge entry
       description: >
         How often the entry was actually used: appeared in search results,
-        fetched individually, or referenced by compile_sql. The measure of
+        fetched individually, and how it was reported to have worked. The measure of
         the write-back loop — evidence for promoting drafts, and a staleness
         signal for verified entries that stopped being used.
       responses:
@@ -359,7 +359,7 @@ paths:
       summary: Report an outcome (worked/failed) for a knowledge entry
       description: >
         The last edge of the write-back loop: after acting on knowledge
-        (running a golden query, executing compiled SQL), report whether
+        (running a golden query, running SQL written from an entry), report whether
         the result was correct. Reports feed the entry's usage totals;
         failed counts against verified entries flag them for
         re-verification. The caller's identity is recorded with each
@@ -623,29 +623,6 @@ paths:
                     description: Still unembedded when the limit was reached.
                     type: integer
         "501": { $ref: "#/components/responses/Error" }
-  /api/v1/compile:
-    post:
-      operationId: compileSQL
-      summary: Deterministically compile metrics into SQL
-      description: >
-        Compiles from a semantic model — a models entry holding the Ossie
-        model object in attrs.spec (design doc 0018). ochakai never
-        executes the SQL and never guesses: requests outside the supported
-        subset (single fact + star joins) return 422 with a reason. Any
-        verified golden queries about the metrics are returned alongside and
-        should be preferred when they answer the question.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CompileRequest" }
-      responses:
-        "200":
-          description: Compiled SQL.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CompileResult" }
-        "422": { $ref: "#/components/responses/Error" }
 components:
   responses:
     Error:
@@ -799,7 +776,6 @@ components:
       properties:
         search_hits: { type: integer, description: Times the entry appeared in search results. }
         fetches: { type: integer, description: Times the entry was fetched individually. }
-        compiles: { type: integer, description: Times compile_sql referenced the entry. }
         worked: { type: integer, description: Outcome reports saying the entry led to a correct result. }
         failed: { type: integer, description: Outcome reports saying the entry led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
@@ -849,52 +825,3 @@ components:
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         snapshot: { $ref: "#/components/schemas/Knowledge" }
-    CompileRequest:
-      type: object
-      required: [metrics]
-      properties:
-        model:
-          type: string
-          description: >
-            Id of a models entry (e.g. models/sales). Optional: when
-            omitted, the models entry whose spec defines the first
-            metric is used — if several do, the compile is a 422 asking
-            for model (design doc 0019).
-        metrics: { type: array, items: { type: string }, minItems: 1 }
-        dimensions:
-          type: array
-          items: { type: string, description: "dataset.field" }
-        filters:
-          type: array
-          items:
-            type: object
-            required: [field, op, value]
-            properties:
-              field: { type: string, description: "dataset.field" }
-              op: { type: string, enum: ["=", "!=", ">", ">=", "<", "<=", "in", "not_in"] }
-              value: {}
-        time_grain:
-          type: object
-          required: [field, grain]
-          properties:
-            field: { type: string, description: "dataset.field (time column)" }
-            grain: { type: string, enum: [day, week, month, quarter, year] }
-        limit: { type: integer }
-    CompileResult:
-      type: object
-      properties:
-        sql: { type: string, description: Always BigQuery SQL (design doc 0016). }
-        datasets_used: { type: array, items: { type: string } }
-        notes: { type: array, items: { type: string } }
-        model:
-          type: string
-          description: Id of the models entry the SQL was compiled from.
-        model_status:
-          $ref: "#/components/schemas/Status"
-          description: >
-            The models entry's verification status. Compile does not gate
-            on status — judge trust from provenance (design doc 0018).
-        verified_queries:
-          type: array
-          description: Verified golden queries about the requested metrics; prefer these when applicable.
-          items: { $ref: "#/components/schemas/SearchHit" }

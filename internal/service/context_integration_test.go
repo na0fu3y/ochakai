@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -135,126 +134,6 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 	}
 	if u.SearchHits < 1 {
 		t.Errorf("search_hits = %d, want >= 1", u.SearchHits)
-	}
-}
-
-// TestCompileIntegration covers the compile path the unit tests cannot:
-// model resolution from the models entries themselves (the one whose
-// spec defines the metric, design doc 0019), and surfacing verified
-// golden queries next to the SQL.
-func TestCompileIntegration(t *testing.T) {
-	ctx := context.Background()
-	svc := newIntegrationService(t, ctx)
-	actor := domain.Actor{Kind: "human", Name: "test"}
-
-	id := uid("cplit")
-	modelName, metricName, goldenID := id+"_model", id+"_revenue", id+"-golden"
-	spec := map[string]any{
-		"name": modelName,
-		"datasets": []any{map[string]any{
-			"name": "orders", "source": "shop.orders",
-			"fields": []any{map[string]any{"name": "amount", "expression": "total_price"}},
-		}},
-		"metrics": []any{map[string]any{
-			"name": metricName, "expression": "SUM(orders.amount)",
-		}},
-	}
-	modelID := "models/" + modelName
-	metricEntryID := "metrics/" + metricName
-	for _, k := range []*domain.Knowledge{
-		// The model is a knowledge entry with the spec in attrs.spec
-		// (design doc 0018); Compile resolves the model by scanning models
-		// entries for the one defining the metric (design doc 0019). The
-		// metric entry names its model via attrs.model, which attributes
-		// compile usage to it.
-		{Type: domain.TypeModels, ID: modelID, Title: modelName,
-			Attrs: map[string]any{"spec": spec}},
-		{Type: domain.TypeMetrics, ID: metricEntryID, Title: "compile-test revenue",
-			Attrs: map[string]any{"model": modelID}},
-		{Type: domain.TypeQueries, ID: goldenID, Title: metricName + " by month",
-			Status: domain.StatusVerified},
-	} {
-		if _, err := svc.Create(ctx, k, actor); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Model omitted: resolved from the models entry defining the metric.
-	res, err := svc.Compile(ctx, CompileRequest{Request: compiler.Request{Metrics: []string{metricName}}})
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-	if !strings.Contains(res.SQL, "SUM(orders.total_price)") {
-		t.Errorf("compiled SQL wrong:\n%s", res.SQL)
-	}
-	if res.Model != modelID || res.ModelStatus != domain.StatusDraft {
-		t.Errorf("model provenance = %q/%q, want %q/draft", res.Model, res.ModelStatus, modelID)
-	}
-	if len(res.VerifiedQueries) == 0 || res.VerifiedQueries[0].ID != goldenID {
-		t.Errorf("verified golden query not surfaced: %+v", res.VerifiedQueries)
-	}
-
-	// Compile usage lands on the model entry and on the metric entry
-	// naming it via attrs.model — and only on entries that exist.
-	if err := svc.Store.FlushUsage(ctx); err != nil {
-		t.Fatalf("FlushUsage: %v", err)
-	}
-	for _, target := range []string{modelID, metricEntryID} {
-		u, err := svc.Usage(ctx, target)
-		if err != nil {
-			t.Fatalf("Usage(%s): %v", target, err)
-		}
-		if u.Compiles < 1 {
-			t.Errorf("compiles(%s) = %d, want >= 1", target, u.Compiles)
-		}
-	}
-
-	// A second models entry defining the same metric name makes the
-	// implicit resolution ambiguous; the explicit model still compiles.
-	spec2 := map[string]any{
-		"name": modelName + "_b",
-		"datasets": []any{map[string]any{
-			"name": "orders", "source": "shop.orders_b",
-			"fields": []any{map[string]any{"name": "amount", "expression": "total_price"}},
-		}},
-		"metrics": []any{map[string]any{
-			"name": metricName, "expression": "SUM(orders.amount)",
-		}},
-	}
-	if _, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeModels,
-		ID: modelID + "-b", Title: modelName + "_b",
-		Attrs: map[string]any{"spec": spec2}}, actor); err != nil {
-		t.Fatal(err)
-	}
-	var ambErr *compiler.Error
-	if _, err := svc.Compile(ctx, CompileRequest{Request: compiler.Request{Metrics: []string{metricName}}}); !errors.As(err, &ambErr) || !strings.Contains(ambErr.Reason, modelID+"-b") {
-		t.Errorf("ambiguous model: want compiler.Error naming the candidates, got %v", err)
-	}
-	if _, err := svc.Compile(ctx, CompileRequest{Model: modelID, Request: compiler.Request{Metrics: []string{metricName}}}); err != nil {
-		t.Errorf("explicit model must disambiguate: %v", err)
-	}
-
-	// Unresolvable model and missing metrics are compile refusals, not crashes.
-	var cErr *compiler.Error
-	if _, err := svc.Compile(ctx, CompileRequest{Request: compiler.Request{Metrics: []string{id + "-none"}}}); !errors.As(err, &cErr) {
-		t.Errorf("unresolvable model: want compiler.Error, got %v", err)
-	}
-	if _, err := svc.Compile(ctx, CompileRequest{Model: id + "-missing", Request: compiler.Request{Metrics: []string{metricName}}}); !errors.As(err, &cErr) {
-		t.Errorf("unknown model: want compiler.Error, got %v", err)
-	}
-	if _, err := svc.Compile(ctx, CompileRequest{Model: goldenID, Request: compiler.Request{Metrics: []string{metricName}}}); !errors.As(err, &cErr) {
-		t.Errorf("non-model entry as model: want compiler.Error, got %v", err)
-	}
-	if _, err := svc.Compile(ctx, CompileRequest{}); !errors.As(err, &cErr) {
-		t.Errorf("no metrics: want compiler.Error, got %v", err)
-	}
-
-	// A broken model is rejected when written, not at compile time.
-	var invErr *InvalidInputError
-	if _, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeModels,
-		ID: modelID + "-broken", Title: "broken",
-		Attrs: map[string]any{"spec": map[string]any{"datasets": []any{}}}}, actor); !errors.As(err, &invErr) {
-		t.Errorf("broken model: want invalid input error, got %v", err)
 	}
 }
 

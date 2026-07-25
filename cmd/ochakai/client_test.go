@@ -65,46 +65,6 @@ func TestDecodeEntryDetectsFormat(t *testing.T) {
 	}
 }
 
-func TestParseFilter(t *testing.T) {
-	got, err := parseFilter("orders.status = shipped and packed")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := apiclient.Filter{Field: "orders.status", Op: "=", Value: "shipped and packed"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %+v, want %+v", got, want)
-	}
-
-	got, err = parseFilter("orders.qty >= 10")
-	if err != nil || got.Value != int64(10) {
-		t.Errorf("numeric value = %#v (%v)", got.Value, err)
-	}
-
-	got, err = parseFilter("orders.region in tokyo, osaka")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got.Value, []any{"tokyo", "osaka"}) {
-		t.Errorf("in list = %#v", got.Value)
-	}
-
-	if _, err := parseFilter("no-op-here"); err == nil {
-		t.Error("bad filter parsed without error")
-	}
-}
-
-func TestParseGrain(t *testing.T) {
-	tg, err := parseGrain("orders.created_at:month")
-	if err != nil || tg.Field != "orders.created_at" || tg.Grain != "month" {
-		t.Errorf("tg = %+v, err = %v", tg, err)
-	}
-	for _, bad := range []string{"orders.created_at", ":month", "orders.created_at:"} {
-		if _, err := parseGrain(bad); err == nil {
-			t.Errorf("parseGrain(%q) succeeded, want error", bad)
-		}
-	}
-}
-
 func tarGz(t *testing.T, files map[string]string) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -151,25 +111,15 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 	}
 }
 
-func TestScalar(t *testing.T) {
-	for in, want := range map[string]any{
-		"10": int64(10), "1.5": 1.5, "true": true, "false": false, "shipped": "shipped",
-	} {
-		if got := scalar(in); got != want {
-			t.Errorf("scalar(%q) = %#v, want %#v", in, got, want)
-		}
-	}
-}
-
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "report", "revisions", "backlinks", "compile", "export", "import", "use", "whoami", "ui", "completion"} {
+	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "report", "revisions", "backlinks", "export", "import", "use", "whoami", "ui", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 23 {
+	if len(clientCommands) != 22 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest
@@ -190,7 +140,7 @@ func TestRenderContext(t *testing.T) {
 				CreatedBy:  domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
 				VerifiedBy: &human, VerifiedAt: &now,
 				Attrs: map[string]any{"question": "Revenue by month?", "sql": "SELECT 1\n"},
-				Body:  "Use this over compile.",
+				Body:  "Prefer this over writing new SQL.",
 			},
 			{
 				Type: domain.TypeInsights, ID: "insights/revenue-seasonality", Status: domain.StatusDraft,
@@ -208,7 +158,7 @@ func TestRenderContext(t *testing.T) {
 		"verified by human:na0 on 2026-06-01; created by agent:claude",
 		"Q: Revenue by month?",
 		"```sql\nSELECT 1\n```",
-		"Use this over compile.",
+		"Prefer this over writing new SQL.",
 		"## ochakai://insights/revenue-seasonality (draft) — Seasonality",
 		"Also relevant",
 		"- ochakai://terms/arr (draft) — ARR",

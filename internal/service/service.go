@@ -1,6 +1,6 @@
 // Package service implements ochakai's behavior shared by the MCP server
 // and the REST API: knowledge CRUD with the verification policy, hybrid
-// search, and deterministic SQL compilation.
+// search, and the usage/outcome write-back loop.
 package service
 
 import (
@@ -14,7 +14,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
@@ -277,29 +276,6 @@ func validate(k *domain.Knowledge) error {
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
 		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
-	}
-	if k.Type == domain.TypeModels {
-		return validateModel(k)
-	}
-	return nil
-}
-
-// validateModel is the write-time guard behind type=models entries
-// (design doc 0018 §4.2): compile_sql promises deterministic compilation
-// from a validated document, so a broken model is rejected when written,
-// not when someone asks for SQL. The spec is kept verbatim; only the
-// parts the compiler reads are checked.
-func validateModel(k *domain.Knowledge) error {
-	spec, ok := k.Attrs["spec"].(map[string]any)
-	if !ok {
-		return Invalidf("a models entry carries its Ossie semantic model object in attrs.spec")
-	}
-	m, err := compiler.ModelFromSpec(spec)
-	if err != nil {
-		return Invalidf("invalid semantic model in attrs.spec: %v", err)
-	}
-	if err := m.Validate(); err != nil {
-		return Invalidf("invalid semantic model in attrs.spec: %v", err)
 	}
 	return nil
 }
@@ -839,115 +815,4 @@ func truncateUTF8(s string, max int) string {
 		s = s[:len(s)-1]
 	}
 	return s
-}
-
-// --- compile ---
-
-// CompileRequest wraps a compiler request with the semantic model
-// reference: the id of a models entry (design doc 0018). Model may be
-// empty when exactly one models entry's spec defines the first metric
-// (design doc 0019) — pass it to disambiguate.
-type CompileRequest struct {
-	Model string `json:"model,omitempty"`
-	compiler.Request
-}
-
-// CompileResult carries the SQL plus verified golden queries related to the
-// requested metrics, which clients should prefer when applicable. Model and
-// ModelStatus identify the models entry the SQL came from — compile does
-// not gate on status (design doc 0018 §4.3); the caller judges from
-// provenance.
-type CompileResult struct {
-	compiler.Result
-	Model           string             `json:"model"`
-	ModelStatus     domain.Status      `json:"model_status"`
-	VerifiedQueries []domain.SearchHit `json:"verified_queries,omitempty"`
-}
-
-func (s *Service) Compile(ctx context.Context, req CompileRequest) (*CompileResult, error) {
-	if len(req.Metrics) == 0 {
-		return nil, &compiler.Error{Reason: "at least one metric is required"}
-	}
-
-	var entry *domain.Knowledge
-	if req.Model != "" {
-		e, err := s.Store.Get(ctx, req.Model)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return nil, &compiler.Error{Reason: fmt.Sprintf("semantic model entry %q does not exist; create a models entry with the Ossie model object in attrs.spec", req.Model)}
-			}
-			return nil, err
-		}
-		entry = e
-	} else {
-		// The model is the source of truth for its metrics (design doc
-		// 0018), so resolution scans the models entries themselves — no
-		// path convention involved; entries live wherever the user put
-		// them (design docs 0017, 0019). Ambiguity is the caller's call.
-		candidates, err := s.Store.ListModelsDefiningMetric(ctx, req.Metrics[0])
-		if err != nil {
-			return nil, err
-		}
-		switch len(candidates) {
-		case 1:
-			entry = &candidates[0]
-		case 0:
-			return nil, &compiler.Error{Reason: fmt.Sprintf("no models entry defines metric %q; create one with the Ossie model object in attrs.spec, or pass model (a models entry id) explicitly", req.Metrics[0])}
-		default:
-			ids := make([]string, len(candidates))
-			for i := range candidates {
-				ids[i] = candidates[i].ID
-			}
-			return nil, &compiler.Error{Reason: fmt.Sprintf("metric %q is defined by %d models entries (%s); pass model to pick one", req.Metrics[0], len(candidates), strings.Join(ids, ", "))}
-		}
-	}
-	spec, _ := entry.Attrs["spec"].(map[string]any)
-	if entry.Type != domain.TypeModels || spec == nil {
-		return nil, &compiler.Error{Reason: fmt.Sprintf("%q is not a semantic model entry (want type models with the Ossie model object in attrs.spec)", entry.ID)}
-	}
-	model, err := compiler.ModelFromSpec(spec)
-	if err != nil {
-		return nil, err
-	}
-	result, err := compiler.Compile(model, req.Request)
-	if err != nil {
-		return nil, err
-	}
-
-	// Surface verified golden queries about the requested metrics: a human-
-	// checked query beats a compiled one when it answers the question.
-	hits, err := s.Store.SearchLexical(ctx, strings.Join(req.Metrics, " "),
-		store.Filter{Types: []domain.Type{domain.TypeQueries}, Statuses: []domain.Status{domain.StatusVerified}}, 3)
-	if err != nil {
-		s.Log.Warn("verified query lookup failed", "error", err)
-		hits = nil
-	}
-
-	// The models entry is counted, plus the metrics entries that name it
-	// via attrs.model (matched to the requested metric names by their
-	// id's last segment): compiles are their usage signal too (a verified
-	// model nobody compiles from is stale). Only entries that exist are
-	// counted — no ghost usage rows for unregistered metric names.
-	usageIDs := []string{entry.ID}
-	if metricEntryIDs, err := s.Store.ListMetricEntryIDs(ctx, entry.ID); err != nil {
-		s.Log.Warn("metric entry lookup failed", "model", entry.ID, "error", err)
-	} else {
-		requested := make(map[string]bool, len(req.Metrics))
-		for _, m := range req.Metrics {
-			requested[m] = true
-		}
-		for _, id := range metricEntryIDs {
-			if requested[id[strings.LastIndex(id, "/")+1:]] {
-				usageIDs = append(usageIDs, id)
-			}
-		}
-	}
-	s.recordUsage(ctx, domain.EventCompiled, usageIDs)
-	queryIDs := make([]string, len(hits))
-	for i, h := range hits {
-		queryIDs[i] = h.ID
-	}
-	s.recordUsage(ctx, domain.EventSearchHit, queryIDs)
-
-	return &CompileResult{Result: *result, Model: entry.ID, ModelStatus: entry.Status, VerifiedQueries: hits}, nil
 }

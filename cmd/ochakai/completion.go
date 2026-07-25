@@ -52,7 +52,6 @@ _ochakai() {
     'report:report an outcome (worked/failed) for an entry'
     'revisions:list the change history of an entry (newest first)'
     'backlinks:list entries whose links point at this one'
-    'compile:compile metrics into BigQuery SQL'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
     'use:pick the server for later commands'
@@ -114,17 +113,6 @@ _ochakai() {
     attach)
       _arguments '--name[attachment name]:name:' '--json[print the attachment metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
       ;;
-    compile)
-      _arguments \
-        '*--metric[metric name]:metric:' \
-        '*--dimension[group-by column as dataset.field]:dimension:' \
-        '*--filter[filter as "dataset.field op value"]:filter:' \
-        '--grain[time grain as dataset.field\:grain]:grain:' \
-        '--model[models entry id]:model:' \
-        '--limit[LIMIT clause]:limit:' \
-        '--json[print the full JSON response]' \
-        '--url[server URL]:url:'
-      ;;
     reembed)
       _arguments '--limit[max entries per pass]:limit:' '--json[print JSON]' '--url[server URL]:url:'
       ;;
@@ -167,7 +155,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update delete purge reembed move attach detach usage report revisions backlinks compile export import use whoami ui completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -194,7 +182,6 @@ _ochakai() {
     create|update) opts="-f --json --url" ;;
     delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
-    compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
     reembed)       opts="--url --limit --json" ;;
     export)        opts="--url --no-attachments" ;;
     import)        opts="--dry-run --url" ;;
@@ -239,7 +226,6 @@ complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for 
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a backlinks -d 'list entries whose links point at this one'
-complete -c ochakai -n __fish_use_subcommand -a compile -d 'compile metrics into BigQuery SQL'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
@@ -250,11 +236,11 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete purge move attach detach usage report revisions backlinks compile export import whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update delete purge move attach detach usage report revisions backlinks export import whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update attach usage report revisions backlinks compile whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
@@ -264,16 +250,11 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed' -d 'list instead of searching: by verification age, demand, or failed reports'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
-complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks compile' -l limit -x -d 'max results / LIMIT clause'
+complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l metric -x -d 'metric name'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l dimension -x -d 'group-by column as dataset.field'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l filter -x -d 'filter as "dataset.field op value"'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l grain -x -d 'time grain as dataset.field:grain'
-complete -c ochakai -n '__fish_seen_subcommand_from compile' -l model -x -d 'models entry id'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

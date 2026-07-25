@@ -183,13 +183,13 @@ func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 		if r.URL.Path != "/api/v1/usage/queries/sales/monthly-revenue" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(domain.Usage{SearchHits: 12, Fetches: 4, Compiles: 2})
+		_ = json.NewEncoder(w).Encode(domain.Usage{SearchHits: 12, Fetches: 4, Worked: 2})
 	})
 	u, err := c.Usage(context.Background(), "queries/sales/monthly-revenue")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.SearchHits != 12 || u.Fetches != 4 || u.Compiles != 2 {
+	if u.SearchHits != 12 || u.Fetches != 4 || u.Worked != 2 {
 		t.Errorf("usage = %+v", u)
 	}
 }
@@ -206,18 +206,6 @@ func TestErrorResponsesBecomeAPIErrors(t *testing.T) {
 	}
 	if apiErr.StatusCode != http.StatusNotFound || apiErr.Message != "not found: metrics/nope" {
 		t.Errorf("apiErr = %+v", apiErr)
-	}
-}
-
-func TestCompileRefusalIs422(t *testing.T) {
-	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "metric x is not in the model"})
-	})
-	_, err := c.Compile(context.Background(), CompileRequest{})
-	apiErr, ok := err.(*APIError)
-	if !ok || apiErr.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("err = %T %v, want 422 *APIError", err, err)
 	}
 }
 

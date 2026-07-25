@@ -16,7 +16,7 @@ docker compose -f deploy/compose.yaml up
 Seed it and poke around:
 
 ```sh
-go run ./cmd/ochakai create models/sales-analytics -f examples/semantic-model.md
+go run ./cmd/ochakai create queries/monthly-revenue -f examples/golden-query.md
 go run ./cmd/ochakai use http://localhost:8080
 go run ./cmd/ochakai search "revenue"
 ```
@@ -51,9 +51,9 @@ PR. Small fixes and additions within existing decisions don't need one.
 
 Two decisions worth knowing before proposing features:
 
-- **No LLM inside, no SQL execution.** ochakai compiles and serves
-  knowledge deterministically; interpretation and execution belong to the
-  client agent (0001).
+- **No LLM inside, no SQL execution.** ochakai stores and serves
+  knowledge; interpretation and execution belong to the client agent
+  (0001).
 - **Google Cloud only, secret-zero.** Auth is Cloud Run IAM + Cloud SQL
   IAM; features must not introduce tokens or passwords (0002, 0003).
 

@@ -11,7 +11,7 @@
      usage, revision history, backlinks, attachments, create/edit with
      the draft → verified workflow, move with reference rewriting (a Move
      action and tree drag & drop), the draft review queue (sort=usage),
-     SQL compilation (a Compile tab on metric entries), and OKF export.
+     and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -380,7 +380,6 @@
   .form .field { margin-bottom: .9rem; }
   .form label.top { display: block; font-size: .84rem; font-weight: 600; margin-bottom: .25rem; }
   .form .hint { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
-  .filters-list .filter-row { display: grid; grid-template-columns: 1fr 6.5rem 1fr 2.2rem; gap: .5rem; margin-bottom: .5rem; }
 
   .section-title { font-size: 1.25rem; font-weight: 700; margin: .2rem 0 1rem; }
   .toolbar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
@@ -440,10 +439,6 @@ const TYPE_ICONS = { 'Semantic Model': '🧩', 'Metric': '📊', 'Golden Query':
 const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
-// Mirrors domain.EqualType: two types name the same kind regardless of
-// case or surrounding space, since the stored spelling is the writer's.
-const sameType = (a, b) =>
-  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 const STATUSES = ['draft', 'verified', 'deprecated', 'rejected'];
 
 function fmtDate(s) {
@@ -1187,19 +1182,6 @@ async function viewDetail(id) {
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const atts = entry.attachments || [];
-  // Metric entries are the compilable knowledge, so their detail view gets
-  // a Compile tab instead of a site-wide compile page. The compiler matches
-  // metrics by their semantic-model name — conventionally the entry id's
-  // last segment (design doc 0018 §4.4) — and the model (a Semantic Model
-  // entry id) is seeded from attrs.model when present; left blank, the
-  // server resolves it from the Semantic Model entry defining the metric
-  // (design doc 0019).
-  const compilable = sameType(entry.type, 'Metric');
-  const cstate = compilable ? {
-    metrics: entry.id.split('/').pop(),
-    model: typeof (entry.attrs || {}).model === 'string' ? entry.attrs.model : '',
-    dimensions: '', filters: [], tgField: '', tgGrain: '', limit: '',
-  } : null;
 
   view.innerHTML = `
     <nav class="crumbs mono">${crumbTrail(entry.id.split('/').slice(0, -1))} <span class="badge">${esc(entry.type)}</span></nav>
@@ -1239,7 +1221,6 @@ async function viewDetail(id) {
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     <div class="tabs" id="tabs">
       <button data-tab="overview" class="active">Overview</button>
-      ${compilable ? '<button data-tab="compile">Compile</button>' : ''}
       <button data-tab="attrs">Attributes</button>
       <button data-tab="links">Links${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
       <button data-tab="attachments">Attachments${atts.length ? ' (' + atts.length + ')' : ''}</button>
@@ -1356,13 +1337,6 @@ async function viewDetail(id) {
     usage: () => '<div class="empty">…</div>',
     history: () => '<div class="empty">…</div>',
   };
-  if (compilable) {
-    tabs.compile = () => `
-      <p class="provenance" style="margin:0 0 1rem">Deterministically compiles this metric from its semantic
-      model (a models entry) — ochakai never executes SQL and never guesses. Verified golden queries about the metrics
-      are returned alongside; prefer them when they answer the question.</p>
-      ${compileFormHTML(cstate)}`;
-  }
 
   function wireAttachments() {
     const fileInput = $('#att-file');
@@ -1402,7 +1376,6 @@ async function viewDetail(id) {
         <div class="stat-tiles">
           <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">search hits</div></div>
           <div class="tile"><div class="num">${u.fetches ?? 0}</div><div class="lbl">fetches</div></div>
-          <div class="tile"><div class="num">${u.compiles ?? 0}</div><div class="lbl">compiles</div></div>
           <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">worked</div></div>
           <div class="tile"><div class="num">${u.failed ?? 0}</div><div class="lbl">failed</div></div>
         </div>
@@ -1435,7 +1408,6 @@ async function viewDetail(id) {
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     body.innerHTML = tabs[name]();
     if (name === 'attachments') wireAttachments();
-    if (name === 'compile') wireCompileForm(cstate);
     if (lazy[name]) {
       try {
         tabs[name] = await lazy[name]();
@@ -1588,8 +1560,8 @@ function reviewCard(h) {
   const tags = (h.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const who = actorStr(h.created_by);
   const age = daysSince(h.created_at);
-  const usageBits = (u.search_hits || u.fetches || u.compiles)
-    ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0} · compiled ${u.compiles || 0}`
+  const usageBits = (u.search_hits || u.fetches)
+    ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0}`
     : 'no usage yet';
   const outcomeBits = (u.worked || u.failed)
     ? `${u.failed ? '⚠️ ' : ''}worked ${u.worked || 0} · failed ${u.failed || 0}`
@@ -1787,129 +1759,6 @@ async function viewEditor(id, prefix = '') {
         ? ` — <a href="#/k/${idPath(payload.id)}">view the existing ${esc(payload.id)}</a> (edit it, or pick another ID)`
         : '';
       errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
-    }
-  });
-}
-
-/* ============================== compile ============================== */
-
-// The compile form renders inside the Compile tab of a Metric entry's
-// detail view (metrics are the compilable knowledge; the model resolves
-// via the metric's attrs.model). State is per-view, seeded from the
-// metric, and written back on every input so it survives tab switches.
-function compileFormHTML(c) {
-  return `
-    <form class="form" id="compile-form">
-      <div class="row">
-        <div class="field">
-          <label class="top" for="c-metrics">Metrics</label>
-          <input type="text" id="c-metrics" class="mono" value="${esc(c.metrics)}" placeholder="revenue, order_count" required>
-          <div class="hint">Comma-separated metric names.</div>
-        </div>
-        <div class="field">
-          <label class="top" for="c-model">Model</label>
-          <input type="text" id="c-model" class="mono" value="${esc(c.model)}" placeholder="models/… (optional — resolved from the Semantic Model entry defining the metric)">
-        </div>
-      </div>
-      <div class="field">
-        <label class="top" for="c-dims">Dimensions</label>
-        <input type="text" id="c-dims" class="mono" value="${esc(c.dimensions)}" placeholder="customers.region, orders.channel">
-        <div class="hint">Comma-separated <code>dataset.field</code>.</div>
-      </div>
-      <div class="field">
-        <label class="top">Filters</label>
-        <div class="filters-list" id="c-filters"></div>
-        <button class="btn small" type="button" id="c-add-filter">+ Add filter</button>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label class="top" for="c-tg-field">Time grain</label>
-          <div style="display:flex;gap:.5rem">
-            <input type="text" id="c-tg-field" class="mono" value="${esc(c.tgField)}" placeholder="orders.created_at">
-            <select id="c-tg-grain" style="width:8rem">
-              <option value="">—</option>
-              ${['day', 'week', 'month', 'quarter', 'year'].map(g => `<option ${g === c.tgGrain ? 'selected' : ''}>${g}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <div class="field">
-          <label class="top" for="c-limit">Limit</label>
-          <input type="number" id="c-limit" value="${esc(c.limit)}" placeholder="limit" min="1" style="width:7rem">
-        </div>
-      </div>
-      <p><button class="btn primary" type="submit">Compile</button></p>
-    </form>
-    <div id="compile-result"></div>`;
-}
-
-function wireCompileForm(c) {
-  const OPS = ['=', '!=', '>', '>=', '<', '<=', 'in', 'not_in'];
-  const filtersBox = $('#c-filters');
-  function renderFilters() {
-    filtersBox.innerHTML = c.filters.map((f, i) => `
-      <div class="filter-row">
-        <input type="text" class="mono" data-f="field" data-i="${i}" value="${esc(f.field)}" placeholder="orders.status">
-        <select data-f="op" data-i="${i}">${OPS.map(o => `<option ${o === f.op ? 'selected' : ''}>${o}</option>`).join('')}</select>
-        <input type="text" class="mono" data-f="value" data-i="${i}" value="${esc(f.value)}" placeholder='completed or ["a","b"]'>
-        <button class="btn small" type="button" data-del="${i}" title="remove">✕</button>
-      </div>`).join('');
-    filtersBox.querySelectorAll('input,select').forEach(el =>
-      el.addEventListener('input', () => { c.filters[+el.dataset.i][el.dataset.f] = el.value; }));
-    filtersBox.querySelectorAll('[data-del]').forEach(b =>
-      b.addEventListener('click', () => { c.filters.splice(+b.dataset.del, 1); renderFilters(); }));
-  }
-  renderFilters();
-  $('#c-add-filter').addEventListener('click', () => { c.filters.push({ field: '', op: '=', value: '' }); renderFilters(); });
-
-  // Write inputs back into the state object as they change, so edits
-  // survive a switch to another tab and back (the tab re-renders from c).
-  const persist = () => {
-    c.metrics = $('#c-metrics').value; c.model = $('#c-model').value; c.dimensions = $('#c-dims').value;
-    c.tgField = $('#c-tg-field').value; c.tgGrain = $('#c-tg-grain').value;
-    c.limit = $('#c-limit').value;
-  };
-  $('#compile-form').addEventListener('input', persist);
-
-  $('#compile-form').addEventListener('submit', async ev => {
-    ev.preventDefault();
-    persist();
-    const body = {
-      metrics: c.metrics.split(',').map(s => s.trim()).filter(Boolean),
-    };
-    if (c.model.trim()) body.model = c.model.trim();
-    const dims = c.dimensions.split(',').map(s => s.trim()).filter(Boolean);
-    if (dims.length) body.dimensions = dims;
-    const filters = c.filters.filter(f => f.field.trim()).map(f => {
-      let value = f.value;
-      try { value = JSON.parse(f.value); } catch { /* keep as string */ }
-      return { field: f.field.trim(), op: f.op, value };
-    });
-    if (filters.length) body.filters = filters;
-    if (c.tgField.trim() && c.tgGrain) body.time_grain = { field: c.tgField.trim(), grain: c.tgGrain };
-    if (c.limit) body.limit = +c.limit;
-
-    const out = $('#compile-result');
-    out.innerHTML = '<div class="empty">compiling…</div>';
-    try {
-      const r = await api('/api/v1/compile', { method: 'POST', body });
-      const datasets = (r.datasets_used || []).map(d => `<span class="tag mono">${esc(d)}</span>`).join(' ');
-      const notes = (r.notes || []).map(n => `<li>${esc(n)}</li>`).join('');
-      const golden = (r.verified_queries || []).map(hitCard).join('');
-      out.innerHTML = `
-        <div class="toolbar" style="margin-top:1.4rem">
-          <strong>Compiled SQL</strong> <span class="badge">BigQuery</span> ${datasets}
-          <span class="grow"></span>
-          <button class="btn small" id="copy-sql">Copy</button>
-        </div>
-        <pre id="sql-out">${esc(r.sql || '')}</pre>
-        ${notes ? `<ul style="color:var(--muted);font-size:.9rem">${notes}</ul>` : ''}
-        ${golden ? `<h3 style="margin-top:1.6rem">Verified golden queries — prefer these when applicable</h3>${golden}` : ''}`;
-      $('#copy-sql').addEventListener('click', async () => {
-        await navigator.clipboard.writeText(r.sql || '');
-        toast('SQL copied.');
-      });
-    } catch (e) {
-      out.innerHTML = `<div class="error-banner">Compile failed: ${esc(e.message)}</div>`;
     }
   });
 }

@@ -1,6 +1,6 @@
 // Package restapi serves /api/v1 so users can build their own web UIs
 // (the bundled one lives in internal/webui). It is a superset of the MCP tools:
-// the same knowledge/search/usage/compile operations plus the bulk export
+// the same knowledge/search/usage operations plus the bulk export
 // endpoint that makes no sense as an agent tool call, and human-facing
 // endpoints (browse, revisions, backlinks) that stay off MCP by design
 // (agents get search/get_context instead; design doc 0015 records the
@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/okf"
@@ -199,7 +198,7 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// GET /api/v1/usage/{id...} — how often the entry was actually used
-	// (search hits, fetches, compiles). The measure of the write-back
+	// (search hits, fetches, outcomes). The measure of the write-back
 	// loop: draft promotion evidence, staleness signal. Lives outside
 	// /knowledge/ so a "/usage" suffix can never be confused with an ID
 	// segment.
@@ -553,19 +552,6 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {
-		var req service.CompileRequest
-		if !readJSON(w, r, &req) {
-			return
-		}
-		res, err := svc.Compile(r.Context(), req)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, res)
-	})
-
 	return mux
 }
 
@@ -618,7 +604,6 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 
 func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
-	var compileErr *compiler.Error
 	var inputErr *service.InvalidInputError
 	var unsupportedErr *service.UnsupportedError
 	switch {
@@ -629,8 +614,6 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusPreconditionFailed
 	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrNotDeleted):
 		status = http.StatusConflict
-	case errors.As(err, &compileErr):
-		status = http.StatusUnprocessableEntity
 	case errors.As(err, &inputErr):
 		status = http.StatusBadRequest
 	case errors.As(err, &unsupportedErr):
