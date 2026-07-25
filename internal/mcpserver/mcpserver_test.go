@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
 
@@ -401,5 +402,42 @@ func TestVerifiedGuardIsAdvertised(t *testing.T) {
 	}
 	for name := range want {
 		t.Errorf("tool %s not found", name)
+	}
+}
+
+// The budget governs the whole response or it governs nothing.
+// domain.SearchHit embeds Knowledge, so returning hits verbatim would send
+// every top entry a second time, uncapped — and an entry pushed into
+// outline for being too large would arrive in full through hits anyway,
+// while the outline row told the agent to go fetch what it already had.
+func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
+	body := strings.Repeat("x", 4000)
+	hits := []domain.SearchHit{{
+		Knowledge: domain.Knowledge{
+			Type: domain.TypeQueries, ID: "queries/monthly-revenue",
+			Status: domain.StatusVerified, Body: body,
+			Attrs: map[string]any{"sql": "SELECT 1"},
+		},
+		Score: 0.9,
+	}}
+	out := contextOut{Hits: contextRanks(hits)}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), body) {
+		t.Error("hits carried the body; the budget covers only entries")
+	}
+	if strings.Contains(string(encoded), "SELECT 1") {
+		t.Error("hits carried attrs; the budget covers only entries")
+	}
+	got := out.Hits[0]
+	if got.ID != "queries/monthly-revenue" || got.Score != 0.9 || got.Status != domain.StatusVerified {
+		t.Errorf("a hit must still rank and address the entry: %+v", got)
+	}
+	// Title falls back to the filename when the entry has none (design doc
+	// 0022), so a hit is readable without fetching.
+	if got.Title != "monthly-revenue" {
+		t.Errorf("hit title = %q, want the display title", got.Title)
 	}
 }
