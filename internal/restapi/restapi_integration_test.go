@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,41 @@ func TestRESTIntegration(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("export bundle misses %s/sales/orders.md", typ)
+	}
+
+	// ?attachments=false skips the bytes: a CI backup can take the
+	// entries from here and the files straight from GCS, which is both
+	// cheaper and the only sane path once attachments outweigh the text.
+	resp, err = http.Get(srv.URL + "/api/v1/export?attachments=false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("export without attachments: status = %d", resp.StatusCode)
+	}
+	gz, err = gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found = false
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasSuffix(hdr.Name, ".md") {
+			t.Errorf("attachments=false still carried %s", hdr.Name)
+		}
+		if hdr.Name == typ+"/sales/orders.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("attachments=false dropped the entries too")
 	}
 
 	// Delete, then the entry is gone.

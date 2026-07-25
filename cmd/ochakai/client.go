@@ -851,7 +851,8 @@ func cmdCompile(ctx context.Context, args []string) error {
 func cmdExport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai export [flags] <dir | ->\n\nDownload the whole knowledge base as an OKF bundle (markdown + YAML\nfrontmatter) into dir, or stream the tar.gz to stdout with \"-\".\nYour knowledge is yours.",
-		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n")
+		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-attachments - > entries.tar.gz   # bytes are in GCS; copy them from there\n")
+	noAtt := fs.Bool("no-attachments", false, "export the markdown only, skipping attachment files")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -864,7 +865,7 @@ func cmdExport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc, err := c.Export(ctx)
+	rc, err := c.Export(ctx, !*noAtt)
 	if err != nil {
 		return err
 	}

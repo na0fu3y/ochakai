@@ -124,7 +124,7 @@ _ochakai() {
         '--url[server URL]:url:'
       ;;
     export)
-      _arguments '--url[server URL]:url:' '1:directory:_files -/'
+      _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
       ;;
     import)
       _arguments '--dry-run[parse and list, write nothing]' '--url[server URL]:url:' '1:bundle:_files'
@@ -190,7 +190,7 @@ _ochakai() {
     delete|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
-    export)        opts="--url" ;;
+    export)        opts="--url --no-attachments" ;;
     import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
@@ -268,5 +268,6 @@ complete -c ochakai -n '__fish_seen_subcommand_from compile' -l model -x -d 'mod
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
+complete -c ochakai -n '__fish_seen_subcommand_from export' -l no-attachments -d 'export the markdown only'
 complete -c ochakai -n '__fish_seen_subcommand_from export' -a '(__fish_complete_directories)'
 `

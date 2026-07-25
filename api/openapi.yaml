@@ -529,7 +529,22 @@ paths:
       description: >
         Streams a tar.gz of the whole knowledge base in Open Knowledge
         Format (markdown + YAML frontmatter, one concept per entry, with
-        index.md files). Your knowledge is yours.
+        index.md files), attachment files included. Your knowledge is
+        yours.
+
+
+        Written one file at a time, so the server never holds the whole
+        bundle in memory. Because the response starts before the last
+        file is read, a failure mid-export can only truncate the stream:
+        verify a backup by reading the archive, not by the status code.
+      parameters:
+        - name: attachments
+          in: query
+          description: >
+            `false` exports the markdown only. Attachment bytes live in
+            GCS, so a periodic backup can copy them from there directly
+            instead of pulling them through this endpoint.
+          schema: { type: string, enum: ["false"] }
       responses:
         "200":
           description: OKF bundle.
