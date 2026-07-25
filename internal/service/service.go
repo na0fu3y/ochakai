@@ -138,6 +138,15 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }
 
+// Purge hard-deletes an already soft-deleted entry, freeing its id for a
+// move (design doc 0021: Move cannot revive a tombstone the way Create
+// can). Not an MCP tool: this is the one operation that destroys history,
+// so it belongs to the human surfaces (design doc 0015). No actor is
+// recorded because nothing survives to record it on.
+func (s *Service) Purge(ctx context.Context, id string) error {
+	return s.Store.Purge(ctx, domain.Normalize(id))
+}
+
 // Move renames an entry to newID, carrying every id-keyed record along
 // (revisions, usage, attachments, embeddings) and rewriting inbound
 // references so nothing breaks (design doc 0021). Moving to the current

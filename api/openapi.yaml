@@ -274,9 +274,24 @@ paths:
     delete:
       operationId: deleteKnowledge
       summary: Soft-delete a knowledge entry (history retained)
+      description: >
+        Soft-deletes by default: the entry disappears from reads, its
+        history stays, and creating the same id revives it. With
+        `purge=true` the entry is hard-deleted instead — entry,
+        revisions, usage, and attachment metadata erased, the id freed
+        for a move. Two calls, deliberately: the first is reversible, the
+        second is not. Purging a live entry is a 409; delete it first.
+        Content-addressed attachment bytes are left in the blob store,
+        as detaching leaves them.
+      parameters:
+        - name: purge
+          in: query
+          description: Hard-delete an already soft-deleted entry.
+          schema: { type: string, enum: ["true"] }
       responses:
         "204": { description: Deleted. }
         "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveKnowledge
@@ -288,7 +303,8 @@ paths:
         (link targets in both bare and ochakai:// forms, and attrs.model)
         so nothing breaks (design doc 0021). The destination must be a
         fresh id: a live or soft-deleted entry there already owns that
-        address and its history. Lives at its own top-level path for the
+        address and its history — free an id held by a deleted entry with
+        DELETE ...?purge=true. Lives at its own top-level path for the
         same reason /usage and /revisions do — a suffix after the
         hierarchical id could be confused with an ID segment.
       requestBody:

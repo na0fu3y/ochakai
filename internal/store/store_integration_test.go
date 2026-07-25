@@ -1158,3 +1158,91 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 		t.Errorf("detaching left the filename in search_text: %q", searchText(moved))
 	}
 }
+
+// Move onto an id held by a soft-deleted entry, and the purge that frees
+// it. Create revives a tombstone in place (it brings no history of its
+// own), but Move cannot: the arriving entry has revisions, and (id, rev)
+// is a primary key. Without purge the id would be blocked forever — the
+// exact outcome Create's own comment calls out as unacceptable.
+func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	const src, dst = "it-purge-src", "it-purge-dst"
+	for _, id := range []string{src, dst} {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+	}
+	create := func(id string) {
+		t.Helper()
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeTerms, ID: id, Title: id,
+			Status: domain.StatusDraft, CreatedBy: actor,
+		}); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	create(src)
+	create(dst)
+
+	// A live occupant is a plain conflict.
+	if _, err := s.Move(ctx, src, dst, actor); !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
+	}
+
+	if err := s.SoftDelete(ctx, dst, actor); err != nil {
+		t.Fatal(err)
+	}
+	// Still taken — but the error must say so, or the caller goes looking
+	// for an entry they cannot see.
+	_, err = s.Move(ctx, src, dst, actor)
+	if !errors.Is(err, ErrAlreadyExists) {
+		t.Fatalf("move onto a tombstone: got %v, want ErrAlreadyExists", err)
+	}
+	if !strings.Contains(err.Error(), "purge") {
+		t.Errorf("error does not point at the way out: %v", err)
+	}
+
+	// Purging a live entry is refused: delete first, purge second.
+	if err := s.Purge(ctx, src); !errors.Is(err, ErrNotDeleted) {
+		t.Errorf("purge of a live entry: got %v, want ErrNotDeleted", err)
+	}
+
+	if err := s.Purge(ctx, dst); err != nil {
+		t.Fatalf("Purge: %v", err)
+	}
+	var revs int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_revision WHERE id = $1`, dst).Scan(&revs); err != nil {
+		t.Fatal(err)
+	}
+	if revs != 0 {
+		t.Errorf("purge left %d revisions behind", revs)
+	}
+	if err := s.Purge(ctx, dst); !errors.Is(err, ErrNotFound) {
+		t.Errorf("purge of a purged entry: got %v, want ErrNotFound", err)
+	}
+
+	// The id is free again.
+	moved, err := s.Move(ctx, src, dst, actor)
+	if err != nil {
+		t.Fatalf("move after purge: %v", err)
+	}
+	if moved.ID != dst {
+		t.Errorf("moved entry id = %q, want %q", moved.ID, dst)
+	}
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, dst)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dst)
+}

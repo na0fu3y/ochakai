@@ -33,6 +33,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"create":    cmdCreate,
 	"update":    cmdUpdate,
 	"delete":    cmdDelete,
+	"purge":     cmdPurge,
 	"move":      cmdMove,
 	"attach":    cmdAttach,
 	"detach":    cmdDetach,
@@ -748,6 +749,38 @@ func cmdDelete(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("deleted ochakai://%s\n", id)
+	return nil
+}
+
+// cmdPurge is the second half of a two-step destruction: delete makes an
+// entry invisible and recoverable, purge makes it gone. It exists because
+// a soft-deleted entry still owns its id — Create revives one in place,
+// but Move cannot, so without purge a renamed-away id would be blocked
+// forever (design doc 0021).
+func cmdPurge(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai purge [flags] <id>\n\nHard-delete an already soft-deleted entry: the entry, its revisions,\nusage, and attachment metadata are erased and the id is freed for a\nmove. History is gone — `ochakai delete` first, then purge. A live\nentry is refused.",
+		"  ochakai delete terms/obsolete-kpi\n  ochakai purge terms/obsolete-kpi\n")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	id, err := parseRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	if err := c.Purge(ctx, id); err != nil {
+		return err
+	}
+	fmt.Printf("purged ochakai://%s\n", id)
 	return nil
 }
 
