@@ -180,16 +180,16 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Timestamp:   k.UpdatedAt.UTC().Format(time.RFC3339),
 		Status:      string(k.Status),
 		StatusNote:  k.StatusNote,
-		CreatedBy:   k.CreatedBy.Kind + ":" + k.CreatedBy.Name,
+		CreatedBy:   k.CreatedBy.String(),
 	}
 	if k.VerifiedBy != nil {
-		fm.VerifiedBy = k.VerifiedBy.Kind + ":" + k.VerifiedBy.Name
+		fm.VerifiedBy = k.VerifiedBy.String()
 	}
 	if k.VerifiedAt != nil {
 		fm.VerifiedAt = k.VerifiedAt.UTC().Format(time.RFC3339)
 	}
 	if k.RejectedBy != nil {
-		fm.RejectedBy = k.RejectedBy.Kind + ":" + k.RejectedBy.Name
+		fm.RejectedBy = k.RejectedBy.String()
 	}
 	if k.RejectedAt != nil {
 		fm.RejectedAt = k.RejectedAt.UTC().Format(time.RFC3339)

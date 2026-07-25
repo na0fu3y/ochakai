@@ -164,9 +164,30 @@ type Usage struct {
 }
 
 // Actor identifies who created or verified a knowledge entry.
+//
+// Via names the caller that acted on this actor's behalf: an application
+// with its own service-account identity, forwarding the identity of the
+// person using it (design doc 0027). It is never a replacement for the
+// actor — an entry written by tanaka through InsightFlow and one tanaka
+// wrote with their own credentials must stay distinguishable, or the
+// delegation becomes indistinguishable from a forgery. Empty for the
+// ordinary case, where the caller acted as itself.
 type Actor struct {
 	Kind string `json:"kind"` // "human" | "agent"
 	Name string `json:"name"`
+	Via  string `json:"via,omitempty"` // the delegating caller's identity, "" when there is none
+}
+
+// String renders an actor the way every surface shows provenance:
+// "human:tanaka@example.co.jp", or "human:tanaka@example.co.jp via
+// agent:insightflow@example.iam.gserviceaccount.com" when the write came
+// through a delegating application.
+func (a Actor) String() string {
+	s := a.Kind + ":" + a.Name
+	if a.Via != "" {
+		s += " via " + a.Via
+	}
+	return s
 }
 
 const (

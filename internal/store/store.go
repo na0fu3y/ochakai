@@ -120,8 +120,9 @@ type Filter struct {
 }
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note,
-	created_by_kind, created_by_name, verified_by_kind, verified_by_name, verified_at,
-	rejected_by_kind, rejected_by_name, rejected_at,
+	created_by_kind, created_by_name, created_by_via,
+	verified_by_kind, verified_by_name, verified_by_via, verified_at,
+	rejected_by_kind, rejected_by_name, rejected_by_via, rejected_at,
 	links, attrs, body, created_at, updated_at`
 
 // knowledgeDest returns the scan destinations for knowledgeCols targeting
@@ -130,14 +131,16 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 // append their own destinations — the column list lives here once.
 func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
+	var verifiedVia, rejectedVia string
 	var links, attrs []byte
 	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote,
-		&k.CreatedBy.Kind, &k.CreatedBy.Name, &verifiedKind, &verifiedName, &k.VerifiedAt,
-		&rejectedKind, &rejectedName, &k.RejectedAt,
+		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
+		&verifiedKind, &verifiedName, &verifiedVia, &k.VerifiedAt,
+		&rejectedKind, &rejectedName, &rejectedVia, &k.RejectedAt,
 		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt}
 	finish = func() error {
-		k.VerifiedBy = actorFrom(verifiedKind, verifiedName)
-		k.RejectedBy = actorFrom(rejectedKind, rejectedName)
+		k.VerifiedBy = actorFrom(verifiedKind, verifiedName, verifiedVia)
+		k.RejectedBy = actorFrom(rejectedKind, rejectedName, rejectedVia)
 		if err := json.Unmarshal(links, &k.Links); err != nil {
 			return err
 		}
@@ -155,19 +158,21 @@ func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
 	return k, finish()
 }
 
-func actorFrom(kind, name *string) *domain.Actor {
+func actorFrom(kind, name *string, via string) *domain.Actor {
 	if kind == nil || name == nil {
 		return nil
 	}
-	return &domain.Actor{Kind: *kind, Name: *name}
+	return &domain.Actor{Kind: *kind, Name: *name, Via: via}
 }
 
-// actorPtrs splits an optional actor into nullable columns.
-func actorPtrs(a *domain.Actor) (kind, name *string) {
+// actorPtrs splits an optional actor into its columns. Kind and name are
+// nullable together (no actor at all); via is a plain column because an
+// absent delegation and an empty one are the same thing.
+func actorPtrs(a *domain.Actor) (kind, name *string, via string) {
 	if a == nil {
-		return nil, nil
+		return nil, nil, ""
 	}
-	return &a.Kind, &a.Name
+	return &a.Kind, &a.Name, a.Via
 }
 
 func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
@@ -249,26 +254,28 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 		if err != nil {
 			return err
 		}
-		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
-		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
+		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
+		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
 			ON CONFLICT (id) DO UPDATE SET
 				type=EXCLUDED.type,
 				title=EXCLUDED.title, description=EXCLUDED.description, resource=EXCLUDED.resource, tags=EXCLUDED.tags,
 				status=EXCLUDED.status, status_note=EXCLUDED.status_note,
 				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
+				created_by_via=EXCLUDED.created_by_via,
 				verified_by_kind=EXCLUDED.verified_by_kind, verified_by_name=EXCLUDED.verified_by_name,
-				verified_at=EXCLUDED.verified_at,
+				verified_by_via=EXCLUDED.verified_by_via, verified_at=EXCLUDED.verified_at,
 				rejected_by_kind=EXCLUDED.rejected_by_kind, rejected_by_name=EXCLUDED.rejected_by_name,
-				rejected_at=EXCLUDED.rejected_at,
+				rejected_by_via=EXCLUDED.rejected_by_via, rejected_at=EXCLUDED.rejected_at,
 				links=EXCLUDED.links, attrs=EXCLUDED.attrs, body=EXCLUDED.body,
 				created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at,
 				deleted_at=NULL
 			WHERE knowledge.deleted_at IS NOT NULL`,
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
-			k.CreatedBy.Kind, k.CreatedBy.Name, verifiedKind, verifiedName, k.VerifiedAt,
-			rejectedKind, rejectedName, k.RejectedAt,
+			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
+			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
+			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
 			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt)
 		if err != nil {
 			return err
@@ -293,12 +300,12 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
-		verifiedKind, verifiedName := actorPtrs(k.VerifiedBy)
-		rejectedKind, rejectedName := actorPtrs(k.RejectedBy)
+		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
+		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
-			verifiedKind, verifiedName, k.VerifiedAt,
-			rejectedKind, rejectedName, k.RejectedAt,
+			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
+			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
 			links, attrs, k.Body, k.UpdatedAt}
 		if ifMatch != nil {
 			args = append(args, ifMatch.UTC())
@@ -306,9 +313,9 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		}
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8,
-			verified_by_kind=$9, verified_by_name=$10, verified_at=$11,
-			rejected_by_kind=$12, rejected_by_name=$13, rejected_at=$14,
-			links=$15, attrs=$16, body=$17, updated_at=$18
+			verified_by_kind=$9, verified_by_name=$10, verified_by_via=$11, verified_at=$12,
+			rejected_by_kind=$13, rejected_by_name=$14, rejected_by_via=$15, rejected_at=$16,
+			links=$17, attrs=$18, body=$19, updated_at=$20
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -559,7 +566,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 // trail is most interesting exactly when the entry is gone.
 func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT rev, change, changed_by_kind, changed_by_name, changed_at, snapshot
+		`SELECT rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_at, snapshot
 		 FROM knowledge_revision WHERE id=$1 ORDER BY rev DESC LIMIT $2`,
 		id, limit)
 	if err != nil {
@@ -568,7 +575,7 @@ func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]doma
 	revs, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Revision, error) {
 		var r domain.Revision
 		var snapshot []byte
-		if err := row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedAt, &snapshot); err != nil {
+		if err := row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedBy.Via, &r.ChangedAt, &snapshot); err != nil {
 			return r, err
 		}
 		return r, json.Unmarshal(snapshot, &r.Snapshot)
@@ -589,9 +596,9 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, snapshot)
-		VALUES ($1, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE id=$1), $2, $3, $4, $5)`,
-		k.ID, change, actor.Kind, actor.Name, snapshot)
+	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, changed_by_via, snapshot)
+		VALUES ($1, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE id=$1), $2, $3, $4, $5, $6)`,
+		k.ID, change, actor.Kind, actor.Name, actor.Via, snapshot)
 	return err
 }
 

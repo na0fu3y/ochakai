@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -45,8 +46,78 @@ func Middleware(cfg *config.Config, next http.Handler) http.Handler {
 			http.Error(w, "auth: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
+		actor, status, err := delegate(actor, r.Header.Get(OnBehalfOfHeader), cfg.Delegators)
+		if err != nil {
+			http.Error(w, "auth: "+err.Error(), status)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), actor)))
 	})
+}
+
+// OnBehalfOfHeader carries the end-user identity a trusted caller is
+// acting for: "human:tanaka@example.co.jp" (design doc 0027).
+const OnBehalfOfHeader = "X-Ochakai-On-Behalf-Of"
+
+// maxOnBehalfOf bounds the header so a provenance column cannot be filled
+// with arbitrary bulk.
+const maxOnBehalfOf = 320 // the maximum length of an email address
+
+// delegate resolves the actor to record when caller forwards an end-user
+// identity. The forwarded identity becomes the actor and the caller is
+// kept as Via — never dropped. Recording only the human would make a
+// delegated write indistinguishable from one the human made themselves,
+// which is the definition of a forgery; recording only the caller is the
+// collapse this exists to fix (design doc 0002 §3).
+//
+// A header from a caller that is not permitted to delegate is an error,
+// not a silent downgrade: an application that believes it is writing as
+// tanaka must not discover months later that every entry says otherwise.
+func delegate(caller domain.Actor, header string, delegators []string) (domain.Actor, int, error) {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return caller, 0, nil
+	}
+	if !permitted(caller.Name, delegators) {
+		return caller, http.StatusForbidden, fmt.Errorf(
+			"%s: %s is not permitted to act on behalf of others (add it to OCHAKAI_DELEGATING_CALLERS)",
+			OnBehalfOfHeader, caller.Name)
+	}
+	onBehalf, err := parseOnBehalfOf(header)
+	if err != nil {
+		return caller, http.StatusBadRequest, err
+	}
+	onBehalf.Via = caller.String()
+	return onBehalf, 0, nil
+}
+
+func permitted(caller string, delegators []string) bool {
+	for _, d := range delegators {
+		if d == "*" || d == caller {
+			return true
+		}
+	}
+	return false
+}
+
+// parseOnBehalfOf reads "kind:name". The kind is explicit rather than
+// guessed from the name: the caller knows whether it is forwarding a
+// person or another agent, and a guess would silently mislabel every
+// identity that does not look like the domain expects.
+func parseOnBehalfOf(v string) (domain.Actor, error) {
+	if len(v) > maxOnBehalfOf {
+		return domain.Actor{}, fmt.Errorf("%s: value exceeds %d bytes", OnBehalfOfHeader, maxOnBehalfOf)
+	}
+	kind, name, ok := strings.Cut(v, ":")
+	name = strings.TrimSpace(name)
+	if !ok || name == "" || (kind != domain.ActorHuman && kind != domain.ActorAgent) {
+		return domain.Actor{}, fmt.Errorf(
+			`%s: want "human:<identity>" or "agent:<identity>", got %q`, OnBehalfOfHeader, v)
+	}
+	if strings.ContainsAny(name, " \t") {
+		return domain.Actor{}, fmt.Errorf("%s: identity must not contain whitespace", OnBehalfOfHeader)
+	}
+	return domain.Actor{Kind: kind, Name: name}, nil
 }
 
 // actorFromIDToken extracts provenance from ID token claims: the email is
