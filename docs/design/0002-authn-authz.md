@@ -51,13 +51,15 @@ agent、それ以外は human。署名の再検証はしない(IAM 通過 = 検�
 |---|---|---|
 | Claude Code / MCP | gcloud proxy → cloudrun-iam | human:本人メール |
 | ヘッドレスエージェント | 専用 SA → cloudrun-iam | agent:SA メール |
-| sample webui | webui の SA が IAM 通過 | agent:webui SA(全利用者が集約される。per-user が必要になったら IAP 検証を将来検討) |
+| sample webui | webui の SA が IAM 通過 | agent:webui SA(全利用者が集約される。解消手段は [0027](0027-delegated-provenance.md) — webui が IAP の検証済み JWT からユーザーを取り出し `X-Ochakai-On-Behalf-Of` に載せる。webui 側は未実装) |
 | 非 GCP | clients モード | トークンのマップ通り |
 
 ## 4. 将来の選択肢(作らない、必要になったら)
 
 - MCP OAuth(Issue #5): 公開エンドポイントで proxy なし直結が必要になったら
-- IAP JWT 検証: webui 利用者の per-user provenance が必要になったら
+- IAP JWT 検証: webui 利用者の per-user provenance が必要になったら。
+  ochakai 側の受け口は [0027](0027-delegated-provenance.md) で用意済みなので、
+  残るのは webui が IAP の JWT を検証してヘッダに載せる実装だけである
 - 認可(role / スコープ): 「読めるが書けない人」を作る必要が生まれたら
 
 ## 5. v0.2 実装スコープ
