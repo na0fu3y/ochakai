@@ -205,8 +205,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"attrs.expression holding the expression, so the definitions are searchable and compile " +
 			"usage is attributed to them; have table entries link to the Semantic Model entry from their body. " +
 			"Links are never a field: write a markdown link to the other entry's path in body — " +
-			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink).",
+			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink). " +
+			"An id whose entry was deleted can be reused, which revives it as your draft — unless a human had " +
+			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
+			"different id instead.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+		// Creating on a soft-deleted id revives that row in place, status
+		// and status_note included — the other way to overwrite a ruling
+		// from a surface with no If-Match channel, and the one the update
+		// and delete guards cannot see (design doc 0015 §3.1).
+		if err := svc.RefuseIfRevivingCurated(ctx, in.ID); err != nil {
+			return nil, knowledgeOut{}, err
+		}
 		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
 		if err != nil {
 			return nil, knowledgeOut{}, err

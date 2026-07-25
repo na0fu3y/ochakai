@@ -81,6 +81,23 @@ CLI、Web UI。機能を足すたびに「どのサーフェスに載せるか�
   2 コールで消せる。しかも verified の消失と違い、rejected の消失は
   誰も使っていなかったので誰も気づかない。
 
+  **create による復活も塞ぐ(2026-07-25 追記)。** delete を塞いだだけ
+  では足りなかった。Create は soft-delete 済みの行を
+  `ON CONFLICT ... WHERE deleted_at IS NOT NULL` でその場で復活させ、
+  status と status_note を入力で上書きする。つまり**すでに存在する
+  墓標**——このルール以前に消されたもの、あるいは人間が REST/CLI で
+  整理として消したもの(rejected を消すのは正当な運用である)——は、
+  create 1 コールで「一度も判断されていない draft」として戻せる。
+  update / delete のガードはこれを見られない。読む行が live ではない
+  からである。
+
+  そこで create も、対象 id が verified / rejected / deprecated の墓標
+  なら拒否する(`RefuseIfRevivingCurated`)。draft の墓標は従来どおり
+  復活できる — 誰も判断を下していないし、放棄された draft の id を
+  再利用するのは create の想定どおりの使い方である。人間の面(REST /
+  CLI / Web UI)は従来どおり復活でき、id を完全に解放したければ purge
+  がある(0021)。
+
   **状態遷移も同じ扱いにする。** verified → deprecated も MCP からは
   できない。廃止は「正しかったが今は推奨しない」という判断であって、
   エージェントの観測ではない。観測の通り道は report_outcome であり、

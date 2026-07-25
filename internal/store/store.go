@@ -192,6 +192,27 @@ func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 	return &k, nil
 }
 
+// GetTombstone returns the soft-deleted entry holding id, or ErrNotFound
+// when the id is free or live. Create revives such a row in place
+// (ON CONFLICT ... WHERE deleted_at IS NOT NULL), overwriting its status
+// and status_note, so a surface that must not overwrite a ruling has to
+// be able to see the ruling a tombstone still carries.
+func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND deleted_at IS NOT NULL`, id)
+	if err != nil {
+		return nil, err
+	}
+	k, err := pgx.CollectExactlyOneRow(rows, scanKnowledge)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
 // ListLinkingTo returns live entries whose links point at id, most
 // recently updated first. This is the reverse edge Context needs: the
 // insight that explains a metric links to the metric, not the other way
