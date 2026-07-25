@@ -373,19 +373,19 @@ func TestContextHint(t *testing.T) {
 	}
 }
 
-// TestVerifiedGuardIsAdvertised pins the half of the verified-write rule
+// TestCuratedGuardIsAdvertised pins the half of the curated-write rule
 // that agents can act on: the tool descriptions must say what to do
 // instead, or an agent meets the refusal with no next move. The refusal
 // itself is exercised in the service integration test.
-func TestVerifiedGuardIsAdvertised(t *testing.T) {
+func TestCuratedGuardIsAdvertised(t *testing.T) {
 	cs := connect(t)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
 	want := map[string][]string{
-		"update_knowledge": {"Verified entries cannot be updated", "report_outcome failed", "create_knowledge"},
-		"delete_knowledge": {"Verified entries cannot be deleted", "report_outcome failed"},
+		"update_knowledge": {"verified, rejected, or deprecated", "report_outcome failed", "create_knowledge"},
+		"delete_knowledge": {"verified, rejected, or deprecated", "erase the record of why"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]
