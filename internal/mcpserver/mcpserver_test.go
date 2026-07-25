@@ -237,7 +237,6 @@ func TestToolAnnotations(t *testing.T) {
 		"get_knowledge":       {readOnly: true},
 		"get_attachment":      {readOnly: true},
 		"get_knowledge_usage": {readOnly: true},
-		"compile_sql":         {readOnly: true},
 		"create_knowledge":    {destructive: &no},
 		"update_knowledge":    {destructive: &no},
 		"delete_knowledge":    {destructive: &yes},

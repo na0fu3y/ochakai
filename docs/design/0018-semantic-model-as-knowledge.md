@@ -1,6 +1,8 @@
 # ochakai 設計ドキュメント 0018: import-ossie の廃止 — セマンティックモデルを通常ナレッジにする
 
-Status: Accepted(2026-07-19)
+Status: Accepted(2026-07-19)。[0028](0028-retire-compile-sql.md) が
+compile_sql と書き込み時検証(§4.2・§4.3)を撤去 — import-ossie 廃止と
+「モデルは通常のナレッジエントリ」の決定は有効
 Date: 2026-07-19
 
 ## 1. 目的

@@ -6,82 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// The apiclient compile types deliberately mirror api/openapi.yaml
-// instead of importing the server's types (which drag in the store and
-// embedding dependency trees). This test pins the two shapes together so
-// they cannot drift apart silently. Importing service here is fine:
-// test files don't ship in the binary.
-
-func TestCompileRequestMatchesServerWire(t *testing.T) {
-	req := CompileRequest{
-		Model:      "models/sales-analytics",
-		Metrics:    []string{"revenue"},
-		Dimensions: []string{"orders.region"},
-		Filters: []Filter{
-			{Field: "orders.status", Op: "=", Value: "shipped"},
-			{Field: "orders.region", Op: "in", Value: []any{"tokyo", "osaka"}},
-		},
-		TimeGrain: &TimeGrain{Field: "orders.created_at", Grain: "month"},
-		Limit:     100,
-	}
-	data, err := json.Marshal(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got service.CompileRequest
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("server cannot decode the client request: %v", err)
-	}
-	want := service.CompileRequest{Model: "models/sales-analytics", Request: compiler.Request{
-		Metrics:    []string{"revenue"},
-		Dimensions: []string{"orders.region"},
-		Filters: []compiler.Filter{
-			{Field: "orders.status", Op: "=", Value: "shipped"},
-			{Field: "orders.region", Op: "in", Value: []any{"tokyo", "osaka"}},
-		},
-		TimeGrain: &compiler.TimeGrain{Field: "orders.created_at", Grain: "month"},
-		Limit:     100,
-	}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("server decoded:\n%+v\nwant:\n%+v", got, want)
-	}
-}
-
-func TestCompileResultMatchesServerWire(t *testing.T) {
-	server := service.CompileResult{
-		Result: compiler.Result{
-			SQL:          "SELECT 1",
-			DatasetsUsed: []string{"orders"},
-			Notes:        []string{"a note"},
-		},
-		Model:       "models/sales-analytics",
-		ModelStatus: domain.StatusVerified,
-		VerifiedQueries: []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeQueries, ID: "q1", Title: "Q"}, Score: 0.7},
-		},
-	}
-	data, err := json.Marshal(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got CompileResult
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("client cannot decode the server response: %v", err)
-	}
-	if got.SQL != "SELECT 1" ||
-		!reflect.DeepEqual(got.DatasetsUsed, []string{"orders"}) ||
-		!reflect.DeepEqual(got.Notes, []string{"a note"}) ||
-		got.Model != "models/sales-analytics" || got.ModelStatus != domain.StatusVerified ||
-		len(got.VerifiedQueries) != 1 || got.VerifiedQueries[0].ID != "q1" {
-		t.Errorf("client decoded: %+v", got)
-	}
-}
+// The apiclient types deliberately mirror api/openapi.yaml instead of
+// importing the server's types (which drag in the store and embedding
+// dependency trees). These tests pin the two shapes together so they
+// cannot drift apart silently. Importing service here is fine: test
+// files don't ship in the binary.
 
 func TestBrowseResultMatchesServerWire(t *testing.T) {
 	when := time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)

@@ -15,15 +15,15 @@ import (
 )
 
 // Type is the kind of a knowledge entry. Any single-line string is a valid
-// type (design doc 0005): the built-in types below are recommendations with
-// server behavior attached (compile_sql reads metrics), never a closed set —
-// users' own document types are first-class. The values are the OKF type
-// vocabulary verbatim, so import and export are identity on the type key
-// (design doc 0023).
+// type (design doc 0005): the built-in types below are recommendations,
+// never a closed set — users' own document types are first-class. The
+// values are the OKF type vocabulary verbatim, so import and export are
+// identity on the type key (design doc 0023); the list is a vocabulary,
+// not a registry of server behavior (design doc 0028 §3).
 type Type string
 
 const (
-	TypeModels     Type = "Semantic Model"   // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018)
+	TypeModels     Type = "Semantic Model"   // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018; unvalidated since 0028)
 	TypeMetrics    Type = "Metric"           // semantic metric definition (Apache Ossie)
 	TypeQueries    Type = "Golden Query"     // golden query: question + verified SQL
 	TypeInsights   Type = "Insight"          // how to read a metric: baselines, caveats
@@ -129,12 +129,15 @@ func ValidStatus(s Status) bool {
 }
 
 // Usage event kinds recorded per knowledge entry (design doc 0001 §9).
-// The first three are recorded passively by reads; worked/failed are
+// The first two are recorded passively by reads; worked/failed are
 // deliberate outcome reports (report_outcome) closing the write-back loop.
+//
+// Retired: "compiled", written by compile_sql until 0.13.0 (design doc
+// 0028). Existing rows are kept — history stays history — but nothing
+// writes or aggregates them any more.
 const (
 	EventSearchHit = "search_hit" // appeared in search results
 	EventFetched   = "fetched"    // fetched individually via get
-	EventCompiled  = "compiled"   // referenced by compile_sql
 	EventWorked    = "worked"     // caller reports the entry led to a correct result
 	EventFailed    = "failed"     // caller reports the entry led to a wrong or unusable result
 )
@@ -157,7 +160,6 @@ func ValidOutcome(o string) bool {
 type Usage struct {
 	SearchHits int64      `json:"search_hits"`
 	Fetches    int64      `json:"fetches"`
-	Compiles   int64      `json:"compiles"`
 	Worked     int64      `json:"worked"`
 	Failed     int64      `json:"failed"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`

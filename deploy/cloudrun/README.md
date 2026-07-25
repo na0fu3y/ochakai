@@ -347,16 +347,15 @@ instruction, nothing is lost. Once migrated, the bytea column is gone,
 so binaries and configurations without the bucket cannot read
 attachments again; keep the var set from then on.
 
-## 5. Load a semantic model and connect Claude Code
+## 5. Load knowledge and connect Claude Code
 
-Register a semantic model as a `models` knowledge entry (design doc
-0018) through the API. The CLI resolves Google ID tokens itself from
-your gcloud login, so no Cloud SQL proxy or authorized network is
-needed — `$OCHAKAI_URL` was exported when the service was deployed
-above:
+Register an entry through the API. The CLI resolves Google ID tokens
+itself from your gcloud login, so no Cloud SQL proxy or authorized
+network is needed — `$OCHAKAI_URL` was exported when the service was
+deployed above:
 
 ```sh
-go run github.com/na0fu3y/ochakai/cmd/ochakai@latest create models/sales-analytics -f examples/semantic-model.md
+go run github.com/na0fu3y/ochakai/cmd/ochakai@latest create queries/monthly-revenue -f examples/golden-query.md
 ```
 
 Connect Claude Code — with the Cloud Run proxy running, no headers, no
@@ -372,8 +371,6 @@ Smoke test over REST (through the proxy, also tokenless):
 
 ```sh
 curl "http://localhost:8787/api/v1/knowledge?q=revenue"
-curl -X POST "http://localhost:8787/api/v1/compile" \
-  -d '{"metrics":["revenue"],"dimensions":["customers.region"]}'
 ```
 
 ## 5b. Optional: the team web UI behind IAP (separate service, by design)

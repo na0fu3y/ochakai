@@ -180,8 +180,6 @@ func (s *Store) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 			u.SearchHits = count
 		case domain.EventFetched:
 			u.Fetches = count
-		case domain.EventCompiled:
-			u.Compiles = count
 		case domain.EventWorked:
 			u.Worked = count
 		case domain.EventFailed:

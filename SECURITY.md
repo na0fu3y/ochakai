@@ -24,9 +24,6 @@ Especially interesting reports, given that design:
 
 - Ways a request could smuggle or spoof the forwarded identity when
   deployed as documented in [deploy/cloudrun/README.md](deploy/cloudrun/README.md).
-- Ways `compile_sql` output could be made to differ from the semantic
-  definition or golden query it claims to come from (the compiled SQL is
-  executed downstream with real warehouse credentials).
 - Anything that makes `OCHAKAI_INSECURE_DEV` behavior reachable in a
   non-dev configuration.
 

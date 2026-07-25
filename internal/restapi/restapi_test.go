@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -27,7 +26,6 @@ func TestWriteErrorStatuses(t *testing.T) {
 		{"not found", store.ErrNotFound, http.StatusNotFound},
 		{"already exists", store.ErrAlreadyExists, http.StatusConflict},
 		{"if-match conflict", store.ErrConflict, http.StatusPreconditionFailed},
-		{"compile refusal", &compiler.Error{Reason: "outside the subset"}, http.StatusUnprocessableEntity},
 		{"invalid input", service.Invalidf("title is required"), http.StatusBadRequest},
 		{"unsupported", service.Unsupportedf("attachments need GCS"), http.StatusNotImplemented},
 		{"unknown", errors.New("connection reset"), http.StatusInternalServerError},

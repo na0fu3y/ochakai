@@ -12,7 +12,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
@@ -299,42 +298,12 @@ func TestDeriveLinksIgnoresPayloadLinks(t *testing.T) {
 	}
 }
 
-// TestValidateModelsEntries pins the write-time guard behind type=models
-// (design doc 0018 §4.2): attrs.spec must hold a structurally valid
-// Ossie model object; a broken model never reaches the store.
-func TestValidateModelsEntries(t *testing.T) {
-	entry := func(spec any) *domain.Knowledge {
-		k := &domain.Knowledge{Type: domain.TypeModels, ID: "models/sales", Title: "sales"}
-		if spec != nil {
-			k.Attrs = map[string]any{"spec": spec}
-		}
-		return k
-	}
-	if err := validate(entry(map[string]any{
-		"name": "sales", "datasets": []any{map[string]any{"name": "orders"}},
-	})); err != nil {
-		t.Errorf("valid model rejected: %v", err)
-	}
-	for name, spec := range map[string]any{
-		"no attrs.spec":  nil,
-		"spec not a map": "name: sales",
-		"nameless model": map[string]any{"datasets": []any{map[string]any{"name": "d"}}},
-		"no datasets":    map[string]any{"name": "m"},
-	} {
-		err := validate(entry(spec))
-		var invalid *InvalidInputError
-		if err == nil || !errors.As(err, &invalid) {
-			t.Errorf("%s: want InvalidInputError, got %v", name, err)
-		}
-	}
-}
-
-// TestExampleSemanticModelRegisters guards the shipped example against
-// drift: examples/semantic-model.md must parse as an OKF document, land
-// on type models, pass the write-time validation, and compile — the
-// quickstart command has to keep working.
-func TestExampleSemanticModelRegisters(t *testing.T) {
-	doc, err := os.ReadFile("../../examples/semantic-model.md")
+// TestExampleGoldenQueryRegisters guards the shipped example against
+// drift: examples/golden-query.md must parse as an OKF document and pass
+// validation with its frontmatter landing in attrs — the quickstart
+// command has to keep working.
+func TestExampleGoldenQueryRegisters(t *testing.T) {
+	doc, err := os.ReadFile("../../examples/golden-query.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,24 +311,18 @@ func TestExampleSemanticModelRegisters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("okf.Parse: %v", err)
 	}
-	k.ID = "models/sales-analytics"
-	if k.Type != domain.TypeModels {
-		t.Errorf("type = %q, want models", k.Type)
+	k.ID = "queries/monthly-revenue"
+	if k.Type != domain.TypeQueries {
+		t.Errorf("type = %q, want %q", k.Type, domain.TypeQueries)
 	}
 	if err := validate(k); err != nil {
-		t.Errorf("example model rejected: %v", err)
+		t.Errorf("example entry rejected: %v", err)
 	}
-	spec, _ := k.Attrs["spec"].(map[string]any)
-	model, err := compiler.ModelFromSpec(spec)
-	if err != nil {
-		t.Fatalf("ModelFromSpec: %v", err)
+	if q, _ := k.Attrs["question"].(string); q == "" {
+		t.Error("attrs.question missing: a golden query without its question is not searchable as one")
 	}
-	res, err := compiler.Compile(model, compiler.Request{Metrics: []string{"revenue"}})
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-	if !strings.Contains(res.SQL, "SUM(") {
-		t.Errorf("compiled SQL wrong:\n%s", res.SQL)
+	if sql, _ := k.Attrs["sql"].(string); !strings.Contains(sql, "SELECT") {
+		t.Errorf("attrs.sql = %q", k.Attrs["sql"])
 	}
 }
 
