@@ -168,59 +168,108 @@ func TestUpdateIfMatchIntegration(t *testing.T) {
 	}
 }
 
-// The verified-write rule: a surface with no If-Match precondition (MCP)
-// must not replace curated knowledge in place. Everything else an agent
-// does stays open — creating, editing drafts, and promoting to verified
-// are all still allowed, because this is about preconditions, not
-// authority (design docs 0002, 0015 §3.1).
-func TestRefuseIfVerifiedIntegration(t *testing.T) {
+// The curated-write rule: a surface with no If-Match precondition (MCP)
+// must not replace a state a human put there. Everything else an agent
+// does stays open — creating, editing drafts, and promoting a draft to
+// verified are all still allowed, because this is about preconditions,
+// not authority (design docs 0002, 0015 §3.1).
+func TestRefuseIfCuratedIntegration(t *testing.T) {
 	ctx := context.Background()
 	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "agent", Name: "insightflow@example.iam.gserviceaccount.com"}
+	human := domain.Actor{Kind: "human", Name: "na0"}
 
-	id := "queries/" + uid("guard")
-	k, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeQueries, ID: id, Title: "monthly revenue",
-		Attrs: map[string]any{"sql": "SELECT 1"},
-	}, actor)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-
-	// A draft is fair game: the agent that drafted it can keep working.
-	if err := svc.RefuseIfVerified(ctx, id, "update"); err != nil {
-		t.Errorf("draft must be writable: %v", err)
-	}
-
-	// Promotion to verified is not restricted — 0002 stands.
-	k.Status = domain.StatusVerified
-	if _, _, err := svc.Update(ctx, k, actor, nil); err != nil {
-		t.Fatalf("promote to verified: %v", err)
-	}
-
-	err = svc.RefuseIfVerified(ctx, id, "update")
-	var invalid *InvalidInputError
-	if !errors.As(err, &invalid) {
-		t.Fatalf("verified entry: got %v, want a refusal", err)
-	}
-	// The refusal has to name the way forward, or an agent stalls here.
-	for _, want := range []string{"report_outcome failed", "create_knowledge", id} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("refusal does not mention %q: %v", want, err)
+	setStatus := func(t *testing.T, k *domain.Knowledge, status domain.Status, by domain.Actor) {
+		t.Helper()
+		k.Status = status
+		updated, _, err := svc.Update(ctx, k, by, nil)
+		if err != nil {
+			t.Fatalf("set status %s: %v", status, err)
 		}
+		*k = *updated
 	}
 
-	// Demoting a verified entry is how a human reopens it; after that the
-	// entry is writable again.
-	k.Status = domain.StatusDeprecated
-	if _, _, err := svc.Update(ctx, k, domain.Actor{Kind: "human", Name: "na0"}, nil); err != nil {
-		t.Fatalf("deprecate: %v", err)
-	}
-	if err := svc.RefuseIfVerified(ctx, id, "update"); err != nil {
-		t.Errorf("deprecated entry must be writable again: %v", err)
+	t.Run("drafts stay writable", func(t *testing.T) {
+		id := "queries/" + uid("guard-draft")
+		k, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeQueries, ID: id, Title: "draft"}, actor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		version, err := svc.RefuseIfCurated(ctx, id, "update")
+		if err != nil {
+			t.Fatalf("draft must be writable: %v", err)
+		}
+		// The guard hands back a usable precondition, not just a verdict.
+		if version == nil || !version.Equal(k.UpdatedAt) {
+			t.Errorf("version = %v, want the entry's updated_at %v", version, k.UpdatedAt)
+		}
+		// Promotion to verified is not restricted — 0002 stands.
+		setStatus(t, k, domain.StatusVerified, actor)
+	})
+
+	// Each curated state is refused, and each refusal names a way forward:
+	// an agent that meets a wall with no door stalls or works around it.
+	for status, wantAdvice := range map[domain.Status]string{
+		domain.StatusVerified:   "report_outcome failed",
+		domain.StatusRejected:   "status_note",
+		domain.StatusDeprecated: "create_knowledge",
+	} {
+		t.Run(string(status)+" is refused", func(t *testing.T) {
+			id := "queries/" + uid("guard-"+string(status))
+			k, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: string(status),
+				StatusNote: "because the numbers were wrong",
+			}, actor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+			setStatus(t, k, status, human)
+
+			for _, op := range []string{"update", "delete"} {
+				_, err := svc.RefuseIfCurated(ctx, id, op)
+				var invalid *InvalidInputError
+				if !errors.As(err, &invalid) {
+					t.Fatalf("%s %s: got %v, want a refusal", op, status, err)
+				}
+				if !strings.Contains(err.Error(), wantAdvice) {
+					t.Errorf("%s refusal does not offer %q: %v", status, wantAdvice, err)
+				}
+			}
+
+			// A human reopening it makes it writable again.
+			setStatus(t, k, domain.StatusDraft, human)
+			if _, err := svc.RefuseIfCurated(ctx, id, "update"); err != nil {
+				t.Errorf("reopened entry must be writable: %v", err)
+			}
+		})
 	}
 
-	if err := svc.Delete(ctx, id, actor); err != nil {
-		t.Fatalf("cleanup: %v", err)
-	}
+	// The path this rule exists to close: Create refuses a live rejected
+	// entry, so without the guard an agent could delete it and recreate it
+	// as a draft, taking the reason for the rejection with it.
+	t.Run("a rejection cannot be laundered into a draft", func(t *testing.T) {
+		id := "queries/" + uid("guard-launder")
+		k, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeQueries, ID: id, Title: "rejected proposal",
+			StatusNote: "duplicate of an existing golden query",
+		}, actor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		setStatus(t, k, domain.StatusRejected, human)
+
+		if _, err := svc.RefuseIfCurated(ctx, id, "delete"); err == nil {
+			t.Fatal("deleting a rejected entry was allowed; the memory of no is erasable")
+		}
+		stored, err := svc.Get(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stored.Status != domain.StatusRejected || stored.StatusNote == "" {
+			t.Errorf("the rejection and its reason must survive: %+v", stored)
+		}
+	})
 }

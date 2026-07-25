@@ -221,8 +221,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"an omitted title clears it, making the filename the name). " +
 			"Links are not a field: they come from the markdown links in body, so keep the ones you want to keep. " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
-			"Verified entries cannot be updated from this surface: if one is wrong, report_outcome failed, " +
-			"or create_knowledge a better draft — a human promotes it. " +
+			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be updated from " +
+			"this surface: if a verified entry is wrong, report_outcome failed; otherwise create_knowledge " +
+			"a better draft and let a human promote it. " +
 			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
 			"as rejected_by; put the reason in status_note (also useful when deprecating).",
@@ -231,10 +232,15 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		// If-Match precondition (nil) and writes are last-write-wins. That
 		// is tolerable for drafts and not for curated knowledge, so
 		// verified entries are refused here rather than clobbered.
-		if err := svc.RefuseIfVerified(ctx, in.ID, "update"); err != nil {
+		version, err := svc.RefuseIfCurated(ctx, in.ID, "update")
+		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		k, _, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx), nil)
+		// The version read by the guard becomes the precondition, so an
+		// entry curated in the window between the two is a conflict rather
+		// than a clobber — the surface has no If-Match channel of its own,
+		// but the check can supply one.
+		k, _, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx), version)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
@@ -245,10 +251,14 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "delete_knowledge",
 		Annotations: destructive,
 		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
-			"create_knowledge on the same id revives it. Verified entries cannot be deleted from " +
-			"this surface — report_outcome failed if one is wrong.",
+			"create_knowledge on the same id revives it. Entries a human has ruled on — verified, " +
+			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
+			"entry and recreating it would erase the record of why it was turned down.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
-		if err := svc.RefuseIfVerified(ctx, in.ID, "delete"); err != nil {
+		// Delete has no precondition channel in the store, so a curation
+		// landing in the window between check and delete still wins. The
+		// window is a single round trip and the delete is revivable.
+		if _, err := svc.RefuseIfCurated(ctx, in.ID, "delete"); err != nil {
 			return nil, deleteOut{}, err
 		}
 		if err := svc.Delete(ctx, in.ID, httpauth.Actor(ctx)); err != nil {

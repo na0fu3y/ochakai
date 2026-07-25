@@ -48,9 +48,10 @@ CLI、Web UI。機能を足すたびに「どのサーフェスに載せるか�
   get_attachment の description が既に誘導している。
 - **バルク(export / import / import-ossie)。** 応答サイズが読めず、
   tar.gz はツール結果に載らない。管理タスクは CLI / CI の領分。
-- **verified エントリの上書き・削除。** update_knowledge /
-  delete_knowledge は、対象が verified なら拒否する(create、draft の
-  更新、verified への昇格はいずれも従来どおり)。
+- **人間が判断を下したエントリ(verified / rejected / deprecated)の
+  上書き・削除。** update_knowledge / delete_knowledge は対象がこの
+  いずれかなら拒否する(create、draft の更新、draft から verified への
+  昇格はいずれも従来どおり)。
 
   これは認可ではない。0002 の「認可を持たない・verified 昇格を制限
   しない」は撤回しない — 誰が検証したかは記録され、信頼は provenance
@@ -69,6 +70,28 @@ CLI、Web UI。機能を足すたびに「どのサーフェスに載せるか�
   report_outcome failed(sort=failed の再検証フィードに乗る)、
   より良いものがあるなら新しい draft を create する。どちらも
   書き戻しループの正規の経路であり、この規則はむしろそこへ誘導する。
+
+  **rejected は verified と同じかそれ以上に重要である。** Create は
+  live なエントリがあれば ErrAlreadyExists を返す(rejected を含む)
+  ので、rejected に阻まれたエージェントには delete → create という
+  2 手の迂回路がある。soft-delete 済みエントリは Create が draft として
+  復活させるので、却下の理由(status_note)ごと消える。README が
+  memory layer との差別化の筆頭に挙げ、配布する指示がエージェントに
+  「再提案の前に --status rejected を見ろ」と言っている当のものが、
+  2 コールで消せる。しかも verified の消失と違い、rejected の消失は
+  誰も使っていなかったので誰も気づかない。
+
+  **状態遷移も同じ扱いにする。** verified → deprecated も MCP からは
+  できない。廃止は「正しかったが今は推奨しない」という判断であって、
+  エージェントの観測ではない。観測の通り道は report_outcome であり、
+  判断は人間の面で行う。
+
+  **TOCTOU。** チェックと書き込みの間に別の書き込みが挟まりうる。
+  update はチェック時に読んだ updated_at を If-Match として渡すことで
+  構造的に閉じてある(0025 §11 の機構をそのまま使う)ので、窓の中で
+  キュレーションされた場合は上書きではなく衝突になる。delete には
+  ストア側に precondition の通り道が無く、窓は 1 往復ぶん残る —
+  delete は復活可能なので許容している。
 
 ### 3.2 REST に載せないもの
 

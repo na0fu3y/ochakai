@@ -134,33 +134,51 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	return k, true, nil
 }
 
-// RefuseIfVerified reports an error when id names a verified entry, for
-// surfaces that must not overwrite curated knowledge in place.
+// RefuseIfCurated reports an error when id names an entry a human has
+// already ruled on — verified, rejected, or deprecated — for surfaces that
+// must not overwrite that ruling in place. It returns the entry's version
+// so the caller can pass it as an If-Match precondition and close the
+// window between this check and the write.
 //
 // The rule is about preconditions, not authority. Design doc 0002 settled
 // that ochakai has no authorization and that verification is judged from
-// provenance, and this does not reopen it: an agent may still verify, may
-// still create, may still edit drafts. What it may not do from a surface
-// with no If-Match channel (MCP, design doc 0025 §11) is silently replace
-// an entry a human already curated — a bad overwrite of a verified golden
-// query is invisible until someone runs it and gets a wrong number, while
-// a soft-delete is both visible and revivable.
+// provenance, and this does not reopen it: an agent may still create, may
+// still edit drafts, may still promote a draft to verified. What it may
+// not do from a surface with no If-Match channel (MCP, design doc 0025
+// §11) is silently replace a state a human put there.
 //
-// It reads through the store rather than Service.Get so a refused write
-// does not record a fetch: nobody used the knowledge.
-func (s *Service) RefuseIfVerified(ctx context.Context, id, op string) error {
+// Rejected matters at least as much as verified, and it is the one the
+// obvious rule would have missed. Create refuses a live entry, so an agent
+// blocked by a rejection has a two-call path around it — delete, then
+// create, which revives the tombstone as a fresh draft and takes the
+// status_note with it. That erases the memory of no that the write-back
+// loop is built on (design doc 0025) and that the shipped instructions
+// tell agents to consult before re-proposing. Nobody notices: unlike a
+// deleted verified entry, a deleted rejection leaves nothing anyone was
+// using.
+func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Time, error) {
 	k, err := s.Store.Get(ctx, domain.Normalize(id))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if k.Status != domain.StatusVerified {
-		return nil
+	var instead string
+	switch k.Status {
+	case domain.StatusVerified:
+		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
+			"re-verification feed. If you have something better, create_knowledge a new draft."
+	case domain.StatusRejected:
+		instead = "The rejection is the record of a decision, and status_note says why; read it " +
+			"before proposing this again. If you disagree, create_knowledge a new entry at a " +
+			"different id and let a human judge it."
+	case domain.StatusDeprecated:
+		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
+			"reviving, create_knowledge a draft that says why."
+	default:
+		return &k.UpdatedAt, nil
 	}
-	return Invalidf("cannot %s %s from this surface: it is verified, and this surface has no "+
-		"If-Match precondition to overwrite curated knowledge safely. If it is wrong, say so with "+
-		"report_outcome failed (that puts it in the re-verification feed); if you have something "+
-		"better, create_knowledge a new draft. A human changes verified entries from the web UI or CLI.",
-		op, id)
+	return nil, Invalidf("cannot %s %s from this surface: it is %s, and this surface has no "+
+		"If-Match precondition to replace curated knowledge safely. %s A human changes curated "+
+		"entries from the web UI or CLI.", op, id, k.Status, instead)
 }
 
 func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
