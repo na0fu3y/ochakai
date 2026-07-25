@@ -551,10 +551,13 @@ paths:
         yours.
 
 
-        Written one file at a time, so the server never holds the whole
-        bundle in memory. Because the response starts before the last
-        file is read, a failure mid-export can only truncate the stream:
-        verify a backup by reading the archive, not by the status code.
+        Written as it is read — indexes first, then entries in batches,
+        then one attachment at a time — so the server never holds the
+        whole bundle in memory. Because the response starts before the
+        last file is read, a failure mid-export can only truncate the
+        stream: verify a backup by reading the archive, not by the status
+        code. The server logs every such failure at error level, naming
+        the file it stopped on.
       parameters:
         - name: attachments
           in: query

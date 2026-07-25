@@ -29,6 +29,11 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
+// exportBatch is how many entries the exporter holds at once. Small
+// enough that a knowledge base of any size costs the same peak memory;
+// large enough that the round trips disappear against the transfer.
+const exportBatch = 100
+
 func Handler(svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
@@ -418,15 +423,18 @@ func Handler(svc *service.Service) http.Handler {
 	// (tar.gz of markdown + YAML frontmatter, plus attachment files).
 	// Your knowledge is yours.
 	//
-	// Written straight to the response one file at a time. Collecting the
-	// bundle first would mean holding every entry and every attachment's
-	// bytes in memory at once — a periodic CI backup would be the largest
-	// allocation the process ever makes, on the instance size Cloud Run
-	// runs it at. With ?attachments=false the bytes are skipped entirely:
-	// they live in GCS, so a backup can copy them from there far more
-	// cheaply than through this endpoint.
+	// Written straight to the response, a batch of entries and one
+	// attachment at a time. Collecting the bundle first would mean holding
+	// every entry and every attachment's bytes in memory at once — a
+	// periodic CI backup would be the largest allocation the process ever
+	// makes, on the instance size Cloud Run runs it at. With
+	// ?attachments=false the bytes are skipped entirely: they live in GCS,
+	// so a backup can copy them from there far more cheaply than through
+	// this endpoint.
 	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
-		entries, err := svc.Store.ListAll(r.Context())
+		// index.md files need every id, but only the id, title and
+		// description — never a body.
+		rows, err := svc.Store.ListAllIndexRows(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return
@@ -440,23 +448,31 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 		}
-		// Indexes need every id, but only the ids. Rendering them up front
-		// keeps the concept documents streaming one at a time.
-		indexes := okf.Indexes(entries) // also sorts entries by id
+		indexes := okf.Indexes(rows) // also sorts rows by id
+		ids := make([]string, len(rows))
+		for i := range rows {
+			ids[i] = rows[i].ID
+		}
 
 		// Past this point the status is already sent, so a failure can only
 		// truncate the stream. Everything that can fail cheaply — the
-		// listings above — has already run.
+		// listings above — has already run; everything below is logged,
+		// because a silently short archive is the worst possible outcome
+		// for the backup this endpoint exists to serve.
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
 		tgz := okf.NewTarGzWriter(w, time.Now())
-		written := make(map[string]bool, len(entries)+len(indexes))
-		add := func(p string, data []byte) bool {
+		written := make(map[string]bool, len(ids)+len(indexes))
+		fail := func(what string, err error) {
+			svc.Log.Error("export truncated after the response began",
+				"at", what, "error", err, "files_written", len(written))
+		}
+		add := func(p string, data []byte) error {
 			if err := tgz.Add(p, data); err != nil {
-				return false
+				return err
 			}
 			written[p] = true
-			return true
+			return nil
 		}
 		// Sorted so a backup taken twice from the same content produces the
 		// same archive: map iteration order is not an ordering.
@@ -466,17 +482,30 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		sort.Strings(indexPaths)
 		for _, path := range indexPaths {
-			if !add(path, indexes[path]) {
+			if err := add(path, indexes[path]); err != nil {
+				fail("index "+path, err)
 				return
 			}
 		}
-		for i := range entries {
-			doc, err := okf.Document(&entries[i])
+		// Entries in batches: one batch in memory at a time, and no pool
+		// connection held for the length of the download.
+		for start := 0; start < len(ids); start += exportBatch {
+			end := min(start+exportBatch, len(ids))
+			batch, err := svc.Store.ListByIDs(r.Context(), ids[start:end])
 			if err != nil {
-				return // headers are out; nothing to report but a short stream
-			}
-			if !add(entries[i].ID+".md", doc) {
+				fail(fmt.Sprintf("entries %d-%d", start, end), err)
 				return
+			}
+			for i := range batch {
+				doc, err := okf.Document(&batch[i])
+				if err != nil {
+					fail("render "+batch[i].ID, err)
+					return
+				}
+				if err := add(batch[i].ID+".md", doc); err != nil {
+					fail("write "+batch[i].ID, err)
+					return
+				}
 			}
 		}
 		// Attachments go next to their entries: "<id>/<name>", or the
@@ -489,17 +518,21 @@ func Handler(svc *service.Service) http.Handler {
 			a := &atts[i]
 			data, err := svc.Store.AttachmentBytes(r.Context(), a.Att.SHA256)
 			if err != nil {
+				fail("fetch attachment "+a.ID+"/"+a.Att.Name, err)
 				return
 			}
 			p := okf.AttachmentPath(a.ID, &a.Att)
 			if written[p] {
 				p = a.ID + "/" + a.Att.Name
 			}
-			if !add(p, data) {
+			if err := add(p, data); err != nil {
+				fail("write attachment "+p, err)
 				return
 			}
 		}
-		_ = tgz.Close()
+		if err := tgz.Close(); err != nil {
+			fail("close", err)
+		}
 	})
 
 	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {

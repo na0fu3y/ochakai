@@ -190,6 +190,55 @@ func TestRESTIntegration(t *testing.T) {
 		t.Errorf("attachments=false dropped the entries too")
 	}
 
+	// The export must survive crossing a batch boundary: entries are
+	// fetched in groups so that peak memory does not scale with the
+	// knowledge base, and an off-by-one there would silently drop
+	// whichever entries fall past the first group.
+	var planted []string
+	for i := range exportBatch + 3 {
+		id := fmt.Sprintf("%s/batch/%d", typ, i)
+		planted = append(planted, id)
+		body, _ := json.Marshal(map[string]any{"type": typ, "id": id, "title": fmt.Sprintf("batch %d", i)})
+		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	t.Cleanup(func() {
+		for _, id := range planted {
+			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		}
+	})
+	resp, err = http.Get(srv.URL + "/api/v1/export?attachments=false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	gz, err = gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inBundle := map[string]bool{}
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("bundle truncated: %v", err)
+		}
+		inBundle[hdr.Name] = true
+	}
+	for _, id := range planted {
+		if !inBundle[id+".md"] {
+			t.Errorf("export dropped %s across a batch boundary", id)
+		}
+	}
+
 	// Delete, then the entry is gone.
 	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", nil)
 	resp, err = http.DefaultClient.Do(req)
