@@ -72,11 +72,19 @@ func TestQueryFragments(t *testing.T) {
 	}{
 		{"english question", "why is revenue down?", []string{"why", "is", "revenue", "down"}},
 		{"single word", "revenue", []string{"revenue"}},
-		// Only the windows carrying a content character survive: the
-		// all-hiragana ones (って, てい, のか) are grammar and match
-		// nearly every entry.
+		// Only windows that begin with a content character survive. The
+		// all-hiragana ones (って, てい, のか) are grammar and match nearly
+		// every entry; the ones that straddle a word boundary (ぜ売, が下)
+		// mean nothing and, being rare, would be weighted highest.
 		{"japanese question", "なぜ売上が下がっているのか",
-			[]string{"ぜ売", "売上", "上が", "が下", "下が"}},
+			[]string{"売上", "上が", "下が"}},
+		// Latin abbreviations mixed into Japanese are everyday domain
+		// vocabulary. Dispatching on the token's first character would
+		// send PL科目 down the latin path (matching only the exact string)
+		// and cut 売上KPI into windows that break KPI apart.
+		{"latin prefix", "PL科目", []string{"PL", "科目"}},
+		{"latin suffix", "売上KPI", []string{"売上", "KPI"}},
+		{"latin infix", "EC売上高", []string{"EC", "売上", "上高"}},
 		{"all-kana query keeps its windows", "ください",
 			[]string{"くだ", "ださ", "さい"}},
 		{"short japanese term", "売上", []string{"売上"}},
@@ -99,5 +107,19 @@ func TestQueryFragments(t *testing.T) {
 	}
 	if got := queryFragments(long.String()); len(got) != maxQueryFragments {
 		t.Errorf("long query produced %d fragments, want the cap of %d", len(got), maxQueryFragments)
+	}
+
+	// The cap falls evenly across the query rather than truncating its
+	// tail: a question often names its subject last, and cutting in
+	// reading order would drop exactly that.
+	got := queryFragments(
+		"先日の定例で共有された年度計画の資料の件で相談があります、" +
+			"店舗別の在庫回転率と発注リードタイムの数字を見ていて気づいたのですが、" +
+			"直近の原価率はどうなっていますか")
+	if len(got) != maxQueryFragments {
+		t.Fatalf("capped query produced %d fragments, want %d", len(got), maxQueryFragments)
+	}
+	if !slices.Contains(got, "原価") {
+		t.Errorf("the cap dropped the subject named at the end: %q", got)
 	}
 }

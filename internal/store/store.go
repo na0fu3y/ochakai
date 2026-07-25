@@ -639,47 +639,61 @@ const maxQueryFragments = 24
 // not. Runs of Han/Hiragana/Katakana have no spaces to split on, so they
 // become sliding two-character windows — the standard n-gram treatment
 // for Japanese, and the smallest unit that still carries meaning (売上,
-// 受注, 原価). Two characters is below what a trigram index can resolve
-// exactly, but pg_trgm still narrows the scan with partial trigrams.
+// 受注, 原価).
+//
+// Two characters is below what a trigram index can serve, and pg_trgm
+// does not narrow the scan for such a pattern: LIKE '%売上%' has no word
+// boundary to pad against, so no whole trigram can be extracted and the
+// planner reads the table. Measured on 5000 entries, '%revenue%' and
+// '%売上の%' are index scans at 0.2ms while '%売上%' is a sequential scan
+// at 16ms. Three-character windows would restore the index and lose 売上,
+// 原価, 客数 — the terms the search is for — so the scan is the price of
+// finding them. SearchLexical keeps that scan cheap by scoring over ids
+// alone.
 func queryFragments(query string) []string {
-	var out []string
-	seen := map[string]bool{}
-	add := func(frag string) {
-		if frag == "" || seen[frag] || len(out) >= maxQueryFragments {
-			return
-		}
-		seen[frag] = true
-		out = append(out, frag)
-	}
+	// Fragments are collected per run and then interleaved, so the cap
+	// falls evenly across the query instead of truncating its tail. A
+	// question often names its subject last ("〜の件で、直近の原価率は?"),
+	// and cutting in reading order would drop exactly that.
+	var runs [][]string
 	for _, token := range strings.FieldsFunc(query, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	}) {
-		runes := []rune(token)
-		if !scriptWithoutSpaces(runes[0]) || len(runes) <= 2 {
-			add(token)
-			continue
+		// A token can still mix scripts, because FieldsFunc treats latin
+		// and kanji alike as letters: "PL科目", "売上KPI", "EC売上" all
+		// arrive whole. Dispatching on the first character alone would
+		// send "PL科目" through the latin path (matching only the exact
+		// string "PL科目") and cut "売上KPI" into windows that break KPI
+		// apart. Domain vocabulary is full of these, so split at the
+		// script boundary first and treat each run on its own terms.
+		for _, run := range scriptRuns(token) {
+			runes := []rune(run)
+			if !scriptWithoutSpaces(runes[0]) || len(runes) <= 2 {
+				runs = append(runs, []string{run})
+				continue
+			}
+			runs = append(runs, contentWindows(runes))
 		}
-		// Windows that carry a content character first. Japanese grammar
-		// is written in hiragana, so an all-hiragana window (ってい, のか)
-		// is a function word: it matches nearly every entry and would
-		// drown the one window that names the subject. Han and katakana
-		// carry the meaning. A run with no content character at all —
-		// an all-kana query — keeps its windows, or it would match
-		// nothing.
-		windows := make([]string, 0, len(runes))
-		var content []string
-		for i := 0; i+2 <= len(runes); i++ {
-			w := string(runes[i : i+2])
-			windows = append(windows, w)
-			if strings.ContainsFunc(w, contentChar) {
-				content = append(content, w)
+	}
+
+	var out []string
+	seen := map[string]bool{}
+	for round := 0; len(out) < maxQueryFragments; round++ {
+		progressed := false
+		for _, run := range runs {
+			if round >= len(run) {
+				continue
+			}
+			progressed = true
+			if frag := run[round]; !seen[frag] {
+				seen[frag] = true
+				if out = append(out, frag); len(out) >= maxQueryFragments {
+					break
+				}
 			}
 		}
-		if len(content) > 0 {
-			windows = content
-		}
-		for _, w := range windows {
-			add(w)
+		if !progressed {
+			break
 		}
 	}
 	if len(out) == 0 {
@@ -690,6 +704,52 @@ func queryFragments(query string) []string {
 		}
 	}
 	return out
+}
+
+// contentWindows cuts a space-less run into two-character windows and
+// keeps the ones that begin with a content character.
+//
+// Japanese grammar is written in hiragana and content words in kanji or
+// katakana, so a window's first character says which it is: 売上 and 下が
+// (the stem of 下がる) begin a word, while ぜ売 and が下 straddle a
+// boundary and mean nothing. Keeping only the former drops both the
+// function words, which match nearly every entry, and the accidental
+// fragments, which match almost none — and the latter matter more than
+// they look, because scoring weights rare fragments highest and a
+// meaningless one is rare by construction.
+//
+// A run with no content character at all — an all-kana query like
+// ください — keeps every window, or it would match nothing.
+func contentWindows(runes []rune) []string {
+	all := make([]string, 0, len(runes))
+	var content []string
+	for i := 0; i+2 <= len(runes); i++ {
+		w := string(runes[i : i+2])
+		all = append(all, w)
+		if contentChar(runes[i]) {
+			content = append(content, w)
+		}
+	}
+	if len(content) > 0 {
+		return content
+	}
+	return all
+}
+
+// scriptRuns splits a token wherever it crosses between a space-less
+// script (Han, kana) and anything else, so "PL科目" becomes "PL" and
+// "科目".
+func scriptRuns(token string) []string {
+	var runs []string
+	runes := []rune(token)
+	start := 0
+	for i := 1; i < len(runes); i++ {
+		if scriptWithoutSpaces(runes[i]) != scriptWithoutSpaces(runes[start]) {
+			runs = append(runs, string(runes[start:i]))
+			start = i
+		}
+	}
+	return append(runs, string(runes[start:]))
 }
 
 // scriptWithoutSpaces reports whether r belongs to a script that does not
@@ -733,9 +793,10 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	args = append(args, "%"+escapeLike(query)+"%")
 	wholeParam := len(args)
 	frags := queryFragments(query)
-	var hit, weight, weighted, weights []string
+	var hit, weight, weighted, weights, tests []string
 	for i, frag := range frags {
 		args = append(args, "%"+escapeLike(frag)+"%")
+		tests = append(tests, fmt.Sprintf("k.search_text ILIKE $%d", len(args)))
 		hit = append(hit, fmt.Sprintf("k.search_text ILIKE $%d AS h%d", len(args), i))
 		// Document frequency over the candidates, not the whole table: one
 		// window pass, no extra scans.
@@ -744,26 +805,34 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		weighted = append(weighted, fmt.Sprintf("CASE WHEN h%d THEN w%d ELSE 0 END", i, i))
 		weights = append(weights, fmt.Sprintf("w%d", i))
 	}
-	tests := make([]string, len(frags))
-	for i := range frags {
-		tests[i] = fmt.Sprintf("k.search_text ILIKE $%d", wholeParam+1+i)
-	}
+	// Scoring carries ids and booleans, never rows. The window functions
+	// force every candidate to be materialized before LIMIT can apply, and
+	// the candidate set is an OR over fragments — one common two-character
+	// window and it is most of the table. Selecting k.* through those
+	// layers would push every body, and search_text (a near-copy of the
+	// body) alongside it, through a sort node: tens of megabytes on a
+	// corpus of a few thousand, spilling work_mem on the instance size
+	// this is meant to run on. The entries are fetched once the top N is
+	// known.
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeCols+`, score FROM (
-			SELECT w.*, (%[1]s) / NULLIF(%[2]s, 0)
-				+ CASE WHEN w.search_text ILIKE $%[3]d THEN 0.3 ELSE 0 END
-				+ CASE WHEN w.status = 'verified' THEN 0.05 ELSE 0 END AS score
+		WITH scored AS (
+			SELECT w.id, (%[1]s) / NULLIF(%[2]s, 0) + w.whole + w.verified AS score
 			FROM (
-				SELECT c.*, %[4]s FROM (
-					SELECT k.*, %[5]s, count(*) OVER () AS total
+				SELECT c.*, %[3]s FROM (
+					SELECT k.id, %[4]s, count(*) OVER () AS total,
+						CASE WHEN k.search_text ILIKE $%[5]d THEN 0.3 ELSE 0 END AS whole,
+						CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS verified
 					FROM knowledge k
 					WHERE (%[6]s) AND %[7]s
 				) c
 			) w
-		) ranked
-		ORDER BY score DESC LIMIT %[8]d`,
-		strings.Join(weighted, " + "), strings.Join(weights, " + "), wholeParam,
-		strings.Join(weight, ", "), strings.Join(hit, ", "),
+			ORDER BY score DESC LIMIT %[8]d
+		)
+		SELECT `+qualifyCols("k")+`, scored.score
+		FROM knowledge k JOIN scored ON scored.id = k.id
+		ORDER BY scored.score DESC`,
+		strings.Join(weighted, " + "), strings.Join(weights, " + "),
+		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam,
 		strings.Join(tests, " OR "), where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
