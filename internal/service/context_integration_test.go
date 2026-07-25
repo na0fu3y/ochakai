@@ -71,7 +71,7 @@ func TestContextIntegration(t *testing.T) {
 		}
 	}
 
-	res, err := svc.Context(ctx, id+"-revenue", store.Filter{}, 5, 0)
+	res, err := svc.Context(ctx, ContextRequest{Query: id + "-revenue", Limit: 5})
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestContextIntegration(t *testing.T) {
 	}
 
 	// A prohibitive min_score empties the pack instead of shipping junk.
-	filtered, err := svc.Context(ctx, id+"-revenue", store.Filter{}, 5, 1e9)
+	filtered, err := svc.Context(ctx, ContextRequest{Query: id + "-revenue", Limit: 5, MinScore: 1e9})
 	if err != nil {
 		t.Fatalf("Context with min_score: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestContextIntegration(t *testing.T) {
 
 	// A blank question is the client's mistake.
 	var invalid *InvalidInputError
-	if _, err := svc.Context(ctx, "  ", store.Filter{}, 5, 0); !errors.As(err, &invalid) {
+	if _, err := svc.Context(ctx, ContextRequest{Query: "  ", Limit: 5}); !errors.As(err, &invalid) {
 		t.Errorf("empty query: want InvalidInputError, got %v", err)
 	}
 }
@@ -279,5 +279,94 @@ func TestDeleteIntegration(t *testing.T) {
 	}
 	if err := svc.Delete(ctx, id, actor); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
+	}
+}
+
+// TestContextBudgetIntegration pins the embedding-host path end to end: a
+// budget too small for everything delivers whole entries up to the cap and
+// names the rest, and the named ones are not counted as fetched — an
+// outline row is not a use of the knowledge.
+func TestContextBudgetIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	// The shared test database carries other tests' entries, and fuzzy
+	// search does not respect test boundaries — assert over our own ids.
+	id := uid("budgetit")
+	mine := map[string]bool{}
+	for i := range 4 {
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: fmt.Sprintf("insights/%s-%d", id, i),
+			Title: id + " budget", Description: "an entry about " + id,
+			Body: strings.Repeat("x", 2000),
+		}
+		if _, err := svc.Create(ctx, k, actor); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+		mine[k.ID] = true
+	}
+
+	full, err := svc.Context(ctx, ContextRequest{Query: id, Limit: 5})
+	if err != nil {
+		t.Fatalf("Context: %v", err)
+	}
+	if full.Truncated != 0 || full.Outline != nil {
+		t.Errorf("no budget must not truncate: %d outlined", full.Truncated)
+	}
+	delivered := 0
+	for _, e := range full.Entries {
+		if mine[e.ID] {
+			delivered++
+		}
+	}
+	if delivered != len(mine) {
+		t.Fatalf("unbudgeted pack carries %d of our %d entries", delivered, len(mine))
+	}
+
+	// Room for roughly one entry.
+	const budget = 2500
+	capped, err := svc.Context(ctx, ContextRequest{Query: id, Limit: 5, Budget: budget})
+	if err != nil {
+		t.Fatalf("Context with budget: %v", err)
+	}
+	used := 0
+	for i := range capped.Entries {
+		used += serializedSize(&capped.Entries[i])
+	}
+	if used > budget {
+		t.Errorf("delivered %d bytes over a %d budget", used, budget)
+	}
+	if len(capped.Entries) >= len(full.Entries) {
+		t.Errorf("budget delivered %d entries, unbudgeted %d — nothing was capped",
+			len(capped.Entries), len(full.Entries))
+	}
+	if capped.Truncated != len(capped.Outline) || capped.Truncated == 0 {
+		t.Fatalf("truncated = %d, outline = %d; want both nonzero and equal",
+			capped.Truncated, len(capped.Outline))
+	}
+	// Nothing is lost: every entry the unbudgeted pack carried is either
+	// delivered or named.
+	seen := map[string]bool{}
+	for _, e := range capped.Entries {
+		seen[e.ID] = true
+	}
+	for _, o := range capped.Outline {
+		seen[o.ID] = true
+		if o.Bytes == 0 {
+			t.Errorf("outline row carries no size: %+v", o)
+		}
+		if mine[o.ID] && o.Description == "" {
+			t.Errorf("outline row dropped the description: %+v", o)
+		}
+	}
+	for _, e := range full.Entries {
+		if !seen[e.ID] {
+			t.Errorf("%s vanished under a budget: neither delivered nor outlined", e.ID)
+		}
+	}
+	// Hits still name everything that matched — the ranking is not cut.
+	if len(capped.Hits) != len(full.Hits) {
+		t.Errorf("budget changed the hit list: %d vs %d", len(capped.Hits), len(full.Hits))
 	}
 }

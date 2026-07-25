@@ -92,9 +92,14 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	// GET /api/v1/context?q=...&type=...&status=...&tag=...&limit=...
+	// GET /api/v1/context?q=...&type=...&status=...&tag=...&limit=...&budget=...
 	// The one-call read before answering a data question: full entries
 	// behind the top hits, expanded one hop through links.
+	//
+	// budget defaults to 0 (no cap) here, unlike MCP where it is on by
+	// default: a REST caller is a program with a pipe, not an agent with a
+	// context window, and `ochakai context` does its own rendering-side
+	// capping.
 	mux.HandleFunc("GET /api/v1/context", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
@@ -107,11 +112,20 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		res, err := svc.Context(r.Context(), q.Get("q"), store.Filter{
-			Types:    domain.ToTypes(q["type"]),
-			Statuses: domain.ToStatuses(q["status"]),
-			Tags:     q["tag"],
-		}, limit, minScore)
+		budget, err := queryInt(q, "budget")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		res, err := svc.Context(r.Context(), service.ContextRequest{
+			Query: q.Get("q"),
+			Filter: store.Filter{
+				Types:    domain.ToTypes(q["type"]),
+				Statuses: domain.ToStatuses(q["status"]),
+				Tags:     q["tag"],
+			},
+			Limit: limit, MinScore: minScore, Budget: budget,
+		})
 		if err != nil {
 			writeError(w, err)
 			return

@@ -307,3 +307,68 @@ func TestReportOutcomeValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestContextSchemaBoundsResponse pins the get_context input schema: an
+// embedding host that never touches the tool arguments must still get a
+// bounded response, so budget is documented with its default and
+// min_score — usable only after calibration an agent cannot do — is off
+// this surface entirely.
+func TestContextSchemaBoundsResponse(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	for _, tool := range res.Tools {
+		if tool.Name != "get_context" {
+			continue
+		}
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal schema: %v", err)
+		}
+		var schema struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal schema: %v", err)
+		}
+		if _, ok := schema.Properties["min_score"]; ok {
+			t.Error("get_context must not expose min_score: an agent cannot calibrate a score floor")
+		}
+		budget, ok := schema.Properties["budget"]
+		if !ok {
+			t.Fatal("get_context must expose budget")
+		}
+		for _, want := range []string{"12000", "outline"} {
+			if !strings.Contains(budget.Description, want) {
+				t.Errorf("budget description %q does not mention %q", budget.Description, want)
+			}
+		}
+		return
+	}
+	t.Fatal("get_context tool not found")
+}
+
+// TestContextHint pins the habit the server hands every host. Claude Code
+// sites can install it as a Stop hook; a browser-based host has no shell,
+// so this string is the only copy it will ever see.
+func TestContextHint(t *testing.T) {
+	plain := contextHint(0)
+	for _, want := range []string{"report_outcome", "create_knowledge", "rejected"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("hint does not mention %q: %s", want, plain)
+		}
+	}
+	if strings.Contains(plain, "outline") {
+		t.Errorf("nothing was dropped; hint must not mention the outline: %s", plain)
+	}
+	truncated := contextHint(3)
+	for _, want := range []string{"3 entries", "outline", "get_knowledge"} {
+		if !strings.Contains(truncated, want) {
+			t.Errorf("truncated hint does not mention %q: %s", want, truncated)
+		}
+	}
+}

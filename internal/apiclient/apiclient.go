@@ -143,9 +143,13 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 
 // ContextResult mirrors the /api/v1/context response: ranked hits plus
 // the full entries behind the top ones, expanded one hop through links.
+// Outline lists entries the server's budget dropped; it stays empty for
+// the CLI, which asks for everything and caps at render time instead.
 type ContextResult struct {
-	Hits    []domain.SearchHit `json:"hits"`
-	Entries []domain.Knowledge `json:"entries"`
+	Hits      []domain.SearchHit      `json:"hits"`
+	Entries   []domain.Knowledge      `json:"entries"`
+	Outline   []domain.ContextOutline `json:"outline,omitempty"`
+	Truncated int                     `json:"truncated,omitempty"`
 }
 
 func (c *Client) Context(ctx context.Context, query string, types, statuses, tags []string, limit int, minScore float64) (*ContextResult, error) {

@@ -190,6 +190,18 @@ paths:
             similarity plus boosts vs RRF rank fusion) — calibrate against
             your own corpus before use. Non-numeric values are a 400.
           schema: { type: number, default: 0 }
+        - name: budget
+          in: query
+          description: >
+            Cap the serialized bytes of entries returned in full. Entries
+            past the cap are listed under `outline` instead — an entry is
+            delivered whole or not at all, never truncated. Packing is
+            greedy, so one oversized entry high in the ranking does not
+            starve the rest. Defaults to 0 (no cap) here; the MCP
+            get_context tool defaults it on, because an agent's context
+            window is the scarce resource and an embedding host will not
+            set it.
+          schema: { type: integer, default: 0 }
       responses:
         "200":
           description: Ranked hits plus the full entries behind the top ones.
@@ -204,6 +216,16 @@ paths:
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/Knowledge" }
+                  outline:
+                    description: >
+                      Entries the budget dropped: named and sized, not
+                      delivered. Fetch any of them by id. Absent when
+                      nothing was dropped.
+                    type: array
+                    items: { $ref: "#/components/schemas/ContextOutline" }
+                  truncated:
+                    description: How many entries went to the outline.
+                    type: integer
         "400": { $ref: "#/components/responses/Error" }
   /api/v1/knowledge/{id}:
     parameters:
@@ -699,6 +721,23 @@ components:
                 Usage totals, present in the sort=usage listing (the draft
                 review feed) and the sort=failed listing (the re-verification
                 feed); absent for search results and the verified_at feed.
+    ContextOutline:
+      type: object
+      description: >
+        An entry a context pack could not afford to deliver in full:
+        enough to decide whether to spend a round trip fetching it by id,
+        and nothing more.
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/Type" }
+        title:
+          description: The display title — the entry's own, or its filename.
+          type: string
+        description: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        bytes:
+          description: What the full entry would have cost.
+          type: integer
     Revision:
       type: object
       description: >

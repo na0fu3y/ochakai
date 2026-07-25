@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -297,10 +298,23 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 
 // ContextResult is the one-call context pack behind get_context and
 // `ochakai context`: the ranked hits, plus the full entries behind the
-// top ones expanded one hop through links.
+// top ones expanded one hop through links. Entries that did not fit the
+// caller's budget are listed in Outline instead — named, not delivered.
 type ContextResult struct {
-	Hits    []domain.SearchHit `json:"hits"`
-	Entries []domain.Knowledge `json:"entries"`
+	Hits      []domain.SearchHit      `json:"hits"`
+	Entries   []domain.Knowledge      `json:"entries"`
+	Outline   []domain.ContextOutline `json:"outline,omitempty"`
+	Truncated int                     `json:"truncated,omitempty"`
+}
+
+// ContextRequest is the input to Context. Budget caps the serialized size
+// of the entries returned in full; 0 means no cap.
+type ContextRequest struct {
+	Query    string
+	Filter   store.Filter
+	Limit    int
+	MinScore float64
+	Budget   int
 }
 
 // Context gathers what an agent should read before answering a data
@@ -310,27 +324,32 @@ type ContextResult struct {
 // metric, the golden query that answers the question — arrives without
 // further round trips.
 //
-// minScore drops hits scoring below it before expansion, for callers
+// req.MinScore drops hits scoring below it before expansion, for callers
 // that inject the pack automatically (hooks) and prefer nothing over
 // junk. It defaults to 0 (off) because scores are search-mode dependent
 // and uncalibrated: trigram similarity plus boosts in lexical mode, RRF
 // rank fusion (~0.02 scale) in hybrid mode — a floor meaningful in one
 // mode is nonsense in the other.
-func (s *Service) Context(ctx context.Context, query string, f store.Filter, limit int, minScore float64) (*ContextResult, error) {
-	if strings.TrimSpace(query) == "" {
+//
+// req.Budget caps how many bytes of full entries come back; the rest
+// become outline rows (packWithinBudget). Callers whose context window is
+// the scarce resource — an agent, not a UI — should always set it.
+func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResult, error) {
+	if strings.TrimSpace(req.Query) == "" {
 		return nil, Invalidf("invalid context request: query is required")
 	}
+	limit := req.Limit
 	if limit <= 0 || limit > 20 {
 		limit = 5
 	}
-	hits, err := s.Search(ctx, query, f, 2*limit)
+	hits, err := s.Search(ctx, req.Query, req.Filter, 2*limit)
 	if err != nil {
 		return nil, err
 	}
-	if minScore > 0 {
+	if req.MinScore > 0 {
 		kept := hits[:0]
 		for _, h := range hits {
-			if h.Score >= minScore {
+			if h.Score >= req.MinScore {
 				kept = append(kept, h)
 			}
 		}
@@ -379,12 +398,64 @@ func (s *Service) Context(ctx context.Context, query string, f store.Filter, lim
 			addFetched(&linking[j])
 		}
 	}
+	entries, outline := packWithinBudget(entries, req.Budget)
+	// Only delivered entries count as fetched. An outline row names an
+	// entry; it does not hand over the knowledge, so counting it as a use
+	// would inflate the demand signal that drives the review feeds.
 	ids := make([]string, len(entries))
 	for i := range entries {
 		ids[i] = entries[i].ID
 	}
 	s.recordUsage(ctx, domain.EventFetched, ids)
-	return &ContextResult{Hits: hits, Entries: entries}, nil
+	return &ContextResult{Hits: hits, Entries: entries, Outline: outline, Truncated: len(outline)}, nil
+}
+
+// packWithinBudget splits entries into the ones that fit within budget
+// serialized bytes and outline rows for the rest, preserving rank order in
+// both. budget <= 0 means no cap.
+//
+// Entries are atomic: an entry is delivered whole or not at all. Cutting a
+// body mid-way would be worse than dropping it — half of a Golden Query's
+// attrs.sql still looks executable, and half a semantic model spec is not
+// a spec. Nothing downstream can tell a truncated field from a short one.
+//
+// Packing is greedy rather than a prefix cut: one oversized entry high in
+// the ranking (a Semantic Model carries its entire spec in attrs) would
+// otherwise starve everything below it. An entry larger than the whole
+// budget always becomes an outline row, even at rank 1 — the caller sees
+// its size and can fetch it deliberately.
+func packWithinBudget(entries []domain.Knowledge, budget int) ([]domain.Knowledge, []domain.ContextOutline) {
+	if budget <= 0 {
+		return entries, nil
+	}
+	kept := make([]domain.Knowledge, 0, len(entries))
+	var outline []domain.ContextOutline
+	used := 0
+	for i := range entries {
+		k := &entries[i]
+		size := serializedSize(k)
+		if used+size <= budget {
+			kept = append(kept, *k)
+			used += size
+			continue
+		}
+		outline = append(outline, domain.ContextOutline{
+			ID: k.ID, Type: k.Type, Title: k.DisplayTitle(),
+			Description: k.Description, Status: k.Status, Bytes: size,
+		})
+	}
+	return kept, outline
+}
+
+// serializedSize is what the entry costs on the wire — attrs included. A
+// body-only measure would miss the largest payload in the base, a
+// Semantic Model's attrs.spec.
+func serializedSize(k *domain.Knowledge) int {
+	b, err := json.Marshal(k)
+	if err != nil {
+		return len(k.Body) // unreachable in practice; never drop on a marshal quirk
+	}
+	return len(b)
 }
 
 // ListByVerifiedAt lists entries by verification age, oldest first — the

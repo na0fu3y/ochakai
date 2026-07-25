@@ -374,3 +374,17 @@ type SearchHit struct {
 	Score float64 `json:"score"`
 	Usage *Usage  `json:"usage,omitempty"`
 }
+
+// ContextOutline names an entry a context pack could not afford to deliver
+// in full: enough for the caller to decide whether to spend a round trip
+// fetching it by id, and nothing more. The description carries the weight
+// here — an entry with an empty description is nearly invisible in an
+// outline, which is one more reason curation pays.
+type ContextOutline struct {
+	ID          string `json:"id"`
+	Type        Type   `json:"type"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Status      Status `json:"status"`
+	Bytes       int    `json:"bytes"`
+}
