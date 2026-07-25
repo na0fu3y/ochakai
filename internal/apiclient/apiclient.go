@@ -354,8 +354,12 @@ func (c *Client) Compile(ctx context.Context, req CompileRequest) (*CompileResul
 
 // Export streams the knowledge base as an OKF tar.gz bundle. The caller
 // must close the reader.
-func (c *Client) Export(ctx context.Context) (io.ReadCloser, error) {
-	resp, err := c.do(ctx, http.MethodGet, "/api/v1/export", nil, nil)
+func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, error) {
+	var q url.Values
+	if !attachments {
+		q = url.Values{"attachments": {"false"}}
+	}
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/export", q, nil)
 	if err != nil {
 		return nil, err
 	}

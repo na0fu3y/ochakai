@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -392,16 +393,67 @@ func Handler(svc *service.Service) http.Handler {
 	// GET /api/v1/export — the whole knowledge base as an OKF bundle
 	// (tar.gz of markdown + YAML frontmatter, plus attachment files).
 	// Your knowledge is yours.
+	//
+	// Written straight to the response one file at a time. Collecting the
+	// bundle first would mean holding every entry and every attachment's
+	// bytes in memory at once — a periodic CI backup would be the largest
+	// allocation the process ever makes, on the instance size Cloud Run
+	// runs it at. With ?attachments=false the bytes are skipped entirely:
+	// they live in GCS, so a backup can copy them from there far more
+	// cheaply than through this endpoint.
 	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
 		entries, err := svc.Store.ListAll(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		files, err := okf.Bundle(entries)
-		if err != nil {
-			writeError(w, err)
-			return
+		withAttachments := r.URL.Query().Get("attachments") != "false"
+		var atts []store.ExportAttachment
+		if withAttachments {
+			// Metadata only; bytes are pulled one attachment at a time below.
+			if atts, err = svc.Store.ListAllAttachmentMeta(r.Context()); err != nil {
+				writeError(w, err)
+				return
+			}
+		}
+		// Indexes need every id, but only the ids. Rendering them up front
+		// keeps the concept documents streaming one at a time.
+		indexes := okf.Indexes(entries) // also sorts entries by id
+
+		// Past this point the status is already sent, so a failure can only
+		// truncate the stream. Everything that can fail cheaply — the
+		// listings above — has already run.
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
+		tgz := okf.NewTarGzWriter(w, time.Now())
+		written := make(map[string]bool, len(entries)+len(indexes))
+		add := func(p string, data []byte) bool {
+			if err := tgz.Add(p, data); err != nil {
+				return false
+			}
+			written[p] = true
+			return true
+		}
+		// Sorted so a backup taken twice from the same content produces the
+		// same archive: map iteration order is not an ordering.
+		indexPaths := make([]string, 0, len(indexes))
+		for path := range indexes {
+			indexPaths = append(indexPaths, path)
+		}
+		sort.Strings(indexPaths)
+		for _, path := range indexPaths {
+			if !add(path, indexes[path]) {
+				return
+			}
+		}
+		for i := range entries {
+			doc, err := okf.Document(&entries[i])
+			if err != nil {
+				return // headers are out; nothing to report but a short stream
+			}
+			if !add(entries[i].ID+".md", doc) {
+				return
+			}
 		}
 		// Attachments go next to their entries: "<id>/<name>", or the
 		// foreign path they were imported at (okf_path) so original body
@@ -409,25 +461,21 @@ func Handler(svc *service.Service) http.Handler {
 		// document falls back to the canonical layout — identical content
 		// at the same path (the same image referenced by two entries) is
 		// no conflict.
-		atts, err := svc.Store.ListAllAttachments(r.Context())
-		if err != nil {
-			writeError(w, err)
-			return
-		}
 		for i := range atts {
 			a := &atts[i]
+			data, err := svc.Store.AttachmentBytes(r.Context(), a.Att.SHA256)
+			if err != nil {
+				return
+			}
 			p := okf.AttachmentPath(a.ID, &a.Att)
-			if _, taken := files[p]; taken {
+			if written[p] {
 				p = a.ID + "/" + a.Att.Name
 			}
-			files[p] = a.Data
+			if !add(p, data) {
+				return
+			}
 		}
-		w.Header().Set("Content-Type", "application/gzip")
-		w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
-		if err := okf.WriteTarGz(w, files, time.Now()); err != nil {
-			// Headers already sent; nothing to do but log via server.
-			return
-		}
+		_ = tgz.Close()
 	})
 
 	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {

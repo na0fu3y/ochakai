@@ -252,20 +252,34 @@ func TestCreateSendsJSONBodyAndDelete204(t *testing.T) {
 }
 
 func TestExportStreamsBody(t *testing.T) {
-	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/export" {
-			t.Errorf("path = %s", r.URL.Path)
-		}
-		_, _ = w.Write([]byte("tarball-bytes"))
-	})
-	rc, err := c.Export(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rc.Close()
-	data, _ := io.ReadAll(rc)
-	if string(data) != "tarball-bytes" {
-		t.Errorf("body = %q", data)
+	for _, tc := range []struct {
+		name        string
+		attachments bool
+		wantParam   string
+	}{
+		{"with attachments", true, ""},
+		{"markdown only", false, "false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/export" {
+					t.Errorf("path = %s", r.URL.Path)
+				}
+				if got := r.URL.Query().Get("attachments"); got != tc.wantParam {
+					t.Errorf("attachments = %q, want %q", got, tc.wantParam)
+				}
+				_, _ = w.Write([]byte("tarball-bytes"))
+			})
+			rc, err := c.Export(context.Background(), tc.attachments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rc.Close()
+			data, _ := io.ReadAll(rc)
+			if string(data) != "tarball-bytes" {
+				t.Errorf("body = %q", data)
+			}
+		})
 	}
 }
 

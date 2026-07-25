@@ -66,20 +66,30 @@ var reservedKeys = map[string]bool{
 // the directories. Every directory level gets an index.md for
 // progressive disclosure.
 func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
-	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
+	files := Indexes(entries)
+	for i := range entries {
+		doc, err := Document(&entries[i])
+		if err != nil {
+			return nil, fmt.Errorf("render %s: %w", entries[i].URI(), err)
+		}
+		files[entries[i].ID+".md"] = doc
+	}
+	return files, nil
+}
 
-	files := map[string][]byte{}
+// Indexes renders a bundle's directory index.md files and nothing else,
+// sorting entries by id on the way (Bundle's ordering). Split out so a
+// streaming exporter can render one concept document at a time — the
+// indexes need every id, but only the ids.
+func Indexes(entries []domain.Knowledge) map[string][]byte {
+	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	root := &dir{}
 	for _, k := range entries {
-		doc, err := Document(&k)
-		if err != nil {
-			return nil, fmt.Errorf("render %s: %w", k.URI(), err)
-		}
-		files[k.ID+".md"] = doc
 		root.insert(strings.Split(k.ID, "/"), k)
 	}
+	files := map[string][]byte{}
 	root.writeIndexes(files, "")
-	return files, nil
+	return files
 }
 
 // dir is one directory level of a bundle, used to generate index.md files.
@@ -227,23 +237,49 @@ func WriteTarGz(w io.Writer, files map[string][]byte, modTime time.Time) error {
 	}
 	sort.Strings(paths)
 
-	gz := gzip.NewWriter(w)
-	tw := tar.NewWriter(gz)
+	tgz := NewTarGzWriter(w, modTime)
 	for _, p := range paths {
-		if err := tw.WriteHeader(&tar.Header{
-			Name:    p,
-			Mode:    0o644,
-			Size:    int64(len(files[p])),
-			ModTime: modTime.UTC(),
-		}); err != nil {
-			return err
-		}
-		if _, err := tw.Write(files[p]); err != nil {
+		if err := tgz.Add(p, files[p]); err != nil {
 			return err
 		}
 	}
-	if err := tw.Close(); err != nil {
+	return tgz.Close()
+}
+
+// TarGzWriter writes a bundle one file at a time. A caller that can
+// produce its files lazily — the export endpoint, pulling attachment
+// bytes from the blob store as it goes — then never holds more than one
+// file in memory, instead of the whole knowledge base plus every
+// attachment.
+type TarGzWriter struct {
+	gz      *gzip.Writer
+	tw      *tar.Writer
+	modTime time.Time
+}
+
+func NewTarGzWriter(w io.Writer, modTime time.Time) *TarGzWriter {
+	gz := gzip.NewWriter(w)
+	return &TarGzWriter{gz: gz, tw: tar.NewWriter(gz), modTime: modTime.UTC()}
+}
+
+// Add appends one file. Callers that care about ordering add in order:
+// unlike WriteTarGz, nothing is sorted here because nothing is collected.
+func (t *TarGzWriter) Add(path string, data []byte) error {
+	if err := t.tw.WriteHeader(&tar.Header{
+		Name:    path,
+		Mode:    0o644,
+		Size:    int64(len(data)),
+		ModTime: t.modTime,
+	}); err != nil {
 		return err
 	}
-	return gz.Close()
+	_, err := t.tw.Write(data)
+	return err
+}
+
+func (t *TarGzWriter) Close() error {
+	if err := t.tw.Close(); err != nil {
+		return err
+	}
+	return t.gz.Close()
 }
