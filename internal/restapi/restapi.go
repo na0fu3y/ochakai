@@ -372,8 +372,18 @@ func Handler(svc *service.Service) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	// DELETE soft-deletes; ?purge=true hard-deletes an entry that is
+	// already soft-deleted, freeing its id (a tombstone still owns the
+	// primary key, so a move onto it fails). Two calls, deliberately: the
+	// first is reversible, the second is not. Not on MCP — destroying
+	// history is a human decision (design doc 0015).
 	mux.HandleFunc("DELETE /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		err := svc.Delete(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
+		var err error
+		if r.URL.Query().Get("purge") == "true" {
+			err = svc.Purge(r.Context(), r.PathValue("id"))
+		} else {
+			err = svc.Delete(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
+		}
 		if err != nil {
 			writeError(w, err)
 			return
@@ -566,7 +576,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrConflict):
 		// The If-Match precondition failed: the entry changed since read.
 		status = http.StatusPreconditionFailed
-	case errors.Is(err, store.ErrAlreadyExists):
+	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrNotDeleted):
 		status = http.StatusConflict
 	case errors.As(err, &compileErr):
 		status = http.StatusUnprocessableEntity

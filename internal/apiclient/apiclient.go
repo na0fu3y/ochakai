@@ -261,6 +261,12 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
+// Purge hard-deletes an entry that is already soft-deleted, freeing its
+// id (DELETE ...?purge=true). A live entry is a 409: delete it first.
+func (c *Client) Purge(ctx context.Context, id string) error {
+	return c.doJSON(ctx, http.MethodDelete, entryPath(id), url.Values{"purge": {"true"}}, nil, nil)
+}
+
 // Move renames the entry at id to newID (POST /api/v1/move). The server
 // carries revisions, usage, and attachments along and rewrites inbound
 // references so nothing breaks (design doc 0021).

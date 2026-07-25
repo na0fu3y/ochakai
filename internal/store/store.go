@@ -27,6 +27,11 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 // (design doc 0025 §11). The entry exists — a missing entry is ErrNotFound.
 var ErrConflict = errors.New("knowledge changed since it was read")
 
+// ErrNotDeleted is returned by Purge for an entry that is still live.
+// Purging is the second step of a two-step destruction: delete first, so
+// no single call can erase history that was in use a moment ago.
+var ErrNotDeleted = errors.New("knowledge is live; soft-delete it before purging")
+
 // nowStored is the current UTC time truncated to the microsecond precision
 // PostgreSQL timestamptz stores. Setting entity timestamps from it means an
 // in-memory updated_at always equals the value that round-trips through the
@@ -355,6 +360,58 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) e
 	})
 }
 
+// Purge hard-deletes a soft-deleted entry and everything keyed by its id:
+// revisions, usage totals and events, embeddings, attachment metadata.
+// This is how an id comes back into circulation for a move — Create
+// already revives a soft-deleted entry in place, but Move cannot, because
+// the tombstone still owns the primary key and its revisions still own
+// (id, rev).
+//
+// Only a soft-deleted entry can be purged. Delete first, purge second: no
+// single call erases history, and the entry stays recoverable (Create
+// revives it) right up until someone deliberately asks for it to be gone.
+//
+// Attachment bytes are left in the blob store, as DeleteAttachment leaves
+// them: blobs are content-addressed and shared between entries, so
+// reclaiming them is a separate sweep, not a side effect of one purge.
+func (s *Store) Purge(ctx context.Context, id string) error {
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		var deleted bool
+		err := tx.QueryRow(ctx,
+			`SELECT deleted_at IS NOT NULL FROM knowledge WHERE id=$1`, id).Scan(&deleted)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			return ErrNotDeleted
+		}
+		for _, q := range []string{
+			`DELETE FROM attachment WHERE knowledge_id=$1`,
+			`DELETE FROM knowledge_usage WHERE knowledge_id=$1`,
+			`DELETE FROM knowledge_event WHERE knowledge_id=$1`,
+			`DELETE FROM knowledge_revision WHERE id=$1`,
+			`DELETE FROM knowledge WHERE id=$1`,
+		} {
+			if _, err := tx.Exec(ctx, q, id); err != nil {
+				return err
+			}
+		}
+		// Embedding tables exist only once semantic search has been enabled.
+		for _, q := range []string{
+			`DELETE FROM knowledge_embedding WHERE id=$1`,
+			`DELETE FROM attachment_embedding WHERE knowledge_id=$1`,
+		} {
+			if err := execTolerateMissingTable(ctx, tx, q, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // Move renames an entry to a new id. The id is the address (design doc
 // 0017), so everything keyed by it follows in one transaction — the row,
 // its revisions, attachments, usage, events, and embeddings — and live
@@ -370,12 +427,23 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 	}
 	k.UpdatedAt = nowStored()
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
-		var taken bool
+		// A soft-deleted entry still owns the id — the row holds the primary
+		// key and its revisions hold (id, rev) — so the destination is taken
+		// either way. Create can revive such an entry in place; a move
+		// cannot, because the arriving entry brings revisions of its own.
+		// Say which case it is: "already exists" sends someone looking for
+		// an entry they cannot see, and without purge the id would be
+		// blocked forever.
+		var occupied, occupantDeleted bool
 		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM knowledge WHERE id=$1)`, newID).Scan(&taken); err != nil {
+			`SELECT true, deleted_at IS NOT NULL FROM knowledge WHERE id=$1`, newID).
+			Scan(&occupied, &occupantDeleted); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if taken {
+		if occupied {
+			if occupantDeleted {
+				return fmt.Errorf("%w: %s holds a deleted entry; purge it to free the id", ErrAlreadyExists, newID)
+			}
 			return ErrAlreadyExists
 		}
 		// deleted_at IS NULL guards the race with a concurrent delete,
