@@ -148,6 +148,66 @@ func TestRewriteBodyLinksMultiplePerLine(t *testing.T) {
 	}
 }
 
+// A move changes what a relative target means, because links are derived
+// from the body against the entry's own id. Absolutizing against the old
+// id is what keeps the edge pointing where the author pointed it.
+func TestAbsolutizeBodyLinks(t *testing.T) {
+	for _, tc := range []struct {
+		name, id, body, want string
+	}{
+		{
+			name: "relative target resolves against the old location",
+			id:   "metrics/revenue",
+			body: "See [gross](./gross.md) and [net](net.md).",
+			want: "See [gross](/metrics/gross.md) and [net](/metrics/net.md).",
+		}, {
+			name: "a parent-relative target too",
+			id:   "metrics/sales/revenue",
+			body: "See [orders](../orders.md).",
+			want: "See [orders](/metrics/orders.md).",
+		}, {
+			name: "absolute and canonical forms are already stable",
+			id:   "metrics/revenue",
+			body: "See [g](/metrics/gross.md), ochakai://metrics/net, <ochakai://metrics/net>.",
+			want: "See [g](/metrics/gross.md), ochakai://metrics/net, <ochakai://metrics/net>.",
+		}, {
+			name: "non-entry targets are left alone",
+			id:   "metrics/revenue",
+			body: "See [site](https://example.com/x.md), [chart](./chart.png), [top](#summary).",
+			want: "See [site](https://example.com/x.md), [chart](./chart.png), [top](#summary).",
+		}, {
+			name: "a fragment survives the rewrite",
+			id:   "metrics/revenue",
+			body: "See [gross](./gross.md#caveats).",
+			want: "See [gross](/metrics/gross.md#caveats).",
+		}, {
+			name: "code is left alone",
+			id:   "metrics/revenue",
+			body: "Real [g](./gross.md), inline `[g](./gross.md)`\n```\n[g](./gross.md)\n```",
+			want: "Real [g](/metrics/gross.md), inline `[g](./gross.md)`\n```\n[g](./gross.md)\n```",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AbsolutizeBodyLinks(tc.id, tc.body)
+			if got != tc.want {
+				t.Errorf("AbsolutizeBodyLinks =\n%q\nwant\n%q", got, tc.want)
+			}
+			// The point of the exercise: the edges read the same from the
+			// new location as they did from the old one.
+			before := LinksFromBody(tc.id, tc.body)
+			after := LinksFromBody("elsewhere/revenue", got)
+			if len(before) != len(after) {
+				t.Fatalf("edge count changed: %v -> %v", before, after)
+			}
+			for i := range before {
+				if before[i].Target != after[i].Target {
+					t.Errorf("edge %d moved: %q -> %q", i, before[i].Target, after[i].Target)
+				}
+			}
+		})
+	}
+}
+
 func TestLinkDisplayText(t *testing.T) {
 	if got := (Link{Target: "metrics/revenue", Text: "売上"}).DisplayText(); got != "売上" {
 		t.Errorf("DisplayText = %q, want the anchor text", got)
