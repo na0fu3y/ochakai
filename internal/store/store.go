@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -602,43 +603,153 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	return err
 }
 
-// SearchLexical ranks by trigram similarity with a substring-match floor
-// (trigram alone misses short Japanese terms), verified entries boosted.
-// The haystack is the search_text column (migration 0016): the id (design
-// doc 0022 — with title optional, the filename may be the entry's only
-// name), the envelope fields, the body, and the attachment filenames
-// (design doc 0020 — "seeds" finds the entry carrying seeds.txt, embedder
-// or not), maintained by trigger.
+// maxQueryFragments bounds how many pieces a query is split into, so a
+// pasted paragraph cannot turn one search into a hundred index probes.
+const maxQueryFragments = 24
+
+// queryFragments splits a search query into the pieces a document might
+// actually contain.
 //
-// The candidate predicate and the score read the same column as the GIN
-// trigram index, which is what makes the index usable: `%` (trigram
-// similarity above pg_trgm.similarity_threshold, 0.3 by default — an
-// operator can retune it per database without touching this query) and
-// ILIKE both have index support. Before 0016 the score was computed in
-// the SELECT list over a concatenation no index could match, and the
-// floor was applied outside the subquery, so every search scanned and
-// scored every row.
+// Matching the query as a whole is useless for the input get_context is
+// built for. Its documented argument is a data question, and the recall
+// hook feeds it a raw user prompt — "why is revenue down?" appears
+// verbatim in no body, and trigram similarity between a short query and a
+// multi-kilobyte document is 0.01-0.1 at best (for Japanese, where the
+// three-character windows of a question and a body almost never align, it
+// is routinely exactly 0). Neither a substring test nor a similarity
+// threshold can find anything from that. The signal is not the question;
+// it is the terms inside it.
+//
+// Latin-script tokens stay whole: "revenue" is a word, and its pieces are
+// not. Runs of Han/Hiragana/Katakana have no spaces to split on, so they
+// become sliding two-character windows — the standard n-gram treatment
+// for Japanese, and the smallest unit that still carries meaning (売上,
+// 受注, 原価). Two characters is below what a trigram index can resolve
+// exactly, but pg_trgm still narrows the scan with partial trigrams.
+func queryFragments(query string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(frag string) {
+		if frag == "" || seen[frag] || len(out) >= maxQueryFragments {
+			return
+		}
+		seen[frag] = true
+		out = append(out, frag)
+	}
+	for _, token := range strings.FieldsFunc(query, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		runes := []rune(token)
+		if !scriptWithoutSpaces(runes[0]) || len(runes) <= 2 {
+			add(token)
+			continue
+		}
+		// Windows that carry a content character first. Japanese grammar
+		// is written in hiragana, so an all-hiragana window (ってい, のか)
+		// is a function word: it matches nearly every entry and would
+		// drown the one window that names the subject. Han and katakana
+		// carry the meaning. A run with no content character at all —
+		// an all-kana query — keeps its windows, or it would match
+		// nothing.
+		windows := make([]string, 0, len(runes))
+		var content []string
+		for i := 0; i+2 <= len(runes); i++ {
+			w := string(runes[i : i+2])
+			windows = append(windows, w)
+			if strings.ContainsFunc(w, contentChar) {
+				content = append(content, w)
+			}
+		}
+		if len(content) > 0 {
+			windows = content
+		}
+		for _, w := range windows {
+			add(w)
+		}
+	}
+	if len(out) == 0 {
+		// A single character, or punctuation only: match it as written
+		// rather than matching nothing.
+		if q := strings.TrimSpace(query); q != "" {
+			out = append(out, q)
+		}
+	}
+	return out
+}
+
+// scriptWithoutSpaces reports whether r belongs to a script that does not
+// separate words with spaces, so a token of it needs windowing rather than
+// taking whole.
+func scriptWithoutSpaces(r rune) bool {
+	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r)
+}
+
+// contentChar reports whether r is the kind of character a Japanese
+// content word is written in, as opposed to the hiragana that spells the
+// grammar around it.
+func contentChar(r rune) bool {
+	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Katakana, r)
+}
+
+// SearchLexical ranks entries by how much of the query they contain,
+// verified entries boosted. The haystack is the search_text column
+// (migration 0016): the id (design doc 0022 — with title optional, the
+// filename may be the entry's only name), the envelope fields, the body,
+// and the attachment filenames (design doc 0020 — "seeds" finds the entry
+// carrying seeds.txt, embedder or not), maintained by trigger.
+//
+// The score is the fraction of the query's fragments the entry contains,
+// plus a bonus when the whole query appears verbatim (a keyword search
+// should outrank an entry that merely shares terms with a question), plus
+// the verified boost. An entry containing none of the fragments is not a
+// result — the floor is "matched something", not a magic number.
+//
+// Every term of that is a substring test against one column, which is
+// what the GIN trigram index serves, so the candidate predicate and the
+// score read the same expressions (migration 0016). Fragment matching
+// replaced a similarity()/`%` pair that could not work: `%` is true only
+// above pg_trgm.similarity_threshold (0.3) and a real query never scores
+// that against a real document, so the candidate set was whatever the
+// whole-query substring test found — nothing, for a question.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
-	// The trigram term takes the raw query; the substring floor takes a
-	// separate, escaped LIKE pattern. Without escaping, a query containing
-	// '%' or '_' is read as an ILIKE wildcard — '%' matches every entry and
-	// hands them all the +0.3 boost, flattening the ranking (and '_' matches
-	// any one character). similarity() is unaffected; only the ILIKE floor.
-	args = append(args, query)
-	simParam := len(args)
+	// Each pattern is escaped: unescaped, a query containing '%' matches
+	// every entry and flattens the ranking ('_' matches any one character).
 	args = append(args, "%"+escapeLike(query)+"%")
-	likeParam := len(args)
+	wholeParam := len(args)
+	frags := queryFragments(query)
+	var hit, weight, weighted, weights []string
+	for i, frag := range frags {
+		args = append(args, "%"+escapeLike(frag)+"%")
+		hit = append(hit, fmt.Sprintf("k.search_text ILIKE $%d AS h%d", len(args), i))
+		// Document frequency over the candidates, not the whole table: one
+		// window pass, no extra scans.
+		weight = append(weight, fmt.Sprintf(
+			"ln(1 + total::float / GREATEST(count(*) FILTER (WHERE h%d) OVER (), 1)) AS w%d", i, i))
+		weighted = append(weighted, fmt.Sprintf("CASE WHEN h%d THEN w%d ELSE 0 END", i, i))
+		weights = append(weights, fmt.Sprintf("w%d", i))
+	}
+	tests := make([]string, len(frags))
+	for i := range frags {
+		tests[i] = fmt.Sprintf("k.search_text ILIKE $%d", wholeParam+1+i)
+	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
-			SELECT k.*, similarity(k.search_text, $%[1]d)
-				+ CASE WHEN k.search_text ILIKE $%[2]d THEN 0.3 ELSE 0 END
-				+ CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS score
-			FROM knowledge k
-			WHERE (k.search_text %% $%[1]d OR k.search_text ILIKE $%[2]d) AND %[3]s
+			SELECT w.*, (%[1]s) / NULLIF(%[2]s, 0)
+				+ CASE WHEN w.search_text ILIKE $%[3]d THEN 0.3 ELSE 0 END
+				+ CASE WHEN w.status = 'verified' THEN 0.05 ELSE 0 END AS score
+			FROM (
+				SELECT c.*, %[4]s FROM (
+					SELECT k.*, %[5]s, count(*) OVER () AS total
+					FROM knowledge k
+					WHERE (%[6]s) AND %[7]s
+				) c
+			) w
 		) ranked
-		WHERE score > 0.05
-		ORDER BY score DESC LIMIT %[4]d`, simParam, likeParam, where, limit)
+		ORDER BY score DESC LIMIT %[8]d`,
+		strings.Join(weighted, " + "), strings.Join(weights, " + "), wholeParam,
+		strings.Join(weight, ", "), strings.Join(hit, ", "),
+		strings.Join(tests, " OR "), where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
