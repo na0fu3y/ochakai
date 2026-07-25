@@ -196,14 +196,18 @@ paths:
         - name: budget
           in: query
           description: >
-            Cap the serialized bytes of entries returned in full. Entries
-            past the cap are listed under `outline` instead — an entry is
-            delivered whole or not at all, never truncated. Packing is
-            greedy, so one oversized entry high in the ranking does not
-            starve the rest. Defaults to 0 (no cap) here; the MCP
-            get_context tool defaults it on, because an agent's context
-            window is the scarce resource and an embedding host will not
-            set it.
+            Cap the serialized bytes of the response. Entries past the
+            cap are listed under `outline` instead — an entry is delivered
+            whole or not at all, never truncated — and those rows count
+            against the same cap, because naming what was left out is not
+            free (an outline row carries a description). Packing is greedy,
+            so one oversized entry high in the ranking does not starve the
+            rest. The floor is the outline of everything that matched: a
+            budget too small even for the names still gets them, since a
+            caller cannot raise a budget for entries it never heard about.
+            Defaults to 0 (no cap) here; the MCP get_context tool defaults
+            it on, because an agent's context window is the scarce resource
+            and an embedding host will not set it.
           schema: { type: integer, default: 0 }
       responses:
         "200":

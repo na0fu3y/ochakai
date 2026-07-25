@@ -400,7 +400,9 @@ type ContextResult struct {
 }
 
 // ContextRequest is the input to Context. Budget caps the serialized size
-// of the entries returned in full; 0 means no cap.
+// of the response — the entries returned in full and the outline rows
+// naming the rest, which carry a description and are not free; 0 means no
+// cap.
 type ContextRequest struct {
 	Query    string
 	Filter   store.Filter
@@ -516,27 +518,86 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 // otherwise starve everything below it. An entry larger than the whole
 // budget always becomes an outline row, even at rank 1 — the caller sees
 // its size and can fetch it deliberately.
+//
+// The outline is inside the budget, not on top of it. Naming what was left
+// out costs bytes too, and an outline row carries a description, which is
+// unbounded on an entry: a budget that governed only the delivered entries
+// left the response as a whole ungoverned, which is the thing callers
+// actually have to fit in a context window. So rows are counted, their
+// descriptions are capped, and entries are demoted from the bottom of the
+// ranking until the two halves fit together.
+//
+// The floor is the outline of everything: a request whose budget cannot
+// even hold the names of what matched gets those names anyway. Silently
+// dropping entries the caller never hears about is worse than a response
+// slightly over budget, and the caller can raise the budget only if it
+// knows there was something there.
 func packWithinBudget(entries []domain.Knowledge, budget int) ([]domain.Knowledge, []domain.ContextOutline) {
 	if budget <= 0 {
 		return entries, nil
 	}
-	kept := make([]domain.Knowledge, 0, len(entries))
-	var outline []domain.ContextOutline
-	used := 0
+	sizes := make([]int, len(entries))
+	rows := make([]domain.ContextOutline, len(entries))
+	rowSizes := make([]int, len(entries))
+	deliver := make([]bool, len(entries))
 	for i := range entries {
-		k := &entries[i]
-		size := serializedSize(k)
-		if used+size <= budget {
-			kept = append(kept, *k)
-			used += size
+		sizes[i] = serializedSize(&entries[i])
+		rows[i] = outlineRow(&entries[i], sizes[i])
+		rowSizes[i] = jsonSize(rows[i])
+	}
+	used, outlineBytes := 0, 0
+	for i := range entries {
+		if used+sizes[i] <= budget {
+			deliver[i] = true
+			used += sizes[i]
 			continue
 		}
-		outline = append(outline, domain.ContextOutline{
-			ID: k.ID, Type: k.Type, Title: k.DisplayTitle(),
-			Description: k.Description, Status: k.Status, Bytes: size,
-		})
+		outlineBytes += rowSizes[i]
+	}
+	// Demote from the bottom of the ranking until the outline the skipped
+	// entries cost fits alongside what was kept. Each demotion frees the
+	// entry's bytes and pays for its row, which is strictly smaller — the
+	// guard is there so a pathological entry cannot spin this loop.
+	for used+outlineBytes > budget {
+		last := -1
+		for i := range deliver {
+			if deliver[i] {
+				last = i
+			}
+		}
+		if last < 0 || sizes[last] <= rowSizes[last] {
+			break
+		}
+		deliver[last] = false
+		used -= sizes[last]
+		outlineBytes += rowSizes[last]
+	}
+	kept := make([]domain.Knowledge, 0, len(entries))
+	var outline []domain.ContextOutline
+	for i := range entries {
+		if deliver[i] {
+			kept = append(kept, entries[i])
+			continue
+		}
+		outline = append(outline, rows[i])
 	}
 	return kept, outline
+}
+
+// outlineDescriptionBytes caps the description an outline row carries.
+// The description is what makes a row worth reading — it is the caller's
+// only basis for spending a round trip — but nothing bounds it on the
+// entry, so one entry with a page-long description could outweigh the
+// budget on its own. Enough for a sentence or two; the rest is what the
+// fetch is for.
+const outlineDescriptionBytes = 200
+
+func outlineRow(k *domain.Knowledge, size int) domain.ContextOutline {
+	return domain.ContextOutline{
+		ID: k.ID, Type: k.Type, Title: k.DisplayTitle(),
+		Description: truncateUTF8(k.Description, outlineDescriptionBytes),
+		Status:      k.Status, Bytes: size,
+	}
 }
 
 // serializedSize is what the entry costs on the wire — attrs included. A
@@ -546,6 +607,15 @@ func serializedSize(k *domain.Knowledge) int {
 	b, err := json.Marshal(k)
 	if err != nil {
 		return len(k.Body) // unreachable in practice; never drop on a marshal quirk
+	}
+	return len(b)
+}
+
+// jsonSize is what any part of the response costs on the wire.
+func jsonSize(v any) int {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return 0
 	}
 	return len(b)
 }

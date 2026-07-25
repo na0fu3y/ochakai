@@ -345,7 +345,11 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	}
 	small := entry("insights/small", 100)
 	big := entry("insights/big", 5000)
+	// Room for the small entry plus the row that names the big one: the
+	// outline is inside the budget, so "room for one entry" has to include
+	// what saying "and there was another" costs.
 	one := serializedSize(&small)
+	oneAndARow := one + jsonSize(outlineRow(&big, serializedSize(&big))) + 10
 
 	t.Run("no budget keeps everything", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 0)
@@ -355,7 +359,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	})
 
 	t.Run("overflow becomes an outline row", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, one+10)
+		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want only the small entry in full, got %d", len(kept))
 		}
@@ -374,7 +378,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// entire budget. A prefix cut would let it starve everything below it;
 	// greedy packing keeps the rest and names the giant.
 	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{big, small}, one+10)
+		kept, outline := packWithinBudget([]domain.Knowledge{big, small}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want the small entry delivered behind the giant, got %+v", kept)
 		}
@@ -385,11 +389,45 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 
 	// Budgets below one entry outline everything rather than shipping a
 	// fragment: an empty entries list with a populated outline is a usable
-	// answer, a half-entry is not.
+	// answer, a half-entry is not. Naming everything is also the floor —
+	// a caller cannot raise a budget for entries it never heard about.
 	t.Run("a budget below one entry outlines everything", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 1)
 		if len(kept) != 0 || len(outline) != 2 {
 			t.Errorf("want everything outlined, got %d kept / %d outlined", len(kept), len(outline))
+		}
+	})
+
+	// The budget governs the response, not half of it. An outline row
+	// carries a description — unbounded on the entry — so a budget that
+	// only counted delivered entries left the actual payload unbounded.
+	t.Run("the outline is inside the budget", func(t *testing.T) {
+		wordy := make([]domain.Knowledge, 6)
+		for i := range wordy {
+			wordy[i] = entry(fmt.Sprintf("insights/wordy-%d", i), 900)
+			wordy[i].Description = strings.Repeat("長い説明。", 400) // ~6 kB each
+		}
+		const budget = 4000
+		kept, outline := packWithinBudget(wordy, budget)
+		total := 0
+		for i := range kept {
+			total += serializedSize(&kept[i])
+		}
+		for _, row := range outline {
+			total += jsonSize(row)
+		}
+		if total > budget {
+			t.Errorf("response = %d bytes over a budget of %d (%d kept, %d outlined)",
+				total, budget, len(kept), len(outline))
+		}
+		if len(kept)+len(outline) != len(wordy) {
+			t.Errorf("every entry must be delivered or named: %d kept, %d outlined, want %d total",
+				len(kept), len(outline), len(wordy))
+		}
+		for _, row := range outline {
+			if len(row.Description) > outlineDescriptionBytes {
+				t.Errorf("outline description = %d bytes, want <= %d", len(row.Description), outlineDescriptionBytes)
+			}
 		}
 	})
 

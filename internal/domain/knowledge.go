@@ -400,7 +400,9 @@ type SearchHit struct {
 // in full: enough for the caller to decide whether to spend a round trip
 // fetching it by id, and nothing more. The description carries the weight
 // here — an entry with an empty description is nearly invisible in an
-// outline, which is one more reason curation pays.
+// outline, which is one more reason curation pays. It is also the only
+// unbounded field, so the packer caps it: these rows are counted against
+// the same budget as the entries.
 type ContextOutline struct {
 	ID          string `json:"id"`
 	Type        Type   `json:"type"`
