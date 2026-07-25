@@ -558,6 +558,23 @@ paths:
         stream: verify a backup by reading the archive, not by the status
         code. The server logs every such failure at error level, naming
         the file it stopped on.
+
+
+        There is no matching import endpoint, and that is deliberate
+        (design doc 0015 §3.2): importing a bundle is a loop over the
+        endpoints already here, so a server-side version would add a
+        second path to the same outcome without adding a capability.
+        To write your own importer against any OKF bundle: walk the
+        tar.gz, POST each `<id>.md` to /api/v1/knowledge (PUT to
+        /api/v1/knowledge/{id} if it exists), and PUT each non-markdown
+        file to /api/v1/attachments/{id}/{name}, attributing it to the
+        entry whose directory it sits in or whose body links to it.
+        `index.md` files are generated on export and are not entries.
+        Frontmatter keys the server owns — `created_by`, `verified_by`,
+        `verified_at`, `rejected_by`, `rejected_at`, `timestamp` — are
+        ignored on write; provenance comes from the caller's identity
+        (design docs 0005 §3.3, 0009). `ochakai import` is exactly this
+        loop.
       parameters:
         - name: attachments
           in: query

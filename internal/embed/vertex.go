@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -223,8 +224,17 @@ func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) 
 		// are only an estimate of a token count — the ratio moves with the
 		// script — so the caller needs to be able to react by shortening
 		// rather than by giving up on the entry.
-		if resp.StatusCode == http.StatusBadRequest && inputTooLong(string(respBody)) {
-			return nil, fmt.Errorf("%w: %w", ErrInputTooLong, err)
+		if resp.StatusCode == http.StatusBadRequest {
+			if inputTooLong(string(respBody)) {
+				return nil, fmt.Errorf("%w: %w", ErrInputTooLong, err)
+			}
+			// Every other 400 is logged loudly, because the phrase list
+			// below is the only thing standing between a token-limit
+			// rejection and an entry vanishing from vector search. When
+			// the API rewords its complaint this line is how anyone finds
+			// out; without it the failure looks exactly like an outage.
+			slog.Warn("Vertex AI rejected the request and the reason was not recognized as a token limit;"+
+				" if it is one, the shorten-and-retry path is not running", "body", truncate(string(respBody), 200))
 		}
 		return nil, err
 	}
@@ -233,7 +243,10 @@ func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) 
 
 // inputTooLong recognizes the model's complaint about input length in a
 // 400 body. Matching on prose is unlovely, but the API returns no code
-// that distinguishes this from any other invalid argument.
+// that distinguishes this from any other invalid argument — so the
+// caller above logs the 400s this does not recognize, and a reworded
+// message shows up as a warning rather than as entries quietly missing
+// from vector search.
 func inputTooLong(body string) bool {
 	b := strings.ToLower(body)
 	for _, phrase := range []string{"token limit", "too many tokens", "input is too long",

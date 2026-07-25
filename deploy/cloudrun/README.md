@@ -295,6 +295,13 @@ loaded beforehand has none and hybrid search stays quietly lexical-only:
 ochakai reembed            # repeat while it reports entries still missing
 ```
 
+`reembed` is the only endpoint that spends money on your behalf — each
+entry it processes is a Vertex AI embedding call. ochakai has no
+authorization, so anyone who can reach the service can start one; the
+cost is bounded by how many entries are unembedded (a repeat run with
+nothing to do calls nothing), but it is worth knowing before granting
+`roles/run.invoker` widely.
+
 The same applies after changing `OCHAKAI_VERTEX_MODEL`: the old vectors
 are in a space nothing queries any more (design doc 0020).
 
