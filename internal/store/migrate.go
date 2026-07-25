@@ -3,8 +3,11 @@ package store
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"sort"
+
+	"github.com/jackc/pgx/v5"
 )
 
 //go:embed migrations/*.sql
@@ -140,10 +143,16 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 // that and stops.
 func (s *Store) checkEmbeddingDim(ctx context.Context, dim int) error {
 	var stored int
-	if err := s.pool.QueryRow(ctx,
+	// to_regclass rather than a cast: the cast raises when the table is
+	// absent, and "absent" is the one case with nothing to disagree about.
+	err := s.pool.QueryRow(ctx,
 		`SELECT atttypmod FROM pg_attribute
-		 WHERE attrelid = 'knowledge_embedding'::regclass AND attname = 'embedding'`).
-		Scan(&stored); err != nil {
+		 WHERE attrelid = to_regclass('knowledge_embedding') AND attname = 'embedding'`).
+		Scan(&stored)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
 		return fmt.Errorf("read the stored embedding dimension: %w", err)
 	}
 	if stored == dim {
