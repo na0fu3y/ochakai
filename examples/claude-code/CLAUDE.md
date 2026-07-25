@@ -36,11 +36,6 @@ entries. Search it before writing analytics SQL; write learnings back.
   caption is searchable). If you learn something by looking at an
   attachment, write it into the body with `ochakai update` — knowledge
   locked in pixels is invisible to search.
-- `ochakai compile --metric <name> [--dimension ds.field] [--grain ds.time_field:month] [--filter "ds.field = value"]`
-  — deterministic SQL on stdout. ochakai never executes SQL; run the result
-  with your own warehouse access. **Exit 2** means the request is outside
-  the supported subset: read the reason on stderr and prefer any suggested
-  verified golden queries.
 - `ochakai report <id> worked|failed [--note "what went wrong"]`
   — after acting on knowledge (running a golden query, executing compiled
   SQL), report whether the result was actually correct. `failed` reports
@@ -52,6 +47,15 @@ entries. Search it before writing analytics SQL; write learnings back.
   `draft`; your identity is recorded as provenance automatically.
 - `ochakai export <dir>` — snapshot the whole knowledge base as markdown;
   `ochakai import <dir>` loads a bundle back (any OKF bundle works).
+- `ochakai compile --metric <name> [--dimension ds.field] [--grain ds.time_field:month] [--filter "ds.field = value"]`
+  — optional, and rarely the first move: deterministic SQL on stdout from a
+  `Semantic Model` entry, for a metric × grain × filter combination no
+  golden query covers. Search for a verified golden query first — it is a
+  query a human confirmed against the real data, which compiled SQL is not.
+  ochakai never executes SQL; run the result with your own warehouse
+  access. **Exit 2** means the request is outside the supported subset:
+  read the reason on stderr and prefer any suggested verified golden
+  queries.
 
 Types beyond these are welcome (any slug works — e.g. `runbook/…`), and
 IDs may be hierarchical (`queries/sales/monthly-revenue`) to group

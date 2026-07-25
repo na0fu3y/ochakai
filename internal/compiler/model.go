@@ -2,6 +2,22 @@
 // Apache Ossie semantic models. Phase 1 scope (design doc §4): single fact
 // table + star joins, BigQuery output only (design doc 0016). Requests outside the
 // supported subset fail with a clear error — never a guess.
+//
+// The package holds two things of quite different standing. Model and its
+// Validate are load-bearing: they are what makes a Metric an executable
+// specification rather than a paragraph, and they run on every write of a
+// Semantic Model entry whether or not anyone ever compiles anything.
+// Compile itself is optional surface (README) — valuable for metric ×
+// grain × filter combinations nobody has written a golden query for, but
+// narrower than a verified query plus the caveat around it, which is what
+// an agent usually needs and what get_context already returns.
+//
+// That standing decides how the dialect gap is handled. BigQuery is wide
+// and this subset is narrow, and the gap does not close on its own: the
+// rule is that an unsupported construct returns an Error, never
+// approximate SQL. A compiler that says "outside the supported subset" is
+// working as intended; one that emits a plausible-looking date literal
+// with the wrong semantics costs more trust than the whole feature earns.
 package compiler
 
 import (
