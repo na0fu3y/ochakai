@@ -230,36 +230,9 @@ type ExportAttachment struct {
 	Data []byte
 }
 
-// ListAllAttachmentMeta returns every live entry's attachment metadata,
-// ordered by id then name, without any bytes. The OKF exporter walks this
-// and pulls one attachment's bytes at a time (AttachmentBytes), so peak
-// memory is one attachment rather than all of them.
-func (s *Store) ListAllAttachmentMeta(ctx context.Context) ([]ExportAttachment, error) {
-	rows, err := s.pool.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		ORDER BY a.knowledge_id, a.name`)
-	if err != nil {
-		return nil, err
-	}
-	atts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
-		var e ExportAttachment
-		err := row.Scan(&e.ID, &e.Att.Name, &e.Att.MediaType, &e.Att.Size, &e.Att.SHA256, &e.Att.OKFPath,
-			&e.Att.CreatedBy.Kind, &e.Att.CreatedBy.Name, &e.Att.CreatedAt)
-		return e, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(atts) > 0 && s.blobs == nil {
-		return nil, errNoBlobStore
-	}
-	return atts, nil
-}
-
 // AttachmentBytes returns the content-addressed bytes behind an
-// attachment. Paired with ListAllAttachmentMeta for streaming export.
+// attachment. Paired with ExportSnapshot.AttachmentMeta for streaming
+// export.
 func (s *Store) AttachmentBytes(ctx context.Context, sha256 string) ([]byte, error) {
 	if s.blobs == nil {
 		return nil, errNoBlobStore

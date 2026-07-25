@@ -1669,3 +1669,69 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 		t.Errorf("backlinks from %s = %+v, want the moved entry", neighbour, back)
 	}
 }
+
+// An export is streamed, so its reads happen at different moments. The
+// snapshot is what keeps the archive a picture of one instant: an entry
+// deleted after the id list was taken still has to be in the bundle the
+// index promises, or the archive contradicts itself.
+func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	const doomed = "it-exportsnap/doomed"
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-exportsnap%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	if err := s.Create(ctx, &domain.Knowledge{Type: domain.TypeInsights, ID: doomed,
+		Title: "deleted mid-export", Status: domain.StatusDraft, CreatedBy: actor}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"knowledge", "knowledge_revision"} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-exportsnap%'`)
+		}
+	})
+
+	snap, err := s.BeginExport(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Close(ctx)
+	rows, err := snap.IndexRows(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(rows, func(k domain.Knowledge) bool { return k.ID == doomed }) {
+		t.Fatalf("%s missing from the index rows", doomed)
+	}
+
+	// The world moves on while the archive is being written.
+	if err := s.SoftDelete(ctx, doomed, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := snap.ListByIDs(ctx, []string{doomed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].ID != doomed {
+		t.Errorf("the entry the index promised is missing from the bundle: %+v", entries)
+	}
+	// And the snapshot is only the export's: the live database has moved.
+	if _, err := s.Get(ctx, doomed); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Get after delete = %v, want ErrNotFound", err)
+	}
+}
