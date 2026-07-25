@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
@@ -367,7 +369,14 @@ func TestIntegration(t *testing.T) {
 // SoftDelete must survive a database where semantic search was never
 // enabled: knowledge_embedding does not exist, and the failed DELETE used
 // to abort the surrounding transaction (25P02) before the revision insert.
-func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
+//
+// execTolerateMissingTable is the mechanism, and it is exercised here
+// against a table that never exists rather than by dropping the real one.
+// The test database is shared by every package (CONTRIBUTING), so dropping
+// knowledge_embedding threw away the vectors of whatever else was running
+// — and those tests then failed somewhere else entirely, a reembed pass
+// reporting work it had just done as still missing.
+func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
@@ -378,13 +387,24 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil { // trigram-only: no embedding table
-		t.Fatal(err)
-	}
-	if _, err := s.pool.Exec(ctx, `DROP TABLE IF EXISTS knowledge_embedding`); err != nil {
+	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
 
+	// A missing table must leave the transaction usable: without the
+	// helper, the failed statement poisons everything after it.
+	if err := s.withTx(ctx, func(tx pgx.Tx) error {
+		if err := execTolerateMissingTable(ctx, tx,
+			`DELETE FROM it_never_created WHERE id=$1`, "x"); err != nil {
+			return err
+		}
+		var one int
+		return tx.QueryRow(ctx, `SELECT 1`).Scan(&one)
+	}); err != nil {
+		t.Fatalf("a missing table must not abort the transaction: %v", err)
+	}
+
+	// The caller that depends on it, end to end.
 	k := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: "it-delete-me", Title: "delete me",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
@@ -394,7 +414,7 @@ func TestIntegrationSoftDeleteWithoutEmbeddingTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy); err != nil {
-		t.Fatalf("SoftDelete without knowledge_embedding: %v", err)
+		t.Fatalf("SoftDelete: %v", err)
 	}
 	if _, err := s.Get(ctx, k.ID); err == nil {
 		t.Error("entry still visible after SoftDelete")

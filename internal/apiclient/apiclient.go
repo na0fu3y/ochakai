@@ -397,7 +397,10 @@ type ReembedResult struct {
 }
 
 // Reembed fills in vectors for entries that have none for the configured
-// model (POST /api/v1/reembed). limit 0 uses the server default.
+// model (POST /api/v1/reembed). limit 0 uses the server default. One
+// pass is bounded: Missing reports what is still left, and the caller
+// repeats (see cmdReembed) rather than asking for a pass that cannot
+// finish inside a request timeout.
 func (c *Client) Reembed(ctx context.Context, limit int) (*ReembedResult, error) {
 	var out ReembedResult
 	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/reembed", limitQuery(limit), nil, &out); err != nil {

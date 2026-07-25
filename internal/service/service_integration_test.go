@@ -412,8 +412,11 @@ func TestReembedIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reembed after a model change: %v", err)
 	}
-	if res.Embedded == 0 || res.Failed != 0 {
-		t.Fatalf("reembed did nothing useful: %+v", res)
+	// Only Embedded is assertable here: a corpus-wide pass runs over
+	// whatever the other packages have in the shared database, including
+	// entries they delete while it runs (counted as Failed).
+	if res.Embedded == 0 {
+		t.Fatalf("reembed did nothing: %+v", res)
 	}
 	if unembedded(t, "test-embedder-v2") {
 		t.Error("reembed left the entry without a vector for the new model")
@@ -427,9 +430,12 @@ func TestReembedIntegration(t *testing.T) {
 	if unembedded(t, "test-embedder-v2") {
 		t.Error("a second pass unembedded the entry")
 	}
-	if done.Missing != 0 {
-		t.Errorf("nothing is left, but Missing = %d", done.Missing)
-	}
+	// Missing is corpus-wide and the database is shared, so an entry
+	// another package creates between the pass and the count is
+	// legitimately still missing — nothing to assert from here. That the
+	// count does not subtract the pass's own work is pinned by
+	// TestReembedReportsWhatIsLeft, where the corpus is measured first.
+	_ = done
 }
 
 // Missing is the number the operator acts on: it decides whether to run
@@ -474,8 +480,13 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	if res.Embedded != 2 {
 		t.Fatalf("bounded pass embedded %d, want 2", res.Embedded)
 	}
-	if want := total - 2; res.Missing != want {
-		t.Errorf("Missing = %d, want %d (%d unembedded, %d done)", res.Missing, want, total, res.Embedded)
+	// A lower bound, not an equality: the test database is shared by every
+	// package (CONTRIBUTING), so entries can appear between the count above
+	// and the one Reembed takes after the pass. What must hold is that the
+	// pass does not report its own work as still missing — the bug this
+	// covers subtracted it twice.
+	if want := total - 2; res.Missing < want {
+		t.Errorf("Missing = %d, want at least %d (%d unembedded, %d done)", res.Missing, want, total, res.Embedded)
 	}
 	if res.Missing == 0 {
 		t.Error("a bounded pass over a larger corpus reported nothing left")
