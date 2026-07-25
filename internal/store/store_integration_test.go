@@ -1062,10 +1062,14 @@ func TestIntegrationLexicalSearchUsesTrigramIndex(t *testing.T) {
 	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
 		t.Fatal(err)
 	}
+	// The live predicate shape: an OR of one substring test per query
+	// fragment. Two-character Japanese fragments are below what a trigram
+	// index resolves exactly, so this also checks that pg_trgm still
+	// narrows the scan with partial trigrams rather than giving up.
 	rows, err := tx.Query(ctx, `EXPLAIN
 		SELECT k.id FROM knowledge k
-		WHERE (k.search_text % $1 OR k.search_text ILIKE $2) AND k.deleted_at IS NULL`,
-		"revenue", "%revenue%")
+		WHERE (k.search_text ILIKE $1 OR k.search_text ILIKE $2) AND k.deleted_at IS NULL`,
+		"%revenue%", "%売上%")
 	if err != nil {
 		t.Fatalf("EXPLAIN: %v", err)
 	}
@@ -1080,8 +1084,8 @@ func TestIntegrationLexicalSearchUsesTrigramIndex(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plan, "knowledge_search_trgm") {
-		t.Errorf("lexical search cannot use the trigram index; plan was:\n%s", plan)
+	if n := strings.Count(plan, "knowledge_search_trgm"); n != 2 {
+		t.Errorf("want both fragments served by the trigram index, got %d index scans:\n%s", n, plan)
 	}
 }
 
@@ -1379,4 +1383,120 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+}
+
+// get_context is documented to take a data question, and the recall hook
+// feeds it a raw user prompt — so a question, not a keyword, is the
+// flagship input. Matching the query as a whole cannot serve one: a
+// question appears verbatim in no body, and trigram similarity between a
+// short query and a long document is 0.01-0.1 (for Japanese, where the
+// three-character windows of a question and a body rarely align, often
+// exactly 0). Before fragment matching this search returned nothing at
+// all for either language.
+//
+// Recall alone is not enough, though. Split a question into fragments and
+// most of them are grammar — the particle windows ている / のか, the words
+// why / is / down — which nearly every entry contains. Counting matches
+// would rank an entry sharing three function words above the one sharing
+// the actual subject. So this plants a corpus where the grammar really is
+// common and checks the ordering, not just the presence.
+func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	const target, decoy = "it-q-target", "it-q-decoy"
+	ids := []string{target, decoy}
+	for i := range 20 {
+		ids = append(ids, fmt.Sprintf("it-q-filler-%d", i))
+	}
+	clean := func() {
+		for _, id := range ids {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		}
+	}
+	clean()
+	t.Cleanup(clean)
+	create := func(id, title, body string) {
+		t.Helper()
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: title,
+			Status: domain.StatusDraft, CreatedBy: actor, Body: body,
+		}); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	// The target shares the subject and nothing else; the decoy and the
+	// filler share the grammar and nothing else.
+	create(target, "売上の読み方", "売上は前年同期比で見ないと誤読する。monthly revenue by quarter.")
+	create(decoy, "棚卸の運用", "棚卸は毎月行っているのか、四半期ごとなのか。why is this down to the site?")
+	for i := range 20 {
+		create(fmt.Sprintf("it-q-filler-%d", i), fmt.Sprintf("運用メモ %d", i),
+			"これは毎日行っているのかを記録している。why is it down again, and is it down for long?")
+	}
+
+	rank := func(hits []domain.SearchHit, id string) int {
+		for i, h := range hits {
+			if h.ID == id {
+				return i
+			}
+		}
+		return -1
+	}
+	for _, tc := range []struct {
+		query   string
+		outrank bool // must the subject beat the grammar-only entry?
+		why     string
+	}{
+		// Recall is the regression: whole-query matching found none of
+		// these. Ranking is promised only where lexical search can
+		// honestly deliver it.
+		{"なぜ売上が下がっているのか", true, "Japanese question: similarity is 0; content windows carry it"},
+		{"売上", true, "short Japanese keyword"},
+		{"revenue", true, "English keyword"},
+		// The decoy really does contain three of this question's four
+		// words (why / is / down) against the subject's one. Ranking it
+		// higher is what a bag of words does, not a defect to paper over:
+		// English has no equivalent of the kana/kanji split to lean on.
+		// Hybrid mode is the answer — which is why the README recommends
+		// embeddings — so here we require only that the subject is found.
+		{"why is revenue down", false, "English question: recall only"},
+	} {
+		hits, err := s.SearchLexical(ctx, tc.query, Filter{}, 50)
+		if err != nil {
+			t.Fatalf("SearchLexical(%q): %v", tc.query, err)
+		}
+		got, other := rank(hits, target), rank(hits, decoy)
+		if got < 0 {
+			t.Errorf("SearchLexical(%q) did not find %s among %d hits (%s)",
+				tc.query, target, len(hits), tc.why)
+			continue
+		}
+		if tc.outrank && other >= 0 && other < got {
+			t.Errorf("SearchLexical(%q) ranked the grammar-only entry above the subject (%s)",
+				tc.query, tc.why)
+		}
+	}
+
+	// A query that shares nothing must still come back empty: fragment
+	// matching widens recall, it does not turn the floor off.
+	hits, err := s.SearchLexical(ctx, "zzzznothingmatchesthiszzzz", Filter{}, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rank(hits, target) >= 0 || rank(hits, decoy) >= 0 {
+		t.Errorf("unrelated query matched a planted entry (%d hits)", len(hits))
+	}
 }

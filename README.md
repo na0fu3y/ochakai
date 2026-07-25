@@ -274,16 +274,23 @@ round-trip through OKF bundles as plain files next to their entry.
 
 **Japanese knowledge bases should turn embeddings on.** PostgreSQL's
 full-text search does not tokenize Japanese, so the lexical half of search
-falls back to trigrams over a stored haystack — id, title, description,
-tags, body, attachment filenames — plus a substring match, which finds
-what it is given but ranks by a score with no meaning you can set a
-threshold against. `gemini-embedding-001` handles Japanese well, and with
+matches a query by its fragments against a stored haystack — id, title,
+description, tags, body, attachment filenames. Latin words stay whole;
+Japanese, which has no spaces, is cut into two-character windows, and only
+the windows carrying a kanji or katakana are kept, because an all-hiragana
+window is grammar and matches nearly everything. Entries are then ranked
+by how much of the *rare* part of the query they contain.
+
+That finds the right entries for a keyword and for a Japanese question,
+but it is still a bag of words: ask an English question and an entry
+sharing three of its function words can outrank the one that names the
+subject. `gemini-embedding-001` handles Japanese well, and with
 `OCHAKAI_VERTEX_PROJECT` set, ranking comes from rank fusion across both
-halves rather than from trigram overlap alone.
+halves rather than from term overlap alone.
 
 Scores are not comparable across the two modes and are not calibrated:
-trigram similarity plus boosts in the lexical-only mode, RRF rank fusion
-(~0.02 scale) in the hybrid one. Treat them as an ordering, not a
+matched-fragment weight plus boosts in the lexical-only mode, RRF rank
+fusion (~0.02 scale) in the hybrid one. Treat them as an ordering, not a
 measure — `min_score` is for callers who have calibrated against their own
 corpus, which is why the MCP surface does not offer it. To bound a
 response, use `budget` instead.
