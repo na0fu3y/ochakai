@@ -52,10 +52,11 @@ ochakai context "why is revenue down?"  # the one-call read before a data questi
 ochakai search "revenue" --type Metric --status verified
 ochakai get models/sales-analytics
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
-ochakai compile --metric revenue --grain orders.ordered_at:month
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle
 ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (no deploy)
+
+ochakai compile --metric revenue --grain orders.ordered_at:month  # optional: deterministic SQL from a Semantic Model
 ```
 
 `ochakai use` saves the selection locally (name more servers with
@@ -173,8 +174,8 @@ And it stays small by refusing things:
 
 | ochakai has no… | because |
 |---|---|
-| LLM | it returns deterministically compiled SQL from semantic definitions ([Apache Ossie](https://github.com/apache/ossie)) or human-verified golden queries, verbatim. Interpretation is the client agent's job |
-| SQL execution | it holds no warehouse credentials. It compiles; your agent executes |
+| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job |
+| SQL execution | it holds no warehouse credentials. Your agent executes |
 | connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
@@ -192,7 +193,19 @@ And it stays small by refusing things:
 | `delete_knowledge` | Soft-delete (history retained) |
 | `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
-| `compile_sql` | Metrics + dimensions + filters + time grain → SQL. Never executes, never guesses |
+
+One more tool, `compile_sql`, is **optional** and off the list above on
+purpose: metrics + dimensions + filters + time grain → BigQuery SQL,
+deterministically, from a `Semantic Model` entry's spec. It answers metric
+× grain × filter combinations nobody has asked before, which is real but
+narrower than it sounds — what an agent usually needs is the verified
+query and the caveat around it, both of which arrive from `get_context`.
+It also carries the largest tool schema here, and tool schemas are agent
+context. Embedding hosts should leave it out of their allowed-tools list
+unless they want compilation; nothing else degrades. What stays
+first-class either way is `Model.Validate()`: a `Metric` is checked
+against its model on write, which is what makes a metric an executable
+specification rather than a paragraph.
 
 Every entry is also an **MCP resource** addressable by its canonical URI —
 `ochakai://` plus its id (the entry's path), e.g. `ochakai://metrics/revenue`
@@ -214,7 +227,7 @@ over time, run them as canaries from your CI:
 
 | Type | What it holds |
 |---|---|
-| `Semantic Model` | Apache Ossie semantic model, spec verbatim — what `compile` reads |
+| `Semantic Model` | Apache Ossie semantic model, spec verbatim — validates its metrics, and feeds the optional `compile` |
 | `Metric` | Semantic metric definition (Apache Ossie), synonyms |
 | `Golden Query` | Golden query: natural-language question + verified SQL |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
