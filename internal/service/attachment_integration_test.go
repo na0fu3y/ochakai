@@ -106,7 +106,16 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	id := fmt.Sprintf("svcit-att-%d", time.Now().UnixNano())
+	// The search below runs against one run-unique type, not the whole
+	// database. Reciprocal rank fusion gives an entry that matches in one
+	// list ~1/61 and an entry that matches in two ~2/61, so "an
+	// attachment-only match lands in the top 10" holds until ten entries
+	// match both lexically and by vector — a property of the corpus, not
+	// of the code under test. The shared test database (CONTRIBUTING)
+	// grows past that, and the test would then fail for a reason that has
+	// nothing to do with attachments. Scoping the search fixes the field.
+	typ := domain.Type(fmt.Sprintf("svcatt%d", time.Now().UnixNano()))
+	id := string(typ) + "/z-target" // sorts last: an RRF tie must not favor it
 	content := "quarterly revenue by region, expected results"
 	query := "四半期の地域別売上の検証結果"
 	emb := stubEmbedder{vecs: map[string][]float32{
@@ -118,7 +127,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
 
 	if _, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeQueries, ID: id, Title: "golden query",
+		Type: typ, ID: id, Title: "golden query",
 		Status: domain.StatusDraft, Body: "SELECT 1", CreatedBy: actor,
 	}, actor); err != nil {
 		t.Fatal(err)
@@ -126,22 +135,41 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	// Leave no live attachments behind: the store package's blob test
 	// resolves every live attachment against its own blob fake.
 	defer func() { _ = s.SoftDelete(ctx, id, actor) }()
+
+	// Company for the target: same type, no overlap with the query in
+	// either half of search. They are in the vector list (it returns the
+	// nearest N whatever the distance) and nowhere else, so each scores
+	// one RRF term — which is what makes the target's second term visible.
+	for i := range 3 {
+		decoy := fmt.Sprintf("%s/a-decoy-%d", typ, i)
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: typ, ID: decoy, Title: "参考資料", Status: domain.StatusDraft,
+			Body: "参考資料の置き場", CreatedBy: actor,
+		}, actor); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = s.SoftDelete(ctx, decoy, actor) }()
+	}
+
 	if _, err := svc.Attach(ctx, id, "expected.txt", "", []byte(content), actor); err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
 
-	// The Japanese query shares no trigrams with the entry or filename;
-	// only the attachment vector can surface it.
-	hits, err := svc.Search(ctx, query, store.Filter{}, 10)
+	// The Japanese query shares no fragment with any of these entries or
+	// filenames; only the attachment vector can tell them apart.
+	hits, err := svc.Search(ctx, query, store.Filter{Types: []domain.Type{typ}}, 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	found := false
-	for _, h := range hits {
-		found = found || h.ID == id
+	if len(hits) == 0 || hits[0].ID != id {
+		t.Fatalf("the entry whose attachment matches the query must rank first: %+v", hits)
 	}
-	if !found {
-		t.Errorf("hybrid search missed the entry whose attachment matches the query: %+v", hits)
+	// Strictly first, not first by tie-break: without the attachment
+	// vector every entry here carries the same single RRF term.
+	for _, h := range hits[1:] {
+		if h.Score >= hits[0].Score {
+			t.Errorf("attachment match scored %v, no better than %s at %v", hits[0].Score, h.ID, h.Score)
+		}
 	}
 
 	// Non-text attachments are not embeddable yet (design doc 0020 §3):
@@ -183,7 +211,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found = false
+	found := false
 	for _, h := range vhits {
 		if h.ID == id && h.Score > 0.9 {
 			found = true
