@@ -1216,12 +1216,29 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	}
 
 	// Purging a live entry is refused: delete first, purge second.
-	if err := s.Purge(ctx, src); !errors.Is(err, ErrNotDeleted) {
+	if err := s.Purge(ctx, src, actor); !errors.Is(err, ErrNotDeleted) {
 		t.Errorf("purge of a live entry: got %v, want ErrNotDeleted", err)
 	}
 
-	if err := s.Purge(ctx, dst); err != nil {
+	if err := s.Purge(ctx, dst, actor); err != nil {
 		t.Fatalf("Purge: %v", err)
+	}
+	// The one record a purge leaves: who destroyed what, and how much
+	// history went with it. Everything else about the entry is gone, so
+	// without this row nobody can answer "where did it go?".
+	var purgedBy string
+	var purgedRevs int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT purged_by_kind || ':' || purged_by_name, revisions
+		   FROM knowledge_purge WHERE id = $1 ORDER BY purged_at DESC LIMIT 1`, dst).
+		Scan(&purgedBy, &purgedRevs); err != nil {
+		t.Fatalf("purge left no audit row: %v", err)
+	}
+	if purgedBy != actor.Kind+":"+actor.Name {
+		t.Errorf("audit row records %q, want %q", purgedBy, actor.Kind+":"+actor.Name)
+	}
+	if purgedRevs == 0 {
+		t.Error("audit row lost the revision count")
 	}
 	var revs int
 	if err := s.pool.QueryRow(ctx,
@@ -1231,7 +1248,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	if revs != 0 {
 		t.Errorf("purge left %d revisions behind", revs)
 	}
-	if err := s.Purge(ctx, dst); !errors.Is(err, ErrNotFound) {
+	if err := s.Purge(ctx, dst, actor); !errors.Is(err, ErrNotFound) {
 		t.Errorf("purge of a purged entry: got %v, want ErrNotFound", err)
 	}
 

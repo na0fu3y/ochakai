@@ -281,8 +281,10 @@ paths:
         revisions, usage, and attachment metadata erased, the id freed
         for a move. Two calls, deliberately: the first is reversible, the
         second is not. Purging a live entry is a 409; delete it first.
-        Content-addressed attachment bytes are left in the blob store,
-        as detaching leaves them.
+        Content-addressed attachment bytes are left in the blob store, as
+        detaching leaves them; nothing reclaims them afterwards. The purge
+        itself is recorded — who destroyed which id, and how much history
+        went with it — in the one table a purge does not touch.
       parameters:
         - name: purge
           in: query
