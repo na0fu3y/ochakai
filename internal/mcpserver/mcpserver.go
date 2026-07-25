@@ -151,15 +151,28 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"base (verified entries rank higher), returns the full entries behind the top hits, " +
 			"and expands one hop through links so the insight explaining a metric and the golden " +
 			"query answering the question arrive together. Prefer this over search+get chains; " +
-			"fall back to search_knowledge/get_knowledge for precise lookups.",
+			"fall back to search_knowledge/get_knowledge for precise lookups. Entries that do not " +
+			"fit the byte budget are listed under \"outline\" — fetch any of them by id with " +
+			"get_knowledge.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in contextIn) (*mcp.CallToolResult, contextOut, error) {
-		res, err := svc.Context(ctx, in.Query, store.Filter{
-			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
-		}, in.Limit, in.MinScore)
+		budget := in.Budget
+		if budget <= 0 {
+			budget = defaultContextBudget
+		}
+		res, err := svc.Context(ctx, service.ContextRequest{
+			Query: in.Query,
+			Filter: store.Filter{
+				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
+			},
+			Limit: in.Limit, Budget: budget,
+		})
 		if err != nil {
 			return nil, contextOut{}, err
 		}
-		return nil, contextOut{Hits: res.Hits, Entries: res.Entries}, nil
+		return nil, contextOut{
+			Hits: res.Hits, Entries: res.Entries, Outline: res.Outline,
+			Truncated: res.Truncated, Hint: contextHint(res.Truncated),
+		}, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -370,20 +383,50 @@ type searchOut struct {
 	Hits []domain.SearchHit `json:"hits"`
 }
 
+// contextIn deliberately omits min_score, which the REST surface still
+// carries. A score floor is only usable once calibrated against a corpus
+// in a known search mode (trigram vs hybrid RRF), and an agent cannot
+// calibrate anything — offering it here spends tool-schema context on a
+// parameter whose own documentation says to leave it alone. What an agent
+// actually needs to bound a response is budget.
 type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	// MinScore drops hits below it; scores are search-mode dependent
-	// (trigram vs hybrid RRF), so leave it 0 unless calibrated.
-	MinScore float64 `json:"min_score,omitempty" jsonschema:"drop hits scoring below this; scores are search-mode dependent and uncalibrated, so leave 0 (off) unless calibrated against your corpus"`
+	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of entries returned in full (default 12000); entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge. Raise it when you need whole entries, lower it when context is tight"`
 }
 
 type contextOut struct {
-	Hits    []domain.SearchHit `json:"hits"`
-	Entries []domain.Knowledge `json:"entries"`
+	Hits      []domain.SearchHit      `json:"hits"`
+	Entries   []domain.Knowledge      `json:"entries"`
+	Outline   []domain.ContextOutline `json:"outline,omitempty"`
+	Truncated int                     `json:"truncated,omitempty"`
+	Hint      string                  `json:"hint"`
+}
+
+// defaultContextBudget bounds an unparameterized get_context. It is on by
+// default because the callers that most need it — hosts that embed ochakai
+// and never touch the tool arguments — are exactly the ones that will not
+// set it. Roughly 3000 tokens of entries, English or Japanese.
+const defaultContextBudget = 12000
+
+// contextHint rides along with every context pack. Claude Code sites can
+// install the write-back habit with a Stop hook; a browser-based host has
+// no shell to hang one on, so the server supplies it — same words for
+// every host, no LLM involved (the MCP server's Instructions field carries
+// the same habit, but hosts are free to drop instructions and many do).
+func contextHint(truncated int) string {
+	hint := "After acting on this knowledge, call report_outcome (worked/failed) on the entries you " +
+		"used — failed reports are how stale verified knowledge gets caught. If this session " +
+		"produced reusable knowledge, write it back with create_knowledge as a draft; search " +
+		"statuses=[\"rejected\"] first so you do not re-propose something already turned down."
+	if truncated > 0 {
+		hint += fmt.Sprintf(" %d entries did not fit the budget and are listed under \"outline\" — "+
+			"fetch any of them by id with get_knowledge.", truncated)
+	}
+	return hint
 }
 
 type getIn struct {

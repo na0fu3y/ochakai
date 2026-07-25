@@ -313,3 +313,73 @@ func TestExampleSemanticModelRegisters(t *testing.T) {
 		t.Errorf("compiled SQL wrong:\n%s", res.SQL)
 	}
 }
+
+// packWithinBudget delivers whole entries or none: a body cut in half
+// still looks like a body, and half of a golden query's SQL still looks
+// executable.
+func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
+	entry := func(id string, bodyBytes int) domain.Knowledge {
+		return domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: id,
+			Description: "desc " + id, Status: domain.StatusDraft, Body: strings.Repeat("x", bodyBytes)}
+	}
+	small := entry("insights/small", 100)
+	big := entry("insights/big", 5000)
+	one := serializedSize(&small)
+
+	t.Run("no budget keeps everything", func(t *testing.T) {
+		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 0)
+		if len(kept) != 2 || outline != nil {
+			t.Errorf("budget 0 must not truncate: %d kept, %d outlined", len(kept), len(outline))
+		}
+	})
+
+	t.Run("overflow becomes an outline row", func(t *testing.T) {
+		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, one+10)
+		if len(kept) != 1 || kept[0].ID != small.ID {
+			t.Fatalf("want only the small entry in full, got %d", len(kept))
+		}
+		if len(outline) != 1 || outline[0].ID != big.ID {
+			t.Fatalf("want the big entry outlined, got %v", outline)
+		}
+		if outline[0].Bytes != serializedSize(&big) || outline[0].Description != big.Description {
+			t.Errorf("outline row must carry size and description: %+v", outline[0])
+		}
+		if outline[0].Title != big.DisplayTitle() {
+			t.Errorf("outline title = %q, want the display title %q", outline[0].Title, big.DisplayTitle())
+		}
+	})
+
+	// A Semantic Model carries its whole spec in attrs and can outweigh the
+	// entire budget. A prefix cut would let it starve everything below it;
+	// greedy packing keeps the rest and names the giant.
+	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
+		kept, outline := packWithinBudget([]domain.Knowledge{big, small}, one+10)
+		if len(kept) != 1 || kept[0].ID != small.ID {
+			t.Fatalf("want the small entry delivered behind the giant, got %+v", kept)
+		}
+		if len(outline) != 1 || outline[0].ID != big.ID {
+			t.Fatalf("want the giant outlined, got %v", outline)
+		}
+	})
+
+	// Budgets below one entry outline everything rather than shipping a
+	// fragment: an empty entries list with a populated outline is a usable
+	// answer, a half-entry is not.
+	t.Run("a budget below one entry outlines everything", func(t *testing.T) {
+		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 1)
+		if len(kept) != 0 || len(outline) != 2 {
+			t.Errorf("want everything outlined, got %d kept / %d outlined", len(kept), len(outline))
+		}
+	})
+
+	// attrs, not just the body: a Semantic Model's spec is the largest
+	// payload in the base and lives entirely in attrs.
+	t.Run("size counts attrs", func(t *testing.T) {
+		bare := domain.Knowledge{Type: domain.TypeModels, ID: "models/m"}
+		withSpec := bare
+		withSpec.Attrs = map[string]any{"spec": strings.Repeat("y", 2000)}
+		if serializedSize(&withSpec) <= serializedSize(&bare)+1000 {
+			t.Error("serializedSize ignores attrs")
+		}
+	})
+}
