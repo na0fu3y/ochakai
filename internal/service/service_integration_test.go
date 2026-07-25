@@ -284,19 +284,19 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 // past the store to simulate.
 func TestReembedIntegration(t *testing.T) {
 	ctx := context.Background()
-	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "human", Name: "test"}
+	svc := newEmbeddingService(t, ctx, "test-embedder-v1")
 
 	// Without a provider the operator gets told which setting is missing,
 	// not a nil dereference.
+	embedder := svc.Embedder
 	svc.Embedder = nil
 	_, err := svc.Reembed(ctx, 10)
 	var unsupported *UnsupportedError
 	if !errors.As(err, &unsupported) {
 		t.Errorf("without an embedder: got %v, want an UnsupportedError naming the setting", err)
 	}
-
-	svc.Embedder = &fixedEmbedder{model: "test-embedder-v1", dim: 4}
+	svc.Embedder = embedder
 	id := "insights/" + uid("reembed")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeInsights, ID: id, Title: "reembed me", Body: "text",
@@ -340,12 +340,80 @@ func TestReembedIntegration(t *testing.T) {
 	}
 
 	// And it is idempotent: a second pass finds this entry already done.
-	if _, err := svc.Reembed(ctx, 5000); err != nil {
+	done, err := svc.Reembed(ctx, 5000)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if unembedded(t, "test-embedder-v2") {
 		t.Error("a second pass unembedded the entry")
 	}
+	if done.Missing != 0 {
+		t.Errorf("nothing is left, but Missing = %d", done.Missing)
+	}
+}
+
+// Missing is the number the operator acts on: it decides whether to run
+// the command again. Reporting 0 while entries are still unembedded turns
+// a half-done backfill into a finished one, and hybrid search stays
+// quietly lexical for whatever was left — the exact failure this command
+// exists to end.
+func TestReembedReportsWhatIsLeft(t *testing.T) {
+	ctx := context.Background()
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	svc := newEmbeddingService(t, ctx, uid("m"))
+	model := svc.Embedder.Model()
+
+	// Entries written before a provider was configured: created with no
+	// embedder, so nothing wrote a vector. That is the state enabling
+	// semantic search on an existing corpus leaves behind.
+	svc.Embedder = nil
+	for i := range 3 {
+		id := "insights/" + uid("missing")
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: fmt.Sprintf("filler %d", i),
+		}, actor); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+	}
+	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
+
+	total, err := svc.Store.CountUnembedded(ctx, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total < 3 {
+		t.Fatalf("setup left %d unembedded entries, want at least 3", total)
+	}
+
+	// A pass smaller than the corpus must say what it did not reach.
+	res, err := svc.Reembed(ctx, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Embedded != 2 {
+		t.Fatalf("bounded pass embedded %d, want 2", res.Embedded)
+	}
+	if want := total - 2; res.Missing != want {
+		t.Errorf("Missing = %d, want %d (%d unembedded, %d done)", res.Missing, want, total, res.Embedded)
+	}
+	if res.Missing == 0 {
+		t.Error("a bounded pass over a larger corpus reported nothing left")
+	}
+}
+
+// newEmbeddingService is newIntegrationService plus the pgvector schema,
+// which exists only where an embedding dimension was configured. Reembed
+// reads knowledge_embedding, so a test that skipped this would depend on
+// some other package having migrated the shared database first.
+func newEmbeddingService(t *testing.T, ctx context.Context, model string) *Service {
+	t.Helper()
+	svc := newIntegrationService(t, ctx)
+	if err := svc.Store.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
+	return svc
 }
 
 // fixedEmbedder stands in for Vertex: the integration database has no

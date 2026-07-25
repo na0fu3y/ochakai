@@ -715,11 +715,14 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 // rather than trusting it.
 const maxEmbedBytes = 5000
 
-// ReembedResult reports what a Reembed pass did.
+// ReembedResult reports what a Reembed pass did. Missing is how many
+// entries still have no vector once the pass is over — the number that
+// decides whether the operator runs it again, so it counts what is
+// actually left rather than what this pass did not get to.
 type ReembedResult struct {
 	Embedded int `json:"embedded"`
 	Failed   int `json:"failed"`
-	Missing  int `json:"missing"` // still unembedded when the batch limit was reached
+	Missing  int `json:"missing"`
 }
 
 // Reembed fills in the vectors that entry writes never produced. Vectors
@@ -763,14 +766,18 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 		}
 		res.Embedded++
 	}
-	if len(ids) == limit {
-		// The caller asked for a bounded pass and got one; say so rather
-		// than let "done" mean "done for now".
-		remaining, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), limit+1)
-		if err == nil && len(remaining) > res.Embedded {
-			res.Missing = len(remaining) - res.Embedded
-		}
+	// Counted after the pass, so it is what is left — not what was left
+	// minus what we did, which double-counts the work and reports a
+	// bounded pass as a finished one. Entries this pass failed on are
+	// still unembedded and belong in the total.
+	missing, err := s.Store.CountUnembedded(ctx, s.Embedder.Model())
+	if err != nil {
+		// The pass itself succeeded; refusing to report it because the
+		// tally failed would be worse than reporting it without one.
+		s.Log.Warn("reembed: counting what is left failed", "error", err)
+		return res, nil
 	}
+	res.Missing = missing
 	return res, nil
 }
 
