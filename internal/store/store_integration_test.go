@@ -1471,3 +1471,111 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 		t.Errorf("unrelated query matched a planted entry (%d hits)", len(hits))
 	}
 }
+
+// Verify is the exit from both review feeds (design doc 0025 §6). It
+// stamps a fresh verified_at even when the entry is already verified —
+// which Update cannot do — and an entry whose last failure report predates
+// that stamp leaves the re-verification feed.
+func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	const id = "it-verify-feed"
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"knowledge_event", "knowledge_usage"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE knowledge_id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.com"}
+	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
+	k := &domain.Knowledge{Type: domain.TypeQueries, ID: id, Title: "月次売上",
+		Status: domain.StatusDraft, CreatedBy: agent}
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+
+	verified, err := s.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if verified.Status != domain.StatusVerified || verified.VerifiedAt == nil {
+		t.Fatalf("Verify did not promote: status=%q verified_at=%v", verified.Status, verified.VerifiedAt)
+	}
+	first := *verified.VerifiedAt
+
+	// An agent runs the query, gets a wrong number, and says so. The entry
+	// is now in the re-verification feed.
+	if err := s.RecordOutcome(ctx, domain.EventFailed, agent, id, "returned last month"); err != nil {
+		t.Fatal(err)
+	}
+	inFeed := func() bool {
+		hits, err := s.ListByFailed(ctx, Filter{}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(hits, func(h domain.SearchHit) bool { return h.ID == id })
+	}
+	if !inFeed() {
+		t.Fatal("a failed report should put the entry in the re-verification feed")
+	}
+
+	// An Update that changes nothing cannot answer the report: it writes
+	// nothing at all, which is exactly why Verify exists.
+	same := *verified
+	if err := s.Update(ctx, &same, human, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !inFeed() {
+		t.Error("an update must not silently clear the feed")
+	}
+
+	// Re-verifying does.
+	again, err := s.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatalf("re-Verify: %v", err)
+	}
+	if again.VerifiedAt == nil || !again.VerifiedAt.After(first) {
+		t.Fatalf("re-verification did not refresh verified_at: %v -> %v", first, again.VerifiedAt)
+	}
+	if inFeed() {
+		t.Error("an entry verified after its last failure report must leave the feed")
+	}
+	// The lifetime total is untouched: presence in the feed says
+	// "unresolved", the count says "how bad it has been".
+	if u, err := s.Usage(ctx, id); err != nil {
+		t.Fatal(err)
+	} else if u.Failed != 1 {
+		t.Errorf("verification must not rewrite usage totals: failed=%d, want 1", u.Failed)
+	}
+
+	// A fresh failure brings it back.
+	if err := s.RecordOutcome(ctx, domain.EventFailed, agent, id, "still wrong"); err != nil {
+		t.Fatal(err)
+	}
+	if !inFeed() {
+		t.Error("a failure newer than the verification must reopen the entry")
+	}
+
+	revs, err := s.ListRevisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) == 0 || revs[0].Change != "verify" {
+		t.Errorf("verification must be recorded as a revision, got %+v", revs)
+	}
+}

@@ -51,6 +51,7 @@ ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type Metric --status verified
 ochakai get models/sales-analytics
+ochakai verify metrics/revenue      # promotes a draft — and re-affirms a verified entry, clearing the review feeds
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle (a client-side loop — see below)
@@ -96,7 +97,11 @@ verify / deprecate / reject (with the reason) in one click. Two feeds
 put the re-verification queue in front of that reviewer: a *verification
 age* feed (oldest `verified_at` first) so stale golden queries surface,
 and a *needs review* feed (`sort=failed`) that lists the entries agents
-reported wrong, worst first. It also compiles metrics interactively for
+reported wrong, worst first. Both empty the same way: re-verifying an
+entry — "I checked it again and it is still right" — stamps a fresh
+`verified_at` and takes it out of either feed, so the queues are
+something a reviewer can finish rather than a ledger that only grows.
+It also compiles metrics interactively for
 debugging semantic models. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
@@ -131,7 +136,8 @@ for what they still don't do:
   agent that ran a golden query and got a wrong number says so, and the
   entry rises in a *re-verification* feed (`sort=failed`) for a human or
   agent to re-check, instead of the next agent trusting the same entry
-  blind (design doc 0025).
+  blind. Re-checking is itself recorded (`ochakai verify`, or the web
+  UI's Verify), which is what empties the feed (design doc 0025).
 - **No forward-deployed engineers, by design.** Encoding what your data
   means is labor, and it doesn't vanish — the only question is *who* does
   it. Palantir's answer is forward-deployed engineers who hand-build an

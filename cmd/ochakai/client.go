@@ -32,6 +32,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"get":       cmdGet,
 	"create":    cmdCreate,
 	"update":    cmdUpdate,
+	"verify":    cmdVerify,
 	"delete":    cmdDelete,
 	"purge":     cmdPurge,
 	"reembed":   cmdReembed,
@@ -159,7 +160,7 @@ func parseRef(s string) (string, error) {
 
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries reported wrong (report_outcome\nfailed), worst first — the re-verification feed; output leads with the\nfailed count. Empty when nothing was reported wrong.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --status verified            # re-verification queue\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -723,6 +724,38 @@ func cmdUpdate(ctx context.Context, args []string) error {
 		return nil
 	}
 	fmt.Printf("updated %s (%s)\n", updated.URI(), updated.Status)
+	return nil
+}
+
+// cmdVerify records a verification. Re-verifying an entry that is already
+// verified is the point as much as promoting a draft: it is how a review
+// feed empties (design doc 0025 §6), and `update` cannot express it —
+// an unchanged payload writes nothing and verified_at is carried over.
+func cmdVerify(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai verify [flags] <id>\n\nRecord a verification against the entry as it stands: you become\nverified_by and verified_at is stamped now. Promotes a draft, and\nre-affirms an entry that is already verified — which is what takes it\nout of the verification-age and needs-review feeds.",
+		"  ochakai verify metrics/revenue\n")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
+	}
+	id, err := parseRef(pos[0])
+	if err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	k, err := c.Verify(ctx, id)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("verified ochakai://%s by %s\n", k.ID, k.VerifiedBy)
 	return nil
 }
 

@@ -261,6 +261,19 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
+// Verify records a verification against the entry as it stands (POST
+// /api/v1/verify/{id}): the caller becomes verified_by and verified_at is
+// stamped now. It promotes a draft and re-affirms an already-verified
+// entry alike — the second is what takes an entry out of the review feeds
+// (design doc 0025 §6), and Update cannot do it.
+func (c *Client) Verify(ctx context.Context, id string) (*domain.Knowledge, error) {
+	var k domain.Knowledge
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, nil, &k); err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
 // Purge hard-deletes an entry that is already soft-deleted, freeing its
 // id (DELETE ...?purge=true). A live entry is a 409: delete it first.
 func (c *Client) Purge(ctx context.Context, id string) error {
