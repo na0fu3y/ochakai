@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1025,4 +1026,135 @@ func (f *fakeBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 		return nil, fmt.Errorf("fake blob store: %s not found", sum)
 	}
 	return append([]byte(nil), data...), nil
+}
+
+// The point of migration 0016: the trigram index and the search query are
+// about the same text, so the index can actually serve the search. Before
+// it, similarity() was computed in the SELECT list over a concatenation no
+// index expression could match (tags need array_to_string, which is not
+// IMMUTABLE; attachment names live in another table), and the score floor
+// sat outside the subquery — every search scanned every row.
+//
+// enable_seqscan=off is a cost penalty, not a prohibition: PostgreSQL
+// still picks a sequential scan when no index can answer the predicate.
+// So this asserts index usability, not planner preference — which is
+// exactly the property that was missing.
+func TestIntegrationLexicalSearchUsesTrigramIndex(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN
+		SELECT k.id FROM knowledge k
+		WHERE (k.search_text % $1 OR k.search_text ILIKE $2) AND k.deleted_at IS NULL`,
+		"revenue", "%revenue%")
+	if err != nil {
+		t.Fatalf("EXPLAIN: %v", err)
+	}
+	plan := ""
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan += line + "\n"
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "knowledge_search_trgm") {
+		t.Errorf("lexical search cannot use the trigram index; plan was:\n%s", plan)
+	}
+}
+
+// search_text is maintained by trigger, so every write path keeps the
+// haystack current without remembering to. These are the two paths a
+// Go-side implementation would most easily miss: a file attached after
+// the entry was written (design doc 0020), and an entry renamed into a
+// new id (design doc 0022 put the id in the haystack).
+func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.UseBlobStore(newFakeBlobStore())
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	searchText := func(id string) string {
+		var got string
+		if err := s.pool.QueryRow(ctx, `SELECT search_text FROM knowledge WHERE id = $1`, id).Scan(&got); err != nil {
+			t.Fatalf("read search_text for %s: %v", id, err)
+		}
+		return got
+	}
+
+	const id, moved = "it-haystack", "it-haystack-moved"
+	for _, dead := range []string{id, moved} {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, dead)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dead)
+	}
+	k := &domain.Knowledge{
+		Type: domain.TypeTerms, ID: id, Title: "haystack", Tags: []string{"ledger"},
+		Status: domain.StatusDraft, CreatedBy: actor, Body: "prose",
+	}
+	if err := s.Create(ctx, k); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{id, "haystack", "ledger", "prose"} {
+		if !strings.Contains(searchText(id), want) {
+			t.Errorf("search_text misses %q after create: %q", want, searchText(id))
+		}
+	}
+
+	if _, err := s.PutAttachment(ctx, id, "seeds.txt", "text/plain", "", []byte("x"), actor); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(searchText(id), "seeds.txt") {
+		t.Errorf("attaching a file left search_text stale: %q", searchText(id))
+	}
+
+	if _, err := s.Move(ctx, id, moved, actor); err != nil {
+		t.Fatal(err)
+	}
+	after := searchText(moved)
+	if !strings.Contains(after, moved) {
+		t.Errorf("move left the old id in search_text: %q", after)
+	}
+	if !strings.Contains(after, "seeds.txt") {
+		t.Errorf("move dropped the attachment name from search_text: %q", after)
+	}
+
+	if err := s.DeleteAttachment(ctx, moved, "seeds.txt", actor); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(searchText(moved), "seeds.txt") {
+		t.Errorf("detaching left the filename in search_text: %q", searchText(moved))
+	}
 }

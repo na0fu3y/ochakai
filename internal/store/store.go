@@ -529,10 +529,20 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 
 // SearchLexical ranks by trigram similarity with a substring-match floor
 // (trigram alone misses short Japanese terms), verified entries boosted.
-// Attachment filenames join the haystack (design doc 0020): "seeds" finds
-// the entry carrying seeds.txt, embedder or not. So does the id (design
-// doc 0022): with title optional, the filename may be the entry's only
-// name.
+// The haystack is the search_text column (migration 0016): the id (design
+// doc 0022 — with title optional, the filename may be the entry's only
+// name), the envelope fields, the body, and the attachment filenames
+// (design doc 0020 — "seeds" finds the entry carrying seeds.txt, embedder
+// or not), maintained by trigger.
+//
+// The candidate predicate and the score read the same column as the GIN
+// trigram index, which is what makes the index usable: `%` (trigram
+// similarity above pg_trgm.similarity_threshold, 0.3 by default — an
+// operator can retune it per database without touching this query) and
+// ILIKE both have index support. Before 0016 the score was computed in
+// the SELECT list over a concatenation no index could match, and the
+// floor was applied outside the subquery, so every search scanned and
+// scored every row.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	// The trigram term takes the raw query; the substring floor takes a
@@ -546,18 +556,14 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	likeParam := len(args)
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
-			SELECT k.*, similarity(k.id || ' ' || k.title || ' ' || k.description || ' ' || array_to_string(k.tags, ' ') || ' ' || k.body || ' ' || att.names, $%d)
-				+ CASE WHEN k.id || ' ' || k.title || ' ' || k.description || ' ' || k.body || ' ' || att.names ILIKE $%d THEN 0.3 ELSE 0 END
+			SELECT k.*, similarity(k.search_text, $%[1]d)
+				+ CASE WHEN k.search_text ILIKE $%[2]d THEN 0.3 ELSE 0 END
 				+ CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS score
 			FROM knowledge k
-			LEFT JOIN LATERAL (
-				SELECT COALESCE(string_agg(a.name, ' '), '') AS names
-				FROM attachment a WHERE a.knowledge_id = k.id
-			) att ON true
-			WHERE %s
+			WHERE (k.search_text %% $%[1]d OR k.search_text ILIKE $%[2]d) AND %[3]s
 		) ranked
 		WHERE score > 0.05
-		ORDER BY score DESC LIMIT %d`, simParam, likeParam, where, limit)
+		ORDER BY score DESC LIMIT %[4]d`, simParam, likeParam, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
