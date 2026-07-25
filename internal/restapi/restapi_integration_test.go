@@ -407,3 +407,88 @@ func getJSON(t *testing.T, url string, v any) {
 		t.Fatalf("GET %s: decode: %v", url, err)
 	}
 }
+
+// POST /api/v1/verify/{id} records a verification against the entry as it
+// stands. The second call is the point: re-affirming an entry that is
+// already verified is what empties the review feeds, and PUT cannot do it
+// (design doc 0025 §6).
+func TestRESTIntegrationVerify(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(Handler(svc))
+	defer srv.Close()
+
+	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
+	id := typ + "/verify-me"
+	payload, _ := json.Marshal(map[string]any{"type": typ, "id": id, "title": "verify round trip"})
+	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	verify := func() domain.Knowledge {
+		t.Helper()
+		resp, err := http.Post(srv.URL+"/api/v1/verify/"+id, "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("verify = %d: %s", resp.StatusCode, body)
+		}
+		if resp.Header.Get("ETag") == "" {
+			t.Error("verify response carries no ETag")
+		}
+		var k domain.Knowledge
+		if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
+			t.Fatal(err)
+		}
+		return k
+	}
+
+	first := verify()
+	if first.Status != domain.StatusVerified || first.VerifiedAt == nil {
+		t.Fatalf("verify: %+v", first)
+	}
+	second := verify()
+	if second.VerifiedAt == nil || !second.VerifiedAt.After(*first.VerifiedAt) {
+		t.Errorf("re-verify did not refresh verified_at: %v -> %v", first.VerifiedAt, second.VerifiedAt)
+	}
+
+	resp, err = http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("verify of a missing entry = %d, want 404", resp.StatusCode)
+	}
+
+	// Leave nothing live behind: the test database is shared (CONTRIBUTING).
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("cleanup delete status = %d", resp.StatusCode)
+	}
+}

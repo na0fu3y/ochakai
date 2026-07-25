@@ -198,6 +198,24 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, updated)
 	})
 
+	// POST /api/v1/verify/{id...} — record a verification against the
+	// entry as it stands. Promoting a draft and re-affirming an entry that
+	// was already verified are the same act, and this is the only way to
+	// express the second one: PUT carries the stored verified_at over and
+	// writes nothing at all when the content is unchanged, which left both
+	// review feeds without an exit (design doc 0025 §6). Lives outside
+	// /knowledge/ for the same reason /usage does — a "/verify" suffix
+	// would be indistinguishable from an ID segment.
+	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		k, err := svc.Verify(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("ETag", etagOf(k))
+		writeJSON(w, http.StatusOK, k)
+	})
+
 	// GET /api/v1/usage/{id...} — how often the entry was actually used
 	// (search hits, fetches, compiles). The measure of the write-back
 	// loop: draft promotion evidence, staleness signal. Lives outside

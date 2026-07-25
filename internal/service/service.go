@@ -185,6 +185,31 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }
 
+// Verify records a verification against the entry as it stands: the
+// reviewer becomes verified_by and verified_at is now, whether the entry
+// was a draft being promoted or a verified entry being re-checked.
+//
+// The second case is the one Update could not express, and without it
+// neither review feed had an exit (design doc 0025 §6): a reviewer who
+// re-read a verified entry and found it still correct had no way to say
+// so, so it stayed at the top of the verification-age feed, and an entry
+// that was reported wrong and then fixed stayed in the re-verification
+// feed for good. A queue nobody can empty stops being read.
+//
+// Not an MCP tool. Verification is the human ruling the write-back loop
+// turns on; an agent's route to the same effect is create_knowledge with
+// status verified, which records the agent as verified_by (design docs
+// 0002, 0015 §3.1).
+func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+	id = domain.Normalize(id)
+	k, err := s.Store.Verify(ctx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	s.Log.Info("knowledge verified", "id", id, "actor", actor.String())
+	return k, nil
+}
+
 // Purge hard-deletes an already soft-deleted entry, freeing its id for a
 // move (design doc 0021: Move cannot revive a tombstone the way Create
 // can). Not an MCP tool: this is the one operation that destroys history,
@@ -557,13 +582,15 @@ func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([
 	return s.Store.ListByUsage(ctx, f, limit)
 }
 
-// ListByFailed lists entries with failed outcome reports, worst first —
-// the re-verification feed (design doc 0025): in-force knowledge that
-// callers report is producing wrong results, the evidence-based
-// counterpart to the verified_at feed. A healthy base yields an empty
-// feed. Not a search: no usage is recorded (triaging the queue must not
-// inflate the signal it ranks by). Each hit carries its usage totals;
-// score is 0, keeping the wire shape of a search across all list modes.
+// ListByFailed lists entries whose failure reports are still unanswered,
+// worst first — the re-verification feed (design doc 0025): in-force
+// knowledge that callers report is producing wrong results, the
+// evidence-based counterpart to the verified_at feed. Verifying an entry
+// (or rejecting it) takes it out of the feed, so a base that is kept up
+// yields an empty one. Not a search: no usage is recorded (triaging the
+// queue must not inflate the signal it ranks by). Each hit carries its
+// usage totals; score is 0, keeping the wire shape of a search across all
+// list modes.
 func (s *Service) ListByFailed(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
