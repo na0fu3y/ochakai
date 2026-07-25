@@ -53,7 +53,7 @@ ochakai search "revenue" --type Metric --status verified
 ochakai get models/sales-analytics
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
-ochakai import ./knowledge   # the inverse; works with any OKF bundle
+ochakai import ./knowledge   # the inverse; works with any OKF bundle (a client-side loop — see below)
 ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (no deploy)
 
 ochakai compile --metric revenue --grain orders.ordered_at:month  # optional: deterministic SQL from a Semantic Model
@@ -216,8 +216,18 @@ stays with `get_context`/`search_knowledge`. Read tools carry `readOnly`
 annotations and `delete_knowledge` a `destructive` one, so client
 auto-approval policies work without parsing descriptions.
 
+`import` is the one place the CLI is more than a thin client: there is no
+bulk import endpoint, because loading a bundle is a loop over endpoints
+that already exist, and a server-side second path to the same outcome
+buys convenience rather than capability (design doc 0015 §3.2). The cost
+is that the bundle semantics — attributing loose files to entries,
+skipping what does not belong, ignoring the frontmatter keys the server
+owns — live in the client. To load OKF bundles from something other than
+this binary, [api/openapi.yaml](api/openapi.yaml) spells out what that
+loop does under `/api/v1/export`.
+
 The REST API (`/api/v1`) is a superset of these tools, adding bulk
-export/import, the human-facing browse/revisions/backlinks reads, and
+export, the human-facing browse/revisions/backlinks reads, and
 attachment writes — see
 [api/openapi.yaml](api/openapi.yaml). To keep golden queries trustworthy
 over time, run them as canaries from your CI:
