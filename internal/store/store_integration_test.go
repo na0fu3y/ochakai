@@ -1043,67 +1043,6 @@ func (f *fakeBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 	return append([]byte(nil), data...), nil
 }
 
-// The point of migration 0016: the trigram index and the search query are
-// about the same text, so the index can actually serve the search. Before
-// it, similarity() was computed in the SELECT list over a concatenation no
-// index expression could match (tags need array_to_string, which is not
-// IMMUTABLE; attachment names live in another table), and the score floor
-// sat outside the subquery — every search scanned every row.
-//
-// enable_seqscan=off is a cost penalty, not a prohibition: PostgreSQL
-// still picks a sequential scan when no index can answer the predicate.
-// So this asserts index usability, not planner preference — which is
-// exactly the property that was missing.
-func TestIntegrationLexicalSearchUsesTrigramIndex(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := context.Background()
-	s, err := New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
-		t.Fatal(err)
-	}
-	// The live predicate shape: an OR of one substring test per query
-	// fragment. Two-character Japanese fragments are below what a trigram
-	// index resolves exactly, so this also checks that pg_trgm still
-	// narrows the scan with partial trigrams rather than giving up.
-	rows, err := tx.Query(ctx, `EXPLAIN
-		SELECT k.id FROM knowledge k
-		WHERE (k.search_text ILIKE $1 OR k.search_text ILIKE $2) AND k.deleted_at IS NULL`,
-		"%revenue%", "%売上%")
-	if err != nil {
-		t.Fatalf("EXPLAIN: %v", err)
-	}
-	plan := ""
-	for rows.Next() {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			t.Fatal(err)
-		}
-		plan += line + "\n"
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	if n := strings.Count(plan, "knowledge_search_trgm"); n != 2 {
-		t.Errorf("want both fragments served by the trigram index, got %d index scans:\n%s", n, plan)
-	}
-}
-
 // search_text is maintained by trigger, so every write path keeps the
 // haystack current without remembering to. These are the two paths a
 // Go-side implementation would most easily miss: a file attached after

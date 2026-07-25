@@ -17,6 +17,17 @@
 -- path (create, update, move, attach, detach) would otherwise have to
 -- remember, and the one that forgets makes an entry silently
 -- unsearchable.
+--
+-- How far the index actually reaches, measured on 5000 entries of about
+-- 1.2 kB each: '%revenue%' and '%売上の%' are index scans at ~0.2 ms,
+-- '%売上%' is a sequential scan at ~16 ms. A two-character pattern has no
+-- word boundary to pad against, so pg_trgm extracts no whole trigram and
+-- the planner reads the table — and Japanese search runs on exactly such
+-- terms (売上, 原価, 客数). The index earns its place on latin words and
+-- longer Japanese phrases; the scan is the price of the short ones.
+-- Beware EXPLAIN with enable_seqscan=off: GIN answers by scanning the
+-- whole index and rechecking, which reads as an index scan and is slower
+-- than the scan it replaced.
 
 ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS search_text text NOT NULL DEFAULT '';
 

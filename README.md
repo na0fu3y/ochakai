@@ -284,7 +284,12 @@ by how much of the *rare* part of the query they contain.
 That finds the right entries for a keyword and for a Japanese question,
 but it is still a bag of words: ask an English question and an entry
 sharing three of its function words can outrank the one that names the
-subject. `gemini-embedding-001` handles Japanese well, and with
+subject. It is also not fully indexed. A trigram index cannot serve a
+two-character pattern — there is no whole trigram in one — so Japanese
+terms like 売上 or 原価 are answered by scanning the table: about 16 ms
+per search across 5000 entries, against 0.2 ms for a latin word. That
+is fine at the scale a curated knowledge base reaches and does not stay
+fine forever. `gemini-embedding-001` handles Japanese well, and with
 `OCHAKAI_VERTEX_PROJECT` set, ranking comes from rank fusion across both
 halves rather than from term overlap alone.
 
