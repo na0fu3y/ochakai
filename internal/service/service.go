@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/config"
@@ -558,6 +559,15 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	}
 }
 
+// maxEmbedBodyBytes caps the body text handed to the embedding model. The
+// real limit is tokens (2048 for gemini-embedding-001), and UTF-8 bytes
+// track tokens across scripts far better than characters do: roughly 4
+// bytes per token in English, 4-5 in Japanese. Capping by rune count
+// instead would let Japanese overrun the model's window while English
+// stayed far under it — 6000 bytes lands near 1300-1500 tokens either way,
+// with headroom for the envelope fields above.
+const maxEmbedBodyBytes = 6000
+
 // embeddingText builds the document text to embed: envelope fields plus the
 // golden query question, body truncated to keep within model input limits.
 // The id leads (design doc 0022): with title optional, the filename may be
@@ -567,12 +577,26 @@ func embeddingText(k *domain.Knowledge) string {
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
 	}
-	body := k.Body
-	if len(body) > 4000 {
-		body = body[:4000]
-	}
-	parts = append(parts, body)
+	parts = append(parts, truncateUTF8(k.Body, maxEmbedBodyBytes))
 	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+// truncateUTF8 caps s at max bytes and then drops a trailing partial rune.
+// A plain s[:max] lands mid-character two times in three on Japanese text
+// (3 bytes per character), and half a character is not valid UTF-8.
+func truncateUTF8(s string, max int) string {
+	if len(s) > max {
+		s = s[:max]
+	}
+	for len(s) > 0 {
+		// DecodeLastRuneInString reports (RuneError, 1) for a byte that
+		// cannot end a valid encoding; a real U+FFFD decodes with size 3.
+		if r, size := utf8.DecodeLastRuneInString(s); r != utf8.RuneError || size > 1 {
+			break
+		}
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 // --- compile ---

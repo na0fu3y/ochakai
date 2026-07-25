@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -129,13 +130,53 @@ func TestEmbeddingText(t *testing.T) {
 // The body is truncated to stay within embedding-model input limits;
 // the envelope fields must survive untouched.
 func TestEmbeddingTextTruncatesBody(t *testing.T) {
-	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", 5000)}
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", maxEmbedBodyBytes+1000)}
 	got := embeddingText(k)
-	if len(got) > 4100 {
-		t.Errorf("embeddingText length = %d, want body capped at 4000", len(got))
+	if len(got) > maxEmbedBodyBytes+100 {
+		t.Errorf("embeddingText length = %d, want body capped at %d", len(got), maxEmbedBodyBytes)
 	}
 	if !strings.HasPrefix(got, "T") {
 		t.Errorf("title must lead the text: %q", got[:20])
+	}
+}
+
+// Japanese is 3 bytes per character in UTF-8, so a byte cap lands inside a
+// character unless it backs off. Half a character is not valid UTF-8, and
+// the API request carries it as a replacement char.
+func TestEmbeddingTextTruncatesOnRuneBoundary(t *testing.T) {
+	// 2001 characters * 3 bytes = 6003 bytes: the cap falls mid-character.
+	k := &domain.Knowledge{Body: strings.Repeat("売", 2001)}
+	got := embeddingText(k)
+	if !utf8.ValidString(got) {
+		t.Errorf("embeddingText produced invalid UTF-8 (length %d)", len(got))
+	}
+	if len(got) > maxEmbedBodyBytes {
+		t.Errorf("embeddingText length = %d, want <= %d", len(got), maxEmbedBodyBytes)
+	}
+	if want := maxEmbedBodyBytes / 3 * 3; len(got) != want {
+		t.Errorf("embeddingText length = %d, want %d (whole characters only)", len(got), want)
+	}
+}
+
+func TestTruncateUTF8(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		max  int
+		want string
+	}{
+		{"under the cap", "abc", 10, "abc"},
+		{"exactly the cap", "abc", 3, "abc"},
+		{"ascii cut", "abcdef", 3, "abc"},
+		{"cut one byte into a character", "あい", 4, "あ"},
+		{"cut two bytes into a character", "あい", 5, "あ"},
+		{"cut on a boundary", "あい", 3, "あ"},
+		{"cap smaller than one character", "あ", 2, ""},
+		{"a real U+FFFD survives", "x�", 4, "x�"},
+	} {
+		if got := truncateUTF8(tc.in, tc.max); got != tc.want {
+			t.Errorf("%s: truncateUTF8(%q, %d) = %q, want %q", tc.name, tc.in, tc.max, got, tc.want)
+		}
 	}
 }
 
