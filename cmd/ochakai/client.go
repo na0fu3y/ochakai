@@ -34,6 +34,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"update":    cmdUpdate,
 	"delete":    cmdDelete,
 	"purge":     cmdPurge,
+	"reembed":   cmdReembed,
 	"move":      cmdMove,
 	"attach":    cmdAttach,
 	"detach":    cmdDetach,
@@ -781,6 +782,42 @@ func cmdPurge(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("purged ochakai://%s\n", id)
+	return nil
+}
+
+// cmdReembed exists because vectors are written on entry writes only: a
+// base imported before semantic search was configured has none, and
+// hybrid search stays quietly lexical-only until every entry happens to
+// be rewritten.
+func cmdReembed(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"Usage: ochakai reembed [flags]\n\nEmbed entries that have no vector for the configured model — entries\nwritten before semantic search was enabled, or before the model was\nchanged. Bounded per run; repeat until \"missing\" reaches 0.",
+		"  ochakai reembed\n  ochakai reembed --limit 2000\n")
+	limit := fs.Int("limit", 0, "max entries to embed in this pass (server default 500)")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 {
+		fs.Usage()
+		return errReported
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	res, err := c.Reembed(ctx, *limit)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(res)
+	}
+	fmt.Printf("embedded %d, failed %d, still missing %d\n", res.Embedded, res.Failed, res.Missing)
+	if res.Missing > 0 {
+		fmt.Fprintln(os.Stderr, "run again to continue")
+	}
 	return nil
 }
 

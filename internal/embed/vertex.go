@@ -218,9 +218,31 @@ func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) 
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Vertex AI embeddings: %s: %s", resp.Status, truncate(string(respBody), 500))
+		err := fmt.Errorf("Vertex AI embeddings: %s: %s", resp.Status, truncate(string(respBody), 500))
+		// A token-limit rejection is a 400 naming the limit. Byte budgets
+		// are only an estimate of a token count — the ratio moves with the
+		// script — so the caller needs to be able to react by shortening
+		// rather than by giving up on the entry.
+		if resp.StatusCode == http.StatusBadRequest && inputTooLong(string(respBody)) {
+			return nil, fmt.Errorf("%w: %w", ErrInputTooLong, err)
+		}
+		return nil, err
 	}
 	return respBody, nil
+}
+
+// inputTooLong recognizes the model's complaint about input length in a
+// 400 body. Matching on prose is unlovely, but the API returns no code
+// that distinguishes this from any other invalid argument.
+func inputTooLong(body string) bool {
+	b := strings.ToLower(body)
+	for _, phrase := range []string{"token limit", "too many tokens", "input is too long",
+		"exceeds the maximum", "maximum number of tokens", "input token count"} {
+		if strings.Contains(b, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func truncate(s string, n int) string {

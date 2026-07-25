@@ -376,6 +376,23 @@ func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, e
 	return resp.Body, nil
 }
 
+// ReembedResult mirrors the /api/v1/reembed response.
+type ReembedResult struct {
+	Embedded int `json:"embedded"`
+	Failed   int `json:"failed"`
+	Missing  int `json:"missing"`
+}
+
+// Reembed fills in vectors for entries that have none for the configured
+// model (POST /api/v1/reembed). limit 0 uses the server default.
+func (c *Client) Reembed(ctx context.Context, limit int) (*ReembedResult, error) {
+	var out ReembedResult
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/reembed", limitQuery(limit), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // entryPath escapes each ID segment separately: the id is a path
 // ("metric/revenue") and its slashes must stay real path separators.
 func entryPath(id string) string { return escapedPath("/api/v1/knowledge/", id) }

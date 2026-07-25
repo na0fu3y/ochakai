@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"strings"
@@ -11,6 +14,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/compiler"
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
@@ -130,10 +134,10 @@ func TestEmbeddingText(t *testing.T) {
 // The body is truncated to stay within embedding-model input limits;
 // the envelope fields must survive untouched.
 func TestEmbeddingTextTruncatesBody(t *testing.T) {
-	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", maxEmbedBodyBytes+1000)}
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", maxEmbedBytes+1000)}
 	got := embeddingText(k)
-	if len(got) > maxEmbedBodyBytes+100 {
-		t.Errorf("embeddingText length = %d, want body capped at %d", len(got), maxEmbedBodyBytes)
+	if len(got) > maxEmbedBytes {
+		t.Errorf("embeddingText length = %d, want capped at %d", len(got), maxEmbedBytes)
 	}
 	if !strings.HasPrefix(got, "T") {
 		t.Errorf("title must lead the text: %q", got[:20])
@@ -150,11 +154,28 @@ func TestEmbeddingTextTruncatesOnRuneBoundary(t *testing.T) {
 	if !utf8.ValidString(got) {
 		t.Errorf("embeddingText produced invalid UTF-8 (length %d)", len(got))
 	}
-	if len(got) > maxEmbedBodyBytes {
-		t.Errorf("embeddingText length = %d, want <= %d", len(got), maxEmbedBodyBytes)
+	if len(got) > maxEmbedBytes {
+		t.Errorf("embeddingText length = %d, want <= %d", len(got), maxEmbedBytes)
 	}
-	if want := maxEmbedBodyBytes / 3 * 3; len(got) != want {
+	if want := maxEmbedBytes / 3 * 3; len(got) != want {
 		t.Errorf("embeddingText length = %d, want %d (whole characters only)", len(got), want)
+	}
+}
+
+// The envelope shares the budget with the body. It used to ride on top of
+// it, so a deep path plus a paragraph of description could push the text
+// past the model's window even though the body itself fit.
+func TestEmbeddingTextCapsTheWholeText(t *testing.T) {
+	k := &domain.Knowledge{
+		ID:          strings.Repeat("a/", 200) + "entry",
+		Title:       strings.Repeat("t", 500),
+		Description: strings.Repeat("d", 2000),
+		Tags:        []string{strings.Repeat("g", 500)},
+		Attrs:       map[string]any{"question": strings.Repeat("q", 2000)},
+		Body:        strings.Repeat("b", maxEmbedBytes),
+	}
+	if got := len(embeddingText(k)); got > maxEmbedBytes {
+		t.Errorf("embeddingText length = %d, want the whole text capped at %d", got, maxEmbedBytes)
 	}
 }
 
@@ -382,4 +403,62 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 			t.Error("serializedSize ignores attrs")
 		}
 	})
+}
+
+// A byte budget only approximates a token count, and the approximation is
+// worst for Japanese. When the model rejects the text anyway, the entry
+// must not vanish from vector search: shorten and try again, rather than
+// log a warning and report the write as a success.
+func TestEmbedDocumentShortensOnOverlongInput(t *testing.T) {
+	long := strings.Repeat("あ", 2000)
+
+	t.Run("retries shorter until it fits", func(t *testing.T) {
+		e := &shrinkEmbedder{acceptUnder: 1200}
+		svc := &Service{Embedder: e, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+		if _, err := svc.embedDocument(context.Background(), long); err != nil {
+			t.Fatalf("embedDocument: %v", err)
+		}
+		if e.calls < 2 {
+			t.Errorf("calls = %d, want a retry after the rejection", e.calls)
+		}
+		if !utf8.ValidString(e.last) {
+			t.Error("shortening cut a character in half")
+		}
+	})
+
+	// An outage is not an overrun: retrying it only adds latency to a
+	// write that was going to fall back to trigram search anyway.
+	t.Run("does not retry other failures", func(t *testing.T) {
+		e := &shrinkEmbedder{fail: errors.New("connection refused")}
+		svc := &Service{Embedder: e, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+		if _, err := svc.embedDocument(context.Background(), long); err == nil {
+			t.Fatal("want the error surfaced")
+		}
+		if e.calls != 1 {
+			t.Errorf("calls = %d, want exactly one", e.calls)
+		}
+	})
+}
+
+// shrinkEmbedder accepts input below acceptUnder bytes and reports
+// anything longer as over the model's limit.
+type shrinkEmbedder struct {
+	acceptUnder int
+	fail        error
+	calls       int
+	last        string
+}
+
+func (e *shrinkEmbedder) Model() string { return "fake" }
+
+func (e *shrinkEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) ([][]float32, error) {
+	e.calls++
+	e.last = texts[0]
+	if e.fail != nil {
+		return nil, e.fail
+	}
+	if len(texts[0]) >= e.acceptUnder {
+		return nil, fmt.Errorf("%w: 400 Bad Request", embed.ErrInputTooLong)
+	}
+	return [][]float32{{1, 0}}, nil
 }

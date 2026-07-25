@@ -686,7 +686,7 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	if s.Embedder == nil {
 		return
 	}
-	vecs, err := s.Embedder.Embed(ctx, embed.TaskDocument, []string{embeddingText(k)})
+	vecs, err := s.embedDocument(ctx, embeddingText(k))
 	if err != nil {
 		s.Log.Warn("document embedding failed; entry remains searchable via trigram", "type", k.Type, "id", k.ID, "error", err)
 		return
@@ -696,14 +696,109 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	}
 }
 
-// maxEmbedBodyBytes caps the body text handed to the embedding model. The
-// real limit is tokens (2048 for gemini-embedding-001), and UTF-8 bytes
-// track tokens across scripts far better than characters do: roughly 4
-// bytes per token in English, 4-5 in Japanese. Capping by rune count
-// instead would let Japanese overrun the model's window while English
-// stayed far under it — 6000 bytes lands near 1300-1500 tokens either way,
-// with headroom for the envelope fields above.
-const maxEmbedBodyBytes = 6000
+// maxEmbedBytes caps the text handed to the embedding model. The real
+// limit is tokens (2048 for gemini-embedding-001), and UTF-8 bytes track
+// tokens across scripts far better than characters do — but only
+// roughly, and the ratio is worst where it matters most: Japanese runs
+// three bytes per character and can approach one token per character, so
+// 6000 bytes is 2000 characters and possibly 2000 tokens. Against a 2048
+// limit that is not headroom, it is a coin flip.
+//
+// So the cap covers the whole text, envelope included (the id, title,
+// description, tags and question used to ride on top of the body's
+// budget), and sits at 5000 bytes — comfortably inside the window even
+// at one token per character. English pays for that in unused budget,
+// which is the right trade: an overrun does not degrade the embedding,
+// it removes the entry from vector search entirely.
+//
+// The estimate is still an estimate, so embedDocument retries shorter
+// rather than trusting it.
+const maxEmbedBytes = 5000
+
+// ReembedResult reports what a Reembed pass did.
+type ReembedResult struct {
+	Embedded int `json:"embedded"`
+	Failed   int `json:"failed"`
+	Missing  int `json:"missing"` // still unembedded when the batch limit was reached
+}
+
+// Reembed fills in the vectors that entry writes never produced. Vectors
+// are written on create and update only, so a base loaded before
+// OCHAKAI_VERTEX_PROJECT was set has none, and hybrid search silently
+// stays lexical-only until every entry happens to be rewritten. Switching
+// models has the same shape: the old vectors are in a space nothing
+// queries any more (design doc 0020).
+//
+// Failures are counted, not fatal: one entry the provider chokes on must
+// not strand the rest of the corpus.
+func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error) {
+	if s.Embedder == nil {
+		return nil, Unsupportedf("semantic search is not configured: set OCHAKAI_VERTEX_PROJECT")
+	}
+	if limit <= 0 || limit > 5000 {
+		limit = 500
+	}
+	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), limit)
+	if err != nil {
+		return nil, err
+	}
+	res := &ReembedResult{}
+	for _, id := range ids {
+		k, err := s.Store.Get(ctx, id)
+		if err != nil {
+			res.Failed++
+			s.Log.Warn("reembed: entry disappeared", "id", id, "error", err)
+			continue
+		}
+		vecs, err := s.embedDocument(ctx, embeddingText(k))
+		if err != nil {
+			res.Failed++
+			s.Log.Warn("reembed: embedding failed", "id", id, "error", err)
+			continue
+		}
+		if err := s.Store.UpsertEmbedding(ctx, id, s.Embedder.Model(), vecs[0]); err != nil {
+			res.Failed++
+			s.Log.Warn("reembed: storing failed", "id", id, "error", err)
+			continue
+		}
+		res.Embedded++
+	}
+	if len(ids) == limit {
+		// The caller asked for a bounded pass and got one; say so rather
+		// than let "done" mean "done for now".
+		remaining, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), limit+1)
+		if err == nil && len(remaining) > res.Embedded {
+			res.Missing = len(remaining) - res.Embedded
+		}
+	}
+	return res, nil
+}
+
+// embedDocument embeds text, halving it and retrying while the model says
+// it is too long. Byte budgets only approximate a token count, and the
+// approximation is worst for Japanese; without this, an entry that
+// overruns is dropped from vector search silently — logged, but with the
+// write reported as a success. Halving converges in a couple of rounds
+// and only runs on the rejection, so an outage still costs one call.
+func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, error) {
+	// Four attempts halve a 5000-byte text to 625, well under any
+	// plausible window; the floor below stops it before it embeds a
+	// fragment too short to mean anything.
+	for attempt := range 4 {
+		vecs, err := s.Embedder.Embed(ctx, embed.TaskDocument, []string{text})
+		if err == nil {
+			if attempt > 0 {
+				s.Log.Info("embedded after shortening", "bytes", len(text), "attempts", attempt+1)
+			}
+			return vecs, nil
+		}
+		if !errors.Is(err, embed.ErrInputTooLong) || len(text) < 500 {
+			return nil, err
+		}
+		text = truncateUTF8(text, len(text)/2)
+	}
+	return nil, fmt.Errorf("still over the embedding model's input limit after shortening")
+}
 
 // embeddingText builds the document text to embed: envelope fields plus the
 // golden query question, body truncated to keep within model input limits.
@@ -714,8 +809,11 @@ func embeddingText(k *domain.Knowledge) string {
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
 	}
-	parts = append(parts, truncateUTF8(k.Body, maxEmbedBodyBytes))
-	return strings.TrimSpace(strings.Join(parts, "\n"))
+	parts = append(parts, k.Body)
+	// The cap covers the joined text: an entry whose envelope is long
+	// (a deep path, a paragraph of description) must not push the total
+	// past the window just because the body fit on its own.
+	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), maxEmbedBytes)
 }
 
 // truncateUTF8 caps s at max bytes and then drops a trailing partial rune.

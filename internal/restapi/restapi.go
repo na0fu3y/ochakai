@@ -535,6 +535,24 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
+	// POST /api/v1/reembed?limit=N — fill in vectors for entries that have
+	// none for the configured model. Not an MCP tool: an operator task
+	// with an unbounded runtime and no place in an agent's turn (design
+	// doc 0015).
+	mux.HandleFunc("POST /api/v1/reembed", func(w http.ResponseWriter, r *http.Request) {
+		limit, err := queryInt(r.URL.Query(), "limit")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		res, err := svc.Reembed(r.Context(), limit)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+
 	mux.HandleFunc("POST /api/v1/compile", func(w http.ResponseWriter, r *http.Request) {
 		var req service.CompileRequest
 		if !readJSON(w, r, &req) {
