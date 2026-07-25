@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,5 +165,62 @@ func TestUpdateIfMatchIntegration(t *testing.T) {
 	// Opting out (nil) keeps last-write-wins — no precondition, always writes.
 	if _, _, err := svc.Update(ctx, mk("v4-lww"), actor, nil); err != nil {
 		t.Fatalf("opt-out update: %v", err)
+	}
+}
+
+// The verified-write rule: a surface with no If-Match precondition (MCP)
+// must not replace curated knowledge in place. Everything else an agent
+// does stays open — creating, editing drafts, and promoting to verified
+// are all still allowed, because this is about preconditions, not
+// authority (design docs 0002, 0015 §3.1).
+func TestRefuseIfVerifiedIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "agent", Name: "insightflow@example.iam.gserviceaccount.com"}
+
+	id := "queries/" + uid("guard")
+	k, err := svc.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeQueries, ID: id, Title: "monthly revenue",
+		Attrs: map[string]any{"sql": "SELECT 1"},
+	}, actor)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// A draft is fair game: the agent that drafted it can keep working.
+	if err := svc.RefuseIfVerified(ctx, id, "update"); err != nil {
+		t.Errorf("draft must be writable: %v", err)
+	}
+
+	// Promotion to verified is not restricted — 0002 stands.
+	k.Status = domain.StatusVerified
+	if _, _, err := svc.Update(ctx, k, actor, nil); err != nil {
+		t.Fatalf("promote to verified: %v", err)
+	}
+
+	err = svc.RefuseIfVerified(ctx, id, "update")
+	var invalid *InvalidInputError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("verified entry: got %v, want a refusal", err)
+	}
+	// The refusal has to name the way forward, or an agent stalls here.
+	for _, want := range []string{"report_outcome failed", "create_knowledge", id} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal does not mention %q: %v", want, err)
+		}
+	}
+
+	// Demoting a verified entry is how a human reopens it; after that the
+	// entry is writable again.
+	k.Status = domain.StatusDeprecated
+	if _, _, err := svc.Update(ctx, k, domain.Actor{Kind: "human", Name: "na0"}, nil); err != nil {
+		t.Fatalf("deprecate: %v", err)
+	}
+	if err := svc.RefuseIfVerified(ctx, id, "update"); err != nil {
+		t.Errorf("deprecated entry must be writable again: %v", err)
+	}
+
+	if err := svc.Delete(ctx, id, actor); err != nil {
+		t.Fatalf("cleanup: %v", err)
 	}
 }

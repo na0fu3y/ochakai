@@ -48,6 +48,27 @@ CLI、Web UI。機能を足すたびに「どのサーフェスに載せるか�
   get_attachment の description が既に誘導している。
 - **バルク(export / import / import-ossie)。** 応答サイズが読めず、
   tar.gz はツール結果に載らない。管理タスクは CLI / CI の領分。
+- **verified エントリの上書き・削除。** update_knowledge /
+  delete_knowledge は、対象が verified なら拒否する(create、draft の
+  更新、verified への昇格はいずれも従来どおり)。
+
+  これは認可ではない。0002 の「認可を持たない・verified 昇格を制限
+  しない」は撤回しない — 誰が検証したかは記録され、信頼は provenance
+  で判断される、という原則はそのまま。制限するのは**前提条件を
+  表明できない面からの黙示的な置き換え**だけである。0025 §11 の
+  If-Match は REST の ETag に乗っており、MCP にはその通り道がない。
+  つまり MCP の update は last-write-wins で、draft には許容できるが
+  人間がキュレーションしたものには許容できない。
+
+  非対称性の根拠は復旧可能性ではなく**可視性**にある。soft-delete は
+  目に見えて、かつ create で復活する。verified なゴールデンクエリの
+  本文が黙って置き換わった場合、誰かがそれを実行して間違った数字を
+  得るまで誰も気づかない。
+
+  エージェント側の正しい行動は 0025 が既に用意している: 誤りなら
+  report_outcome failed(sort=failed の再検証フィードに乗る)、
+  より良いものがあるなら新しい draft を create する。どちらも
+  書き戻しループの正規の経路であり、この規則はむしろそこへ誘導する。
 
 ### 3.2 REST に載せないもの
 
