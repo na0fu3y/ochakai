@@ -622,9 +622,22 @@ components:
       enum: [draft, verified, deprecated, rejected]
     Actor:
       type: object
+      description: >
+        Who acted. Resolved from the caller's Google identity, never from
+        the request payload (design doc 0009).
       properties:
         kind: { type: string, enum: [human, agent] }
         name: { type: string }
+        via:
+          description: >
+            The delegating caller, when an application forwarded an end
+            user's identity with X-Ochakai-On-Behalf-Of (design doc
+            0027) — e.g. "agent:app@project.iam.gserviceaccount.com" on
+            an entry whose actor is the person who used that application.
+            Absent when the caller acted as itself. Recorded rather than
+            replaced: a write made through an application must stay
+            distinguishable from one the person made directly.
+          type: string
     Link:
       type: object
       description: >

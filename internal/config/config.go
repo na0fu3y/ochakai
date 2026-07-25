@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -21,6 +22,19 @@ type Config struct {
 	// InsecureDev disables authentication for local development: every
 	// request acts as human:anonymous. Never enable on a deployment.
 	InsecureDev bool
+	// Delegators lists the caller identities allowed to forward an end
+	// user's identity with X-Ochakai-On-Behalf-Of (design doc 0027): the
+	// service accounts of applications that embed ochakai and serve many
+	// people. "*" trusts every authenticated caller. Empty (the default)
+	// disables delegation, and a header from anyone not listed is an
+	// error rather than a silent downgrade — a caller that believes it is
+	// writing as tanaka must not find out later that it was not.
+	//
+	// This is not authorization: it decides whose identity claim is
+	// recorded, not what anyone may do. Every caller that reaches ochakai
+	// can already read and write everything (design doc 0002).
+	Delegators []string
+
 	// GCSBucket names the bucket holding attachment bytes as GCS objects
 	// (blob/<sha256>, design doc 0013). Auth is ADC. When empty,
 	// attachments are unsupported — markdown entries only.
@@ -42,12 +56,24 @@ type EmbeddingConfig struct {
 	Dim      int    // output dimensionality stored in pgvector
 }
 
+// splitList parses a comma-separated env var, dropping blanks.
+func splitList(v string) []string {
+	var out []string
+	for _, s := range strings.Split(v, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func FromEnv() (*Config, error) {
 	cfg := &Config{
 		Addr:        ":" + envOr("PORT", "8080"),
 		DatabaseURL: os.Getenv("OCHAKAI_DATABASE_URL"),
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
 		InsecureDev: os.Getenv("OCHAKAI_INSECURE_DEV") == "true",
+		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
 	}
 	if cfg.DatabaseURL == "" {

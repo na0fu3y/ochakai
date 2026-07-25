@@ -1302,3 +1302,81 @@ func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
 	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id = $1`, id)
 	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE knowledge_id = $1`, id)
 }
+
+// Delegated provenance survives the round trip through both the entry and
+// its revisions (design doc 0027). The point of the column is that a
+// reader can tell "tanaka, through InsightFlow" from "tanaka" — if Via
+// were dropped on the way to the database, the two would be identical and
+// the delegation would be a forgery.
+func TestIntegrationDelegatedProvenance(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	const id = "it-delegated"
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+	via := "agent:insightflow@example.iam.gserviceaccount.com"
+	delegated := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp", Via: via}
+
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeInsights, ID: id, Title: "delegated",
+		Status: domain.StatusDraft, CreatedBy: delegated,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	k, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.CreatedBy != delegated {
+		t.Errorf("created_by = %+v, want %+v", k.CreatedBy, delegated)
+	}
+	if want := "human:tanaka@example.co.jp via " + via; k.CreatedBy.String() != want {
+		t.Errorf("rendered = %q, want %q", k.CreatedBy.String(), want)
+	}
+
+	// Verification carries its own delegation, independent of creation.
+	verifier := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
+	k.Status = domain.StatusVerified
+	k.VerifiedBy = &verifier
+	if err := s.Update(ctx, k, verifier, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CreatedBy.Via != via {
+		t.Errorf("update dropped created_by_via: %+v", got.CreatedBy)
+	}
+	if got.VerifiedBy == nil || got.VerifiedBy.Via != "" {
+		t.Errorf("verified_by must carry its own (absent) delegation: %+v", got.VerifiedBy)
+	}
+
+	revs, err := s.ListRevisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) == 0 {
+		t.Fatal("no revisions")
+	}
+	create := revs[len(revs)-1]
+	if create.ChangedBy.Via != via {
+		t.Errorf("revision changed_by lost the delegation: %+v", create.ChangedBy)
+	}
+
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+}

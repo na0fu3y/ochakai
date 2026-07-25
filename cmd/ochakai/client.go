@@ -332,10 +332,10 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 func renderEntry(k *domain.Knowledge) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s (%s) — %s\n", k.URI(), k.Status, k.DisplayTitle())
-	prov := fmt.Sprintf("created by %s:%s", k.CreatedBy.Kind, k.CreatedBy.Name)
+	prov := "created by " + k.CreatedBy.String()
 	if k.VerifiedBy != nil && k.VerifiedAt != nil {
-		prov = fmt.Sprintf("verified by %s:%s on %s; %s",
-			k.VerifiedBy.Kind, k.VerifiedBy.Name, k.VerifiedAt.Format("2006-01-02"), prov)
+		prov = fmt.Sprintf("verified by %s on %s; %s",
+			k.VerifiedBy, k.VerifiedAt.Format("2006-01-02"), prov)
 	}
 	fmt.Fprintln(&b, prov)
 	if k.StatusNote != "" {
@@ -457,8 +457,8 @@ func cmdRevisions(ctx context.Context, args []string) error {
 		return printJSON(map[string]any{"revisions": revs})
 	}
 	for _, r := range revs {
-		fmt.Printf("#%d\t%s\t%s:%s\t%s\n", r.Rev, r.Change,
-			r.ChangedBy.Kind, r.ChangedBy.Name, r.ChangedAt.Format(time.RFC3339))
+		fmt.Printf("#%d\t%s\t%s\t%s\n", r.Rev, r.Change,
+			r.ChangedBy, r.ChangedAt.Format(time.RFC3339))
 	}
 	return nil
 }

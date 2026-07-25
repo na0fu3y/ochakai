@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/config"
@@ -103,5 +104,78 @@ func TestInsecureDevActsAsAnonymous(t *testing.T) {
 	}
 	if got.Kind != domain.ActorHuman || got.Name != "anonymous" {
 		t.Errorf("actor = %+v, want human:anonymous", got)
+	}
+}
+
+// Delegation records both identities. The forwarded one is the actor; the
+// caller stays as Via, so an entry written by tanaka through an embedded
+// application never reads like one tanaka wrote directly (design doc
+// 0027).
+func TestDelegate(t *testing.T) {
+	sa := domain.Actor{Kind: domain.ActorAgent, Name: "insightflow@example.iam.gserviceaccount.com"}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
+	allowed := []string{sa.Name}
+
+	t.Run("no header acts as the caller", func(t *testing.T) {
+		got, status, err := delegate(sa, "", allowed)
+		if err != nil || status != 0 || got != sa {
+			t.Errorf("got (%v, %d, %v), want the caller unchanged", got, status, err)
+		}
+	})
+
+	t.Run("permitted caller delegates", func(t *testing.T) {
+		got, _, err := delegate(sa, "human:tanaka@example.co.jp", allowed)
+		if err != nil {
+			t.Fatalf("delegate: %v", err)
+		}
+		want := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp", Via: sa.String()}
+		if got != want {
+			t.Errorf("actor = %+v, want %+v", got, want)
+		}
+		if !strings.Contains(got.String(), "via agent:insightflow@") {
+			t.Errorf("rendered provenance hides the delegation: %s", got)
+		}
+	})
+
+	// Silently ignoring the header would be worse than refusing it: the
+	// application goes on believing it writes as its users.
+	t.Run("unlisted caller is refused, not downgraded", func(t *testing.T) {
+		got, status, err := delegate(human, "human:tanaka@example.co.jp", allowed)
+		if err == nil {
+			t.Fatalf("delegation by an unlisted caller succeeded as %+v", got)
+		}
+		if status != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", status)
+		}
+	})
+
+	t.Run("wildcard trusts every authenticated caller", func(t *testing.T) {
+		got, _, err := delegate(human, "human:tanaka@example.co.jp", []string{"*"})
+		if err != nil || got.Name != "tanaka@example.co.jp" || got.Via != human.String() {
+			t.Errorf("got (%+v, %v), want the delegation accepted", got, err)
+		}
+	})
+
+	t.Run("delegation is off by default", func(t *testing.T) {
+		if _, status, err := delegate(sa, "human:tanaka@example.co.jp", nil); err == nil || status != http.StatusForbidden {
+			t.Errorf("empty allowlist must refuse: status %d, err %v", status, err)
+		}
+	})
+
+	for _, bad := range []string{
+		"tanaka@example.co.jp",      // no kind: the kind is never guessed
+		"root:tanaka@example.co.jp", // unknown kind
+		"human:",                    // no identity
+		"human: tanaka with spaces", // whitespace in the identity
+		"human:" + strings.Repeat("x", 400),
+	} {
+		t.Run("rejects "+bad[:min(len(bad), 20)], func(t *testing.T) {
+			_, status, err := delegate(sa, bad, allowed)
+			if err == nil {
+				t.Errorf("accepted malformed header %q", bad)
+			} else if status != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400", status)
+			}
+		})
 	}
 }
