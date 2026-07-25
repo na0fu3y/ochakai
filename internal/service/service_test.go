@@ -123,7 +123,7 @@ func TestEmbeddingText(t *testing.T) {
 		Attrs:       map[string]any{"question": "monthly revenue?"},
 		Body:        "body text",
 	}
-	got := embeddingText(k)
+	got := embeddingText(k, embed.ConservativeInputBytes)
 	for _, want := range []string{"Revenue", "total sales", "finance kpi", "monthly revenue?", "body text"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("embeddingText misses %q:\n%s", want, got)
@@ -134,10 +134,10 @@ func TestEmbeddingText(t *testing.T) {
 // The body is truncated to stay within embedding-model input limits;
 // the envelope fields must survive untouched.
 func TestEmbeddingTextTruncatesBody(t *testing.T) {
-	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", maxEmbedBytes+1000)}
-	got := embeddingText(k)
-	if len(got) > maxEmbedBytes {
-		t.Errorf("embeddingText length = %d, want capped at %d", len(got), maxEmbedBytes)
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", embed.ConservativeInputBytes+1000)}
+	got := embeddingText(k, embed.ConservativeInputBytes)
+	if len(got) > embed.ConservativeInputBytes {
+		t.Errorf("embeddingText length = %d, want capped at %d", len(got), embed.ConservativeInputBytes)
 	}
 	if !strings.HasPrefix(got, "T") {
 		t.Errorf("title must lead the text: %q", got[:20])
@@ -150,14 +150,14 @@ func TestEmbeddingTextTruncatesBody(t *testing.T) {
 func TestEmbeddingTextTruncatesOnRuneBoundary(t *testing.T) {
 	// 2001 characters * 3 bytes = 6003 bytes: the cap falls mid-character.
 	k := &domain.Knowledge{Body: strings.Repeat("売", 2001)}
-	got := embeddingText(k)
+	got := embeddingText(k, embed.ConservativeInputBytes)
 	if !utf8.ValidString(got) {
 		t.Errorf("embeddingText produced invalid UTF-8 (length %d)", len(got))
 	}
-	if len(got) > maxEmbedBytes {
-		t.Errorf("embeddingText length = %d, want <= %d", len(got), maxEmbedBytes)
+	if len(got) > embed.ConservativeInputBytes {
+		t.Errorf("embeddingText length = %d, want <= %d", len(got), embed.ConservativeInputBytes)
 	}
-	if want := maxEmbedBytes / 3 * 3; len(got) != want {
+	if want := embed.ConservativeInputBytes / 3 * 3; len(got) != want {
 		t.Errorf("embeddingText length = %d, want %d (whole characters only)", len(got), want)
 	}
 }
@@ -172,12 +172,40 @@ func TestEmbeddingTextCapsTheWholeText(t *testing.T) {
 		Description: strings.Repeat("d", 2000),
 		Tags:        []string{strings.Repeat("g", 500)},
 		Attrs:       map[string]any{"question": strings.Repeat("q", 2000)},
-		Body:        strings.Repeat("b", maxEmbedBytes),
+		Body:        strings.Repeat("b", embed.ConservativeInputBytes),
 	}
-	if got := len(embeddingText(k)); got > maxEmbedBytes {
-		t.Errorf("embeddingText length = %d, want the whole text capped at %d", got, maxEmbedBytes)
+	if got := len(embeddingText(k, embed.ConservativeInputBytes)); got > embed.ConservativeInputBytes {
+		t.Errorf("embeddingText length = %d, want the whole text capped at %d", got, embed.ConservativeInputBytes)
 	}
 }
+
+// The window is a property of the model. Handing gemini-embedding-2's
+// 8192-token input the budget sized for a 2048-token model throws away
+// three quarters of it, and the entry embeds fine while carrying less of
+// itself — a loss nothing reports.
+func TestEmbedBytesFollowsTheModel(t *testing.T) {
+	conservative := &Service{Embedder: &shrinkEmbedder{}}
+	if got := conservative.embedBytes(); got != embed.ConservativeInputBytes {
+		t.Errorf("an embedder that does not say = %d, want the floor %d", got, embed.ConservativeInputBytes)
+	}
+	roomy := &Service{Embedder: limitedEmbedder{bytes: 20000}}
+	if got := roomy.embedBytes(); got != 20000 {
+		t.Errorf("an embedder that says = %d, want 20000", got)
+	}
+	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", 30000)}
+	if got := len(embeddingText(k, roomy.embedBytes())); got != 20000 {
+		t.Errorf("text capped at %d, want the model's 20000", got)
+	}
+}
+
+// limitedEmbedder reports an input window, like Vertex does.
+type limitedEmbedder struct{ bytes int }
+
+func (limitedEmbedder) Model() string { return "fake-roomy" }
+func (limitedEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) ([][]float32, error) {
+	return make([][]float32, len(texts)), nil
+}
+func (e limitedEmbedder) MaxInputBytes() int { return e.bytes }
 
 func TestTruncateUTF8(t *testing.T) {
 	for _, tc := range []struct {

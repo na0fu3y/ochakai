@@ -127,7 +127,7 @@ _ochakai() {
         '--url[server URL]:url:'
       ;;
     reembed)
-      _arguments '--limit[max entries per pass]:limit:' '--json[print JSON]' '--url[server URL]:url:'
+      _arguments '--limit[max entries per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     export)
       _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
@@ -196,7 +196,7 @@ _ochakai() {
     verify|delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
-    reembed)       opts="--url --limit --json" ;;
+    reembed)       opts="--url --limit --once --json" ;;
     export)        opts="--url --no-attachments" ;;
     import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
@@ -268,6 +268,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verif
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks compile' -l limit -x -d 'max results / LIMIT clause'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
+complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'

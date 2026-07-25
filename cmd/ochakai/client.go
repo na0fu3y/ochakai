@@ -824,10 +824,11 @@ func cmdPurge(ctx context.Context, args []string) error {
 // be rewritten.
 func cmdReembed(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai reembed [flags]\n\nEmbed entries that have no vector for the configured model — entries\nwritten before semantic search was enabled, or before the model was\nchanged. Bounded per run; repeat until \"missing\" reaches 0.",
-		"  ochakai reembed\n  ochakai reembed --limit 2000\n")
-	limit := fs.Int("limit", 0, "max entries to embed in this pass (server default 500)")
-	asJSON := fs.Bool("json", false, "print the raw JSON response")
+		"Usage: ochakai reembed [flags]\n\nEmbed entries that have no vector for the configured model — entries\nwritten before semantic search was enabled, or before the model was\nchanged. Runs bounded passes until nothing is left, so it can be started\nonce and left alone.",
+		"  ochakai reembed\n  ochakai reembed --limit 50   # smaller passes, e.g. behind a short request timeout\n  ochakai reembed --once       # one pass, then report what is left\n")
+	limit := fs.Int("limit", 0, "max entries to embed per pass (server default 200)")
+	once := fs.Bool("once", false, "run a single pass instead of continuing until nothing is left")
+	asJSON := fs.Bool("json", false, "print the raw JSON response of each pass")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -840,16 +841,41 @@ func cmdReembed(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := c.Reembed(ctx, *limit)
-	if err != nil {
-		return err
+	// One pass is one HTTP request and one entry is one call to the
+	// embedding provider, so a pass has to stay well inside the server's
+	// request timeout — which makes "run it until it is done" the client's
+	// job. Looping here also means an operator types one command instead
+	// of watching a number and deciding when to stop.
+	var embedded, failed int
+	for pass := 1; ; pass++ {
+		res, err := c.Reembed(ctx, *limit)
+		if err != nil {
+			return err
+		}
+		embedded += res.Embedded
+		failed += res.Failed
+		if *asJSON {
+			if err := printJSON(res); err != nil {
+				return err
+			}
+		} else {
+			fmt.Printf("pass %d: embedded %d, failed %d, still missing %d\n",
+				pass, res.Embedded, res.Failed, res.Missing)
+		}
+		if *once || res.Missing == 0 {
+			break
+		}
+		if res.Embedded == 0 {
+			// Every entry left is one the provider refuses. Another pass
+			// would fetch the same ids and fail the same way.
+			fmt.Fprintf(os.Stderr,
+				"stopping: %d entries still missing and no progress this pass; see the server log for why\n",
+				res.Missing)
+			return errReported
+		}
 	}
-	if *asJSON {
-		return printJSON(res)
-	}
-	fmt.Printf("embedded %d, failed %d, still missing %d\n", res.Embedded, res.Failed, res.Missing)
-	if res.Missing > 0 {
-		fmt.Fprintln(os.Stderr, "run again to continue")
+	if !*asJSON {
+		fmt.Printf("done: embedded %d, failed %d\n", embedded, failed)
 	}
 	return nil
 }

@@ -642,13 +642,17 @@ paths:
         more (design doc 0020). This fills the gap.
 
 
-        Bounded per call — repeat while `missing` is above zero. A
-        provider failure on one entry is counted, not fatal. 501 when
-        semantic search is not configured.
+        Bounded per call — repeat while `missing` is above zero; the CLI
+        (`ochakai reembed`) does that for you. One entry is one call to
+        the embedding provider and the calls are sequential, so the
+        default pass is sized to finish well inside a request timeout
+        (Cloud Run's default is 300s); raise `limit` only if you know
+        yours. A provider failure on one entry is counted, not fatal. 501
+        when semantic search is not configured.
       parameters:
         - name: limit
           in: query
-          schema: { type: integer, default: 500, maximum: 5000 }
+          schema: { type: integer, default: 200, maximum: 5000 }
       responses:
         "200":
           description: What the pass did.

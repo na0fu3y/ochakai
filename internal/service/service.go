@@ -829,7 +829,7 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	if s.Embedder == nil {
 		return
 	}
-	vecs, err := s.embedDocument(ctx, embeddingText(k))
+	vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
 	if err != nil {
 		s.Log.Warn("document embedding failed; entry remains searchable via trigram", "type", k.Type, "id", k.ID, "error", err)
 		return
@@ -839,24 +839,28 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	}
 }
 
-// maxEmbedBytes caps the text handed to the embedding model. The real
-// limit is tokens (2048 for gemini-embedding-001), and UTF-8 bytes track
-// tokens across scripts far better than characters do — but only
-// roughly, and the ratio is worst where it matters most: Japanese runs
-// three bytes per character and can approach one token per character, so
-// 6000 bytes is 2000 characters and possibly 2000 tokens. Against a 2048
-// limit that is not headroom, it is a coin flip.
+// embedBytes is how much text this deployment's model can be handed.
 //
-// So the cap covers the whole text, envelope included (the id, title,
-// description, tags and question used to ride on top of the body's
-// budget), and sits at 5000 bytes — comfortably inside the window even
-// at one token per character. English pays for that in unused budget,
-// which is the right trade: an overrun does not degrade the embedding,
-// it removes the entry from vector search entirely.
+// The real limit is tokens, and UTF-8 bytes track tokens across scripts
+// far better than characters do — but only roughly, and the ratio is
+// worst where it matters most: Japanese runs three bytes per character
+// and can approach one token per character. So the cap is deliberately
+// conservative, covers the whole text (envelope included), and comes from
+// the model rather than from a constant: the window it has to fit inside
+// is a property of the model, and applying the smallest model's budget to
+// a model with four times the window throws away three quarters of it —
+// silently, since an entry truncated for no reason still embeds fine and
+// just carries less of itself.
 //
-// The estimate is still an estimate, so embedDocument retries shorter
-// rather than trusting it.
-const maxEmbedBytes = 5000
+// A provider that does not say (any embedder but Vertex, including the
+// fakes in tests) gets the conservative floor. The estimate is still an
+// estimate, so embedDocument retries shorter rather than trusting it.
+func (s *Service) embedBytes() int {
+	if l, ok := s.Embedder.(embed.InputLimited); ok {
+		return l.MaxInputBytes()
+	}
+	return embed.ConservativeInputBytes
+}
 
 // ReembedResult reports what a Reembed pass did. Missing is how many
 // entries still have no vector once the pass is over — the number that
@@ -867,6 +871,21 @@ type ReembedResult struct {
 	Failed   int `json:"failed"`
 	Missing  int `json:"missing"`
 }
+
+// A reembed pass is one HTTP request, and one entry is one call to the
+// embedding provider — gemini-embedding-001 takes a single text per
+// request, so the passes are sequential by construction. At a few hundred
+// milliseconds each, a pass of 500 is minutes of request time, and Cloud
+// Run's default request timeout is 300 seconds: a "bounded" pass that
+// cannot finish inside a request is not bounded, it just fails late and
+// reports nothing (the work it did is still written).
+//
+// So a pass is sized to finish, and the CLI repeats it until nothing is
+// left. The ceiling is for operators who know their own timeout.
+const (
+	defaultReembedPass = 200
+	maxReembedPass     = 5000
+)
 
 // Reembed fills in the vectors that entry writes never produced. Vectors
 // are written on create and update only, so a base loaded before
@@ -881,8 +900,8 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 	if s.Embedder == nil {
 		return nil, Unsupportedf("semantic search is not configured: set OCHAKAI_VERTEX_PROJECT")
 	}
-	if limit <= 0 || limit > 5000 {
-		limit = 500
+	if limit <= 0 || limit > maxReembedPass {
+		limit = defaultReembedPass
 	}
 	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), limit)
 	if err != nil {
@@ -896,7 +915,7 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 			s.Log.Warn("reembed: entry disappeared", "id", id, "error", err)
 			continue
 		}
-		vecs, err := s.embedDocument(ctx, embeddingText(k))
+		vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
 		if err != nil {
 			res.Failed++
 			s.Log.Warn("reembed: embedding failed", "id", id, "error", err)
@@ -954,7 +973,7 @@ func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, 
 // golden query question, body truncated to keep within model input limits.
 // The id leads (design doc 0022): with title optional, the filename may be
 // the entry's only name, and the path carries the domain hierarchy.
-func embeddingText(k *domain.Knowledge) string {
+func embeddingText(k *domain.Knowledge, max int) string {
 	parts := []string{k.ID, k.Title, k.Description, strings.Join(k.Tags, " ")}
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
@@ -963,7 +982,7 @@ func embeddingText(k *domain.Knowledge) string {
 	// The cap covers the joined text: an entry whose envelope is long
 	// (a deep path, a paragraph of description) must not push the total
 	// past the window just because the body fit on its own.
-	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), maxEmbedBytes)
+	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), max)
 }
 
 // truncateUTF8 caps s at max bytes and then drops a trailing partial rune.
