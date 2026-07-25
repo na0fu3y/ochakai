@@ -3,12 +3,15 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
 
@@ -442,5 +445,46 @@ func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 	// 0022), so a hit is readable without fetching.
 	if got.Title != "monthly-revenue" {
 		t.Errorf("hit title = %q, want the display title", got.Title)
+	}
+}
+
+// requestActor must prefer the headers of the call's own HTTP request
+// over the session context: the context actor is captured at initialize
+// and would misattribute every later call on a shared session.
+func TestRequestActorUsesCallHeaders(t *testing.T) {
+	cfg := &config.Config{InsecureDev: true}
+	h := http.Header{}
+	h.Set(httpauth.OnBehalfOfHeader, "human:tanaka@example.co.jp")
+	req := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{Header: h}}
+	ctx := httpauth.WithActor(context.Background(),
+		domain.Actor{Kind: domain.ActorHuman, Name: "initializer@example.co.jp"})
+
+	actor, err := requestActor(ctx, cfg, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp", Via: "human:anonymous"}
+	if actor != want {
+		t.Errorf("actor = %+v, want %+v", actor, want)
+	}
+}
+
+// Without an HTTP request (in-process transports), the context actor is
+// all there is — and correct, since such callers cannot share a session
+// across identities.
+func TestRequestActorFallsBackToContext(t *testing.T) {
+	want := domain.Actor{Kind: domain.ActorAgent, Name: "sa@example.gserviceaccount.com"}
+	ctx := httpauth.WithActor(context.Background(), want)
+	for _, req := range []*mcp.CallToolRequest{
+		{},
+		{Extra: &mcp.RequestExtra{}},
+	} {
+		actor, err := requestActor(ctx, &config.Config{InsecureDev: true}, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if actor != want {
+			t.Errorf("actor = %+v, want %+v", actor, want)
+		}
 	}
 }

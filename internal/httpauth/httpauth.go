@@ -30,44 +30,46 @@ type ctxKey struct{}
 // from any caller, so a delegating integration can be developed and its
 // mistakes seen locally.
 func Middleware(cfg *config.Config, next http.Handler) http.Handler {
-	if cfg.InsecureDev {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Delegation is processed here too, and every caller may
-			// delegate: someone building an embedding host develops
-			// against this mode, and short-circuiting past delegate()
-			// would let them ship a header that silently did nothing —
-			// exactly the failure design doc 0027 §5.2 refuses to allow in
-			// production, hidden until the first deployment.
-			actor, status, err := delegate(
-				domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"},
-				r.Header.Get(OnBehalfOfHeader), []string{"*"})
-			if err != nil {
-				http.Error(w, "auth: "+err.Error(), status)
-				return
-			}
-			next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), actor)))
-		})
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// When both headers are present, Cloud Run validates only
-		// X-Serverless-Authorization — so it must take precedence here,
-		// or an authorized caller could impersonate via Authorization.
-		token := bearerFrom(r.Header.Get("X-Serverless-Authorization"))
-		if token == "" {
-			token = bearerFrom(r.Header.Get("Authorization"))
-		}
-		actor, err := actorFromIDToken(token)
-		if err != nil {
-			http.Error(w, "auth: "+err.Error(), http.StatusUnauthorized)
-			return
-		}
-		actor, status, err := delegate(actor, r.Header.Get(OnBehalfOfHeader), cfg.Delegators)
+		actor, status, err := ActorFromHeader(cfg, r.Header)
 		if err != nil {
 			http.Error(w, "auth: "+err.Error(), status)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), actor)))
 	})
+}
+
+// ActorFromHeader resolves the actor exactly as Middleware does, from a
+// bare header set. It exists on its own because the MCP layer must
+// re-derive the actor per tool call: a streamable session's context is
+// captured at initialize, so the context value alone would pin every
+// later call to whoever opened the session (see mcpserver).
+// The returned status accompanies a non-nil error.
+func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, error) {
+	if cfg.InsecureDev {
+		// Delegation is processed here too, and every caller may
+		// delegate: someone building an embedding host develops
+		// against this mode, and short-circuiting past delegate()
+		// would let them ship a header that silently did nothing —
+		// exactly the failure design doc 0027 §5.2 refuses to allow in
+		// production, hidden until the first deployment.
+		return delegate(
+			domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"},
+			h.Get(OnBehalfOfHeader), []string{"*"})
+	}
+	// When both headers are present, Cloud Run validates only
+	// X-Serverless-Authorization — so it must take precedence here,
+	// or an authorized caller could impersonate via Authorization.
+	token := bearerFrom(h.Get("X-Serverless-Authorization"))
+	if token == "" {
+		token = bearerFrom(h.Get("Authorization"))
+	}
+	actor, err := actorFromIDToken(token)
+	if err != nil {
+		return domain.Actor{}, http.StatusUnauthorized, err
+	}
+	return delegate(actor, h.Get(OnBehalfOfHeader), cfg.Delegators)
 }
 
 // OnBehalfOfHeader carries the end-user identity a trusted caller is

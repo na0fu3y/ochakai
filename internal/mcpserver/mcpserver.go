@@ -16,6 +16,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/okf"
@@ -32,6 +33,30 @@ const (
 func Handler(svc *service.Service, version string) http.Handler {
 	server := newServer(svc, version)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+}
+
+// requestActor resolves the actor to record for a tool call from the
+// HTTP headers that carried the call. httpauth.Middleware puts the
+// actor on the request context, but a streamable session is connected
+// once — at initialize — and every later call runs on a context derived
+// from that first request, so the context value is pinned to whoever
+// opened the session. A delegating host (design doc 0027) that reuses
+// one session across end users would then have every write silently
+// misattributed to the first user — the exact failure 0027 §5.2
+// refuses. The middleware has already vetted these headers (a rejected
+// delegation never reaches a handler), so resolution here cannot newly
+// fail; if it somehow does, refuse the write rather than misattribute
+// it. In-process transports (tests, embedding without HTTP) carry no
+// request headers and fall back to the context actor.
+func requestActor(ctx context.Context, cfg *config.Config, req *mcp.CallToolRequest) (domain.Actor, error) {
+	if extra := req.GetExtra(); cfg != nil && extra != nil && extra.Header != nil {
+		actor, _, err := httpauth.ActorFromHeader(cfg, extra.Header)
+		if err != nil {
+			return domain.Actor{}, fmt.Errorf("resolving actor: %w", err)
+		}
+		return actor, nil
+	}
+	return httpauth.Actor(ctx), nil
 }
 
 func newServer(svc *service.Service, version string) *mcp.Server {
@@ -207,7 +232,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"An id whose entry was deleted can be reused, which revives it as your draft — unless a human had " +
 			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
 			"different id instead.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+		actor, err := requestActor(ctx, svc.Config, req)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
 		// Creating on a soft-deleted id revives that row in place, status
 		// and status_note included — the other way to overwrite a ruling
 		// from a surface with no If-Match channel, and the one the update
@@ -215,7 +244,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err := svc.RefuseIfRevivingCurated(ctx, in.ID); err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		k, err := svc.Create(ctx, in.toKnowledge(), httpauth.Actor(ctx))
+		k, err := svc.Create(ctx, in.toKnowledge(), actor)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
@@ -235,7 +264,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
 			"as rejected_by; put the reason in status_note (also useful when deprecating).",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+		actor, err := requestActor(ctx, svc.Config, req)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
 		// MCP has no conditional-update channel, so it cannot opt into the
 		// If-Match precondition (nil) and writes are last-write-wins. That
 		// is tolerable for drafts and not for curated knowledge, so
@@ -248,7 +281,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		// entry curated in the window between the two is a conflict rather
 		// than a clobber — the surface has no If-Match channel of its own,
 		// but the check can supply one.
-		k, _, err := svc.Update(ctx, in.toKnowledge(), httpauth.Actor(ctx), version)
+		k, _, err := svc.Update(ctx, in.toKnowledge(), actor, version)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
@@ -262,14 +295,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"create_knowledge on the same id revives it. Entries a human has ruled on — verified, " +
 			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
 			"entry and recreating it would erase the record of why it was turned down.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
+		actor, err := requestActor(ctx, svc.Config, req)
+		if err != nil {
+			return nil, deleteOut{}, err
+		}
 		// Delete has no precondition channel in the store, so a curation
 		// landing in the window between check and delete still wins. The
 		// window is a single round trip and the delete is revivable.
 		if _, err := svc.RefuseIfCurated(ctx, in.ID, "delete"); err != nil {
 			return nil, deleteOut{}, err
 		}
-		if err := svc.Delete(ctx, in.ID, httpauth.Actor(ctx)); err != nil {
+		if err := svc.Delete(ctx, in.ID, actor); err != nil {
 			return nil, deleteOut{}, err
 		}
 		return nil, deleteOut{Deleted: true, URI: uriScheme + in.ID}, nil
