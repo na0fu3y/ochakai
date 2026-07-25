@@ -570,3 +570,72 @@ func sortLinks(l []domain.Link) {
 		return l[i].Text < l[j].Text
 	})
 }
+
+// The HNSW indexes exist once semantic search is configured, and the
+// searches can use them: an index built for the wrong operator class is
+// simply never chosen, which looks exactly like having no index at all.
+// Above pgvector's 2000-dimension indexing limit the migration must skip
+// them rather than fail — the exact scan still answers correctly.
+func TestIntegrationVectorIndexes(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, index := range []string{"knowledge_embedding_hnsw", "attachment_embedding_hnsw"} {
+		var exists bool
+		if err := s.pool.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = $1)`, index).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if !exists {
+			t.Errorf("%s was not created", index)
+		}
+	}
+
+	// The planner must be able to reach it through the `<=>` ordering the
+	// searches use. enable_seqscan=off is a cost penalty, not a
+	// prohibition, so a wrong operator class would still show a scan.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN SELECT id FROM knowledge_embedding
+		ORDER BY embedding <=> $1::vector LIMIT 5`, encodeVector([]float32{1, 0, 0, 0}))
+	if err != nil {
+		t.Fatalf("EXPLAIN: %v", err)
+	}
+	plan := ""
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		plan += line + "\n"
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "knowledge_embedding_hnsw") {
+		t.Errorf("vector search cannot use the HNSW index; plan was:\n%s", plan)
+	}
+
+	// A dimension above pgvector's indexing limit skips the index instead
+	// of failing the migration.
+	if err := s.migrateVectorIndexes(ctx, hnswMaxDim+1); err != nil {
+		t.Errorf("migrateVectorIndexes above the dimension limit: %v", err)
+	}
+}

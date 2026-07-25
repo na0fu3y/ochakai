@@ -97,8 +97,6 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 	if _, err := s.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
 		return fmt.Errorf("pgvector extension is required for semantic search (create it as the admin user, or unset OCHAKAI_VERTEX_PROJECT): %w", err)
 	}
-	// Exact scan is fine at knowledge-base scale (thousands of rows), so no
-	// ANN index; this also keeps dimensions above index limits usable.
 	if _, err := s.pool.Exec(ctx, fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS knowledge_embedding (
 			id         text NOT NULL PRIMARY KEY,
@@ -120,6 +118,47 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 			PRIMARY KEY (knowledge_id, name)
 		)`, dim)); err != nil {
 		return fmt.Errorf("create attachment_embedding: %w", err)
+	}
+	return s.migrateVectorIndexes(ctx, dim)
+}
+
+// hnswMaxDim is pgvector's indexing limit for the vector type. Above it
+// no ANN index can be built (halfvec would raise it to 4000, but storing
+// half precision is a different decision than indexing), so those
+// deployments keep the exact scan.
+const hnswMaxDim = 2000
+
+// migrateVectorIndexes builds the HNSW indexes behind semantic search.
+// 0001 left them out on the grounds that an exact scan is fine at
+// knowledge-base scale — true at a few thousand rows, but a table
+// specification plus a glossary plus the Golden Queries and Insights the
+// write-back loop accumulates passes that within a year, and every search
+// reads every vector until it does not.
+//
+// The build is not deferred to a background goroutine: it runs once, on
+// the first startup after semantic search is enabled — when the table has
+// just been created and is empty — and the advisory lock in Migrate
+// already serializes instances starting together. A deployment that
+// enables it against an existing corpus pays a one-time build well inside
+// Cloud Run's startup allowance.
+//
+// vector_cosine_ops matches the `<=>` operator the searches order by; an
+// index built for another distance would simply never be used.
+func (s *Store) migrateVectorIndexes(ctx context.Context, dim int) error {
+	if dim > hnswMaxDim {
+		// Not an error: the exact scan still answers correctly, and the
+		// operator chose the dimension deliberately.
+		return nil
+	}
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS knowledge_embedding_hnsw
+			ON knowledge_embedding USING hnsw (embedding vector_cosine_ops)`,
+		`CREATE INDEX IF NOT EXISTS attachment_embedding_hnsw
+			ON attachment_embedding USING hnsw (embedding vector_cosine_ops)`,
+	} {
+		if _, err := s.pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("create vector index: %w", err)
+		}
 	}
 	return nil
 }
