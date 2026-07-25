@@ -165,6 +165,11 @@ func serve(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	// Runs after runServer returns, i.e. after the HTTP server has drained:
+	// Close stops the usage flush loop and drains its buffer one last time,
+	// so a SIGTERM does not discard the events recorded in the last few
+	// seconds (design doc 0025 §10). Ordering matters — flushing before the
+	// server drains would miss the requests still in flight.
 	defer svc.Store.Close()
 
 	mux := http.NewServeMux()
@@ -202,6 +207,15 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 	return runServer(ctx, cfg.Addr, mux)
 }
 
+// drainTimeout bounds how long in-flight requests get after SIGTERM.
+// Cloud Run allows 10 seconds between SIGTERM and SIGKILL, and the final
+// usage flush happens after the drain (see serve) — spending the whole
+// allowance here would leave the flush to be killed mid-write, losing the
+// events the drained requests just recorded. Five seconds is more than
+// any handler here needs; export streams longer, and a truncated backup
+// is the cheapest thing in the process to lose.
+const drainTimeout = 5 * time.Second
+
 func runServer(ctx context.Context, addr string, handler http.Handler) error {
 	server := &http.Server{
 		Addr:              addr,
@@ -210,7 +224,7 @@ func runServer(ctx context.Context, addr string, handler http.Handler) error {
 	}
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()

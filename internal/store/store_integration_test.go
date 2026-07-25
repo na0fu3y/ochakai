@@ -1246,3 +1246,59 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, dst)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dst)
 }
+
+// Close is the last thing a SIGTERM'd process does with the usage buffer:
+// stop the flush loop, drain what is still in it. Events recorded in the
+// seconds before shutdown — a whole request's worth on a Cloud Run
+// instance scaling to zero — would otherwise never reach the database.
+func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Migrate(ctx, 0); err != nil {
+		s.Close()
+		t.Fatal(err)
+	}
+	const id = "it-flush-on-close"
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE knowledge_id = $1`, id)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: id, Title: "flush", Status: domain.StatusDraft, CreatedBy: actor,
+	}); err != nil {
+		s.Close()
+		t.Fatal(err)
+	}
+	// Buffered, not written: the flush interval is far longer than this
+	// test, so only Close can get it to the database.
+	if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{id}); err != nil {
+		s.Close()
+		t.Fatal(err)
+	}
+	s.Close()
+
+	verify, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer verify.Close()
+	u, err := verify.Usage(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Fetches != 1 {
+		t.Errorf("fetches = %d after Close, want 1 — the buffer was dropped", u.Fetches)
+	}
+	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id = $1`, id)
+	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE knowledge_id = $1`, id)
+}
