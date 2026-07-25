@@ -26,11 +26,26 @@ type ctxKey struct{}
 // must therefore never run publicly invokable.
 //
 // With cfg.InsecureDev (local development only), every request acts as
-// human:anonymous instead.
+// human:anonymous instead — but X-Ochakai-On-Behalf-Of is still honored,
+// from any caller, so a delegating integration can be developed and its
+// mistakes seen locally.
 func Middleware(cfg *config.Config, next http.Handler) http.Handler {
 	if cfg.InsecureDev {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"})))
+			// Delegation is processed here too, and every caller may
+			// delegate: someone building an embedding host develops
+			// against this mode, and short-circuiting past delegate()
+			// would let them ship a header that silently did nothing —
+			// exactly the failure design doc 0027 §5.2 refuses to allow in
+			// production, hidden until the first deployment.
+			actor, status, err := delegate(
+				domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"},
+				r.Header.Get(OnBehalfOfHeader), []string{"*"})
+			if err != nil {
+				http.Error(w, "auth: "+err.Error(), status)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), actor)))
 		})
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
