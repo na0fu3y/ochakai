@@ -44,6 +44,7 @@ _ochakai() {
     'update:replace an entry (kept as a revision)'
     'delete:soft-delete an entry'
     'purge:hard-delete a soft-deleted entry, freeing its id'
+    'reembed:embed entries that have no vector for the configured model'
     'move:move (rename) an entry; references are rewritten'
     'attach:attach files to an entry'
     'detach:remove an attachment'
@@ -124,6 +125,9 @@ _ochakai() {
         '--json[print the full JSON response]' \
         '--url[server URL]:url:'
       ;;
+    reembed)
+      _arguments '--limit[max entries per pass]:limit:' '--json[print JSON]' '--url[server URL]:url:'
+      ;;
     export)
       _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
       ;;
@@ -163,7 +167,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update delete purge move attach detach usage report revisions backlinks compile export import use whoami ui completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update delete purge reembed move attach detach usage report revisions backlinks compile export import use whoami ui completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -191,6 +195,7 @@ _ochakai() {
     delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     compile)       opts="--metric --dimension --filter --grain --model --limit --json --url" ;;
+    reembed)       opts="--url --limit --json" ;;
     export)        opts="--url --no-attachments" ;;
     import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
@@ -226,6 +231,7 @@ complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from 
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
 complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted entry, freeing its id'
+complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed entries that have no vector for the configured model'
 complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) an entry; references are rewritten'
 complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to an entry'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
@@ -259,6 +265,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed' -d 'list instead of searching: by verification age, demand, or failed reports'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks compile' -l limit -x -d 'max results / LIMIT clause'
+complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'

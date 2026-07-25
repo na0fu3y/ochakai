@@ -572,6 +572,40 @@ paths:
           content:
             application/gzip:
               schema: { type: string, format: binary }
+  /api/v1/reembed:
+    post:
+      operationId: reembedKnowledge
+      summary: Embed entries that have no vector for the configured model
+      description: >
+        Vectors are written when an entry is written, so a knowledge base
+        loaded before `OCHAKAI_VERTEX_PROJECT` was set has none, and
+        hybrid search stays quietly lexical-only until every entry
+        happens to be rewritten. Changing the embedding model has the
+        same shape: the old vectors sit in a space nothing queries any
+        more (design doc 0020). This fills the gap.
+
+
+        Bounded per call — repeat while `missing` is above zero. A
+        provider failure on one entry is counted, not fatal. 501 when
+        semantic search is not configured.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 500, maximum: 5000 }
+      responses:
+        "200":
+          description: What the pass did.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  embedded: { type: integer }
+                  failed: { type: integer }
+                  missing:
+                    description: Still unembedded when the limit was reached.
+                    type: integer
+        "501": { $ref: "#/components/responses/Error" }
   /api/v1/compile:
     post:
       operationId: compileSQL

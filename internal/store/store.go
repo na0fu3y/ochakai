@@ -994,6 +994,24 @@ func (s *Store) ListByIDs(ctx context.Context, ids []string) ([]domain.Knowledge
 	return pgx.CollectRows(rows, scanKnowledge)
 }
 
+// ListUnembedded returns the ids of live entries with no vector for the
+// named model, oldest first, up to limit. That covers both halves of the
+// same gap: entries written before semantic search was configured (there
+// is no row), and entries whose vector belongs to a model that has since
+// been changed (design doc 0020 — the old vectors sit in a space nobody
+// queries any more).
+func (s *Store) ListUnembedded(ctx context.Context, model string, limit int) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT k.id FROM knowledge k
+		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
+		 WHERE k.deleted_at IS NULL AND e.id IS NULL
+		 ORDER BY k.created_at LIMIT $2`, model, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
 // UpsertEmbedding stores the document embedding for a knowledge entry.
 func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []float32) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (id, model, embedding, updated_at)

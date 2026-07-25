@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
@@ -272,4 +274,94 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Errorf("the rejection and its reason must survive: %+v", stored)
 		}
 	})
+}
+
+// Reembed closes the gap between "semantic search is configured" and
+// "semantic search works". Vectors are written on entry writes only, so a
+// base loaded before the provider was configured has none — and nothing
+// says so: search just quietly stays lexical. Changing the model has the
+// same shape, and is what this exercises, because it needs no reaching
+// past the store to simulate.
+func TestReembedIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	// Without a provider the operator gets told which setting is missing,
+	// not a nil dereference.
+	svc.Embedder = nil
+	_, err := svc.Reembed(ctx, 10)
+	var unsupported *UnsupportedError
+	if !errors.As(err, &unsupported) {
+		t.Errorf("without an embedder: got %v, want an UnsupportedError naming the setting", err)
+	}
+
+	svc.Embedder = &fixedEmbedder{model: "test-embedder-v1", dim: 4}
+	id := "insights/" + uid("reembed")
+	if _, err := svc.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeInsights, ID: id, Title: "reembed me", Body: "text",
+	}, actor); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+
+	// Assertions are about this entry, not about counts: the test database
+	// is shared by every package, so a corpus-wide pass legitimately picks
+	// up whatever else happens to be unembedded.
+	unembedded := func(t *testing.T, model string) bool {
+		t.Helper()
+		ids, err := svc.Store.ListUnembedded(ctx, model, 5000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.Contains(ids, id)
+	}
+
+	if unembedded(t, "test-embedder-v1") {
+		t.Error("writing the entry should have embedded it")
+	}
+
+	// Switch models: the entry's vector is now in a space nothing queries,
+	// and nothing but a reembed notices (design doc 0020).
+	svc.Embedder = &fixedEmbedder{model: "test-embedder-v2", dim: 4}
+	if !unembedded(t, "test-embedder-v2") {
+		t.Fatal("a model change must leave the old vector behind")
+	}
+
+	res, err := svc.Reembed(ctx, 5000)
+	if err != nil {
+		t.Fatalf("Reembed after a model change: %v", err)
+	}
+	if res.Embedded == 0 || res.Failed != 0 {
+		t.Fatalf("reembed did nothing useful: %+v", res)
+	}
+	if unembedded(t, "test-embedder-v2") {
+		t.Error("reembed left the entry without a vector for the new model")
+	}
+
+	// And it is idempotent: a second pass finds this entry already done.
+	if _, err := svc.Reembed(ctx, 5000); err != nil {
+		t.Fatal(err)
+	}
+	if unembedded(t, "test-embedder-v2") {
+		t.Error("a second pass unembedded the entry")
+	}
+}
+
+// fixedEmbedder stands in for Vertex: the integration database has no
+// provider configured, and the model name is what Reembed keys on.
+type fixedEmbedder struct {
+	model string
+	dim   int
+}
+
+func (e *fixedEmbedder) Model() string { return e.model }
+
+func (e *fixedEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i := range texts {
+		out[i] = make([]float32, e.dim)
+		out[i][0] = 1
+	}
+	return out, nil
 }

@@ -287,6 +287,17 @@ all vectors must share one model's space: on an existing base, entries
 and attachments keep their old-model vectors (and stay out of the new
 space) until they are written again (design doc 0020 §2.3).
 
+Turning this on for a knowledge base that already has entries needs one
+more step. Vectors are written when an entry is written, so everything
+loaded beforehand has none and hybrid search stays quietly lexical-only:
+
+```sh
+ochakai reembed            # repeat while it reports entries still missing
+```
+
+The same applies after changing `OCHAKAI_VERTEX_MODEL`: the old vectors
+are in a space nothing queries any more (design doc 0020).
+
 ## 4b. Attachments require GCS
 
 Attachment bytes live only in a GCS bucket — metadata and revisions stay

@@ -94,6 +94,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   update <id>             replace an entry (every change kept as a revision)
   delete <id>             soft-delete an entry (history retained)
   purge <id>              hard-delete a soft-deleted entry, freeing its id
+  reembed                 embed entries missing a vector for the current model
   move <id> <new-id>      move (rename) an entry; references are rewritten
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
