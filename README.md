@@ -259,6 +259,22 @@ doc 0020).
 Attachment bytes live in GCS and are fetched on demand, and attachments
 round-trip through OKF bundles as plain files next to their entry.
 
+**Japanese knowledge bases should turn embeddings on.** PostgreSQL's
+full-text search does not tokenize Japanese, so the lexical half of search
+falls back to trigrams over a stored haystack — id, title, description,
+tags, body, attachment filenames — plus a substring match, which finds
+what it is given but ranks by a score with no meaning you can set a
+threshold against. `gemini-embedding-001` handles Japanese well, and with
+`OCHAKAI_VERTEX_PROJECT` set, ranking comes from rank fusion across both
+halves rather than from trigram overlap alone.
+
+Scores are not comparable across the two modes and are not calibrated:
+trigram similarity plus boosts in the lexical-only mode, RRF rank fusion
+(~0.02 scale) in the hybrid one. Treat them as an ordering, not a
+measure — `min_score` is for callers who have calibrated against their own
+corpus, which is why the MCP surface does not offer it. To bound a
+response, use `budget` instead.
+
 ## Configuration
 
 | Env var | Description |
@@ -266,7 +282,7 @@ round-trip through OKF bundles as plain files next to their entry.
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
 | `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
-| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys |
+| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, trigram-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys. **Recommended for Japanese knowledge bases** (see below) |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`); switching models on an existing base leaves old vectors in the old space until entries are re-written (design doc 0020) |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
 | `PORT` | Listen port (default `8080`) |
