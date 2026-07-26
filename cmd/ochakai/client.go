@@ -676,6 +676,12 @@ func cmdCreate(ctx context.Context, args []string) error {
 			return err
 		}
 	}
+	// An OKF document carries no id, so the argument is the only place most
+	// inputs can get one. Saying so here beats the server's `invalid id ""`,
+	// which describes the id format and not the missing argument.
+	if k.ID == "" {
+		return errors.New("no id: pass the entry's path as the argument (e.g. `ochakai create queries/monthly-revenue -f entry.md`)")
+	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err

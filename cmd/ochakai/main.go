@@ -88,7 +88,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
-  browse [type[/prefix]]  list one level of the ID hierarchy (folder view)
+  browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
   create [id] [-f file]   create an entry from OKF markdown or JSON
