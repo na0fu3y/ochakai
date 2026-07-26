@@ -47,7 +47,7 @@ PR の中に残る。
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) — **Accepted**
-  (実装済み、0.13.0 で出る)。**OKF 互換領域の現行ドキュメント**。
+  (実装済み、次のリリース 0.14.0 で出る)。**OKF 互換領域の現行ドキュメント**。
   SPEC が定義するキーは封筒に持つ、と基準を引き直し、§5.1(`sources` /
   `usage_window`)と §10.2(`runtime` / `parameters` / `computation` /
   `executor` / `attester`)を attrs から封筒フィールドへ。trust/lifecycle の
