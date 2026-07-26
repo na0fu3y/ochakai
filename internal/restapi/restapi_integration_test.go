@@ -25,7 +25,7 @@ import (
 
 // lockLiveAttachments serializes, across the test packages sharing the
 // test database, the tests that hold live attachments or scan them all
-// (OKF export, ListAllAttachments): bytes resolve against each test's
+// (OKF export, ExportSnapshot.AttachmentMeta): bytes resolve against each
 // own in-memory blob fake, so a foreign live attachment breaks a
 // whole-KB scan. Key shared with the store and service test packages.
 func lockLiveAttachments(t *testing.T, dbURL string) {
@@ -360,7 +360,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 
 	// Soft-delete the entry so its attachment row does not stay live in
 	// the shared test database: other packages' tests scan all live
-	// attachments (ListAllAttachments) and resolve bytes from their own
+	// attachments (the export snapshot) and resolve bytes from their own
 	// blob stores, while this test's bytes live only in this process.
 	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/reading", nil)
 	resp, err = http.DefaultClient.Do(req)

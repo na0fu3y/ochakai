@@ -240,38 +240,6 @@ func (s *Store) AttachmentBytes(ctx context.Context, sha256 string) ([]byte, err
 	return s.blobs.Get(ctx, sha256)
 }
 
-// ListAllAttachments returns every live entry's attachments with bytes,
-// ordered by id then name. Holds every attachment in memory at once —
-// prefer ListAllAttachmentMeta plus AttachmentBytes.
-func (s *Store) ListAllAttachments(ctx context.Context) ([]ExportAttachment, error) {
-	rows, err := s.pool.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		ORDER BY a.knowledge_id, a.name`)
-	if err != nil {
-		return nil, err
-	}
-	atts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
-		var e ExportAttachment
-		err := row.Scan(&e.ID, &e.Att.Name, &e.Att.MediaType, &e.Att.Size, &e.Att.SHA256, &e.Att.OKFPath,
-			&e.Att.CreatedBy.Kind, &e.Att.CreatedBy.Name, &e.Att.CreatedAt)
-		return e, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(atts) > 0 && s.blobs == nil {
-		return nil, errNoBlobStore
-	}
-	for i := range atts {
-		if atts[i].Data, err = s.blobs.Get(ctx, atts[i].Att.SHA256); err != nil {
-			return nil, err
-		}
-	}
-	return atts, nil
-}
-
 // touchAndRevise bumps the entry's updated_at and records a revision
 // whose snapshot includes the attachment list after the change —
 // attach/detach are changes to the entry, and every change is kept.

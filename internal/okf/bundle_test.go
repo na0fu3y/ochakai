@@ -1,16 +1,54 @@
 package okf
 
 import (
+	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
+
+// bundle renders entries into a path→content map, the inverse of
+// FromBundle. Export streams a bundle a file at a time (Indexes, then
+// Document per entry, into a TarGzWriter) and never materializes one, so
+// this lives here: the round-trip tests want the whole map at once, and
+// nothing in the server does.
+func bundle(t *testing.T, entries []domain.Knowledge) map[string][]byte {
+	t.Helper()
+	files := Indexes(entries)
+	for i := range entries {
+		doc, err := Document(&entries[i])
+		if err != nil {
+			t.Fatalf("render %s: %v", entries[i].URI(), err)
+		}
+		files[entries[i].ID+".md"] = doc
+	}
+	return files
+}
+
+// writeTarGz collects a whole bundle into one archive, in sorted path
+// order. Export adds files as it produces them; only the tests need the
+// collected form.
+func writeTarGz(t *testing.T, w io.Writer, files map[string][]byte, modTime time.Time) {
+	t.Helper()
+	paths := slices.Sorted(maps.Keys(files))
+	tgz := NewTarGzWriter(w, modTime)
+	for _, p := range paths {
+		if err := tgz.Add(p, files[p]); err != nil {
+			t.Fatalf("add %s: %v", p, err)
+		}
+	}
+	if err := tgz.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // The id's segments become nested directories, and every level gets its
 // own index.md. The layout is the user's (design doc 0016): a domain
@@ -25,10 +63,7 @@ func TestBundleNestedDirectories(t *testing.T) {
 		{Type: "runbook", ID: "ops/restore", Title: "リストア手順",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
 	}
-	files, err := Bundle(entries)
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := bundle(t, entries)
 	for _, path := range []string{
 		"queries/sales/monthly-revenue.md", "queries/sales/refunds/by-region.md", "ops/restore.md",
 		"index.md", "queries/index.md", "queries/sales/index.md", "queries/sales/refunds/index.md", "ops/index.md",
@@ -67,10 +102,7 @@ func TestBundleRoundTrip(t *testing.T) {
 			Attrs:       map[string]any{"sql": "SELECT 1"},
 			Body:        "本文。", UpdatedAt: now},
 	}
-	files, err := Bundle(want)
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := bundle(t, want)
 	got, _, skipped := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
@@ -110,10 +142,7 @@ func TestBundleTitleOptional(t *testing.T) {
 	if len(entries) != 1 || entries[0].ID != "insights/サンプル" || entries[0].Title != "" {
 		t.Fatalf("entries = %+v, want one titleless insights/サンプル", entries)
 	}
-	out, err := Bundle(entries)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out := bundle(t, entries)
 	doc := string(out["insights/サンプル.md"])
 	if strings.Contains(doc, "title:") {
 		t.Errorf("re-export must omit the empty title:\n%s", doc)
@@ -187,10 +216,7 @@ func TestFromBundleForeign(t *testing.T) {
 	// Import and export are identity on the type key: what came in as
 	// "Table" goes back out as "Table", at the original path, with no
 	// preservation attr in between.
-	out, err := Bundle(entries)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out := bundle(t, entries)
 	if doc := string(out["tables/users.md"]); !strings.Contains(doc, "type: Table\n") {
 		t.Errorf("re-export did not reproduce the authored type:\n%s", doc)
 	}
@@ -245,10 +271,7 @@ func TestFromBundleFixture(t *testing.T) {
 		t.Errorf("body mangled:\n%s", aov.Body)
 	}
 
-	out, err := Bundle(entries)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out := bundle(t, entries)
 	doc := string(out["references/metrics/avg_order_value.md"])
 	for _, want := range []string{
 		"type: Reference",

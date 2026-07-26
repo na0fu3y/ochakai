@@ -124,10 +124,7 @@ func TestDocumentResourceForTable(t *testing.T) {
 }
 
 func TestBundleLayoutAndIndexes(t *testing.T) {
-	files, err := Bundle(sample())
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := bundle(t, sample())
 	for _, path := range []string{"insights/revenue-seasonality.md", "tables/orders.md", "index.md", "insights/index.md", "tables/index.md"} {
 		if _, ok := files[path]; !ok {
 			t.Errorf("bundle missing %s (have %d files)", path, len(files))
@@ -188,14 +185,9 @@ func TestDocumentFlattensAttrs(t *testing.T) {
 }
 
 func TestWriteTarGzRoundTrip(t *testing.T) {
-	files, err := Bundle(sample())
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := bundle(t, sample())
 	var buf bytes.Buffer
-	if err := WriteTarGz(&buf, files, time.Unix(0, 0)); err != nil {
-		t.Fatal(err)
-	}
+	writeTarGz(t, &buf, files, time.Unix(0, 0))
 	gz, err := gzip.NewReader(&buf)
 	if err != nil {
 		t.Fatal(err)
