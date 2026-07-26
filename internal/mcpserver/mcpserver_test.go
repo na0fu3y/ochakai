@@ -348,7 +348,10 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 		if !ok {
 			t.Fatal("get_context must expose budget")
 		}
-		for _, want := range []string{"12000", "outline"} {
+		// "the entries plus the outline rows" is what the cap actually
+		// binds (design doc 0033 §3.2); it is not the response body, and
+		// an agent that reads it as one will size it wrong.
+		for _, want := range []string{"12000", "outline", "the entries plus the outline rows"} {
 			if !strings.Contains(budget.Description, want) {
 				t.Errorf("budget description %q does not mention %q", budget.Description, want)
 			}
