@@ -359,7 +359,7 @@ paths:
         endpoint exists: PUT carries the stored verified_at over and writes
         nothing at all when the content is unchanged, so "checked again,
         still right" could not be recorded — and both review feeds
-        (sort=verified_at, sort=failed) had no exit (design doc 0025 §12).
+        (sort=verified_at, sort=failed) had no exit (design doc 0025 §6).
         A rejection is cleared. Not an MCP tool: verification is the human
         ruling the write-back loop turns on. Lives at its own top-level
         path for the same reason /usage does — a suffix after the

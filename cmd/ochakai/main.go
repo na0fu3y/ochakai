@@ -170,7 +170,7 @@ func serve(log *slog.Logger) error {
 	// Runs after runServer returns, i.e. after the HTTP server has drained:
 	// Close stops the usage flush loop and drains its buffer one last time,
 	// so a SIGTERM does not discard the events recorded in the last few
-	// seconds (design doc 0025 §10). Ordering matters — flushing before the
+	// seconds (design doc 0029). Ordering matters — flushing before the
 	// server drains would miss the requests still in flight.
 	defer svc.Store.Close()
 

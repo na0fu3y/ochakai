@@ -93,7 +93,7 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 // just read must not bury real history under identical snapshots.
 //
 // ifMatch is an optional optimistic-concurrency precondition (design doc
-// 0025 §11): when non-nil it is the updated_at the caller based the edit
+// 0030): when non-nil it is the updated_at the caller based the edit
 // on, and an entry that has changed since — whether before this call's
 // read, or in the read-modify-write window below — yields store.ErrConflict
 // rather than silently clobbering the other write. nil keeps the prior
