@@ -1670,6 +1670,123 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 	}
 }
 
+// A move that rewrites the moved entry's own body — relative links
+// absolutized because the directory changed (design doc 0024 §3.5) — is
+// still one logical operation. The value Move returns, the stored row,
+// and the entry's terminal "move" revision must all carry the same final
+// body, links, attrs, and timestamp; the moved entry gets no separate
+// "update" revision (only its referrers do). This is the regression test
+// for Move returning the pre-rewrite body with a stale updated_at.
+func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-selfmove%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() {
+		for _, table := range []string{"knowledge", "knowledge_revision"} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-selfmove%'`)
+		}
+	}()
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	const neighbour = "it-selfmove-src/gross"
+	const mover = "it-selfmove-src/revenue"
+	const referrer = "it-selfmove-src/note"
+	const dest = "it-selfmove-dst/revenue"
+	for _, k := range []*domain.Knowledge{
+		{Type: domain.TypeMetrics, ID: neighbour, Title: "gross", Status: domain.StatusDraft, CreatedBy: actor},
+		{Type: domain.TypeMetrics, ID: mover, Title: "revenue", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "Net of [gross](./gross.md).",
+			Links: []domain.Link{{Target: neighbour, Text: "gross"}}},
+		{Type: domain.TypeInsights, ID: referrer, Title: "note", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "See [revenue](./revenue.md).",
+			Links: []domain.Link{{Target: mover, Text: "revenue"}}},
+	} {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	returned, err := s.Move(ctx, mover, dest, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.Get(ctx, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// (1) The return value is the stored row: the rewrite that the move
+	// performed on the entry's own body is visible in what Move hands back.
+	if !strings.Contains(stored.Body, "/"+neighbour+".md") {
+		t.Fatalf("the move did not absolutize the entry's own relative link: %q", stored.Body)
+	}
+	if returned.Body != stored.Body {
+		t.Errorf("Move returned body %q, stored body is %q", returned.Body, stored.Body)
+	}
+	if !returned.UpdatedAt.Equal(stored.UpdatedAt) {
+		t.Errorf("Move returned updated_at %v, stored row has %v — the returned value cannot serve as If-Match", returned.UpdatedAt, stored.UpdatedAt)
+	}
+	if len(returned.Links) != 1 || returned.Links[0].Target != neighbour {
+		t.Errorf("Move returned links %+v, want the re-derived link to %s", returned.Links, neighbour)
+	}
+
+	// (2) One operation, one revision: history is create then move, the
+	// move snapshot is the stored row, and nothing trails it.
+	revs, err := s.ListRevisions(ctx, dest, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 2 || revs[0].Change != "move" || revs[1].Change != "create" {
+		changes := make([]string, len(revs))
+		for i, r := range revs {
+			changes[i] = r.Change
+		}
+		t.Fatalf("revisions (newest first) = %v, want [move create] — the moved entry must not get its own trailing \"update\"", changes)
+	}
+	if revs[0].Snapshot.Body != stored.Body {
+		t.Errorf("move revision snapshot body %q contradicts the stored row %q", revs[0].Snapshot.Body, stored.Body)
+	}
+	if !revs[0].Snapshot.UpdatedAt.Equal(stored.UpdatedAt) {
+		t.Errorf("move revision snapshot updated_at %v, stored row has %v", revs[0].Snapshot.UpdatedAt, stored.UpdatedAt)
+	}
+	if revs[0].Snapshot.UpdatedAt.Before(revs[1].Snapshot.UpdatedAt) {
+		t.Errorf("revision timestamps run backwards: rev %d has %v, rev %d has %v",
+			revs[1].Rev, revs[1].Snapshot.UpdatedAt, revs[0].Rev, revs[0].Snapshot.UpdatedAt)
+	}
+	if revs[0].ChangedAt.Before(revs[1].ChangedAt) {
+		t.Errorf("revision changed_at runs backwards: rev %d at %v, rev %d at %v",
+			revs[1].Rev, revs[1].ChangedAt, revs[0].Rev, revs[0].ChangedAt)
+	}
+
+	// (3) Referrers keep their own "update" revision — their rewrite is a
+	// change to them, distinct from the move.
+	refRevs, err := s.ListRevisions(ctx, referrer, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refRevs) != 2 || refRevs[0].Change != "update" {
+		t.Fatalf("referrer revisions = %+v, want an \"update\" on top of \"create\"", refRevs)
+	}
+	if !strings.Contains(refRevs[0].Snapshot.Body, "/"+dest+".md") {
+		t.Errorf("referrer's update snapshot still points at the old id: %q", refRevs[0].Snapshot.Body)
+	}
+}
+
 // An export is streamed, so its reads happen at different moments. The
 // snapshot is what keeps the archive a picture of one instant: an entry
 // deleted after the id list was taken still has to be in the bundle the

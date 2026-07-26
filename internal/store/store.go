@@ -552,10 +552,10 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 				return err
 			}
 		}
-		if err := s.rewriteReferences(ctx, tx, oldID, newID, actor); err != nil {
+		k.ID = newID
+		if err := s.rewriteReferences(ctx, tx, oldID, k, actor); err != nil {
 			return err
 		}
-		k.ID = newID
 		return s.addRevision(ctx, tx, k, "move", actor)
 	})
 	if err != nil {
@@ -567,7 +567,12 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 // rewriteReferences updates live entries that reference oldID — the
 // markdown links in their body, and attrs.model (design doc 0019) — each
 // rewrite recorded as an "update" revision. Runs after the rename itself,
-// so a self-referencing entry (already at newID) is covered too.
+// so the moved entry (already renamed, passed as moved with the move's
+// timestamp stamped) is covered too — but its own rewrite is part of the
+// move, not a separate change: the row keeps the move's updated_at, no
+// "update" revision is added, and the rewritten body, links, and attrs
+// are folded back into moved so the caller's "move" revision and return
+// value carry the final state.
 //
 // The body is what gets rewritten: links are derived from it (design doc
 // 0024), so repairing the links column alone would leave the author's
@@ -576,7 +581,8 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 //
 // Candidates come from the links column, which still holds the pre-move
 // derivation and so is an accurate index of who refers to oldID.
-func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID string, actor domain.Actor) error {
+func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, moved *domain.Knowledge, actor domain.Actor) error {
+	newID := moved.ID
 	rows, err := tx.Query(ctx,
 		`SELECT `+knowledgeCols+` FROM knowledge
 		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)`,
@@ -594,11 +600,12 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 	movedDirs := path.Dir(oldID) != path.Dir(newID)
 	for i := range referrers {
 		r := &referrers[i]
+		self := r.ID == newID
 		// The moved entry resolves its own relative links against its old
 		// directory, so it is rewritten as if it still lived at oldID.
 		from := r.ID
 		body := r.Body
-		if r.ID == newID {
+		if self {
 			from = oldID
 			// Its own outbound relative links point at the old directory,
 			// and links are derived from the body against the entry's
@@ -624,11 +631,26 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID, newID s
 		if err != nil {
 			return err
 		}
-		r.UpdatedAt = now
+		// The moved entry's own rewrite is the move, not a change on top
+		// of it: keep the move's timestamp so the row, the "move"
+		// revision, and the returned entry agree on one instant.
+		if self {
+			r.UpdatedAt = moved.UpdatedAt
+		} else {
+			r.UpdatedAt = now
+		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5 WHERE id=$1`,
 			r.ID, links, attrs, r.Body, r.UpdatedAt); err != nil {
 			return err
+		}
+		if self {
+			// Fold the result back into the caller's entry; the caller
+			// records the single "move" revision with this final state.
+			moved.Body = r.Body
+			moved.Links = r.Links
+			moved.Attrs = r.Attrs
+			continue
 		}
 		if err := s.addRevision(ctx, tx, r, "update", actor); err != nil {
 			return err
