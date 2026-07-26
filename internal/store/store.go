@@ -980,13 +980,7 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id AND e.model = $%d
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, vecParam, len(args), where, vecParam, limit)
-	rows, err := s.pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
-		return scanHit(row)
-	})
+	return s.annSearch(ctx, limit, q, args)
 }
 
 // SearchVectorAttachments ranks entries by their closest attachment
@@ -1006,7 +1000,50 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 			ORDER BY k.id, e.embedding <=> $%d::vector
 		) best
 		ORDER BY score DESC LIMIT %d`, vecParam, len(args), where, vecParam, limit)
-	rows, err := s.pool.Query(ctx, q, args...)
+	return s.annSearch(ctx, limit, q, args)
+}
+
+// efSearch is how many candidates the HNSW index is asked to consider for
+// a search wanting limit rows.
+//
+// The index scan runs first and the WHERE clause filters what it returns,
+// so ef_search is a ceiling on the answer, not a starting point: at
+// pgvector's default of 40, a search for 100 rows could never return more
+// than 40 even before a type or tag filter took its cut. Four times the
+// limit is the headroom for that filtering, floored at the default so a
+// small search is no worse than before and capped at pgvector's maximum.
+//
+// Set per query rather than on the connection: pooled connections are
+// shared, and a lingering session GUC would silently retune searches that
+// never asked.
+func efSearch(limit int) int {
+	const (
+		defaultEF = 40   // pgvector's own default
+		maxEF     = 1000 // pgvector's ceiling
+	)
+	ef := 4 * limit
+	if ef < defaultEF {
+		ef = defaultEF
+	}
+	if ef > maxEF {
+		ef = maxEF
+	}
+	return ef
+}
+
+// annSearch runs a vector query with ef_search sized for the limit. The
+// transaction exists only to scope SET LOCAL to this one statement; it
+// reads, so it ends in a rollback.
+func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) ([]domain.SearchHit, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL hnsw.ef_search = %d", efSearch(limit))); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

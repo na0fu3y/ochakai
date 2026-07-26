@@ -123,3 +123,25 @@ func TestQueryFragments(t *testing.T) {
 		t.Errorf("the cap dropped the subject named at the end: %q", got)
 	}
 }
+
+// The HNSW index scan runs before the WHERE clause, so ef_search is a
+// ceiling on what a vector search can return: at pgvector's default of 40
+// a search for 100 rows could not fill its limit even unfiltered.
+func TestEfSearchCoversTheLimit(t *testing.T) {
+	cases := []struct{ limit, want int }{
+		{0, 40},   // never below pgvector's default
+		{5, 40},   // a small search is no worse than before
+		{10, 40},  // the default still covers 4x
+		{40, 160}, // headroom for the filters applied after the scan
+		{100, 400},
+		{500, 1000}, // pgvector's ceiling
+	}
+	for _, c := range cases {
+		if got := efSearch(c.limit); got != c.want {
+			t.Errorf("efSearch(%d) = %d, want %d", c.limit, got, c.want)
+		}
+		if got := efSearch(c.limit); got < c.limit {
+			t.Errorf("efSearch(%d) = %d, below the limit it must cover", c.limit, got)
+		}
+	}
+}
