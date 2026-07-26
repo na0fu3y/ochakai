@@ -270,7 +270,7 @@ func cmdContext(ctx context.Context, args []string) error {
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
-	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (trigram vs hybrid), so calibrate before use (0 = off)")
+	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {

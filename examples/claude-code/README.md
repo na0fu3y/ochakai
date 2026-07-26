@@ -42,8 +42,8 @@ never blocks a prompt or a stop.
 | `OCHAKAI_RECALL_MIN_SCORE` | Drop hits below this score before injecting (default 0 = inject whenever anything matches) |
 
 Search scores are **not calibrated**: they depend on the server's search
-mode (trigram vs hybrid embeddings) and on your corpus — English trigram
-matches score far higher than Japanese ones. Before setting a floor, run
+mode (matched-fragment weight plus boosts in lexical mode, RRF rank
+fusion in hybrid mode) and on your corpus. Before setting a floor, run
 `ochakai search "<typical prompt>" | cut -f1-2` for a few relevant and
 irrelevant prompts and pick a value that separates them; there is no
 universal default, which is why the hook ships with the floor off.

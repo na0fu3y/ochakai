@@ -170,8 +170,8 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 // that ochakai has no authorization and that verification is judged from
 // provenance, and this does not reopen it: an agent may still create, may
 // still edit drafts, may still promote a draft to verified. What it may
-// not do from a surface with no If-Match channel (MCP, design doc 0025
-// §11) is silently replace a state a human put there.
+// not do from a surface with no If-Match channel (MCP, design doc 0030
+// §3.4) is silently replace a state a human put there.
 //
 // Rejected matters at least as much as verified, and it is the one the
 // obvious rule would have missed. Create refuses a live entry, so an agent

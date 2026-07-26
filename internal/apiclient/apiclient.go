@@ -106,8 +106,10 @@ type SearchParams struct {
 	// Sort switches the endpoint from searching to listing:
 	// "verified_at" returns entries by verification age, oldest first
 	// (the golden-query canary feed); "usage" returns entries by demand,
-	// most-searched first (the draft review feed, hits carry usage). The
-	// server rejects a Query combined with Sort; listed hits carry score 0.
+	// most-searched first (the draft review feed, hits carry usage);
+	// "failed" returns entries callers reported wrong, worst first (the
+	// re-verification feed, design doc 0025 §6). The server rejects a
+	// Query combined with Sort; listed hits carry score 0.
 	Sort  string
 	Limit int
 }

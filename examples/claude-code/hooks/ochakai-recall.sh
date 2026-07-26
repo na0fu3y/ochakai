@@ -10,8 +10,8 @@
 # (`ochakai use <url>`). Tune with:
 #   OCHAKAI_RECALL_BUDGET     max injected bytes (default 4000)
 #   OCHAKAI_RECALL_MIN_SCORE  drop hits below this score (default 0 = off).
-#     Scores depend on the server's search mode and your corpus — English
-#     trigram matches score far higher than CJK ones — so measure with
+#     Scores depend on the server's search mode and your corpus, and are
+#     not comparable between modes — so measure with
 #     `ochakai search ... | cut -f1` before picking a floor.
 #
 # Failures are silent by design: a knowledge base being down must never
