@@ -170,6 +170,9 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if *sortBy != "" && len(pos) > 0 {
 		return fmt.Errorf("--sort lists entries; it cannot be combined with a search query")
 	}
+	if *sortBy == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
+		return fmt.Errorf("search needs a query; use --sort to list entries without one")
+	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err

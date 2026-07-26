@@ -51,6 +51,18 @@ func TestParseRef(t *testing.T) {
 	}
 }
 
+// TestCmdSearchNeedsQueryOrSort pins the client-side check mirroring the
+// server rule: exactly one of the query and --sort is required, and both
+// checks fire before any connection is made.
+func TestCmdSearchNeedsQueryOrSort(t *testing.T) {
+	if err := cmdSearch(context.Background(), nil); err == nil || !strings.Contains(err.Error(), "needs a query") {
+		t.Errorf("no query and no --sort: got %v, want a needs-a-query error", err)
+	}
+	if err := cmdSearch(context.Background(), []string{" ", "\t"}); err == nil || !strings.Contains(err.Error(), "needs a query") {
+		t.Errorf("whitespace query: got %v, want a needs-a-query error", err)
+	}
+}
+
 func TestDecodeEntryDetectsFormat(t *testing.T) {
 	fromJSON, err := decodeEntry([]byte(`{"type":"metric","id":"revenue","title":"売上"}`))
 	if err != nil || fromJSON.ID != "revenue" {

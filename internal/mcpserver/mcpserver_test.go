@@ -107,8 +107,9 @@ func TestLimitContractsInSchema(t *testing.T) {
 }
 
 // TestSearchSortValidation mirrors the CLI and REST rules: a search query
-// combined with a sort mode is an error (not silently ignored), and an
-// unknown sort is rejected — for verified_at, usage, and failed.
+// combined with a sort mode is an error (not silently ignored), an
+// unknown sort is rejected — for verified_at, usage, and failed — and
+// omitting both query and sort is a tool error, not a Postgres 500.
 func TestSearchSortValidation(t *testing.T) {
 	cs := connect(t)
 	cases := []struct {
@@ -120,6 +121,8 @@ func TestSearchSortValidation(t *testing.T) {
 		{"usage with query", map[string]any{"sort": "usage", "query": "revenue"}, "cannot be combined"},
 		{"failed with query", map[string]any{"sort": "failed", "query": "revenue"}, "cannot be combined"},
 		{"invalid sort", map[string]any{"sort": "created_at"}, "invalid sort"},
+		{"neither query nor sort", map[string]any{}, "needs a query"},
+		{"whitespace query", map[string]any{"query": " \t"}, "needs a query"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

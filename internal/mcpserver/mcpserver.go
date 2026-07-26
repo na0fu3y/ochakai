@@ -139,7 +139,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
 			"each hit carries its usage totals — the draft review/promotion feed. With sort=\"failed\" it " +
 			"lists entries callers reported wrong (report_outcome failed), worst first — the re-verification " +
-			"feed; empty when nothing was reported wrong.",
+			"feed; empty when nothing was reported wrong. Exactly one of query / sort is required.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags}
 		if in.Sort != "" {
@@ -417,8 +417,9 @@ func parseKnowledgeURI(uri string) (id string, ok bool) {
 // document — MCP agents only see the tool schema.
 type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
-	// rejects it — one of query / sort must be set.
-	Query    string   `json:"query,omitempty" jsonschema:"search text; omit when sort is set"`
+	// rejects it — exactly one of query / sort must be set (the service
+	// rejects an empty search, the handler rejects the combination).
+	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
