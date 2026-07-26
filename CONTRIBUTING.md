@@ -30,8 +30,16 @@ gofmt -l .          # must print nothing
 go vet ./...
 go test -race ./...
 CGO_ENABLED=0 go build -trimpath ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
+
+The linters are configured in [.golangci.yml](.golangci.yml) and chosen so
+a clean tree reports nothing — a finding means new code, not a linter's
+taste ([design doc 0035](docs/design/0035-verifiability.md)). The most
+load-bearing one is `exhaustive`: a `switch` over `domain.Status` or
+`domain.Type` that names every case and no `default` must keep naming
+every case when a value is added.
 
 `go test` runs the fuzz targets' seed corpora like ordinary tests, which
 is what CI does. Fuzzing proper is a local tool — reach for it when
@@ -91,5 +99,9 @@ Two decisions worth knowing before proposing features:
 - Keep PRs small and focused; include tests for behavior changes.
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml) — keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
-  in sync (wire compatibility is pinned by tests).
+  in sync (wire compatibility is pinned by tests). The REST half is
+  checked, not just reviewed: the integration tests run every request and
+  response past the spec (`internal/restapi/openapi_test.go`), so an
+  endpoint whose shape drifts from `openapi.yaml` fails CI. A new
+  endpoint needs an integration test to come under that check.
 - Write commit messages and code comments in English.

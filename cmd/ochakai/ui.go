@@ -86,25 +86,25 @@ func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid server URL %q: %w", target, err)
 	}
-	proxy := httputil.NewSingleHostReverseProxy(u)
-	director := proxy.Director
-	proxy.Director = func(r *http.Request) {
-		director(r)
-		r.Host = u.Host
+	// Rewrite rather than Director: it drops the browser's X-Forwarded-*
+	// headers instead of appending to them, which is what we want from a
+	// proxy that trusts nothing the page sends.
+	proxy := &httputil.ReverseProxy{Rewrite: func(r *httputil.ProxyRequest) {
+		r.SetURL(u) // also points the outbound Host at the target
 		// Never forward whatever the browser sent; the proxy's whole job
 		// is to substitute the CLI user's identity. That covers the
 		// delegation header too: this proxy has no verified source for
 		// one (serve-ui gets its from IAP, design doc 0032), and a page
 		// that could set it would be forging an author on a server where
 		// you are permitted to delegate.
-		r.Header.Del("Authorization")
-		r.Header.Del(httpauth.OnBehalfOfHeader)
+		r.Out.Header.Del("Authorization")
+		r.Out.Header.Del(httpauth.OnBehalfOfHeader)
 		if tokens != nil {
 			if tok, err := tokens.Token(); err == nil {
-				r.Header.Set("Authorization", "Bearer "+tok.AccessToken)
+				r.Out.Header.Set("Authorization", "Bearer "+tok.AccessToken)
 			}
 		}
-	}
+	}}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {

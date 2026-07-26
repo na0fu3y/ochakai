@@ -202,8 +202,8 @@ func TestErrorResponsesBecomeAPIErrors(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found: metrics/nope"})
 	})
 	_, err := c.Get(context.Background(), "metrics/nope")
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("err = %T %v, want *APIError", err, err)
 	}
 	if apiErr.StatusCode != http.StatusNotFound || apiErr.Message != "not found: metrics/nope" {
