@@ -1,4 +1,4 @@
--- OKF v0.2 (design doc 0034) needs two things the envelope did not have.
+-- OKF v0.2 (design doc 0036) needs two things the envelope did not have.
 --
 -- updated_by: OKF's generated.by is "who produced the content as it now
 -- stands" (SPEC §5.2). ochakai only knew created_by — accurate until

@@ -237,7 +237,7 @@ over time, run them as canaries from your CI:
 | `Semantic Model` | Apache Ossie semantic model, spec verbatim in `attrs.spec` |
 | `Metric` | Semantic metric definition (Apache Ossie), synonyms |
 | `Golden Query` | Golden query: natural-language question + verified SQL |
-| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract (`runtime`, `parameters`, `executor`, `attester`) in `attrs` |
+| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
 | `Glossary Term` | Glossary term |
 | `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
@@ -281,30 +281,45 @@ doc 0020).
 Attachment bytes live in GCS and are fetched on demand, and attachments
 round-trip through OKF bundles as plain files next to their entry.
 
-**Trust travels with the knowledge.** An exported entry carries the OKF
-v0.2 trust and lifecycle families (SPEC §5), so a consumer that has never
-heard of ochakai can still tell how much to trust it:
+**Trust travels with the knowledge.** OKF v0.2's schema is ochakai's
+schema: every key the spec defines is a first-class field, so an exported
+entry carries its provenance, trust and lifecycle (SPEC §5) where a
+consumer that has never heard of ochakai will look for them.
 
 ```yaml
 type: Golden Query
 title: Monthly revenue by channel
-status: stable                 # draft | stable | deprecated
-stale_after: 2026-12-31        # advisory: re-check on and after this day
+sources:
+  - id: rev-policy
+    resource: https://wiki.example/finance/revenue-recognition
+    title: Revenue Recognition Policy (FY2026)
+    author: human:jsmith@example.co.jp
+    last_modified: "2026-06-15"
+usage_window: { from: "2026-06-01", to: "2026-06-30" }
 generated: { by: agent:analyst@example.iam.gserviceaccount.com, at: 2026-07-26T04:12:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
+status: stable                 # draft | stable | deprecated
+stale_after: "2026-12-31"      # advisory: re-check on and after this day
 ```
 
+`sources` is the material an entry derives from — give one an `id` and a
+markdown footnote in the body can attribute a single claim to it.
 `generated` is who the content stands by and when it last changed;
 `verified` is who confirmed it — absent means unverified, and a `human:`
 entry is what makes it human-reviewed (SPEC §5.3). ochakai's `verified`
 status is exactly that: `stable` plus a verification, which is where a
 v0.2 consumer looks. The reverse mapping keeps the round-trip exact
-without treating a foreign bundle's `stable` as reviewed. What you write
-in `attrs` — including OKF's `sources` and the Attested Computation
-contract — passes through untouched, in place. Provenance itself is never
-read back from a bundle: it is what this instance observed, not what a
-document claims (design docs 0009, 0034).
+without treating a foreign bundle's `stable` as reviewed.
+
+ochakai **records** these; it never acts on them. It does not fetch a
+source's `resource`, score its credibility signals, or run an Attested
+Computation's `executor` and `attester` — weighing the signals and
+running the computation belong to whoever consumes the entry (SPEC §5.1,
+§10.5). Keys OKF does not define pass through `attrs` untouched, in
+place. Provenance itself is never read back from a bundle: it is what
+this instance observed, not what a document claims (design docs 0009,
+0035).
 
 **Japanese knowledge bases should turn embeddings on.** PostgreSQL's
 full-text search does not tokenize Japanese, so the lexical half of search
