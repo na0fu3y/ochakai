@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -62,16 +63,26 @@ func (e errUsageBuffer) Error() string { return string(e) }
 
 // usageFlushLoop drains the usage buffer on a timer until Close, then once
 // more so a clean shutdown loses nothing already buffered.
+//
+// Nobody is waiting on these writes, so the loop is the last place the
+// error can be seen. It logs: design doc 0029 §3.1 accepts losing a
+// failed batch, on the condition that the loss is visible rather than
+// silent, and the loop is the only caller in a position to make it so.
 func (s *Store) usageFlushLoop() {
 	defer s.flushWG.Done()
 	t := time.NewTicker(usageFlushInterval)
 	defer t.Stop()
+	flush := func() {
+		if err := s.FlushUsage(context.Background()); err != nil {
+			s.log.Warn("usage flush failed", "error", err)
+		}
+	}
 	for {
 		select {
 		case <-t.C:
-			s.FlushUsage(context.Background())
+			flush()
 		case <-s.flushStop:
-			s.FlushUsage(context.Background())
+			flush()
 			return
 		}
 	}
@@ -79,9 +90,13 @@ func (s *Store) usageFlushLoop() {
 
 // FlushUsage writes all buffered usage events: one knowledge_event row per
 // occurrence, and the running totals in knowledge_usage bumped in the same
-// statement. Exported so shutdown and tests can force a flush. On a
-// database error the drained batch is lost (best-effort); the error is
-// returned for visibility.
+// statement. Exported so shutdown and tests can force a flush.
+//
+// On a database error the drained batch is lost and there is no retry
+// queue: usage is best-effort, and design doc 0029 §3.1 chose that
+// deliberately over spending memory on a stalled database. What the
+// decision also asked for is that the loss be visible — the error says
+// how many events went with it, and the flush loop logs it.
 func (s *Store) FlushUsage(ctx context.Context) error {
 	s.usageMu.Lock()
 	if len(s.usageBuf) == 0 {
@@ -115,7 +130,7 @@ func (s *Store) FlushUsage(ctx context.Context) error {
 			last_at = GREATEST(knowledge_usage.last_at, EXCLUDED.last_at)`,
 		ids, events, kinds, names, ats)
 	if err != nil {
-		return err
+		return fmt.Errorf("writing %d buffered usage events: %w", len(batch), err)
 	}
 	s.maybePruneEvents(ctx)
 	return nil

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"sync"
@@ -57,6 +58,10 @@ type Store struct {
 	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64
+	// log carries what only the store can see. The background flush loop
+	// has no caller to return an error to, so without this a database
+	// that rejects writes loses usage in silence.
+	log *slog.Logger
 
 	// Usage events buffer in memory and flush on a timer so recording
 	// never touches the read path (design doc 0029). usageBuf is
@@ -66,6 +71,15 @@ type Store struct {
 	usageBuf  []usageEvent
 	flushStop chan struct{}
 	flushWG   sync.WaitGroup
+}
+
+// UseLogger routes the store's own diagnostics to l — the flush loop's
+// failures, which no request is waiting on. Call before serving; the
+// default is slog.Default().
+func (s *Store) UseLogger(l *slog.Logger) {
+	if l != nil {
+		s.log = l
+	}
 }
 
 // UseBlobStore routes attachment bytes to b (design doc 0013). Call
@@ -102,7 +116,7 @@ func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) 
 		pool.Close()
 		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
-	s := &Store{pool: pool, flushStop: make(chan struct{})}
+	s := &Store{pool: pool, flushStop: make(chan struct{}), log: slog.Default()}
 	s.flushWG.Add(1)
 	go s.usageFlushLoop()
 	return s, nil
