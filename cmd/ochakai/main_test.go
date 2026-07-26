@@ -12,8 +12,47 @@ import (
 func TestUsageAddressesEntriesByPath(t *testing.T) {
 	var b strings.Builder
 	usage(&b)
-	if strings.Contains(b.String(), "<type>/<id>") {
-		t.Errorf("usage() still documents the pre-0017 <type>/<id> address:\n%s", b.String())
+	// "type[/prefix]" is the same claim in browse's clothing: a prefix is
+	// a path prefix, and its first segment is a directory, not a type.
+	for _, stale := range []string{"<type>/<id>", "type[/"} {
+		if strings.Contains(b.String(), stale) {
+			t.Errorf("usage() still documents the pre-0017 address form %q:\n%s", stale, b.String())
+		}
+	}
+}
+
+// Guard: every `ochakai create` we ship names the entry's id. The id is an
+// argument and an OKF document carries none (design doc 0017), so a
+// flags-only invocation is one an agent following our own instructions
+// cannot complete — it fails on the server with a format complaint about
+// an id it was never told to pass.
+func TestShippedCreateExamplesPassAnID(t *testing.T) {
+	for _, f := range []string{
+		"../../README.md",
+		"../../CONTRIBUTING.md",
+		"../../examples/claude-code/CLAUDE.md",
+		"../../examples/claude-code/hooks/ochakai-write-back.sh",
+		"../../docs/guides/golden-query-canary.md",
+	} {
+		content, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		for _, line := range strings.Split(string(content), "\n") {
+			_, rest, found := strings.Cut(line, "ochakai create")
+			if !found {
+				continue
+			}
+			rest = strings.TrimLeft(rest, " ")
+			// `ochakai create -h` prints the help that explains the id; it is
+			// the one invocation that needs none.
+			if strings.HasPrefix(rest, "-h") || strings.HasPrefix(rest, "--help") {
+				continue
+			}
+			if rest == "" || strings.HasPrefix(rest, "-") {
+				t.Errorf("%s documents `ochakai create` without an id: %s", f, strings.TrimSpace(line))
+			}
+		}
 	}
 }
 

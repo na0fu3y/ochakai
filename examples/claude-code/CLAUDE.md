@@ -42,9 +42,11 @@ entries. Search it before writing analytics SQL; write learnings back.
   flag verified entries for re-verification, so the next agent doesn't
   trust a stale entry blind. Always report `failed` when a verified entry
   led you to a wrong number.
-- `ochakai create -f entry.md` — write a learning back (OKF markdown as
-  printed by `get`, or JSON; see `ochakai create -h`). Entries start as
-  `draft`; your identity is recorded as provenance automatically.
+- `ochakai create <id> -f entry.md` — write a learning back (OKF markdown
+  as printed by `get`, or JSON; see `ochakai create -h`). The id is the
+  entry's path (`queries/sales/monthly-revenue`) and it is an argument:
+  an OKF document does not carry one. Entries start as `draft`; your
+  identity is recorded as provenance automatically.
 - `ochakai export <dir>` — snapshot the whole knowledge base as markdown;
   `ochakai import <dir>` loads a bundle back (any OKF bundle works).
 Types beyond these are welcome (any slug works — e.g. `runbook/…`), and
