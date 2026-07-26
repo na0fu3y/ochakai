@@ -750,7 +750,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 // an unchanged payload writes nothing and verified_at is carried over.
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai verify [flags] <id>\n\nRecord a verification against the entry as it stands: you become\nverified_by and verified_at is stamped now. Promotes a draft, and\nre-affirms an entry that is already verified — which is what takes it\nout of the verification-age and reported-wrong feeds. Verifying a\nrejected entry clears the rejection: the status becomes verified and\nrejected_by/rejected_at are dropped (the revision history keeps both).",
+		"Usage: ochakai verify [flags] <id>\n\nRecord a verification against the entry as it stands: you become\nverified_by and verified_at is stamped now. Promotes a draft, and\nre-affirms an entry that is already verified — which is what takes it\nout of both review feeds (--sort verified_at, --sort failed). Verifying\na rejected entry clears the rejection: the status becomes verified and\nrejected_by/rejected_at are dropped (the revision history keeps both).",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r .verified_at\n")
 	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
 	pos, err := parseArgs(fs, args)
