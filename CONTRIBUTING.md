@@ -80,5 +80,9 @@ Two decisions worth knowing before proposing features:
 - Keep PRs small and focused; include tests for behavior changes.
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml) — keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
-  in sync (wire compatibility is pinned by tests).
+  in sync (wire compatibility is pinned by tests). The REST half is
+  checked, not just reviewed: the integration tests run every request and
+  response past the spec (`internal/restapi/openapi_test.go`), so an
+  endpoint whose shape drifts from `openapi.yaml` fails CI. A new
+  endpoint needs an integration test to come under that check.
 - Write commit messages and code comments in English.
