@@ -141,9 +141,9 @@ func TestRenderContext(t *testing.T) {
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	res := &apiclient.ContextResult{
-		Hits: []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeQueries, ID: "queries/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue"}, Score: 0.9},
-			{Knowledge: domain.Knowledge{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR"}, Score: 0.1},
+		Hits: []domain.ContextRank{
+			{Type: domain.TypeQueries, ID: "queries/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue", Score: 0.9},
+			{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR", Score: 0.1},
 		},
 		Entries: []domain.Knowledge{
 			{

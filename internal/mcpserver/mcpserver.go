@@ -231,7 +231,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, contextOut{}, err
 		}
 		return nil, contextOut{
-			Hits: contextRanks(res.Hits), Entries: res.Entries, Outline: res.Outline,
+			Hits: res.Hits, Entries: res.Entries, Outline: res.Outline,
 			Truncated: res.Truncated, Hint: contextHint(res.Truncated),
 		}, nil
 	})
@@ -492,43 +492,11 @@ type contextIn struct {
 }
 
 type contextOut struct {
-	Hits      []contextRank           `json:"hits"`
+	Hits      []domain.ContextRank    `json:"hits"`
 	Entries   []domain.Knowledge      `json:"entries"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 	Hint      string                  `json:"hint"`
-}
-
-// contextRank is what a hit is worth once the entries are in the same
-// response: an ordering, not a second copy of the knowledge.
-//
-// domain.SearchHit embeds the whole Knowledge — body, attrs and all — so
-// returning hits verbatim would send every top entry twice and leave the
-// budget governing only one of the copies. Worse, an entry too large for
-// the budget would arrive in full through hits while outline told the
-// agent to go fetch it. The Semantic Model case packWithinBudget exists
-// for (attrs.spec is the largest payload in the base) walked straight
-// past it.
-//
-// search_knowledge keeps returning full hits: there the entries are the
-// answer, not a duplicate of one.
-type contextRank struct {
-	ID     string        `json:"id"`
-	Type   domain.Type   `json:"type"`
-	Title  string        `json:"title"`
-	Status domain.Status `json:"status"`
-	Score  float64       `json:"score"`
-}
-
-func contextRanks(hits []domain.SearchHit) []contextRank {
-	out := make([]contextRank, len(hits))
-	for i, h := range hits {
-		out[i] = contextRank{
-			ID: h.ID, Type: h.Type, Title: h.DisplayTitle(),
-			Status: h.Status, Score: h.Score,
-		}
-	}
-	return out
 }
 
 // defaultContextBudget bounds an unparameterized get_context. It is on by

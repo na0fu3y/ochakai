@@ -444,11 +444,15 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 }
 
 // ContextResult is the one-call context pack behind get_context and
-// `ochakai context`: the ranked hits, plus the full entries behind the
-// top ones expanded one hop through links. Entries that did not fit the
+// `ochakai context`: the ranking, plus the full entries behind the top
+// hits expanded one hop through links. Entries that did not fit the
 // caller's budget are listed in Outline instead — named, not delivered.
+//
+// Hits is the ranking only (design doc 0033). The knowledge travels once,
+// in Entries; a hit that was not expanded into an entry is a pointer the
+// caller can spend a round trip on.
 type ContextResult struct {
-	Hits      []domain.SearchHit      `json:"hits"`
+	Hits      []domain.ContextRank    `json:"hits"`
 	Entries   []domain.Knowledge      `json:"entries"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
@@ -556,7 +560,10 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 		ids[i] = entries[i].ID
 	}
 	s.recordUsage(ctx, domain.EventFetched, ids)
-	return &ContextResult{Hits: hits, Entries: entries, Outline: outline, Truncated: len(outline)}, nil
+	return &ContextResult{
+		Hits: domain.ContextRanks(hits), Entries: entries,
+		Outline: outline, Truncated: len(outline),
+	}, nil
 }
 
 // packWithinBudget splits entries into the ones that fit within budget

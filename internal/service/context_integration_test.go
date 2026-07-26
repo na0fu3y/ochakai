@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -247,5 +249,36 @@ func TestContextBudgetIntegration(t *testing.T) {
 	// Hits still name everything that matched — the ranking is not cut.
 	if len(capped.Hits) != len(full.Hits) {
 		t.Errorf("budget changed the hit list: %d vs %d", len(capped.Hits), len(full.Hits))
+	}
+
+	// The budget has to govern what the caller actually receives, not one
+	// field of it. Hits used to embed the whole entry, so an entry the
+	// packer had just refused to deliver arrived in full anyway — the
+	// outline row told the caller to go fetch what it already had, and the
+	// cap it set was spent twice over (design doc 0033).
+	wire, err := json.Marshal(capped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range capped.Outline {
+		if !mine[o.ID] {
+			continue
+		}
+		k, err := svc.Get(ctx, o.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(wire, []byte(k.Body)) {
+			t.Errorf("%s was outlined but its body still shipped in the response", o.ID)
+		}
+	}
+	ranking, err := json.Marshal(capped.Hits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The ranking is the one thing outside the cap: no bodies, bounded by
+	// the hit count. Anything else growing past the budget is a leak.
+	if over := len(wire) - len(ranking); over > budget {
+		t.Errorf("response carries %d bytes of knowledge over a %d budget", over, budget)
 	}
 }
