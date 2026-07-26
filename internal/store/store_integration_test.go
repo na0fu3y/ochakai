@@ -1243,6 +1243,107 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dst)
 }
 
+// A purge and a revival can be in flight at the same time: Create brings a
+// tombstone back in place, and the entry it produces is live knowledge
+// somebody is now using. The purge must lose that race — it was authorized
+// against a tombstone, and hard-deleting the revived entry would destroy in
+// one call history that was in use a moment ago, which is exactly what the
+// two-step delete-then-purge exists to prevent.
+func TestIntegrationPurgeLosesToRevival(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	const id = "it-purge-race"
+	cleanup := func() {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_purge WHERE id = $1`, id)
+	}
+	cleanup()
+	defer cleanup()
+
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: id, Title: id,
+		Status: domain.StatusDraft, CreatedBy: actor,
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SoftDelete(ctx, id, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stand in for a concurrent Create: it revives the tombstone in place
+	// and holds the row until it commits.
+	revive, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = revive.Rollback(ctx) }()
+	if _, err := revive.Exec(ctx,
+		`UPDATE knowledge SET deleted_at = NULL, updated_at = now() WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+
+	purged := make(chan error, 1)
+	go func() { purged <- s.Purge(ctx, id, actor) }()
+
+	// Wait for the purge to block on the revival's row lock. Without the
+	// wait the purge might not have reached the row yet, and committing
+	// first would test a serial order rather than the interleaving.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var waiting int
+		if err := s.pool.QueryRow(ctx,
+			`SELECT count(*) FROM pg_stat_activity
+			  WHERE wait_event_type = 'Lock' AND query LIKE '%knowledge%'`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("purge never blocked on the revival's lock")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err := revive.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-purged; !errors.Is(err, ErrNotDeleted) {
+		t.Errorf("purge racing a revival: got %v, want ErrNotDeleted", err)
+	}
+
+	k, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("the revived entry is gone: %v", err)
+	}
+	if k.ID != id {
+		t.Errorf("got entry %q, want %q", k.ID, id)
+	}
+	// An audit row would claim a destruction that must not have happened.
+	var audits int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_purge WHERE id = $1`, id).Scan(&audits); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 0 {
+		t.Errorf("refused purge left %d audit rows", audits)
+	}
+}
+
 // Close is the last thing a SIGTERM'd process does with the usage buffer:
 // stop the flush loop, drain what is still in it. Events recorded in the
 // seconds before shutdown — a whole request's worth on a Cloud Run
