@@ -2032,3 +2032,109 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 		}
 	})
 }
+
+// A move rewrites every entry that referred to the old id, and it does so
+// by reading the referrer, repairing its body in Go, and writing the whole
+// row back. Without a lock on that read, an edit committing in the window
+// is reverted by the write-back -- and recorded as an ordinary "update"
+// revision, so the history shows a change but not that one was lost.
+func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	stamp := time.Now().UnixNano()
+	target := fmt.Sprintf("it-clobber-%d/metric", stamp)
+	moved := fmt.Sprintf("it-clobber-%d/renamed", stamp)
+	referrer := fmt.Sprintf("it-clobber-%d/insight", stamp)
+	cleanup := func() {
+		for _, table := range []string{"knowledge", "knowledge_revision"} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE $1`,
+				fmt.Sprintf("it-clobber-%d%%", stamp))
+		}
+	}
+	cleanup()
+	defer cleanup()
+
+	for _, k := range []*domain.Knowledge{
+		{Type: domain.TypeMetrics, ID: target, Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
+		{Type: domain.TypeInsights, ID: referrer, Title: "referrer", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "Explains [the metric](/" + target + ".md).",
+			Links: domain.LinksFromBody(referrer, "Explains [the metric](/"+target+".md).")},
+	} {
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+	}
+
+	// A human edit to the referrer, committed while the move is in flight.
+	edit, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = edit.Rollback(ctx) }()
+	const added = "A sentence the move must not eat."
+	if _, err := edit.Exec(ctx,
+		`UPDATE knowledge SET body = body || $2, updated_at = now() WHERE id = $1`,
+		referrer, "\n\n"+added); err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Move(ctx, target, moved, actor)
+		done <- err
+	}()
+
+	// Let the move reach the referrer and block there.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var waiting int
+		if err := s.pool.QueryRow(ctx,
+			`SELECT count(*) FROM pg_stat_activity
+			  WHERE wait_event_type = 'Lock' AND query LIKE '%knowledge%'`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting > 0 {
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("move finished without blocking: %v", err)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("move never blocked on the concurrent edit")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := edit.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+
+	got, err := s.Get(ctx, referrer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got.Body, added) {
+		t.Errorf("the move reverted a concurrent edit; body = %q", got.Body)
+	}
+	// And it still did its own job: the reference follows the move.
+	if !strings.Contains(got.Body, moved) {
+		t.Errorf("reference was not rewritten to %s; body = %q", moved, got.Body)
+	}
+}

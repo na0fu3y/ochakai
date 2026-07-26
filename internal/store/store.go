@@ -634,9 +634,16 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 // derivation and so is an accurate index of who refers to oldID.
 func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, moved *domain.Knowledge, actor domain.Actor) error {
 	newID := moved.ID
+	// FOR UPDATE, because each referrer is read here and written whole
+	// below: the rewrite carries body, links and attrs from this read, so
+	// an update committing in the window would be silently reverted — and
+	// recorded as an ordinary "update" revision, which hides that anything
+	// was lost. ORDER BY id gives concurrent moves one lock order, so they
+	// queue instead of deadlocking.
 	rows, err := tx.Query(ctx,
 		`SELECT `+knowledgeCols+` FROM knowledge
-		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)`,
+		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)
+		 ORDER BY id FOR UPDATE`,
 		fmt.Sprintf(`[{"target": %q}]`, oldID),
 		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+oldID),
 		oldID, newID)
@@ -690,10 +697,20 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		} else {
 			r.UpdatedAt = now
 		}
-		if _, err := tx.Exec(ctx,
-			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5 WHERE id=$1`,
-			r.ID, links, attrs, r.Body, r.UpdatedAt); err != nil {
+		// deleted_at IS NULL restates what the locked read already
+		// established, so the statement does not depend on the reader
+		// having filtered: rewriting a tombstone would plant a repaired
+		// body and a revision on an entry nobody can see, to resurface
+		// whenever someone revives it.
+		tag, err := tx.Exec(ctx,
+			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5
+			 WHERE id=$1 AND deleted_at IS NULL`,
+			r.ID, links, attrs, r.Body, r.UpdatedAt)
+		if err != nil {
 			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("rewriting references to %s: %s changed under the move", oldID, r.ID)
 		}
 		if self {
 			// Fold the result back into the caller's entry; the caller
