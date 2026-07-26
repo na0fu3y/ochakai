@@ -208,3 +208,31 @@ func TestOversizedJSONBodyIsTooLarge(t *testing.T) {
 		t.Errorf("body = %s", got)
 	}
 }
+
+// A boolean query parameter refuses what it cannot read, like the numeric
+// ones. "?purge=1" used to fall through to a soft delete and answer 204,
+// telling the caller an id had been freed that was still taken -- and the
+// two calls of a purge are meant to be deliberate (design doc 0031).
+func TestBooleanQueryParamsRejectUnreadableValues(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct {
+		name, method, url, wantSubstr string
+	}{
+		{"purge=1", http.MethodDelete, "/api/v1/knowledge/metrics/revenue?purge=1", "invalid purge"},
+		{"purge=True", http.MethodDelete, "/api/v1/knowledge/metrics/revenue?purge=True", "invalid purge"},
+		{"purge=yes", http.MethodDelete, "/api/v1/knowledge/metrics/revenue?purge=yes", "invalid purge"},
+		{"attachments=0", http.MethodGet, "/api/v1/export?attachments=0", "invalid attachments"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), c.wantSubstr) {
+				t.Errorf("body %q does not mention %q", rec.Body, c.wantSubstr)
+			}
+		})
+	}
+}

@@ -113,6 +113,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+        "400": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /api/v1/browse:
     get:
@@ -343,11 +344,16 @@ paths:
       parameters:
         - name: purge
           in: query
-          description: Hard-delete an already soft-deleted entry.
-          schema: { type: string, enum: ["true"] }
+          description: >
+            Hard-delete an already soft-deleted entry. `true` or `false`;
+            anything else is a 400 rather than a soft delete, because a
+            204 for a value meant as a purge would report an id freed
+            that is not.
+          schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/OnBehalfOf"
       responses:
         "204": { description: Deleted. }
+        "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /api/v1/move:
@@ -678,14 +684,16 @@ paths:
           description: >
             `false` exports the markdown only. Attachment bytes live in
             GCS, so a periodic backup can copy them from there directly
-            instead of pulling them through this endpoint.
-          schema: { type: string, enum: ["false"] }
+            instead of pulling them through this endpoint. A value that
+            is neither `true` nor `false` is a 400.
+          schema: { type: boolean, default: true }
       responses:
         "200":
           description: OKF bundle.
           content:
             application/gzip:
               schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
   /api/v1/reembed:
     post:
       operationId: reembedKnowledge
@@ -753,6 +761,7 @@ paths:
                       missing; unchanged from the one sent in means the
                       corpus is exhausted and what remains only fails.
                     type: string
+        "400": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
 components:
   headers:
