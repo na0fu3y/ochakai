@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/na0fu3y/ochakai/internal/config"
@@ -102,5 +103,37 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	want := domain.Actor{Kind: domain.ActorHuman, Name: "bob@example.co.jp", Via: "human:anonymous"}
 	if k.CreatedBy != want {
 		t.Errorf("created_by = %+v, want %+v (actor pinned to the session initializer?)", k.CreatedBy, want)
+	}
+
+	// report_outcome takes no actor argument — the service reads it from
+	// the context — so it is the tool where a session-pinned actor
+	// survives longest. Its report is evidence in the re-verification
+	// feed, and evidence attributed to the wrong person is worse than
+	// none.
+	sw.set("human:carol@example.co.jp")
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "report_outcome",
+		Arguments: map[string]any{"target": id, "outcome": "failed", "note": "did not run"},
+	})
+	if err != nil {
+		t.Fatalf("report_outcome: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("report_outcome failed: %+v", res.Content)
+	}
+	conn, err := pgx.Connect(context.Background(), dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(context.Background())
+	var kind, name string
+	if err := conn.QueryRow(context.Background(),
+		`SELECT actor_kind, actor_name FROM knowledge_event
+		  WHERE knowledge_id = $1 AND event = 'failed' ORDER BY at DESC LIMIT 1`, id).
+		Scan(&kind, &name); err != nil {
+		t.Fatalf("outcome event: %v", err)
+	}
+	if kind != string(domain.ActorHuman) || name != "carol@example.co.jp" {
+		t.Errorf("outcome recorded %s:%s, want human:carol@example.co.jp (actor pinned to the session initializer?)", kind, name)
 	}
 }
