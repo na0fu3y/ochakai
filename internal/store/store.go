@@ -152,8 +152,9 @@ type Filter struct {
 	Tags     []string
 }
 
-const knowledgeCols = `type, id, title, description, resource, tags, status, status_note,
+const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
 	created_by_kind, created_by_name, created_by_via,
+	updated_by_kind, updated_by_name, updated_by_via,
 	verified_by_kind, verified_by_name, verified_by_via, verified_at,
 	rejected_by_kind, rejected_by_name, rejected_by_via, rejected_at,
 	links, attrs, body, created_at, updated_at`
@@ -165,21 +166,41 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
 	var verifiedVia, rejectedVia string
+	var staleAfter *time.Time
 	var links, attrs []byte
-	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote,
+	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote, &staleAfter,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
+		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
 		&verifiedKind, &verifiedName, &verifiedVia, &k.VerifiedAt,
 		&rejectedKind, &rejectedName, &rejectedVia, &k.RejectedAt,
 		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt}
 	finish = func() error {
 		k.VerifiedBy = actorFrom(verifiedKind, verifiedName, verifiedVia)
 		k.RejectedBy = actorFrom(rejectedKind, rejectedName, rejectedVia)
+		if staleAfter != nil {
+			k.StaleAfter = staleAfter.UTC().Format(domain.StaleAfterLayout)
+		}
 		if err := json.Unmarshal(links, &k.Links); err != nil {
 			return err
 		}
 		return json.Unmarshal(attrs, &k.Attrs)
 	}
 	return dests, finish
+}
+
+// staleAfterArg turns the entry's stale_after into a date argument: NULL
+// when unset. The value is validated at the service boundary, so a
+// malformed one here is a bug, not user input — it fails the write rather
+// than being silently dropped.
+func staleAfterArg(s string) (*time.Time, error) {
+	if s == "" {
+		return nil, nil
+	}
+	d, err := time.Parse(domain.StaleAfterLayout, s)
+	if err != nil {
+		return nil, fmt.Errorf("stale_after %q: %w", s, err)
+	}
+	return &d, nil
 }
 
 func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
@@ -279,18 +300,23 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 	// instead of being erased by it.
 	revive := ""
 	if keepCuratedTombstones {
-		revive = ` AND knowledge.status <> ALL($25::text[])`
+		revive = ` AND knowledge.status <> ALL($29::text[])`
 	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		links, attrs, err := marshalJSONFields(k)
 		if err != nil {
 			return err
 		}
+		staleAfter, err := staleAfterArg(k.StaleAfter)
+		if err != nil {
+			return err
+		}
 		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		args := []any{
-			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
+			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
+			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
 			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
 			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
 			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt,
@@ -303,13 +329,15 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			args = append(args, curated)
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
 			ON CONFLICT (id) DO UPDATE SET
 				type=EXCLUDED.type,
 				title=EXCLUDED.title, description=EXCLUDED.description, resource=EXCLUDED.resource, tags=EXCLUDED.tags,
-				status=EXCLUDED.status, status_note=EXCLUDED.status_note,
+				status=EXCLUDED.status, status_note=EXCLUDED.status_note, stale_after=EXCLUDED.stale_after,
 				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
 				created_by_via=EXCLUDED.created_by_via,
+				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
+				updated_by_via=EXCLUDED.updated_by_via,
 				verified_by_kind=EXCLUDED.verified_by_kind, verified_by_name=EXCLUDED.verified_by_name,
 				verified_by_via=EXCLUDED.verified_by_via, verified_at=EXCLUDED.verified_at,
 				rejected_by_kind=EXCLUDED.rejected_by_kind, rejected_by_name=EXCLUDED.rejected_by_name,
@@ -352,10 +380,15 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
+		staleAfter, err := staleAfterArg(k.StaleAfter)
+		if err != nil {
+			return err
+		}
 		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		cond := ""
-		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
+		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
+			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
 			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
 			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
 			links, attrs, k.Body, k.UpdatedAt}
@@ -364,10 +397,11 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			cond = fmt.Sprintf(" AND updated_at=$%d", len(args))
 		}
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
-			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8,
-			verified_by_kind=$9, verified_by_name=$10, verified_by_via=$11, verified_at=$12,
-			rejected_by_kind=$13, rejected_by_name=$14, rejected_by_via=$15, rejected_at=$16,
-			links=$17, attrs=$18, body=$19, updated_at=$20
+			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
+			updated_by_kind=$10, updated_by_name=$11, updated_by_via=$12,
+			verified_by_kind=$13, verified_by_name=$14, verified_by_via=$15, verified_at=$16,
+			rejected_by_kind=$17, rejected_by_name=$18, rejected_by_via=$19, rejected_at=$20,
+			links=$21, attrs=$22, body=$23, updated_at=$24
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -575,6 +609,10 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		return nil, err
 	}
 	k.UpdatedAt = NowStored()
+	// A move rewrites the entry's own relative links and every referrer's
+	// body, so the mover is who the content now stands by: generated.by
+	// in an export (design doc 0034 §3.3).
+	k.UpdatedBy = actor
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		// A soft-deleted entry still owns the id — the row holds the primary
 		// key and its revisions hold (id, rev) — so the destination is taken
@@ -599,8 +637,10 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// exactly as in SoftDelete: the Get above ran outside this
 		// transaction.
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET id=$2, updated_at=$3 WHERE id=$1 AND deleted_at IS NULL`,
-			oldID, newID, k.UpdatedAt)
+			`UPDATE knowledge SET id=$2, updated_at=$3,
+			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6
+			 WHERE id=$1 AND deleted_at IS NULL`,
+			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via)
 		if isUniqueViolation(err) {
 			// The probe above found the destination free, but it took no
 			// lock — a create can land on newID in the window. The primary
@@ -718,6 +758,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		}
 		r.Body = body
 		r.Links = domain.LinksFromBody(r.ID, r.Body)
+		// The rewrite is a content change by the mover, and it is recorded
+		// as one ("update" revision below), so the entry's generated.by
+		// follows it (design doc 0034 §3.3).
+		r.UpdatedBy = actor
 		links, attrs, err := marshalJSONFields(r)
 		if err != nil {
 			return err
@@ -736,9 +780,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		// body and a revision on an entry nobody can see, to resurface
 		// whenever someone revives it.
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5
+			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
+			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			r.ID, links, attrs, r.Body, r.UpdatedAt)
+			r.ID, links, attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via)
 		if err != nil {
 			return err
 		}

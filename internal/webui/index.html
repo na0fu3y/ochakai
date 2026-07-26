@@ -435,7 +435,7 @@ function esc(s) {
 // Keys are the OKF type vocabulary, which is what the server stores
 // (design doc 0023). Lookup is case-insensitive to match the server's
 // filter matching — the stored spelling is whatever the writer used.
-const TYPE_ICONS = { 'Semantic Model': '🧩', 'Metric': '📊', 'Golden Query': '🧾', 'Insight': '💡', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'Reference': '🔖' };
+const TYPE_ICONS = { 'Semantic Model': '🧩', 'Metric': '📊', 'Golden Query': '🧾', 'Attested Computation': '🧮', 'Insight': '💡', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'Reference': '🔖' };
 const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
@@ -1182,8 +1182,22 @@ async function viewDetail(id) {
     entry.created_by && entry.created_by.name ? `created by ${actorStr(entry.created_by)} ${fmtDate(entry.created_at)}` : `created ${fmtDate(entry.created_at)}`,
     entry.verified_by && entry.verified_by.name ? `verified by ${actorStr(entry.verified_by)} ${fmtDate(entry.verified_at)}` : '',
     entry.rejected_by && entry.rejected_by.name ? `rejected by ${actorStr(entry.rejected_by)} ${fmtDate(entry.rejected_at)}` : '',
-    entry.updated_at && entry.updated_at !== entry.created_at ? `updated ${fmtDate(entry.updated_at)}` : '',
+    // updated_by is OKF's generated.by: who the content stands by now,
+    // which is not always who created it (design doc 0034 §3.3).
+    entry.updated_at && entry.updated_at !== entry.created_at
+      ? (entry.updated_by && entry.updated_by.name
+          ? `updated by ${actorStr(entry.updated_by)} ${fmtDate(entry.updated_at)}`
+          : `updated ${fmtDate(entry.updated_at)}`)
+      : '',
   ].filter(Boolean).join(' · ');
+
+  // A passed stale_after is a prompt to re-check, never a claim the entry
+  // is wrong (OKF SPEC §5.5) — the comparison is a plain date one.
+  const staleNote = entry.stale_after
+    ? (entry.stale_after <= new Date().toISOString().slice(0, 10)
+        ? `<div class="status-note">Stale since ${esc(entry.stale_after)} — due for a re-check.</div>`
+        : `<div class="provenance">stale after ${esc(entry.stale_after)}</div>`)
+    : '';
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const atts = entry.attachments || [];
@@ -1227,6 +1241,7 @@ async function viewDetail(id) {
       revisions, usage, and attachments follow the entry.</p>
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
+    ${staleNote}
     <div class="tabs" id="tabs">
       <button data-tab="overview" class="active">Overview</button>
       <button data-tab="attrs">Attributes</button>
@@ -1489,7 +1504,9 @@ async function viewDetail(id) {
 // 0024) and ignores whatever a payload carries.
 function editablePayload(e) {
   const p = { type: e.type, id: e.id, title: e.title };
-  for (const k of ['description', 'tags', 'status', 'status_note', 'attrs', 'body']) {
+  // Every writable envelope field belongs here: a PUT is a full
+  // replacement, so one left out is one erased by a status change.
+  for (const k of ['description', 'resource', 'tags', 'status', 'status_note', 'stale_after', 'attrs', 'body']) {
     if (e[k] !== undefined && e[k] !== null) p[k] = e[k];
   }
   return p;
@@ -1646,7 +1663,7 @@ function wireReviewActions(container) {
 // in the tree routes here as #/new/<prefix>/.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
-  let entry = { type: 'Insight', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', attrs: {}, body: '' };
+  let entry = { type: 'Insight', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', stale_after: '', attrs: {}, body: '' };
   if (editing) {
     try {
       entry = await api('/api/v1/knowledge/' + idPath(id));
@@ -1681,7 +1698,7 @@ async function viewEditor(id, prefix = '') {
           <label class="top" for="e-type">Type</label>
           <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" required>
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
-          <div class="hint">What the entry is: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — or any type of your own.</div>
+          <div class="hint">What the entry is: Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — or any type of your own.</div>
         </div>
         ${idField}
       </div>
@@ -1705,9 +1722,16 @@ async function viewEditor(id, prefix = '') {
           <select id="e-status">${STATUSES.map(s => `<option ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
         </div>
       </div>
-      <div class="field">
-        <label class="top" for="e-note">Status note</label>
-        <input type="text" id="e-note" value="${esc(entry.status_note || '')}" placeholder="why deprecated / rejected">
+      <div class="row">
+        <div class="field">
+          <label class="top" for="e-note">Status note</label>
+          <input type="text" id="e-note" value="${esc(entry.status_note || '')}" placeholder="why deprecated / rejected">
+        </div>
+        <div class="field">
+          <label class="top" for="e-stale">Stale after</label>
+          <input type="date" id="e-stale" value="${esc(entry.stale_after || '')}">
+          <div class="hint">Optional — the day this stops being current.</div>
+        </div>
       </div>
       <div class="field">
         <label class="top" for="e-body">Body (markdown)</label>
@@ -1765,6 +1789,7 @@ async function viewEditor(id, prefix = '') {
       tags: $('#e-tags').value.split(',').map(s => s.trim()).filter(Boolean),
       status: $('#e-status').value,
       status_note: $('#e-note').value.trim(),
+      stale_after: $('#e-stale').value,
       body: $('#e-body').value,
     };
     const attrsRaw = $('#e-attrs').value.trim();

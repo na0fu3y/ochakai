@@ -23,20 +23,38 @@ import (
 type Type string
 
 const (
-	TypeModels     Type = "Semantic Model"   // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018; unvalidated since 0028)
-	TypeMetrics    Type = "Metric"           // semantic metric definition (Apache Ossie)
-	TypeQueries    Type = "Golden Query"     // golden query: question + verified SQL
-	TypeInsights   Type = "Insight"          // how to read a metric: baselines, caveats
-	TypeTerms      Type = "Glossary Term"    // glossary term
-	TypeDatasets   Type = "BigQuery Dataset" // dataset: a container grouping tables
-	TypeTables     Type = "BigQuery Table"   // table catalog entry
-	TypeReferences Type = "Reference"        // mirror of external material (enums, licenses, schema docs)
+	TypeModels       Type = "Semantic Model"       // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018; unvalidated since 0028)
+	TypeMetrics      Type = "Metric"               // semantic metric definition (Apache Ossie)
+	TypeQueries      Type = "Golden Query"         // golden query: question + verified SQL
+	TypeComputations Type = "Attested Computation" // sanctioned computation and the means to check a run of it (OKF SPEC §10, design doc 0034 §3.6)
+	TypeInsights     Type = "Insight"              // how to read a metric: baselines, caveats
+	TypeTerms        Type = "Glossary Term"        // glossary term
+	TypeDatasets     Type = "BigQuery Dataset"     // dataset: a container grouping tables
+	TypeTables       Type = "BigQuery Table"       // table catalog entry
+	TypeReferences   Type = "Reference"            // mirror of external material (enums, licenses, schema docs)
 )
 
 // Types lists the recommended (built-in) knowledge types, in display order
 // (containers before their contents: models define metrics, datasets
 // group tables).
-var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
+//
+// No server behavior hangs off any of them — the list is a vocabulary, not
+// a registry (design doc 0028 §3). Attested Computation is the clearest
+// case: ochakai records the contract (runtime, parameters, executor,
+// attester) as ordinary attrs and never runs it. Executing the computation
+// and checking the receipt belong to the consumer (OKF SPEC §10.5), which
+// is the same line design doc 0028 drew when compile_sql went away.
+var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeComputations, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
+
+// TypesHint renders the recommended vocabulary for help and error text,
+// so no surface keeps its own copy of the list to fall behind.
+func TypesHint() string {
+	names := make([]string, len(Types))
+	for i, t := range Types {
+		names[i] = string(t)
+	}
+	return strings.Join(names, ", ")
+}
 
 // BuiltinType reports whether t is one of the recommended types, matched
 // case-insensitively (EqualType), the same way search filters match
@@ -144,6 +162,97 @@ func ValidStatus(s Status) bool {
 	return false
 }
 
+// OKF lifecycle values (SPEC §5.4). Three where ochakai has four: OKF
+// spells "a human confirmed this" with the verified key, not with a
+// status, so verified maps onto stable plus a verified entry.
+const (
+	OKFStatusDraft      = "draft"
+	OKFStatusStable     = "stable"
+	OKFStatusDeprecated = "deprecated"
+)
+
+// OKFStatus returns the OKF v0.2 lifecycle value for s (design doc 0034
+// §3.4). Rejected exports as deprecated: OKF has no state for "was never
+// accepted", and the reason survives in status_note while rejected_by /
+// rejected_at stay as ochakai extension keys. The mapping is deliberately
+// lossy in that one direction — a rejection is this instance's curation
+// record, and a bundle carries knowledge, not instance-local rulings
+// (design doc 0009).
+func OKFStatus(s Status) string {
+	switch s {
+	case StatusDraft:
+		return OKFStatusDraft
+	case StatusVerified:
+		return OKFStatusStable
+	case StatusDeprecated, StatusRejected:
+		return OKFStatusDeprecated
+	}
+	// A status ochakai does not know cannot have landed in the store, but
+	// export must still write something OKF-shaped.
+	return OKFStatusDraft
+}
+
+// StatusFromOKF maps a frontmatter status onto ochakai's vocabulary.
+// hasVerified reports whether the document carried a verified key at all
+// — under SPEC §5.3 that key, not the status, is what says a concept was
+// confirmed, so a foreign bundle's stable entries land as drafts unless
+// they carry one. ochakai's own exports always write verified alongside
+// stable, so an ochakai → ochakai round-trip is exact.
+//
+// The values ochakai wrote before v0.2 (verified, rejected) are still
+// accepted verbatim: bundles exported by 0.12 and earlier must keep
+// importing as what they say.
+//
+// An unrecognized value is a draft, never a rejection of the document
+// (SPEC §11 forbids rejecting a concept over an unknown field value). ok
+// reports whether the value was recognized, so an importer can mention
+// what it did rather than silently reinterpreting.
+//
+// An absent status stays unset ("") rather than becoming a value: OKF
+// reads absence as stable (§5.4), but ochakai already has a rule for a
+// write that names no status — draft on create, unchanged on update — and
+// that rule is what keeps a re-imported document from silently demoting
+// the entry it lands on. The one exception is a document that carries a
+// verified key with no status: that is a confirmation, and saying so is
+// the whole point of §5.3.
+func StatusFromOKF(raw string, hasVerified bool) (s Status, ok bool) {
+	switch raw {
+	case "":
+		if hasVerified {
+			return StatusVerified, true
+		}
+		return "", true
+	case OKFStatusDraft:
+		return StatusDraft, true
+	case OKFStatusStable:
+		if hasVerified {
+			return StatusVerified, true
+		}
+		return StatusDraft, true
+	case OKFStatusDeprecated:
+		return StatusDeprecated, true
+	case string(StatusVerified), string(StatusRejected):
+		return Status(raw), true // written by ochakai 0.12 and earlier
+	}
+	return StatusDraft, false
+}
+
+// StaleAfterLayout is the date form OKF fixes for stale_after (SPEC §5.5):
+// an absolute day, not a relative TTL, so staleness stays a plain date
+// comparison with no reference to when the entry was read — and with no
+// timezone to argue about.
+const StaleAfterLayout = "2006-01-02"
+
+// ValidStaleAfter reports whether s can be a stale_after: unset, or a
+// YYYY-MM-DD date that exists.
+func ValidStaleAfter(s string) bool {
+	if s == "" {
+		return true
+	}
+	_, err := time.Parse(StaleAfterLayout, s)
+	return err == nil
+}
+
 // Usage event kinds recorded per knowledge entry (design doc 0001 §9).
 // The first two are recorded passively by reads; worked/failed are
 // deliberate outcome reports (report_outcome) closing the write-back loop.
@@ -245,7 +354,9 @@ type Knowledge struct {
 	Tags        []string       `json:"tags,omitempty"`
 	Status      Status         `json:"status"`
 	StatusNote  string         `json:"status_note,omitempty"` // free-form reason for the current status (why rejected/deprecated)
+	StaleAfter  string         `json:"stale_after,omitempty"` // YYYY-MM-DD; the entry is stale on and after this day (OKF SPEC §5.5, design doc 0034 §3.5)
 	CreatedBy   Actor          `json:"created_by"`
+	UpdatedBy   Actor          `json:"updated_by"` // who last changed the content — OKF's generated.by (design doc 0034 §3.3)
 	VerifiedBy  *Actor         `json:"verified_by,omitempty"`
 	VerifiedAt  *time.Time     `json:"verified_at,omitempty"`
 	RejectedBy  *Actor         `json:"rejected_by,omitempty"`
@@ -292,16 +403,18 @@ func Normalize(s string) string { return norm.NFC.String(s) }
 
 // SameContent reports whether o carries the same authored content as k:
 // the fields a writer controls (title, description, resource, tags, status,
-// status_note, links, attrs, body). Server-managed provenance and
-// timestamps (created_*, verified_*, rejected_*, updated_at) and the
-// attachment list are not content. Attrs are compared as canonical JSON,
-// so the same value decoded from YAML (int) and from JSONB (float64)
-// compares equal; values JSON cannot encode compare as different.
+// status_note, stale_after, links, attrs, body). Server-managed provenance
+// and timestamps (created_*, updated_by, verified_*, rejected_*,
+// updated_at) and the attachment list are not content. Attrs are compared
+// as canonical JSON, so the same value decoded from YAML (int) and from
+// JSONB (float64) compares equal; values JSON cannot encode compare as
+// different.
 func (k *Knowledge) SameContent(o *Knowledge) bool {
 	return k.Type == o.Type && k.ID == o.ID &&
 		k.Title == o.Title && k.Description == o.Description &&
 		k.Resource == o.Resource &&
 		k.Status == o.Status && k.StatusNote == o.StatusNote &&
+		k.StaleAfter == o.StaleAfter &&
 		k.Body == o.Body &&
 		slices.Equal(k.Tags, o.Tags) &&
 		slices.Equal(k.Links, o.Links) &&

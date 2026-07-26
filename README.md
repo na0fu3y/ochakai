@@ -166,10 +166,12 @@ for what they still don't do:
   client-agnostic by construction: the same verified knowledge serves
   Claude Code, hosted MCP agents, CI jobs, and whatever you build next.
 - **An exit, guaranteed.** The whole knowledge base round-trips through
-  [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+  [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
   bundles (`ochakai export` / `ochakai import`) — plain markdown + YAML
-  frontmatter that lives happily in git. Import accepts any producer's
-  OKF bundle, not just ochakai's own. MIT-licensed
+  frontmatter that lives happily in git, with provenance and trust in the
+  spec's own keys (`generated`, `verified`, `status`, `stale_after`), so
+  any OKF consumer can read how much to trust an entry. Import accepts any
+  producer's OKF bundle, v0.1 or v0.2, not just ochakai's own. MIT-licensed
   and self-hostable per tenant: your knowledge is never a hostage.
 
 And it stays small by refusing things:
@@ -235,6 +237,7 @@ over time, run them as canaries from your CI:
 | `Semantic Model` | Apache Ossie semantic model, spec verbatim in `attrs.spec` |
 | `Metric` | Semantic metric definition (Apache Ossie), synonyms |
 | `Golden Query` | Golden query: natural-language question + verified SQL |
+| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract (`runtime`, `parameters`, `executor`, `attester`) in `attrs` |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
 | `Glossary Term` | Glossary term |
 | `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
@@ -277,6 +280,31 @@ enabled — text with any embedding model, images and PDFs with
 doc 0020).
 Attachment bytes live in GCS and are fetched on demand, and attachments
 round-trip through OKF bundles as plain files next to their entry.
+
+**Trust travels with the knowledge.** An exported entry carries the OKF
+v0.2 trust and lifecycle families (SPEC §5), so a consumer that has never
+heard of ochakai can still tell how much to trust it:
+
+```yaml
+type: Golden Query
+title: Monthly revenue by channel
+status: stable                 # draft | stable | deprecated
+stale_after: 2026-12-31        # advisory: re-check on and after this day
+generated: { by: agent:analyst@example.iam.gserviceaccount.com, at: 2026-07-26T04:12:00Z }
+verified:
+  - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
+```
+
+`generated` is who the content stands by and when it last changed;
+`verified` is who confirmed it — absent means unverified, and a `human:`
+entry is what makes it human-reviewed (SPEC §5.3). ochakai's `verified`
+status is exactly that: `stable` plus a verification, which is where a
+v0.2 consumer looks. The reverse mapping keeps the round-trip exact
+without treating a foreign bundle's `stable` as reviewed. What you write
+in `attrs` — including OKF's `sources` and the Attested Computation
+contract — passes through untouched, in place. Provenance itself is never
+read back from a bundle: it is what this instance observed, not what a
+document claims (design docs 0009, 0034).
 
 **Japanese knowledge bases should turn embeddings on.** PostgreSQL's
 full-text search does not tokenize Japanese, so the lexical half of search

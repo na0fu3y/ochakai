@@ -71,7 +71,7 @@ _ochakai() {
   case $words[2] in
     search)
       _arguments \
-        '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
+        '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" "Attested Computation" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--sort[list instead of searching: by verification age, demand, or failed reports]:sort:(verified_at usage failed)' \
@@ -81,7 +81,7 @@ _ochakai() {
       ;;
     context)
       _arguments \
-        '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
+        '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" "Attested Computation" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--limit[max full entries]:limit:' \
@@ -164,7 +164,7 @@ _ochakai() {
   fi
 
   case $prev in
-    --type|-type) COMPREPLY=($(compgen -W "'Semantic Model' Metric 'Golden Query' Insight 'Glossary Term' 'BigQuery Dataset' 'BigQuery Table' Reference" -- "$cur")); return ;;
+    --type|-type) COMPREPLY=($(compgen -W "'Semantic Model' Metric 'Golden Query' 'Attested Computation' Insight 'Glossary Term' 'BigQuery Dataset' 'BigQuery Table' Reference" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
     --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
@@ -252,7 +252,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '"Semantic Model" Metric "Golden Query" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference' -d 'filter by type'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '"Semantic Model" Metric "Golden Query" "Attested Computation" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed' -d 'list instead of searching: by verification age, demand, or failed reports'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'

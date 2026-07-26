@@ -1,6 +1,8 @@
 # ochakai 設計ドキュメント 0023: 型の語彙を OKF に一本化する
 
-Status: Accepted(2026-07-20)
+Status: Accepted(2026-07-20)。§3.1 の型の一覧に
+[0034](0034-okf-v0-2.md) §3.6 が `Attested Computation`(OKF v0.2 §10)を
+足して 9 型にした
 Date: 2026-07-20
 
 ## 1. 目的

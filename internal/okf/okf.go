@@ -28,37 +28,58 @@ import (
 // nothing is lost on the way out, so nothing has to be restored.
 
 // Version is the OKF spec version ochakai produces, declared in the
-// bundle-root index.md (SPEC §11).
-const Version = "0.1"
+// bundle-root index.md (SPEC §12).
+const Version = "0.2"
 
 // frontmatter is the OKF frontmatter for one concept: the required "type",
-// the recommended keys, and ochakai extension keys. Entry attrs are not
-// nested here — Document emits them as producer-defined top-level keys
-// (SPEC §4.1), so foreign extension keys round-trip in place.
+// the recommended keys, the v0.2 trust and lifecycle families (SPEC §5),
+// and ochakai extension keys. Entry attrs are not nested here — Document
+// emits them as producer-defined top-level keys (SPEC §4.1), so foreign
+// extension keys round-trip in place.
+//
+// The v0.1 spellings are gone, following SPEC §13.1: timestamp is now
+// generated.at, and verified_by/verified_at are now a verified list. Parse
+// still reads the old keys so bundles written by ochakai 0.12 and earlier
+// import unchanged — but nothing writes them again.
 type frontmatter struct {
 	Type        string   `yaml:"type"`
 	Resource    string   `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
 	Title       string   `yaml:"title,omitempty"`    // empty means the filename is the name (design doc 0022) — omitted, so titleless documents round-trip unchanged
 	Description string   `yaml:"description,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
-	Timestamp   string   `yaml:"timestamp"`
-	Status      string   `yaml:"status"`
+	Status      string   `yaml:"status"` // OKF vocabulary: draft | stable | deprecated (design doc 0034 §3.4)
 	StatusNote  string   `yaml:"status_note,omitempty"`
-	CreatedBy   string   `yaml:"created_by"`
-	VerifiedBy  string   `yaml:"verified_by,omitempty"`
-	VerifiedAt  string   `yaml:"verified_at,omitempty"`
+	StaleAfter  string   `yaml:"stale_after,omitempty"`
+	Generated   event    `yaml:"generated"`
+	Verified    []event  `yaml:"verified,omitempty"` // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
+	CreatedBy   string   `yaml:"created_by"`         // ochakai extension: OKF records only who produced the current content
 	RejectedBy  string   `yaml:"rejected_by,omitempty"`
 	RejectedAt  string   `yaml:"rejected_at,omitempty"`
 }
 
+// event is one entry of the trust family: who, when, and — as a producer
+// extension — on whose behalf. OKF's actor convention (SPEC §7) has no
+// room for delegation, and folding "A via B" into by would leave a string
+// that is not an actor; a sibling key keeps by parseable and the human:
+// prefix intact, so trust tiers still read correctly (design docs 0027,
+// 0034 §3.2).
+type event struct {
+	By  string `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
+	Via string `yaml:"via,omitempty"`
+	At  string `yaml:"at,omitempty"`
+}
+
 // reservedKeys are the frontmatter keys the envelope owns. An attr with a
 // reserved name is not exported as an extension key: the envelope value
-// wins.
+// wins. The v0.1 trust keys stay listed: an entry that imported one into
+// attrs before this release must not re-emit it beside the v0.2 key that
+// replaced it.
 var reservedKeys = map[string]bool{
 	"type": true, "id": true, "title": true, "description": true,
-	"resource": true, "tags": true, "timestamp": true, "status": true,
-	"status_note": true, "created_by": true, "verified_by": true,
-	"verified_at": true, "rejected_by": true, "rejected_at": true,
+	"resource": true, "tags": true, "status": true, "status_note": true,
+	"stale_after": true, "generated": true, "verified": true,
+	"created_by": true, "rejected_by": true, "rejected_at": true,
+	"timestamp": true, "verified_by": true, "verified_at": true,
 }
 
 // Indexes renders a bundle's directory index.md files and nothing else,
@@ -153,7 +174,31 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 	}
 }
 
+// actorEvent renders one trust event. The actor's kind:name form already
+// matches SPEC §7 for people ("human:tanaka@example.co.jp"); agents keep
+// ochakai's "agent:" prefix rather than being dressed up as a versioned
+// producer or relabelled process, because §5.3 keys trust tiers off the
+// human: prefix alone and nothing else in the convention is load-bearing
+// (design doc 0034 §3.8).
+func actorEvent(a *domain.Actor, at *time.Time) event {
+	var e event
+	if a != nil && (a.Kind != "" || a.Name != "") {
+		e.By, e.Via = a.Kind+":"+a.Name, a.Via
+	}
+	if at != nil {
+		e.At = at.UTC().Format(time.RFC3339)
+	}
+	return e
+}
+
 // Document renders one knowledge entry as an OKF concept document.
+//
+// The trust family follows SPEC §5.2: generated is who the content stands
+// by and when it last changed, verified is the list of confirmations (one,
+// for now — ochakai keeps the latest). status carries OKF's three-value
+// lifecycle, so "verified" leaves the status key entirely and becomes
+// stable plus a verified entry, which is where a v0.2 consumer looks for
+// it (design doc 0034 §3.4).
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
 		Type:        string(k.Type),
@@ -161,16 +206,20 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Title:       k.Title,
 		Description: k.Description,
 		Tags:        k.Tags,
-		Timestamp:   k.UpdatedAt.UTC().Format(time.RFC3339),
-		Status:      string(k.Status),
+		Status:      domain.OKFStatus(k.Status),
 		StatusNote:  k.StatusNote,
+		StaleAfter:  k.StaleAfter,
+		Generated:   actorEvent(&k.UpdatedBy, &k.UpdatedAt),
 		CreatedBy:   k.CreatedBy.String(),
 	}
-	if k.VerifiedBy != nil {
-		fm.VerifiedBy = k.VerifiedBy.String()
-	}
-	if k.VerifiedAt != nil {
-		fm.VerifiedAt = k.VerifiedAt.UTC().Format(time.RFC3339)
+	// Status verified always writes a verified entry, even for an entry
+	// carrying no verification actor. The key's presence is what a v0.2
+	// consumer reads the trust tier from (SPEC §5.3), and what carries
+	// "verified" back through an import (design doc 0034 §3.4) — an
+	// exported status of stable with no verified key means unverified, and
+	// would come back as a draft.
+	if k.Status == domain.StatusVerified || k.VerifiedAt != nil || k.VerifiedBy != nil {
+		fm.Verified = []event{actorEvent(k.VerifiedBy, k.VerifiedAt)}
 	}
 	if k.RejectedBy != nil {
 		fm.RejectedBy = k.RejectedBy.String()

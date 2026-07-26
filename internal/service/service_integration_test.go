@@ -597,3 +597,94 @@ func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
 		})
 	}
 }
+
+// updated_by is OKF's generated.by: who the content stands by now. It
+// follows content changes and nothing else — a verification confirms the
+// content, it does not produce it, which is the distinction v0.2 draws
+// between verified and generated (design doc 0034 §3.3).
+func TestUpdatedByFollowsContentIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	author := domain.Actor{Kind: "agent", Name: "claude-code"}
+	editor := domain.Actor{Kind: "human", Name: "tanaka"}
+	reviewer := domain.Actor{Kind: "human", Name: "na0"}
+
+	id := uid("generated-by")
+	k, err := svc.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: id, Title: id, Body: "First.",
+		StaleAfter: "2026-12-31",
+	}, author)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.UpdatedBy != author || k.CreatedBy != author {
+		t.Fatalf("create: created_by=%v updated_by=%v, want both %v", k.CreatedBy, k.UpdatedBy, author)
+	}
+	if k.StaleAfter != "2026-12-31" {
+		t.Errorf("stale_after = %q on the create response", k.StaleAfter)
+	}
+
+	// An update that changes nothing writes nothing, so it must not
+	// re-attribute the content either.
+	if _, changed, err := svc.Update(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: id, Title: id, Body: "First.", StaleAfter: "2026-12-31",
+	}, editor, nil); err != nil || changed {
+		t.Fatalf("no-op update: changed=%v err=%v", changed, err)
+	}
+	read, err := svc.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.UpdatedBy != author {
+		t.Errorf("a no-op update re-attributed the content to %v", read.UpdatedBy)
+	}
+	if read.StaleAfter != "2026-12-31" {
+		t.Errorf("stale_after = %q after a round-trip through the database", read.StaleAfter)
+	}
+
+	if _, changed, err := svc.Update(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: id, Title: id, Body: "Second.",
+	}, editor, nil); err != nil || !changed {
+		t.Fatalf("real update: changed=%v err=%v", changed, err)
+	}
+	if read, err = svc.Get(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if read.UpdatedBy != editor {
+		t.Errorf("updated_by = %v after an edit by %v", read.UpdatedBy, editor)
+	}
+	if read.CreatedBy != author {
+		t.Errorf("created_by moved to %v; it belongs to whoever created the entry", read.CreatedBy)
+	}
+	if read.StaleAfter != "" {
+		t.Errorf("stale_after = %q; an update that omits it clears it, like every other content field", read.StaleAfter)
+	}
+
+	if _, err := svc.Verify(ctx, id, reviewer); err != nil {
+		t.Fatal(err)
+	}
+	if read, err = svc.Get(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if read.UpdatedBy != editor {
+		t.Errorf("a verification changed updated_by to %v; confirming is not producing", read.UpdatedBy)
+	}
+	if read.VerifiedBy == nil || *read.VerifiedBy != reviewer {
+		t.Errorf("verified_by = %v, want %v", read.VerifiedBy, reviewer)
+	}
+}
+
+// A stale_after that is not an absolute date is refused at the boundary
+// rather than reaching the date column (OKF SPEC §5.5).
+func TestStaleAfterValidationIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	_, err := svc.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: uid("bad-stale"), Title: "x", StaleAfter: "30 days",
+	}, actor)
+	var invalid *InvalidInputError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("create with a relative stale_after: %v, want an invalid-input error", err)
+	}
+}

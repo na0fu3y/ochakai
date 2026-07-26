@@ -986,9 +986,16 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	entries, atts, skipped := okf.FromBundle(files)
+	entries, atts, skipped, notes := okf.FromBundle(files)
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
+	}
+	// Notes are not skips: the entry is imported, with one field read
+	// differently than it was written. Reporting them keeps a foreign
+	// bundle's reinterpreted status or dropped stale_after visible without
+	// pretending the document was rejected (OKF SPEC §11).
+	for _, n := range notes {
+		fmt.Fprintln(os.Stderr, "note:", n)
 	}
 	if *dryRun {
 		for i := range entries {
@@ -1185,7 +1192,11 @@ func readEntry(path string) (*domain.Knowledge, error) {
 func decodeEntry(data []byte) (*domain.Knowledge, error) {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if bytes.HasPrefix(trimmed, []byte("---")) {
-		return okf.Parse(trimmed)
+		k, notes, err := okf.Parse(trimmed)
+		for _, n := range notes {
+			fmt.Fprintln(os.Stderr, "note:", n)
+		}
+		return k, err
 	}
 	var k domain.Knowledge
 	if err := json.Unmarshal(data, &k); err != nil {
