@@ -33,6 +33,21 @@ func TestLinksFromBody(t *testing.T) {
 			body: "Autolink <ochakai://metrics/revenue> and bare ochakai://tables/orders here.",
 			want: []Link{{Target: "metrics/revenue"}, {Target: "tables/orders"}},
 		}, {
+			// A bare URI ends where the sentence does. Left in, the
+			// trailing stop became part of the id: no backlink, no
+			// expansion through the link, and a move that never repairs
+			// it — all silent, because a link to an id nobody wrote looks
+			// the same as one to an entry not written yet.
+			name: "a bare URI ends before the sentence's punctuation",
+			id:   "insights/a",
+			body: "See ochakai://metrics/revenue. Also ochakai://tables/orders、and ochakai://terms/arr?",
+			want: []Link{{Target: "metrics/revenue"}, {Target: "tables/orders"}, {Target: "terms/arr"}},
+		}, {
+			name: "a markdown link's target keeps what the parentheses hold",
+			id:   "insights/a",
+			body: "See [revenue](ochakai://metrics/revenue.) for the definition.",
+			want: []Link{{Target: "metrics/revenue.", Text: "revenue"}},
+		}, {
 			name: "external URLs are not entry links",
 			id:   "insights/a",
 			body: "See [the dashboard](https://example.com/metrics/revenue) and https://example.com/x.",
@@ -225,5 +240,36 @@ func TestLinkDisplayText(t *testing.T) {
 	// No anchor text: the target's last segment is the name (design doc 0022).
 	if got := (Link{Target: "metrics/revenue"}).DisplayText(); got != "revenue" {
 		t.Errorf("DisplayText = %q, want the target's last segment", got)
+	}
+}
+
+// Rewriting a body on move goes through the same reading of where a bare
+// URI ends, so a sentence-final URI has to be rewritten without eating
+// the stop -- and an id that legitimately carries a dot has to keep it.
+func TestBareURIPunctuationRoundTrip(t *testing.T) {
+	for _, tc := range []struct{ name, id, body, want string }{
+		{
+			name: "sentence-final URI keeps its full stop",
+			id:   "insights/a",
+			body: "See ochakai://metrics/revenue. Nothing else.",
+			want: "See ochakai://metrics/gross. Nothing else.",
+		}, {
+			name: "Japanese prose keeps the particle that follows",
+			id:   "insights/a",
+			body: "ochakai://metrics/revenue、を参照。",
+			want: "ochakai://metrics/gross、を参照。",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RewriteBodyLinks(tc.id, tc.body, "metrics/revenue", "metrics/gross"); got != tc.want {
+				t.Errorf("RewriteBodyLinks(%q) = %q, want %q", tc.body, got, tc.want)
+			}
+		})
+	}
+
+	// A dot inside a latin id is part of the id: only a trailing run goes.
+	dotted := LinksFromBody("insights/a", "See ochakai://ga4/events/purchase.v2 for the shape.")
+	if len(dotted) != 1 || dotted[0].Target != "ga4/events/purchase.v2" {
+		t.Errorf("links = %+v, want ga4/events/purchase.v2 intact", dotted)
 	}
 }
