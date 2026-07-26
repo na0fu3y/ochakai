@@ -23,6 +23,12 @@
 <title>ochakai</title>
 <style>
   :root {
+    /* The page follows the OS theme through the media query below, but the
+       controls the UA draws itself — a date input's calendar popup, its
+       picker icon, a select's dropdown, scrollbars — never see those
+       variables. color-scheme is what tells the UA which way to paint
+       them, so a date field stops arriving as a white box on a dark page. */
+    color-scheme: light dark;
     --bg: #f6f8f6;
     --surface: #ffffff;
     --border: #e2e7e2;
@@ -169,7 +175,12 @@
   .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
 
   /* ---- inputs & buttons ---- */
-  input[type=text], input[type=number], select, textarea {
+  /* type=date belongs in this list like any other field: left out, it kept
+     the UA's own font, padding and intrinsic width, which is what made the
+     stale_after field read as something bolted on. Every date input in the
+     form (stale_after, a source's last_modified, the usage window) is
+     styled by this one rule. */
+  input[type=text], input[type=number], input[type=date], select, textarea {
     font: inherit; color: inherit; background: var(--surface);
     border: 1px solid var(--border); border-radius: 8px; padding: .45rem .65rem; width: 100%;
   }
@@ -178,9 +189,13 @@
     background: var(--code-bg); color: var(--muted); cursor: not-allowed;
   }
   textarea { resize: vertical; }
+  /* An empty date input is all separators ("年/月/日"), which reads as
+     noise beside filled fields; the muted tone keeps it as the hint it is
+     until the field carries a date. */
+  input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-shown { color: var(--muted); }
   /* 16px inputs on touch-sized screens so iOS Safari doesn't zoom on focus. */
   @media (max-width: 800px) {
-    input[type=text], input[type=number], select, textarea { font-size: 16px; }
+    input[type=text], input[type=number], input[type=date], select, textarea { font-size: 16px; }
   }
   .btn {
     font: inherit; font-weight: 500; cursor: pointer; border-radius: 8px;
@@ -382,6 +397,22 @@
   .form .field { margin-bottom: .9rem; }
   .form label.top { display: block; font-size: .84rem; font-weight: 600; margin-bottom: .25rem; }
   .form .hint { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
+  .form .req { color: var(--accent-strong); font-weight: 400; }
+
+  /* Repeatable rows (sources, an Attested Computation's parameters). Each
+     row is a bordered card so a list of them reads as a list rather than a
+     wall of inputs, and every row collapses to one column with .form .row. */
+  .fieldset { border: 1px solid var(--border); border-radius: 10px; padding: .9rem; margin-bottom: .9rem; }
+  .fieldset > .legend { font-size: .84rem; font-weight: 600; margin-bottom: .5rem; }
+  .rows { display: flex; flex-direction: column; gap: .7rem; }
+  .rows:empty { display: none; }
+  .row-card { border: 1px solid var(--border); border-radius: 8px; padding: .7rem; background: var(--code-bg); }
+  .row-card .field:last-child { margin-bottom: 0; }
+  .row-card .row-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+  .row-card .row-head .n { color: var(--muted); font-size: .8rem; }
+  .row-card .row-head .btn { margin-left: auto; }
+  .row-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .6rem; }
+  @media (max-width: 620px) { .row-trio { grid-template-columns: 1fr; } }
 
   .section-title { font-size: 1.25rem; font-weight: 700; margin: .2rem 0 1rem; }
   .toolbar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
@@ -442,6 +473,34 @@ const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLo
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
 const STATUSES = ['draft', 'verified', 'deprecated', 'rejected'];
+
+// Types match case-insensitively everywhere the server compares them
+// (design doc 0023 §3.3), so the type-conditional parts of this page do
+// the same rather than requiring one exact spelling.
+const sameType = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
+const splitList = s => String(s ?? '').split(',').map(v => v.trim()).filter(Boolean);
+
+// A window with neither end is no window at all, not an empty one — the
+// server keeps the distinction, so the payload has to as well.
+function windowPayload(from, to) {
+  return from || to ? { from: from || undefined, to: to || undefined } : null;
+}
+
+// usage_count is sent only when the field holds a number: absent means
+// "never counted" and 0 means "counted, zero uses", and an empty box is
+// the former (OKF SPEC §5.1, design doc 0036 §3.1).
+function sourcePayload(s) {
+  const out = { resource: s.resource.trim() };
+  for (const k of ['id', 'title', 'author', 'last_modified']) {
+    if ((s[k] || '').trim()) out[k] = s[k].trim();
+  }
+  const n = String(s.usage_count ?? '').trim();
+  if (n !== '' && Number.isFinite(Number(n))) out.usage_count = Number(n);
+  const w = windowPayload((s.usage_window || {}).from, (s.usage_window || {}).to);
+  if (w) out.usage_window = w;
+  return out;
+}
 
 function fmtDate(s) {
   if (!s) return '';
@@ -1188,6 +1247,67 @@ function viewHome() {
 
 /* ============================== detail ============================== */
 
+// A resource is whatever the writer put there: an external URL, a
+// bundle-relative path, a scope descriptor. Only http(s) becomes a real
+// link — the same line md() draws for body links — and everything is
+// escaped either way, because these strings are user input on their way
+// into an attribute.
+function resourceHTML(ref) {
+  const s = String(ref ?? '');
+  if (!s) return '';
+  return /^https?:/.test(s)
+    ? `<a class="mono" href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>`
+    : `<span class="mono">${esc(s)}</span>`;
+}
+
+const windowText = w => w && (w.from || w.to) ? `${w.from || '…'} → ${w.to || '…'}` : '';
+
+// The material an entry derives from (OKF SPEC §5.1). ochakai shows the
+// signals as the writer recorded them and scores nothing: §5.1 leaves
+// weighing them to whoever is reading.
+function sourcesSection(entry) {
+  const sources = entry.sources || [];
+  const window = windowText(entry.usage_window);
+  if (!sources.length && !window) return '';
+  const rows = sources.map(s => {
+    const name = s.title || s.id || s.resource;
+    const meta = [
+      s.id && s.title ? `id ${esc(s.id)}` : '',
+      s.author ? esc(s.author) : '',
+      s.usage_count !== undefined && s.usage_count !== null ? `${s.usage_count} uses` : '',
+      s.last_modified ? `modified ${esc(s.last_modified)}` : '',
+      windowText(s.usage_window) ? `window ${esc(windowText(s.usage_window))}` : '',
+    ].filter(Boolean).join(' · ');
+    return `<tr><td class="k">${esc(name)}</td><td>${resourceHTML(s.resource)}
+      ${meta ? `<div class="provenance" style="margin:.15rem 0 0">${meta}</div>` : ''}</td></tr>`;
+  }).join('');
+  return `
+    <div class="section-title" style="font-size:1.05rem;margin:1.6rem 0 .6rem">Sources</div>
+    ${rows ? `<table class="kv">${rows}</table>` : ''}
+    ${window ? `<div class="provenance">usage counted over ${esc(window)}</div>` : ''}`;
+}
+
+// The Attested Computation contract (OKF SPEC §10.2), shown above the free
+// attrs because it is the same kind of thing: structured detail about how
+// to use the entry. Displayed only — ochakai never runs any of it.
+function contractSection(entry) {
+  const rows = [
+    ['runtime', entry.runtime ? `<span class="mono">${esc(entry.runtime)}</span>` : ''],
+    ['parameters', (entry.parameters || []).map(p =>
+      `<span class="mono">${esc(p.name)}</span>: ${esc(p.type)}${p.required ? ' <span class="badge">required</span>' : ''}`).join('<br>')],
+    ['computation', entry.computation ? resourceHTML(entry.computation) : ''],
+    ['executor', entry.executor
+      ? resourceHTML(entry.executor.resource) +
+        `<div class="provenance" style="margin:.15rem 0 0">receipt: ${esc((entry.executor.receipt || []).join(', '))}</div>`
+      : ''],
+    ['attester', entry.attester ? resourceHTML(entry.attester.resource) : ''],
+  ].filter(([, v]) => v);
+  if (!rows.length) return '';
+  return `<table class="kv">${rows.map(([k, v]) => `<tr><td class="k mono">${k}</td><td>${v}</td></tr>`).join('')}</table>
+    <p class="provenance">The contract for running this computation. ochakai records it and never runs, checks, or
+    fetches any of it — executing it and checking the receipt belong to the consumer.</p>`;
+}
+
 async function viewDetail(id) {
   revealInTree(id); // in parallel with the entry fetch; harmless on 404
   view.innerHTML = '<div class="empty">…</div>';
@@ -1204,7 +1324,7 @@ async function viewDetail(id) {
     entry.verified_by && entry.verified_by.name ? `verified by ${actorStr(entry.verified_by)} ${fmtDate(entry.verified_at)}` : '',
     entry.rejected_by && entry.rejected_by.name ? `rejected by ${actorStr(entry.rejected_by)} ${fmtDate(entry.rejected_at)}` : '',
     // updated_by is OKF's generated.by: who the content stands by now,
-    // which is not always who created it (design doc 0034 §3.3).
+    // which is not always who created it (design doc 0036 §3.3).
     entry.updated_at && entry.updated_at !== entry.created_at
       ? (entry.updated_by && entry.updated_by.name
           ? `updated by ${actorStr(entry.updated_by)} ${fmtDate(entry.updated_at)}`
@@ -1263,6 +1383,7 @@ async function viewDetail(id) {
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     ${staleNote}
+    ${entry.resource ? `<div class="provenance">resource: ${resourceHTML(entry.resource)}</div>` : ''}
     <div class="tabs" id="tabs">
       <button data-tab="overview" class="active">Overview</button>
       <button data-tab="attrs">Attributes</button>
@@ -1318,15 +1439,20 @@ async function viewDetail(id) {
   };
 
   const tabs = {
+    // Sources sit under the prose they support rather than in a tab of
+    // their own: OKF's own model is body footnotes keyed to source ids, so
+    // whoever is reading the body is exactly who needs the list.
     overview: () => `
       ${entry.description ? `<p style="font-size:1.02rem">${esc(entry.description)}</p>` : ''}
       ${entry.body ? `<div class="md">${md(entry.body, resolveImg, resolveEntry)}</div>` : ''}
-      ${!entry.description && !entry.body ? '<div class="empty">No description or body.</div>' : ''}`,
+      ${!entry.description && !entry.body ? '<div class="empty">No description or body.</div>' : ''}
+      ${sourcesSection(entry)}`,
     attrs: () => {
       const attrs = entry.attrs || {};
       const keys = Object.keys(attrs);
-      if (!keys.length) return '<div class="empty">No structured attributes.</div>';
-      return '<table class="kv">' + keys.map(k => {
+      const contract = contractSection(entry);
+      if (!keys.length) return contract || '<div class="empty">No structured attributes.</div>';
+      return contract + '<table class="kv">' + keys.map(k => {
         const v = attrs[k];
         const rendered = typeof v === 'string' && (k === 'sql' || v.includes('\n'))
           ? `<pre>${esc(v)}</pre>`
@@ -1520,14 +1646,21 @@ async function viewDetail(id) {
   });
 }
 
+// Every writable envelope field is named here, and nowhere else: a PUT is
+// a full replacement, so a field left out of a payload is a field erased.
+// The editor form builds its payload from the same list (design docs 0035
+// §4, where resource was erased by a status change, and 0035, which added
+// the OKF v0.2 families).
+const WRITABLE = ['description', 'resource', 'tags', 'sources', 'usage_window',
+  'status', 'status_note', 'stale_after',
+  'runtime', 'parameters', 'computation', 'executor', 'attester', 'attrs', 'body'];
+
 // The writable subset of a Knowledge entry (PUT is a full replacement).
 // links is not in it — the server derives links from body (design doc
 // 0024) and ignores whatever a payload carries.
 function editablePayload(e) {
   const p = { type: e.type, id: e.id, title: e.title };
-  // Every writable envelope field belongs here: a PUT is a full
-  // replacement, so one left out is one erased by a status change.
-  for (const k of ['description', 'resource', 'tags', 'status', 'status_note', 'stale_after', 'attrs', 'body']) {
+  for (const k of WRITABLE) {
     if (e[k] !== undefined && e[k] !== null) p[k] = e[k];
   }
   return p;
@@ -1687,7 +1820,9 @@ function wireReviewActions(container) {
 // in the tree routes here as #/new/<prefix>/.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
-  let entry = { type: 'Insight', id: prefix, title: '', description: '', tags: [], status: 'draft', status_note: '', stale_after: '', attrs: {}, body: '' };
+  let entry = { type: 'Insight', id: prefix, title: '', description: '', resource: '', tags: [],
+    sources: [], usage_window: null, status: 'draft', status_note: '', stale_after: '',
+    runtime: '', parameters: [], computation: '', executor: null, attester: null, attrs: {}, body: '' };
   if (editing) {
     try {
       entry = await api('/api/v1/knowledge/' + idPath(id));
@@ -1737,26 +1872,55 @@ async function viewEditor(id, prefix = '') {
       </div>
       <div class="row">
         <div class="field">
+          <label class="top" for="e-resource">Resource</label>
+          <input type="text" id="e-resource" class="mono" value="${esc(entry.resource || '')}"
+                 placeholder="bq://project.dataset.table">
+          <div class="hint">The underlying asset's canonical URI — a table or dataset URI, or the external source's URL. Leave empty for an abstract concept.</div>
+        </div>
+        <div class="field">
           <label class="top" for="e-tags">Tags</label>
           <input type="text" id="e-tags" value="${esc((entry.tags || []).join(', '))}" placeholder="finance, monthly">
           <div class="hint">Comma-separated.</div>
         </div>
+      </div>
+      <div class="row">
         <div class="field">
           <label class="top" for="e-status">Status</label>
           <select id="e-status">${STATUSES.map(s => `<option ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
         </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label class="top" for="e-note">Status note</label>
-          <input type="text" id="e-note" value="${esc(entry.status_note || '')}" placeholder="why deprecated / rejected">
-        </div>
         <div class="field">
           <label class="top" for="e-stale">Stale after</label>
           <input type="date" id="e-stale" value="${esc(entry.stale_after || '')}">
-          <div class="hint">Optional — the day this stops being current.</div>
+          <div class="hint">Optional — the day this is due for a re-check.</div>
         </div>
       </div>
+      <div class="field">
+        <label class="top" for="e-note">Status note</label>
+        <input type="text" id="e-note" value="${esc(entry.status_note || '')}" placeholder="why deprecated / rejected">
+      </div>
+      <div class="fieldset">
+        <div class="legend">Sources</div>
+        <div class="rows" id="e-sources"></div>
+        <p class="hint" id="e-sources-empty" style="margin:0"></p>
+        <p style="margin:.7rem 0 0">
+          <button class="btn small" type="button" id="src-add">＋ Add source</button>
+        </p>
+        <div class="hint" style="margin-top:.5rem">Where this entry's knowledge comes from. Give a source an id and a
+          markdown footnote in the body — <code>[^rev-policy]</code> — can attribute a single claim to it.
+          ochakai records sources; it never fetches or checks them.</div>
+        <div class="row" style="margin-top:.7rem">
+          <div class="field" style="margin-bottom:0">
+            <label class="top" for="e-win-from">Usage window from</label>
+            <input type="date" id="e-win-from" value="${esc((entry.usage_window || {}).from || '')}">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label class="top" for="e-win-to">Usage window to</label>
+            <input type="date" id="e-win-to" value="${esc((entry.usage_window || {}).to || '')}">
+          </div>
+        </div>
+        <div class="hint" style="margin-top:.3rem">The range the sources' usage counts were measured over. A source can override it.</div>
+      </div>
+      <div id="e-contract"></div>
       <div class="field">
         <label class="top" for="e-body">Body (markdown)</label>
         <textarea id="e-body" rows="10" class="mono">${esc(entry.body || '')}</textarea>
@@ -1765,7 +1929,9 @@ async function viewEditor(id, prefix = '') {
       <div class="field">
         <label class="top" for="e-attrs">Attributes (JSON)</label>
         <textarea id="e-attrs" rows="6" class="mono" placeholder='{"question": "…", "sql": "SELECT …"}'>${esc(attrsText)}</textarea>
-        <div class="hint">Type-specific structured attributes, e.g. question/sql for a query.</div>
+        <div class="hint">Anything OKF does not define, kept as written: <code>question</code>/<code>sql</code> for a Golden Query,
+          <code>spec</code> for a Semantic Model. The fields above have their own boxes — putting one here is refused rather than
+          stored where nothing reads it.</div>
       </div>
       <div id="editor-error"></div>
       <p>
@@ -1778,6 +1944,194 @@ async function viewEditor(id, prefix = '') {
   let dirty = false;
   $('#editor').addEventListener('input', () => { dirty = true; });
   unsaved = () => dirty;
+
+  // Repeatable rows are the one part of the form that is not a single
+  // innerHTML pass: the list changes while the user is in it. Editing a
+  // field writes straight into the backing array and never re-renders —
+  // replacing the container's HTML on a keystroke would drop focus and the
+  // caret. Only add and remove re-render, and both mark the form dirty
+  // themselves, since the form-level input listener above never sees them.
+  const sources = (entry.sources || []).map(s => ({ ...s, usage_window: { ...(s.usage_window || {}) } }));
+  const params = (entry.parameters || []).map(p => ({ ...p }));
+
+  const srcRow = (s, i) => `
+    <div class="row-card" data-row="src" data-i="${i}">
+      <div class="row-head"><span class="n">Source ${i + 1}</span>
+        <button class="btn small danger" type="button" data-del="src">Remove</button></div>
+      <div class="field">
+        <label class="top">Resource <span class="req">required</span></label>
+        <input type="text" class="mono" data-k="resource" value="${esc(s.resource || '')}"
+               placeholder="https://wiki.example/finance/revenue-recognition">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="top">ID</label>
+          <input type="text" class="mono" data-k="id" value="${esc(s.id || '')}" placeholder="rev-policy">
+        </div>
+        <div class="field">
+          <label class="top">Title</label>
+          <input type="text" data-k="title" value="${esc(s.title || '')}">
+        </div>
+      </div>
+      <div class="row-trio">
+        <div class="field">
+          <label class="top">Author</label>
+          <input type="text" data-k="author" value="${esc(s.author || '')}" placeholder="human:jsmith@example.co.jp">
+        </div>
+        <div class="field">
+          <label class="top">Usage count</label>
+          <input type="number" min="0" step="1" data-k="usage_count"
+                 value="${s.usage_count === undefined || s.usage_count === null ? '' : esc(String(s.usage_count))}">
+        </div>
+        <div class="field">
+          <label class="top">Last modified</label>
+          <input type="date" data-k="last_modified" value="${esc(s.last_modified || '')}">
+        </div>
+      </div>
+      <details ${s.usage_window && (s.usage_window.from || s.usage_window.to) ? 'open' : ''}>
+        <summary class="hint">Override the usage window for this source</summary>
+        <div class="row" style="margin-top:.5rem">
+          <div class="field" style="margin-bottom:0">
+            <label class="top">From</label>
+            <input type="date" data-k="win_from" value="${esc((s.usage_window || {}).from || '')}">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label class="top">To</label>
+            <input type="date" data-k="win_to" value="${esc((s.usage_window || {}).to || '')}">
+          </div>
+        </div>
+      </details>
+    </div>`;
+
+  const paramRow = (p, i) => `
+    <div class="row-card" data-row="param" data-i="${i}">
+      <div class="row-head"><span class="n">Parameter ${i + 1}</span>
+        <button class="btn small danger" type="button" data-del="param">Remove</button></div>
+      <div class="row-trio">
+        <div class="field">
+          <label class="top">Name <span class="req">required</span></label>
+          <input type="text" class="mono" data-k="name" value="${esc(p.name || '')}" placeholder="year">
+        </div>
+        <div class="field">
+          <label class="top">Type <span class="req">required</span></label>
+          <input type="text" class="mono" data-k="type" value="${esc(p.type || '')}" placeholder="integer">
+        </div>
+        <div class="field" style="align-self:end">
+          <label class="check"><input type="checkbox" data-k="required" ${p.required ? 'checked' : ''}> required</label>
+        </div>
+      </div>
+    </div>`;
+
+  // Writing an edit back into the row's object. usage_window lives one
+  // level down, so its two inputs are keyed apart from the flat ones.
+  function setRowValue(obj, key, el) {
+    if (key === 'required') { obj.required = el.checked; return; }
+    if (key === 'win_from' || key === 'win_to') {
+      obj.usage_window = obj.usage_window || {};
+      obj.usage_window[key === 'win_from' ? 'from' : 'to'] = el.value;
+      return;
+    }
+    obj[key] = el.value;
+  }
+
+  function renderRows(sel, list, render, focusLast) {
+    const box = $(sel);
+    if (!box) return; // navigated away mid-edit
+    box.innerHTML = list.map(render).join('');
+    box.querySelectorAll('[data-row]').forEach(card => {
+      const obj = list[Number(card.dataset.i)];
+      card.querySelectorAll('[data-k]').forEach(el =>
+        el.addEventListener('input', () => setRowValue(obj, el.dataset.k, el)));
+      card.querySelector('[data-del]').addEventListener('click', () => {
+        list.splice(Number(card.dataset.i), 1);
+        dirty = true;
+        renderRows(sel, list, render);
+      });
+    });
+    if (focusLast) {
+      const first = box.querySelector('.row-card:last-child input');
+      if (first) first.focus({ preventScroll: true });
+    }
+  }
+
+  function renderSources(focusLast) {
+    renderRows('#e-sources', sources, srcRow, focusLast);
+    const empty = $('#e-sources-empty');
+    if (empty) empty.textContent = sources.length ? '' : 'No sources recorded.';
+  }
+  renderSources();
+  $('#src-add').addEventListener('click', () => {
+    sources.push({ resource: '', id: '', title: '', author: '', last_modified: '', usage_window: {} });
+    dirty = true;
+    renderSources(true);
+  });
+
+  // The Attested Computation contract shows only for that type, but the
+  // values ride along whatever the type says: the envelope is not
+  // type-scoped, so switching type away and back must not silently drop a
+  // contract somebody wrote.
+  function renderContract() {
+    const box = $('#e-contract');
+    if (!box) return;
+    if (!sameType($('#e-type').value, 'Attested Computation')) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <div class="fieldset">
+        <div class="legend">Computation contract</div>
+        <div class="row">
+          <div class="field">
+            <label class="top" for="e-runtime">Runtime <span class="req">required</span></label>
+            <input type="text" id="e-runtime" list="runtime-list" value="${esc(entry.runtime || '')}" placeholder="bigquery">
+            <datalist id="runtime-list">${['bigquery', 'postgres', 'dbt', 'python', 'Looker'].map(r => `<option value="${r}">`).join('')}</datalist>
+            <div class="hint">What runs it — this is what tells a reader how to read the parameters.</div>
+          </div>
+          <div class="field">
+            <label class="top" for="e-computation">Computation path</label>
+            <input type="text" id="e-computation" class="mono" value="${esc(entry.computation || '')}" placeholder="queries/revenue.sql">
+            <div class="hint">Leave empty to keep the computation inline, in a <code># Computation</code> fence in the body.</div>
+          </div>
+        </div>
+        <div class="legend">Parameters</div>
+        <div class="rows" id="e-params"></div>
+        <p style="margin:.7rem 0 0"><button class="btn small" type="button" id="param-add">＋ Add parameter</button></p>
+        <div class="row" style="margin-top:.9rem">
+          <div class="field">
+            <label class="top" for="e-exec">Executor resource</label>
+            <input type="text" id="e-exec" class="mono" value="${esc((entry.executor || {}).resource || '')}" placeholder="references/skills/run-on-bq.md">
+          </div>
+          <div class="field">
+            <label class="top" for="e-receipt">Executor receipt</label>
+            <input type="text" id="e-receipt" class="mono" value="${esc(((entry.executor || {}).receipt || []).join(', '))}" placeholder="job_id, executed_sql, result">
+            <div class="hint">Comma-separated. What a run must hand back as evidence.</div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="top" for="e-attester">Attester resource</label>
+          <input type="text" id="e-attester" class="mono" value="${esc((entry.attester || {}).resource || '')}" placeholder="references/attesters/revenue.py">
+        </div>
+        <div class="hint">ochakai records this contract and never runs, checks, or fetches any of it. Executing the
+          computation and checking the receipt belong to whoever consumes the entry.</div>
+      </div>`;
+    renderRows('#e-params', params, paramRow);
+    $('#param-add').addEventListener('click', () => {
+      params.push({ name: '', type: '', required: false });
+      dirty = true;
+      renderRows('#e-params', params, paramRow, true);
+    });
+  }
+  renderContract();
+  // Keep the entry object current so a re-render of the section does not
+  // reset fields the user already filled in.
+  $('#e-contract').addEventListener('input', () => {
+    for (const [id, set] of [
+      ['#e-runtime', v => entry.runtime = v],
+      ['#e-computation', v => entry.computation = v],
+    ]) { const el = $(id); if (el) set(el.value); }
+    const ex = $('#e-exec'), rc = $('#e-receipt'), at = $('#e-attester');
+    entry.executor = ex && (ex.value.trim() || (rc && rc.value.trim()))
+      ? { resource: ex.value.trim(), receipt: splitList(rc ? rc.value : '') } : null;
+    entry.attester = at && at.value.trim() ? { resource: at.value.trim() } : null;
+  });
+  $('#e-type').addEventListener('input', renderContract);
 
   // Creating: put the caret past the folder the ＋ seeded, so only the
   // name is left to type. Deferred by a tick — focusing a field this
@@ -1805,15 +2159,36 @@ async function viewEditor(id, prefix = '') {
       $('#e-id').focus();
       return;
     }
+    // A source with nothing in it is a row the user opened and left, not a
+    // citation — dropping it here keeps an accidental ＋ from failing the
+    // save, while a half-filled one still gets the server's answer below.
+    const filledSources = sources.filter(s =>
+      s.resource.trim() || s.id.trim() || s.title.trim() || s.author.trim());
+    const blank = filledSources.findIndex(s => !s.resource.trim());
+    if (blank >= 0) {
+      errBox.innerHTML = `<div class="error-banner">Source ${blank + 1} needs a resource — the artifact it cites. Fill it in or remove the row.</div>`;
+      return;
+    }
     const payload = {
       type: $('#e-type').value.trim(),
       id: editing ? entry.id : newID,
       title: $('#e-title').value.trim(),
       description: $('#e-desc').value.trim(),
+      resource: $('#e-resource').value.trim(),
       tags: $('#e-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+      sources: filledSources.map(sourcePayload),
+      usage_window: windowPayload($('#e-win-from').value, $('#e-win-to').value),
       status: $('#e-status').value,
       status_note: $('#e-note').value.trim(),
       stale_after: $('#e-stale').value,
+      // The contract rides along whatever the type is: it is an envelope
+      // field, and hiding the section must not erase what it holds.
+      runtime: (entry.runtime || '').trim(),
+      parameters: params.filter(p => p.name.trim() || p.type.trim())
+        .map(p => ({ name: p.name.trim(), type: p.type.trim(), required: !!p.required })),
+      computation: (entry.computation || '').trim(),
+      executor: entry.executor,
+      attester: entry.attester,
       body: $('#e-body').value,
     };
     const attrsRaw = $('#e-attrs').value.trim();

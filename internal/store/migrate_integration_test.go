@@ -681,7 +681,7 @@ func TestIntegrationEmbeddingDimChangeIsRefused(t *testing.T) {
 // for entries whose revisions cannot answer. A verify revision must not
 // win — confirming an entry is not producing its content, which is the
 // whole distinction v0.2 draws between verified and generated (design doc
-// 0034 §3.3).
+// 0036 §3.3).
 func TestMigrationUpdatedByBackfill(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
@@ -762,5 +762,158 @@ func TestMigrationUpdatedByBackfill(t *testing.T) {
 	}
 	if staleAfter != nil {
 		t.Errorf("stale_after = %v, want NULL for an entry that never set one", staleAfter)
+	}
+}
+
+// Migration 0020 lifts OKF v0.2's provenance and Attested Computation
+// families out of attrs and into their own columns (design doc 0036).
+//
+// Three properties matter and none of them is obvious from the SQL. The
+// attr must be removed as the column is filled, or the value shows up
+// twice on the wire and the next full-replacement PUT makes the duplicate
+// permanent. A value the migration cannot read must be left entirely
+// alone, attr included, rather than half-converted. And updated_at must
+// not move: it is the optimistic-locking version and OKF's generated.at,
+// so bumping it would invalidate every held ETag and misdate every entry.
+func TestMigrationOKFFamiliesOutOfAttrs(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	// A date that went through attrs before this migration came back as a
+	// full timestamp; the column keeps the day the producer wrote.
+	for _, q := range []string{
+		`CREATE SCHEMA okf35_scratch`,
+		`SET LOCAL search_path TO okf35_scratch`,
+		`CREATE TABLE knowledge (
+			id text PRIMARY KEY,
+			attrs jsonb NOT NULL DEFAULT '{}',
+			updated_at timestamptz NOT NULL DEFAULT now())`,
+		`INSERT INTO knowledge (id, attrs, updated_at) VALUES
+			('finance/full', '{
+				"dialect": "standard-sql",
+				"sources": [
+					{"id": "rev", "resource": "https://wiki.example/rev", "title": "Policy",
+					 "author": "human:jsmith", "usage_count": 0,
+					 "last_modified": "2026-06-15T00:00:00Z",
+					 "usage_window": {"from": "2026-05-01T00:00:00Z", "to": "2026-05-31"}},
+					{"id": "nameless", "title": "no resource"}
+				],
+				"usage_window": {"from": "2026-06-01", "to": "2026-06-30"},
+				"runtime": "bigquery",
+				"computation": "queries/rev.sql",
+				"parameters": [{"name": "year", "type": "integer", "required": true},
+				               {"type": "orphan"}],
+				"executor": {"resource": "run.md", "receipt": ["job_id"]},
+				"attester": {"resource": "check.py"}
+			}'::jsonb, '2026-07-01T00:00:00Z'),
+			('finance/malformed', '{"sources": ["just a string"], "executor": {"resource": "run.md"}}'::jsonb,
+			 '2026-07-01T00:00:00Z'),
+			('finance/none', '{"dialect": "standard-sql"}'::jsonb, '2026-07-01T00:00:00Z')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0020_okf_schema_first.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0020: %v", err)
+	}
+
+	read := func(id string) (k domain.Knowledge, attrs map[string]any, updatedAt time.Time) {
+		var sources, window, params, executor, attester, rawAttrs []byte
+		if err := tx.QueryRow(ctx, `SELECT sources, usage_window, runtime, parameters, computation,
+			executor, attester, attrs, updated_at FROM knowledge WHERE id = $1`, id).
+			Scan(&sources, &window, &k.Runtime, &params, &k.Computation,
+				&executor, &attester, &rawAttrs, &updatedAt); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		for _, d := range []struct {
+			raw []byte
+			out any
+		}{{sources, &k.Sources}, {window, &k.UsageWindow}, {params, &k.Parameters},
+			{executor, &k.Executor}, {attester, &k.Attester}, {rawAttrs, &attrs}} {
+			if len(d.raw) == 0 {
+				continue
+			}
+			if err := json.Unmarshal(d.raw, d.out); err != nil {
+				t.Fatalf("%s: decoding %s: %v", id, d.raw, err)
+			}
+		}
+		return k, attrs, updatedAt
+	}
+
+	k, attrs, updatedAt := read("finance/full")
+	// The source that named no resource is dropped: SPEC §5.1 requires one.
+	if len(k.Sources) != 1 {
+		t.Fatalf("sources = %+v, want only the one naming a resource", k.Sources)
+	}
+	got := k.Sources[0]
+	if got.LastModified != "2026-06-15" || got.UsageWindow == nil || got.UsageWindow.From != "2026-05-01" {
+		t.Errorf("dates kept their clock component: %+v (%+v)", got, got.UsageWindow)
+	}
+	if got.UsageCount == nil || *got.UsageCount != 0 {
+		t.Errorf("usage_count = %v, want a pointer to 0 — zero uses is a count", got.UsageCount)
+	}
+	if k.UsageWindow == nil || k.UsageWindow.To != "2026-06-30" {
+		t.Errorf("usage_window = %+v", k.UsageWindow)
+	}
+	if k.Runtime != "bigquery" || k.Computation != "queries/rev.sql" {
+		t.Errorf("runtime = %q, computation = %q", k.Runtime, k.Computation)
+	}
+	// The parameter missing a name is dropped rather than stored half-formed.
+	want := []domain.Parameter{{Name: "year", Type: "integer", Required: true}}
+	if !reflect.DeepEqual(k.Parameters, want) {
+		t.Errorf("parameters = %+v, want %+v", k.Parameters, want)
+	}
+	if k.Executor == nil || k.Executor.Resource != "run.md" || k.Attester == nil {
+		t.Errorf("executor = %+v, attester = %+v", k.Executor, k.Attester)
+	}
+	// Only the producer's own key is left; every promoted key is gone, or
+	// the value would render and round-trip twice.
+	if !reflect.DeepEqual(attrs, map[string]any{"dialect": "standard-sql"}) {
+		t.Errorf("attrs = %v, want only the producer extension key", attrs)
+	}
+	if !updatedAt.Equal(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("updated_at moved to %v: it is the ETag version and generated.at", updatedAt)
+	}
+
+	// A shape the migration cannot read is left completely alone — attr
+	// intact — so a human can still find it.
+	k, attrs, _ = read("finance/malformed")
+	if len(k.Sources) != 0 || k.Executor != nil {
+		t.Errorf("a malformed family must not be half-converted: %+v %+v", k.Sources, k.Executor)
+	}
+	if _, ok := attrs["sources"]; !ok {
+		t.Error("an unconverted sources attr must stay in attrs, not vanish")
+	}
+	if _, ok := attrs["executor"]; !ok {
+		t.Error("an executor missing its receipt must stay in attrs")
+	}
+
+	// An entry with none of these families gets the empty defaults.
+	k, attrs, _ = read("finance/none")
+	if len(k.Sources) != 0 || k.UsageWindow != nil || k.Runtime != "" || k.Executor != nil {
+		t.Errorf("an entry with no OKF families got values: %+v", k)
+	}
+	if len(attrs) != 1 {
+		t.Errorf("attrs = %v, want the producer key untouched", attrs)
 	}
 }

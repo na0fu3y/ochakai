@@ -50,3 +50,95 @@ func TestFeedsAreLinkableFromTheReviewLoop(t *testing.T) {
 		t.Error("the failed-report chip is labelled \"needs review\" again, colliding with the Review tab")
 	}
 }
+
+// A PUT is a full replacement, so a writable field missing from a payload
+// is a field erased. That failure is silent — the save succeeds and the
+// value is simply gone — and it shipped twice: design doc 0036 §4 records
+// resource vanishing when a status was changed from the detail view, and
+// again when an entry was saved from the editor, which had no resource
+// field at all.
+//
+// One list, WRITABLE, is the fix; this guard is what keeps a new envelope
+// field from being added to the server and forgotten here.
+func TestEveryWritableFieldReachesBothSavePaths(t *testing.T) {
+	page := string(Index)
+	i := strings.Index(page, "const WRITABLE = [")
+	if i < 0 {
+		t.Fatal("WRITABLE is gone; the writable-field list moved without updating this guard")
+	}
+	list := page[i:]
+	if end := strings.Index(list, "];"); end >= 0 {
+		list = list[:end]
+	}
+	for _, want := range []string{
+		"'resource'", "'sources'", "'usage_window'", "'stale_after'",
+		"'runtime'", "'parameters'", "'computation'", "'executor'", "'attester'",
+	} {
+		if !strings.Contains(list, want) {
+			t.Errorf("WRITABLE is missing %s, so a status change erases it:\n%s", want, list)
+		}
+	}
+	// The editor builds its own payload rather than reading WRITABLE (it
+	// reads form controls), so each field has to appear there too.
+	j := strings.Index(page, "const payload = {")
+	if j < 0 {
+		t.Fatal("the editor's payload builder moved without updating this guard")
+	}
+	payload := page[j:]
+	if end := strings.Index(payload, "\n    };"); end >= 0 {
+		payload = payload[:end]
+	}
+	for _, want := range []string{
+		"resource:", "sources:", "usage_window:", "stale_after:",
+		"runtime:", "parameters:", "computation:", "executor:", "attester:",
+	} {
+		if !strings.Contains(payload, want) {
+			t.Errorf("the editor payload is missing %s, so saving from the form erases it:\n%s", want, payload)
+		}
+	}
+}
+
+// Date inputs were left out of the input rule, so stale_after arrived with
+// the UA's own font, padding and intrinsic width — and, with no
+// color-scheme declared, a white calendar popup on a dark page. Both are
+// easy to reintroduce by editing the selector list, and both look like a
+// bug in the form rather than in the stylesheet.
+func TestDateInputsAreStyledLikeEveryOtherField(t *testing.T) {
+	page := string(Index)
+	if strings.Count(page, "input[type=date]") < 2 {
+		t.Error("input[type=date] is not in both the base and the touch-size input rules")
+	}
+	if !strings.Contains(page, "color-scheme:") {
+		t.Error("no color-scheme is declared, so UA-drawn controls ignore the dark theme")
+	}
+}
+
+// ochakai records the Attested Computation contract and never acts on it:
+// no running the executor, no checking a receipt, no fetching the attester
+// (design docs 0001, 0036 §3.6, §5). The curation surface is where a
+// human reads what the product promises, so the promise has to be the
+// narrow one.
+func TestContractIsPresentedAsRecordedNotExecuted(t *testing.T) {
+	page := string(Index)
+	if !strings.Contains(page, "never runs, checks, or fetches") {
+		t.Error("the contract sections no longer say ochakai does not run them")
+	}
+	if !strings.Contains(page, "never fetches or checks them") {
+		t.Error("the sources hint no longer says ochakai does not fetch a source's resource")
+	}
+}
+
+// Every key OKF v0.2 defines is an envelope field (design doc 0036 §2).
+// The page must read them from the entry, not from attrs, or it renders
+// nothing for entries written after the promotion.
+func TestOKFFamiliesAreReadFromTheEnvelope(t *testing.T) {
+	page := string(Index)
+	for _, want := range []string{"entry.sources", "entry.usage_window", "entry.runtime", "entry.executor", "entry.attester"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the detail view does not read %s", want)
+		}
+	}
+	if strings.Contains(page, "attrs.sources") || strings.Contains(page, `attrs['sources']`) {
+		t.Error("the page still reads sources out of attrs; it is an envelope field now")
+	}
+}

@@ -26,7 +26,7 @@ const (
 	TypeModels       Type = "Semantic Model"       // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018; unvalidated since 0028)
 	TypeMetrics      Type = "Metric"               // semantic metric definition (Apache Ossie)
 	TypeQueries      Type = "Golden Query"         // golden query: question + verified SQL
-	TypeComputations Type = "Attested Computation" // sanctioned computation and the means to check a run of it (OKF SPEC §10, design doc 0034 §3.6)
+	TypeComputations Type = "Attested Computation" // sanctioned computation and the means to check a run of it (OKF SPEC §10, design doc 0036 §3.6)
 	TypeInsights     Type = "Insight"              // how to read a metric: baselines, caveats
 	TypeTerms        Type = "Glossary Term"        // glossary term
 	TypeDatasets     Type = "BigQuery Dataset"     // dataset: a container grouping tables
@@ -41,9 +41,10 @@ const (
 // No server behavior hangs off any of them — the list is a vocabulary, not
 // a registry (design doc 0028 §3). Attested Computation is the clearest
 // case: ochakai records the contract (runtime, parameters, executor,
-// attester) as ordinary attrs and never runs it. Executing the computation
-// and checking the receipt belong to the consumer (OKF SPEC §10.5), which
-// is the same line design doc 0028 drew when compile_sql went away.
+// attester) as envelope fields and never runs it. Holding a field is not
+// acting on it — executing the computation and checking the receipt belong
+// to the consumer (OKF SPEC §10.5), which is the same line design doc 0028
+// drew when compile_sql went away.
 var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeComputations, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
 
 // TypesHint renders the recommended vocabulary for help and error text,
@@ -171,7 +172,7 @@ const (
 	OKFStatusDeprecated = "deprecated"
 )
 
-// OKFStatus returns the OKF v0.2 lifecycle value for s (design doc 0034
+// OKFStatus returns the OKF v0.2 lifecycle value for s (design doc 0036
 // §3.4). Rejected exports as deprecated: OKF has no state for "was never
 // accepted", and the reason survives in status_note while rejected_by /
 // rejected_at stay as ochakai extension keys. The mapping is deliberately
@@ -199,14 +200,19 @@ func OKFStatus(s Status) string {
 // they carry one. ochakai's own exports always write verified alongside
 // stable, so an ochakai → ochakai round-trip is exact.
 //
-// The values ochakai wrote before v0.2 (verified, rejected) are still
-// accepted verbatim: bundles exported by 0.12 and earlier must keep
-// importing as what they say.
+// The values ochakai wrote before v0.2 (verified, rejected) are no longer
+// read back as themselves: OKF's vocabulary is three values, and anything
+// else is an unrecognized one (design doc 0036 §3.5). A 0.12 bundle's
+// "status: verified" still lands as verified, but through the spec's own
+// mechanism rather than an ochakai alias — those documents also carry
+// verified_at, and §5.3 makes that key, not the status, the thing that
+// says a concept was confirmed. The lifecycle value and the trust signal
+// are independent, so an unrecognized status does not discard the latter.
 //
-// An unrecognized value is a draft, never a rejection of the document
-// (SPEC §11 forbids rejecting a concept over an unknown field value). ok
-// reports whether the value was recognized, so an importer can mention
-// what it did rather than silently reinterpreting.
+// An unrecognized value is otherwise a draft, never a rejection of the
+// document (SPEC §11 forbids rejecting a concept over an unknown field
+// value). ok reports whether the value was recognized, so an importer can
+// mention what it did rather than silently reinterpreting.
 //
 // An absent status stays unset ("") rather than becoming a value: OKF
 // reads absence as stable (§5.4), but ochakai already has a rule for a
@@ -231,27 +237,37 @@ func StatusFromOKF(raw string, hasVerified bool) (s Status, ok bool) {
 		return StatusDraft, true
 	case OKFStatusDeprecated:
 		return StatusDeprecated, true
-	case string(StatusVerified), string(StatusRejected):
-		return Status(raw), true // written by ochakai 0.12 and earlier
+	}
+	if hasVerified {
+		return StatusVerified, false
 	}
 	return StatusDraft, false
 }
 
-// StaleAfterLayout is the date form OKF fixes for stale_after (SPEC §5.5):
-// an absolute day, not a relative TTL, so staleness stays a plain date
+// DateLayout is the date form OKF fixes for its absolute dates — stale_after
+// (SPEC §5.5), sources[].last_modified and usage_window (SPEC §5.1). An
+// absolute day, not a relative TTL, so staleness stays a plain date
 // comparison with no reference to when the entry was read — and with no
 // timezone to argue about.
-const StaleAfterLayout = "2006-01-02"
+const DateLayout = "2006-01-02"
 
-// ValidStaleAfter reports whether s can be a stale_after: unset, or a
-// YYYY-MM-DD date that exists.
-func ValidStaleAfter(s string) bool {
+// StaleAfterLayout is the older name for DateLayout, kept because the date
+// rule was written for stale_after first.
+const StaleAfterLayout = DateLayout
+
+// ValidDate reports whether s can be one of OKF's absolute dates: unset,
+// or a YYYY-MM-DD date that exists. Every date field in the envelope is
+// held to this one rule.
+func ValidDate(s string) bool {
 	if s == "" {
 		return true
 	}
-	_, err := time.Parse(StaleAfterLayout, s)
+	_, err := time.Parse(DateLayout, s)
 	return err == nil
 }
+
+// ValidStaleAfter reports whether s can be a stale_after.
+func ValidStaleAfter(s string) bool { return ValidDate(s) }
 
 // Usage event kinds recorded per knowledge entry (design doc 0001 §9).
 // The first two are recorded passively by reads; worked/failed are
@@ -342,21 +358,138 @@ func (l Link) DisplayText() string {
 	return DisplayTitle("", l.Target)
 }
 
-// Knowledge is the common envelope for all knowledge types. Type-specific
-// structured attributes live in Attrs; prose lives in Body (markdown).
-// The envelope maps 1:1 to an OKF document (YAML frontmatter + markdown).
+// UsageWindow is the date range that frames usage_count values (OKF SPEC
+// §5.1): "5000 uses" means nothing without the window it was counted over.
+// ochakai records the window and never computes one.
+type UsageWindow struct {
+	From string `json:"from,omitempty"` // YYYY-MM-DD
+	To   string `json:"to,omitempty"`
+}
+
+func (w *UsageWindow) Valid() bool {
+	return w == nil || (ValidDate(w.From) && ValidDate(w.To))
+}
+
+func (w *UsageWindow) sameAs(o *UsageWindow) bool {
+	if w == nil || o == nil {
+		return w == o
+	}
+	return *w == *o
+}
+
+// Source is one piece of external material a concept derives from (OKF
+// SPEC §5.1). ochakai records sources; it never fetches Resource, checks
+// that it resolves, or scores the credibility signals — SPEC §5.1 is
+// explicit that raw signals are for the consumer to weigh.
+//
+// The spec's six keys are modeled exhaustively, so a producer key inside a
+// source mapping is dropped on import with a note rather than kept
+// (design doc 0036 §3.5): the whole point of the promotion is that four
+// surfaces can describe one shape.
+type Source struct {
+	Resource string `json:"resource"` // REQUIRED within an entry: the artifact this came from
+	ID       string `json:"id,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Author   string `json:"author,omitempty"` // an actor (SPEC §7), the source's, not ochakai's
+	// UsageCount is a pointer because absent and zero say different things:
+	// no count at all versus a source exercised zero times over the window.
+	UsageCount   *int         `json:"usage_count,omitempty"`
+	LastModified string       `json:"last_modified,omitempty"` // YYYY-MM-DD
+	UsageWindow  *UsageWindow `json:"usage_window,omitempty"`  // overrides the entry's window for this source
+}
+
+// Valid reports whether s is a usable source. A source that names no
+// artifact is not a citation, which is why SPEC §5.1 makes resource
+// required inside an entry.
+func (s Source) Valid() bool {
+	return s.Resource != "" && ValidDate(s.LastModified) && s.UsageWindow.Valid() &&
+		(s.UsageCount == nil || *s.UsageCount >= 0)
+}
+
+func (s Source) sameAs(o Source) bool {
+	if s.Resource != o.Resource || s.ID != o.ID || s.Title != o.Title ||
+		s.Author != o.Author || s.LastModified != o.LastModified {
+		return false
+	}
+	if !s.UsageWindow.sameAs(o.UsageWindow) {
+		return false
+	}
+	if s.UsageCount == nil || o.UsageCount == nil {
+		return s.UsageCount == o.UsageCount
+	}
+	return *s.UsageCount == *o.UsageCount
+}
+
+// Parameter is one declared input of an Attested Computation (OKF SPEC
+// §10.2). An agent supplies parameter values; it must not author or edit
+// the computation itself — which is a rule for the consumer running it,
+// not something ochakai enforces.
+//
+// Required is a plain bool because the spec gives absent and false the
+// same meaning. UsageCount is a pointer for the opposite reason.
+type Parameter struct {
+	Name     string `json:"name"` // REQUIRED within an entry
+	Type     string `json:"type"` // REQUIRED within an entry
+	Required bool   `json:"required,omitempty"`
+}
+
+func (p Parameter) Valid() bool { return p.Name != "" && p.Type != "" }
+
+// Executor says how an Attested Computation is run and what a run must
+// hand back as evidence (OKF SPEC §10.2). ochakai stores it and never
+// runs it: executing the computation and checking the receipt belong to
+// the consumer (SPEC §10.5, design docs 0001, 0036 §5).
+type Executor struct {
+	Resource string   `json:"resource"` // REQUIRED within executor: run instructions or code
+	Receipt  []string `json:"receipt"`  // REQUIRED within executor: the fields a run must return
+}
+
+func (e *Executor) Valid() bool {
+	return e == nil || (e.Resource != "" && len(e.Receipt) > 0)
+}
+
+// Attester is the deterministic, LLM-free checker that a run of an
+// Attested Computation was performed correctly (OKF SPEC §10.2). As with
+// Executor, ochakai records the path and never executes it.
+type Attester struct {
+	Resource string `json:"resource"` // REQUIRED within attester
+}
+
+func (a *Attester) Valid() bool { return a == nil || a.Resource != "" }
+
+// Knowledge is the common envelope for all knowledge types. Every key OKF
+// v0.2 defines is a field here; Attrs carries only producer-defined
+// extension keys (SPEC §4.1, design doc 0036 §2). Prose lives in Body
+// (markdown). The envelope maps 1:1 to an OKF document (YAML frontmatter
+// + markdown).
 type Knowledge struct {
-	Type        Type           `json:"type"`
-	ID          string         `json:"id"`              // full bundle path, the sole key (design doc 0017)
-	Title       string         `json:"title,omitempty"` // display-name override; empty means the id's last segment is the name (design doc 0022)
-	Description string         `json:"description,omitempty"`
-	Resource    string         `json:"resource,omitempty"` // canonical URI of the underlying asset (OKF recommended key)
-	Tags        []string       `json:"tags,omitempty"`
-	Status      Status         `json:"status"`
-	StatusNote  string         `json:"status_note,omitempty"` // free-form reason for the current status (why rejected/deprecated)
-	StaleAfter  string         `json:"stale_after,omitempty"` // YYYY-MM-DD; the entry is stale on and after this day (OKF SPEC §5.5, design doc 0034 §3.5)
+	Type        Type         `json:"type"`
+	ID          string       `json:"id"`              // full bundle path, the sole key (design doc 0017)
+	Title       string       `json:"title,omitempty"` // display-name override; empty means the id's last segment is the name (design doc 0022)
+	Description string       `json:"description,omitempty"`
+	Resource    string       `json:"resource,omitempty"` // canonical URI of the underlying asset (OKF recommended key)
+	Tags        []string     `json:"tags,omitempty"`
+	Sources     []Source     `json:"sources,omitempty"`      // the material this derives from (OKF SPEC §5.1)
+	UsageWindow *UsageWindow `json:"usage_window,omitempty"` // the range the sources' usage_counts were counted over
+	Status      Status       `json:"status"`
+	StatusNote  string       `json:"status_note,omitempty"` // free-form reason for the current status (why rejected/deprecated)
+	StaleAfter  string       `json:"stale_after,omitempty"` // YYYY-MM-DD; the entry is stale on and after this day (OKF SPEC §5.5, design doc 0036 §3.5)
+	// The Attested Computation contract (OKF SPEC §10.2). These live in the
+	// envelope for every type — Go structs do not change shape per type, and
+	// ochakai enforces no per-type schema (design doc 0036 §5). What varies
+	// by type is validation of Runtime alone (design doc 0036 §3.4) and
+	// which sections the Web UI shows.
+	//
+	// ochakai records this contract and never acts on it: it does not run
+	// Executor, check a receipt, run Attester, or fetch Computation. That
+	// is the consumer's procedure (SPEC §10.5, design docs 0001, 0036 §5).
+	Runtime     string         `json:"runtime,omitempty"`     // required by SPEC when the type is Attested Computation
+	Parameters  []Parameter    `json:"parameters,omitempty"`  // inputs an agent may fill in
+	Computation string         `json:"computation,omitempty"` // path to the computation; empty means the body's "# Computation" fence
+	Executor    *Executor      `json:"executor,omitempty"`
+	Attester    *Attester      `json:"attester,omitempty"`
 	CreatedBy   Actor          `json:"created_by"`
-	UpdatedBy   Actor          `json:"updated_by"` // who last changed the content — OKF's generated.by (design doc 0034 §3.3)
+	UpdatedBy   Actor          `json:"updated_by"` // who last changed the content — OKF's generated.by (design doc 0036 §3.3)
 	VerifiedBy  *Actor         `json:"verified_by,omitempty"`
 	VerifiedAt  *time.Time     `json:"verified_at,omitempty"`
 	RejectedBy  *Actor         `json:"rejected_by,omitempty"`
@@ -370,6 +503,20 @@ type Knowledge struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// EnvelopeKeys names every OKF frontmatter key the envelope owns, in the
+// spelling a bundle uses. Attrs carries producer extension keys (SPEC
+// §4.1) and nothing else, so a payload naming one of these inside attrs is
+// rejected rather than stored where nothing will read it (design doc 0036
+// §3.5). Server-owned provenance (generated, verified, created_by,
+// rejected_*) is not here: those keys are ignored on the way in, and the
+// bundle writer keeps its own longer list.
+var EnvelopeKeys = []string{
+	"type", "id", "title", "description", "resource", "tags",
+	"sources", "usage_window",
+	"status", "status_note", "stale_after",
+	"runtime", "parameters", "computation", "executor", "attester",
 }
 
 // URI returns the canonical reference, e.g. "ochakai://metrics/revenue" —
@@ -402,23 +549,48 @@ func DisplayTitle(title, id string) string {
 func Normalize(s string) string { return norm.NFC.String(s) }
 
 // SameContent reports whether o carries the same authored content as k:
-// the fields a writer controls (title, description, resource, tags, status,
-// status_note, stale_after, links, attrs, body). Server-managed provenance
-// and timestamps (created_*, updated_by, verified_*, rejected_*,
-// updated_at) and the attachment list are not content. Attrs are compared
-// as canonical JSON, so the same value decoded from YAML (int) and from
-// JSONB (float64) compares equal; values JSON cannot encode compare as
-// different.
+// the fields a writer controls (title, description, resource, tags,
+// sources, usage_window, status, status_note, stale_after, the Attested
+// Computation contract, links, attrs, body). Server-managed provenance and
+// timestamps (created_*, updated_by, verified_*, rejected_*, updated_at)
+// and the attachment list are not content. Attrs are compared as canonical
+// JSON, so the same value decoded from YAML (int) and from JSONB (float64)
+// compares equal; values JSON cannot encode compare as different.
+//
+// The list comparisons are order-sensitive on purpose: reordering an
+// entry's citations or an Attested Computation's parameters is a change to
+// what it says, and a write that reorders them must not be swallowed as a
+// no-op.
 func (k *Knowledge) SameContent(o *Knowledge) bool {
 	return k.Type == o.Type && k.ID == o.ID &&
 		k.Title == o.Title && k.Description == o.Description &&
 		k.Resource == o.Resource &&
 		k.Status == o.Status && k.StatusNote == o.StatusNote &&
 		k.StaleAfter == o.StaleAfter &&
+		k.Runtime == o.Runtime && k.Computation == o.Computation &&
 		k.Body == o.Body &&
 		slices.Equal(k.Tags, o.Tags) &&
+		slices.EqualFunc(k.Sources, o.Sources, Source.sameAs) &&
+		k.UsageWindow.sameAs(o.UsageWindow) &&
+		slices.Equal(k.Parameters, o.Parameters) &&
+		executorsEqual(k.Executor, o.Executor) &&
+		attestersEqual(k.Attester, o.Attester) &&
 		slices.Equal(k.Links, o.Links) &&
 		attrsEqual(k.Attrs, o.Attrs)
+}
+
+func executorsEqual(a, b *Executor) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Resource == b.Resource && slices.Equal(a.Receipt, b.Receipt)
+}
+
+func attestersEqual(a, b *Attester) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func attrsEqual(a, b map[string]any) bool {
