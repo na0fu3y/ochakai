@@ -1059,7 +1059,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 			) w
 			ORDER BY score DESC LIMIT %[8]d
 		)
-		SELECT `+qualifyCols("k")+`, scored.score
+		SELECT `+knowledgeColsK+`, scored.score
 		FROM knowledge k JOIN scored ON scored.id = k.id
 		ORDER BY scored.score DESC`,
 		strings.Join(weighted, " + "), strings.Join(weights, " + "),
@@ -1087,7 +1087,7 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 	// absence rather than a plausible wrong ranking.
 	args = append(args, model)
 	q := fmt.Sprintf(`
-		SELECT `+qualifyCols("k")+`, 1 - (e.embedding <=> $%d::vector) AS score
+		SELECT `+knowledgeColsK+`, 1 - (e.embedding <=> $%d::vector) AS score
 		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id AND e.model = $%d
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, vecParam, len(args), where, vecParam, limit)
@@ -1244,7 +1244,7 @@ const usageLateral = `
 func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
-		SELECT `+qualifyCols("k")+`,
+		SELECT `+knowledgeColsK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s
@@ -1278,7 +1278,7 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
-		SELECT `+qualifyCols("k")+`,
+		SELECT `+knowledgeColsK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s AND u.failed > 0
@@ -1464,14 +1464,17 @@ func marshalJSONFields(k *domain.Knowledge) (links, attrs []byte, err error) {
 	return links, attrs, nil
 }
 
-// qualifyCols prefixes every column in knowledgeCols with a table alias.
-func qualifyCols(alias string) string {
+// knowledgeColsK is knowledgeCols with every column prefixed by "k", the
+// alias every query that joins another table gives the knowledge table.
+// Built once: the column list is fixed at compile time, so re-splitting it
+// per query bought nothing.
+var knowledgeColsK = func() string {
 	cols := strings.Split(knowledgeCols, ",")
 	for i, c := range cols {
-		cols[i] = alias + "." + strings.TrimSpace(c)
+		cols[i] = "k." + strings.TrimSpace(c)
 	}
 	return strings.Join(cols, ", ")
-}
+}()
 
 // escapeLike neutralizes the LIKE/ILIKE pattern metacharacters '%' and '_'
 // in a user query so it matches literally. PostgreSQL's default LIKE escape

@@ -36,7 +36,7 @@ func (s *metadataTokenSource) password(ctx context.Context) (string, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("Cloud SQL IAM auth needs the GCE metadata server (Cloud Run/GCE only): %w", err)
+		return "", fmt.Errorf("cannot reach the GCE metadata server that Cloud SQL IAM auth needs (Cloud Run/GCE only): %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

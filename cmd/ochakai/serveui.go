@@ -106,22 +106,22 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 // browser sent is a claim about identity from the one party with no
 // standing to make it.
 func newServiceProxy(target *url.URL, tokens serviceTokenSource, iap iapVerifier, log *slog.Logger) http.Handler {
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	director := proxy.Director
-	proxy.Director = func(r *http.Request) {
-		director(r)
-		r.Host = target.Host
+	// Rewrite rather than Director: it drops the browser's X-Forwarded-*
+	// headers instead of appending to them, which is what we want from a
+	// proxy that trusts nothing the page sends.
+	proxy := &httputil.ReverseProxy{Rewrite: func(r *httputil.ProxyRequest) {
+		r.SetURL(target) // also points the outbound Host at the target
 		// Whatever the browser sent, this proxy speaks as the service.
-		r.Header.Del("Authorization")
-		r.Header.Del("X-Serverless-Authorization")
+		r.Out.Header.Del("Authorization")
+		r.Out.Header.Del("X-Serverless-Authorization")
 		// Cloud Run service-to-service auth; harmless if unavailable
 		// (e.g. running locally against an unrestricted ochakai).
 		if tok, err := tokens.token(); err == nil {
-			r.Header.Set("X-Serverless-Authorization", "Bearer "+tok)
+			r.Out.Header.Set("X-Serverless-Authorization", "Bearer "+tok)
 		} else {
 			log.Warn("no service identity token; forwarding without it", "error", err)
 		}
-	}
+	}}
 	if iap == nil {
 		return stripDelegation(proxy)
 	}

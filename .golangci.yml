@@ -1,0 +1,28 @@
+# Static checks beyond `go vet`, kept to ones that report nothing on a
+# clean tree — so a finding always means new code, never a linter's
+# taste. Design doc 0035 says why each is here and what it stands in for.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose # an unclosed response body leaks the connection
+    - errorlint # err == Sentinel stops matching the moment a layer wraps it
+    - exhaustive # a value added to Status or Type must be handled, not defaulted into silence
+    - nilerr # returning nil after finding err != nil
+    - staticcheck # deprecations, dead code, standard-library misuse
+    - unconvert # conversions that convert nothing
+    - unparam # parameters no caller ever varies
+  settings:
+    exhaustive:
+      # A switch with a default has already said what it does with the
+      # values it does not name. The check is for the switches that mean
+      # to cover the whole type, which are the ones a new value breaks.
+      default-signifies-exhaustive: true
+
+issues:
+  # Report every finding. The defaults cap repeats per linter (50) and
+  # per message (3), which quietly hides the rest — and "a clean tree
+  # reports nothing" is only a usable rule if the count can be trusted.
+  max-issues-per-linter: 0
+  max-same-issues: 0

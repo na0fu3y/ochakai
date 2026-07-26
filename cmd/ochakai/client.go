@@ -1156,7 +1156,7 @@ func readBundleTarGz(r io.Reader) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return files, nil
 		}
 		if err != nil {
@@ -1221,7 +1221,7 @@ func extractTarGz(dir string, r io.Reader) (int, error) {
 	n := 0
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return n, nil
 		}
 		if err != nil {

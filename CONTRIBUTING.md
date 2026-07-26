@@ -30,8 +30,16 @@ gofmt -l .          # must print nothing
 go vet ./...
 go test -race ./...
 CGO_ENABLED=0 go build -trimpath ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
+
+The linters are configured in [.golangci.yml](.golangci.yml) and chosen so
+a clean tree reports nothing — a finding means new code, not a linter's
+taste ([design doc 0035](docs/design/0035-verifiability.md)). The most
+load-bearing one is `exhaustive`: a `switch` over `domain.Status` or
+`domain.Type` that names every case and no `default` must keep naming
+every case when a value is added.
 
 The store integration test is skipped unless a real PostgreSQL is
 available (CI runs one as a service container):
