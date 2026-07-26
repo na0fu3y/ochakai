@@ -41,20 +41,69 @@ const Version = "0.2"
 // generated.at, and verified_by/verified_at are now a verified list. Parse
 // still reads the old keys so bundles written by ochakai 0.12 and earlier
 // import unchanged — but nothing writes them again.
+// The key order follows the spec's own families — base (§4.1), provenance
+// (§5.1), trust (§5.2), lifecycle (§5.4/§5.5), Attested Computation
+// (§10.2) — so a document reads in the order the spec introduces it, with
+// ochakai's extension keys last.
 type frontmatter struct {
-	Type        string   `yaml:"type"`
-	Resource    string   `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
-	Title       string   `yaml:"title,omitempty"`    // empty means the filename is the name (design doc 0022) — omitted, so titleless documents round-trip unchanged
-	Description string   `yaml:"description,omitempty"`
-	Tags        []string `yaml:"tags,omitempty"`
-	Status      string   `yaml:"status"` // OKF vocabulary: draft | stable | deprecated (design doc 0034 §3.4)
-	StatusNote  string   `yaml:"status_note,omitempty"`
-	StaleAfter  string   `yaml:"stale_after,omitempty"`
-	Generated   event    `yaml:"generated"`
-	Verified    []event  `yaml:"verified,omitempty"` // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
-	CreatedBy   string   `yaml:"created_by"`         // ochakai extension: OKF records only who produced the current content
-	RejectedBy  string   `yaml:"rejected_by,omitempty"`
-	RejectedAt  string   `yaml:"rejected_at,omitempty"`
+	Type        string       `yaml:"type"`
+	Resource    string       `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
+	Title       string       `yaml:"title,omitempty"`    // empty means the filename is the name (design doc 0022) — omitted, so titleless documents round-trip unchanged
+	Description string       `yaml:"description,omitempty"`
+	Tags        []string     `yaml:"tags,omitempty"`
+	Sources     []source     `yaml:"sources,omitempty"`
+	UsageWindow *usageWindow `yaml:"usage_window,omitempty"`
+	Generated   event        `yaml:"generated"`
+	Verified    []event      `yaml:"verified,omitempty"` // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
+	Status      string       `yaml:"status"`             // OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4)
+	StatusNote  string       `yaml:"status_note,omitempty"`
+	StaleAfter  string       `yaml:"stale_after,omitempty"`
+	Runtime     string       `yaml:"runtime,omitempty"`
+	Parameters  []parameter  `yaml:"parameters,omitempty"`
+	Computation string       `yaml:"computation,omitempty"`
+	Executor    *executor    `yaml:"executor,omitempty"`
+	Attester    *attester    `yaml:"attester,omitempty"`
+	CreatedBy   string       `yaml:"created_by"` // ochakai extension: OKF records only who produced the current content
+	RejectedBy  string       `yaml:"rejected_by,omitempty"`
+	RejectedAt  string       `yaml:"rejected_at,omitempty"`
+}
+
+// The YAML spelling of the v0.2 families lives here rather than on the
+// domain types, the way frontmatter and event already do: domain carries
+// the JSON wire shape, and the bundle format is this package's business.
+//
+// Dates are written as strings. yaml.v3 quotes a string that would
+// otherwise resolve to a timestamp, so last_modified goes out as
+// "2026-05-30" and comes back the plain day the producer wrote — the same
+// treatment stale_after gets (design doc 0036 §3.7).
+type source struct {
+	Resource     string       `yaml:"resource"`
+	ID           string       `yaml:"id,omitempty"`
+	Title        string       `yaml:"title,omitempty"`
+	Author       string       `yaml:"author,omitempty"`
+	UsageCount   *int         `yaml:"usage_count,omitempty"` // a pointer: zero uses and no count at all are different claims
+	LastModified string       `yaml:"last_modified,omitempty"`
+	UsageWindow  *usageWindow `yaml:"usage_window,omitempty"`
+}
+
+type usageWindow struct {
+	From string `yaml:"from,omitempty"`
+	To   string `yaml:"to,omitempty"`
+}
+
+type parameter struct {
+	Name     string `yaml:"name"`
+	Type     string `yaml:"type"`
+	Required bool   `yaml:"required,omitempty"` // absent and false mean the same thing (SPEC §10.2)
+}
+
+type executor struct {
+	Resource string   `yaml:"resource"`
+	Receipt  []string `yaml:"receipt"`
+}
+
+type attester struct {
+	Resource string `yaml:"resource"`
 }
 
 // event is one entry of the trust family: who, when, and — as a producer
@@ -62,7 +111,7 @@ type frontmatter struct {
 // room for delegation, and folding "A via B" into by would leave a string
 // that is not an actor; a sibling key keeps by parseable and the human:
 // prefix intact, so trust tiers still read correctly (design docs 0027,
-// 0034 §3.2).
+// 0036 §3.2).
 type event struct {
 	By  string `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
 	Via string `yaml:"via,omitempty"`
@@ -71,16 +120,22 @@ type event struct {
 
 // reservedKeys are the frontmatter keys the envelope owns. An attr with a
 // reserved name is not exported as an extension key: the envelope value
-// wins. The v0.1 trust keys stay listed: an entry that imported one into
-// attrs before this release must not re-emit it beside the v0.2 key that
-// replaced it.
-var reservedKeys = map[string]bool{
-	"type": true, "id": true, "title": true, "description": true,
-	"resource": true, "tags": true, "status": true, "status_note": true,
-	"stale_after": true, "generated": true, "verified": true,
-	"created_by": true, "rejected_by": true, "rejected_at": true,
-	"timestamp": true, "verified_by": true, "verified_at": true,
-}
+// wins. It is every envelope key (domain.EnvelopeKeys, which the write
+// path also refuses to accept inside attrs) plus the server-owned
+// provenance keys and the v0.1 trust spellings — the latter because an
+// entry that imported one into attrs before 0.13.0 must not re-emit it
+// beside the v0.2 key that replaced it.
+var reservedKeys = func() map[string]bool {
+	m := map[string]bool{
+		"generated": true, "verified": true,
+		"created_by": true, "rejected_by": true, "rejected_at": true,
+		"timestamp": true, "verified_by": true, "verified_at": true,
+	}
+	for _, k := range domain.EnvelopeKeys {
+		m[k] = true
+	}
+	return m
+}()
 
 // Indexes renders a bundle's directory index.md files and nothing else,
 // sorting entries by id on the way (Bundle's ordering). Split out so a
@@ -179,7 +234,7 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 // ochakai's "agent:" prefix rather than being dressed up as a versioned
 // producer or relabelled process, because §5.3 keys trust tiers off the
 // human: prefix alone and nothing else in the convention is load-bearing
-// (design doc 0034 §3.8).
+// (design doc 0036 §3.11).
 func actorEvent(a *domain.Actor, at *time.Time) event {
 	var e event
 	if a != nil && (a.Kind != "" || a.Name != "") {
@@ -191,6 +246,25 @@ func actorEvent(a *domain.Actor, at *time.Time) event {
 	return e
 }
 
+func windowOut(w *domain.UsageWindow) *usageWindow {
+	if w == nil {
+		return nil
+	}
+	return &usageWindow{From: w.From, To: w.To}
+}
+
+func sourcesOut(in []domain.Source) []source {
+	var out []source
+	for _, s := range in {
+		out = append(out, source{
+			Resource: s.Resource, ID: s.ID, Title: s.Title, Author: s.Author,
+			UsageCount: s.UsageCount, LastModified: s.LastModified,
+			UsageWindow: windowOut(s.UsageWindow),
+		})
+	}
+	return out
+}
+
 // Document renders one knowledge entry as an OKF concept document.
 //
 // The trust family follows SPEC §5.2: generated is who the content stands
@@ -198,7 +272,7 @@ func actorEvent(a *domain.Actor, at *time.Time) event {
 // for now — ochakai keeps the latest). status carries OKF's three-value
 // lifecycle, so "verified" leaves the status key entirely and becomes
 // stable plus a verified entry, which is where a v0.2 consumer looks for
-// it (design doc 0034 §3.4).
+// it (design doc 0036 §3.4).
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
 		Type:        string(k.Type),
@@ -206,16 +280,29 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Title:       k.Title,
 		Description: k.Description,
 		Tags:        k.Tags,
+		Sources:     sourcesOut(k.Sources),
+		UsageWindow: windowOut(k.UsageWindow),
 		Status:      domain.OKFStatus(k.Status),
 		StatusNote:  k.StatusNote,
 		StaleAfter:  k.StaleAfter,
+		Runtime:     k.Runtime,
+		Computation: k.Computation,
 		Generated:   actorEvent(&k.UpdatedBy, &k.UpdatedAt),
 		CreatedBy:   k.CreatedBy.String(),
+	}
+	for _, p := range k.Parameters {
+		fm.Parameters = append(fm.Parameters, parameter{Name: p.Name, Type: p.Type, Required: p.Required})
+	}
+	if k.Executor != nil {
+		fm.Executor = &executor{Resource: k.Executor.Resource, Receipt: k.Executor.Receipt}
+	}
+	if k.Attester != nil {
+		fm.Attester = &attester{Resource: k.Attester.Resource}
 	}
 	// Status verified always writes a verified entry, even for an entry
 	// carrying no verification actor. The key's presence is what a v0.2
 	// consumer reads the trust tier from (SPEC §5.3), and what carries
-	// "verified" back through an import (design doc 0034 §3.4) — an
+	// "verified" back through an import (design doc 0036 §3.4) — an
 	// exported status of stable with no verified key means unverified, and
 	// would come back as a draft.
 	if k.Status == domain.StatusVerified || k.VerifiedAt != nil || k.VerifiedBy != nil {

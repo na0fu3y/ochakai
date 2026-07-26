@@ -1,7 +1,7 @@
 # ochakai 設計ドキュメント 0005: OKF 互換とナレッジの構造
 
-Status: **Superseded by [0034](0034-okf-v0-2.md)**(OKF v0.2 対応にあたり、
-OKF 互換領域の現在の姿を 0034 が全面的に置き換えた)。改訂の履歴:
+Status: **Superseded by [0036](0036-okf-schema-first.md)**(OKF v0.2 対応に
+あたり、OKF 互換領域の現在の姿を 0036 が全面的に置き換えた)。改訂の履歴:
 [0016](0016-knowledge-catalog-alignment.md) が一部を改訂
 (推奨タイプは複数形スラグに、`resource` は封筒フィールドに)。§3.1 のパス規則
 (第 1 セグメント = タイプ)と §3.3 の一部・§3.5 のレガシーエイリアスは

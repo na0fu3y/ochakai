@@ -675,7 +675,7 @@ func TestIntegrationMove(t *testing.T) {
 	}
 	// A move rewrites the moved entry's links and every referrer's body,
 	// so the mover is who those contents stand by — generated.by in an
-	// export (design doc 0034 §3.3).
+	// export (design doc 0036 §3.3).
 	if moved.UpdatedBy != mover {
 		t.Errorf("moved.UpdatedBy = %v, want %v", moved.UpdatedBy, mover)
 	}

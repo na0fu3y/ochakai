@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0016: knowledge-catalog リファレンスバンドルへの準拠
 
-Status: **Superseded by [0034](0034-okf-v0-2.md)**(カタログ準拠の残り — `resource` の封筒フィールド化、本文セクションの規約 — は 0034 が引き継いだ)。改訂の履歴: 推奨タイプの複数形スラグは [0023](0023-okf-type-vocabulary.md) が OKF 表示名そのものに置き換え。§2.5 のうち compile の `dialect` に関する部分は [0028](0028-retire-compile-sql.md) の compile 撤去により対象が消滅(BigQuery 修飾の表示名は有効)
+Status: **Superseded by [0036](0036-okf-schema-first.md)**(カタログ準拠の残り — `resource` の封筒フィールド化とそのキー順、本文セクションの規約 — は 0036 が引き継いだ)。改訂の履歴: 推奨タイプの複数形スラグは [0023](0023-okf-type-vocabulary.md) が OKF 表示名そのものに置き換え。§2.5 のうち compile の `dialect` に関する部分は [0028](0028-retire-compile-sql.md) の compile 撤去により対象が消滅(BigQuery 修飾の表示名は有効)
 Date: 2026-07-19
 
 ## 1. 目的

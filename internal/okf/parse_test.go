@@ -2,6 +2,7 @@ package okf
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -229,7 +230,7 @@ func TestParseScalarTags(t *testing.T) {
 
 // The v0.2 lifecycle vocabulary is three values where ochakai has four,
 // and "a human confirmed this" is the verified key, not a status
-// (SPEC §5.3-5.4, design doc 0034 §3.4).
+// (SPEC §5.3-5.4, design doc 0036 §3.4).
 func TestParseStatusMapping(t *testing.T) {
 	const verified = "verified:\n  - { by: human:na0, at: 2026-07-01T00:00:00Z }\n"
 	for _, tc := range []struct {
@@ -244,8 +245,14 @@ func TestParseStatusMapping(t *testing.T) {
 		{"deprecated stays deprecated", "status: deprecated\n", domain.StatusDeprecated, false},
 		{"an absent status stays unset for the write path to default", "", "", false},
 		{"an absent status with a verification is a confirmation", verified, domain.StatusVerified, false},
-		{"ochakai 0.12 wrote status: verified", "status: verified\n", domain.StatusVerified, false},
-		{"ochakai 0.12 wrote status: rejected", "status: rejected\n", domain.StatusRejected, false},
+		// The values ochakai wrote before v0.2 are unrecognized now: OKF's
+		// vocabulary is the three above (design doc 0036 §3.5). A 0.12
+		// bundle still imports its verified entries as verified, but
+		// through the verified key SPEC §5.3 makes authoritative, not
+		// through an ochakai-only status alias.
+		{"ochakai 0.12 wrote status: verified", "status: verified\n" + verified, domain.StatusVerified, true},
+		{"a legacy status with no verification is a draft", "status: verified\n", domain.StatusDraft, true},
+		{"ochakai 0.12 wrote status: rejected", "status: rejected\n", domain.StatusDraft, true},
 		{"an unknown value is a draft, not a rejected document", "status: retired\n", domain.StatusDraft, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -339,13 +346,14 @@ func TestParseStaleAfter(t *testing.T) {
 	}
 }
 
-// OKF's own families are producer data ochakai does not interpret: sources
-// and the Attested Computation contract ride through attrs, in place
-// (design doc 0034 §§3.6-3.7).
-func TestParseKeepsOKFFamiliesAsAttrs(t *testing.T) {
+// Every key OKF v0.2 defines is an envelope field, not an attr: the spec's
+// schema is the shape ochakai keeps (design doc 0036 §2). Only producer
+// extension keys ride through attrs.
+func TestParseReadsOKFFamiliesIntoTheEnvelope(t *testing.T) {
 	doc := []byte(`---
 type: Attested Computation
 title: Revenue for fiscal year
+tags: [finance]
 runtime: bigquery
 parameters:
   - { name: year, type: integer, required: true }
@@ -354,11 +362,17 @@ executor:
   receipt: [job_id, executed_sql, result]
 attester:
   resource: references/attesters/revenue.py
+computation: queries/revenue.sql
 sources:
   - id: rev-policy
     resource: https://wiki.example/finance/revenue-recognition
     title: Revenue recognition policy
+    author: human:jsmith@acme
+    usage_count: 0
+    last_modified: 2026-06-15
+    usage_window: { from: 2026-05-01, to: 2026-05-31 }
 usage_window: { from: 2026-06-01, to: 2026-06-30 }
+dialect: standard-sql
 ---
 
 # Computation
@@ -375,18 +389,133 @@ usage_window: { from: 2026-06-01, to: 2026-06-30 }
 	if k.Type != domain.TypeComputations {
 		t.Errorf("type = %q, want %q", k.Type, domain.TypeComputations)
 	}
-	for _, key := range []string{"runtime", "parameters", "executor", "attester", "sources", "usage_window"} {
-		if _, ok := k.Attrs[key]; !ok {
-			t.Errorf("%s did not survive as an attr: %v", key, k.Attrs)
-		}
+	if k.Runtime != "bigquery" || k.Computation != "queries/revenue.sql" {
+		t.Errorf("runtime = %q, computation = %q", k.Runtime, k.Computation)
 	}
+	want := []domain.Parameter{{Name: "year", Type: "integer", Required: true}}
+	if !reflect.DeepEqual(k.Parameters, want) {
+		t.Errorf("parameters = %+v, want %+v", k.Parameters, want)
+	}
+	if k.Executor == nil || k.Executor.Resource != "references/skills/run-on-bq.md" ||
+		!reflect.DeepEqual(k.Executor.Receipt, []string{"job_id", "executed_sql", "result"}) {
+		t.Errorf("executor = %+v", k.Executor)
+	}
+	if k.Attester == nil || k.Attester.Resource != "references/attesters/revenue.py" {
+		t.Errorf("attester = %+v", k.Attester)
+	}
+	if len(k.Sources) != 1 {
+		t.Fatalf("sources = %+v", k.Sources)
+	}
+	s := k.Sources[0]
+	// A date the producer wrote without a clock stays a date: YAML types
+	// it as a timestamp, and letting that through would hand back a day
+	// nobody wrote (design doc 0036 §3.7).
+	if s.LastModified != "2026-06-15" {
+		t.Errorf("last_modified = %q, want the bare date", s.LastModified)
+	}
+	// Zero uses is a count, not the absence of one (design doc 0036 §3.1).
+	if s.UsageCount == nil || *s.UsageCount != 0 {
+		t.Errorf("usage_count = %v, want a pointer to 0", s.UsageCount)
+	}
+	if s.UsageWindow == nil || s.UsageWindow.From != "2026-05-01" {
+		t.Errorf("per-source usage_window = %+v", s.UsageWindow)
+	}
+	if k.UsageWindow == nil || k.UsageWindow.To != "2026-06-30" {
+		t.Errorf("usage_window = %+v", k.UsageWindow)
+	}
+	// Only the producer's own key is left in attrs.
+	if !reflect.DeepEqual(k.Attrs, map[string]any{"dialect": "standard-sql"}) {
+		t.Errorf("attrs = %v, want only the producer extension key", k.Attrs)
+	}
+
 	out, err := Document(k)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"runtime: bigquery", "attester:", "sources:", "usage_window:", "# Computation"} {
+	for _, want := range []string{
+		"runtime: bigquery", "attester:", "sources:", "usage_window:", "# Computation",
+		"usage_count: 0", `last_modified: "2026-06-15"`, "dialect: standard-sql",
+	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("re-export missing %q:\n%s", want, out)
 		}
+	}
+	// The frontmatter follows the spec's own family order (design doc
+	// 0036 §3.6), so a document reads the way SPEC introduces it.
+	var last int
+	for _, key := range []string{"\ntype:", "\ntags:", "\nsources:", "\nusage_window:", "\ngenerated:", "\nstatus:", "\nruntime:", "\nparameters:", "\nexecutor:", "\nattester:", "\ncreated_by:"} {
+		at := strings.Index("\n"+string(out), key)
+		if at < 0 {
+			t.Fatalf("key %q missing from the export:\n%s", key, out)
+		}
+		if at < last {
+			t.Errorf("key %q is out of the spec's family order:\n%s", key, out)
+		}
+		last = at
+	}
+}
+
+// A malformed value inside an OKF family costs the value and a note, never
+// the document: SPEC's conformance rule tells consumers to take the
+// concept (design doc 0036 §3.4).
+func TestParseReportsUnusableOKFValues(t *testing.T) {
+	k, notes, err := Parse([]byte(`---
+type: Insight
+sources:
+  - resource: policies/revenue.md
+    last_modified: soon
+    license: CC-BY
+  - id: nameless
+  - resource: ok/other.md
+    usage_count: many
+usage_window: [2026-06-01, 2026-06-30]
+parameters:
+  - { type: integer }
+executor: { resource: run.md }
+attester: {}
+---
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The two sources that name a resource survive; the one that names
+	// nothing does not (SPEC §5.1 requires resource within an entry).
+	if len(k.Sources) != 2 {
+		t.Errorf("sources = %+v, want the two that name a resource", k.Sources)
+	}
+	if len(k.Sources) > 0 && k.Sources[0].LastModified != "" {
+		t.Errorf("an unparseable last_modified must be dropped, got %q", k.Sources[0].LastModified)
+	}
+	// A half-stated contract is dropped rather than stored: both of the
+	// executor's keys are required within it (SPEC §10.2).
+	if k.UsageWindow != nil || k.Executor != nil || k.Attester != nil || len(k.Parameters) != 0 {
+		t.Errorf("unusable values must be dropped: %+v %+v %+v %+v",
+			k.UsageWindow, k.Executor, k.Attester, k.Parameters)
+	}
+	for _, want := range []string{
+		"last_modified", "names no resource", "dropped keys OKF does not define: license",
+		"usage_count", "usage_window", "parameters[0]", "executor", "attester",
+	} {
+		if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, want) }) {
+			t.Errorf("no note mentions %q: %v", want, notes)
+		}
+	}
+}
+
+// An attr shadowing an envelope key is not exported twice — the envelope
+// wins, as it has since 0005, and the write path now refuses the payload
+// outright (design doc 0036 §3.5).
+func TestDocumentDoesNotReExportShadowedEnvelopeAttrs(t *testing.T) {
+	out, err := Document(&domain.Knowledge{
+		Type:    domain.TypeInsights,
+		ID:      "i",
+		Sources: []domain.Source{{Resource: "policies/revenue.md"}},
+		Attrs:   map[string]any{"sources": []any{map[string]any{"resource": "ghost.md"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "ghost.md") {
+		t.Errorf("a shadowed attr must not be re-exported:\n%s", out)
 	}
 }

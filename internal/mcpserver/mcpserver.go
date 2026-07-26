@@ -265,10 +265,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
 			"the conventional body sections: # Schema, # Common query patterns. " +
 			"An \"Attested Computation\" entry records a sanctioned computation others must run instead of " +
-			"improvising: put the computation in a # Computation fence in body and the contract in attrs " +
-			"(runtime, parameters, executor, attester). ochakai stores it and never runs it. " +
-			"Cite the material an entry derives from in attrs.sources — a list of {id, resource, title} — " +
-			"and attribute single claims with markdown footnotes keyed to those ids. " +
+			"improvising: put the computation in a # Computation fence in body and the contract in the " +
+			"runtime, parameters, executor and attester fields. ochakai stores it and never runs it. " +
+			"Cite the material an entry derives from in sources — each needs a resource, and an id lets " +
+			"markdown footnotes in body attribute single claims to it. " +
 			"Set stale_after when the knowledge has a known expiry date. " +
 			"A semantic model is a \"Semantic Model\" entry with the Apache Ossie model object in attrs.spec " +
 			"(one entry per model). Give each metric its own entry too (last id segment = the metric " +
@@ -294,8 +294,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
-		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/stale_after/attrs/body — " +
-			"an omitted title clears it, making the filename the name). " +
+		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/sources/usage_window/" +
+			"status/stale_after/runtime/parameters/computation/executor/attester/attrs/body — " +
+			"an omitted title clears it, making the filename the name, and omitted sources clear the citations). " +
 			"Links are not a field: they come from the markdown links in body, so keep the ones you want to keep. " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
 			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be updated from " +
@@ -562,17 +563,24 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string         `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — any custom type works"`
-	ID          string         `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
-	Title       string         `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
-	Description string         `json:"description,omitempty"`
-	Resource    string         `json:"resource,omitempty" jsonschema:"canonical URI of the underlying asset (the table/dataset URI, or for references the external source URL); omit for abstract concepts"`
-	Tags        []string       `json:"tags,omitempty"`
-	Status      string         `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
-	StatusNote  string         `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
-	StaleAfter  string         `json:"stale_after,omitempty" jsonschema:"absolute date (YYYY-MM-DD) after which this entry should be re-checked, e.g. when the quarter it describes closes; omit when nothing dates it"`
-	Attrs       map[string]any `json:"attrs,omitempty" jsonschema:"type-specific structured attributes, e.g. question/sql for a query"`
-	Body        string         `json:"body,omitempty" jsonschema:"markdown body; link to other entries by writing a markdown link to their path — [revenue](/metrics/revenue.md) — and those links become the entry's links"`
+	Type        string              `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — any custom type works"`
+	ID          string              `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
+	Title       string              `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
+	Description string              `json:"description,omitempty"`
+	Resource    string              `json:"resource,omitempty" jsonschema:"canonical URI of the underlying asset (the table/dataset URI, or for references the external source URL); omit for abstract concepts"`
+	Tags        []string            `json:"tags,omitempty"`
+	Sources     []domain.Source     `json:"sources,omitempty" jsonschema:"the material this entry derives from: a list of {resource, id, title, author, usage_count, last_modified}; resource is required and names the artifact; give each an id so footnotes in body can attribute single claims to it"`
+	UsageWindow *domain.UsageWindow `json:"usage_window,omitempty" jsonschema:"the date range the sources' usage_count values were counted over: {from, to} as YYYY-MM-DD"`
+	Status      string              `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
+	StatusNote  string              `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
+	StaleAfter  string              `json:"stale_after,omitempty" jsonschema:"absolute date (YYYY-MM-DD) after which this entry should be re-checked, e.g. when the quarter it describes closes; omit when nothing dates it"`
+	Runtime     string              `json:"runtime,omitempty" jsonschema:"for an Attested Computation, the execution environment (bigquery, postgres, dbt, python...); required for that type because it is what tells a consumer how to read the parameters"`
+	Parameters  []domain.Parameter  `json:"parameters,omitempty" jsonschema:"an Attested Computation's declared inputs: a list of {name, type, required}; you supply values for these, never edits to the computation itself"`
+	Computation string              `json:"computation,omitempty" jsonschema:"path to the file holding the computation; omit to put it inline in a # Computation fence in body"`
+	Executor    *domain.Executor    `json:"executor,omitempty" jsonschema:"how the computation is run and what a run must return as evidence: {resource, receipt}; ochakai records this and never runs it"`
+	Attester    *domain.Attester    `json:"attester,omitempty" jsonschema:"the deterministic checker for a run: {resource}; ochakai records the path and never executes it"`
+	Attrs       map[string]any      `json:"attrs,omitempty" jsonschema:"producer-defined extension keys, e.g. question/sql for a query; the keys OKF itself defines are fields of their own above and are rejected here"`
+	Body        string              `json:"body,omitempty" jsonschema:"markdown body; link to other entries by writing a markdown link to their path — [revenue](/metrics/revenue.md) — and those links become the entry's links"`
 }
 
 func (in writeIn) toKnowledge() *domain.Knowledge {
@@ -583,9 +591,16 @@ func (in writeIn) toKnowledge() *domain.Knowledge {
 		Description: in.Description,
 		Resource:    in.Resource,
 		Tags:        in.Tags,
+		Sources:     in.Sources,
+		UsageWindow: in.UsageWindow,
 		Status:      domain.Status(in.Status),
 		StatusNote:  in.StatusNote,
 		StaleAfter:  in.StaleAfter,
+		Runtime:     in.Runtime,
+		Parameters:  in.Parameters,
+		Computation: in.Computation,
+		Executor:    in.Executor,
+		Attester:    in.Attester,
 		Attrs:       in.Attrs,
 		Body:        in.Body,
 	}

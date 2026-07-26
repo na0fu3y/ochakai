@@ -349,6 +349,31 @@ func renderEntry(k *domain.Knowledge) string {
 	if k.StatusNote != "" {
 		fmt.Fprintf(&b, "status note: %s\n", k.StatusNote)
 	}
+	// The compact "what is this and can I trust it" view: what the entry
+	// derives from, and — for a computation — how a consumer would run it.
+	// The full records (authors, usage counts, receipts) are in
+	// `ochakai get`, which prints the whole OKF document.
+	if len(k.Sources) > 0 {
+		fmt.Fprintln(&b, "sources:")
+		for _, s := range k.Sources {
+			name := s.Title
+			if name == "" {
+				name = s.ID
+			}
+			if name == "" {
+				fmt.Fprintf(&b, "- %s\n", s.Resource)
+				continue
+			}
+			fmt.Fprintf(&b, "- %s — %s\n", name, s.Resource)
+		}
+	}
+	if k.Runtime != "" {
+		line := "runtime: " + k.Runtime
+		if k.Executor != nil {
+			line += "; run with " + k.Executor.Resource
+		}
+		fmt.Fprintln(&b, line)
+	}
 	if k.Description != "" {
 		fmt.Fprintf(&b, "\n%s\n", k.Description)
 	}
