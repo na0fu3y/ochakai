@@ -2,6 +2,7 @@ package httpauth
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -232,5 +233,39 @@ func TestInsecureDevHonorsDelegation(t *testing.T) {
 	// A malformed header must fail here, where the developer can see it.
 	if status, _ := get(t, "tanaka@example.co.jp"); status != http.StatusBadRequest {
 		t.Errorf("malformed header status = %d, want 400", status)
+	}
+}
+
+// A rejection from the middleware is an API error like any other, and the
+// message is the useful part: an unpermitted delegator is told to add
+// itself to OCHAKAI_DELEGATING_CALLERS. Clients read the documented
+// {"error": ...} envelope (internal/apiclient does), so text/plain here
+// meant they reported a bare "Forbidden" and dropped the instruction.
+func TestMiddlewareRejectsInTheAPIErrorEnvelope(t *testing.T) {
+	cfg := &config.Config{Delegators: []string{"someone-else@example.iam.gserviceaccount.com"}}
+	h := Middleware(cfg, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("a rejected request must not reach the handler")
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil)
+	r.Header.Set("X-Serverless-Authorization", "Bearer "+fakeIDToken(`{"email":"stranger@example.iam.gserviceaccount.com"}`))
+	r.Header.Set(OnBehalfOfHeader, "human:tanaka@example.co.jp")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want the JSON error envelope", ct)
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not the documented envelope: %v (%q)", err, w.Body.String())
+	}
+	if !strings.Contains(body.Error, "OCHAKAI_DELEGATING_CALLERS") {
+		t.Errorf("error drops the actionable part: %q", body.Error)
 	}
 }
