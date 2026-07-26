@@ -71,7 +71,7 @@ var completionLongFlags = map[string][]string{
 	"get":       {"json", "download", "url"},
 	"create":    {"json", "url"},
 	"update":    {"if-match", "json", "url"},
-	"verify":    {"url"},
+	"verify":    {"json", "url"},
 	"delete":    {"url"},
 	"purge":     {"url"},
 	"reembed":   {"limit", "once", "json", "url"},

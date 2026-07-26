@@ -111,7 +111,10 @@ _ochakai() {
     update)
       _arguments '-f[input file]:file:_files' '--if-match[update only if the entry still has this version (updated_at)]:version:' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
-    verify|delete|purge|detach|move)
+    verify)
+      _arguments '--json[print the entry as JSON]' '--url[server URL]:url:'
+      ;;
+    delete|purge|detach|move)
       _arguments '--url[server URL]:url:'
       ;;
     attach)
@@ -185,9 +188,10 @@ _ochakai() {
       opts="--note --json --url" ;;
     create)        opts="-f --json --url" ;;
     update)        opts="-f --if-match --json --url" ;;
-    verify|delete|purge|detach|move) opts="--url" ;;
+    verify)        opts="--json --url" ;;
+    delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
-    reembed)       opts="--url --limit --once --json" ;;
+    reembed)       opts="--limit --once --json --url" ;;
     export)        opts="--url --no-attachments" ;;
     import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
@@ -246,7 +250,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search browse context get cr
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
