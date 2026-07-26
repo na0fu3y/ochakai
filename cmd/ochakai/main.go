@@ -129,6 +129,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if err != nil {
 		return nil, nil, err
 	}
+	st.UseLogger(log)
 	embedDim := 0
 	var embedder embed.Embedder
 	if cfg.Embedding != nil {
