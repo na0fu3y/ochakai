@@ -141,8 +141,8 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 
 // ContextResult mirrors the /api/v1/context response: ranked hits plus
 // the full entries behind the top ones, expanded one hop through links.
-// Outline lists entries the server's budget dropped; it stays empty for
-// the CLI, which asks for everything and caps at render time instead.
+// Outline lists entries the server's budget dropped; it stays empty
+// unless the caller passes a budget.
 type ContextResult struct {
 	Hits      []domain.SearchHit      `json:"hits"`
 	Entries   []domain.Knowledge      `json:"entries"`
@@ -150,7 +150,12 @@ type ContextResult struct {
 	Truncated int                     `json:"truncated,omitempty"`
 }
 
-func (c *Client) Context(ctx context.Context, query string, types, statuses, tags []string, limit int, minScore float64) (*ContextResult, error) {
+// budget, when positive, caps the response bytes server-side: entries
+// that do not fit come back as Outline instead of being dropped
+// silently. 0 asks for everything, which is what the rendered CLI
+// output wants — it caps at render time, where it can say what it left
+// out.
+func (c *Client) Context(ctx context.Context, query string, types, statuses, tags []string, limit int, minScore float64, budget int) (*ContextResult, error) {
 	q := url.Values{}
 	q.Set("q", query)
 	if minScore > 0 {
@@ -167,6 +172,9 @@ func (c *Client) Context(ctx context.Context, query string, types, statuses, tag
 	}
 	if limit > 0 {
 		q.Set("limit", strconv.Itoa(limit))
+	}
+	if budget > 0 {
+		q.Set("budget", strconv.Itoa(budget))
 	}
 	var out ContextResult
 	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/context", q, nil, &out); err != nil {

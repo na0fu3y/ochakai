@@ -56,7 +56,7 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 		// production, hidden until the first deployment.
 		return delegate(
 			domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"},
-			h.Get(OnBehalfOfHeader), []string{"*"})
+			h.Values(OnBehalfOfHeader), []string{"*"})
 	}
 	// When both headers are present, Cloud Run validates only
 	// X-Serverless-Authorization — so it must take precedence here,
@@ -69,7 +69,7 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 	if err != nil {
 		return domain.Actor{}, http.StatusUnauthorized, err
 	}
-	return delegate(actor, h.Get(OnBehalfOfHeader), cfg.Delegators)
+	return delegate(actor, h.Values(OnBehalfOfHeader), cfg.Delegators)
 }
 
 // OnBehalfOfHeader carries the end-user identity a trusted caller is
@@ -90,8 +90,18 @@ const maxOnBehalfOf = 320 // the maximum length of an email address
 // A header from a caller that is not permitted to delegate is an error,
 // not a silent downgrade: an application that believes it is writing as
 // tanaka must not discover months later that every entry says otherwise.
-func delegate(caller domain.Actor, header string, delegators []string) (domain.Actor, int, error) {
-	header = strings.TrimSpace(header)
+func delegate(caller domain.Actor, headers []string, delegators []string) (domain.Actor, int, error) {
+	if len(headers) > 1 {
+		// Taking the first and ignoring the rest would pick an identity
+		// the sender did not necessarily mean; §5.2's rule against silent
+		// degradation applies to ambiguity as much as to rejection.
+		return caller, http.StatusBadRequest, fmt.Errorf(
+			"%s: sent %d times; send it once", OnBehalfOfHeader, len(headers))
+	}
+	header := ""
+	if len(headers) == 1 {
+		header = strings.TrimSpace(headers[0])
+	}
 	if header == "" {
 		return caller, 0, nil
 	}

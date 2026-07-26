@@ -189,3 +189,22 @@ func TestETagRoundTrip(t *testing.T) {
 		t.Error("malformed If-Match must be an error")
 	}
 }
+
+// An oversized JSON body is a 413, matching what the attachment path
+// (readBody) already answers. Calling it "invalid JSON" sent the caller
+// hunting for a syntax error in a payload that merely did not fit.
+func TestOversizedJSONBodyIsTooLarge(t *testing.T) {
+	h := Handler(&service.Service{})
+	body := `{"type":"metrics","id":"metrics/x","body":"` + strings.Repeat("a", 5<<20) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/knowledge", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
+	}
+	if got := w.Body.String(); !strings.Contains(got, "exceeds") {
+		t.Errorf("body = %s", got)
+	}
+}

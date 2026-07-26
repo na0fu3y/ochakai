@@ -29,6 +29,12 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 // (design doc 0030). The entry exists — a missing entry is ErrNotFound.
 var ErrConflict = errors.New("knowledge changed since it was read")
 
+// ErrCuratedTombstone is returned by Create when the id holds a
+// soft-deleted entry a human ruled on and the caller asked for curated
+// tombstones to be kept (design doc 0015 §3.1). Distinct from
+// ErrAlreadyExists: the blocking row is invisible to a plain read.
+var ErrCuratedTombstone = errors.New("knowledge id holds a curated tombstone")
+
 // ErrNotDeleted is returned by Purge for an entry that is still live.
 // Purging is the second step of a two-step destruction: delete first, so
 // no single call can erase history that was in use a moment ago.
@@ -238,9 +244,18 @@ func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]doma
 // otherwise be dead forever (the row still owns the primary key while
 // Update refuses deleted rows), and its history stays in the revisions
 // either way.
-func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
+func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTombstones bool) error {
 	now := nowStored()
 	k.CreatedAt, k.UpdatedAt = now, now
+	// Reviving a tombstone overwrites its status in place. When the caller
+	// must not replace a human ruling (design doc 0015 §3.1), the revival
+	// carries the same restriction as the UPDATE itself, so a curation
+	// landing between a service-level check and this write loses the race
+	// instead of being erased by it.
+	revive := ""
+	if keepCuratedTombstones {
+		revive = ` AND knowledge.status <> ALL($25::text[])`
+	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		links, attrs, err := marshalJSONFields(k)
 		if err != nil {
@@ -248,6 +263,20 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 		}
 		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
 		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
+		args := []any{
+			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
+			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
+			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
+			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
+			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt,
+		}
+		if keepCuratedTombstones {
+			curated := make([]string, len(domain.CuratedStatuses))
+			for i, st := range domain.CuratedStatuses {
+				curated[i] = string(st)
+			}
+			args = append(args, curated)
+		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
 			ON CONFLICT (id) DO UPDATE SET
@@ -263,16 +292,22 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 				links=EXCLUDED.links, attrs=EXCLUDED.attrs, body=EXCLUDED.body,
 				created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at,
 				deleted_at=NULL
-			WHERE knowledge.deleted_at IS NOT NULL`,
-			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote,
-			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
-			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
-			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
-			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt)
+			WHERE knowledge.deleted_at IS NOT NULL`+revive,
+			args...)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
+			if keepCuratedTombstones {
+				// Either a live entry or a curated tombstone blocked the
+				// write; only the second is this guard's business, and the
+				// caller needs to tell them apart to explain itself.
+				if t, err := s.GetTombstone(ctx, k.ID); err == nil && t.Status.Curated() {
+					return ErrCuratedTombstone
+				} else if err != nil && !errors.Is(err, ErrNotFound) {
+					return err
+				}
+			}
 			return ErrAlreadyExists
 		}
 		return s.addRevision(ctx, tx, k, "create", k.CreatedBy)

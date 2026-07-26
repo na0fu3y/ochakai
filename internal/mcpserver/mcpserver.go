@@ -237,14 +237,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		// Creating on a soft-deleted id revives that row in place, status
-		// and status_note included — the other way to overwrite a ruling
-		// from a surface with no If-Match channel, and the one the update
-		// and delete guards cannot see (design doc 0015 §3.1).
-		if err := svc.RefuseIfRevivingCurated(ctx, in.ID); err != nil {
-			return nil, knowledgeOut{}, err
-		}
-		k, err := svc.Create(ctx, in.toKnowledge(), actor)
+		k, err := svc.CreateKeepingCurated(ctx, in.toKnowledge(), actor)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}

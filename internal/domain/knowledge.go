@@ -119,6 +119,22 @@ const (
 // every user-facing enumeration (CLI help, completions, docs guards).
 var Statuses = []Status{StatusDraft, StatusVerified, StatusDeprecated, StatusRejected}
 
+// CuratedStatuses are the states a human has ruled on. Surfaces with no
+// If-Match channel must not replace one in place (design doc 0015 §3.1),
+// and the rule is enforced both in the service guards and in the store's
+// create transaction — so this list is the one place it is spelled.
+var CuratedStatuses = []Status{StatusVerified, StatusDeprecated, StatusRejected}
+
+// Curated reports whether a human has ruled on this status.
+func (s Status) Curated() bool {
+	for _, v := range CuratedStatuses {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
 func ValidStatus(s Status) bool {
 	for _, v := range Statuses {
 		if s == v {
