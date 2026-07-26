@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0006: Web UI の二つの配信経路
 
-Status: Accepted(2026-07-17)、改訂(2026-07-19: examples/webui を `ochakai serve-ui` に昇格)
+Status: Accepted(2026-07-17)、改訂(2026-07-19: examples/webui を `ochakai serve-ui` に昇格)。§6 の「IAP を前置しても記録されるのはサービスの SA」は [0032](0032-webui-iap-identity.md) が覆した(`OCHAKAI_IAP_AUDIENCE` 設定時はブラウザ利用者を記録する)
 Date: 2026-07-17
 
 ## 1. 目的
