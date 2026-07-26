@@ -90,9 +90,15 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 
 // newServiceProxy reverse-proxies to target as this service (not as the
 // browser user): every request carries the service's Google-signed ID
-// token in X-Serverless-Authorization, the header Cloud Run validates
-// in preference to Authorization — which therefore passes through
-// untouched for the backend's httpauth to ignore.
+// token in X-Serverless-Authorization, the header Cloud Run validates in
+// preference to Authorization.
+//
+// Both credential headers are dropped before that, whatever the browser
+// sent and whether or not a token is available, as `ochakai ui` drops
+// them. httpauth reads Authorization when X-Serverless-Authorization is
+// absent, so a token fetch that fails — the one moment the proxy has no
+// identity of its own — is exactly when a forwarded browser header would
+// get to name the actor instead.
 //
 // When iap is non-nil the request is additionally attributed to the
 // person driving the browser, taken from IAP's signed assertion (design
@@ -105,6 +111,9 @@ func newServiceProxy(target *url.URL, tokens serviceTokenSource, iap iapVerifier
 	proxy.Director = func(r *http.Request) {
 		director(r)
 		r.Host = target.Host
+		// Whatever the browser sent, this proxy speaks as the service.
+		r.Header.Del("Authorization")
+		r.Header.Del("X-Serverless-Authorization")
 		// Cloud Run service-to-service auth; harmless if unavailable
 		// (e.g. running locally against an unrestricted ochakai).
 		if tok, err := tokens.token(); err == nil {

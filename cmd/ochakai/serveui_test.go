@@ -56,8 +56,9 @@ func TestServeUIRequiresOchakaiURL(t *testing.T) {
 
 // The proxy authenticates as the service: X-Serverless-Authorization
 // carries its ID token (the header Cloud Run validates in preference to
-// Authorization), the Host header is rewritten to the target, and any
-// browser-sent Authorization passes through untouched.
+// Authorization), the Host header is rewritten to the target, and the
+// browser's own credential headers are dropped -- this proxy speaks as
+// the service, never as whoever is holding the page.
 func TestServeUIProxySignsAsService(t *testing.T) {
 	var got http.Header
 	var gotHost string
@@ -86,8 +87,8 @@ func TestServeUIProxySignsAsService(t *testing.T) {
 	if auth := got.Get("X-Serverless-Authorization"); auth != "Bearer sa-id-token" {
 		t.Errorf("X-Serverless-Authorization = %q, want the service's token", auth)
 	}
-	if auth := got.Get("Authorization"); auth != "Bearer browser-supplied" {
-		t.Errorf("Authorization = %q, want pass-through", auth)
+	if auth := got.Get("Authorization"); auth != "" {
+		t.Errorf("Authorization = %q, want the browser's header dropped", auth)
 	}
 	if gotHost != u.Host {
 		t.Errorf("upstream Host = %q, want %q", gotHost, u.Host)
@@ -108,7 +109,14 @@ func TestServeUIProxyForwardsWithoutToken(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	resp, err := http.Get(local.URL + "/mcp")
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/mcp", nil)
+	// A browser that sends credentials of its own, at the one moment the
+	// proxy has none: httpauth falls back to Authorization when
+	// X-Serverless-Authorization is absent, so a forwarded header here
+	// would name the actor the page chose.
+	req.Header.Set("Authorization", "Bearer browser-supplied")
+	req.Header.Set("X-Serverless-Authorization", "Bearer browser-forged")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,8 +124,10 @@ func TestServeUIProxyForwardsWithoutToken(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("proxied GET = %d, want 200", resp.StatusCode)
 	}
-	if auth := got.Get("X-Serverless-Authorization"); auth != "" {
-		t.Errorf("X-Serverless-Authorization = %q, want none", auth)
+	for _, h := range []string{"X-Serverless-Authorization", "Authorization"} {
+		if auth := got.Get(h); auth != "" {
+			t.Errorf("%s = %q; with no service token the request must carry none", h, auth)
+		}
 	}
 }
 
