@@ -69,13 +69,48 @@ func LinksFromBody(id, body string) []Link {
 			add(m[3], m[2])
 		}
 		for _, m := range bareURIRe.FindAllStringSubmatch(line, -1) {
-			if consumed[m[1]] { // already taken as a markdown link target
+			uri := trimSentencePunctuation(m[1])
+			if consumed[uri] || consumed[m[1]] { // already taken as a markdown link target
 				continue
 			}
-			add(m[1], "")
+			add(uri, "")
 		}
 	}
 	return links
+}
+
+// asciiEnders end an English sentence; cjkEnders end a Japanese one.
+// They are treated differently because English prose puts a space after
+// the stop and Japanese does not, so only the trailing run can be trimmed
+// in one and the match has to be cut at the first occurrence in the
+// other. Both apply to bare URIs alone: a markdown link's target has
+// explicit delimiters, so whatever the parentheses hold is meant.
+const (
+	asciiEnders = ".,;:!?"
+	cjkEnders   = "。、，．！？"
+)
+
+// trimSentencePunctuation ends a bare URI where the sentence around it
+// ends. "See ochakai://metrics/revenue." names metrics/revenue, not
+// "metrics/revenue." — which resolves to no entry, so the target gains no
+// backlink, a context pack never expands through it, and a move never
+// repairs it. Nothing reports the miss: a link to an id nobody wrote
+// looks exactly like a link to an entry not written yet.
+//
+// The trailing trim cannot serve Japanese, where "ochakai://tables/orders
+// を参照" has no space to stop at — so the match is also cut at the first
+// full-width stop, which no id in practice contains. Latin ids that
+// contain a dot ("ga4/events/purchase.v2") keep it: only a trailing run
+// is trimmed.
+//
+// An id may technically end in "." (only a leading dot is refused) and is
+// unreachable this way. It stays addressable in the form that says where
+// it ends: a markdown link.
+func trimSentencePunctuation(uri string) string {
+	if i := strings.IndexAny(uri, cjkEnders); i >= 0 {
+		uri = uri[:i]
+	}
+	return strings.TrimRight(uri, asciiEnders)
 }
 
 // resolveTarget turns one link target into an entry id, or "" when the
@@ -271,6 +306,11 @@ func rewriteLine(line string, rewriteTarget func(string) string) string {
 		if inCode(m[0], m[1]) || overlapsLink(line, lo) {
 			continue
 		}
+		// The URI ends where the sentence around it does, as it does when
+		// the same line is read for links: rewriting the punctuation along
+		// with it would compare "metrics/revenue." against the moved id
+		// and leave the reference pointing at an entry that is gone.
+		hi = lo + len(trimSentencePunctuation(line[lo:hi]))
 		if t := rewriteTarget(line[lo:hi]); t != line[lo:hi] {
 			edits = append(edits, edit{lo, hi, t})
 		}
