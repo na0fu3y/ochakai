@@ -1073,6 +1073,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL) // seeds.txt rides a fake blob store other packages' export scans can't read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
