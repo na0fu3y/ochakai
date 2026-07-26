@@ -779,8 +779,10 @@ components:
         is acting for; the forwarded identity is recorded as the actor
         and the caller is kept as Actor.via — never dropped. A caller
         not permitted to delegate is a 403 and a malformed value a 400 —
-        an error, not a silent downgrade. Honored on every call;
-        declared on the operations that record provenance.
+        an error, not a silent downgrade, and in the same JSON envelope
+        as every other error here, so the message reaches the caller.
+        Honored on every call; declared on the operations that record
+        provenance.
       schema: { type: string, maxLength: 320 }
   responses:
     Error:

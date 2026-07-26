@@ -18,6 +18,20 @@ import (
 
 type ctxKey struct{}
 
+// writeError answers in the same envelope the rest of the API uses —
+// {"error": "..."} as JSON — rather than http.Error's text/plain. These
+// rejections are the ones a caller most needs to read: a delegation
+// refused for an unpermitted caller says to add it to
+// OCHAKAI_DELEGATING_CALLERS, and a client that parses the documented
+// envelope (internal/apiclient does) would otherwise report a bare
+// "Forbidden" and leave the operator guessing. Written here rather than
+// borrowed from restapi, which imports this package.
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 // Middleware resolves the actor from the Google-verified ID token that
 // Cloud Run forwards after its IAM check. It parses claims WITHOUT
 // verifying the signature: on a non-public Cloud Run service the token
@@ -33,7 +47,7 @@ func Middleware(cfg *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor, status, err := ActorFromHeader(cfg, r.Header)
 		if err != nil {
-			http.Error(w, "auth: "+err.Error(), status)
+			writeError(w, status, "auth: "+err.Error())
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(WithActor(r.Context(), actor)))
