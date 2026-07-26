@@ -354,6 +354,41 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Errorf("live entry: %v", err)
 		}
 	})
+
+	// Creating over a live entry is still ErrAlreadyExists, but it has to
+	// say what holds the id: the caller that lands here is the agent that
+	// skipped the "search rejected first" step, and a bare "already
+	// exists" leaves it guessing while every neighbouring refusal names
+	// the next move.
+	t.Run("a live entry says what holds the id", func(t *testing.T) {
+		for status, wantAdvice := range map[domain.Status]string{
+			domain.StatusRejected:   "status_note",
+			domain.StatusVerified:   "report_outcome failed",
+			domain.StatusDeprecated: "no longer recommended",
+			domain.StatusDraft:      "update_knowledge",
+		} {
+			id := "queries/" + uid("guard-live-"+string(status))
+			k, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: "ruled on",
+				StatusNote: "duplicate of an existing golden query"}, actor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = svc.Delete(ctx, id, human) })
+			if status != domain.StatusDraft {
+				setStatus(t, k, status, human)
+			}
+
+			_, err = svc.CreateKeepingCurated(ctx, &domain.Knowledge{
+				Type: domain.TypeQueries, ID: id, Title: "re-proposal"}, actor)
+			if !errors.Is(err, store.ErrAlreadyExists) {
+				t.Fatalf("create over a live %s entry: got %v, want ErrAlreadyExists", status, err)
+			}
+			if !strings.Contains(err.Error(), string(status)) || !strings.Contains(err.Error(), wantAdvice) {
+				t.Errorf("create over a live %s entry names neither the status nor a way forward: %v", status, err)
+			}
+		}
+	})
 }
 
 // Reembed closes the gap between "semantic search is configured" and
