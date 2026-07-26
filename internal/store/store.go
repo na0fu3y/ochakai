@@ -41,14 +41,17 @@ var ErrCuratedTombstone = errors.New("knowledge id holds a curated tombstone")
 // no single call can erase history that was in use a moment ago.
 var ErrNotDeleted = errors.New("knowledge is live; soft-delete it before purging")
 
-// nowStored is the current UTC time truncated to the microsecond precision
+// NowStored is the current UTC time truncated to the microsecond precision
 // PostgreSQL timestamptz stores. Setting entity timestamps from it means an
 // in-memory updated_at always equals the value that round-trips through the
 // database — the invariant the ETag/If-Match optimistic lock depends on
-// (design doc 0030): time.Now()'s nanoseconds would otherwise make the
+// (design doc 0030 §3.2): time.Now()'s nanoseconds would otherwise make the
 // value returned by a write differ from the stored one on nanosecond-
 // resolution clocks (Linux), breaking a client's next conditional update.
-func nowStored() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
+//
+// Exported because the service layer stamps timestamps of its own —
+// verified_at, rejected_at — and they answer to the same column.
+func NowStored() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -259,7 +262,7 @@ func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]doma
 // Update refuses deleted rows), and its history stays in the revisions
 // either way.
 func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTombstones bool) error {
-	now := nowStored()
+	now := NowStored()
 	k.CreatedAt, k.UpdatedAt = now, now
 	// Reviving a tombstone overwrites its status in place. When the caller
 	// must not replace a human ruling (design doc 0015 §3.1), the revival
@@ -335,7 +338,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 // read-modify-write race that silently lost updates. A nil ifMatch keeps
 // the prior last-write-wins behavior for callers that do not opt in.
 func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) error {
-	k.UpdatedAt = nowStored()
+	k.UpdatedAt = NowStored()
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		links, attrs, err := marshalJSONFields(k)
 		if err != nil {
@@ -563,7 +566,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 	if err != nil {
 		return nil, err
 	}
-	k.UpdatedAt = nowStored()
+	k.UpdatedAt = NowStored()
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		// A soft-deleted entry still owns the id — the row holds the primary
 		// key and its revisions hold (id, rev) — so the destination is taken
@@ -668,7 +671,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	if err != nil {
 		return err
 	}
-	now := nowStored()
+	now := NowStored()
 	movedDirs := path.Dir(oldID) != path.Dir(newID)
 	for i := range referrers {
 		r := &referrers[i]
