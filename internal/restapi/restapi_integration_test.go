@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -63,7 +62,7 @@ func TestRESTIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := httptest.NewServer(Handler(svc))
+	srv := checkedServer(t, Handler(svc))
 	defer srv.Close()
 
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
@@ -280,7 +279,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	}
 	s.UseBlobStore(memBlobStore{})
 	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := httptest.NewServer(Handler(svc))
+	srv := checkedServer(t, Handler(svc))
 	defer srv.Close()
 
 	typ := fmt.Sprintf("restatt%d", time.Now().UnixNano())
@@ -358,6 +357,25 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 		t.Errorf("stale conditional GET = %d with %d bytes, want 200 with the file", resp.StatusCode, len(body))
 	}
 
+	// Detach: the attachment goes away, the entry stays.
+	req, _ = http.NewRequest(http.MethodDelete, attURL, nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("detach status = %d, want 204", resp.StatusCode)
+	}
+	resp, err = http.Get(attURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("GET a detached attachment = %d, want 404", resp.StatusCode)
+	}
+
 	// Soft-delete the entry so its attachment row does not stay live in
 	// the shared test database: other packages' tests scan all live
 	// attachments (the export snapshot) and resolve bytes from their own
@@ -427,7 +445,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := httptest.NewServer(Handler(svc))
+	srv := checkedServer(t, Handler(svc))
 	defer srv.Close()
 
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
@@ -525,7 +543,7 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := httptest.NewServer(Handler(svc))
+	srv := checkedServer(t, Handler(svc))
 	defer srv.Close()
 
 	typ := fmt.Sprintf("ctxbudget%d", time.Now().UnixNano())
@@ -594,5 +612,108 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 	}
 	if over := len(wire) - len(ranking); over > budget {
 		t.Errorf("response carries %d bytes of knowledge over a %d budget", over, budget)
+	}
+}
+
+// TestRESTIntegrationUsageBacklinksAndMove covers the four endpoints the
+// REST integration tests had never called — report_outcome, usage,
+// backlinks, and move — which also left them outside the contract check
+// (design doc 0035 §3.2). The move is the assertion worth having: design
+// doc 0021 promises a rename carries everything keyed by the id and
+// rewrites inbound references, so the insight that linked to the metric
+// must still link to it afterwards, at its new address.
+func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := checkedServer(t, Handler(svc))
+	defer srv.Close()
+
+	root := fmt.Sprintf("restumb%d", time.Now().UnixNano())
+	metric, insight := root+"/revenue", root+"/revenue-reading"
+	create := func(id, title, body string) {
+		t.Helper()
+		payload, _ := json.Marshal(map[string]any{
+			"type": root, "id": id, "title": title, "body": body,
+		})
+		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("create %s = %d: %s", id, resp.StatusCode, b)
+		}
+	}
+	create(metric, "Revenue", "The headline number.")
+	create(insight, "Reading revenue", "Seasonality caveats for [Revenue](ochakai://"+metric+").")
+
+	// Backlinks: the insight links to the metric, not the other way round.
+	var backlinks struct {
+		Entries []domain.Knowledge `json:"entries"`
+	}
+	getJSON(t, srv.URL+"/api/v1/backlinks/"+metric, &backlinks)
+	if len(backlinks.Entries) != 1 || backlinks.Entries[0].ID != insight {
+		t.Fatalf("backlinks of %s = %+v, want just %s", metric, backlinks.Entries, insight)
+	}
+
+	// Report an outcome, then read the totals back.
+	report, _ := json.Marshal(map[string]string{"outcome": "worked", "note": "ran it against last quarter"})
+	resp, err := http.Post(srv.URL+"/api/v1/usage/"+metric, "application/json", bytes.NewReader(report))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reported domain.Usage
+	if err := json.NewDecoder(resp.Body).Decode(&reported); err != nil {
+		t.Fatalf("report outcome: decode: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || reported.Worked != 1 {
+		t.Fatalf("report outcome = %d, worked = %d, want 200 and 1", resp.StatusCode, reported.Worked)
+	}
+	var usage domain.Usage
+	getJSON(t, srv.URL+"/api/v1/usage/"+metric, &usage)
+	if usage.Worked != 1 {
+		t.Errorf("usage after one worked report = %+v", usage)
+	}
+
+	// Move, and check the insight's link came along (design doc 0021).
+	moved := root + "/finance/revenue"
+	move, _ := json.Marshal(map[string]string{"from": metric, "to": moved})
+	resp, err = http.Post(srv.URL+"/api/v1/move", "application/json", bytes.NewReader(move))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var after domain.Knowledge
+	if err := json.NewDecoder(resp.Body).Decode(&after); err != nil {
+		t.Fatalf("move: decode: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || after.ID != moved {
+		t.Fatalf("move = %d, id = %q, want 200 and %q", resp.StatusCode, after.ID, moved)
+	}
+	backlinks.Entries = nil
+	getJSON(t, srv.URL+"/api/v1/backlinks/"+moved, &backlinks)
+	if len(backlinks.Entries) != 1 || backlinks.Entries[0].ID != insight {
+		t.Errorf("backlinks after the move = %+v, want the insight to have followed", backlinks.Entries)
+	}
+
+	// Usage is keyed by the id, so it moved too.
+	usage = domain.Usage{}
+	getJSON(t, srv.URL+"/api/v1/usage/"+moved, &usage)
+	if usage.Worked != 1 {
+		t.Errorf("usage after the move = %+v, want the worked report to have followed", usage)
 	}
 }
