@@ -125,7 +125,7 @@ func FuzzLinksFromBody(f *testing.F) {
 	})
 }
 
-// TestOKFStatusRoundTrip states design doc 0034 §3.4's mapping over the
+// TestOKFStatusRoundTrip states design doc 0036 §3.4's mapping over the
 // whole status vocabulary rather than the examples: exporting and
 // re-importing returns the status, except for the one direction the
 // design calls lossy on purpose. A status added to Statuses without a
@@ -146,7 +146,7 @@ func TestOKFStatusRoundTrip(t *testing.T) {
 		}
 		want := s
 		if s == StatusRejected {
-			want = StatusDeprecated // OKF has no "was never accepted" (0034 §3.4)
+			want = StatusDeprecated // OKF has no "was never accepted" (0036 §3.4)
 		}
 		if got != want {
 			t.Errorf("%q exported as %q read back as %q, want %q", s, okf, got, want)

@@ -3,8 +3,8 @@ package okf
 // Property tests for the two directions of the OKF format (design doc
 // 0035 §3.3). Parse is the only place ochakai reads bytes it did not
 // write — a bundle from Git, from another instance, from a producer that
-// is not ochakai at all — and design doc 0034 §3.4 claims an
-// ochakai → ochakai round-trip is exact. Both are statements about every
+// is not ochakai at all — and design doc 0036 §3.12 lays out
+// the round-trip rules ochakai promises to hold to. Both are statements about every
 // input, which is what a fuzz target can check and an example cannot.
 
 import (
@@ -51,7 +51,7 @@ func FuzzParse(f *testing.F) {
 		}
 		// The status is either one ochakai knows or deliberately unset —
 		// "" means "the document named none", which the write path reads
-		// as draft-on-create/unchanged-on-update (design doc 0034 §3.4).
+		// as draft-on-create/unchanged-on-update (design doc 0036 §3.4).
 		if k.Status != "" && !domain.ValidStatus(k.Status) {
 			t.Errorf("accepted status %q", k.Status)
 		}
@@ -72,7 +72,7 @@ func FuzzParse(f *testing.F) {
 	})
 }
 
-// FuzzDocumentRoundTrip checks design doc 0034 §3.4's claim — that an
+// FuzzDocumentRoundTrip checks design doc 0036 §3.12's claim — that an
 // ochakai export re-imports as what it says — over arbitrary field
 // values rather than the handful an example can name. Writing then
 // reading must return the same authored content.
@@ -82,6 +82,13 @@ func FuzzParse(f *testing.F) {
 // and the importer takes it from the filename. Links are derived from
 // the body on write, not stored (design doc 0024). Provenance belongs to
 // the instance, not the bundle (design doc 0009).
+//
+// What this varies is the base envelope — type, title, description,
+// tags, status, stale_after, body. The typed fields design doc 0036
+// lifted out of attrs (sources and usage_window, §3.7; the Attested
+// Computation contract, §3.8) are compared by SameContent but left at
+// their zero values here, so the property does not yet say anything
+// about them. Worth extending when someone next touches them.
 func FuzzDocumentRoundTrip(f *testing.F) {
 	f.Add("Metric", "Revenue", "The headline number", "sales,orders", "verified", "2026-12-31", "Body text.")
 	f.Add("Golden Query", "", "", "", "draft", "", "")
@@ -150,7 +157,7 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 		want.Body = strings.TrimSpace(k.Body)
 		// The one documented lossy step: OKF has no lifecycle value for
 		// "was never accepted", so a rejection exports as deprecated and
-		// comes back as one (design doc 0034 §3.4). The ruling stays in
+		// comes back as one (design doc 0036 §3.4). The ruling stays in
 		// this instance's record, which is where 0009 puts it.
 		if want.Status == domain.StatusRejected {
 			want.Status = domain.StatusDeprecated
