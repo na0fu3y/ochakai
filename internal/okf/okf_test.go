@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
@@ -253,5 +253,40 @@ func TestWriteTarGzRoundTrip(t *testing.T) {
 	}
 	if len(got) != len(files) {
 		t.Errorf("tar has %d entries, want %d", len(got), len(files))
+	}
+}
+
+// TestDocumentKeepsLeadingNewlines is why the YAML library moved to the
+// maintained fork. gopkg.in/yaml.v3 v3.0.1 emitted a value that begins
+// with a newline as a block scalar that dropped exactly that newline —
+// its own output did not read back as what went in, so an export of such
+// an entry silently lost a character on re-import. The bug is fixed
+// upstream in go.yaml.in/yaml, and this pins the fix: it fails against
+// the old library.
+//
+// Not a general claim about round-tripping. A value whose first line
+// starts with a tab still emits frontmatter the parser rejects, in every
+// yaml version tried; see the fuzz target's skip for that one.
+func TestDocumentKeepsLeadingNewlines(t *testing.T) {
+	for _, title := range []string{
+		"\nleading",
+		"\n\nleading",
+		"\n",
+		"trailing\n",
+		"first\nsecond",
+		"tab\tmid\nsecond",
+	} {
+		doc, err := Document(&domain.Knowledge{Type: domain.TypeMetrics, Title: title})
+		if err != nil {
+			t.Fatalf("Document(title=%q): %v", title, err)
+		}
+		got, _, err := Parse(doc)
+		if err != nil {
+			t.Errorf("title=%q: our own document does not parse: %v\n%s", title, err, doc)
+			continue
+		}
+		if got.Title != title {
+			t.Errorf("title %q came back as %q\n%s", title, got.Title, doc)
+		}
 	}
 }
