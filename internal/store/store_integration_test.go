@@ -799,7 +799,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-revive-me", Title: "imposter",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, dup, false); err != ErrAlreadyExists {
+	if err := s.Create(ctx, dup, false); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("create over a live entry = %v, want ErrAlreadyExists", err)
 	}
 
@@ -861,7 +861,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-revive-no", Title: "try again",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, again, false); err != ErrAlreadyExists {
+	if err := s.Create(ctx, again, false); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("create over a rejected entry = %v, want ErrAlreadyExists", err)
 	}
 }
@@ -975,7 +975,7 @@ func TestIntegrationAttachments(t *testing.T) {
 	if err := s.SoftDelete(ctx, k.ID, actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.GetAttachment(ctx, k.ID, "weekly.png"); err != ErrNotFound {
+	if _, _, err := s.GetAttachment(ctx, k.ID, "weekly.png"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("attachment of a deleted entry = %v, want ErrNotFound", err)
 	}
 }
@@ -1045,7 +1045,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 		t.Errorf("changed_by = %+v, want %+v", revs[0].ChangedBy, actor)
 	}
 
-	if _, err := s.ListRevisions(ctx, "it-revs-never-existed", 50); err != ErrNotFound {
+	if _, err := s.ListRevisions(ctx, "it-revs-never-existed", 50); !errors.Is(err, ErrNotFound) {
 		t.Errorf("revisions of a nonexistent entry = %v, want ErrNotFound", err)
 	}
 }

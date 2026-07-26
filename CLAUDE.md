@@ -27,8 +27,11 @@ doc in the same PR and keep the index truthful:
 ## Checks and conventions
 
 CI runs `gofmt -l .`, `go vet`, `go test -race`, a `CGO_ENABLED=0`
-build, and govulncheck — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
-exact commands and the store integration test setup.
+build, golangci-lint, and govulncheck — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for the exact commands and the store
+integration test setup. Linters are configured in
+[.golangci.yml](.golangci.yml) and chosen so a clean tree reports
+nothing ([docs/design/0035](docs/design/0035-verifiability.md)).
 
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml); keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`

@@ -22,6 +22,13 @@ PR の中に残る。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
 
+## 実装の品質ゲート
+
+- [0035 不変条件を機械に検査させる](0035-verifiability.md) — **Accepted**。
+  型に載らない不変条件(網羅性・wire 契約・往復の正確さ)を、
+  golangci-lint / openapi 契約テスト / fuzz の三層で外から検査する。
+  linter の選定基準は「clean tree で 0 件」。
+
 ## 認証・認可と provenance
 
 - [0002 認証・認可](0002-authn-authz.md) — **Accepted**(§4 の
