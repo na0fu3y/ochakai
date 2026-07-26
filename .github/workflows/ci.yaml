@@ -26,9 +26,28 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # setup-go's built-in cache keys on go.sum alone and is shared
+          # by every job, so the first job to finish freezes it and this
+          # job's build cache (race-instrumented deps, vet facts) never
+          # gets saved. Cache explicitly instead, per job, saving on
+          # every run: the run_id suffix makes each key unique, and
+          # restore-keys start from the most recent previous run.
+          cache: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: test-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            test-go-${{ hashFiles('go.sum') }}-
+            test-go-
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
-      - run: go test -race ./...
+      # -count=1: with a warm build cache go would reuse cached test
+      # results, but the store tests talk to Postgres, which the test
+      # cache cannot see — make them run every time.
+      - run: go test -race -count=1 ./...
         env:
           OCHAKAI_TEST_DATABASE_URL: postgres://t:t@localhost:55433/t?sslmode=disable
       - run: CGO_ENABLED=0 go build -trimpath ./...
@@ -39,6 +58,17 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false # same shared-key problem as in the test job
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: lint-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            lint-go-${{ hashFiles('go.sum') }}-
+            lint-go-
       # Pinned, unlike govulncheck: a new govulncheck release failing CI
       # means a new vulnerability, but a new linter release failing CI
       # only means a new check.
