@@ -91,12 +91,14 @@ PR の中に残る。
 
 ## サーフェス(REST / MCP / CLI / Web UI)
 
-- [0004 リモート CLI](0004-cli.md) — **Accepted**。REST API の
+- [0004 リモート CLI](0004-cli.md) — **Accepted**(コマンド表の
+  `compile` 行と終了コード 2 は 0028 で対象消滅)。REST API の
   薄いクライアントとしての CLI。
 - [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Accepted**。
   データの出し入れを API 経由に一本化。DB 直結で残るのは `serve` のみ。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) —
-  **Accepted**。4 サーフェスの役割分担と、意図して実装しないもの。
+  **Accepted**(§4 の verify 糖衣の判断は 0025 §6 が覆した)。
+  4 サーフェスの役割分担と、意図して実装しないもの。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
   — **Accepted**。バイト予算の決定を記録し、`hits` から知識の複製を外す
   (全サーフェスで `id`/`type`/`title`/`status`/`score` のみ)。REST の
@@ -105,8 +107,9 @@ PR の中に残る。
 ## 検証ループと利用測定
 
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
-  **Accepted**。検証の時効と、failed 報告・利用実績による再検証の
-  優先順位づけ。
+  **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した)。
+  検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。
+  再検証を記録する `POST /api/v1/verify/{id}` はここが出所。
 - [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
   — **Accepted**。利用イベントをメモリにバッファして定期フラッシュし、
   利用統計は best-effort と明示する(上限超過は破棄、シャットダウンは
