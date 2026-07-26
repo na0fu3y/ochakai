@@ -242,8 +242,22 @@ func (c *Client) Create(ctx context.Context, k *domain.Knowledge) (*domain.Knowl
 // wrote nothing because the payload matched the stored content (the
 // Ochakai-Unchanged response header); servers predating the header
 // always report changed=true.
-func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (updated *domain.Knowledge, changed bool, err error) {
-	resp, err := c.do(ctx, http.MethodPut, entryPath(k.ID), nil, k)
+//
+// A non-empty ifMatch is sent as the If-Match precondition: the entry's
+// version — its updated_at in RFC3339Nano, as a prior read returned it
+// (the ETag header, or the JSON body's updated_at field). The update
+// then lands only if the entry still has that version; a stale one is a
+// 412 APIError and nothing is written. "" means last write wins.
+func (c *Client) Update(ctx context.Context, k *domain.Knowledge, ifMatch string) (updated *domain.Knowledge, changed bool, err error) {
+	buf, err := json.Marshal(k)
+	if err != nil {
+		return nil, false, err
+	}
+	var hdr http.Header
+	if ifMatch != "" {
+		hdr = http.Header{"If-Match": {etagValue(ifMatch)}}
+	}
+	resp, err := c.doRaw(ctx, http.MethodPut, entryPath(k.ID), nil, "application/json", hdr, bytes.NewReader(buf))
 	if err != nil {
 		return nil, false, err
 	}
@@ -253,6 +267,15 @@ func (c *Client) Update(ctx context.Context, k *domain.Knowledge) (updated *doma
 		return nil, false, err
 	}
 	return &out, resp.Header.Get("Ochakai-Unchanged") != "true", nil
+}
+
+// etagValue renders a version as an If-Match value: quoted, the way HTTP
+// spells an ETag, unless the caller already passed one (or "*").
+func etagValue(v string) string {
+	if v == "*" || strings.HasPrefix(v, `"`) {
+		return v
+	}
+	return `"` + v + `"`
 }
 
 func (c *Client) Delete(ctx context.Context, id string) error {
@@ -304,7 +327,7 @@ func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []by
 		q = url.Values{"okf_path": {okfPath}}
 	}
 	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), q,
-		"application/octet-stream", bytes.NewReader(data))
+		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
@@ -426,12 +449,13 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		rd = bytes.NewReader(buf)
 		contentType = "application/json"
 	}
-	return c.doRaw(ctx, method, path, query, contentType, rd)
+	return c.doRaw(ctx, method, path, query, contentType, nil, rd)
 }
 
 // doRaw is do without the JSON encoding: the body is sent verbatim
-// (nil rd and empty contentType for body-less requests).
-func (c *Client) doRaw(ctx context.Context, method, path string, query url.Values, contentType string, rd io.Reader) (*http.Response, error) {
+// (nil rd and empty contentType for body-less requests); extra headers,
+// if any, are copied onto the request.
+func (c *Client) doRaw(ctx context.Context, method, path string, query url.Values, contentType string, extra http.Header, rd io.Reader) (*http.Response, error) {
 	u := c.base + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -442,6 +466,9 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+	for name, values := range extra {
+		req.Header[name] = values
 	}
 	if c.tokens != nil {
 		tok, err := c.tokens.Token()

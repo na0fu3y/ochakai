@@ -10,7 +10,7 @@ info:
     human-facing browse/revisions/backlinks reads, and attachment writes —
     so users can build their own web UIs. ochakai executes no SQL and uses
     no LLM.
-  version: 0.1.0
+  version: 0.13.0
   license:
     name: MIT
 servers:
@@ -18,7 +18,11 @@ servers:
 # Authentication is Cloud Run IAM (Google identity), handled by the
 # infrastructure before requests reach ochakai — there is no
 # application-level auth scheme. ochakai reads the forwarded identity
-# only to record provenance (design docs 0002/0003).
+# only to record provenance (design docs 0002/0003). An application on
+# the delegator allowlist may forward the end user it acts for with
+# X-Ochakai-On-Behalf-Of (design doc 0027) — the header is honored on
+# every call; it is declared below (components/parameters/OnBehalfOf)
+# on the operations that record provenance.
 paths:
   /api/v1/knowledge:
     get:
@@ -96,6 +100,8 @@ paths:
         authorization). A live entry with the same id is a 409 —
         including rejected ones — but creating over a soft-deleted entry
         revives it (its prior history stays in the revisions).
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
       requestBody:
         required: true
         content:
@@ -252,6 +258,8 @@ paths:
       responses:
         "200":
           description: The entry.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
@@ -261,7 +269,12 @@ paths:
       summary: Update a knowledge entry (full replacement; revisions retained)
       description: >
         The path is the address; the body carries the metadata — type
-        included, always (design doc 0016).
+        included, always (design doc 0016). With If-Match, the update is
+        conditional on the entry's version — see the parameter; without
+        it, last write wins.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/OnBehalfOf"
       requestBody:
         required: true
         content:
@@ -271,6 +284,7 @@ paths:
         "200":
           description: Updated, or unchanged (see the Ochakai-Unchanged header).
           headers:
+            ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Unchanged:
               description: >
                 Set to "true" when the payload matched the stored content
@@ -280,7 +294,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+        "400":
+          description: >
+            Invalid entry, or a malformed If-Match value (one that is
+            neither "*" nor an RFC3339Nano version, quoted or bare).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
         "404": { $ref: "#/components/responses/Error" }
+        "412":
+          description: >
+            The If-Match precondition failed: the entry changed since it
+            was read. Nothing was written — re-read the entry, redo the
+            edit, and retry with the new version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
     delete:
       operationId: deleteKnowledge
       summary: Soft-delete a knowledge entry (history retained)
@@ -300,6 +335,7 @@ paths:
           in: query
           description: Hard-delete an already soft-deleted entry.
           schema: { type: string, enum: ["true"] }
+        - $ref: "#/components/parameters/OnBehalfOf"
       responses:
         "204": { description: Deleted. }
         "404": { $ref: "#/components/responses/Error" }
@@ -319,6 +355,8 @@ paths:
         DELETE ...?purge=true. Lives at its own top-level path for the
         same reason /usage and /revisions do — a suffix after the
         hierarchical id could be confused with an ID segment.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
       requestBody:
         required: true
         content:
@@ -364,6 +402,8 @@ paths:
         ruling the write-back loop turns on. Lives at its own top-level
         path for the same reason /usage does — a suffix after the
         hierarchical id could be confused with an ID segment.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
       responses:
         "200":
           description: The verified entry.
@@ -371,9 +411,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
           headers:
-            ETag:
-              schema: { type: string }
-              description: The entry's version, usable as If-Match on a later update.
+            ETag: { $ref: "#/components/headers/ETag" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
@@ -407,6 +445,8 @@ paths:
         failed counts against verified entries flag them for
         re-verification. The caller's identity is recorded with each
         report; the optional note travels with the raw event.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
       requestBody:
         required: true
         content:
@@ -442,7 +482,8 @@ paths:
       operationId: listKnowledgeRevisions
       summary: Change history for one knowledge entry
       description: >
-        Every create/update/delete/attach/detach, newest first, each with
+        Every change — create, update, verify, delete, move, attach,
+        detach — newest first, each with
         who made it, when, and the full snapshot as of that change — the
         read surface behind "every change kept as a revision". Works for
         soft-deleted entries too: the audit trail is most interesting
@@ -531,6 +572,7 @@ paths:
         server to have GCS configured (OCHAKAI_GCS_BUCKET); without it
         the request fails with 501.
       parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
         - name: okf_path
           in: query
           required: false
@@ -580,6 +622,8 @@ paths:
       description: >
         Removes the attachment (kept as a revision; the content-addressed
         bytes remain referenced by history).
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
       responses:
         "204": { description: Detached. }
         "404": { $ref: "#/components/responses/Error" }
@@ -671,6 +715,43 @@ paths:
                     type: integer
         "501": { $ref: "#/components/responses/Error" }
 components:
+  headers:
+    ETag:
+      description: >
+        The entry's version — its updated_at in RFC3339Nano, quoted. A
+        client echoes it in If-Match on a later update to write only if
+        nothing changed meanwhile (design doc 0030).
+      schema: { type: string }
+  parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >
+        Optimistic-concurrency precondition (design doc 0030): the
+        entry's version — its updated_at in RFC3339Nano, as a prior read
+        returned it in the ETag response header (quotes optional; the
+        JSON body's updated_at field is the same value). The write
+        happens only if the entry still has this version; an entry
+        changed since it was read is a 412 and nothing is written.
+        Absent or "*" means no precondition — last write wins. A value
+        that is neither is a 400.
+      schema: { type: string }
+    OnBehalfOf:
+      name: X-Ochakai-On-Behalf-Of
+      in: header
+      required: false
+      description: >
+        Delegated end-user identity (design doc 0027): "kind:identity",
+        kind human or agent, no whitespace in the identity, at most 320
+        bytes — e.g. "human:tanaka@example.co.jp". An application on the
+        delegator allowlist (OCHAKAI_DELEGATING_CALLERS) forwards who it
+        is acting for; the forwarded identity is recorded as the actor
+        and the caller is kept as Actor.via — never dropped. A caller
+        not permitted to delegate is a 403 and a malformed value a 400 —
+        an error, not a silent downgrade. Honored on every call;
+        declared on the operations that record provenance.
+      schema: { type: string, maxLength: 320 }
   responses:
     Error:
       description: Error.
@@ -868,7 +949,7 @@ components:
         how, when, and the full snapshot as of that change.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per entry. }
-        change: { type: string, enum: [create, update, delete, move, attach, detach] }
+        change: { type: string, enum: [create, update, verify, delete, move, attach, detach] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         snapshot: { $ref: "#/components/schemas/Knowledge" }
