@@ -371,7 +371,7 @@ func TestReembedIntegration(t *testing.T) {
 	// not a nil dereference.
 	embedder := svc.Embedder
 	svc.Embedder = nil
-	_, err := svc.Reembed(ctx, 10)
+	_, err := svc.Reembed(ctx, "", 10)
 	var unsupported *UnsupportedError
 	if !errors.As(err, &unsupported) {
 		t.Errorf("without an embedder: got %v, want an UnsupportedError naming the setting", err)
@@ -390,7 +390,7 @@ func TestReembedIntegration(t *testing.T) {
 	// up whatever else happens to be unembedded.
 	unembedded := func(t *testing.T, model string) bool {
 		t.Helper()
-		ids, err := svc.Store.ListUnembedded(ctx, model, 5000)
+		ids, err := svc.Store.ListUnembedded(ctx, model, "", 5000)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -408,7 +408,7 @@ func TestReembedIntegration(t *testing.T) {
 		t.Fatal("a model change must leave the old vector behind")
 	}
 
-	res, err := svc.Reembed(ctx, 5000)
+	res, err := svc.Reembed(ctx, "", 5000)
 	if err != nil {
 		t.Fatalf("Reembed after a model change: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestReembedIntegration(t *testing.T) {
 	}
 
 	// And it is idempotent: a second pass finds this entry already done.
-	done, err := svc.Reembed(ctx, 5000)
+	done, err := svc.Reembed(ctx, "", 5000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	}
 
 	// A pass smaller than the corpus must say what it did not reach.
-	res, err := svc.Reembed(ctx, 2)
+	res, err := svc.Reembed(ctx, "", 2)
 	if err != nil {
 		t.Fatal(err)
 	}

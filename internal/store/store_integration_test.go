@@ -85,7 +85,7 @@ func TestIntegration(t *testing.T) {
 
 	// The joined vector query must not have ambiguous column references
 	// (knowledge_embedding shares type/id/updated_at with knowledge).
-	vec, err := s.SearchVector(ctx, []float32{1, 0, 0, 0}, Filter{
+	vec, err := s.SearchVector(ctx, []float32{1, 0, 0, 0}, "test-model", Filter{
 		Types: []domain.Type{domain.TypeMetrics}, Statuses: []domain.Status{domain.StatusVerified},
 	}, 20)
 	if err != nil {

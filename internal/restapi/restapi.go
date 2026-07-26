@@ -567,17 +567,19 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
-	// POST /api/v1/reembed?limit=N — fill in vectors for entries that have
-	// none for the configured model. Not an MCP tool: an operator task
-	// with an unbounded runtime and no place in an agent's turn (design
-	// doc 0015).
+	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for
+	// entries and attachments that have none for the configured model.
+	// The response's cursor feeds the next call: a pass whose entries all
+	// fail would otherwise hand back the same window forever. Not an MCP
+	// tool: an operator task with an unbounded runtime and no place in an
+	// agent's turn (design doc 0015).
 	mux.HandleFunc("POST /api/v1/reembed", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := queryInt(r.URL.Query(), "limit")
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		res, err := svc.Reembed(r.Context(), limit)
+		res, err := svc.Reembed(r.Context(), r.URL.Query().Get("cursor"), limit)
 		if err != nil {
 			writeError(w, err)
 			return

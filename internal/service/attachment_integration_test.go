@@ -188,7 +188,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	// Had the png slipped past the media gate, its stub vector would be
 	// the fallback {0,0,0,1} and the entry would score ~1 here; with only
 	// expected.txt embedded, the entry's best attachment is orthogonal.
-	vhits, err := s.SearchVectorAttachments(ctx, []float32{0, 0, 0, 1}, store.Filter{}, 50)
+	vhits, err := s.SearchVectorAttachments(ctx, []float32{0, 0, 0, 1}, "stub", store.Filter{}, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	if _, err := fsvc.Attach(ctx, id, "chart.png", "", png, actor); err != nil {
 		t.Fatalf("re-attach png with file embedder: %v", err)
 	}
-	vhits, err = s.SearchVectorAttachments(ctx, []float32{0, 0, 1, 0}, store.Filter{}, 50)
+	vhits, err = s.SearchVectorAttachments(ctx, []float32{0, 0, 1, 0}, "stub", store.Filter{}, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,4 +220,101 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	if !found {
 		t.Errorf("image attachment not searchable with a file-capable embedder: %+v", vhits)
 	}
+}
+
+// Reembed covers attachment vectors, not just entry vectors (design doc
+// 0020). Only attach writes them, so the documented recovery from a
+// dimension change — drop both embedding tables, restart, reembed —
+// used to leave every file findable by name alone, forever. Also pins
+// the cursor: a pass must not keep handing back the same window.
+func TestReembedCoversAttachmentsIntegration(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	lockLiveAttachments(t, dbURL)
+	ctx := context.Background()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup, not defer: the entry below is removed from a t.Cleanup,
+	// which runs after the test function returns — a deferred Close would
+	// already have shut the pool, leaving a live entry whose attachment
+	// bytes exist only in this test's in-memory blob store. Registered
+	// first, so LIFO runs it last.
+	t.Cleanup(func() { s.Close() })
+	s.UseBlobStore(memBlobStore{})
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+	model := fmt.Sprintf("reembed-att-%d", time.Now().UnixNano())
+	svc := &Service{Store: s, Embedder: stubEmbedder{}, Log: slog.New(slog.DiscardHandler)}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	typ := domain.Type(fmt.Sprintf("svcre%d", time.Now().UnixNano()))
+	id := string(typ) + "/host"
+	if _, err := svc.Create(ctx, &domain.Knowledge{Type: typ, ID: id, Title: "host"}, actor); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if _, err := svc.Attach(ctx, id, name, "", []byte("some text for "+name), actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Simulate the recovery procedure: the vectors written by attach are
+	// under the stub's model, so switching the model leaves both
+	// attachments unembedded for the model now in use.
+	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
+
+	pending, err := s.ListUnembeddedAttachments(ctx, model, "", "", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countOwned(pending, id); got != 2 {
+		t.Fatalf("unembedded attachments for %s = %d, want 2", id, got)
+	}
+
+	// Run the corpus down the way the CLI does. Entries go first, so the
+	// attachments are reached only once the cursor has walked past every
+	// entry — which is also the assertion that the cursor advances: a
+	// pass that kept returning the same window would never get here.
+	cursor := ""
+	for pass := 1; ; pass++ {
+		if pass > 100 {
+			t.Fatalf("reembed did not converge in %d passes (cursor %q)", pass-1, cursor)
+		}
+		res, err := svc.Reembed(ctx, cursor, 500)
+		if err != nil {
+			t.Fatalf("pass %d: %v", pass, err)
+		}
+		if res.Missing == 0 {
+			break
+		}
+		if res.Cursor == "" || res.Cursor == cursor {
+			t.Fatalf("pass %d left %d missing but did not advance the cursor (%q)",
+				pass, res.Missing, cursor)
+		}
+		cursor = res.Cursor
+	}
+
+	// Both attachments now have a vector under the current model.
+	if pending, err = s.ListUnembeddedAttachments(ctx, model, "", "", 100); err != nil {
+		t.Fatal(err)
+	}
+	if got := countOwned(pending, id); got != 0 {
+		t.Errorf("after reembed, %d of %s's attachments still lack a vector", got, id)
+	}
+}
+
+func countOwned(pending []store.UnembeddedAttachment, id string) int {
+	n := 0
+	for _, p := range pending {
+		if p.KnowledgeID == id {
+			n++
+		}
+	}
+	return n
 }

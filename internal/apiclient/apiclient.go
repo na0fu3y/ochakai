@@ -381,19 +381,30 @@ func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, e
 
 // ReembedResult mirrors the /api/v1/reembed response.
 type ReembedResult struct {
-	Embedded int `json:"embedded"`
-	Failed   int `json:"failed"`
-	Missing  int `json:"missing"`
+	Embedded    int    `json:"embedded"`
+	Attachments int    `json:"attachments"`
+	Failed      int    `json:"failed"`
+	Missing     int    `json:"missing"`
+	Cursor      string `json:"cursor,omitempty"`
 }
 
-// Reembed fills in vectors for entries that have none for the configured
-// model (POST /api/v1/reembed). limit 0 uses the server default. One
-// pass is bounded: Missing reports what is still left, and the caller
-// repeats (see cmdReembed) rather than asking for a pass that cannot
-// finish inside a request timeout.
-func (c *Client) Reembed(ctx context.Context, limit int) (*ReembedResult, error) {
+// Reembed fills in vectors for entries and attachments that have none
+// for the configured model (POST /api/v1/reembed). limit 0 uses the
+// server default. One pass is bounded: Missing reports what is still
+// left and Cursor where to resume, and the caller repeats (see
+// cmdReembed) rather than asking for a pass that cannot finish inside a
+// request timeout. Pass the previous Cursor back to advance; passing ""
+// starts from the beginning.
+func (c *Client) Reembed(ctx context.Context, cursor string, limit int) (*ReembedResult, error) {
+	q := limitQuery(limit)
+	if cursor != "" {
+		if q == nil {
+			q = url.Values{}
+		}
+		q.Set("cursor", cursor)
+	}
 	var out ReembedResult
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/reembed", limitQuery(limit), nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/reembed", q, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
