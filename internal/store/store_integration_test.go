@@ -2154,3 +2154,116 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 		t.Errorf("reference was not rewritten to %s; body = %q", moved, got.Body)
 	}
 }
+
+// The two lookups design doc 0037 adds: the feed of entries past the
+// expiry their author declared, and the reverse of sources[].resource.
+//
+// Every query here is narrowed by a tag unique to this run. The test
+// database is shared (see hitScore above), and both of these are listing
+// modes over the whole corpus — without the tag, another package's stale
+// entry is indistinguishable from a bug here.
+func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+
+	run := fmt.Sprintf("it37-%d", time.Now().UnixNano())
+	mine := Filter{Tags: []string{run}}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	policy := "https://wiki.example/" + run + "/revenue-recognition"
+	other := "https://wiki.example/" + run + "/close-calendar"
+
+	mk := func(name, staleAfter string, sources ...domain.Source) string {
+		id := run + "/" + name
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: name, Body: "b", Tags: []string{run},
+			Status: domain.StatusDraft, StaleAfter: staleAfter, Sources: sources,
+			CreatedBy: actor, UpdatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+		return id
+	}
+	ids := func(entries []domain.Knowledge) []string {
+		out := make([]string, len(entries))
+		for i, k := range entries {
+			out[i] = k.ID
+		}
+		return out
+	}
+
+	now := time.Now().UTC()
+	longAgo := now.AddDate(0, 0, -30).Format(domain.DateLayout)
+	yesterday := now.AddDate(0, 0, -1).Format(domain.DateLayout)
+	tomorrow := now.AddDate(0, 0, 1).Format(domain.DateLayout)
+
+	overdue := mk("overdue", longAgo, domain.Source{Resource: policy})
+	justPast := mk("just-past", yesterday, domain.Source{Resource: policy, ID: "rev"})
+	today := mk("today", now.Format(domain.DateLayout))
+	mk("future", tomorrow, domain.Source{Resource: policy})
+	mk("undated", "", domain.Source{Resource: other})
+
+	// Most overdue first. The future declaration and the undated entry are
+	// absent: a date that has not come due is not work (0037 §2.1), and
+	// today counts as stale because the rule is today >= stale_after.
+	stale, err := s.ListByStaleAfter(ctx, mine, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{overdue, justPast, today}; !slices.Equal(ids(stale), want) {
+		t.Errorf("stale feed = %v, want %v", ids(stale), want)
+	}
+
+	// The reverse lookup, matched on resource and ordered by id.
+	cited, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: policy}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{run + "/future", justPast, overdue}; !slices.Equal(ids(cited), want) {
+		t.Errorf("source lookup = %v, want %v", ids(cited), want)
+	}
+
+	// Exact, on resource only: a prefix, a longer string, and the
+	// per-document source id all match nothing (0037 §2.3).
+	for _, miss := range []string{"https://wiki.example/" + run, policy + "#section", "rev"} {
+		hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: miss}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hits) != 0 {
+			t.Errorf("source %q matched %v; matching is exact on resource", miss, ids(hits))
+		}
+	}
+
+	// The two compose: "cites this and is overdue" is one question.
+	both, err := s.ListByStaleAfter(ctx, Filter{Tags: []string{run}, Source: policy}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{overdue, justPast}; !slices.Equal(ids(both), want) {
+		t.Errorf("source + stale feed = %v, want %v", ids(both), want)
+	}
+
+	// A resource carrying a quote and a backslash cannot break out of the
+	// jsonb literal the filter builds.
+	odd := `https://x.test/a"b\c`
+	quoted := mk("quoted", "", domain.Source{Resource: odd})
+	hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: odd}, 100)
+	if err != nil {
+		t.Fatalf("resource with a quote: %v", err)
+	}
+	if want := []string{quoted}; !slices.Equal(ids(hits), want) {
+		t.Errorf("quoted resource lookup = %v, want %v", ids(hits), want)
+	}
+}

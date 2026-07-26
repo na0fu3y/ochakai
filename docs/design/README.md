@@ -46,8 +46,14 @@ PR の中に残る。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
+- [0037 宣言した期限と引用元から引けるようにする](0037-stale-and-source-lookup.md)
+  — **Accepted**(実装済み、0.14.0 で出る)。0036 が封筒に載せた
+  `stale_after` / `sources` を引けるようにする: `sort=stale_after` の
+  期限切れフィード(verify ではなく編集で空になる — 0025 の 2 フィードとの
+  違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index)。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) — **Accepted**
-  (実装済み、次のリリース 0.14.0 で出る)。**OKF 互換領域の現行ドキュメント**。
+  (実装済み、次のリリース 0.14.0 で出る)。**OKF 互換領域の現行ドキュメント**
+  (§5 の 2 項目は 0037 が撤回して実装した)。
   SPEC が定義するキーは封筒に持つ、と基準を引き直し、§5.1(`sources` /
   `usage_window`)と §10.2(`runtime` / `parameters` / `computation` /
   `executor` / `attester`)を attrs から封筒フィールドへ。trust/lifecycle の
@@ -127,7 +133,8 @@ PR の中に残る。
 ## 検証ループと利用測定
 
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
-  **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した)。
+  **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した。フィードは
+  0037 が 3 つめを足した)。
   検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。
   再検証を記録する `POST /api/v1/verify/{id}` はここが出所。
 - [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)

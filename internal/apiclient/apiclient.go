@@ -108,10 +108,17 @@ type SearchParams struct {
 	// (the golden-query canary feed); "usage" returns entries by demand,
 	// most-searched first (the draft review feed, hits carry usage);
 	// "failed" returns entries callers reported wrong, worst first (the
-	// re-verification feed, design doc 0025 §6). The server rejects a
-	// Query combined with Sort; listed hits carry score 0.
-	Sort  string
-	Limit int
+	// re-verification feed, design doc 0025 §6); "stale_after" returns
+	// entries whose declared expiry has passed, most overdue first
+	// (design doc 0037 §2.1 — the one feed verifying does not empty).
+	// The server rejects a Query combined with Sort; listed hits carry
+	// score 0.
+	Sort string
+	// Source narrows to entries citing this exact resource, the reverse
+	// of sources[].resource (design doc 0037 §2.3). Composes with Query
+	// and with any Sort.
+	Source string
+	Limit  int
 }
 
 func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit, error) {
@@ -130,6 +137,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	}
 	for _, t := range p.Tags {
 		q.Add("tag", t)
+	}
+	if p.Source != "" {
+		q.Set("source", p.Source)
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))

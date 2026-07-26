@@ -142,3 +142,38 @@ func TestOKFFamiliesAreReadFromTheEnvelope(t *testing.T) {
 		t.Error("the page still reads sources out of attrs; it is an envelope field now")
 	}
 }
+
+// "Stale" already meant two different things on this page — the
+// verification-age feed and a draft nobody searches for — before
+// stale_after made a third (design doc 0037). The feed variable was
+// renamed to match its own label; reintroducing the old name would put
+// two unrelated queues behind one word again.
+func TestFeedNamesDoNotCollideOnStale(t *testing.T) {
+	page := string(Index)
+	if strings.Contains(page, "staleFeed") {
+		t.Error("staleFeed is back; the verification-age feed is ageFeed, and stale_after's is expiredFeed")
+	}
+	for _, want := range []string{"ageFeed", "expiredFeed", "'stale_after'"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page does not contain %s", want)
+		}
+	}
+	// The three feeds are listing modes, so each must be reachable by its
+	// own route — the filter bar was once the only way in (0025 §6).
+	for _, route := range []string{"'verification-age'", "'reported-wrong'", "'stale'", "'cites'"} {
+		if !strings.Contains(page, route) {
+			t.Errorf("route %s is gone", route)
+		}
+	}
+}
+
+// The stale feed is the one queue verifying does not empty: the date is
+// the writer's declaration, so it clears by editing (design doc 0037
+// §2.2). A reviewer who does not know that will verify entries and watch
+// the queue stay full, so the page has to say it.
+func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
+	page := string(Index)
+	if !strings.Contains(page, "Verifying does <em>not</em> clear this one") {
+		t.Error("the stale feed banner no longer explains that verifying does not empty it")
+	}
+}
