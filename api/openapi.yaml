@@ -113,6 +113,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
         "400": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /api/v1/browse:
@@ -173,6 +175,12 @@ paths:
         golden query answering the question) arrives in the same response.
         Rejected entries never appear. limit caps the primary entries
         (default 5, max 20); linked companions share a 2×limit total cap.
+
+        Changed in 0.13.0 (design doc 0033): `hits` carries the ranking
+        only — id, type, title, status, score. It used to repeat every
+        top entry in full, so the knowledge arrived twice and the budget
+        bound one copy of it. A client that read bodies out of `hits`
+        reads them from `entries` instead, where they always were.
       parameters:
         - name: q
           in: query
@@ -393,6 +401,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -782,8 +792,9 @@ components:
       description: >
         Optimistic-concurrency precondition (design doc 0030): the
         entry's version — its updated_at in RFC3339Nano, as a prior read
-        returned it in the ETag response header (quotes optional; the
-        JSON body's updated_at field is the same value). The write
+        or write returned it in the ETag response header (quotes
+        optional; the JSON body's updated_at field is the same value).
+        Every response carrying an entry carries the header. The write
         happens only if the entry still has this version; an entry
         changed since it was read is a 412 and nothing is written.
         Absent or "*" means no precondition — last write wins. A value

@@ -40,12 +40,21 @@ ochakai はこの工程に関与しない。
 
 ### 4. 書き戻し — 認可ではなく記録で
 
-- **正常だった**: `update_knowledge` で `status: verified` のまま更新すると、
-  実行者が `verified_by`・現在時刻が `verified_at` に再スタンプされ、
-  次回の `sort=verified_at` で後ろに回る。
+- **正常だった**: 再検証として記録する — `ochakai verify queries/<id>`
+  (REST: `POST /api/v1/verify/queries/<id>`)。実行者が `verified_by`・
+  現在時刻が `verified_at` になり、次回の `sort=verified_at` で後ろに回る。
+  `update` ではこれを表現できない: 内容の変わらない更新は何も書かず、
+  `verified_at` は保存済みの値が持ち越されるので、「もう一度確かめた、
+  やはり正しい」がどこにも残らない。この出口のために verify がある
+  (設計ドキュメント 0025 §6)。MCP にはこのツールがない — 検証は人間の
+  判断であり、CI が回すカナリアは CI 自身の identity で記録される。
 - **失敗・警告**: 対象ナレッジへ `Insight`(`kind: caveat`)を draft で作成するか、
   `status: deprecated` + `status_note`(理由)への変更を提案する。判断は人間が
   provenance を見て行う。誤りと確定した場合は `status: rejected` + `status_note`。
+  status の変更は人間の面(Web UI / CLI)から行う: エージェントがカナリアを
+  回している場合、verified エントリの上書きと status 変更は MCP から拒否される
+  (設計ドキュメント 0015 §3.1)ので、エージェント側の出口は次項の
+  `report_outcome failed` と、別 id の draft 作成である。
 - **どちらの場合も成果を記録する**: `ochakai report queries/<id> worked` /
   `ochakai report queries/<id> failed --note "何が起きたか"`(REST:
   `POST /api/v1/usage/queries/<id>`、MCP: `report_outcome`)。worked / failed の
@@ -84,9 +93,22 @@ jobs:
               sql=$(jq -r .attrs.sql <<<"$hit")
               if ! bq query --nouse_legacy_sql --dry_run "$sql" >/dev/null 2>&1; then
                 echo "::error::golden query $id no longer compiles against the warehouse"
+                curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+                  -H 'Content-Type: application/json' \
+                  -d '{"outcome":"failed","note":"canary: dry-run failed"}' \
+                  "$OCHAKAI_URL/api/v1/usage/$id" >/dev/null
+              else
+                # 再検証として記録し、verified_at を今にする(→ 両フィードから外れる)
+                curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+                  "$OCHAKAI_URL/api/v1/verify/$id" >/dev/null
               fi
             done
 ```
+
+正常時に `verify` を打つかは、そのカナリアが何を確かめたかによる。上のように
+`--dry_run` だけなら分かるのは「まだコンパイルできる」ことまでで、`verified_at`
+を今に進めるのは実実行して結果まで比較したときが素直である(前者だけを回すなら
+verify は落として、失敗報告だけを書き戻す)。
 
 `--dry_run` はスキーマ変更による破損(工程 3 の「失敗」)をコストゼロで検知する。
 結果変動まで見る場合は実実行して前回結果と比較する(行数と主要集計値を

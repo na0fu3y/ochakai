@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0015: サーフェス一貫性の方針
 
-Status: Accepted(2026-07-18 の議論で決定)
+Status: Accepted(2026-07-18 の議論で決定)。§4 の「verify は新 API を作らず PUT の糖衣として」は [0025](0025-closing-the-loop.md) §6 が覆した — 内容の変わらない PUT は何も書かないので糖衣では再検証を表現できず、`POST /api/v1/verify/{id}` を新設した(REST / CLI / Web UI に載り、MCP には載らない)
 Date: 2026-07-18
 
 ## 1. 目的

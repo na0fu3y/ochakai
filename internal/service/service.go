@@ -92,7 +92,47 @@ func (s *Service) CreateKeepingCurated(ctx context.Context, k *domain.Knowledge,
 			return nil, err
 		}
 	}
+	if errors.Is(err, store.ErrAlreadyExists) {
+		return nil, s.explainOccupiedID(ctx, k.ID, err)
+	}
 	return created, err
+}
+
+// explainOccupiedID says what holds an id and what to do instead. Every
+// other refusal this surface can meet names the next move — the update,
+// delete and revival guards all end in report_outcome failed or a draft
+// at another id — and this one did not: creating over a live entry
+// returned the store's bare "knowledge already exists", the one wall on
+// the surface with no door drawn on it.
+//
+// A live rejection is the case that matters. Design doc 0015 §3.1 turns
+// on agents reading a rejection before re-proposing what it turned down,
+// and the caller that lands here is precisely the one that skipped that
+// read: it needs to be told the id holds a ruling, not that something
+// unnamed is in the way. The error stays wrapped, so a caller matching
+// on ErrAlreadyExists still matches.
+func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) error {
+	k, getErr := s.Store.Get(ctx, domain.Normalize(id))
+	if getErr != nil {
+		return err
+	}
+	var instead string
+	switch k.Status {
+	case domain.StatusRejected:
+		instead = "The rejection is the record of a decision and status_note says why; read it " +
+			"(get_knowledge) before proposing this again. If you disagree, create_knowledge a new " +
+			"entry at a different id and let a human judge it."
+	case domain.StatusVerified:
+		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
+			"re-verification feed. If you have something better, create_knowledge it at a " +
+			"different id and let a human judge it."
+	case domain.StatusDeprecated:
+		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
+			"reviving, create_knowledge a draft at a different id that says why."
+	default:
+		instead = "Nobody has ruled on it: update_knowledge replaces it in place."
+	}
+	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, k.Status, instead)
 }
 
 func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.Actor, keepCuratedTombstones bool) (*domain.Knowledge, error) {

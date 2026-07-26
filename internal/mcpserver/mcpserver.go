@@ -495,7 +495,7 @@ type contextIn struct {
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the response body (default 12000); entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows are counted against the same budget. Raise it when you need whole entries, lower it when context is tight"`
+	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the entries plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows count against the same budget. Raise it when you need whole entries, lower it when context is tight"`
 }
 
 type contextOut struct {

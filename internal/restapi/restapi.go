@@ -149,6 +149,10 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		// The version of what was just written, like every other response
+		// that carries an entry: a client that creates and then updates
+		// conditionally should not need a GET in between.
+		w.Header().Set("ETag", etagOf(created))
 		writeJSON(w, http.StatusCreated, created)
 	})
 
@@ -438,6 +442,7 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		w.Header().Set("ETag", etagOf(moved))
 		writeJSON(w, http.StatusOK, moved)
 	})
 

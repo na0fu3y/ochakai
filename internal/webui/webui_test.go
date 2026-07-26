@@ -27,3 +27,26 @@ func TestActorRenderingKeepsDelegation(t *testing.T) {
 		t.Errorf("actorStr drops the delegating caller:\n%s", body)
 	}
 }
+
+// The re-verification feed is the exit design doc 0025 §6 built for the
+// review loop, and it was reachable only by opening the search filter
+// bar and knowing which chip meant it. Both feeds have their own routes
+// now, and the review queue links them; a rename that drops the routes
+// would quietly hide the queues again.
+func TestFeedsAreLinkableFromTheReviewLoop(t *testing.T) {
+	page := string(Index)
+	for _, want := range []string{
+		"'reported-wrong'",               // the route the links point at
+		"'verification-age'",             // its verification-age sibling
+		`href="#/search/reported-wrong"`, // linked, not only routable
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page does not contain %s", want)
+		}
+	}
+	// "Review" is the draft queue in the top nav; a chip labelled with the
+	// same word for a different queue is the one naming collision here.
+	if strings.Contains(page, ">needs review<") {
+		t.Error("the failed-report chip is labelled \"needs review\" again, colliding with the Review tab")
+	}
+}

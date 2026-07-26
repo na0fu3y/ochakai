@@ -293,3 +293,46 @@ func TestUpdateIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 		}
 	}
 }
+
+// A verification's whole product is a timestamp and a name, and the only
+// way to read them back was a second call: verify printed one line and
+// dropped the entry the server had already returned. --json hands the
+// same response every other write verb hands over, so a canary can stamp
+// and record verified_at in one round trip.
+func TestVerifyJSONPrintsTheEntry(t *testing.T) {
+	verified := time.Date(2026, 7, 26, 9, 0, 0, 0, time.UTC)
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(domain.Knowledge{
+			Type: domain.TypeQueries, ID: r.PathValue("id"), Status: domain.StatusVerified,
+			Title: "Monthly revenue", VerifiedBy: &human, VerifiedAt: &verified,
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	orig := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	verifyErr := cmdVerify(context.Background(), []string{"queries/monthly-revenue", "--json", "--url", srv.URL})
+	pw.Close()
+	os.Stdout = orig
+	out, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verifyErr != nil {
+		t.Fatal(verifyErr)
+	}
+	var got domain.Knowledge
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("--json did not print JSON (%v): %s", err, out)
+	}
+	if got.ID != "queries/monthly-revenue" || got.VerifiedAt == nil || !got.VerifiedAt.Equal(verified) {
+		t.Errorf("verified entry = %+v, want the server's response with verified_at", got)
+	}
+}
