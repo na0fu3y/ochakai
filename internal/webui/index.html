@@ -11,7 +11,9 @@
      usage, revision history, backlinks, attachments, create/edit with
      the draft → verified workflow, move with reference rewriting (a Move
      action and tree drag & drop), the draft review queue (sort=usage),
-     and OKF export.
+     the two feeds that empty by verifying — reported wrong (sort=failed)
+     and verification age (sort=verified_at), reachable from the review
+     queue and #/search/reported-wrong — and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -647,6 +649,15 @@ function route() {
     viewReview();
   } else if (head === 'search') {
     mark('search');
+    // #/search/reported-wrong and #/search/verification-age open a feed
+    // directly. Both are entrances to the review loop, and the filter bar
+    // was the only way in — a queue nobody can find stops being read as
+    // surely as one nobody can empty (design doc 0025 §6).
+    if (rest[0] === 'reported-wrong' || rest[0] === 'verification-age') {
+      explore.failedFeed = rest[0] === 'reported-wrong';
+      explore.staleFeed = rest[0] === 'verification-age';
+      explore.feedAll = false;
+    }
     viewExplore();
   } else {
     viewHome();
@@ -700,8 +711,8 @@ function viewExplore() {
            the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
         : explore.failedFeed
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — entries whose failure reports
-           (report_outcome failed) are still unanswered, worst first. Verifying one takes it out of the feed.
-           Uncheck <strong>needs review</strong> to search.</div>`
+           (report_outcome failed) are still unanswered, worst first. Open one, re-read it, and verify it to take it
+           out of the feed. Uncheck <strong>reported wrong</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
       <a class="btn" href="#/new" title="Create a knowledge entry">＋ New entry</a>
@@ -719,7 +730,7 @@ function viewExplore() {
         <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
           type="checkbox" id="f-stale" aria-label="verification age feed" ${explore.staleFeed ? 'checked' : ''}>verification age</label>
         <label class="chip" title="Entries reported wrong (report_outcome failed) and not verified since — the re-verification feed"><input
-          type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>needs review</label>
+          type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>reported wrong</label>
       </div>
     </details>
     <div id="results"><div class="empty">…</div></div>
@@ -762,9 +773,13 @@ async function runSearch() {
   if (!out) return;
   const p = new URLSearchParams();
   const isFeed = explore.staleFeed || explore.failedFeed;
+  // The query as the server and the messages below see it: a box holding
+  // only spaces is no query, and saying `No knowledge found for “  ”`
+  // describes something the user did not ask.
+  const q = explore.q.trim();
   if (explore.staleFeed) p.set('sort', 'verified_at');
   else if (explore.failedFeed) p.set('sort', 'failed');
-  else if (explore.q.trim()) p.set('q', explore.q);
+  else if (q) p.set('q', explore.q);
   // No query typed yet (or only whitespace): the landing view lists by
   // demand instead of searching — an empty q is a 400 (searching needs
   // a query to rank by).
@@ -781,19 +796,24 @@ async function runSearch() {
     const { hits } = await api('/api/v1/knowledge?' + p);
     if (my !== runSearch._seq || out !== $('#results')) return; // stale response
     if (!hits || !hits.length) {
-      out.innerHTML = `<div class="empty">No knowledge found${explore.q ? ' for “' + esc(explore.q) + '”' : ''}.</div>`;
+      out.innerHTML = `<div class="empty">No knowledge found${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
       return;
     }
     // With a query, split off low-relevance hits so junk doesn't render as
     // if it matched — semantic and lexical search always return *something*.
     let strong = hits, weak = [];
-    if (explore.q && !isFeed && hits[0].score > 0.05) {
+    if (q && !isFeed && hits[0].score > 0.05) {
       strong = hits.filter(h => h.score >= WEAK_SCORE);
       weak = hits.filter(h => h.score < WEAK_SCORE);
     }
     let html = strong.map(hitCard).join('');
     if (!strong.length) {
-      html = `<div class="empty">No strong matches for “${esc(explore.q)}”.</div>`;
+      html = `<div class="empty">No strong matches for “${esc(q)}”.</div>`;
+    }
+    // Nothing typed: this is the most-searched listing, not everything
+    // there is. The feeds say what they are; this one said nothing.
+    if (!isFeed && !q) {
+      html = `<div class="truncation-note">Nothing searched yet — the most-searched entries first.</div>` + html;
     }
     if (weak.length) {
       html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
@@ -803,7 +823,7 @@ async function runSearch() {
       html += isFeed && !explore.feedAll
         ? `<div class="truncation-note">Showing the first ${limit} entries ·
              <a href="#" id="feed-more">load up to 1000</a></div>`
-        : `<div class="truncation-note">Showing the first ${limit} ${explore.q ? 'matches' : 'entries'}
+        : `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
              (server cap) — narrow with filters or a more specific query.</div>`;
     }
     out.innerHTML = html;
@@ -1153,6 +1173,7 @@ function viewHome() {
     </div>
     <p style="color:var(--muted);font-size:.9rem">
       <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
+      <a href="#/search/reported-wrong">Reported wrong</a> — verified knowledge that came back wrong ·
       <a href="#/new">＋ New entry</a> ·
       <a href="${BASE}/api/v1/export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
     </p>
@@ -1541,6 +1562,9 @@ function viewReview() {
     <p style="color:var(--muted);max-width:48rem">Drafts agents wrote back, most-demanded first — ranked by search hits, how
     often the draft already surfaces when people search. Verify what's true, reject what isn't (the reason is recorded as
     status_note so agents stop re-proposing it). Never-used drafts sink to the bottom; toggle <em>stale</em> to triage them.</p>
+    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">Verified knowledge has two queues of its own:
+    <a href="#/search/reported-wrong">reported wrong</a> — entries whose failure reports are unanswered — and
+    <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying an entry empties it from both.</p>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
         stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
