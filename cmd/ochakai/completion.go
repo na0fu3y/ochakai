@@ -105,8 +105,11 @@ _ochakai() {
     report)
       _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
       ;;
-    create|update)
+    create)
       _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
+      ;;
+    update)
+      _arguments '-f[input file]:file:_files' '--if-match[update only if the entry still has this version (updated_at)]:version:' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
     verify|delete|purge|detach|move)
       _arguments '--url[server URL]:url:'
@@ -180,7 +183,8 @@ _ochakai() {
         return
       fi
       opts="--note --json --url" ;;
-    create|update) opts="-f --json --url" ;;
+    create)        opts="-f --json --url" ;;
+    update)        opts="-f --if-match --json --url" ;;
     verify|delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     reembed)       opts="--url --limit --once --json" ;;
@@ -238,11 +242,11 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify delete purge move attach detach usage report revisions backlinks export import whoami ui' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify delete purge reembed move attach detach usage report revisions backlinks export import whoami ui' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
@@ -258,6 +262,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a singl
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'
+complete -c ochakai -n '__fish_seen_subcommand_from update' -l if-match -x -d 'update only if the entry still has this version (updated_at)'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

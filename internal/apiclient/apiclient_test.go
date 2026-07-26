@@ -3,10 +3,12 @@ package apiclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -384,5 +386,48 @@ func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 	}
 	if u.Worked != 3 || u.Failed != 1 {
 		t.Errorf("usage = %+v", u)
+	}
+}
+
+// Update's ifMatch becomes the If-Match precondition on the wire: absent
+// when "", quoted into a valid ETag when the caller passes the bare
+// version (the updated_at a read returned), verbatim when already an
+// ETag. A stale version surfaces as a 412 APIError.
+func TestUpdateSendsIfMatchAndMapsConflict(t *testing.T) {
+	var got []string
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		v, sent := r.Header["If-Match"]
+		if !sent {
+			v = []string{"(absent)"}
+		}
+		got = append(got, v[0])
+		if v[0] == `"2026-07-01T00:00:00.000000001Z"` {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge changed since it was read"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(domain.Knowledge{Type: domain.TypeMetrics, ID: "metrics/revenue"})
+	})
+	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: "metrics/revenue", Title: "売上"}
+	for _, ifMatch := range []string{"", "2026-06-30T00:00:00Z", `"2026-06-30T00:00:00Z"`} {
+		if _, _, err := c.Update(context.Background(), k, ifMatch); err != nil {
+			t.Fatalf("Update(ifMatch=%q): %v", ifMatch, err)
+		}
+	}
+	want := []string{"(absent)", `"2026-06-30T00:00:00Z"`, `"2026-06-30T00:00:00Z"`}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("If-Match on the wire = %q, want %q", got, want)
+	}
+
+	_, _, err := c.Update(context.Background(), k, "2026-07-01T00:00:00.000000001Z")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("stale version: err = %v, want a 412 *APIError", err)
+	}
+	if apiErr.Message != "knowledge changed since it was read" {
+		t.Errorf("Message = %q", apiErr.Message)
 	}
 }

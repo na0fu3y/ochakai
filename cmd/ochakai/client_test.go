@@ -248,3 +248,36 @@ func TestImportReportsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// `ochakai update --if-match` sends the version as the If-Match header,
+// and a 412 comes back as an actionable conflict message (re-read, redo,
+// retry) rather than the raw server error.
+func TestUpdateIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
+	var gotIfMatch string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		gotIfMatch = r.Header.Get("If-Match")
+		w.WriteHeader(http.StatusPreconditionFailed)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge changed since it was read"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	doc := filepath.Join(t.TempDir(), "revenue.md")
+	if err := os.WriteFile(doc, []byte("---\ntype: metric\ntitle: 売上\n---\n\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := cmdUpdate(context.Background(), []string{"metrics/revenue",
+		"-f", doc, "--if-match", "2026-07-01T00:00:00.123456789Z", "--url", srv.URL})
+	if gotIfMatch != `"2026-07-01T00:00:00.123456789Z"` {
+		t.Errorf("If-Match on the wire = %q", gotIfMatch)
+	}
+	if err == nil {
+		t.Fatal("stale --if-match succeeded, want a conflict error")
+	}
+	for _, want := range []string{"conflict", "ochakai get metrics/revenue"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("conflict error misses %q: %v", want, err)
+		}
+	}
+}

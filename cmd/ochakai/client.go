@@ -681,9 +681,10 @@ func cmdCreate(ctx context.Context, args []string) error {
 
 func cmdUpdate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai update [flags] <id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\nthe id comes from the argument, the type from the input). Every\nchange is kept as a revision server-side.",
-		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n")
+		"Usage: ochakai update [flags] <id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\nthe id comes from the argument, the type from the input). Every\nchange is kept as a revision server-side. With --if-match the update\nis conditional: it lands only if the entry still has the version you\nread, and fails instead of overwriting someone else's edit.",
+		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n  ochakai update metrics/revenue -f revenue.md --if-match \"$(ochakai get metrics/revenue --json | jq -r .updated_at)\"\n")
 	file := fs.String("f", "", "input file (default: stdin)")
+	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its updated_at (`ochakai get <id> --json` prints it as .updated_at; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting")
 	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -706,8 +707,12 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	updated, changed, err := c.Update(ctx, k)
+	updated, changed, err := c.Update(ctx, k, *ifMatch)
 	if err != nil {
+		var apiErr *apiclient.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
+			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, redo the edit, and retry with the new updated_at", id, id)
+		}
 		return err
 	}
 	if *asJSON {
@@ -998,7 +1003,9 @@ func cmdImport(ctx context.Context, args []string) error {
 		} else if !isConflict(err) {
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
-		_, changed, err := c.Update(ctx, k)
+		// No If-Match: import deliberately replaces whatever is stored
+		// (the bundle is the source of truth for this loop).
+		_, changed, err := c.Update(ctx, k, "")
 		if err != nil {
 			if isInvalid(err) {
 				skipEntry(k, err)
