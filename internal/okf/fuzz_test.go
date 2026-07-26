@@ -3,9 +3,10 @@ package okf
 // Property tests for the two directions of the OKF format (design doc
 // 0035 §3.3). Parse is the only place ochakai reads bytes it did not
 // write — a bundle from Git, from another instance, from a producer that
-// is not ochakai at all — and design doc 0036 §3.12 lays out
-// the round-trip rules ochakai promises to hold to. Both are statements about every
-// input, which is what a fuzz target can check and an example cannot.
+// is not ochakai at all — and design doc 0036 §3.12 lays out the
+// round-trip rules ochakai holds itself to. Both are statements about
+// every input, which is what a fuzz target can check and an example
+// cannot.
 
 import (
 	"slices"
@@ -95,7 +96,10 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 	f.Add("Attested Computation", "T", "D", "one", "rejected", "", "- a list\n- of things")
 	f.Add("カスタム型", "タイトル", "説明", "タグ", "deprecated", "", "本文です。")
 	f.Add("Insight", "  padded  ", "", "a,,b", "", "not-a-date", "  \n  ")
-	f.Add("Metric ", "", "", "", "draft", "", "") // trailing space: trimmed before storage, so not a round trip of one
+	f.Add("Metric ", "", "", "", "draft", "", "")                   // trailing space: trimmed before storage, so not a round trip of one
+	f.Add("Metric", "\nleading", "trailing\n", "", "draft", "", "") // newlines at either end: dropped before #183, kept now
+	f.Add("Metric", "", "", " indented\nsecond", "draft", "", "")   // a tag whose first line is indented: emits frontmatter Parse rejects
+	f.Add("Metric", "", "", "", "draft", "", "first\r\nsecond")     // CRLF body: normalized to LF on read (0036 §3.12)
 
 	f.Fuzz(func(t *testing.T, typ, title, desc, tags, status, staleAfter, body string) {
 		k := &domain.Knowledge{
@@ -120,25 +124,48 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 			!domain.ValidStaleAfter(k.StaleAfter) {
 			t.Skip()
 		}
-		// Two faults this target found, scoped out here and reported
-		// rather than worked around — both are in how yaml.v3 emits a
-		// multi-line string as a block scalar, and both need a fix in
-		// Document (which would change the bytes of every exported
-		// document that has a multi-line field), not in a test.
+		// The fault this target found that is still open, and it is a
+		// class rather than a single shape: a value that spans lines and
+		// whose *first* line is indented emits frontmatter ochakai cannot
+		// read back at all. Not a lossy field — Parse fails outright, so
+		// the entry exports into a bundle whose document is skipped on
+		// import (design doc 0019) instead of round-tripping.
 		//
-		//  1. A leading newline is dropped: "\nx" comes back "x", "\n\nx"
-		//     comes back "\nx". Only the first one, and only at the front
-		//     — trailing newlines, blank lines and embedded newlines all
-		//     survive, and a leading space is enough to make it survive.
-		//  2. A value with a tab in it produces frontmatter ochakai
-		//     cannot read back: Document writes the tab into an indented
-		//     block scalar and Parse fails with "found a tab character
-		//     where an indentation space is expected". This is the worse
-		//     of the two — such an entry exports into a bundle whose
-		//     document is skipped on import (design doc 0019) rather than
-		//     round-tripping.
-		if blockScalarFault(k.Title) || blockScalarFault(k.Description) ||
-			blockScalarFault(k.StatusNote) || slices.ContainsFunc(k.Tags, blockScalarFault) {
+		// A block scalar takes its indentation from the first content
+		// line, so an indented one needs an explicit indicator; the
+		// emitter writes one that does not match, or none at all. Shapes
+		// found so far:
+		//
+		//	"\tx\ny"   anywhere: "found a tab character where an
+		//	           indentation space is expected".
+		//	" x\ny"    as a tag — a sequence item: "did not find expected
+		//	           '-' indicator". Fine as a mapping value.
+		//	"\nx"      as a tag: the same. Fine as a mapping value, which
+		//	           is what #183 fixed.
+		//
+		// A single-line value is safe whatever it holds; the emitter
+		// quotes it rather than reaching for a block scalar. Beyond that
+		// the exact rule is the emitter's bug surface, and every time
+		// this skip was narrowed to match it, fuzzing found another
+		// shape. So it rounds up instead: any multi-line tag, and any
+		// multi-line value opening with a space or tab. That skips
+		// several shapes that do work ("x\n y" as a tag), which costs
+		// coverage but keeps the skip from being a second bug to track.
+		//
+		// It reproduces in gopkg.in/yaml.v3 v3.0.1, go.yaml.in/yaml
+		// v3.0.4 and v4 alike, so there is no upstream fix to take: the
+		// fix belongs in Document, which is why it is still open here.
+		// Enumerating the surface is the losing half of that fix — the
+		// paragraph above is the evidence for it.
+		//
+		// The other fault this target found — a dropped leading newline —
+		// was an emitter bug that upstream had already fixed, and moving
+		// to the maintained library took it (#183).
+		// TestDocumentKeepsLeadingNewlines pins that, and those values
+		// are checked here now.
+		if indentedFirstLine(k.Title) || indentedFirstLine(k.Description) ||
+			indentedFirstLine(k.StatusNote) ||
+			slices.ContainsFunc(k.Tags, func(t string) bool { return strings.Contains(t, "\n") }) {
 			t.Skip()
 		}
 
@@ -154,7 +181,12 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 		// Compare on the terms the round-trip is stated in: the fields a
 		// writer controls, minus the three the format carries elsewhere.
 		want := *k
-		want.Body = strings.TrimSpace(k.Body)
+		// CRLF comes back as LF, by the rule design doc 0036 §3.12 states
+		// for line endings: a bundle authored on Windows must import the
+		// same as one authored anywhere else. It shows up in the body and
+		// nowhere else — frontmatter values go through YAML, which escapes
+		// the carriage return in a quoted scalar, so they arrive verbatim.
+		want.Body = strings.TrimSpace(strings.ReplaceAll(k.Body, "\r\n", "\n"))
 		// The one documented lossy step: OKF has no lifecycle value for
 		// "was never accepted", so a rejection exports as deprecated and
 		// comes back as one (design doc 0036 §3.4). The ruling stays in
@@ -170,11 +202,9 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 	})
 }
 
-// blockScalarFault reports whether s would go into the frontmatter as a
-// block scalar that does not survive the trip back — the two faults
-// listed at the skip above. yaml.v3 only reaches for a block scalar when
-// the value spans lines, so a single-line value is always safe.
-func blockScalarFault(s string) bool {
-	return strings.Contains(s, "\n") &&
-		(strings.HasPrefix(s, "\n") || strings.Contains(s, "\t"))
+// indentedFirstLine reports whether s is the shape described at the skip
+// above: a value that spans lines and opens with a space or a tab.
+func indentedFirstLine(s string) bool {
+	first, _, multiLine := strings.Cut(s, "\n")
+	return multiLine && (strings.HasPrefix(first, " ") || strings.HasPrefix(first, "\t"))
 }
