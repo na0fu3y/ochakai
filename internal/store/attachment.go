@@ -244,14 +244,22 @@ func (s *Store) AttachmentBytes(ctx context.Context, sha256 string) ([]byte, err
 // whose snapshot includes the attachment list after the change —
 // attach/detach are changes to the entry, and every change is kept.
 func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
-	// nowStored, like every other write path: time.Now()'s nanoseconds do
+	// NowStored, like every other write path: time.Now()'s nanoseconds do
 	// not survive the round trip through timestamptz, so the revision
 	// snapshot would carry a version the stored row never had (design
 	// doc 0030).
 	k.UpdatedAt = NowStored()
-	if _, err := tx.Exec(ctx,
-		`UPDATE knowledge SET updated_at=$2 WHERE id=$1`, k.ID, k.UpdatedAt); err != nil {
+	// deleted_at IS NULL, as on every other write: the entry was read
+	// outside this transaction, so a delete can land in the window, and
+	// an attachment plus its revision planted on a tombstone would
+	// resurface whenever someone revived the entry.
+	tag, err := tx.Exec(ctx,
+		`UPDATE knowledge SET updated_at=$2 WHERE id=$1 AND deleted_at IS NULL`, k.ID, k.UpdatedAt)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
 	}
 	atts, err := listAttachmentsTx(ctx, tx, k.ID)
 	if err != nil {

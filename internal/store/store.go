@@ -16,11 +16,19 @@ import (
 	"unicode"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/na0fu3y/ochakai/internal/blob"
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
+
+// isUniqueViolation reports whether err is PostgreSQL's unique_violation
+// (SQLSTATE 23505) — a race lost to another writer on the same key.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 
 var ErrNotFound = errors.New("knowledge not found")
 var ErrAlreadyExists = errors.New("knowledge already exists")
@@ -399,12 +407,12 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // A rejection is cleared, mirroring the status transitions Update makes:
 // an entry cannot be both vouched for and turned down.
 //
-// The timestamp comes from the database, not from nowStored: the feed
+// The timestamp comes from the database, not from NowStored: the feed
 // compares it against the last failure report, which RecordOutcome stamps
 // with the database's now(). Two clocks a millisecond apart are enough to
 // hide a report that arrived after the verification, or to keep one that
 // arrived before it — so both sides read the same clock, and RETURNING
-// hands back exactly what was stored (the ETag invariant nowStored exists
+// hands back exactly what was stored (the ETag invariant NowStored exists
 // for).
 func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
@@ -593,6 +601,14 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		tag, err := tx.Exec(ctx,
 			`UPDATE knowledge SET id=$2, updated_at=$3 WHERE id=$1 AND deleted_at IS NULL`,
 			oldID, newID, k.UpdatedAt)
+		if isUniqueViolation(err) {
+			// The probe above found the destination free, but it took no
+			// lock — a create can land on newID in the window. The primary
+			// key stops it either way; this is so the caller reads the
+			// same answer as when the id was already taken, rather than a
+			// 500 with a constraint name in it.
+			return fmt.Errorf("%w: %s", ErrAlreadyExists, newID)
+		}
 		if err != nil {
 			return err
 		}
