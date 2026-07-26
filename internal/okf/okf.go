@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.yaml.in/yaml/v3"
 
@@ -46,26 +47,26 @@ const Version = "0.2"
 // (§10.2) — so a document reads in the order the spec introduces it, with
 // ochakai's extension keys last.
 type frontmatter struct {
-	Type        string       `yaml:"type"`
-	Resource    string       `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
-	Title       string       `yaml:"title,omitempty"`    // empty means the filename is the name (design doc 0022) — omitted, so titleless documents round-trip unchanged
-	Description string       `yaml:"description,omitempty"`
-	Tags        []string     `yaml:"tags,omitempty"`
+	Type        text         `yaml:"type"`
+	Resource    text         `yaml:"resource,omitempty"` // right after type, matching the knowledge-catalog reference bundles
+	Title       text         `yaml:"title,omitempty"`    // empty means the filename is the name (design doc 0022) — omitted, so titleless documents round-trip unchanged
+	Description text         `yaml:"description,omitempty"`
+	Tags        []text       `yaml:"tags,omitempty"`
 	Sources     []source     `yaml:"sources,omitempty"`
 	UsageWindow *usageWindow `yaml:"usage_window,omitempty"`
 	Generated   event        `yaml:"generated"`
 	Verified    []event      `yaml:"verified,omitempty"` // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
-	Status      string       `yaml:"status"`             // OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4)
-	StatusNote  string       `yaml:"status_note,omitempty"`
-	StaleAfter  string       `yaml:"stale_after,omitempty"`
-	Runtime     string       `yaml:"runtime,omitempty"`
+	Status      text         `yaml:"status"`             // OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4)
+	StatusNote  text         `yaml:"status_note,omitempty"`
+	StaleAfter  text         `yaml:"stale_after,omitempty"`
+	Runtime     text         `yaml:"runtime,omitempty"`
 	Parameters  []parameter  `yaml:"parameters,omitempty"`
-	Computation string       `yaml:"computation,omitempty"`
+	Computation text         `yaml:"computation,omitempty"`
 	Executor    *executor    `yaml:"executor,omitempty"`
 	Attester    *attester    `yaml:"attester,omitempty"`
-	CreatedBy   string       `yaml:"created_by"` // ochakai extension: OKF records only who produced the current content
-	RejectedBy  string       `yaml:"rejected_by,omitempty"`
-	RejectedAt  string       `yaml:"rejected_at,omitempty"`
+	CreatedBy   text         `yaml:"created_by"` // ochakai extension: OKF records only who produced the current content
+	RejectedBy  text         `yaml:"rejected_by,omitempty"`
+	RejectedAt  text         `yaml:"rejected_at,omitempty"`
 }
 
 // The YAML spelling of the v0.2 families lives here rather than on the
@@ -77,33 +78,33 @@ type frontmatter struct {
 // "2026-05-30" and comes back the plain day the producer wrote — the same
 // treatment stale_after gets (design doc 0036 §3.7).
 type source struct {
-	Resource     string       `yaml:"resource"`
-	ID           string       `yaml:"id,omitempty"`
-	Title        string       `yaml:"title,omitempty"`
-	Author       string       `yaml:"author,omitempty"`
+	Resource     text         `yaml:"resource"`
+	ID           text         `yaml:"id,omitempty"`
+	Title        text         `yaml:"title,omitempty"`
+	Author       text         `yaml:"author,omitempty"`
 	UsageCount   *int         `yaml:"usage_count,omitempty"` // a pointer: zero uses and no count at all are different claims
-	LastModified string       `yaml:"last_modified,omitempty"`
+	LastModified text         `yaml:"last_modified,omitempty"`
 	UsageWindow  *usageWindow `yaml:"usage_window,omitempty"`
 }
 
 type usageWindow struct {
-	From string `yaml:"from,omitempty"`
-	To   string `yaml:"to,omitempty"`
+	From text `yaml:"from,omitempty"`
+	To   text `yaml:"to,omitempty"`
 }
 
 type parameter struct {
-	Name     string `yaml:"name"`
-	Type     string `yaml:"type"`
-	Required bool   `yaml:"required,omitempty"` // absent and false mean the same thing (SPEC §10.2)
+	Name     text `yaml:"name"`
+	Type     text `yaml:"type"`
+	Required bool `yaml:"required,omitempty"` // absent and false mean the same thing (SPEC §10.2)
 }
 
 type executor struct {
-	Resource string   `yaml:"resource"`
-	Receipt  []string `yaml:"receipt"`
+	Resource text   `yaml:"resource"`
+	Receipt  []text `yaml:"receipt"`
 }
 
 type attester struct {
-	Resource string `yaml:"resource"`
+	Resource text `yaml:"resource"`
 }
 
 // event is one entry of the trust family: who, when, and — as a producer
@@ -113,9 +114,98 @@ type attester struct {
 // prefix intact, so trust tiers still read correctly (design docs 0027,
 // 0036 §3.2).
 type event struct {
-	By  string `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
-	Via string `yaml:"via,omitempty"`
-	At  string `yaml:"at,omitempty"`
+	By  text `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
+	Via text `yaml:"via,omitempty"`
+	At  text `yaml:"at,omitempty"`
+}
+
+// text is a frontmatter string that never goes out as a block scalar the
+// parser cannot read back.
+//
+// A block scalar takes its indentation from its first content line, so a
+// value opening with whitespace — or with a blank line — needs an
+// explicit indentation indicator. The emitter does not reliably write
+// one, and the document it then produces fails to parse: "found a tab
+// character where an indentation space is expected", or, inside a
+// sequence, "did not find expected '-' indicator". An entry holding such
+// a value exported into a bundle whose own document ochakai skipped on
+// re-import (design doc 0019) instead of round-tripping (0036 §3.12).
+//
+// Which shapes break varies with the yaml version, and with whether the
+// value sits in a mapping or a sequence. Every attempt to enumerate them
+// found one more, so this covers the family: a multi-line value opening
+// with a space, a tab or a newline goes out quoted. Anything else keeps
+// the style the emitter picks, so ordinary multi-line prose stays a block
+// scalar — which is how an exported bundle wants to read in a Git diff
+// (design doc 0009).
+//
+// The style has to be set here rather than on the marshaled node tree:
+// yaml.Node.Encode emits and re-parses internally, so it hits the same
+// fault before there is a tree to correct.
+type text string
+
+func (s text) MarshalYAML() (any, error) {
+	// Everything but the risky shape goes out as a plain string, exactly
+	// as it did before this type existed. That keeps the handling yaml
+	// already gets right — a date string quoted so it does not resolve
+	// back as a timestamp (0036 §3.7), bytes that are not valid UTF-8
+	// written as !!binary — out of this decision.
+	if !blockScalarRisk(string(s)) {
+		return string(s), nil
+	}
+	// !!str because an explicit node no longer gets its tag resolved from
+	// the value: without it a quoted 2026-12-31 would lose its quotes.
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!str",
+		Style: yaml.DoubleQuotedStyle,
+		Value: string(s),
+	}, nil
+}
+
+// blockScalarRisk reports whether s is the shape described on text: a
+// value spanning lines that opens with a space, a tab or a newline.
+// Invalid UTF-8 is left alone — yaml has its own answer for that, and it
+// is not this one's business to override it.
+func blockScalarRisk(s string) bool {
+	return strings.Contains(s, "\n") && strings.TrimLeft(s, " \t\n") != s &&
+		utf8.ValidString(s)
+}
+
+// texts converts a slice of plain strings into frontmatter text.
+func texts(in []string) []text {
+	if in == nil {
+		return nil
+	}
+	out := make([]text, len(in))
+	for i, s := range in {
+		out[i] = text(s)
+	}
+	return out
+}
+
+// textify converts every string inside a decoded attr value to text, so
+// producer extension keys are emitted under the same rule as the envelope
+// (see text). Attrs arrive from JSON or YAML, so these are the only kinds
+// that can hold one.
+func textify(v any) any {
+	switch v := v.(type) {
+	case string:
+		return text(v)
+	case []any:
+		out := make([]any, len(v))
+		for i := range v {
+			out[i] = textify(v[i])
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, e := range v {
+			out[key] = textify(e)
+		}
+		return out
+	}
+	return v
 }
 
 // reservedKeys are the frontmatter keys the envelope owns. An attr with a
@@ -238,10 +328,10 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 func actorEvent(a *domain.Actor, at *time.Time) event {
 	var e event
 	if a != nil && (a.Kind != "" || a.Name != "") {
-		e.By, e.Via = a.Kind+":"+a.Name, a.Via
+		e.By, e.Via = text(a.Kind+":"+a.Name), text(a.Via)
 	}
 	if at != nil {
-		e.At = at.UTC().Format(time.RFC3339)
+		e.At = text(at.UTC().Format(time.RFC3339))
 	}
 	return e
 }
@@ -250,15 +340,15 @@ func windowOut(w *domain.UsageWindow) *usageWindow {
 	if w == nil {
 		return nil
 	}
-	return &usageWindow{From: w.From, To: w.To}
+	return &usageWindow{From: text(w.From), To: text(w.To)}
 }
 
 func sourcesOut(in []domain.Source) []source {
 	var out []source
 	for _, s := range in {
 		out = append(out, source{
-			Resource: s.Resource, ID: s.ID, Title: s.Title, Author: s.Author,
-			UsageCount: s.UsageCount, LastModified: s.LastModified,
+			Resource: text(s.Resource), ID: text(s.ID), Title: text(s.Title), Author: text(s.Author),
+			UsageCount: s.UsageCount, LastModified: text(s.LastModified),
 			UsageWindow: windowOut(s.UsageWindow),
 		})
 	}
@@ -275,29 +365,29 @@ func sourcesOut(in []domain.Source) []source {
 // it (design doc 0036 §3.4).
 func Document(k *domain.Knowledge) ([]byte, error) {
 	fm := frontmatter{
-		Type:        string(k.Type),
-		Resource:    k.Resource,
-		Title:       k.Title,
-		Description: k.Description,
-		Tags:        k.Tags,
+		Type:        text(k.Type),
+		Resource:    text(k.Resource),
+		Title:       text(k.Title),
+		Description: text(k.Description),
+		Tags:        texts(k.Tags),
 		Sources:     sourcesOut(k.Sources),
 		UsageWindow: windowOut(k.UsageWindow),
-		Status:      domain.OKFStatus(k.Status),
-		StatusNote:  k.StatusNote,
-		StaleAfter:  k.StaleAfter,
-		Runtime:     k.Runtime,
-		Computation: k.Computation,
+		Status:      text(domain.OKFStatus(k.Status)),
+		StatusNote:  text(k.StatusNote),
+		StaleAfter:  text(k.StaleAfter),
+		Runtime:     text(k.Runtime),
+		Computation: text(k.Computation),
 		Generated:   actorEvent(&k.UpdatedBy, &k.UpdatedAt),
-		CreatedBy:   k.CreatedBy.String(),
+		CreatedBy:   text(k.CreatedBy.String()),
 	}
 	for _, p := range k.Parameters {
-		fm.Parameters = append(fm.Parameters, parameter{Name: p.Name, Type: p.Type, Required: p.Required})
+		fm.Parameters = append(fm.Parameters, parameter{Name: text(p.Name), Type: text(p.Type), Required: p.Required})
 	}
 	if k.Executor != nil {
-		fm.Executor = &executor{Resource: k.Executor.Resource, Receipt: k.Executor.Receipt}
+		fm.Executor = &executor{Resource: text(k.Executor.Resource), Receipt: texts(k.Executor.Receipt)}
 	}
 	if k.Attester != nil {
-		fm.Attester = &attester{Resource: k.Attester.Resource}
+		fm.Attester = &attester{Resource: text(k.Attester.Resource)}
 	}
 	// Status verified always writes a verified entry, even for an entry
 	// carrying no verification actor. The key's presence is what a v0.2
@@ -309,10 +399,10 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		fm.Verified = []event{actorEvent(k.VerifiedBy, k.VerifiedAt)}
 	}
 	if k.RejectedBy != nil {
-		fm.RejectedBy = k.RejectedBy.String()
+		fm.RejectedBy = text(k.RejectedBy.String())
 	}
 	if k.RejectedAt != nil {
-		fm.RejectedAt = k.RejectedAt.UTC().Format(time.RFC3339)
+		fm.RejectedAt = text(k.RejectedAt.UTC().Format(time.RFC3339))
 	}
 
 	fmYAML, err := yaml.Marshal(&fm)
@@ -320,11 +410,11 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		return nil, err
 	}
 	// Extension attrs go out as top-level keys, after the envelope keys.
-	// yaml.Marshal sorts map keys, so the output is deterministic.
+	// yaml sorts map keys, so the output is deterministic.
 	extras := map[string]any{}
 	for key, v := range k.Attrs {
 		if !reservedKeys[key] {
-			extras[key] = v
+			extras[key] = textify(v)
 		}
 	}
 	var exYAML []byte

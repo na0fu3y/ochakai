@@ -9,7 +9,6 @@ package okf
 // cannot.
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -98,7 +97,7 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 	f.Add("Insight", "  padded  ", "", "a,,b", "", "not-a-date", "  \n  ")
 	f.Add("Metric ", "", "", "", "draft", "", "")                   // trailing space: trimmed before storage, so not a round trip of one
 	f.Add("Metric", "\nleading", "trailing\n", "", "draft", "", "") // newlines at either end: dropped before #183, kept now
-	f.Add("Metric", "", "", " indented\nsecond", "draft", "", "")   // a tag whose first line is indented: emits frontmatter Parse rejects
+	f.Add("Metric", "", "", " indented\nsecond", "draft", "", "")   // a tag whose first line is indented: the shape that broke the export
 	f.Add("Metric", "", "", "", "draft", "", "first\r\nsecond")     // CRLF body: normalized to LF on read (0036 §3.12)
 
 	f.Fuzz(func(t *testing.T, typ, title, desc, tags, status, staleAfter, body string) {
@@ -122,50 +121,6 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 		// the rest is not a promise anyone made.
 		if !domain.ValidType(k.Type) || !domain.ValidStatus(k.Status) ||
 			!domain.ValidStaleAfter(k.StaleAfter) {
-			t.Skip()
-		}
-		// The fault this target found that is still open, and it is a
-		// class rather than a single shape: a value that spans lines and
-		// whose *first* line is indented emits frontmatter ochakai cannot
-		// read back at all. Not a lossy field — Parse fails outright, so
-		// the entry exports into a bundle whose document is skipped on
-		// import (design doc 0019) instead of round-tripping.
-		//
-		// A block scalar takes its indentation from the first content
-		// line, so an indented one needs an explicit indicator; the
-		// emitter writes one that does not match, or none at all. Shapes
-		// found so far:
-		//
-		//	"\tx\ny"   anywhere: "found a tab character where an
-		//	           indentation space is expected".
-		//	" x\ny"    as a tag — a sequence item: "did not find expected
-		//	           '-' indicator". Fine as a mapping value.
-		//	"\nx"      as a tag: the same. Fine as a mapping value, which
-		//	           is what #183 fixed.
-		//
-		// A single-line value is safe whatever it holds; the emitter
-		// quotes it rather than reaching for a block scalar. Beyond that
-		// the exact rule is the emitter's bug surface, and every time
-		// this skip was narrowed to match it, fuzzing found another
-		// shape. So it rounds up instead: any multi-line tag, and any
-		// multi-line value opening with a space or tab. That skips
-		// several shapes that do work ("x\n y" as a tag), which costs
-		// coverage but keeps the skip from being a second bug to track.
-		//
-		// It reproduces in gopkg.in/yaml.v3 v3.0.1, go.yaml.in/yaml
-		// v3.0.4 and v4 alike, so there is no upstream fix to take: the
-		// fix belongs in Document, which is why it is still open here.
-		// Enumerating the surface is the losing half of that fix — the
-		// paragraph above is the evidence for it.
-		//
-		// The other fault this target found — a dropped leading newline —
-		// was an emitter bug that upstream had already fixed, and moving
-		// to the maintained library took it (#183).
-		// TestDocumentKeepsLeadingNewlines pins that, and those values
-		// are checked here now.
-		if indentedFirstLine(k.Title) || indentedFirstLine(k.Description) ||
-			indentedFirstLine(k.StatusNote) ||
-			slices.ContainsFunc(k.Tags, func(t string) bool { return strings.Contains(t, "\n") }) {
 			t.Skip()
 		}
 
@@ -200,11 +155,4 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 			t.Errorf("round trip changed the entry:\n got %+v\nwant %+v\ndocument:\n%s", *got, want, doc)
 		}
 	})
-}
-
-// indentedFirstLine reports whether s is the shape described at the skip
-// above: a value that spans lines and opens with a space or a tab.
-func indentedFirstLine(s string) bool {
-	first, _, multiLine := strings.Cut(s, "\n")
-	return multiLine && (strings.HasPrefix(first, " ") || strings.HasPrefix(first, "\t"))
 }

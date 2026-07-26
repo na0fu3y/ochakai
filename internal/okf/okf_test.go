@@ -290,3 +290,74 @@ func TestDocumentKeepsLeadingNewlines(t *testing.T) {
 		}
 	}
 }
+
+// TestDocumentSurvivesIndentedFirstLines pins the shapes that used to
+// export into a bundle ochakai could not read back. A value that spans
+// lines and opens with whitespace went out as a block scalar with the
+// wrong indentation indicator, and Parse rejected the document outright —
+// so the entry was skipped on import (design doc 0019) rather than
+// round-tripping. Found by FuzzDocumentRoundTrip; see the text type.
+func TestDocumentSurvivesIndentedFirstLines(t *testing.T) {
+	for _, v := range []string{
+		" space\nsecond",
+		"\ttab\nsecond",
+		"\nnewline\nsecond",
+		"  \n  ",
+		"ordinary\nprose",
+		"trailing\n",
+		"mid\ttab\nsecond",
+	} {
+		for _, c := range []struct {
+			where string
+			k     *domain.Knowledge
+			got   func(*domain.Knowledge) string
+		}{
+			{"title", &domain.Knowledge{Type: domain.TypeMetrics, Title: v},
+				func(k *domain.Knowledge) string { return k.Title }},
+			{"description", &domain.Knowledge{Type: domain.TypeMetrics, Description: v},
+				func(k *domain.Knowledge) string { return k.Description }},
+			{"tag", &domain.Knowledge{Type: domain.TypeMetrics, Tags: []string{v}},
+				func(k *domain.Knowledge) string {
+					if len(k.Tags) != 1 {
+						return ""
+					}
+					return k.Tags[0]
+				}},
+			{"attr", &domain.Knowledge{Type: domain.TypeMetrics, Attrs: map[string]any{"note": v}},
+				func(k *domain.Knowledge) string {
+					s, _ := k.Attrs["note"].(string)
+					return s
+				}},
+		} {
+			doc, err := Document(c.k)
+			if err != nil {
+				t.Errorf("%s=%q: Document: %v", c.where, v, err)
+				continue
+			}
+			back, _, err := Parse(doc)
+			if err != nil {
+				t.Errorf("%s=%q: our own document does not parse: %v\n%s", c.where, v, err, doc)
+				continue
+			}
+			if got := c.got(back); got != v {
+				t.Errorf("%s=%q came back as %q\n%s", c.where, v, got, doc)
+			}
+		}
+	}
+}
+
+// TestDocumentKeepsBlockScalarsForProse guards the cost side of that fix:
+// only the awkward shapes are quoted. An exported bundle is read in Git
+// diffs (design doc 0009), where a multi-line description as one escaped
+// line is a real loss.
+func TestDocumentKeepsBlockScalarsForProse(t *testing.T) {
+	doc, err := Document(&domain.Knowledge{
+		Type: domain.TypeInsights, Description: "First line.\nSecond line.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "description: |-\n    First line.\n    Second line.\n") {
+		t.Errorf("ordinary multi-line prose should stay a block scalar:\n%s", doc)
+	}
+}
