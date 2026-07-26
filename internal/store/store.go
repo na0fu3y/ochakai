@@ -929,15 +929,22 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 }
 
 // SearchVector ranks by cosine distance against stored embeddings.
-func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f Filter, limit int) ([]domain.SearchHit, error) {
 	// Columns must be qualified: knowledge_embedding shares id/updated_at.
 	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
+	vecParam := len(args)
+	// Only this model's vectors: a vector written by another model lives
+	// in a different space, so comparing it to this query's vector yields
+	// a number that means nothing. Reembed refills the gap (design doc
+	// 0020); until it runs the entry is lexical-only, which is a visible
+	// absence rather than a plausible wrong ranking.
+	args = append(args, model)
 	q := fmt.Sprintf(`
 		SELECT `+qualifyCols("k")+`, 1 - (e.embedding <=> $%d::vector) AS score
-		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id
+		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id AND e.model = $%d
 		WHERE %s
-		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, len(args), where, len(args), limit)
+		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, vecParam, len(args), where, vecParam, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -951,17 +958,19 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, f Filter, limit
 // embedding (design doc 0020). Each entry appears once, carrying its
 // best attachment's score — attachments never stand alone, so the hit
 // is the owning entry.
-func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, f Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, model string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
+	vecParam := len(args)
+	args = append(args, model) // this model's vectors only, as in SearchVector
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeCols+`, score FROM (
 			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
-			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id
+			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
 			WHERE %s
 			ORDER BY k.id, e.embedding <=> $%d::vector
 		) best
-		ORDER BY score DESC LIMIT %d`, len(args), where, len(args), limit)
+		ORDER BY score DESC LIMIT %d`, vecParam, len(args), where, vecParam, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -1133,16 +1142,73 @@ func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
 // is no row), and entries whose vector belongs to a model that has since
 // been changed (design doc 0020 — the old vectors sit in a space nobody
 // queries any more).
-func (s *Store) ListUnembedded(ctx context.Context, model string, limit int) ([]string, error) {
+//
+// after is a keyset cursor: pass the last id of the previous page to get
+// the next one. Without it a pass whose entries all fail keeps handing
+// back the same window, and the caller — which stops when a pass embeds
+// nothing — never reaches the rest of the corpus.
+func (s *Store) ListUnembedded(ctx context.Context, model, after string, limit int) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT k.id FROM knowledge k
 		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
-		 WHERE k.deleted_at IS NULL AND e.id IS NULL
-		 ORDER BY k.created_at LIMIT $2`, model, limit)
+		 WHERE k.deleted_at IS NULL AND e.id IS NULL AND ($2 = '' OR k.id > $2)
+		 ORDER BY k.id LIMIT $3`, model, after, limit)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// UnembeddedAttachment names one attachment awaiting a vector.
+type UnembeddedAttachment struct {
+	KnowledgeID string
+	Name        string
+}
+
+// ListUnembeddedAttachments is ListUnembedded for attachment vectors
+// (design doc 0020). Attach writes them, so a corpus loaded before
+// semantic search — or one whose embedding tables were dropped to change
+// dimensions — has none, and the files are findable by name only. The
+// cursor is the (knowledge_id, name) pair, for the same reason.
+func (s *Store) ListUnembeddedAttachments(ctx context.Context, model, afterID, afterName string, limit int) ([]UnembeddedAttachment, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT a.knowledge_id, a.name FROM attachment a
+		 JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		 LEFT JOIN attachment_embedding e
+		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
+		 WHERE e.knowledge_id IS NULL
+		   AND ($2 = '' OR (a.knowledge_id, a.name) > ($2, $3))
+		 ORDER BY a.knowledge_id, a.name LIMIT $4`, model, afterID, afterName, limit)
+	if err != nil {
+		if isUndefinedTable(err) {
+			return nil, nil // embedding tables appear with semantic search
+		}
+		return nil, err
+	}
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (UnembeddedAttachment, error) {
+		var a UnembeddedAttachment
+		return a, row.Scan(&a.KnowledgeID, &a.Name)
+	})
+	if err != nil && isUndefinedTable(err) {
+		return nil, nil
+	}
+	return out, err
+}
+
+// CountUnembeddedAttachments counts what ListUnembeddedAttachments would
+// eventually return.
+func (s *Store) CountUnembeddedAttachments(ctx context.Context, model string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM attachment a
+		 JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		 LEFT JOIN attachment_embedding e
+		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
+		 WHERE e.knowledge_id IS NULL`, model).Scan(&n)
+	if err != nil && isUndefinedTable(err) {
+		return 0, nil
+	}
+	return n, err
 }
 
 // CountUnembedded counts the live entries with no vector for the named
@@ -1258,4 +1324,19 @@ func encodeVector(vec []float32) string {
 
 func isUndefinedTable(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "42P01")
+}
+
+// CountAttachmentEmbedding reports whether one attachment has a vector
+// for the named model (0 or 1). Reembed uses it to tell an embedding
+// that landed from one the provider declined — the attach path logs its
+// own failures rather than returning them.
+func (s *Store) CountAttachmentEmbedding(ctx context.Context, id, name, model string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM attachment_embedding
+		 WHERE knowledge_id = $1 AND name = $2 AND model = $3`, id, name, model).Scan(&n)
+	if err != nil && isUndefinedTable(err) {
+		return 0, nil
+	}
+	return n, err
 }

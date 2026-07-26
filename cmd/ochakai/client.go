@@ -848,36 +848,42 @@ func cmdReembed(ctx context.Context, args []string) error {
 	// request timeout — which makes "run it until it is done" the client's
 	// job. Looping here also means an operator types one command instead
 	// of watching a number and deciding when to stop.
-	var embedded, failed int
+	var embedded, attachments, failed int
+	cursor := ""
 	for pass := 1; ; pass++ {
-		res, err := c.Reembed(ctx, *limit)
+		res, err := c.Reembed(ctx, cursor, *limit)
 		if err != nil {
 			return err
 		}
 		embedded += res.Embedded
+		attachments += res.Attachments
 		failed += res.Failed
 		if *asJSON {
 			if err := printJSON(res); err != nil {
 				return err
 			}
 		} else {
-			fmt.Printf("pass %d: embedded %d, failed %d, still missing %d\n",
-				pass, res.Embedded, res.Failed, res.Missing)
+			fmt.Printf("pass %d: embedded %d entries, %d attachments, failed %d, still missing %d\n",
+				pass, res.Embedded, res.Attachments, res.Failed, res.Missing)
 		}
 		if *once || res.Missing == 0 {
 			break
 		}
-		if res.Embedded == 0 {
-			// Every entry left is one the provider refuses. Another pass
-			// would fetch the same ids and fail the same way.
+		// The cursor, not the progress count, decides when to stop: a
+		// pass whose every item the provider refuses still advances, and
+		// the corpus beyond that window deserves its turn. An exhausted
+		// cursor with work still missing means those failures are all
+		// that is left.
+		if res.Cursor == "" || res.Cursor == cursor {
 			fmt.Fprintf(os.Stderr,
-				"stopping: %d entries still missing and no progress this pass; see the server log for why\n",
+				"stopping: %d items still missing and the corpus is exhausted; see the server log for why they failed\n",
 				res.Missing)
 			return errReported
 		}
+		cursor = res.Cursor
 	}
 	if !*asJSON {
-		fmt.Printf("done: embedded %d, failed %d\n", embedded, failed)
+		fmt.Printf("done: embedded %d entries, %d attachments, failed %d\n", embedded, attachments, failed)
 	}
 	return nil
 }

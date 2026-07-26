@@ -689,17 +689,33 @@ paths:
         more (design doc 0020). This fills the gap.
 
 
-        Bounded per call — repeat while `missing` is above zero; the CLI
-        (`ochakai reembed`) does that for you. One entry is one call to
+        Attachment vectors are covered too: only `attach` writes them, so
+        a corpus loaded before semantic search — or one whose embedding
+        tables were dropped to change dimensions — has files that are
+        findable by name alone until this runs. Entries go first and
+        attachments fill the rest of the pass.
+
+
+        Bounded per call — repeat while `missing` is above zero, passing
+        the previous response's `cursor` back each time; the CLI
+        (`ochakai reembed`) does that for you. One item is one call to
         the embedding provider and the calls are sequential, so the
         default pass is sized to finish well inside a request timeout
         (Cloud Run's default is 300s); raise `limit` only if you know
-        yours. A provider failure on one entry is counted, not fatal. 501
+        yours. A provider failure on one item is counted, not fatal. 501
         when semantic search is not configured.
       parameters:
         - name: limit
           in: query
           schema: { type: integer, default: 200, maximum: 5000 }
+        - name: cursor
+          in: query
+          description: >
+            Resume position from a previous response. Omit to start from
+            the beginning. Without it, a pass whose every item the
+            provider refuses returns the same window forever and the rest
+            of the corpus is never attempted.
+          schema: { type: string }
       responses:
         "200":
           description: What the pass did.
@@ -708,11 +724,25 @@ paths:
               schema:
                 type: object
                 properties:
-                  embedded: { type: integer }
+                  embedded:
+                    description: Knowledge entries embedded by this pass.
+                    type: integer
+                  attachments:
+                    description: Attachments embedded by this pass.
+                    type: integer
                   failed: { type: integer }
                   missing:
-                    description: Still unembedded when the limit was reached.
+                    description: >
+                      Entries and attachments still unembedded once the
+                      pass was over — counted after the fact, so items
+                      this pass failed on are included.
                     type: integer
+                  cursor:
+                    description: >
+                      Where the next pass resumes. Absent once nothing is
+                      missing; unchanged from the one sent in means the
+                      corpus is exhausted and what remains only fails.
+                    type: string
         "501": { $ref: "#/components/responses/Error" }
 components:
   headers:

@@ -118,7 +118,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 			t.Fatalf("UpsertAttachmentEmbedding(%s/%s): %v", e.id, e.name, err)
 		}
 	}
-	vhits, err := s.SearchVectorAttachments(ctx, []float32{0.9, 0.1, 0.1, 0}, Filter{}, 5)
+	vhits, err := s.SearchVectorAttachments(ctx, []float32{0.9, 0.1, 0.1, 0}, "test-model", Filter{}, 5)
 	if err != nil {
 		t.Fatalf("SearchVectorAttachments: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 	if n := countEmbeddings(b.ID, "other.txt"); n != 1 {
 		t.Errorf("soft delete removed attachment embeddings: got %d rows, want 1", n)
 	}
-	vhits, err = s.SearchVectorAttachments(ctx, []float32{0, 0, 1, 0}, Filter{}, 5)
+	vhits, err = s.SearchVectorAttachments(ctx, []float32{0, 0, 1, 0}, "test-model", Filter{}, 5)
 	if err != nil {
 		t.Fatal(err)
 	}

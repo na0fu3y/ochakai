@@ -401,14 +401,14 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		}
 		return lexical, nil
 	}
-	vector, err := s.Store.SearchVector(ctx, vecs[0], f, limit*2)
+	vector, err := s.Store.SearchVector(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
 		return nil, err
 	}
 	// Entries whose attachments match are the third list (design doc
 	// 0020): an entry matching in both body and attachment gains rank
 	// from both, so evidence-backed entries surface first.
-	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], f, limit*2)
+	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
 		return nil, err
 	}
@@ -845,13 +845,17 @@ func (s *Service) embedBytes() int {
 }
 
 // ReembedResult reports what a Reembed pass did. Missing is how many
-// entries still have no vector once the pass is over — the number that
-// decides whether the operator runs it again, so it counts what is
-// actually left rather than what this pass did not get to.
+// entries and attachments still have no vector once the pass is over —
+// the number that decides whether the operator runs it again, so it
+// counts what is actually left rather than what this pass did not get
+// to. Cursor is where the next pass resumes; empty means the corpus is
+// exhausted.
 type ReembedResult struct {
-	Embedded int `json:"embedded"`
-	Failed   int `json:"failed"`
-	Missing  int `json:"missing"`
+	Embedded    int    `json:"embedded"`
+	Attachments int    `json:"attachments"`
+	Failed      int    `json:"failed"`
+	Missing     int    `json:"missing"`
+	Cursor      string `json:"cursor,omitempty"`
 }
 
 // A reembed pass is one HTTP request, and one entry is one call to the
@@ -878,14 +882,15 @@ const (
 //
 // Failures are counted, not fatal: one entry the provider chokes on must
 // not strand the rest of the corpus.
-func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error) {
+func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*ReembedResult, error) {
 	if s.Embedder == nil {
 		return nil, Unsupportedf("semantic search is not configured: set OCHAKAI_VERTEX_PROJECT")
 	}
 	if limit <= 0 || limit > maxReembedPass {
 		limit = defaultReembedPass
 	}
-	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), limit)
+	entryCursor, attachCursor := splitReembedCursor(cursor)
+	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), entryCursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -910,6 +915,20 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 		}
 		res.Embedded++
 	}
+	if len(ids) > 0 {
+		entryCursor = ids[len(ids)-1]
+	}
+	// Attachments carry vectors of their own (design doc 0020) and only
+	// attach writes them, so dropping the embedding tables to change
+	// dimensions leaves every file findable by name alone. Entries come
+	// first and attachments fill the rest of the pass, so a corpus with
+	// both makes progress on both.
+	if rest := limit - len(ids); rest > 0 {
+		attachCursor, err = s.reembedAttachments(ctx, res, attachCursor, rest)
+		if err != nil {
+			return nil, err
+		}
+	}
 	// Counted after the pass, so it is what is left — not what was left
 	// minus what we did, which double-counts the work and reports a
 	// bounded pass as a finished one. Entries this pass failed on are
@@ -921,8 +940,73 @@ func (s *Service) Reembed(ctx context.Context, limit int) (*ReembedResult, error
 		s.Log.Warn("reembed: counting what is left failed", "error", err)
 		return res, nil
 	}
-	res.Missing = missing
+	attMissing, err := s.Store.CountUnembeddedAttachments(ctx, s.Embedder.Model())
+	if err != nil {
+		s.Log.Warn("reembed: counting attachments left failed", "error", err)
+	}
+	res.Missing = missing + attMissing
+	if res.Missing > 0 {
+		res.Cursor = joinReembedCursor(entryCursor, attachCursor)
+	}
 	return res, nil
+}
+
+// reembedAttachments re-embeds up to limit attachments, returning the
+// cursor to resume from. Failures are counted like entry failures: a
+// file the provider rejects must not strand the rest.
+func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, cursor string, limit int) (string, error) {
+	afterID, afterName := splitReembedCursor(cursor)
+	pending, err := s.Store.ListUnembeddedAttachments(ctx, s.Embedder.Model(), afterID, afterName, limit)
+	if err != nil {
+		return cursor, err
+	}
+	for _, a := range pending {
+		att, data, err := s.Store.GetAttachment(ctx, a.KnowledgeID, a.Name)
+		if err != nil {
+			res.Failed++
+			s.Log.Warn("reembed: attachment disappeared", "id", a.KnowledgeID, "name", a.Name, "error", err)
+			continue
+		}
+		// The same path attach uses, so the vectors match what a fresh
+		// attach would have produced; it logs and swallows its own
+		// failures, which is why the count below is of rows written.
+		before := s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name)
+		s.updateAttachmentEmbedding(ctx, a.KnowledgeID, att, data)
+		if s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name) > before {
+			res.Attachments++
+		} else {
+			res.Failed++
+		}
+		afterID, afterName = a.KnowledgeID, a.Name
+	}
+	return joinReembedCursor(afterID, afterName), nil
+}
+
+// attachmentVectorCount reports whether a current-model vector exists,
+// so a pass can tell an embedding that landed from one the provider (or
+// the model's file support) declined.
+func (s *Service) attachmentVectorCount(ctx context.Context, id, name string) int {
+	n, err := s.Store.CountAttachmentEmbedding(ctx, id, name, s.Embedder.Model())
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// The reembed cursor carries two positions — entries and attachments —
+// in one opaque string, so the wire stays a single token the CLI can
+// hand back unchanged. "\x00" cannot occur in an id (design doc 0017)
+// or an attachment name.
+func joinReembedCursor(a, b string) string {
+	if a == "" && b == "" {
+		return ""
+	}
+	return a + "\x00" + b
+}
+
+func splitReembedCursor(c string) (string, string) {
+	a, b, _ := strings.Cut(c, "\x00")
+	return a, b
 }
 
 // embedDocument embeds text, halving it and retrying while the model says
