@@ -401,8 +401,12 @@ func Handler(svc *service.Service) http.Handler {
 	// first is reversible, the second is not. Not on MCP — destroying
 	// history is a human decision (design doc 0015).
 	mux.HandleFunc("DELETE /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		if r.URL.Query().Get("purge") == "true" {
+		purge, err := queryBool(r.URL.Query(), "purge", false)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if purge {
 			err = svc.Purge(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
 		} else {
 			err = svc.Delete(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
@@ -456,6 +460,13 @@ func Handler(svc *service.Service) http.Handler {
 		// archive that disagrees with its own index — an index.md naming a
 		// file that is not there, an entry that moved appearing twice or
 		// not at all. The archive would look fine.
+		// Parsed before the snapshot: a rejected parameter should not
+		// have held a pooled connection open, however briefly.
+		withAttachments, err := queryBool(r.URL.Query(), "attachments", true)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		snap, err := svc.Store.BeginExport(r.Context())
 		if err != nil {
 			writeError(w, err)
@@ -469,7 +480,6 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		withAttachments := r.URL.Query().Get("attachments") != "false"
 		var atts []store.ExportAttachment
 		if withAttachments {
 			// Metadata only; bytes are pulled one attachment at a time below.
@@ -704,6 +714,24 @@ func queryInt(q url.Values, name string) (int, error) {
 		return 0, service.Invalidf("invalid %s %q (want an integer)", name, s)
 	}
 	return n, nil
+}
+
+// queryBool parses an optional boolean query parameter. Like queryInt it
+// refuses what it cannot read rather than falling back to def: "?purge=1"
+// answering 204 for a soft delete would tell the caller an id had been
+// freed when it had not, and the two calls of a purge are meant to be
+// deliberate (design doc 0031).
+func queryBool(q url.Values, name string, def bool) (bool, error) {
+	switch q.Get(name) {
+	case "":
+		return def, nil
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, service.Invalidf("invalid %s %q (want true or false)", name, q.Get(name))
+	}
 }
 
 func queryFloat(q url.Values, name string) (float64, error) {
