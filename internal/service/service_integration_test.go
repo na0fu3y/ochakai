@@ -524,3 +524,54 @@ func (e *fixedEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) (
 	}
 	return out, nil
 }
+
+// Every entity timestamp has to survive the round trip through
+// timestamptz, or a write's response describes an entry the database
+// never held (design doc 0030 §3.2). updated_at has been stored-precision
+// since #108; verified_at and rejected_at were still stamped from
+// time.Now(), so a client that read them back saw a different instant --
+// the same nanosecond mismatch that breaks conditional updates, on the
+// two fields the review feeds sort by.
+func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	for _, tc := range []struct {
+		status domain.Status
+		field  string
+		at     func(*domain.Knowledge) *time.Time
+	}{
+		{domain.StatusVerified, "verified_at", func(k *domain.Knowledge) *time.Time { return k.VerifiedAt }},
+		{domain.StatusRejected, "rejected_at", func(k *domain.Knowledge) *time.Time { return k.RejectedAt }},
+	} {
+		t.Run(string(tc.status), func(t *testing.T) {
+			id := uid("stampit")
+			written, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeTerms, ID: id, Title: id, Status: tc.status,
+			}, actor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stamped := tc.at(written)
+			if stamped == nil {
+				t.Fatalf("create with status=%s stamped no %s", tc.status, tc.field)
+			}
+			// Asserted directly, because a clock without nanosecond
+			// resolution (macOS) would let the round-trip check below
+			// pass on a value that loses precision on Linux.
+			if truncated := stamped.Truncate(time.Microsecond); !truncated.Equal(*stamped) {
+				t.Errorf("%s carries sub-microsecond precision timestamptz cannot store: %s",
+					tc.field, stamped.Format(time.RFC3339Nano))
+			}
+			read, err := svc.Get(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := *tc.at(read), *tc.at(written); !got.Equal(want) {
+				t.Errorf("%s: write returned %s, database holds %s", tc.field,
+					want.Format(time.RFC3339Nano), got.Format(time.RFC3339Nano))
+			}
+		})
+	}
+}

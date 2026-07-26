@@ -280,7 +280,7 @@ func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowled
 	// not survive the round trip through timestamptz, so the revision
 	// snapshot would carry a version the stored row never had (design
 	// doc 0030).
-	k.UpdatedAt = nowStored()
+	k.UpdatedAt = NowStored()
 	if _, err := tx.Exec(ctx,
 		`UPDATE knowledge SET updated_at=$2 WHERE id=$1`, k.ID, k.UpdatedAt); err != nil {
 		return err

@@ -320,8 +320,13 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 // no promotion restriction (design doc 0002): anyone who can reach ochakai
 // may verify or reject, and verified_by / rejected_by record who did —
 // trust is judged from provenance.
+//
+// The timestamp comes from store.NowStored, like every other entity
+// timestamp (design doc 0030 §3.2): time.Now()'s nanoseconds do not
+// survive timestamptz, so a write's response carried a verified_at that
+// no later read of the same entry would ever return.
 func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, actor domain.Actor) {
-	now := time.Now().UTC()
+	now := store.NowStored()
 	wasVerified := old != nil && old.Status == domain.StatusVerified
 	if k.Status == domain.StatusVerified && !wasVerified {
 		k.VerifiedBy, k.VerifiedAt = &actor, &now
