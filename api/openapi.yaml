@@ -175,6 +175,12 @@ paths:
         golden query answering the question) arrives in the same response.
         Rejected entries never appear. limit caps the primary entries
         (default 5, max 20); linked companions share a 2×limit total cap.
+
+        Changed in 0.13.0 (design doc 0033): `hits` carries the ranking
+        only — id, type, title, status, score. It used to repeat every
+        top entry in full, so the knowledge arrived twice and the budget
+        bound one copy of it. A client that read bodies out of `hits`
+        reads them from `entries` instead, where they always were.
       parameters:
         - name: q
           in: query
