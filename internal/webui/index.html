@@ -749,9 +749,10 @@ function debounce(fn, ms) {
   debounce._t = setTimeout(fn, ms);
 }
 
-// Below this score a lexical hit is almost certainly noise: real matches
-// carry a 0.3 substring bonus, while trigram similarity of unrelated text
-// hovers near the server's 0.05 floor (plus a 0.05 verified boost). Only
+// Below this score a lexical hit is almost certainly noise: a real match
+// contains the query whole and carries the server's 0.3 bonus for it,
+// while an entry sharing one common fragment with a question scores a
+// small fraction of the query's fragments (plus 0.05 if verified). Only
 // meaningful in lexical mode — hybrid (RRF) scores live on a ~1/60 scale,
 // detected below by the top score, where no useful floor exists.
 const WEAK_SCORE = 0.15;
@@ -784,7 +785,7 @@ async function runSearch() {
       return;
     }
     // With a query, split off low-relevance hits so junk doesn't render as
-    // if it matched — semantic/trigram search always returns *something*.
+    // if it matched — semantic and lexical search always return *something*.
     let strong = hits, weak = [];
     if (explore.q && !isFeed && hits[0].score > 0.05) {
       strong = hits.filter(h => h.score >= WEAK_SCORE);

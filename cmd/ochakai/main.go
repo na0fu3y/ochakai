@@ -140,7 +140,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		embedder = v
 		log.Info("semantic search enabled", "model", cfg.Embedding.Model, "dim", cfg.Embedding.Dim)
 	} else {
-		log.Info("semantic search disabled; using trigram search only")
+		log.Info("semantic search disabled; using lexical search only")
 	}
 	// Attachment bytes live only on GCS (design doc 0013).
 	if cfg.GCSBucket != "" {
