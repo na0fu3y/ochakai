@@ -1244,17 +1244,6 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	return h, nil
 }
 
-// ListAll returns every non-deleted entry, ordered by id. Used by the
-// OKF exporter.
-func (s *Store) ListAll(ctx context.Context) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge WHERE deleted_at IS NULL ORDER BY id`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
-}
-
 // ListUnembedded returns the ids of live entries with no vector for the
 // named model, oldest first, up to limit. That covers both halves of the
 // same gap: entries written before semantic search was configured (there

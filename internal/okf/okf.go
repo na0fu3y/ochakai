@@ -61,22 +61,6 @@ var reservedKeys = map[string]bool{
 	"verified_at": true, "rejected_by": true, "rejected_at": true,
 }
 
-// Bundle renders every entry into a path→content map. The path is
-// "<id>.md" — the OKF concept ID is ochakai's id, and its segments are
-// the directories. Every directory level gets an index.md for
-// progressive disclosure.
-func Bundle(entries []domain.Knowledge) (map[string][]byte, error) {
-	files := Indexes(entries)
-	for i := range entries {
-		doc, err := Document(&entries[i])
-		if err != nil {
-			return nil, fmt.Errorf("render %s: %w", entries[i].URI(), err)
-		}
-		files[entries[i].ID+".md"] = doc
-	}
-	return files, nil
-}
-
 // Indexes renders a bundle's directory index.md files and nothing else,
 // sorting entries by id on the way (Bundle's ordering). Split out so a
 // streaming exporter can render one concept document at a time — the
@@ -228,24 +212,6 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-// WriteTarGz streams the bundle as a gzipped tarball (the OKF-sanctioned
-// archive distribution), with deterministic entry order.
-func WriteTarGz(w io.Writer, files map[string][]byte, modTime time.Time) error {
-	paths := make([]string, 0, len(files))
-	for p := range files {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-
-	tgz := NewTarGzWriter(w, modTime)
-	for _, p := range paths {
-		if err := tgz.Add(p, files[p]); err != nil {
-			return err
-		}
-	}
-	return tgz.Close()
-}
-
 // TarGzWriter writes a bundle one file at a time. A caller that can
 // produce its files lazily — the export endpoint, pulling attachment
 // bytes from the blob store as it goes — then never holds more than one
@@ -262,8 +228,8 @@ func NewTarGzWriter(w io.Writer, modTime time.Time) *TarGzWriter {
 	return &TarGzWriter{gz: gz, tw: tar.NewWriter(gz), modTime: modTime.UTC()}
 }
 
-// Add appends one file. Callers that care about ordering add in order:
-// unlike WriteTarGz, nothing is sorted here because nothing is collected.
+// Add appends one file, in the order the caller adds them: nothing is
+// sorted here because nothing is collected.
 func (t *TarGzWriter) Add(path string, data []byte) error {
 	if err := t.tw.WriteHeader(&tar.Header{
 		Name:    path,

@@ -19,7 +19,7 @@ import (
 
 // lockLiveAttachments serializes, across the test packages sharing the
 // test database, the tests that hold live attachments or scan them all
-// (OKF export, ListAllAttachments): bytes resolve against each test's
+// (OKF export, ExportSnapshot.AttachmentMeta): bytes resolve against each
 // own in-memory blob fake, so a foreign live attachment breaks a
 // whole-KB scan. Key shared with the store and restapi test packages.
 func lockLiveAttachments(t *testing.T, dbURL string) {

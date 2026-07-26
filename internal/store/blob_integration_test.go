@@ -76,19 +76,33 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 		t.Errorf("attachment did not round-trip: %v", err)
 	}
 
-	// The export listing resolves bytes from the blob store.
-	all, err := s.ListAllAttachments(ctx)
+	// The export path finds the attachment in its snapshot and resolves
+	// the bytes from the blob store, one at a time.
+	snap, err := s.BeginExport(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metas, err := snap.AttachmentMeta(ctx)
+	snap.Close(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	found := false
-	for _, e := range all {
-		if e.ID == k.ID && e.Att.Name == "chart.png" && string(e.Data) == string(png) {
-			found = true
+	for _, m := range metas {
+		if m.ID != k.ID || m.Att.Name != "chart.png" {
+			continue
 		}
+		data, err := s.AttachmentBytes(ctx, m.Att.SHA256)
+		if err != nil {
+			t.Fatalf("AttachmentBytes: %v", err)
+		}
+		if string(data) != string(png) {
+			t.Errorf("export read %q, want %q", data, png)
+		}
+		found = true
 	}
 	if !found {
-		t.Error("ListAllAttachments did not resolve the blob")
+		t.Error("the export snapshot did not list the attachment")
 	}
 
 	// Without a blob store, writes and reads refuse with the config hint.
