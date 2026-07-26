@@ -665,12 +665,28 @@ func TestIntegrationMove(t *testing.T) {
 		t.Fatalf("move onto a soft-deleted entry: got %v, want ErrAlreadyExists", err)
 	}
 
-	moved, err := s.Move(ctx, "it-move-src/metric", "it-move-dst/metric", actor)
+	mover := domain.Actor{Kind: "human", Name: "mover"}
+	moved, err := s.Move(ctx, "it-move-src/metric", "it-move-dst/metric", mover)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
 	if moved.ID != "it-move-dst/metric" {
 		t.Errorf("moved.ID = %q", moved.ID)
+	}
+	// A move rewrites the moved entry's links and every referrer's body,
+	// so the mover is who those contents stand by — generated.by in an
+	// export (design doc 0034 §3.3).
+	if moved.UpdatedBy != mover {
+		t.Errorf("moved.UpdatedBy = %v, want %v", moved.UpdatedBy, mover)
+	}
+	for _, id := range []string{"it-move-dst/metric", "it-move-bare", "it-move-attrs"} {
+		k, err := s.Get(ctx, id)
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+		if k.UpdatedBy != mover {
+			t.Errorf("%s updated_by = %v after the move, want %v", id, k.UpdatedBy, mover)
+		}
 	}
 	if _, err := s.Get(ctx, "it-move-src/metric"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("old id still resolves: %v", err)

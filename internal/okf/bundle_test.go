@@ -103,7 +103,7 @@ func TestBundleRoundTrip(t *testing.T) {
 			Body:        "本文。", UpdatedAt: now},
 	}
 	files := bundle(t, want)
-	got, _, skipped := FromBundle(files)
+	got, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -135,7 +135,7 @@ func TestBundleTitleOptional(t *testing.T) {
 	files := map[string][]byte{
 		"insights/サンプル.md": []byte("---\ntype: Insight\n---\n\n本文。\n"),
 	}
-	entries, _, skipped := FromBundle(files)
+	entries, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -162,7 +162,7 @@ func TestFromBundleNFCPaths(t *testing.T) {
 			"![chart](" + nfd + "/chart.png)\n"),
 		"insights/" + nfd + "/chart.png": pngBytes(),
 	}
-	entries, atts, skipped := FromBundle(files)
+	entries, atts, skipped, _ := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -190,7 +190,7 @@ func TestFromBundleForeign(t *testing.T) {
 		"notes/2026/q3.md": []byte("---\ntitle: Q3 notes\n---\n"), // no frontmatter type at all
 		"viz.html":         []byte("<html></html>"),
 	}
-	entries, _, skipped := FromBundle(files)
+	entries, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 2 || !strings.Contains(skipped[0], "notes/2026/q3.md") || !strings.Contains(skipped[1], "viz.html") {
 		t.Errorf("skipped = %v, want the typeless document and viz.html", skipped)
 	}
@@ -246,7 +246,7 @@ func TestFromBundleFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries, _, skipped := FromBundle(files)
+	entries, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 1 || !strings.Contains(skipped[0], "viz.html") {
 		t.Errorf("skipped = %v, want only viz.html", skipped)
 	}
@@ -299,7 +299,7 @@ func TestFromBundleWrappedArchive(t *testing.T) {
 		"._ga4":                []byte("apple double"),
 		"ga4/.DS_Store":        []byte("finder noise"),
 	}
-	entries, _, skipped := FromBundle(wrapped)
+	entries, _, skipped, _ := FromBundle(wrapped)
 	if len(skipped) != 0 {
 		t.Errorf("skipped = %v, want none (hidden files skip silently)", skipped)
 	}

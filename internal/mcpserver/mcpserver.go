@@ -96,7 +96,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"It executes no SQL and uses no LLM. " +
 			"Before answering a data question, call get_context once — it returns the relevant " +
 			"entries in full, links expanded. " +
-			"Prefer verified knowledge and judge trust from provenance (created_by / verified_by). " +
+			"Prefer verified knowledge and judge trust from provenance (created_by / updated_by / verified_by), " +
+			"and treat an entry whose stale_after has passed as due for re-checking, not as wrong. " +
 			"After acting on knowledge (running a golden query, writing SQL from a metric definition), report " +
 			"whether it actually worked with report_outcome — failed reports are how stale " +
 			"verified knowledge gets caught. " +
@@ -262,7 +263,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
 			"re-proposing knowledge that was already rejected (status_note records why). " +
 			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
-			"the conventional body sections: # Schema, # Common query patterns, # Citations. " +
+			"the conventional body sections: # Schema, # Common query patterns. " +
+			"An \"Attested Computation\" entry records a sanctioned computation others must run instead of " +
+			"improvising: put the computation in a # Computation fence in body and the contract in attrs " +
+			"(runtime, parameters, executor, attester). ochakai stores it and never runs it. " +
+			"Cite the material an entry derives from in attrs.sources — a list of {id, resource, title} — " +
+			"and attribute single claims with markdown footnotes keyed to those ids. " +
+			"Set stale_after when the knowledge has a known expiry date. " +
 			"A semantic model is a \"Semantic Model\" entry with the Apache Ossie model object in attrs.spec " +
 			"(one entry per model). Give each metric its own entry too (last id segment = the metric " +
 			"name, e.g. metrics/<name>) with attrs.expression holding the expression, so the " +
@@ -287,7 +294,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
-		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/attrs/body — " +
+		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/status/stale_after/attrs/body — " +
 			"an omitted title clears it, making the filename the name). " +
 			"Links are not a field: they come from the markdown links in body, so keep the ones you want to keep. " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
@@ -555,7 +562,7 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string         `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — any custom type works"`
+	Type        string         `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — any custom type works"`
 	ID          string         `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
 	Title       string         `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
 	Description string         `json:"description,omitempty"`
@@ -563,6 +570,7 @@ type writeIn struct {
 	Tags        []string       `json:"tags,omitempty"`
 	Status      string         `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
 	StatusNote  string         `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
+	StaleAfter  string         `json:"stale_after,omitempty" jsonschema:"absolute date (YYYY-MM-DD) after which this entry should be re-checked, e.g. when the quarter it describes closes; omit when nothing dates it"`
 	Attrs       map[string]any `json:"attrs,omitempty" jsonschema:"type-specific structured attributes, e.g. question/sql for a query"`
 	Body        string         `json:"body,omitempty" jsonschema:"markdown body; link to other entries by writing a markdown link to their path — [revenue](/metrics/revenue.md) — and those links become the entry's links"`
 }
@@ -577,6 +585,7 @@ func (in writeIn) toKnowledge() *domain.Knowledge {
 		Tags:        in.Tags,
 		Status:      domain.Status(in.Status),
 		StatusNote:  in.StatusNote,
+		StaleAfter:  in.StaleAfter,
 		Attrs:       in.Attrs,
 		Body:        in.Body,
 	}

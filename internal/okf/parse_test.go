@@ -16,7 +16,7 @@ func TestParseRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := Parse(doc)
+		got, _, err := Parse(doc)
 		if err != nil {
 			t.Fatalf("Parse(%s): %v", want.URI(), err)
 		}
@@ -51,7 +51,7 @@ func TestParseRoundTrip(t *testing.T) {
 }
 
 func TestParseAcceptsRawTypeAndHandWrittenDoc(t *testing.T) {
-	k, err := Parse([]byte(`---
+	k, _, err := Parse([]byte(`---
 type: Golden Query
 id: monthly-revenue
 title: 月次売上
@@ -85,7 +85,7 @@ func TestParseRejectsGarbage(t *testing.T) {
 		"---\ntype: \ntitle: x\n---\n",    // empty
 		"---\ntype: [a]\ntitle: x\n---\n", // type is not a string
 	} {
-		if _, err := Parse([]byte(doc)); err == nil {
+		if _, _, err := Parse([]byte(doc)); err == nil {
 			t.Errorf("Parse(%q) succeeded, want error", doc)
 		}
 	}
@@ -96,7 +96,7 @@ func TestParseRejectsGarbage(t *testing.T) {
 // stashed in a preservation attr, so the document round-trips because
 // nothing was changed in the first place.
 func TestParseFreeTypes(t *testing.T) {
-	k, err := Parse([]byte("---\ntype: runbook\nid: restore-backup\ntitle: リストア手順\n---\n"))
+	k, _, err := Parse([]byte("---\ntype: runbook\nid: restore-backup\ntitle: リストア手順\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestParseFreeTypes(t *testing.T) {
 		t.Errorf("one-word type: got type=%q attrs=%v", k.Type, k.Attrs)
 	}
 
-	k, err = Parse([]byte("---\ntype: Data Contract\nid: orders-contract\ntitle: 注文契約\n---\n"))
+	k, _, err = Parse([]byte("---\ntype: Data Contract\nid: orders-contract\ntitle: 注文契約\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestParseFreeTypes(t *testing.T) {
 // (SPEC §4.1): they land in attrs as-is and export back to the top level,
 // so a foreign bundle's resource/owner keys survive a round-trip in place.
 func TestParseKeepsUnknownKeys(t *testing.T) {
-	k, err := Parse([]byte(`---
+	k, _, err := Parse([]byte(`---
 type: Reference
 title: Average Pageviews
 resource: https://developers.google.com/analytics/bigquery/basic-queries
@@ -175,7 +175,7 @@ Body.
 }
 
 func TestParseStatusNoteRoundTrip(t *testing.T) {
-	k, err := Parse([]byte("---\ntype: insight\nid: dup\ntitle: 重複\nstatus: rejected\nstatus_note: 既存と重複\n---\n"))
+	k, _, err := Parse([]byte("---\ntype: insight\nid: dup\ntitle: 重複\nstatus: rejected\nstatus_note: 既存と重複\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestParseStatusNoteRoundTrip(t *testing.T) {
 }
 
 func TestParseNormalizesCRLF(t *testing.T) {
-	k, err := Parse([]byte("---\r\ntype: Glossary Term\r\nid: churn\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
+	k, _, err := Parse([]byte("---\r\ntype: Glossary Term\r\nid: churn\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestParseKeepsLinksSectionAsBody(t *testing.T) {
 	// structured links. It is ordinary prose now (design doc 0024) — the
 	// links inside it are found by the same extraction as any other.
 	body := "Intro.\n\n# Links\n\nSee [the dashboard](https://example.com) for details."
-	got, err := Parse([]byte("---\ntype: Insight\n---\n\n" + body + "\n"))
+	got, _, err := Parse([]byte("---\ntype: Insight\n---\n\n" + body + "\n"))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
@@ -217,12 +217,176 @@ func TestParseKeepsLinksSectionAsBody(t *testing.T) {
 // The knowledge-catalog reference bundles sometimes write tags as one
 // comma-separated string; permissive consumption (SPEC §9) accepts it.
 func TestParseScalarTags(t *testing.T) {
-	k, err := Parse([]byte("---\ntype: Dataset\ntitle: SO\ntags: Stack Overflow, public data, community, Q&A\n---\n"))
+	k, _, err := Parse([]byte("---\ntype: Dataset\ntitle: SO\ntags: Stack Overflow, public data, community, Q&A\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"Stack Overflow", "public data", "community", "Q&A"}
 	if !reflect.DeepEqual(k.Tags, want) {
 		t.Errorf("tags = %v, want %v", k.Tags, want)
+	}
+}
+
+// The v0.2 lifecycle vocabulary is three values where ochakai has four,
+// and "a human confirmed this" is the verified key, not a status
+// (SPEC §5.3-5.4, design doc 0034 §3.4).
+func TestParseStatusMapping(t *testing.T) {
+	const verified = "verified:\n  - { by: human:na0, at: 2026-07-01T00:00:00Z }\n"
+	for _, tc := range []struct {
+		name, frontmatter string
+		want              domain.Status
+		wantNote          bool
+	}{
+		{"stable with a verification is verified", "status: stable\n" + verified, domain.StatusVerified, false},
+		{"stable alone is not a review", "status: stable\n", domain.StatusDraft, false},
+		{"a bare verified mapping counts too (SPEC §5.2)", "status: stable\nverified: { by: human:na0, at: 2026-07-01T00:00:00Z }\n", domain.StatusVerified, false},
+		{"draft stays draft", "status: draft\n", domain.StatusDraft, false},
+		{"deprecated stays deprecated", "status: deprecated\n", domain.StatusDeprecated, false},
+		{"an absent status stays unset for the write path to default", "", "", false},
+		{"an absent status with a verification is a confirmation", verified, domain.StatusVerified, false},
+		{"ochakai 0.12 wrote status: verified", "status: verified\n", domain.StatusVerified, false},
+		{"ochakai 0.12 wrote status: rejected", "status: rejected\n", domain.StatusRejected, false},
+		{"an unknown value is a draft, not a rejected document", "status: retired\n", domain.StatusDraft, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k, notes, err := Parse([]byte("---\ntype: Insight\n" + tc.frontmatter + "---\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if k.Status != tc.want {
+				t.Errorf("status = %q, want %q", k.Status, tc.want)
+			}
+			if got := len(notes) > 0; got != tc.wantNote {
+				t.Errorf("notes = %v, want a note: %v", notes, tc.wantNote)
+			}
+			// The trust family is read for its presence only; the actors
+			// and times stay outside the payload (design doc 0009).
+			if k.VerifiedBy != nil || k.VerifiedAt != nil {
+				t.Errorf("a bundle must not set verification provenance: %v %v", k.VerifiedBy, k.VerifiedAt)
+			}
+			for _, key := range []string{"verified", "generated", "status"} {
+				if _, ok := k.Attrs[key]; ok {
+					t.Errorf("%s leaked into attrs: %v", key, k.Attrs)
+				}
+			}
+		})
+	}
+}
+
+// A v0.1 document keeps importing: the renamed keys are read (and, being
+// server-owned, ignored) rather than landing in attrs where a re-export
+// would write them beside their v0.2 replacements (SPEC §13.1).
+func TestParseV01Document(t *testing.T) {
+	k, _, err := Parse([]byte(`---
+type: Insight
+title: 売上の季節性
+status: verified
+timestamp: '2026-05-28T22:51:43+00:00'
+created_by: 'agent:claude-code'
+verified_by: 'human:na0'
+verified_at: '2026-06-01T00:00:00Z'
+---
+
+Body.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Status != domain.StatusVerified {
+		t.Errorf("status = %q, want verified", k.Status)
+	}
+	if len(k.Attrs) != 0 {
+		t.Errorf("v0.1 trust keys must not become attrs: %v", k.Attrs)
+	}
+	doc, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, gone := range []string{"timestamp:", "verified_by:", "verified_at:"} {
+		if strings.Contains(string(doc), gone) {
+			t.Errorf("re-export wrote the v0.1 key %q:\n%s", gone, doc)
+		}
+	}
+}
+
+func TestParseStaleAfter(t *testing.T) {
+	k, notes, err := Parse([]byte("---\ntype: Insight\nstale_after: 2026-12-31\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.StaleAfter != "2026-12-31" || len(notes) != 0 {
+		t.Errorf("stale_after = %q, notes = %v", k.StaleAfter, notes)
+	}
+	if _, ok := k.Attrs["stale_after"]; ok {
+		t.Errorf("stale_after is an envelope key, not an attr: %v", k.Attrs)
+	}
+	doc, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "stale_after: \"2026-12-31\"") {
+		t.Errorf("stale_after lost on export:\n%s", doc)
+	}
+
+	// A malformed date is dropped with a note — the document still imports
+	// (SPEC §11).
+	k, notes, err = Parse([]byte("---\ntype: Insight\nstale_after: soon\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.StaleAfter != "" || len(notes) != 1 {
+		t.Errorf("stale_after = %q, notes = %v", k.StaleAfter, notes)
+	}
+}
+
+// OKF's own families are producer data ochakai does not interpret: sources
+// and the Attested Computation contract ride through attrs, in place
+// (design doc 0034 §§3.6-3.7).
+func TestParseKeepsOKFFamiliesAsAttrs(t *testing.T) {
+	doc := []byte(`---
+type: Attested Computation
+title: Revenue for fiscal year
+runtime: bigquery
+parameters:
+  - { name: year, type: integer, required: true }
+executor:
+  resource: references/skills/run-on-bq.md
+  receipt: [job_id, executed_sql, result]
+attester:
+  resource: references/attesters/revenue.py
+sources:
+  - id: rev-policy
+    resource: https://wiki.example/finance/revenue-recognition
+    title: Revenue recognition policy
+usage_window: { from: 2026-06-01, to: 2026-06-30 }
+---
+
+# Computation
+
+    SELECT SUM(amount) FROM finance.recognized_revenue WHERE fiscal_year = @year
+`)
+	k, notes, err := Parse(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 0 {
+		t.Errorf("nothing here needs reinterpreting: %v", notes)
+	}
+	if k.Type != domain.TypeComputations {
+		t.Errorf("type = %q, want %q", k.Type, domain.TypeComputations)
+	}
+	for _, key := range []string{"runtime", "parameters", "executor", "attester", "sources", "usage_window"} {
+		if _, ok := k.Attrs[key]; !ok {
+			t.Errorf("%s did not survive as an attr: %v", key, k.Attrs)
+		}
+	}
+	out, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"runtime: bigquery", "attester:", "sources:", "usage_window:", "# Computation"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("re-export missing %q:\n%s", want, out)
+		}
 	}
 }

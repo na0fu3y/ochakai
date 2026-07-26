@@ -105,7 +105,7 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 		k.Status = domain.StatusDraft
 	}
 	s.applyVerification(k, nil, actor)
-	k.CreatedBy = actor
+	k.CreatedBy, k.UpdatedBy = actor, actor
 	if err := s.Store.Create(ctx, k, keepCuratedTombstones); err != nil {
 		return nil, err
 	}
@@ -150,6 +150,10 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if k.SameContent(old) {
 		return old, false, nil
 	}
+	// Past this point the content really changes, so the caller is who the
+	// entry now stands by — OKF's generated.by (design doc 0034 §3.3).
+	// Unchanged writes return above and leave the old one in place.
+	k.UpdatedBy = actor
 	s.applyVerification(k, old, actor)
 	// Pass the precondition through so the write is also guarded against a
 	// concurrent update landing between the Get above and the write.
@@ -372,13 +376,16 @@ func deriveLinks(k *domain.Knowledge) {
 
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
-		return Invalidf(`invalid type %q (one line, no "/", up to 128 bytes; recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference)`, k.Type)
+		return Invalidf(`invalid type %q (one line, no "/", up to 128 bytes; recommended: %s)`, k.Type, domain.TypesHint())
 	}
 	if !domain.ValidID(k.ID) {
 		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
 		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
+	}
+	if !domain.ValidStaleAfter(k.StaleAfter) {
+		return Invalidf("invalid stale_after %q (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)", k.StaleAfter)
 	}
 	return nil
 }

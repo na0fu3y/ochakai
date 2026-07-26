@@ -28,7 +28,7 @@ func TestFromBundleAttachments(t *testing.T) {
 		"terms/broken.md": []byte("---\ntype: Glossary Term\ntitle: x\n---\n\n" +
 			"![missing](nowhere/gone.png)\n"), // broken links are tolerated, never an error
 	}
-	entries, atts, skipped := FromBundle(files)
+	entries, atts, skipped, _ := FromBundle(files)
 	if len(entries) != 3 {
 		t.Fatalf("entries = %d, want 3", len(entries))
 	}
@@ -57,7 +57,7 @@ func TestFromBundleRootConceptAttachment(t *testing.T) {
 		"overview.md":   []byte("---\ntype: Insight\ntitle: overview\n---\n\n![chart](img/chart.png)\n"),
 		"img/chart.png": pngBytes(),
 	}
-	_, atts, _ := FromBundle(files)
+	_, atts, _, _ := FromBundle(files)
 	if len(atts) != 1 || atts[0].Path != "img/chart.png" || atts[0].ID != "overview" {
 		t.Fatalf("atts = %+v", atts)
 	}
@@ -74,7 +74,7 @@ func TestFromBundleAttachmentAllowlist(t *testing.T) {
 		"data.csv":   []byte("a,b,c"),
 		"big.png":    append(pngBytes(), make([]byte, domain.MaxAttachmentSize)...),
 	}
-	_, atts, skipped := FromBundle(files)
+	_, atts, skipped, _ := FromBundle(files)
 	if len(atts) != 0 {
 		t.Errorf("nothing should attach, got %+v", atts)
 	}
@@ -94,7 +94,7 @@ func TestFromBundleFileAttachments(t *testing.T) {
 		"data/seeds.txt":         []byte("https://example.com/schema\nhttps://example.com/docs\n"),
 		"tables/orders/spec.pdf": []byte("%PDF-1.7 fake pdf body"),
 	}
-	_, atts, skipped := FromBundle(files)
+	_, atts, skipped, _ := FromBundle(files)
 	got := map[string]string{}
 	for _, a := range atts {
 		got[a.ID+"/"+a.Name] = a.Path
@@ -123,7 +123,7 @@ func TestFromBundleNamespaceAttribution(t *testing.T) {
 		"tables/orders/seeds.txt": []byte("seed data, referenced by no body\n"),
 		"orphan/seeds.txt":        []byte("no entry named orphan\n"),
 	}
-	entries, atts, skipped := FromBundle(files)
+	entries, atts, skipped, _ := FromBundle(files)
 	if len(entries) != 1 {
 		t.Fatalf("entries = %d, want 1", len(entries))
 	}
@@ -150,7 +150,7 @@ func TestFromBundleNamespaceHierarchicalID(t *testing.T) {
 		"queries/sales/monthly.md":           []byte("---\ntype: Golden Query\ntitle: monthly\n---\n"),
 		"queries/sales/monthly/expected.txt": []byte("month,revenue\n2026-01,100\n"),
 	}
-	_, atts, skipped := FromBundle(files)
+	_, atts, skipped, _ := FromBundle(files)
 	if len(atts) != 1 || atts[0].ID != "queries/sales/monthly" || atts[0].Name != "expected.txt" {
 		t.Fatalf("atts = %+v", atts)
 	}

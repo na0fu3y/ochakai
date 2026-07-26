@@ -1,6 +1,9 @@
 # ochakai 設計ドキュメント 0009: OKF/Git 往復と provenance の所有権
 
-Status: Proposed
+Status: Proposed。§4 の「OKF SPEC への先回りをしない(標準キーが定義されたら
+写像を再検討する)」は条件が満たされ、[0034](0034-okf-v0-2.md) §3.2 が
+OKF v0.2 の `generated` / `verified` への写像を決めた(§3 の世界観 —
+バンドルは知識を運び、provenance は読み戻さない — は 0034 §2.2 でそのまま維持)
 Date: 2026-07-18
 
 ## 1. 目的

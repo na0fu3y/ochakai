@@ -223,3 +223,92 @@ func TestToTypesAndToStatuses(t *testing.T) {
 		t.Errorf("ToTypes(nil) = %v, want empty", got)
 	}
 }
+
+// The OKF lifecycle vocabulary is three values to ochakai's four, and the
+// verified key — not the status — is what says a concept was confirmed
+// (SPEC §5.3-5.4, design doc 0034 §3.4).
+func TestOKFStatusMapping(t *testing.T) {
+	for _, tc := range []struct {
+		in   Status
+		want string
+	}{
+		{StatusDraft, "draft"},
+		{StatusVerified, "stable"},
+		{StatusDeprecated, "deprecated"},
+		{StatusRejected, "deprecated"}, // OKF has no "never accepted"
+	} {
+		if got := OKFStatus(tc.in); got != tc.want {
+			t.Errorf("OKFStatus(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+
+	for _, tc := range []struct {
+		raw         string
+		hasVerified bool
+		want        Status
+		wantKnown   bool
+	}{
+		{"stable", true, StatusVerified, true},
+		{"stable", false, StatusDraft, true},
+		{"draft", false, StatusDraft, true},
+		{"draft", true, StatusDraft, true}, // an explicit draft stays one
+		{"deprecated", false, StatusDeprecated, true},
+		{"", false, "", true}, // unset: the write path applies its own default
+		{"", true, StatusVerified, true},
+		{"verified", false, StatusVerified, true}, // written by 0.12 and earlier
+		{"rejected", false, StatusRejected, true},
+		{"retired", false, StatusDraft, false},
+	} {
+		got, known := StatusFromOKF(tc.raw, tc.hasVerified)
+		if got != tc.want || known != tc.wantKnown {
+			t.Errorf("StatusFromOKF(%q, %v) = (%q, %v), want (%q, %v)",
+				tc.raw, tc.hasVerified, got, known, tc.want, tc.wantKnown)
+		}
+	}
+
+	// Every status ochakai can store survives a round-trip through the OKF
+	// vocabulary, except the one the mapping folds on purpose.
+	for _, s := range Statuses {
+		got, known := StatusFromOKF(OKFStatus(s), s == StatusVerified)
+		if !known {
+			t.Errorf("OKFStatus(%q) produced a value StatusFromOKF does not know", s)
+		}
+		if s == StatusRejected {
+			if got != StatusDeprecated {
+				t.Errorf("rejected should land as deprecated, got %q", got)
+			}
+			continue
+		}
+		if got != s {
+			t.Errorf("round-trip of %q gave %q", s, got)
+		}
+	}
+}
+
+func TestValidStaleAfter(t *testing.T) {
+	for _, ok := range []string{"", "2026-12-31", "2026-01-01"} {
+		if !ValidStaleAfter(ok) {
+			t.Errorf("ValidStaleAfter(%q) = false", ok)
+		}
+	}
+	for _, bad := range []string{"soon", "2026-13-01", "2026-02-30", "2026-1-2",
+		"2026-12-31T00:00:00Z", "30 days"} {
+		if ValidStaleAfter(bad) {
+			t.Errorf("ValidStaleAfter(%q) = true", bad)
+		}
+	}
+}
+
+// The recommended vocabulary is one list; every surface that names it
+// reads from there, so adding a type cannot leave a stale copy behind.
+func TestTypesHintCoversEveryBuiltin(t *testing.T) {
+	hint := TypesHint()
+	for _, ty := range Types {
+		if !strings.Contains(hint, string(ty)) {
+			t.Errorf("TypesHint() omits %q: %s", ty, hint)
+		}
+	}
+	if !BuiltinType(TypeComputations) {
+		t.Error("Attested Computation should be a recommended type (design doc 0034 §3.6)")
+	}
+}

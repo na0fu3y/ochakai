@@ -673,11 +673,14 @@ paths:
         file to /api/v1/attachments/{id}/{name}, attributing it to the
         entry whose directory it sits in or whose body links to it.
         `index.md` files are generated on export and are not entries.
-        Frontmatter keys the server owns — `created_by`, `verified_by`,
-        `verified_at`, `rejected_by`, `rejected_at`, `timestamp` — are
+        Frontmatter keys the server owns — `generated`, `verified`,
+        `created_by`, `rejected_by`, `rejected_at`, and the pre-v0.2
+        spellings `timestamp` / `verified_by` / `verified_at` — are
         ignored on write; provenance comes from the caller's identity
-        (design docs 0005 §3.3, 0009). `ochakai import` is exactly this
-        loop.
+        (design docs 0009, 0034 §3.2). The one exception is that the
+        presence of a `verified` key decides how OKF's `stable` status
+        maps onto ochakai's (design doc 0034 §3.4). `ochakai import` is
+        exactly this loop.
       parameters:
         - name: attachments
           in: query
@@ -817,13 +820,14 @@ components:
       type: string
       description: >
         The OKF type vocabulary, verbatim — the built-ins (Semantic Model,
-        Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset,
-        BigQuery Table, Reference) are recommendations with server behavior
-        attached, not a closed set (design docs 0005, 0018, 0023). Any
+        Metric, Golden Query, Attested Computation, Insight, Glossary Term,
+        BigQuery Dataset, BigQuery Table, Reference) are recommendations,
+        not a closed set, and no server behavior hangs off any of them
+        (design docs 0023, 0028 §3, 0034 §3.6). Any
         single-line value works as a type; OKF registers no taxonomy, so
         the spelling is the meaning and it round-trips unchanged. Matching
         is case-insensitive; the spelling you write is the one stored.
-      examples: [Semantic Model, Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
+      examples: [Semantic Model, Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
       pattern: "^[^/\\r\\n]{1,128}$"
     Status:
       type: string
@@ -898,7 +902,24 @@ components:
         status_note:
           type: string
           description: Free-form reason for the current status (why rejected/deprecated).
+        stale_after:
+          type: string
+          format: date
+          description: >
+            Absolute date (YYYY-MM-DD) on and after which the entry is
+            stale — OKF's lifecycle date (SPEC §5.5, design doc 0034
+            §3.5). A date rather than a TTL so staleness is a plain
+            comparison against today. Advisory: nothing hides a stale
+            entry, and no feed sorts by it.
         created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
+        updated_by:
+          allOf: [{ $ref: "#/components/schemas/Actor" }]
+          readOnly: true
+          description: >
+            Who last changed the content — exported as OKF's
+            generated.by (design doc 0034 §3.3). Not created_by: after
+            somebody else edits an entry, the creator is no longer who
+            the content stands by. Verifying does not change it.
         verified_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         verified_at: { type: string, format: date-time, readOnly: true }
         rejected_by: { $ref: "#/components/schemas/Actor", readOnly: true }

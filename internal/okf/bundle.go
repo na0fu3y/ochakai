@@ -34,7 +34,7 @@ import (
 // There is no archive unwrapping: `tar czf ga4.tgz ga4/` imports under
 // "ga4/" — the packed shape is the structure, and a wrapper directory is
 // how a bundle keeps its own namespace (design doc 0017 §4.3).
-func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []BundleAttachment, skipped []string) {
+func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []BundleAttachment, skipped, notes []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
 		paths = append(paths, p)
@@ -54,10 +54,13 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 			nonMarkdown = append(nonMarkdown, p)
 			continue
 		}
-		k, err := fromBundleFile(clean, files[p])
+		k, docNotes, err := fromBundleFile(clean, files[p])
 		if err != nil {
 			skipped = append(skipped, p+": "+err.Error())
 			continue
+		}
+		for _, n := range docNotes {
+			notes = append(notes, p+": "+n)
 		}
 		entries = append(entries, *k)
 	}
@@ -74,7 +77,7 @@ func FromBundle(files map[string][]byte) (entries []domain.Knowledge, atts []Bun
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
-	return entries, atts, skipped
+	return entries, atts, skipped, notes
 }
 
 // cleanPath canonicalizes one bundle path: relative prefix stripped,
@@ -98,20 +101,20 @@ func hiddenPath(clean string) bool {
 	return false
 }
 
-func fromBundleFile(clean string, content []byte) (*domain.Knowledge, error) {
-	k, rawType, err := parseDoc(content)
+func fromBundleFile(clean string, content []byte) (*domain.Knowledge, []string, error) {
+	k, rawType, notes, err := parseDoc(content)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Frontmatter is the type's only source: the path no longer claims
 	// one, and OKF requires the key — a file without it is not a concept
 	// (design doc 0017, no guessing).
 	if k.Type == "" {
-		return nil, fmt.Errorf("no type: frontmatter type %q is unusable (the type key is required; any single-line value works)", rawType)
+		return nil, nil, fmt.Errorf("no type: frontmatter type %q is unusable (the type key is required; any single-line value works)", rawType)
 	}
 	k.ID = strings.TrimSuffix(clean, ".md")
 	if !domain.ValidID(k.ID) {
-		return nil, fmt.Errorf("path yields invalid id %q", k.ID)
+		return nil, nil, fmt.Errorf("path yields invalid id %q", k.ID)
 	}
-	return k, nil
+	return k, notes, nil
 }

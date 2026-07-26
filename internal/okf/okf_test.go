@@ -21,7 +21,9 @@ func sample() []domain.Knowledge {
 			Type: domain.TypeInsights, ID: "insights/revenue-seasonality",
 			Title: "売上の季節性", Description: "12月は繁忙期",
 			Tags: []string{"sales"}, Status: domain.StatusVerified,
+			StaleAfter: "2026-12-31",
 			CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
+			UpdatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
 			VerifiedBy: &domain.Actor{Kind: "human", Name: "na0"}, VerifiedAt: &verifiedAt,
 			Attrs:     map[string]any{"kind": "seasonality"},
 			Body:      "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
@@ -31,6 +33,7 @@ func sample() []domain.Knowledge {
 			Type: domain.TypeTables, ID: "tables/orders",
 			Title: "orders", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
+			UpdatedBy: domain.Actor{Kind: "human", Name: "na0", Via: "agent:insightflow"},
 			Resource:  "myproject.shop.orders",
 			Attrs:     map[string]any{"model": "sales_analytics"},
 			UpdatedAt: verifiedAt,
@@ -56,17 +59,36 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(parts[1]), &fm); err != nil {
 		t.Fatalf("frontmatter is not valid YAML: %v", err)
 	}
+	// v0.2 spellings only: timestamp became generated.at, and the flat
+	// verified_by/verified_at became the verified list (SPEC §13.1). A
+	// verified entry is stable plus a verification, not status: verified
+	// (design doc 0034 §3.4).
 	for key, want := range map[string]any{
 		"type":        "Insight",
 		"title":       "売上の季節性",
-		"status":      "verified",
+		"status":      "stable",
+		"stale_after": "2026-12-31",
 		"created_by":  "agent:claude-code",
-		"verified_by": "human:na0",
-		"timestamp":   "2026-07-01T00:00:00Z",
 	} {
 		if fm[key] != want {
 			t.Errorf("frontmatter %s = %v, want %v", key, fm[key], want)
 		}
+	}
+	for _, gone := range []string{"timestamp", "verified_by", "verified_at"} {
+		if _, ok := fm[gone]; ok {
+			t.Errorf("v0.1 key %s must not be written any more:\n%s", gone, parts[1])
+		}
+	}
+	generated, _ := fm["generated"].(map[string]any)
+	if generated["by"] != "agent:claude-code" || generated["at"] != "2026-07-01T00:00:00Z" {
+		t.Errorf("generated = %v, want the last content author and change time", fm["generated"])
+	}
+	verified, _ := fm["verified"].([]any)
+	if len(verified) != 1 {
+		t.Fatalf("verified = %v, want a one-element list", fm["verified"])
+	}
+	if v, _ := verified[0].(map[string]any); v["by"] != "human:na0" || v["at"] != "2026-07-01T00:00:00Z" {
+		t.Errorf("verified[0] = %v, want the human reviewer and time", verified[0])
 	}
 	if _, ok := fm["id"]; ok {
 		t.Errorf("id must not export — the path is the id (design doc 0016):\n%s", parts[1])
@@ -100,8 +122,11 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(doc)
+	// OKF has no state for "was never accepted", so a rejection exports as
+	// deprecated; the reason and the actor survive as status_note and the
+	// ochakai extension keys (design doc 0034 §3.4).
 	for _, want := range []string{
-		"status: rejected",
+		"status: deprecated",
 		"status_note: revenue-seasonality と重複",
 		"rejected_by: human:na0",
 		`rejected_at: "2026-07-16T00:00:00Z"`,
@@ -109,6 +134,28 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("document missing %q:\n%s", want, s)
 		}
+	}
+	if strings.Contains(s, "verified:") {
+		t.Errorf("an unverified entry must carry no verified key — its absence is the trust tier (SPEC §5.3):\n%s", s)
+	}
+}
+
+// The delegating caller travels as a sibling of by, so by stays a bare
+// actor and the human: prefix a consumer keys trust off stays readable
+// (design docs 0027, 0034 §3.2).
+func TestDocumentDelegatedActor(t *testing.T) {
+	entries := sample()
+	doc, err := Document(&entries[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fm map[string]any
+	if err := yaml.Unmarshal([]byte(strings.SplitN(string(doc), "---\n", 3)[1]), &fm); err != nil {
+		t.Fatal(err)
+	}
+	generated, _ := fm["generated"].(map[string]any)
+	if generated["by"] != "human:na0" || generated["via"] != "agent:insightflow" {
+		t.Errorf("generated = %v, want by and via kept apart", fm["generated"])
 	}
 }
 
@@ -144,7 +191,7 @@ func TestBundleLayoutAndIndexes(t *testing.T) {
 	if !strings.Contains(root, "[insights/](insights/index.md)") {
 		t.Errorf("root index missing type link:\n%s", root)
 	}
-	if !strings.HasPrefix(root, "---\nokf_version: \"0.1\"\n---\n") {
+	if !strings.HasPrefix(root, "---\nokf_version: \"0.2\"\n---\n") {
 		t.Errorf("root index must declare okf_version:\n%s", root)
 	}
 }

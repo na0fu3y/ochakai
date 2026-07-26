@@ -324,9 +324,12 @@ func TestExampleGoldenQueryRegisters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k, err := okf.Parse(doc)
+	k, notes, err := okf.Parse(doc)
 	if err != nil {
 		t.Fatalf("okf.Parse: %v", err)
+	}
+	if len(notes) > 0 {
+		t.Errorf("the shipped example should parse without reinterpretation: %v", notes)
 	}
 	k.ID = "queries/monthly-revenue"
 	if k.Type != domain.TypeQueries {

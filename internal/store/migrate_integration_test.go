@@ -675,3 +675,92 @@ func TestIntegrationEmbeddingDimChangeIsRefused(t *testing.T) {
 		t.Errorf("re-running with the stored dimension: %v", err)
 	}
 }
+
+// TestMigrationUpdatedByBackfill checks 0019's backfill: updated_by is the
+// actor of the newest revision that changed content, and created_by only
+// for entries whose revisions cannot answer. A verify revision must not
+// win — confirming an entry is not producing its content, which is the
+// whole distinction v0.2 draws between verified and generated (design doc
+// 0034 §3.3).
+func TestMigrationUpdatedByBackfill(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA okf2_scratch`,
+		`SET LOCAL search_path TO okf2_scratch`,
+		`CREATE TABLE knowledge (
+			id text PRIMARY KEY,
+			created_by_kind text NOT NULL, created_by_name text NOT NULL,
+			created_by_via text NOT NULL DEFAULT '')`,
+		`CREATE TABLE knowledge_revision (
+			id text NOT NULL, rev int NOT NULL, change text NOT NULL,
+			changed_by_kind text NOT NULL, changed_by_name text NOT NULL,
+			changed_by_via text NOT NULL DEFAULT '')`,
+		`INSERT INTO knowledge (id, created_by_kind, created_by_name) VALUES
+			('insights/edited', 'agent', 'claude-code'),
+			('insights/verified-later', 'agent', 'claude-code'),
+			('insights/delegated', 'agent', 'claude-code'),
+			('insights/no-revisions', 'human', 'na0')`,
+		`INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, changed_by_via) VALUES
+			('insights/edited', 1, 'create', 'agent', 'claude-code', ''),
+			('insights/edited', 2, 'update', 'human', 'tanaka', ''),
+			('insights/verified-later', 1, 'create', 'agent', 'claude-code', ''),
+			('insights/verified-later', 2, 'verify', 'human', 'na0', ''),
+			('insights/delegated', 1, 'create', 'agent', 'claude-code', ''),
+			('insights/delegated', 2, 'move', 'human', 'tanaka', 'agent:insightflow')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0019_okf_v0_2.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0019: %v", err)
+	}
+
+	for _, tc := range []struct{ id, want string }{
+		{"insights/edited", "human:tanaka"},                          // the last content change
+		{"insights/verified-later", "agent:claude-code"},             // a verify is not a content change
+		{"insights/delegated", "human:tanaka via agent:insightflow"}, // delegation carries too
+		{"insights/no-revisions", "human:na0"},                       // falls back to created_by
+	} {
+		var a domain.Actor
+		if err := tx.QueryRow(ctx,
+			`SELECT updated_by_kind, updated_by_name, updated_by_via FROM knowledge WHERE id = $1`,
+			tc.id).Scan(&a.Kind, &a.Name, &a.Via); err != nil {
+			t.Fatalf("%s: %v", tc.id, err)
+		}
+		if a.String() != tc.want {
+			t.Errorf("%s updated_by = %q, want %q", tc.id, a.String(), tc.want)
+		}
+	}
+
+	// The column exists and takes a date; NULL means "nothing dates this".
+	var staleAfter *time.Time
+	if err := tx.QueryRow(ctx,
+		`SELECT stale_after FROM knowledge WHERE id = 'insights/edited'`).Scan(&staleAfter); err != nil {
+		t.Fatalf("stale_after: %v", err)
+	}
+	if staleAfter != nil {
+		t.Errorf("stale_after = %v, want NULL for an entry that never set one", staleAfter)
+	}
+}
