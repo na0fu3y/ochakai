@@ -289,7 +289,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(ContextResult{
-			Hits:    []domain.SearchHit{{Knowledge: domain.Knowledge{Type: "metrics", ID: "revenue"}, Score: 0.8}},
+			Hits:    []domain.ContextRank{{Type: "metrics", ID: "revenue", Score: 0.8}},
 			Entries: []domain.Knowledge{{Type: "metrics", ID: "revenue", Title: "売上"}},
 		})
 	})

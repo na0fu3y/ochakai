@@ -414,6 +414,40 @@ type SearchHit struct {
 	Usage *Usage  `json:"usage,omitempty"`
 }
 
+// ContextRank is what a hit is worth once the entries travel in the same
+// response: an ordering, not a second copy of the knowledge (design doc
+// 0033). SearchHit embeds the whole Knowledge — body, attrs and all — so
+// a context pack that returned hits verbatim sent every top entry twice
+// and left the byte budget governing one of the copies.
+//
+// The fields are the ones a caller needs to decide whether to spend a
+// round trip on an id it was not handed: search results below the pack's
+// own cut-off arrive only this way. Search itself keeps returning full
+// hits — there the entries are the answer, not a duplicate of one.
+type ContextRank struct {
+	ID     string  `json:"id"`
+	Type   Type    `json:"type"`
+	Title  string  `json:"title"`
+	Status Status  `json:"status"`
+	Score  float64 `json:"score"`
+}
+
+// URI is the entry's canonical address, as on Knowledge: a rank is a
+// pointer, and the pointer should read the same everywhere.
+func (c *ContextRank) URI() string { return fmt.Sprintf("ochakai://%s", c.ID) }
+
+// ContextRanks projects search hits down to the ranking behind a pack.
+func ContextRanks(hits []SearchHit) []ContextRank {
+	out := make([]ContextRank, len(hits))
+	for i := range hits {
+		out[i] = ContextRank{
+			ID: hits[i].ID, Type: hits[i].Type, Title: hits[i].DisplayTitle(),
+			Status: hits[i].Status, Score: hits[i].Score,
+		}
+	}
+	return out
+}
+
 // ContextOutline names an entry a context pack could not afford to deliver
 // in full: enough for the caller to decide whether to spend a round trip
 // fetching it by id, and nothing more. The description carries the weight

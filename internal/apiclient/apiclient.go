@@ -139,12 +139,14 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	return out.Hits, err
 }
 
-// ContextResult mirrors the /api/v1/context response: ranked hits plus
-// the full entries behind the top ones, expanded one hop through links.
-// Outline lists entries the server's budget dropped; it stays empty
-// unless the caller passes a budget.
+// ContextResult mirrors the /api/v1/context response: the ranking plus
+// the full entries behind the top hits, expanded one hop through links.
+// Hits carries the ranking only — the knowledge travels once, in Entries
+// (design doc 0033) — so a hit with no matching entry is a pointer to
+// fetch with Get. Outline lists entries the server's budget dropped; it
+// stays empty unless the caller passes a budget.
 type ContextResult struct {
-	Hits      []domain.SearchHit      `json:"hits"`
+	Hits      []domain.ContextRank    `json:"hits"`
 	Entries   []domain.Knowledge      `json:"entries"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`

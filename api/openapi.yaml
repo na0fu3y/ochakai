@@ -205,7 +205,11 @@ paths:
         - name: budget
           in: query
           description: >
-            Cap the serialized bytes of the response. Entries past the
+            Cap the serialized bytes of the knowledge in the response: the
+            entries delivered in full plus the outline rows naming the
+            rest. Nothing else in the response carries a body — `hits` is
+            the ranking only — so the cap cannot be defeated by a second
+            copy of an entry it excluded. Entries past the
             cap are listed under `outline` instead — an entry is delivered
             whole or not at all, never truncated — and those rows count
             against the same cap, because naming what was left out is not
@@ -220,15 +224,21 @@ paths:
           schema: { type: integer, default: 0 }
       responses:
         "200":
-          description: Ranked hits plus the full entries behind the top ones.
+          description: The ranking plus the full entries behind the top hits.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   hits:
+                    description: >
+                      The ranking behind the pack, not a second copy of it:
+                      the knowledge travels once, under `entries`. A hit
+                      with no matching entry ranked below the pack's cut-off
+                      — fetch it by id if the ranking suggests it is worth a
+                      round trip.
                     type: array
-                    items: { $ref: "#/components/schemas/SearchHit" }
+                    items: { $ref: "#/components/schemas/ContextRank" }
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/Knowledge" }
@@ -955,6 +965,22 @@ components:
                 Usage totals, present in the sort=usage listing (the draft
                 review feed) and the sort=failed listing (the re-verification
                 feed); absent for search results and the verified_at feed.
+    ContextRank:
+      type: object
+      description: >
+        One hit's place in the ranking behind a context pack. The knowledge
+        itself travels once, under `entries` — a rank that repeated it would
+        double the response and leave the byte budget governing one of the
+        copies (design doc 0033). Search results keep their full hits: there
+        the entries are the answer, not a duplicate of one.
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/Type" }
+        title:
+          description: The display title — the entry's own, or its filename.
+          type: string
+        status: { $ref: "#/components/schemas/Status" }
+        score: { type: number }
     ContextOutline:
       type: object
       description: >

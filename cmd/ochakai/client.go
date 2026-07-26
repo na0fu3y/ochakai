@@ -326,9 +326,10 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 		fmt.Fprintf(w, "(%d more entries beyond --budget; raise it or `ochakai get` them)\n", omitted)
 	}
 	var rest []string
-	for _, h := range res.Hits {
+	for i := range res.Hits {
+		h := &res.Hits[i]
 		if !rendered[h.ID] {
-			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.DisplayTitle()))
+			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.Title))
 		}
 	}
 	if len(rest) > 0 {

@@ -492,3 +492,96 @@ func TestRESTIntegrationVerify(t *testing.T) {
 		t.Errorf("cleanup delete status = %d", resp.StatusCode)
 	}
 }
+
+// TestRESTContextBudgetGovernsTheResponse pins the budget on the surface
+// an embedding host actually calls. The cap is a promise about what the
+// caller receives, and hits used to embed the whole entry: an entry the
+// packer refused to deliver arrived in full through hits anyway, so the
+// outline row pointed at knowledge the response had already spent the
+// budget on twice (design doc 0033).
+func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(Handler(svc))
+	defer srv.Close()
+
+	typ := fmt.Sprintf("ctxbudget%d", time.Now().UnixNano())
+	body := strings.Repeat("x", 2000)
+	var ids []string
+	for i := range 4 {
+		id := fmt.Sprintf("%s/entry-%d", typ, i)
+		payload, _ := json.Marshal(map[string]any{
+			"type": typ, "id": id, "title": typ + " budget",
+			"description": "an entry about " + typ, "body": body,
+		})
+		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s: status %d", id, resp.StatusCode)
+		}
+		ids = append(ids, id)
+	}
+	defer func() {
+		for _, id := range ids {
+			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		}
+	}()
+
+	const budget = 2500
+	resp, err := http.Get(fmt.Sprintf("%s/api/v1/context?q=%s&limit=5&budget=%d", srv.URL, typ, budget))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("context status = %d", resp.StatusCode)
+	}
+	wire, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Hits      []domain.ContextRank    `json:"hits"`
+		Entries   []domain.Knowledge      `json:"entries"`
+		Outline   []domain.ContextOutline `json:"outline"`
+		Truncated int                     `json:"truncated"`
+	}
+	if err := json.Unmarshal(wire, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Truncated == 0 {
+		t.Fatalf("budget %d over 4 entries of %d bytes truncated nothing", budget, len(body))
+	}
+	if len(got.Hits) == 0 {
+		t.Error("the ranking is gone; hits still have to say what matched")
+	}
+	if bytes.Count(wire, []byte(body)) > len(got.Entries) {
+		t.Errorf("response carries %d copies of the body for %d delivered entries",
+			bytes.Count(wire, []byte(body)), len(got.Entries))
+	}
+	ranking, err := json.Marshal(got.Hits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over := len(wire) - len(ranking); over > budget {
+		t.Errorf("response carries %d bytes of knowledge over a %d budget", over, budget)
+	}
+}

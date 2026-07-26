@@ -429,7 +429,7 @@ func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 		},
 		Score: 0.9,
 	}}
-	out := contextOut{Hits: contextRanks(hits)}
+	out := contextOut{Hits: domain.ContextRanks(hits)}
 	encoded, err := json.Marshal(out)
 	if err != nil {
 		t.Fatal(err)

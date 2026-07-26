@@ -50,8 +50,8 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 
 func TestContextResultMatchesServerWire(t *testing.T) {
 	server := service.ContextResult{
-		Hits: []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeMetrics, ID: "revenue", Title: "Revenue"}, Score: 0.9},
+		Hits: []domain.ContextRank{
+			{Type: domain.TypeMetrics, ID: "revenue", Title: "Revenue", Score: 0.9},
 		},
 		Entries: []domain.Knowledge{
 			{Type: domain.TypeInsights, ID: "revenue-seasonality", Title: "Seasonality", Body: "Q4 peaks."},
