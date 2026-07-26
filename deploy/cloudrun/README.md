@@ -434,18 +434,31 @@ which is one author for the whole team. To record who actually made it,
 tell serve-ui which IAP audience to trust and let ochakai accept the
 webui as a delegator (design docs 0027, 0032):
 
-```sh
-# The JWT audience code for this IAP resource, from the IAP console
-# (⋮ next to the resource → "Get JWT audience code"). serve-ui refuses
-# to guess it: a wrong value would mean verifying nothing.
-gcloud run services update ochakai-webui --region=$REGION \
-  --update-env-vars="OCHAKAI_IAP_AUDIENCE=$IAP_AUDIENCE"
+**Set them in this order.** The moment serve-ui starts forwarding
+identities, ochakai answers 403 unless it already accepts this caller
+(it never downgrades silently) — so grant the delegation first, and the
+UI never sees the window in between.
 
-# ochakai must also accept this caller's forwarded identities, or it
-# answers 403 (it never downgrades silently).
+```sh
+# 1. ochakai must accept this caller's forwarded identities.
 gcloud run services update ochakai --region=$REGION \
   --update-env-vars="OCHAKAI_DELEGATING_CALLERS=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com"
+
+# 2. Tell serve-ui which IAP audience to trust. It refuses to guess:
+# a wrong value would mean verifying nothing. For IAP enabled directly
+# on Cloud Run — what §5b deploys — the audience is
+# /projects/PROJECT_NUMBER/locations/REGION/services/SERVICE_NAME.
+# (Behind a load balancer it is the backend service instead, and the
+# IAP console gives it: ⋮ next to the resource → "Get JWT audience code".)
+IAP_AUDIENCE="/projects/$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')/locations/$REGION/services/ochakai-webui"
+
+gcloud run services update ochakai-webui --region=$REGION \
+  --update-env-vars="OCHAKAI_IAP_AUDIENCE=$IAP_AUDIENCE"
 ```
+
+The startup log says which way it went: `recording browser users by
+their IAP identity` with the audience it will require, or `no
+OCHAKAI_IAP_AUDIENCE; writes are recorded as this service account`.
 
 Writes then read `human:tanaka@example.co.jp via agent:ochakai-webui@…`
 — both identities, never just one. serve-ui verifies IAP's signature,
