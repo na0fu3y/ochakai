@@ -24,7 +24,8 @@ PR の中に残る。
 
 ## 認証・認可と provenance
 
-- [0002 認証・認可](0002-authn-authz.md) — **Accepted**。認可機構を
+- [0002 認証・認可](0002-authn-authz.md) — **Accepted**(§4 の
+  「IAP JWT 検証」は 0032 が実装済み)。認可機構を
   持たない —「到達できた者は読み書きできる」。ヘッダから読むのは
   provenance だけで、信頼の判断は参照側が provenance を見て行う。
 - [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
@@ -41,7 +42,8 @@ PR の中に残る。
   **Accepted**(一部を 0016 / 0017 が改訂)。OKF バンドルとの双方向互換 —
   任意ネストのパス、自由文字列タイプ、バンドルインポート、サーバー所有キー。
 - [0016 knowledge-catalog リファレンスバンドルへの準拠](0016-knowledge-catalog-alignment.md)
-  — **Accepted**(型の語彙は 0023 が置き換え)。リファレンスバンドルへの
+  — **Accepted**(型の語彙は 0023 が置き換え、§2.5 の compile `dialect`
+  は 0028 で対象消滅)。リファレンスバンドルへの
   準拠(`resource` の封筒フィールド化ほか)。
 - [0017 パスが住所、タイプは属性](0017-path-addressing.md) —
   **Accepted**(ID 文字種は 0019 §2、型の語彙は 0023 が改訂)。
@@ -75,7 +77,8 @@ PR の中に残る。
 ## ブラウズと Web UI
 
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Accepted**
-  (2026-07-19 改訂)。自己完結 1 ファイルの UI を、認証モデルの異なる
+  (2026-07-19 改訂、§6 の非目標のうち per-user provenance は 0032 が
+  覆した)。自己完結 1 ファイルの UI を、認証モデルの異なる
   二経路(`ochakai ui` / `ochakai serve-ui`)で配信する。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Accepted**
   (API パラメタは 0017 §4.7、UI は常設サイドバーへ改訂)。prefix に

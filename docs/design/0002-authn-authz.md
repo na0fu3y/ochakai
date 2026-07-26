@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0002: 認証・認可
 
-Status: Accepted(2026-07-15)
+Status: Accepted(2026-07-15)。§4 の「IAP JWT 検証」は [0032](0032-webui-iap-identity.md) が実装済み(§3 の表の「webui 側は未実装」もその時点の記述)
 Date: 2026-07-15
 
 ## 1. 原則
