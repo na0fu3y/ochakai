@@ -8,7 +8,7 @@ go 1.26.5
 retract [v0.1.0, v0.8.0]
 
 require (
-	cloud.google.com/go/storage v1.63.1
+	cloud.google.com/go/storage v1.64.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	golang.org/x/oauth2 v0.36.0
