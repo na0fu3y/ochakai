@@ -281,6 +281,13 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	// attachments are reached only once the cursor has walked past every
 	// entry — which is also the assertion that the cursor advances: a
 	// pass that kept returning the same window would never get here.
+	//
+	// The loop ends when this test's own attachments are embedded, not
+	// when the shared database reaches zero (CONTRIBUTING). Another
+	// package creating an entry whose id sorts behind the cursor leaves
+	// Missing above zero for reasons that have nothing to do with this
+	// test, and waiting for a corpus other packages keep refilling is a
+	// race with no winner.
 	cursor := ""
 	for pass := 1; ; pass++ {
 		if pass > 100 {
@@ -290,12 +297,18 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pass %d: %v", pass, err)
 		}
-		if res.Missing == 0 {
+		left, err := s.ListUnembeddedAttachments(ctx, model, "", "", 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if countOwned(left, id) == 0 {
 			break
 		}
+		// Still work of ours to do, so a cursor standing still is the
+		// bug this loop is here for.
 		if res.Cursor == "" || res.Cursor == cursor {
-			t.Fatalf("pass %d left %d missing but did not advance the cursor (%q)",
-				pass, res.Missing, cursor)
+			t.Fatalf("pass %d left %d of our attachments unembedded but did not advance the cursor (%q)",
+				pass, countOwned(left, id), cursor)
 		}
 		cursor = res.Cursor
 	}

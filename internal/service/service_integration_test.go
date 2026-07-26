@@ -464,12 +464,12 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	}
 	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
 
-	total, err := svc.Store.CountUnembedded(ctx, model)
+	before, err := svc.Store.CountUnembedded(ctx, model)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total < 3 {
-		t.Fatalf("setup left %d unembedded entries, want at least 3", total)
+	if before < 3 {
+		t.Fatalf("setup left %d unembedded entries, want at least 3", before)
 	}
 
 	// A pass smaller than the corpus must say what it did not reach.
@@ -477,19 +477,41 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Embedded != 2 {
-		t.Fatalf("bounded pass embedded %d, want 2", res.Embedded)
+	if res.Embedded > 2 {
+		t.Fatalf("bounded pass embedded %d, over its limit of 2", res.Embedded)
 	}
-	// A lower bound, not an equality: the test database is shared by every
-	// package (CONTRIBUTING), so entries can appear between the count above
-	// and the one Reembed takes after the pass. What must hold is that the
-	// pass does not report its own work as still missing — the bug this
-	// covers subtracted it twice.
-	if want := total - 2; res.Missing < want {
-		t.Errorf("Missing = %d, want at least %d (%d unembedded, %d done)", res.Missing, want, total, res.Embedded)
+	if res.Embedded < 2 {
+		// The pass takes the oldest unembedded entries in the whole
+		// database, so a parallel package deleting one of its own
+		// candidates mid-pass leaves this short. Nothing about the
+		// reporting is wrong; there is just nothing to pin it against.
+		t.Skipf("bounded pass embedded %d of 2; another package's entries moved under it", res.Embedded)
 	}
 	if res.Missing == 0 {
 		t.Error("a bounded pass over a larger corpus reported nothing left")
+	}
+
+	// Missing is a fresh count taken after the pass, so the assertion is
+	// an equality against a count taken the same way — not arithmetic on
+	// the baseline above. The test database is shared by every package
+	// (CONTRIBUTING) and CountUnembedded counts live entries only, so
+	// between the baseline and the pass another package can both add
+	// entries and delete its own; the bug this covers is a two-off
+	// (subtracting the pass's work from a total that already excluded
+	// it), which no tolerance wide enough for that drift could catch.
+	//
+	// So: measure again, and only compare when nothing moved.
+	after, err := svc.Store.CountUnembedded(ctx, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before-res.Embedded != after {
+		t.Skipf("another package changed the corpus during the pass (%d unembedded before, %d after, %d embedded); "+
+			"the count Reembed reports cannot be pinned against a moving baseline", before, after, res.Embedded)
+	}
+	if res.Missing != after {
+		t.Errorf("Missing = %d, want %d — the pass must report what is left, not what is left minus its own work",
+			res.Missing, after)
 	}
 }
 
