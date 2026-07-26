@@ -33,6 +33,17 @@ CGO_ENABLED=0 go build -trimpath ./...
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
+`go test` runs the fuzz targets' seed corpora like ordinary tests, which
+is what CI does. Fuzzing proper is a local tool — reach for it when
+touching the OKF parser, id validity, or link derivation:
+
+```sh
+go test ./internal/okf/ -run XXX -fuzz FuzzDocumentRoundTrip -fuzztime 60s
+```
+
+A failing input lands in `testdata/fuzz/` and becomes a permanent seed;
+commit it with the fix.
+
 The store integration test is skipped unless a real PostgreSQL is
 available (CI runs one as a service container):
 
