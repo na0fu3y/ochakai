@@ -475,9 +475,15 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) e
 // that someone destroyed it is not.
 func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
+		// FOR UPDATE, because the check and the delete must see the same
+		// row: Create revives a tombstone in place, so without the lock a
+		// revival committing in between would leave this transaction
+		// deleting a live entry — the one thing two-step destruction
+		// exists to prevent. The lock also serializes two purges of the
+		// same id, which would otherwise both log an audit row.
 		var deleted bool
 		err := tx.QueryRow(ctx,
-			`SELECT deleted_at IS NOT NULL FROM knowledge WHERE id=$1`, id).Scan(&deleted)
+			`SELECT deleted_at IS NOT NULL FROM knowledge WHERE id=$1 FOR UPDATE`, id).Scan(&deleted)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -501,11 +507,21 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			`DELETE FROM knowledge_usage WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_event WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_revision WHERE id=$1`,
-			`DELETE FROM knowledge WHERE id=$1`,
 		} {
 			if _, err := tx.Exec(ctx, q, id); err != nil {
 				return err
 			}
+		}
+		// The tombstone condition is repeated here so the destructive
+		// statement carries the precondition itself, not just the lock
+		// taken above: a purge that would hit a live row aborts the
+		// transaction instead of erasing it.
+		tag, err := tx.Exec(ctx, `DELETE FROM knowledge WHERE id=$1 AND deleted_at IS NOT NULL`, id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotDeleted
 		}
 		// Embedding tables exist only once semantic search has been enabled.
 		for _, q := range []string{
