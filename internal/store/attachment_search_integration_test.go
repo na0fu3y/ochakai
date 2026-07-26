@@ -70,7 +70,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	for _, k := range []*domain.Knowledge{a, b} {
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}

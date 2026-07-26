@@ -119,14 +119,27 @@ func TestDelegate(t *testing.T) {
 	allowed := []string{sa.Name}
 
 	t.Run("no header acts as the caller", func(t *testing.T) {
-		got, status, err := delegate(sa, "", allowed)
-		if err != nil || status != 0 || got != sa {
-			t.Errorf("got (%v, %d, %v), want the caller unchanged", got, status, err)
+		for _, headers := range [][]string{nil, {""}} {
+			got, status, err := delegate(sa, headers, allowed)
+			if err != nil || status != 0 || got != sa {
+				t.Errorf("delegate(%q) = (%v, %d, %v), want the caller unchanged", headers, got, status, err)
+			}
+		}
+	})
+
+	// Two identities in one request is ambiguous, and picking the first
+	// would attribute the write to whichever the sender happened to put
+	// there first — silent degradation, which 0027 §5.2 refuses.
+	t.Run("a repeated header is refused, not resolved", func(t *testing.T) {
+		got, status, err := delegate(sa,
+			[]string{"human:tanaka@example.co.jp", "human:suzuki@example.co.jp"}, allowed)
+		if err == nil || status != http.StatusBadRequest {
+			t.Errorf("got (%v, %d, %v), want a 400", got, status, err)
 		}
 	})
 
 	t.Run("permitted caller delegates", func(t *testing.T) {
-		got, _, err := delegate(sa, "human:tanaka@example.co.jp", allowed)
+		got, _, err := delegate(sa, []string{"human:tanaka@example.co.jp"}, allowed)
 		if err != nil {
 			t.Fatalf("delegate: %v", err)
 		}
@@ -142,7 +155,7 @@ func TestDelegate(t *testing.T) {
 	// Silently ignoring the header would be worse than refusing it: the
 	// application goes on believing it writes as its users.
 	t.Run("unlisted caller is refused, not downgraded", func(t *testing.T) {
-		got, status, err := delegate(human, "human:tanaka@example.co.jp", allowed)
+		got, status, err := delegate(human, []string{"human:tanaka@example.co.jp"}, allowed)
 		if err == nil {
 			t.Fatalf("delegation by an unlisted caller succeeded as %+v", got)
 		}
@@ -152,14 +165,14 @@ func TestDelegate(t *testing.T) {
 	})
 
 	t.Run("wildcard trusts every authenticated caller", func(t *testing.T) {
-		got, _, err := delegate(human, "human:tanaka@example.co.jp", []string{"*"})
+		got, _, err := delegate(human, []string{"human:tanaka@example.co.jp"}, []string{"*"})
 		if err != nil || got.Name != "tanaka@example.co.jp" || got.Via != human.String() {
 			t.Errorf("got (%+v, %v), want the delegation accepted", got, err)
 		}
 	})
 
 	t.Run("delegation is off by default", func(t *testing.T) {
-		if _, status, err := delegate(sa, "human:tanaka@example.co.jp", nil); err == nil || status != http.StatusForbidden {
+		if _, status, err := delegate(sa, []string{"human:tanaka@example.co.jp"}, nil); err == nil || status != http.StatusForbidden {
 			t.Errorf("empty allowlist must refuse: status %d, err %v", status, err)
 		}
 	})
@@ -172,7 +185,7 @@ func TestDelegate(t *testing.T) {
 		"human:" + strings.Repeat("x", 400),
 	} {
 		t.Run("rejects "+bad[:min(len(bad), 20)], func(t *testing.T) {
-			_, status, err := delegate(sa, bad, allowed)
+			_, status, err := delegate(sa, []string{bad}, allowed)
 			if err == nil {
 				t.Errorf("accepted malformed header %q", bad)
 			} else if status != http.StatusBadRequest {

@@ -68,7 +68,7 @@ func TestIntegration(t *testing.T) {
 		Description: "統合テスト用", Status: domain.StatusVerified,
 		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.UpsertEmbedding(ctx, k.ID, "test-model", []float32{1, 0, 0, 0}); err != nil {
@@ -105,7 +105,7 @@ func TestIntegration(t *testing.T) {
 		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
 		RejectedBy: &domain.Actor{Kind: "human", Name: "test"}, RejectedAt: &rejectedAt,
 	}
-	if err := s.Create(ctx, rej); err != nil {
+	if err := s.Create(ctx, rej, false); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Get(ctx, rej.ID)
@@ -143,7 +143,7 @@ func TestIntegration(t *testing.T) {
 		Description: "統合テスト用", Status: domain.StatusVerified,
 		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
-	if err := s.Create(ctx, free); err != nil {
+	if err := s.Create(ctx, free, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
@@ -231,7 +231,7 @@ func TestIntegration(t *testing.T) {
 		CreatedBy:  domain.Actor{Kind: "human", Name: "test"},
 		VerifiedBy: &domain.Actor{Kind: "human", Name: "test"}, VerifiedAt: &oldAt,
 	}
-	if err := s.Create(ctx, older); err != nil {
+	if err := s.Create(ctx, older, false); err != nil {
 		t.Fatal(err)
 	}
 	list, err := s.ListByVerifiedAt(ctx, Filter{Statuses: []domain.Status{domain.StatusVerified}}, 100)
@@ -261,7 +261,7 @@ func TestIntegration(t *testing.T) {
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
 	for _, d := range []*domain.Knowledge{hot, cold} {
-		if err := s.Create(ctx, d); err != nil {
+		if err := s.Create(ctx, d, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -321,7 +321,7 @@ func TestIntegration(t *testing.T) {
 			k.VerifiedBy = &domain.Actor{Kind: "human", Name: "test"}
 			k.VerifiedAt = &verifiedAt
 		}
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 		return k
@@ -410,7 +410,7 @@ func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
 	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy) // clean rerun
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy); err != nil {
@@ -455,7 +455,7 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 			Links: []domain.Link{{Target: "it-link-metric", Text: "explains"}}},
 	}
 	for _, k := range entries {
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -506,7 +506,7 @@ func TestIntegrationSearchLexicalWildcardEscape(t *testing.T) {
 	pct := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-wild-pct", Title: "解約率は5%以内",
 		Description: "パーセント記号を含む", Status: domain.StatusDraft, CreatedBy: actor}
 	for _, k := range []*domain.Knowledge{plain, pct} {
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -562,7 +562,7 @@ func TestIntegrationUsageBuffering(t *testing.T) {
 	actor := domain.Actor{Kind: "agent", Name: "claude-code"}
 	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-buf-metric", Title: "計測",
 		Status: domain.StatusDraft, CreatedBy: actor}
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -635,7 +635,7 @@ func TestIntegrationMove(t *testing.T) {
 		{Type: domain.TypeInsights, ID: "it-move-taken", Title: "occupies destination", Status: domain.StatusDraft, CreatedBy: actor},
 	}
 	for _, k := range entries {
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -774,7 +774,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-revive-me", Title: "first life",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, first); err != nil {
+	if err := s.Create(ctx, first, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -783,7 +783,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-revive-me", Title: "imposter",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, dup); err != ErrAlreadyExists {
+	if err := s.Create(ctx, dup, false); err != ErrAlreadyExists {
 		t.Fatalf("create over a live entry = %v, want ErrAlreadyExists", err)
 	}
 
@@ -796,7 +796,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-revive-me", Title: "second life",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 	}
-	if err := s.Create(ctx, second); err != nil {
+	if err := s.Create(ctx, second, false); err != nil {
 		t.Fatalf("create over a soft-deleted entry: %v", err)
 	}
 	got, err := s.Get(ctx, second.ID)
@@ -838,14 +838,14 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		Status: domain.StatusRejected, StatusNote: "duplicate",
 		CreatedBy: actor, RejectedBy: &actor,
 	}
-	if err := s.Create(ctx, rejected); err != nil {
+	if err := s.Create(ctx, rejected, false); err != nil {
 		t.Fatal(err)
 	}
 	again := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: "it-revive-no", Title: "try again",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, again); err != ErrAlreadyExists {
+	if err := s.Create(ctx, again, false); err != ErrAlreadyExists {
 		t.Fatalf("create over a rejected entry = %v, want ErrAlreadyExists", err)
 	}
 }
@@ -884,7 +884,7 @@ func TestIntegrationAttachments(t *testing.T) {
 		Type: domain.TypeInsights, ID: "it-att-reading", Title: "売上の読み方",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -991,7 +991,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-revs-1", Title: "v1",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 	k.Title = "v2"
@@ -1102,7 +1102,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 		Type: domain.TypeTerms, ID: id, Title: "haystack", Tags: []string{"ledger"},
 		Status: domain.StatusDraft, CreatedBy: actor, Body: "prose",
 	}
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{id, "haystack", "ledger", "prose"} {
@@ -1168,7 +1168,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 		if err := s.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeTerms, ID: id, Title: id,
 			Status: domain.StatusDraft, CreatedBy: actor,
-		}); err != nil {
+		}, false); err != nil {
 			t.Fatalf("create %s: %v", id, err)
 		}
 	}
@@ -1268,7 +1268,7 @@ func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	if err := s.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeTerms, ID: id, Title: "flush", Status: domain.StatusDraft, CreatedBy: actor,
-	}); err != nil {
+	}, false); err != nil {
 		s.Close()
 		t.Fatal(err)
 	}
@@ -1327,7 +1327,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 	if err := s.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeInsights, ID: id, Title: "delegated",
 		Status: domain.StatusDraft, CreatedBy: delegated,
-	}); err != nil {
+	}, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1425,7 +1425,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 		if err := s.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeInsights, ID: id, Title: title,
 			Status: domain.StatusDraft, CreatedBy: actor, Body: body,
-		}); err != nil {
+		}, false); err != nil {
 			t.Fatalf("create %s: %v", id, err)
 		}
 	}
@@ -1525,7 +1525,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
 	k := &domain.Knowledge{Type: domain.TypeQueries, ID: id, Title: "月次売上",
 		Status: domain.StatusDraft, CreatedBy: agent}
-	if err := s.Create(ctx, k); err != nil {
+	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1634,7 +1634,7 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 			Body:  "Net of [gross](./gross.md).",
 			Links: []domain.Link{{Target: neighbour, Text: "gross"}}},
 	} {
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1716,7 +1716,7 @@ func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
 			Body:  "See [revenue](./revenue.md).",
 			Links: []domain.Link{{Target: mover, Text: "revenue"}}},
 	} {
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1813,7 +1813,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 	}
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	if err := s.Create(ctx, &domain.Knowledge{Type: domain.TypeInsights, ID: doomed,
-		Title: "deleted mid-export", Status: domain.StatusDraft, CreatedBy: actor}); err != nil {
+		Title: "deleted mid-export", Status: domain.StatusDraft, CreatedBy: actor}, false); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -1851,4 +1851,82 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 	if _, err := s.Get(ctx, doomed); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Get after delete = %v, want ErrNotFound", err)
 	}
+}
+
+// The curated-tombstone guard lives in the create transaction, not only
+// in the service pre-check (design doc 0015 §3.1): a ruling that lands
+// after the check must beat the create, not be erased by it. Reviving a
+// draft tombstone stays allowed either way, and the unguarded call — the
+// human surfaces — still revives anything.
+func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	tombstone := func(t *testing.T, id string, status domain.Status) {
+		t.Helper()
+		k := &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: id,
+			Status: status, StatusNote: "why", CreatedBy: actor}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SoftDelete(ctx, id, actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revive := func(id string) *domain.Knowledge {
+		return &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: "revived",
+			Status: domain.StatusDraft, CreatedBy: actor}
+	}
+
+	for _, status := range domain.CuratedStatuses {
+		t.Run("guarded create refuses a "+string(status)+" tombstone", func(t *testing.T) {
+			id := fmt.Sprintf("it-tomb-%s-%d", status, time.Now().UnixNano())
+			tombstone(t, id, status)
+			if err := s.Create(ctx, revive(id), true); !errors.Is(err, ErrCuratedTombstone) {
+				t.Fatalf("create = %v, want ErrCuratedTombstone", err)
+			}
+			// The ruling is intact: nothing was revived under it.
+			old, err := s.GetTombstone(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if old.Status != status || old.StatusNote != "why" {
+				t.Errorf("tombstone = %s/%q, want %s/\"why\"", old.Status, old.StatusNote, status)
+			}
+			// The human surfaces still revive it.
+			if err := s.Create(ctx, revive(id), false); err != nil {
+				t.Errorf("unguarded create must still revive: %v", err)
+			}
+		})
+	}
+
+	t.Run("guarded create still revives a draft tombstone", func(t *testing.T) {
+		id := fmt.Sprintf("it-tomb-draft-%d", time.Now().UnixNano())
+		tombstone(t, id, domain.StatusDraft)
+		if err := s.Create(ctx, revive(id), true); err != nil {
+			t.Fatalf("draft tombstone must stay revivable: %v", err)
+		}
+	})
+
+	t.Run("guarded create over a live entry is still ErrAlreadyExists", func(t *testing.T) {
+		id := fmt.Sprintf("it-tomb-live-%d", time.Now().UnixNano())
+		if err := s.Create(ctx, revive(id), false); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Create(ctx, revive(id), true); !errors.Is(err, ErrAlreadyExists) {
+			t.Errorf("create over a live entry = %v, want ErrAlreadyExists", err)
+		}
+	})
 }

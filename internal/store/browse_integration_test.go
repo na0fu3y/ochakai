@@ -38,7 +38,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	mk := func(typ domain.Type, id string, status domain.Status) {
 		k := &domain.Knowledge{Type: typ, ID: id, Title: "t:" + id, Description: "d:" + id, Status: status, CreatedBy: actor}
-		if err := s.Create(ctx, k); err != nil {
+		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}

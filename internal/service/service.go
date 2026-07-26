@@ -69,6 +69,33 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 }
 
 func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
+	return s.create(ctx, k, actor, false)
+}
+
+// CreateKeepingCurated is Create for surfaces that must not replace a
+// human ruling (MCP, design doc 0015 §3.1). Creating on a soft-deleted id
+// revives that row in place, status and status_note included, which is
+// the one way past the update and delete guards — they read a live row
+// and a tombstone is not one. The check runs first so the refusal can
+// explain itself, and the store repeats it inside the create transaction
+// so a curation landing in between loses the race rather than being
+// erased by it.
+func (s *Service) CreateKeepingCurated(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.RefuseIfRevivingCurated(ctx, k.ID); err != nil {
+		return nil, err
+	}
+	created, err := s.create(ctx, k, actor, true)
+	if errors.Is(err, store.ErrCuratedTombstone) {
+		// The window closed on us: re-read for the same advice the
+		// pre-check would have given.
+		if err := s.RefuseIfRevivingCurated(ctx, k.ID); err != nil {
+			return nil, err
+		}
+	}
+	return created, err
+}
+
+func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.Actor, keepCuratedTombstones bool) (*domain.Knowledge, error) {
 	normalizeKeys(k)
 	if err := validate(k); err != nil {
 		return nil, err
@@ -79,7 +106,7 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 	}
 	s.applyVerification(k, nil, actor)
 	k.CreatedBy = actor
-	if err := s.Store.Create(ctx, k); err != nil {
+	if err := s.Store.Create(ctx, k, keepCuratedTombstones); err != nil {
 		return nil, err
 	}
 	s.updateEmbedding(ctx, k)

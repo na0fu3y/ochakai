@@ -276,7 +276,11 @@ func (s *Store) ListAllAttachments(ctx context.Context) ([]ExportAttachment, err
 // whose snapshot includes the attachment list after the change —
 // attach/detach are changes to the entry, and every change is kept.
 func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
-	k.UpdatedAt = time.Now().UTC()
+	// nowStored, like every other write path: time.Now()'s nanoseconds do
+	// not survive the round trip through timestamptz, so the revision
+	// snapshot would carry a version the stored row never had (design
+	// doc 0030).
+	k.UpdatedAt = nowStored()
 	if _, err := tx.Exec(ctx,
 		`UPDATE knowledge SET updated_at=$2 WHERE id=$1`, k.ID, k.UpdatedAt); err != nil {
 		return err

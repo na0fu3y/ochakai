@@ -519,8 +519,10 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 		}
-		// Entries in batches: one batch in memory at a time, and no pool
-		// connection held for the length of the download.
+		// Entries in batches: one batch in memory at a time. The snapshot
+		// does hold a pooled connection for the length of the download —
+		// the trade a point-in-time backup makes (see ExportSnapshot);
+		// batching bounds the memory, not the connection.
 		for start := 0; start < len(ids); start += exportBatch {
 			end := min(start+exportBatch, len(ids))
 			batch, err := snap.ListByIDs(r.Context(), ids[start:end])
@@ -631,6 +633,15 @@ func readBody(w http.ResponseWriter, r *http.Request, limit int64, tooLarge stri
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
 	if err := dec.Decode(v); err != nil {
+		// An oversized body is not malformed JSON, and calling it that
+		// sends the caller looking for a syntax error in a payload that
+		// is simply too big — readBody already answers 413 here.
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSON(w, http.StatusRequestEntityTooLarge,
+				map[string]string{"error": fmt.Sprintf("request body exceeds %d bytes", maxErr.Limit)})
+			return false
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
 		return false
 	}

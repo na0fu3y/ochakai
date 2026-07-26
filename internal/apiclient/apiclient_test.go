@@ -294,7 +294,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 		})
 	})
 	res, err := c.Context(context.Background(), "why did revenue drop",
-		[]string{"metrics"}, []string{"verified"}, []string{"core"}, 7, 0.5)
+		[]string{"metrics"}, []string{"verified"}, []string{"core"}, 7, 0.5, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,5 +429,30 @@ func TestUpdateSendsIfMatchAndMapsConflict(t *testing.T) {
 	}
 	if apiErr.Message != "knowledge changed since it was read" {
 		t.Errorf("Message = %q", apiErr.Message)
+	}
+}
+
+// A positive budget reaches the server, so --json gets the server's
+// budget semantics (entries that do not fit come back as outline). 0
+// sends nothing: the rendered CLI path asks for everything and caps
+// while printing.
+func TestContextSendsBudgetOnlyWhenSet(t *testing.T) {
+	var got []string
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		v := r.URL.Query().Get("budget")
+		if v == "" {
+			v = "(absent)"
+		}
+		got = append(got, v)
+		_ = json.NewEncoder(w).Encode(ContextResult{})
+	})
+	for _, budget := range []int{0, 4000} {
+		if _, err := c.Context(context.Background(), "q", nil, nil, nil, 0, 0, budget); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"(absent)", "4000"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("budget on the wire = %q, want %q", got, want)
 	}
 }

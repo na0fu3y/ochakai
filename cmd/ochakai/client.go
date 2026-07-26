@@ -269,7 +269,7 @@ func cmdContext(ctx context.Context, args []string) error {
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
-	budget := fs.Int("budget", 0, "stop rendering entries after ~this many bytes (0 = no cap)")
+	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (trigram vs hybrid), so calibrate before use (0 = off)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -284,7 +284,15 @@ func cmdContext(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := c.Context(ctx, strings.Join(pos, " "), types, statuses, tags, *limit, *minScore)
+	// The budget goes to the server only for --json: the rendered path
+	// asks for everything and caps while printing, where it can name what
+	// it dropped. JSON has no such layer, so an unsent budget was silently
+	// doing nothing.
+	serverBudget := 0
+	if *asJSON {
+		serverBudget = *budget
+	}
+	res, err := c.Context(ctx, strings.Join(pos, " "), types, statuses, tags, *limit, *minScore, serverBudget)
 	if err != nil {
 		return err
 	}
