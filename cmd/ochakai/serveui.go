@@ -33,6 +33,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/webui"
 )
 
@@ -48,7 +50,18 @@ func serveUI(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("invalid OCHAKAI_URL %q: %w", target, err)
 	}
-	handler := serveUIHandler(newServiceProxy(u, &metadataTokenSource{audience: target}, log))
+	// Per-user provenance (design docs 0027, 0032). Without an audience
+	// the proxy cannot verify anything, so writes stay attributed to this
+	// service account — the behavior before 0032, and still the right one
+	// for a deployment with no IAP.
+	var iap iapVerifier
+	if aud := os.Getenv("OCHAKAI_IAP_AUDIENCE"); aud != "" {
+		iap = &googleIAP{audience: aud}
+		log.Info("recording browser users by their IAP identity", "audience", aud)
+	} else {
+		log.Info("no OCHAKAI_IAP_AUDIENCE; writes are recorded as this service account")
+	}
+	handler := serveUIHandler(newServiceProxy(u, &metadataTokenSource{audience: target}, iap, log))
 	log.Info("proxying to ochakai", "target", target)
 
 	port := os.Getenv("PORT")
@@ -80,7 +93,13 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 // token in X-Serverless-Authorization, the header Cloud Run validates
 // in preference to Authorization — which therefore passes through
 // untouched for the backend's httpauth to ignore.
-func newServiceProxy(target *url.URL, tokens serviceTokenSource, log *slog.Logger) http.Handler {
+//
+// When iap is non-nil the request is additionally attributed to the
+// person driving the browser, taken from IAP's signed assertion (design
+// doc 0032). The delegation header is stripped either way: whatever the
+// browser sent is a claim about identity from the one party with no
+// standing to make it.
+func newServiceProxy(target *url.URL, tokens serviceTokenSource, iap iapVerifier, log *slog.Logger) http.Handler {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	director := proxy.Director
 	proxy.Director = func(r *http.Request) {
@@ -94,7 +113,38 @@ func newServiceProxy(target *url.URL, tokens serviceTokenSource, log *slog.Logge
 			log.Warn("no service identity token; forwarding without it", "error", err)
 		}
 	}
-	return proxy
+	if iap == nil {
+		return stripDelegation(proxy)
+	}
+	return stripDelegation(withIAPIdentity(proxy, iap, log))
+}
+
+// stripDelegation removes an inbound delegation header. It wraps the
+// handler that may legitimately set one, so it runs first and cannot
+// undo it.
+func stripDelegation(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del(httpauth.OnBehalfOfHeader)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// withIAPIdentity names the end user on each proxied request from IAP's
+// assertion. A request IAP did not sign is refused rather than passed
+// on as the service account: the operator asked for per-user provenance
+// by configuring an audience, and quietly recording the wrong author is
+// the failure design doc 0027 §5.2 exists to prevent.
+func withIAPIdentity(next http.Handler, iap iapVerifier, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		email, err := iap.identity(r.Context(), r.Header.Get(iapAssertionHeader))
+		if err != nil {
+			log.Warn("refusing a request with no usable IAP identity", "path", r.URL.Path, "error", err)
+			http.Error(w, "iap: cannot establish who you are: "+err.Error(), http.StatusForbidden)
+			return
+		}
+		r.Header.Set(httpauth.OnBehalfOfHeader, domain.ActorHuman+":"+email)
+		next.ServeHTTP(w, r)
+	})
 }
 
 type serviceTokenSource interface {

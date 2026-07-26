@@ -389,11 +389,11 @@ organization-restricted — no second image to build, and the UI is always
 the exact version of the server it fronts. The webui itself is
 non-public too: [Identity-Aware Proxy](https://cloud.google.com/iap/docs/enabling-cloud-run)
 sits in front, so browsers sign in with their Google account and only
-your organization gets through — no `allUsers` grant anywhere. Note that
-writes through the UI are still recorded as the webui's service account
-(`agent:ochakai-webui@…`), not the browser user; per-user provenance
-would need IAP JWT verification, which ochakai does not do. MCP and CLI
-clients get per-user identity via the §5 proxy path.
+your organization gets through — no `allUsers` grant anywhere. By default
+writes through the UI are recorded as the webui's service account
+(`agent:ochakai-webui@…`); set `OCHAKAI_IAP_AUDIENCE` (below) to record
+the person in the browser instead. MCP and CLI clients get per-user
+identity via the §5 proxy path.
 
 ```sh
 # dedicated identity, allowed to invoke ochakai only
@@ -426,6 +426,39 @@ page loads. The UI and API are same-origin through the proxy, so nothing
 else to configure. To check IAP is actually fronting the service, request
 it unauthenticated — the response is a 302 to `accounts.google.com`
 with an `x-goog-iap-generated-response: true` header, not the page.
+
+### Recording the browser user instead of the service account
+
+Out of the box every edit from the UI reads `agent:ochakai-webui@…`,
+which is one author for the whole team. To record who actually made it,
+tell serve-ui which IAP audience to trust and let ochakai accept the
+webui as a delegator (design docs 0027, 0032):
+
+```sh
+# The JWT audience code for this IAP resource, from the IAP console
+# (⋮ next to the resource → "Get JWT audience code"). serve-ui refuses
+# to guess it: a wrong value would mean verifying nothing.
+gcloud run services update ochakai-webui --region=$REGION \
+  --update-env-vars="OCHAKAI_IAP_AUDIENCE=$IAP_AUDIENCE"
+
+# ochakai must also accept this caller's forwarded identities, or it
+# answers 403 (it never downgrades silently).
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars="OCHAKAI_DELEGATING_CALLERS=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com"
+```
+
+Writes then read `human:tanaka@example.co.jp via agent:ochakai-webui@…`
+— both identities, never just one. serve-ui verifies IAP's signature,
+audience, expiry and issuer on every request, and **refuses (403) any
+request IAP did not sign** once the audience is set: if IAP is not
+really in front of the service, you find out immediately instead of
+discovering months of writes attributed to the wrong author. The
+audience it received is logged next to the one you configured, so a
+mismatch is a one-line fix.
+
+Whether or not you set this, both proxies discard any
+`X-Ochakai-On-Behalf-Of` the browser sends — a page cannot name its own
+author (design doc 0032).
 
 Notes from exercising this end-to-end:
 
