@@ -437,9 +437,20 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
 		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	var created domain.Knowledge
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	// A create returns the entry, so it returns the version with it: a
+	// client that creates and then updates conditionally should not have
+	// to GET the entry it just wrote to learn what to put in If-Match.
+	if got, want := resp.Header.Get("ETag"), `"`+created.UpdatedAt.Format(time.RFC3339Nano)+`"`; got != want {
+		t.Errorf("create ETag = %q, want %q", got, want)
 	}
 
 	verify := func() domain.Knowledge {

@@ -113,6 +113,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
         "400": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /api/v1/browse:
@@ -393,6 +395,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -779,8 +783,9 @@ components:
       description: >
         Optimistic-concurrency precondition (design doc 0030): the
         entry's version — its updated_at in RFC3339Nano, as a prior read
-        returned it in the ETag response header (quotes optional; the
-        JSON body's updated_at field is the same value). The write
+        or write returned it in the ETag response header (quotes
+        optional; the JSON body's updated_at field is the same value).
+        Every response carrying an entry carries the header. The write
         happens only if the entry still has this version; an entry
         changed since it was read is a 412 and nothing is written.
         Absent or "*" means no precondition — last write wins. A value
