@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -218,18 +219,37 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 const drainTimeout = 5 * time.Second
 
 func runServer(ctx context.Context, addr string, handler http.Handler) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
 	server := &http.Server{
-		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
-		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
-	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	return serveAndDrain(ctx, server, ln)
+}
+
+// serveAndDrain serves ln until ctx is cancelled, then returns only once
+// the drain has finished. Serve returns ErrServerClosed the moment
+// Shutdown is *called*, not when the drain completes — returning on it
+// alone would run the caller's deferred Store.Close (final usage flush,
+// pool close) while requests are still in flight, failing them on a
+// closed pool and losing the usage events they just recorded.
+func serveAndDrain(ctx context.Context, server *http.Server, ln net.Listener) error {
+	errc := make(chan error, 1)
+	go func() { errc <- server.Serve(ln) }()
+	select {
+	case err := <-errc:
+		return err // stopped before any shutdown was asked for
+	case <-ctx.Done():
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+	defer cancel()
+	// Best-effort: past drainTimeout the stragglers are cut off and the
+	// process exits; nothing useful to do with the error.
+	_ = server.Shutdown(shutdownCtx)
+	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
