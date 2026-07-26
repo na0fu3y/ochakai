@@ -124,7 +124,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 	if len(hits) == 0 || hits[0].ID != id {
 		t.Fatalf("search missed the entry: %+v", hits)
 	}
-	// Usage recording buffers off the read path (design doc 0025 §11).
+	// Usage recording buffers off the read path (design doc 0029).
 	if err := svc.Store.FlushUsage(ctx); err != nil {
 		t.Fatalf("FlushUsage: %v", err)
 	}

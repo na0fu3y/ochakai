@@ -42,7 +42,7 @@ func TestBundleNestedDirectories(t *testing.T) {
 		t.Errorf("nested index wrong:\n%s", idx)
 	}
 	// Every index level is alphabetical — no recommended-type priority at
-	// the root (design doc 0016 §4.8): "ops" sorts before "query" even
+	// the root (design doc 0017 §4.8): "ops" sorts before "query" even
 	// though query is a built-in type directory.
 	root := string(files["index.md"])
 	if strings.Index(root, "ops/") > strings.Index(root, "queries/") {

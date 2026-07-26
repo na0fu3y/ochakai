@@ -97,6 +97,19 @@ PR の中に残る。
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
   **Accepted**。検証の時効と、failed 報告・利用実績による再検証の
   優先順位づけ。
+- [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
+  — **Accepted**。利用イベントをメモリにバッファして定期フラッシュし、
+  利用統計は best-effort と明示する(上限超過は破棄、シャットダウンは
+  ドレイン後に最終フラッシュ)。
+
+## 同時実行と削除
+
+- [0030 If-Match による楽観ロック](0030-optimistic-locking.md) —
+  **Accepted**。`updated_at` を版として ETag / If-Match で条件付き更新を
+  opt-in で提供する。MCP は通り道を持たず、キュレーション保護が内部で使う。
+- [0031 purge](0031-purge.md) — **Accepted**。ソフト削除済みエントリを
+  完全に破棄して id を解放する二段階目の削除。REST / CLI のみ、監査行を
+  残し、GCS の blob は回収しない。
 
 ## セマンティックモデルと compile
 

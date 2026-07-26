@@ -173,7 +173,7 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		// If-Match is an optional optimistic-concurrency precondition: its
 		// value is the ETag from a prior read. Absent means last-write-wins
-		// (design doc 0025 §11); malformed is a client error.
+		// (design doc 0030); malformed is a client error.
 		ifMatch, err := parseIfMatch(r)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "malformed If-Match: " + err.Error()})
@@ -181,7 +181,7 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		// The path is the address; the body carries the metadata — type
 		// included, always (no fill-in from the stored entry, design doc
-		// 0016 §4.5).
+		// 0017 §4.5).
 		k.ID = r.PathValue("id")
 		updated, changed, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()), ifMatch)
 		if err != nil {
@@ -657,7 +657,7 @@ func writeError(w http.ResponseWriter, err error) {
 
 // etagOf renders an entry's version as an ETag: its updated_at in
 // RFC3339Nano, quoted. A client echoes it in If-Match to update
-// conditionally (design doc 0025 §11).
+// conditionally (design doc 0030).
 func etagOf(k *domain.Knowledge) string {
 	return `"` + k.UpdatedAt.UTC().Format(time.RFC3339Nano) + `"`
 }

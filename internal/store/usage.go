@@ -14,7 +14,7 @@ const eventRetention = 180 * 24 * time.Hour
 // usageFlushInterval is how often buffered usage events are written, and
 // usageBufferMax caps the buffer so a stalled database cannot grow it
 // without bound — past the cap, new events are dropped (usage is a
-// best-effort statistic, design doc 0025 §10).
+// best-effort statistic, design doc 0029).
 const (
 	usageFlushInterval = 5 * time.Second
 	usageBufferMax     = 20000
@@ -30,7 +30,7 @@ type usageEvent struct {
 }
 
 // RecordEvents buffers usage events in memory and returns immediately,
-// keeping recording off the read path (design doc 0025 §11): the events
+// keeping recording off the read path (design doc 0029): the events
 // are written by the background flush loop, not by the caller. ids name
 // the target entries. Callers treat the error as non-fatal — it signals
 // only that the buffer was full and events were dropped, never a failed

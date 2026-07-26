@@ -534,7 +534,7 @@ func TestIntegrationSearchLexicalWildcardEscape(t *testing.T) {
 	}
 }
 
-// RecordEvents buffers off the read path (design doc 0025 §11): totals are
+// RecordEvents buffers off the read path (design doc 0029): totals are
 // invisible until a flush, and Close drains the buffer so a clean shutdown
 // loses nothing.
 func TestIntegrationUsageBuffering(t *testing.T) {
@@ -649,7 +649,7 @@ func TestIntegrationMove(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Flush before Move so the event is persisted under the old id and the
-	// move carries it (RecordEvents now buffers, design doc 0025 §11).
+	// move carries it (RecordEvents now buffers, design doc 0029).
 	if err := s.FlushUsage(ctx); err != nil {
 		t.Fatalf("FlushUsage: %v", err)
 	}

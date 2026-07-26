@@ -26,7 +26,7 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 
 // ErrConflict is returned by Update when an If-Match precondition does not
 // match the stored revision: the entry changed since the caller read it
-// (design doc 0025 §11). The entry exists — a missing entry is ErrNotFound.
+// (design doc 0030). The entry exists — a missing entry is ErrNotFound.
 var ErrConflict = errors.New("knowledge changed since it was read")
 
 // ErrNotDeleted is returned by Purge for an entry that is still live.
@@ -38,7 +38,7 @@ var ErrNotDeleted = errors.New("knowledge is live; soft-delete it before purging
 // PostgreSQL timestamptz stores. Setting entity timestamps from it means an
 // in-memory updated_at always equals the value that round-trips through the
 // database — the invariant the ETag/If-Match optimistic lock depends on
-// (design doc 0025 §11): time.Now()'s nanoseconds would otherwise make the
+// (design doc 0030): time.Now()'s nanoseconds would otherwise make the
 // value returned by a write differ from the stored one on nanosecond-
 // resolution clocks (Linux), breaking a client's next conditional update.
 func nowStored() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
@@ -53,7 +53,7 @@ type Store struct {
 	lastEventPrune atomic.Int64
 
 	// Usage events buffer in memory and flush on a timer so recording
-	// never touches the read path (design doc 0025 §11). usageBuf is
+	// never touches the read path (design doc 0029). usageBuf is
 	// guarded by usageMu; the flush loop stops on flushStop and drains
 	// once more before flushWG releases (see New/Close, usage.go).
 	usageMu   sync.Mutex
@@ -105,7 +105,7 @@ func New(ctx context.Context, databaseURL string, iamAuth bool) (*Store, error) 
 // Close stops the usage flush loop (draining the buffer one last time) and
 // releases the connection pool. Buffered events that have not yet flushed
 // are lost only if the process dies before Close — usage is a best-effort
-// statistic (design doc 0025 §10).
+// statistic (design doc 0029).
 func (s *Store) Close() {
 	if s.flushStop != nil {
 		close(s.flushStop)
@@ -281,7 +281,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge) error {
 
 // Update writes k over the live entry with the same id. When ifMatch is
 // non-nil, the write is conditional on the stored updated_at equalling it
-// (optimistic concurrency, design doc 0025 §11): a mismatch means the entry
+// (optimistic concurrency, design doc 0030): a mismatch means the entry
 // changed since the caller read it and returns ErrConflict, closing the
 // read-modify-write race that silently lost updates. A nil ifMatch keeps
 // the prior last-write-wins behavior for callers that do not opt in.

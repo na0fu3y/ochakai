@@ -108,7 +108,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 }
 
 // TestUpdateIfMatchIntegration exercises the opt-in optimistic lock (design
-// doc 0025 §11): a matching If-Match updates, a stale one is rejected with
+// doc 0030): a matching If-Match updates, a stale one is rejected with
 // ErrConflict, and once the entry has moved on the old version stays
 // rejected until re-read.
 func TestUpdateIfMatchIntegration(t *testing.T) {
