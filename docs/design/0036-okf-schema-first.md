@@ -4,7 +4,7 @@ Status: Accepted(2026-07-27)。[0005](0005-okf-compatibility.md) と
 [0016](0016-knowledge-catalog-alignment.md) を Superseded にし、
 [0009](0009-provenance-portability.md) §4 と
 [0023](0023-okf-type-vocabulary.md) §3.1 を改訂する。
-**OKF 互換領域の現行ドキュメント**。実装は同 PR、0.13.0 で出る
+**OKF 互換領域の現行ドキュメント**。実装は同 PR、次のリリース(0.14.0)で出る
 Date: 2026-07-27
 
 ## 1. 目的
@@ -35,8 +35,15 @@ v0.2 対応は frontmatter の中核に触るので、部分改訂を積まず
 
 v0.2 対応は一度 **0034「OKF v0.2 準拠」**として書かれ、main にマージされた
 (#176)。本ドキュメントはその内容を吸収したうえで置き換えており、**0034 は
-リリースを迎えないまま撤回してファイルごと削除した**(#180)。番号 0034 は
-欠番であり、当時の文面は PR #176 の履歴に残る。
+文書として撤回しファイルごと削除した**(#180)。番号 0034 は欠番であり、
+当時の文面は PR #176 の履歴に残る。
+
+**撤回したのは文書であって、実装ではない。** 0034 の実装は #176 でマージされ
+**v0.13.0 で出荷済み**である(タグ 2026-07-26 16:58 JST、#180 のマージは
+翌 01:29 JST)。エクスポートが `generated` / `verified` を書き
+`okf_version: "0.2"` を宣言するのは 0.13.0 からで、利用者はすでにその挙動を
+持っている。本ドキュメントの破壊的変更(§4)は **0.13.0 からの差分**として
+読むこと。
 
 撤回の理由は、0034 が封筒の基準として置いた次の一文が誤っていたことである
 (§2.3 で詳述):
@@ -533,48 +540,65 @@ ochakai は `human:<id>` / `agent:<id>` を出す。SPEC §7 は `human:<id>` /
 - **Web UI = yes。** 本ドキュメントの動機そのもの。行エディタで sources と
   parameters を編集し、契約は type に応じて出し分ける。
 
-## 4. 壊れるもの(0.13.0)
+## 4. 壊れるもの(0.14.0)
 
-v0.2 対応はまだリリースされていないので、以下は **0.12 系からの差分**として読む。
+**基準線は 0.13.0 である。** v0.2 対応そのもの — `timestamp` /
+`verified_by` / `verified_at` が `generated` / `verified` になり、
+`status: verified` が `stable` + `verified` になり、`rejected` の往復が
+非可逆になり、`status: stable` を受け付けるようになり、`okf_version` が
+`"0.2"` になり、ワイヤに `updated_by` / `stale_after` が載ったこと —
+は撤回された 0034 の実装として **0.13.0 で出荷済み**である(§1.1)。
+それらは本ドキュメントの破壊的変更ではない。0.12 系から上げる場合は
+0.13.0 のリリースノートも併せて読むこと。
 
-- **エクスポートの frontmatter 形状が変わる。** `timestamp` /
-  `verified_by` / `verified_at` が消え、`generated` / `verified` になる。
-  `status: verified` は `stable` + `verified` になる。キー順が SPEC の
-  族順になる。旧形式を読む外部ツールがあれば追従が要る(インポート側は
-  旧形式も読める)。
-- **ワイヤ形式に 9 フィールドが増える**(`updated_by` / `stale_after` /
-  `sources` / `usage_window` / `runtime` / `parameters` / `computation` /
-  `executor` / `attester`。追加のみ)。
-- **既存エントリの `attrs` から同名キーが消える。** `attrs.sources` を
-  読んでいたクライアントは封筒の `sources` を読むよう直す。
-- **`attrs` に封筒キーを書く payload が 400 になる。** 従来は黙って通り、
-  エクスポートで消えていた。
-- **`runtime` の無い Attested Computation が書き込み経路で 400 になる**(§3.10)。
-- **レガシー status 値の読み戻しが無くなる**(§3.5)。`status: verified` を
-  持つ 0.12 バンドルは `verified_at` があるので verified のまま入り、
-  `status: rejected` は draft になる。
-- **`rejected` の往復が非可逆になる。** エクスポートで `deprecated` に
-  なるため、export → import で `rejected` は `deprecated` になる。却下は
-  ochakai ローカルのキュレーション状態であり、バンドルはインスタンス固有の
-  判断を運ばない(0009)という整理の帰結である。理由は `status_note` に
-  残り、`rejected_by` / `rejected_at` は拡張キーとして歴史的記録に残る。
-- **`status: stable` を受け付けるようになる**(0.12 は 400)。未知の status
-  値も落とさなくなる。これは非準拠の修正である。
-- **per-source / per-parameter の拡張キーが失われる**(note 付き、§3.5)。
-- 日付を値に持つ拡張キーの往復が変わる(§3.7)。`2026-06-01T00:00:00Z` として
-  書き戻されていた日付が `2026-06-01` に戻る。書き手が書いたものに近づく
-  方向の変更である。
-- `okf_version` が `"0.2"` になる。
+0.13.0 からの差分は以下である。
 
-`embeddingText`(0001)は id / title / description / tags /
-`attrs["question"]` / body しか読まないので、**再 embed は不要**である。
+**封筒に移ったことによるもの**
 
-実装中に見つけた既存のバグも 2 つ直した(本改訂の帰結ではない):
+- **ワイヤ形式に 7 フィールドが増える**(`sources` / `usage_window` /
+  `runtime` / `parameters` / `computation` / `executor` / `attester`。
+  追加のみ)。
+- **既存エントリの `attrs` から同名キーが消える。** `attrs.sources` などを
+  読んでいたクライアントは封筒のフィールドを読むよう直す。マイグレーション
+  0020 が値を移し、attrs からキーを削除する(§3.13)。
+- **`attrs` に封筒キーと同名のキーを書く payload が 400 になる。**
+  0.13.0 では黙って通り、エクスポートで消えていた(§3.5)。
+- **エクスポートのキー順が SPEC の族順に変わる**(§3.12)。0.13.0 は
+  `status` 系を trust の前に置いていた。値は変わらないが差分を取ると動く。
+- **per-source / per-parameter のプロデューサ拡張キーが失われる**
+  (note 付き、§3.5)。トップレベルの拡張キーは従来どおり素通しする。
+
+**検証が増えたことによるもの**
+
+- **`runtime` の無い Attested Computation が書き込み経路で 400 になる**
+  (§3.10)。インポートは従来どおり通し、note を出す。
+- `sources[].resource` の欠落、日付でない `last_modified` / `usage_window`、
+  `name` か `type` を欠く `parameters`、`receipt` を欠く `executor` も
+  同様に書き込みで 400 になる(§3.10)。
+
+**status の読み戻しが変わるもの**
+
+- **ochakai ≤0.12 が書いたレガシー status 値の読み戻しをやめる**(§3.5)。
+  `status: verified` を持つバンドルは `verified_at` があるので verified の
+  まま入るが、`status: rejected` は draft になる。
+- **未知の status でも `verified` キーがあれば verified になる**(§3.4)。
+  0.13.0 は未知の status を無条件に draft にしていた。lifecycle 値と trust の
+  信号は独立という SPEC §5.3 / §5.4 の整理に合わせた変更であり、上のレガシー
+  値の扱いもこの規則から導かれる。
+
+**アップグレード手順**: マイグレーション 0020 が起動時に自動適用される。
+`attrs` から封筒へ値を移す UPDATE を含むが、`updated_at` は進めないので
+ETag も `generated.at` も動かない(§3.13)。`embeddingText`(0001)は
+id / title / description / tags / `attrs["question"]` / body しか読まないので、
+**再 embed は不要**である。
+
+実装中に見つけた既存のバグも 1 つ直した(本改訂の帰結ではない)。
 Web UI の詳細画面から status を変えると全置換 PUT のペイロードに
-`resource` が含まれておらず**消えていた**。同じバグが
-**編集フォームの経路には残っていた** — フォームに `resource` の入力欄が
-無く、Edit → Save で消えていた。封筒の書き込み可能フィールドを 1 箇所
-(`WRITABLE`)に集め、両経路がそこから payload を作るようにした。
+`resource` が含まれておらず消えていた件は 0.13.0 で直っているが、
+**同じバグが編集フォームの経路には残っていた** — フォームに `resource` の
+入力欄が無く、Edit → Save で消えていた。片方だけ直したから残ったのであり、
+封筒の書き込み可能フィールドを 1 箇所(`WRITABLE`)に集め、両経路が
+そこから payload を作るようにした。
 
 ## 5. やらないこと
 
