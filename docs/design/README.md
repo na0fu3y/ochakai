@@ -82,6 +82,9 @@ PR の中に残る。
   よるツリー閲覧。
 - [0021 ナレッジの move と Web UI の微調整](0021-move-and-webui-refinements.md)
   — **Accepted**。move(パス変更)の導入と表示の整理。
+- [0032 Web UI の書き込みを IAP の identity で記録する](0032-webui-iap-identity.md)
+  — **Accepted**。両プロキシはブラウザ由来の委譲ヘッダを常に削り、
+  serve-ui は IAP の検証済み JWT からのみ作り直す(0027 §6 の実装)。
 
 ## サーフェス(REST / MCP / CLI / Web UI)
 

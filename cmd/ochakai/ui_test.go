@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"golang.org/x/oauth2"
+
+	"github.com/na0fu3y/ochakai/internal/httpauth"
 )
 
 func TestUIHandlerServesIndex(t *testing.T) {
@@ -151,5 +153,38 @@ func TestUIHandlerRejectsForeignOrigin(t *testing.T) {
 		if reachedBackend := reached; reachedBackend != (want == http.StatusOK) {
 			t.Errorf("Origin %q: reached backend = %v, want %v", origin, reachedBackend, want == http.StatusOK)
 		}
+	}
+}
+
+// `ochakai ui` substitutes the CLI user's identity, so a page it serves
+// must not be able to claim it is acting for someone else. There is no
+// verified source for that claim on loopback — serve-ui gets one from
+// IAP, this proxy has none — and the local server may well be one where
+// the user is permitted to delegate (design doc 0032).
+func TestUIHandlerStripsDelegationHeader(t *testing.T) {
+	var got http.Header
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer backend.Close()
+
+	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := httptest.NewServer(h)
+	defer local.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req.Header.Set(httpauth.OnBehalfOfHeader, "human:someone-else@example.co.jp")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	if v := got.Get(httpauth.OnBehalfOfHeader); v != "" {
+		t.Errorf("%s reached the server as %q, want it stripped", httpauth.OnBehalfOfHeader, v)
 	}
 }

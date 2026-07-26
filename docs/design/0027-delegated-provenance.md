@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0027: 呼び出し元によるエンドユーザー identity の委譲
 
-Status: Accepted(2026-07-25)
+Status: Accepted(2026-07-25)(§6 の webui 側実装は 0032)
 Date: 2026-07-25
 
 ## 1. 問題
