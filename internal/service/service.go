@@ -191,7 +191,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 		return old, false, nil
 	}
 	// Past this point the content really changes, so the caller is who the
-	// entry now stands by — OKF's generated.by (design doc 0034 §3.3).
+	// entry now stands by — OKF's generated.by (design doc 0036 §3.3).
 	// Unchanged writes return above and leave the old one in place.
 	k.UpdatedBy = actor
 	s.applyVerification(k, old, actor)
@@ -426,6 +426,62 @@ func validate(k *domain.Knowledge) error {
 	}
 	if !domain.ValidStaleAfter(k.StaleAfter) {
 		return Invalidf("invalid stale_after %q (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)", k.StaleAfter)
+	}
+	return validateOKF(k)
+}
+
+// validateOKF holds the write path to the shape OKF v0.2 defines for its
+// provenance (SPEC §5.1) and Attested Computation (SPEC §10.2) families.
+//
+// Only the write path. Bundle import is deliberately more forgiving: SPEC's
+// conformance rule tells consumers to accept a document without rejecting
+// it, so the parser drops the offending value and reports a note instead
+// (design doc 0036 §3.4). Here the caller is naming a value it means, and
+// silently dropping it would be the worse answer.
+func validateOKF(k *domain.Knowledge) error {
+	// An attr that shadows an envelope key used to survive in attrs and
+	// then vanish from the export, where reservedKeys drops it. Saying so
+	// beats losing it quietly (design doc 0036 §3.5).
+	for _, key := range domain.EnvelopeKeys {
+		if _, ok := k.Attrs[key]; ok {
+			return Invalidf("attrs must not carry %q: it is an OKF envelope field, so write it at the top level of the payload instead", key)
+		}
+	}
+	for i, src := range k.Sources {
+		if src.Resource == "" {
+			return Invalidf("sources[%d] needs a resource (the artifact it cites); id and title alone do not name one", i)
+		}
+		if !domain.ValidDate(src.LastModified) {
+			return Invalidf("sources[%d]: invalid last_modified %q (an absolute date, YYYY-MM-DD)", i, src.LastModified)
+		}
+		if !src.UsageWindow.Valid() {
+			return Invalidf("sources[%d]: usage_window needs absolute dates (YYYY-MM-DD)", i)
+		}
+		if src.UsageCount != nil && *src.UsageCount < 0 {
+			return Invalidf("sources[%d]: usage_count must not be negative", i)
+		}
+	}
+	if !k.UsageWindow.Valid() {
+		return Invalidf("usage_window needs absolute dates (YYYY-MM-DD), e.g. {from: 2026-06-01, to: 2026-06-30}")
+	}
+	for i, p := range k.Parameters {
+		if !p.Valid() {
+			return Invalidf("parameters[%d] needs both a name and a type (SPEC §10.2)", i)
+		}
+	}
+	if !k.Executor.Valid() {
+		return Invalidf("executor needs both a resource and a non-empty receipt (SPEC §10.2); ochakai records the contract and never runs it")
+	}
+	if !k.Attester.Valid() {
+		return Invalidf("attester needs a resource (SPEC §10.2)")
+	}
+	// The one place ochakai holds a type to a schema. SPEC §10.2 makes
+	// runtime required, and it is what gives the parameters their meaning —
+	// a contract missing it cannot be executed by any consumer. The
+	// exception stops here; no other type gains a requirement (design docs
+	// 0036 §5, §3.10).
+	if domain.EqualType(k.Type, domain.TypeComputations) && k.Runtime == "" {
+		return Invalidf("an %s needs a runtime (e.g. bigquery, postgres, dbt, python): it is what tells a consumer how to read the parameters", domain.TypeComputations)
 	}
 	return nil
 }

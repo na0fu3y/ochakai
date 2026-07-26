@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -636,7 +637,7 @@ func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
 // updated_by is OKF's generated.by: who the content stands by now. It
 // follows content changes and nothing else — a verification confirms the
 // content, it does not produce it, which is the distinction v0.2 draws
-// between verified and generated (design doc 0034 §3.3).
+// between verified and generated (design doc 0036 §3.3).
 func TestUpdatedByFollowsContentIntegration(t *testing.T) {
 	ctx := context.Background()
 	svc := newIntegrationService(t, ctx)
@@ -721,5 +722,97 @@ func TestStaleAfterValidationIntegration(t *testing.T) {
 	var invalid *InvalidInputError
 	if !errors.As(err, &invalid) {
 		t.Fatalf("create with a relative stale_after: %v, want an invalid-input error", err)
+	}
+}
+
+// The OKF v0.2 families are refused at the write boundary when they do not
+// match the shape SPEC §5.1 / §10.2 define (design doc 0036 §3.4). Bundle
+// import is deliberately more forgiving — it drops the value and reports a
+// note — but a caller naming a value it means gets told.
+func TestOKFFamilyValidationIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	for name, k := range map[string]*domain.Knowledge{
+		"a source with no resource": {
+			Type: domain.TypeTerms, Sources: []domain.Source{{ID: "rev", Title: "Policy"}}},
+		"a source date that is not a date": {
+			Type: domain.TypeTerms, Sources: []domain.Source{{Resource: "r.md", LastModified: "June"}}},
+		"a usage window that is not dated": {
+			Type: domain.TypeTerms, UsageWindow: &domain.UsageWindow{From: "last quarter"}},
+		"a parameter with no type": {
+			Type: domain.TypeTerms, Parameters: []domain.Parameter{{Name: "year"}}},
+		"an executor with no receipt": {
+			Type: domain.TypeTerms, Executor: &domain.Executor{Resource: "run.md"}},
+		"an attester with no resource": {
+			Type: domain.TypeTerms, Attester: &domain.Attester{}},
+		"an Attested Computation with no runtime": {
+			Type: domain.TypeComputations},
+		// An attr shadowing an envelope key used to survive the write and
+		// then vanish from the export; refusing it says so at the boundary.
+		"an envelope key hidden in attrs": {
+			Type: domain.TypeTerms, Attrs: map[string]any{"sources": []any{}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			k.ID, k.Title = uid("okf-invalid"), "x"
+			var invalid *InvalidInputError
+			if _, err := svc.Create(ctx, k, actor); !errors.As(err, &invalid) {
+				t.Fatalf("create with %s: %v, want an invalid-input error", name, err)
+			}
+		})
+	}
+
+	// The runtime requirement is scoped to the one type SPEC §10.2 puts it
+	// on; no other type gains a required field (design doc 0036 §5).
+	if _, err := svc.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: uid("no-runtime-ok"), Title: "x",
+	}, actor); err != nil {
+		t.Fatalf("a Glossary Term must not need a runtime: %v", err)
+	}
+
+	// A full contract round-trips through the database intact, including
+	// the zero usage_count that means "counted, and never used".
+	id := uid("okf-full")
+	zero := 0
+	want := &domain.Knowledge{
+		Type: domain.TypeComputations, ID: id, Title: "x", Runtime: "bigquery",
+		Sources: []domain.Source{{
+			Resource: "https://wiki.example/rev", ID: "rev", UsageCount: &zero,
+			LastModified: "2026-06-15", UsageWindow: &domain.UsageWindow{From: "2026-05-01"},
+		}},
+		UsageWindow: &domain.UsageWindow{From: "2026-06-01", To: "2026-06-30"},
+		Parameters:  []domain.Parameter{{Name: "year", Type: "integer", Required: true}},
+		Computation: "queries/rev.sql",
+		Executor:    &domain.Executor{Resource: "run.md", Receipt: []string{"job_id"}},
+		Attester:    &domain.Attester{Resource: "check.py"},
+	}
+	if _, err := svc.Create(ctx, want, actor); err != nil {
+		t.Fatal(err)
+	}
+	read, err := svc.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.Sources[0].UsageCount == nil || *read.Sources[0].UsageCount != 0 {
+		t.Errorf("usage_count = %v, want a pointer to 0", read.Sources[0].UsageCount)
+	}
+	if !reflect.DeepEqual(read.Sources, want.Sources) ||
+		!reflect.DeepEqual(read.Parameters, want.Parameters) ||
+		!reflect.DeepEqual(read.Executor, want.Executor) ||
+		!reflect.DeepEqual(read.Attester, want.Attester) ||
+		!reflect.DeepEqual(read.UsageWindow, want.UsageWindow) ||
+		read.Runtime != want.Runtime || read.Computation != want.Computation {
+		t.Errorf("the contract did not survive the database:\ngot  %+v\nwant %+v", read, want)
+	}
+
+	// Editing only a citation is a content change: a write that reordered
+	// or reworded the sources must not be swallowed as a no-op.
+	edited := *read
+	edited.Sources = []domain.Source{{Resource: "https://wiki.example/rev", ID: "rev",
+		Title: "Revenue policy", UsageCount: &zero, LastModified: "2026-06-15",
+		UsageWindow: &domain.UsageWindow{From: "2026-05-01"}}}
+	if _, changed, err := svc.Update(ctx, &edited, actor, nil); err != nil || !changed {
+		t.Fatalf("editing a source's title: changed=%v err=%v, want a write", changed, err)
 	}
 }

@@ -40,23 +40,30 @@ PR の中に残る。
   エンドユーザーを名乗り、provenance がサービスアカウント 1 つに
   潰れる問題を解く。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
-  — **Proposed**(§4 の「SPEC への先回りをしない」は 0034 が写像を決定)。
+  — **Proposed**(§4 の「SPEC への先回りをしない」は 0036 が写像を決定)。
   export → Git → import の往復で provenance が誰のものに
   なるかの整理(バンドルは知識のみを運び、provenance はインスタンス固有)。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
-- [0034 OKF v0.2 準拠](0034-okf-v0-2.md) — **Accepted**(実装済み、0.13.0 で出る)。
-  **OKF 互換領域の現行ドキュメント**。trust/lifecycle を v0.2 のキー
-  (`generated` / `verified` / `status` / `stale_after`)へ完全移行し、
-  `Attested Computation` を語彙に足し、往復規則の全体像を 1 本にまとめる。
+- [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) — **Accepted**
+  (実装済み、0.13.0 で出る)。**OKF 互換領域の現行ドキュメント**。
+  SPEC が定義するキーは封筒に持つ、と基準を引き直し、§5.1(`sources` /
+  `usage_window`)と §10.2(`runtime` / `parameters` / `computation` /
+  `executor` / `attester`)を attrs から封筒フィールドへ。trust/lifecycle の
+  v0.2 キーへの移行と往復規則の全体像も 1 本にまとめ直し、過去の ochakai との
+  互換より OKF との互換を優先する。
+- 0034 OKF v0.2 準拠 — **Withdrawn**(欠番)。v0.2 対応として書かれ
+  main にマージされたが、封筒の基準(§2.3)が誤りと分かり、リリースを
+  迎えないまま 0036 に統合してファイルごと削除した。文面は PR #176 の
+  履歴に残る。経緯は 0036 §1.1。
 - [0005 OKF 互換とナレッジの構造](0005-okf-compatibility.md) —
-  **Superseded by 0034**(改訂の履歴として 0016 / 0017 も参照)。
+  **Superseded by 0036**(改訂の履歴として 0016 / 0017 も参照)。
   OKF バンドルとの双方向互換の出発点 — 任意ネストのパス、自由文字列タイプ、
   バンドルインポート、サーバー所有キー。
 - [0016 knowledge-catalog リファレンスバンドルへの準拠](0016-knowledge-catalog-alignment.md)
-  — **Superseded by 0034**(型の語彙は 0023 が先に置き換え、§2.5 の
-  compile `dialect` は 0028 で対象消滅)。
+  — **Superseded by 0036**(型の語彙は 0023 が先に置き換え、
+  §2.5 の compile `dialect` は 0028 で対象消滅)。
   リファレンスバンドルへの準拠(`resource` の封筒フィールド化ほか)。
 - [0017 パスが住所、タイプは属性](0017-path-addressing.md) —
   **Accepted**(ID 文字種は 0019 §2、型の語彙は 0023 が改訂)。
@@ -67,7 +74,7 @@ PR の中に残る。
 - [0022 ファイル名が名前](0022-filename-as-name.md) — **Accepted**。
   title の任意化、ID の検索対象化、NFC 正規化。
 - [0023 型の語彙を OKF に一本化する](0023-okf-type-vocabulary.md) —
-  **Accepted**(§3.1 の一覧に 0034 が `Attested Computation` を追加)。
+  **Accepted**(§3.1 の一覧に 0036 が `Attested Computation` を追加)。
   内部スラグと OKF 表示名の二重語彙を廃止し、型の値は OKF の綴りそのものに。
 - [0024 リンクは本文から導出する](0024-links-from-body.md) —
   **Accepted**。構造化 `links` フィールドを廃止し、リンクは本文

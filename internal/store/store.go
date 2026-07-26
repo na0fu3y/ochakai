@@ -153,6 +153,7 @@ type Filter struct {
 }
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
+	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
 	verified_by_kind, verified_by_name, verified_by_via, verified_at,
@@ -168,7 +169,9 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 	var verifiedVia, rejectedVia string
 	var staleAfter *time.Time
 	var links, attrs []byte
+	var sources, usageWindow, parameters, executor, attester []byte
 	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote, &staleAfter,
+		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
 		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
 		&verifiedKind, &verifiedName, &verifiedVia, &k.VerifiedAt,
@@ -180,10 +183,25 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 		if staleAfter != nil {
 			k.StaleAfter = staleAfter.UTC().Format(domain.StaleAfterLayout)
 		}
-		if err := json.Unmarshal(links, &k.Links); err != nil {
-			return err
+		// The nullable OKF columns decode only when present: an absent
+		// usage_window is a nil pointer, not a zero-valued one, because
+		// "no window declared" and "an empty window" are different claims.
+		for _, d := range []struct {
+			raw []byte
+			out any
+		}{
+			{sources, &k.Sources}, {parameters, &k.Parameters},
+			{usageWindow, &k.UsageWindow}, {executor, &k.Executor}, {attester, &k.Attester},
+			{links, &k.Links}, {attrs, &k.Attrs},
+		} {
+			if len(d.raw) == 0 {
+				continue
+			}
+			if err := json.Unmarshal(d.raw, d.out); err != nil {
+				return err
+			}
 		}
-		return json.Unmarshal(attrs, &k.Attrs)
+		return nil
 	}
 	return dests, finish
 }
@@ -300,10 +318,10 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 	// instead of being erased by it.
 	revive := ""
 	if keepCuratedTombstones {
-		revive = ` AND knowledge.status <> ALL($29::text[])`
+		revive = ` AND knowledge.status <> ALL($36::text[])`
 	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
-		links, attrs, err := marshalJSONFields(k)
+		j, err := marshalJSONFields(k)
 		if err != nil {
 			return err
 		}
@@ -315,11 +333,12 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		args := []any{
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
+			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
 			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
 			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
-			links, attrs, k.Body, k.CreatedAt, k.UpdatedAt,
+			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt,
 		}
 		if keepCuratedTombstones {
 			curated := make([]string, len(domain.CuratedStatuses))
@@ -329,11 +348,15 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			args = append(args, curated)
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
+			        $26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
 			ON CONFLICT (id) DO UPDATE SET
 				type=EXCLUDED.type,
 				title=EXCLUDED.title, description=EXCLUDED.description, resource=EXCLUDED.resource, tags=EXCLUDED.tags,
 				status=EXCLUDED.status, status_note=EXCLUDED.status_note, stale_after=EXCLUDED.stale_after,
+				sources=EXCLUDED.sources, usage_window=EXCLUDED.usage_window,
+				runtime=EXCLUDED.runtime, parameters=EXCLUDED.parameters, computation=EXCLUDED.computation,
+				executor=EXCLUDED.executor, attester=EXCLUDED.attester,
 				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
 				created_by_via=EXCLUDED.created_by_via,
 				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
@@ -376,7 +399,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) error {
 	k.UpdatedAt = NowStored()
 	return s.withTx(ctx, func(tx pgx.Tx) error {
-		links, attrs, err := marshalJSONFields(k)
+		j, err := marshalJSONFields(k)
 		if err != nil {
 			return err
 		}
@@ -388,20 +411,22 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
+			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
 			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
 			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
-			links, attrs, k.Body, k.UpdatedAt}
+			j.links, j.attrs, k.Body, k.UpdatedAt}
 		if ifMatch != nil {
 			args = append(args, ifMatch.UTC())
 			cond = fmt.Sprintf(" AND updated_at=$%d", len(args))
 		}
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
-			updated_by_kind=$10, updated_by_name=$11, updated_by_via=$12,
-			verified_by_kind=$13, verified_by_name=$14, verified_by_via=$15, verified_at=$16,
-			rejected_by_kind=$17, rejected_by_name=$18, rejected_by_via=$19, rejected_at=$20,
-			links=$21, attrs=$22, body=$23, updated_at=$24
+			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
+			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
+			verified_by_kind=$20, verified_by_name=$21, verified_by_via=$22, verified_at=$23,
+			rejected_by_kind=$24, rejected_by_name=$25, rejected_by_via=$26, rejected_at=$27,
+			links=$28, attrs=$29, body=$30, updated_at=$31
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -611,7 +636,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 	k.UpdatedAt = NowStored()
 	// A move rewrites the entry's own relative links and every referrer's
 	// body, so the mover is who the content now stands by: generated.by
-	// in an export (design doc 0034 §3.3).
+	// in an export (design doc 0036 §3.3).
 	k.UpdatedBy = actor
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		// A soft-deleted entry still owns the id — the row holds the primary
@@ -760,9 +785,12 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		r.Links = domain.LinksFromBody(r.ID, r.Body)
 		// The rewrite is a content change by the mover, and it is recorded
 		// as one ("update" revision below), so the entry's generated.by
-		// follows it (design doc 0034 §3.3).
+		// follows it (design doc 0036 §3.3).
 		r.UpdatedBy = actor
-		links, attrs, err := marshalJSONFields(r)
+		// Only the columns a link rewrite touches are written: a move
+		// repairs references, and an entry's citations and computation
+		// contract are not references it makes.
+		j, err := marshalJSONFields(r)
 		if err != nil {
 			return err
 		}
@@ -783,7 +811,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			r.ID, links, attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via)
+			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via)
 		if err != nil {
 			return err
 		}
@@ -1445,7 +1473,18 @@ func (s *Store) withTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
 	return tx.Commit(ctx)
 }
 
-func marshalJSONFields(k *domain.Knowledge) (links, attrs []byte, err error) {
+// knowledgeJSON carries the entry's jsonb columns, encoded once per write.
+// The three nullable ones stay nil when the entry declares nothing, so an
+// undeclared usage_window or contract is SQL NULL rather than the JSON
+// literal "null" — the read side tells those apart to keep "no window" and
+// "an empty window" distinct (design doc 0036 §3.1).
+type knowledgeJSON struct {
+	links, attrs                    []byte
+	sources, parameters             []byte
+	usageWindow, executor, attester []byte
+}
+
+func marshalJSONFields(k *domain.Knowledge) (knowledgeJSON, error) {
 	if k.Tags == nil {
 		k.Tags = []string{}
 	}
@@ -1455,13 +1494,37 @@ func marshalJSONFields(k *domain.Knowledge) (links, attrs []byte, err error) {
 	if k.Attrs == nil {
 		k.Attrs = map[string]any{}
 	}
-	if links, err = json.Marshal(k.Links); err != nil {
-		return nil, nil, err
+	if k.Sources == nil {
+		k.Sources = []domain.Source{}
 	}
-	if attrs, err = json.Marshal(k.Attrs); err != nil {
-		return nil, nil, err
+	if k.Parameters == nil {
+		k.Parameters = []domain.Parameter{}
 	}
-	return links, attrs, nil
+	var j knowledgeJSON
+	for _, f := range []struct {
+		out *[]byte
+		in  any
+		// nullable columns encode only when the entry has the value.
+		skip bool
+	}{
+		{&j.links, k.Links, false},
+		{&j.attrs, k.Attrs, false},
+		{&j.sources, k.Sources, false},
+		{&j.parameters, k.Parameters, false},
+		{&j.usageWindow, k.UsageWindow, k.UsageWindow == nil},
+		{&j.executor, k.Executor, k.Executor == nil},
+		{&j.attester, k.Attester, k.Attester == nil},
+	} {
+		if f.skip {
+			continue
+		}
+		b, err := json.Marshal(f.in)
+		if err != nil {
+			return knowledgeJSON{}, err
+		}
+		*f.out = b
+	}
+	return j, nil
 }
 
 // knowledgeColsK is knowledgeCols with every column prefixed by "k", the

@@ -62,7 +62,7 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 	// v0.2 spellings only: timestamp became generated.at, and the flat
 	// verified_by/verified_at became the verified list (SPEC §13.1). A
 	// verified entry is stable plus a verification, not status: verified
-	// (design doc 0034 §3.4).
+	// (design doc 0036 §3.4).
 	for key, want := range map[string]any{
 		"type":        "Insight",
 		"title":       "売上の季節性",
@@ -124,7 +124,7 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 	s := string(doc)
 	// OKF has no state for "was never accepted", so a rejection exports as
 	// deprecated; the reason and the actor survive as status_note and the
-	// ochakai extension keys (design doc 0034 §3.4).
+	// ochakai extension keys (design doc 0036 §3.4).
 	for _, want := range []string{
 		"status: deprecated",
 		"status_note: revenue-seasonality と重複",
@@ -142,7 +142,7 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 
 // The delegating caller travels as a sibling of by, so by stays a bare
 // actor and the human: prefix a consumer keys trust off stays readable
-// (design docs 0027, 0034 §3.2).
+// (design docs 0027, 0036 §3.2).
 func TestDocumentDelegatedActor(t *testing.T) {
 	entries := sample()
 	doc, err := Document(&entries[1])

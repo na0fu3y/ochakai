@@ -92,9 +92,18 @@ func TestSameContent(t *testing.T) {
 			Type: TypeMetrics, ID: "revenue", Title: "Revenue",
 			Description: "monthly revenue", Tags: []string{"sales"},
 			Status: StatusVerified, StatusNote: "checked",
-			Links: []Link{{Target: "model/sales", Text: "sales model"}},
-			Attrs: map[string]any{"threshold": 5, "model": "sales"},
-			Body:  "Sum of order totals.",
+			Sources: []Source{
+				{Resource: "policies/revenue.md", ID: "rev", UsageCount: intp(0)},
+				{Resource: "https://example.test/ga4", LastModified: "2026-05-30"},
+			},
+			UsageWindow: &UsageWindow{From: "2026-06-01", To: "2026-06-30"},
+			Runtime:     "bigquery",
+			Parameters:  []Parameter{{Name: "year", Type: "integer", Required: true}},
+			Executor:    &Executor{Resource: "skills/run.md", Receipt: []string{"job_id"}},
+			Attester:    &Attester{Resource: "attesters/revenue.py"},
+			Links:       []Link{{Target: "model/sales", Text: "sales model"}},
+			Attrs:       map[string]any{"threshold": 5, "model": "sales"},
+			Body:        "Sum of order totals.",
 		}
 	}
 
@@ -116,10 +125,12 @@ func TestSameContent(t *testing.T) {
 
 	nilVsEmpty := base()
 	nilVsEmpty.Tags, nilVsEmpty.Links, nilVsEmpty.Attrs = []string{}, []Link{}, map[string]any{}
+	nilVsEmpty.Sources, nilVsEmpty.Parameters = []Source{}, []Parameter{}
 	empty := base()
 	empty.Tags, empty.Links, empty.Attrs = nil, nil, nil
+	empty.Sources, empty.Parameters = nil, nil
 	if !nilVsEmpty.SameContent(empty) {
-		t.Error("nil and empty tags/links/attrs must compare equal")
+		t.Error("nil and empty tags/links/attrs/sources/parameters must compare equal")
 	}
 
 	for name, mutate := range map[string]func(*Knowledge){
@@ -131,11 +142,67 @@ func TestSameContent(t *testing.T) {
 		"links":       func(k *Knowledge) { k.Links[0].Target = "model/billing" },
 		"attrs":       func(k *Knowledge) { k.Attrs["threshold"] = 6 },
 		"body":        func(k *Knowledge) { k.Body = "Sum of order totals, net of refunds." },
+		// OKF v0.2 families are authored content too (design doc 0036): a
+		// write that only edits the citations must not be swallowed.
+		"source title":  func(k *Knowledge) { k.Sources[0].Title = "Revenue policy" },
+		"source order":  func(k *Knowledge) { k.Sources[0], k.Sources[1] = k.Sources[1], k.Sources[0] },
+		"source drop":   func(k *Knowledge) { k.Sources = k.Sources[:1] },
+		"usage_window":  func(k *Knowledge) { k.UsageWindow.To = "2026-07-31" },
+		"window unset":  func(k *Knowledge) { k.UsageWindow = nil },
+		"runtime":       func(k *Knowledge) { k.Runtime = "postgres" },
+		"computation":   func(k *Knowledge) { k.Computation = "queries/revenue.sql" },
+		"param order":   func(k *Knowledge) { k.Parameters = append(k.Parameters, Parameter{Name: "q", Type: "string"}) },
+		"param require": func(k *Knowledge) { k.Parameters[0].Required = false },
+		"receipt":       func(k *Knowledge) { k.Executor.Receipt = []string{"job_id", "result"} },
+		"executor drop": func(k *Knowledge) { k.Executor = nil },
+		"attester":      func(k *Knowledge) { k.Attester.Resource = "attesters/other.py" },
 	} {
 		changed := base()
 		mutate(changed)
 		if base().SameContent(changed) {
 			t.Errorf("a %s change must not compare equal", name)
+		}
+	}
+
+	// A usage_count of zero is a count, not the absence of one: a source
+	// exercised zero times over the window says something an uncounted
+	// source does not (design doc 0036 §3.1).
+	counted, uncounted := base(), base()
+	uncounted.Sources[0].UsageCount = nil
+	if counted.SameContent(uncounted) {
+		t.Error("usage_count 0 and an absent usage_count must not compare equal")
+	}
+}
+
+func intp(n int) *int { return &n }
+
+// The OKF v0.2 families carry their own shape rules (SPEC §5.1, §10.2).
+// domain holds the predicate; service turns a false into a 400 and the
+// bundle parser turns it into a note (design doc 0036 §3.4).
+func TestOKFFamilyValidation(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ok    bool
+		valid func() bool
+	}{
+		"source needs a resource":     {false, func() bool { return Source{ID: "rev"}.Valid() }},
+		"a resource is enough":        {true, func() bool { return Source{Resource: "policies/rev.md"}.Valid() }},
+		"source date must be a date":  {false, func() bool { return Source{Resource: "r", LastModified: "2026-06"}.Valid() }},
+		"source date may be absent":   {true, func() bool { return Source{Resource: "r"}.Valid() }},
+		"usage_count may not be < 0":  {false, func() bool { return Source{Resource: "r", UsageCount: intp(-1)}.Valid() }},
+		"usage_count may be 0":        {true, func() bool { return Source{Resource: "r", UsageCount: intp(0)}.Valid() }},
+		"per-source window is dated":  {false, func() bool { return Source{Resource: "r", UsageWindow: &UsageWindow{From: "nope"}}.Valid() }},
+		"parameter needs a name":      {false, func() bool { return Parameter{Type: "integer"}.Valid() }},
+		"parameter needs a type":      {false, func() bool { return Parameter{Name: "year"}.Valid() }},
+		"parameter with both is fine": {true, func() bool { return Parameter{Name: "year", Type: "integer"}.Valid() }},
+		"executor needs a resource":   {false, func() bool { return (&Executor{Receipt: []string{"job_id"}}).Valid() }},
+		"executor needs a receipt":    {false, func() bool { return (&Executor{Resource: "run.md"}).Valid() }},
+		"absent executor is fine":     {true, func() bool { return (*Executor)(nil).Valid() }},
+		"attester needs a resource":   {false, func() bool { return (&Attester{}).Valid() }},
+		"absent attester is fine":     {true, func() bool { return (*Attester)(nil).Valid() }},
+		"absent window is fine":       {true, func() bool { return (*UsageWindow)(nil).Valid() }},
+	} {
+		if got := tc.valid(); got != tc.ok {
+			t.Errorf("%s: Valid() = %v, want %v", name, got, tc.ok)
 		}
 	}
 }
@@ -226,7 +293,7 @@ func TestToTypesAndToStatuses(t *testing.T) {
 
 // The OKF lifecycle vocabulary is three values to ochakai's four, and the
 // verified key — not the status — is what says a concept was confirmed
-// (SPEC §5.3-5.4, design doc 0034 §3.4).
+// (SPEC §5.3-5.4, design doc 0036 §3.4).
 func TestOKFStatusMapping(t *testing.T) {
 	for _, tc := range []struct {
 		in   Status
@@ -255,9 +322,18 @@ func TestOKFStatusMapping(t *testing.T) {
 		{"deprecated", false, StatusDeprecated, true},
 		{"", false, "", true}, // unset: the write path applies its own default
 		{"", true, StatusVerified, true},
-		{"verified", false, StatusVerified, true}, // written by 0.12 and earlier
-		{"rejected", false, StatusRejected, true},
+		// The values ochakai wrote before v0.2 are no longer read back as
+		// themselves: OKF's vocabulary is the three above, and everything
+		// else is an unrecognized value (design doc 0036 §3.5).
+		{"verified", false, StatusDraft, false},
+		{"rejected", false, StatusDraft, false},
 		{"retired", false, StatusDraft, false},
+		// An unrecognized lifecycle value does not discard the trust
+		// signal: SPEC §5.3 keeps the two independent, which is also what
+		// lets a 0.12 bundle's verified entries import as verified — those
+		// documents carry verified_at.
+		{"retired", true, StatusVerified, false},
+		{"verified", true, StatusVerified, false},
 	} {
 		got, known := StatusFromOKF(tc.raw, tc.hasVerified)
 		if got != tc.want || known != tc.wantKnown {
@@ -309,6 +385,6 @@ func TestTypesHintCoversEveryBuiltin(t *testing.T) {
 		}
 	}
 	if !BuiltinType(TypeComputations) {
-		t.Error("Attested Computation should be a recommended type (design doc 0034 §3.6)")
+		t.Error("Attested Computation should be a recommended type (design doc 0036 §3.6)")
 	}
 }
