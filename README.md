@@ -586,7 +586,10 @@ Underneath it, the decisions themselves live in
 [docs/design](docs/design) as numbered, immutable decision records — the
 [index](docs/design/README.md) groups them by area and marks which ones
 still describe the current state. They are **mostly Japanese**, and they
-are authoritative where they and the prose here disagree.
+are authoritative where they and the prose here disagree — which is why
+[README.en.md](docs/design/README.en.md) sits beside the index and
+summarizes every record in English: what was decided, and what it means
+if you are using ochakai rather than building it.
 [0001](docs/design/0001-architecture.md) carries the survey of prior art:
 OpenAI's and Meta's in-house data agents, Airbnb Minerva, Uber uMetric,
 Snowflake's Verified Query Repository, dbt-mcp, Vanna, WrenAI, and the

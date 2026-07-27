@@ -70,7 +70,8 @@ OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go 
 Architecture decisions live in [docs/design](docs/design) as numbered
 documents (mostly Japanese). Start from the
 [index](docs/design/README.md), which groups them by area and marks
-which ones describe the current state.
+which ones describe the current state; a new record needs a summary in
+[README.en.md](docs/design/README.en.md) beside it, which a test checks.
 [docs/architecture.md](docs/architecture.md) summarizes the accepted ones
 in English if you would rather read the shape of the system first.
 

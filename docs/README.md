@@ -47,6 +47,8 @@ types, and every environment variable.
 - [docs/design](design) — the numbered, immutable decision records, and
   the [index](design/README.md) that says which ones still describe the
   current state. Mostly Japanese; authoritative where they and the English
-  prose disagree.
+  prose disagree. [README.en.md](design/README.en.md) summarizes every one
+  of them in English — what was decided, and what it means for somebody
+  using ochakai.
 - [SECURITY.md](../SECURITY.md) — reporting a vulnerability, and what
   counts as one.
