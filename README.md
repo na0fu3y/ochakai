@@ -140,6 +140,10 @@ ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (n
 it, so scripts and CI stay explicit. Tab completion:
 `source <(ochakai completion zsh)` (also bash, fish).
 
+Every command carries its own flags and worked examples in
+`ochakai <command> -h`. [docs/cli.md](docs/cli.md) is that same text
+rendered, for reading before you install anything.
+
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 into your project's CLAUDE.md — it teaches the agent the commands and the
 write-learnings-back habit. To make the loop automatic instead of

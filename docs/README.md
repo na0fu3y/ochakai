@@ -44,8 +44,10 @@ types, and every environment variable.
 - [Connecting an MCP client](guides/mcp-clients.md) — the URL or the
   `mcp-stdio` bridge, per client, with the config file each one reads and
   the ones that cannot reach an IAM-restricted deployment at all.
-- `ochakai <command> -h` — every command carries its flags and worked
-  examples, generated from the domain model where the values come from it.
+- [CLI reference](cli.md) — every command's synopsis, flags and worked
+  examples. It is `ochakai <command> -h` rendered, and a test fails when
+  the two disagree, so it is readable before you have a binary and cannot
+  go stale after you do.
 
 ## For someone changing it
 
