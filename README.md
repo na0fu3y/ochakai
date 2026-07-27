@@ -1,6 +1,7 @@
 # ochakai
 
 [![ci](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml/badge.svg)](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml)
+[![release](https://img.shields.io/github/v/release/na0fu3y/ochakai?sort=semver)](https://github.com/na0fu3y/ochakai/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/na0fu3y/ochakai.svg)](https://pkg.go.dev/github.com/na0fu3y/ochakai)
 [![Go Report Card](https://goreportcard.com/badge/github.com/na0fu3y/ochakai)](https://goreportcard.com/report/github.com/na0fu3y/ochakai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,9 +15,22 @@ humans and agents together, and served to Claude Code and every other
 data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
 a bundled web UI. More at [ochak.ai](https://ochak.ai).
 
+[Quick start](#quick-start) · [Architecture](docs/architecture.md) ·
+[Deploy on Cloud Run](deploy/cloudrun/README.md) ·
+[REST API](api/openapi.yaml) · [Changelog](CHANGELOG.md) ·
+[Roadmap](ROADMAP.md) · [Support](SUPPORT.md) ·
+[Contributing](CONTRIBUTING.md)
+
 The whole thing is one Go binary and Postgres, deployable on Cloud Run +
 Cloud SQL for [about $10/month](deploy/cloudrun/README.md). Local
 development needs only Docker.
+
+![The draft review queue: entries agents wrote back, waiting for a human
+to verify or reject them](docs/images/webui-review.png)
+
+This README describes `main`. For what is in the version you are running,
+see the [changelog](CHANGELOG.md) — features documented here may not have
+reached a tagged release yet.
 
 ## Quick start
 
@@ -30,9 +44,14 @@ and try a search; everything goes through the API, so plain curl works
 too:
 
 ```sh
+export OCHAKAI_URL=http://localhost:8080
 go run ./cmd/ochakai create queries/monthly-revenue -f examples/golden-query.md
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
+
+Every client command needs to know which server it is talking to. The
+environment variable is the explicit way and the right one for a trial;
+`ochakai use` (below) saves the choice once you install the CLI.
 
 ### Connect Claude Code
 
@@ -42,6 +61,12 @@ REST API: tool schemas don't occupy the agent's context (`--help` is
 read on demand), output composes
 with pipes, and it resolves Google ID tokens itself, so no proxy process
 is needed against Cloud Run.
+
+Install it from the [releases page](https://github.com/na0fu3y/ochakai/releases)
+— each release carries archives for linux, macOS and Windows on amd64 and
+arm64, a `checksums.txt`, and build provenance you can verify the same way
+as the image (see [Supply chain](#supply-chain)). With a Go toolchain,
+`go install` works too:
 
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
@@ -76,16 +101,40 @@ Stop hook asks it once per data session to save what it learned
 ### MCP
 
 Agents without a shell (Claude Desktop, Gemini Enterprise managed
-agents) connect over MCP, which remains the primary interface. Claude Code can use it too:
+agents) connect over MCP, which remains the primary interface. Claude Code
+can use it too:
 
 ```sh
 claude mcp add --transport http ochakai http://localhost:8080/mcp
 ```
 
+Clients that take a JSON config want the same URL:
+
+```json
+{
+  "mcpServers": {
+    "ochakai": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**The transport is HTTP only — there is no stdio build.** A client that
+speaks nothing but stdio needs a bridge in front of it; every other client
+takes the URL above. Against a Cloud Run deployment the URL is not the
+service URL directly, because the request has to carry a Google ID token:
+run `ochakai ui` and point the client at `http://127.0.0.1:8098/mcp`
+instead. The local proxy resolves your identity the same way every other
+client command does, so the client itself needs no credentials — this is
+the one place a desktop client gets an authenticated path to a private
+deployment. `gcloud run services proxy` works the same way and is what the
+[deploy guide §5](deploy/cloudrun/README.md) documents.
+
 Opening this repository in Claude Code connects automatically via the
 committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
-proxy — see the [deploy guide](deploy/cloudrun/README.md)) on
-`localhost:8787`.
+proxy) on `localhost:8787`.
 
 ### Web UI: the human half of the loop
 
@@ -109,6 +158,12 @@ than something the server observed. And when a cited document changes,
 straight from the source's own line on the entry page. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
+
+![An entry: status, provenance, and the tabs for its attributes, links,
+backlinks, usage and revision history](docs/images/webui-entry.png)
+
+![The re-verification feed, filtered to entries agents reported wrong,
+with the type and status filters above it](docs/images/webui-wrong.png)
 
 Same page, two identities:
 `ochakai ui` serves it on loopback acting as *you* (zero deploy, edits
@@ -191,6 +246,8 @@ And it stays small by refusing things:
 | connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
+| authorization | reachability is the whole access model: **whoever can reach the deployment can read and write everything**. ochakai identifies the caller and records it as provenance, and stops there. Deciding who may reach it is Cloud Run IAM's job, and running it publicly invokable is a misconfiguration, not a deployment mode (design doc [0002](docs/design/0002-authn-authz.md)). If you need per-entry permissions, this is the wrong tool |
+| telemetry | nothing is reported anywhere. The only hosts ochakai ever contacts are the Google Cloud APIs you configure — Cloud SQL, and GCS or Vertex AI if you turn them on. Usage counts are rows in your own database |
 
 ## MCP tools
 
@@ -395,18 +452,33 @@ gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai
 
 ## Design
 
-Architecture decisions live in
-[docs/design/0001-architecture.md](docs/design/0001-architecture.md)
-(Japanese), including the survey of prior art: OpenAI's and Meta's in-house
-data agents, Airbnb Minerva, Uber uMetric, Snowflake's Verified Query
-Repository, dbt-mcp, Vanna, WrenAI, and the 2026 context-layer landscape
-(OpenMetadata, DataHub, Atlan, warehouse-native semantic layers).
+[docs/architecture.md](docs/architecture.md) is the English overview: how
+the pieces fit, what the data model is, and why there is no authorization
+layer.
+
+Underneath it, the decisions themselves live in
+[docs/design](docs/design) as numbered, immutable decision records — the
+[index](docs/design/README.md) groups them by area and marks which ones
+still describe the current state. They are **mostly Japanese**, and they
+are authoritative where they and the prose here disagree.
+[0001](docs/design/0001-architecture.md) carries the survey of prior art:
+OpenAI's and Meta's in-house data agents, Airbnb Minerva, Uber uMetric,
+Snowflake's Verified Query Repository, dbt-mcp, Vanna, WrenAI, and the
+2026 context-layer landscape (OpenMetadata, DataHub, Atlan,
+warehouse-native semantic layers).
 
 ## Contributing
 
 Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
-local setup and the checks CI runs, and [SECURITY.md](SECURITY.md) for
-reporting vulnerabilities.
+local setup and the checks CI runs. A design doc in Japanese is the
+project's own habit, not a requirement: propose in whichever language you
+think in, and say so in the PR.
+
+- [SUPPORT.md](SUPPORT.md) — where to ask a question
+- [ROADMAP.md](ROADMAP.md) — what is being worked on, and what is
+  deliberately refused
+- [CHANGELOG.md](CHANGELOG.md) — what changed between releases
+- [SECURITY.md](SECURITY.md) — reporting vulnerabilities
 
 ## License
 

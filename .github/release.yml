@@ -1,0 +1,59 @@
+# Groups the automatically generated release notes by pull request label.
+# A PR lands in the first category whose labels it carries, so dependabot is
+# excluded from the human categories and collected at the end.
+changelog:
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]
+    - title: Added
+      labels:
+        - enhancement
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]
+    - title: Changed
+      labels:
+        - changed
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]
+    - title: Fixed
+      labels:
+        - bug
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]
+    - title: Security
+      labels:
+        - security
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]
+    - title: Documentation
+      labels:
+        - documentation
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]
+    - title: Dependencies
+      labels:
+        - dependencies
+        - github_actions
+        - go
+    - title: Other changes
+      labels:
+        - "*"
+      exclude:
+        authors:
+          - dependabot
+          - dependabot[bot]

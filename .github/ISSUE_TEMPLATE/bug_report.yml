@@ -1,0 +1,119 @@
+name: Bug report
+description: Something behaves differently from what the docs say.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vulnerabilities do not go here. Report them privately through
+        [GitHub Security Advisories](https://github.com/na0fu3y/ochakai/security/advisories/new)
+        — see [SECURITY.md](https://github.com/na0fu3y/ochakai/blob/main/SECURITY.md).
+        A weakness that only appears when the documented deployment posture is
+        not followed is a documentation issue, and this form is the right place
+        for it.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      description: >-
+        Where you hit it. If the same operation behaves differently depending on
+        the surface, pick every one you tried — that difference is itself the
+        bug (design doc 0015).
+      multiple: true
+      options:
+        - REST (/api/v1)
+        - MCP (/mcp)
+        - CLI (ochakai ...)
+        - Web UI (ochakai ui / serve-ui)
+        - Server startup, migrations, or config
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `ochakai version`, or the image tag you deployed.
+      placeholder: "0.13.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Local, docker compose -f deploy/compose.yaml
+        - Local, go run ./cmd/ochakai with OCHAKAI_INSECURE_DEV
+        - Cloud Run + Cloud SQL
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: input
+    id: postgres
+    attributes:
+      label: PostgreSQL version
+      description: >-
+        `SELECT version()`, the image tag, or the database version shown on the
+        Cloud SQL instance.
+      placeholder: "pgvector/pgvector:pg17"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: embeddings
+    attributes:
+      label: Embeddings
+      description: >-
+        Whether `OCHAKAI_VERTEX_PROJECT` is set. Lexical-only and hybrid search
+        rank by different means and their scores are not comparable, so search
+        reports need this.
+      options:
+        - "Off: OCHAKAI_VERTEX_PROJECT unset, lexical-only"
+        - "On: OCHAKAI_VERTEX_PROJECT set"
+        - Not sure, or not about search
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        The commands or requests you ran, in order. If the content of an entry
+        matters, paste it as OKF markdown.
+      placeholder: |
+        1. ochakai create metrics/revenue -f revenue.md
+        2. ochakai search "revenue" --type Metric
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What you expected, and where you read that — README, a design doc, `--help`, api/openapi.yaml.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: >-
+        What happened instead. Include the error and any relevant server log
+        lines; redact identities and URLs if you need to.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Attachments in GCS, delegation (`OCHAKAI_DELEGATING_CALLERS`), IAP, corpus size — whatever you think is relevant.
+    validations:
+      required: false
