@@ -121,16 +121,34 @@ Clients that take a JSON config want the same URL:
 }
 ```
 
-**The transport is HTTP only — there is no stdio build.** A client that
-speaks nothing but stdio needs a bridge in front of it; every other client
-takes the URL above. Against a Cloud Run deployment the URL is not the
-service URL directly, because the request has to carry a Google ID token:
-run `ochakai ui` and point the client at `http://127.0.0.1:8098/mcp`
-instead. The local proxy resolves your identity the same way every other
-client command does, so the client itself needs no credentials — this is
-the one place a desktop client gets an authenticated path to a private
-deployment. `gcloud run services proxy` works the same way and is what the
-[deploy guide §5](deploy/cloudrun/README.md) documents.
+The server speaks streamable HTTP. Two kinds of client need something in
+front of it: one that can only launch a command and talk over stdio, and
+*any* client pointed at Cloud Run, where the request has to carry a Google
+ID token the client cannot mint. `ochakai mcp-stdio` is both answers —
+it speaks MCP on stdin/stdout and forwards every message to the server,
+resolving your identity the way every other client command does, so the
+client itself is configured with no credentials:
+
+```sh
+claude mcp add ochakai -- ochakai mcp-stdio
+```
+
+```json
+{
+  "mcpServers": {
+    "ochakai": { "command": "ochakai", "args": ["mcp-stdio"] }
+  }
+}
+```
+
+It listens on no port and holds no state; it copies JSON-RPC messages, so
+it carries whatever the server offers rather than a second copy of the
+tool list that could go stale (design doc
+[0038](docs/design/0038-mcp-stdio-bridge.md)). Add `--url` to point it at
+a specific server. `ochakai ui` exposes the same authenticated `/mcp` over
+HTTP for clients that would rather have a URL, and
+`gcloud run services proxy` is the third way, documented in the
+[deploy guide §5](deploy/cloudrun/README.md).
 
 Opening this repository in Claude Code connects automatically via the
 committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
