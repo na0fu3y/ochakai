@@ -1,0 +1,9 @@
+# Local working state. terraform.tfvars names your project and who may reach
+# it; the state file describes your deployment. Neither belongs in this
+# repository — this is a module to copy and adapt, not a deployment.
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfstate
+*.tfstate.*
+crash.log
