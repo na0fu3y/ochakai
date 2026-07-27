@@ -44,7 +44,7 @@ type Config struct {
 	ReadOnly bool
 
 	// PublicReadOnly is the posture for a deployment anyone may reach: a
-	// demo, or a reference-only copy handed out (design doc 0041). It
+	// demo, or a reference-only copy handed out (design doc 0042). It
 	// reads no identity at all — the Authorization header is ignored,
 	// because without Cloud Run IAM in front nothing verified its
 	// signature and believing it would let any caller name any person;
@@ -103,7 +103,7 @@ func FromEnv() (*Config, error) {
 		// The implication is applied here, not checked here: there is no
 		// way to ask for the public posture and not get read-only, so the
 		// dangerous combination never exists to be rejected (design doc
-		// 0041 §2.1). Setting OCHAKAI_READ_ONLY=false alongside it does
+		// 0042 §2.1). Setting OCHAKAI_READ_ONLY=false alongside it does
 		// not turn writes back on.
 		cfg.PublicReadOnly = true
 		cfg.ReadOnly = true
@@ -112,7 +112,7 @@ func FromEnv() (*Config, error) {
 		// Both make every caller anonymous, but insecure dev also lets
 		// anyone delegate, which in public is a stranger naming any
 		// person they like. Refuse rather than silently pick one
-		// (design doc 0041 §2.3).
+		// (design doc 0042 §2.3).
 		return nil, fmt.Errorf("OCHAKAI_PUBLIC_READ_ONLY and OCHAKAI_INSECURE_DEV are both set: " +
 			"the public posture reads no identity, while insecure dev lets any caller claim one")
 	}

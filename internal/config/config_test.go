@@ -39,7 +39,7 @@ func TestGCSBucket(t *testing.T) {
 
 // The public posture implies read-only and cannot be separated from it:
 // not reading provenance is only defensible because nothing is written
-// (design doc 0041 §2.1, §3).
+// (design doc 0042 §2.1, §3).
 func TestPublicReadOnlyImpliesReadOnly(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
 	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")
@@ -57,7 +57,7 @@ func TestPublicReadOnlyImpliesReadOnly(t *testing.T) {
 }
 
 // Both make callers anonymous, but insecure dev also lets anyone
-// delegate. Refuse rather than silently pick one (design doc 0041 §2.3).
+// delegate. Refuse rather than silently pick one (design doc 0042 §2.3).
 func TestPublicReadOnlyRefusesInsecureDev(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
 	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")

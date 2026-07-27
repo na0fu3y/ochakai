@@ -25,7 +25,7 @@ ochakai's security posture is deliberately narrow (see
   believes nothing: `OCHAKAI_PUBLIC_READ_ONLY` reads no identity at all
   and refuses every write (design docs
   [0040](docs/design/0040-read-only-mode.md),
-  [0041](docs/design/0041-public-read-only.md)). A deployment that is
+  [0042](docs/design/0042-public-read-only.md)). A deployment that is
   publicly readable and writable is not a configuration ochakai accepts.
   A report that this posture reads a header it should not, or that a
   write reaches the database through it, is a vulnerability.
