@@ -98,6 +98,24 @@ For the shape of the system rather than the history of it, read
 
 ## The knowledge model — structure, ids, types, names, links
 
+- **[0041 Scoping a search by address](0041-path-scoped-search.md)** —
+  *Accepted.* Carries 0017's "the path is the address" into search and
+  `get_context`, which could filter by type, status, tag and source but
+  never by id. Adds a repeatable `prefix` filter matching whole segments —
+  `metrics` covers `metrics/revenue` and `metrics` itself, never
+  `metrics-legacy/churn` — and combining with a query or any `sort`.
+  Repeatable because the ordinary question is "my team's scope *and* the
+  company's" and splitting it into two calls would merge two unrelated
+  rankings. No index and no migration; a scope layout like
+  `teams/<team>/…` stays a convention the server knows nothing about.
+  *For a user:* `?prefix=` on REST, `--prefix` on the CLI, a `prefixes`
+  argument on the existing MCP tools, and a filter plus a "search here"
+  action on the browse tree in the web UI. It is **not** an access
+  boundary: anyone may pass any prefix, and passing none returns
+  everything (0002 — separate deployments are still the answer for a
+  viewing boundary). It only helps where directories mean something a
+  `type` cannot say, such as a team or a tenant.
+
 - **[0037 Making declared expiry and cited sources
   queryable](0037-stale-and-source-lookup.md)** — *Accepted, shipped in
   0.14.0.* `stale_after` and `sources` were writable but not askable.
@@ -145,8 +163,9 @@ For the shape of the system rather than the history of it, read
 
 - **[0017 The path is the address; the type is an
   attribute](0017-path-addressing.md)** — *Accepted; the id character set
-  was relaxed by 0019 §2 and the type vocabulary replaced by 0023 and
-  0038.* Removes the rule that a path's first segment names the type. The
+  was relaxed by 0019 §2, the type vocabulary replaced by 0023 and 0038,
+  and filtering by address added by 0041.* Removes the rule that a path's
+  first segment names the type. The
   full path is the id and the sole address; the primary key becomes the id
   alone. A file with no frontmatter `type` is skipped and reported rather
   than having a type inferred from where it sits.
