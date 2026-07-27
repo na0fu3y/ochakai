@@ -83,6 +83,23 @@ func requestCtx(ctx context.Context, cfg *config.Config, req extraProvider) (con
 	return httpauth.WithActor(ctx, actor), actor, nil
 }
 
+// tool adapts a handler to the shape mcp.AddTool takes, running requestCtx
+// first so the context the handler receives already carries the per-call
+// actor. Registering every tool through here is what makes the "handler
+// forgot requestCtx" failure impossible instead of merely convention.
+func tool[In, Out any](svc *service.Service,
+	fn func(ctx context.Context, actor domain.Actor, in In) (*mcp.CallToolResult, Out, error),
+) func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		ctx, actor, err := requestCtx(ctx, svc.Config, req)
+		if err != nil {
+			var zero Out
+			return nil, zero, err
+		}
+		return fn(ctx, actor, in)
+	}
+}
+
 func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
 		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
@@ -177,11 +194,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"source is a filter rather than a mode: it narrows to the entries citing one resource — use it " +
 			"when a source document changed and you need everything derived from it — and combines with a " +
 			"query or with any sort.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
-		ctx, _, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, searchOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source,
@@ -191,7 +204,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, searchOut{}, err
 		}
 		return nil, searchOut{Hits: hits}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_context",
@@ -203,11 +216,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"fall back to search_knowledge/get_knowledge for precise lookups. \"entries\" is the " +
 			"knowledge; \"hits\" is only the ranking behind it. Entries that do not fit the byte " +
 			"budget are listed under \"outline\" — fetch any of them by id with get_knowledge.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in contextIn) (*mcp.CallToolResult, contextOut, error) {
-		ctx, _, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, contextOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in contextIn) (*mcp.CallToolResult, contextOut, error) {
 		budget := in.Budget
 		if budget <= 0 {
 			budget = defaultContextBudget
@@ -226,7 +235,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Hits: res.Hits, Entries: res.Entries, Outline: res.Outline,
 			Truncated: res.Truncated, Hint: contextHint(res.Truncated),
 		}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_knowledge",
@@ -234,17 +243,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Description: "Get one knowledge entry by id, including its full markdown body, structured attrs, " +
 			"links, and attachment metadata (files the body references: images, PDFs, plain-text data — " +
 			"fetch bytes with get_attachment).",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		ctx, _, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, knowledgeOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
 		return nil, knowledgeOut{Knowledge: *k}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_knowledge",
@@ -271,17 +276,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"An id whose entry was deleted can be reused, which revives it as your draft — unless a human had " +
 			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
 			"different id instead.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		ctx, actor, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, knowledgeOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.CreateKeepingCurated(ctx, in.toKnowledge(), actor)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
 		return nil, knowledgeOut{Knowledge: *k}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
@@ -297,11 +298,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Setting status=verified records you as verified_by — " +
 			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
 			"as rejected_by; put the reason in status_note (also useful when deprecating).",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		ctx, actor, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, knowledgeOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		// MCP has no conditional-update channel, so it cannot opt into the
 		// If-Match precondition (nil) and writes are last-write-wins. That
 		// is tolerable for drafts and not for curated knowledge, so
@@ -319,7 +316,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, knowledgeOut{}, err
 		}
 		return nil, knowledgeOut{Knowledge: *k}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "delete_knowledge",
@@ -328,11 +325,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"create_knowledge on the same id revives it. Entries a human has ruled on — verified, " +
 			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
 			"entry and recreating it would erase the record of why it was turned down.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, deleteOut, error) {
-		ctx, actor, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, deleteOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, actor domain.Actor, in getIn) (*mcp.CallToolResult, deleteOut, error) {
 		// Delete has no precondition channel in the store, so a curation
 		// landing in the window between check and delete still wins. The
 		// window is a single round trip and the delete is revivable.
@@ -343,7 +336,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, deleteOut{}, err
 		}
 		return nil, deleteOut{Deleted: true, URI: uriScheme + in.ID}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_attachment",
@@ -355,11 +348,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
 			"if you learn something from one, write it back into the entry's body with " +
 			"update_knowledge so the knowledge becomes searchable text.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
-		ctx, _, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, attachmentOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
 		att, data, err := svc.Attachment(ctx, in.ID, in.Name)
 		if err != nil {
 			return nil, attachmentOut{}, err
@@ -382,7 +371,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		}
 		res := &mcp.CallToolResult{Content: []mcp.Content{content}}
 		return res, attachmentOut{Attachment: *att}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_knowledge_usage",
@@ -391,17 +380,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"was fetched individually, and how it was reported to have worked, with last_used_at. " +
 			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
 			"and a staleness signal for verified entries that stopped being used.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, usageOut, error) {
-		ctx, _, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, usageOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, usageOut, error) {
 		u, err := svc.Usage(ctx, in.ID)
 		if err != nil {
 			return nil, usageOut{}, err
 		}
 		return nil, usageOut{Usage: *u}, nil
-	})
+	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "report_outcome",
@@ -412,11 +397,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Reports feed the entry's usage totals (get_knowledge_usage), where failed counts " +
 			"against verified entries flag them for re-verification. Your identity is recorded " +
 			"with each report. Returns the entry's updated usage totals.",
-	}, func(ctx context.Context, req *mcp.CallToolRequest, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
-		ctx, _, err := requestCtx(ctx, svc.Config, req)
-		if err != nil {
-			return nil, usageOut{}, err
-		}
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
 		id := strings.TrimPrefix(in.Target, uriScheme)
 		if !domain.ValidID(id) {
 			return nil, usageOut{}, fmt.Errorf("invalid target %q (want the entry's id, e.g. queries/monthly-revenue)", in.Target)
@@ -426,7 +407,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, usageOut{}, err
 		}
 		return nil, usageOut{Usage: *u}, nil
-	})
+	}))
 
 	return s
 }

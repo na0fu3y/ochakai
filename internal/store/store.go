@@ -166,6 +166,56 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 	rejected_by_kind, rejected_by_name, rejected_by_via, rejected_at,
 	links, attrs, body, created_at, updated_at`
 
+// The SQL fragments that restate knowledgeCols are derived from it once,
+// so an envelope column is added by editing the list and knowledgeDest —
+// not by hunting down hand-written copies in each write path.
+var (
+	knowledgeColNames = func() []string {
+		cols := strings.Split(knowledgeCols, ",")
+		for i, c := range cols {
+			cols[i] = strings.TrimSpace(c)
+		}
+		return cols
+	}()
+
+	// knowledgeParams is the "$1,...,$N" placeholder list matching
+	// knowledgeCols; an argument past the columns is $len+1.
+	knowledgeParams = func() string {
+		params := make([]string, len(knowledgeColNames))
+		for i := range params {
+			params[i] = fmt.Sprintf("$%d", i+1)
+		}
+		return strings.Join(params, ",")
+	}()
+
+	// knowledgeExcluded assigns every column except the key from EXCLUDED,
+	// for Create's revive-in-place upsert. A column missing here would
+	// silently keep the tombstone's stale value on revival, with no error
+	// anywhere — which is why the list is derived rather than written out.
+	knowledgeExcluded = func() string {
+		var parts []string
+		for _, c := range knowledgeColNames {
+			if c == "id" {
+				continue
+			}
+			parts = append(parts, c+"=EXCLUDED."+c)
+		}
+		return strings.Join(parts, ", ")
+	}()
+
+	// knowledgeColsK is knowledgeCols with every column prefixed by "k",
+	// the alias every query that joins another table gives the knowledge
+	// table. Built once: the column list is fixed at compile time, so
+	// re-splitting it per query bought nothing.
+	knowledgeColsK = func() string {
+		cols := make([]string, len(knowledgeColNames))
+		for i, c := range knowledgeColNames {
+			cols[i] = "k." + c
+		}
+		return strings.Join(cols, ", ")
+	}()
+)
+
 // knowledgeDest returns the scan destinations for knowledgeCols targeting
 // k, plus a finish func that decodes the JSON columns and nullable actors
 // after the scan. Row shapes with trailing columns (score, usage totals)
@@ -328,7 +378,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 	// instead of being erased by it.
 	revive := ""
 	if keepCuratedTombstones {
-		revive = ` AND knowledge.status <> ALL($36::text[])`
+		revive = fmt.Sprintf(` AND knowledge.status <> ALL($%d::text[])`, len(knowledgeColNames)+1)
 	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		j, err := marshalJSONFields(k)
@@ -358,26 +408,8 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			args = append(args, curated)
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
-			        $26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
-			ON CONFLICT (id) DO UPDATE SET
-				type=EXCLUDED.type,
-				title=EXCLUDED.title, description=EXCLUDED.description, resource=EXCLUDED.resource, tags=EXCLUDED.tags,
-				status=EXCLUDED.status, status_note=EXCLUDED.status_note, stale_after=EXCLUDED.stale_after,
-				sources=EXCLUDED.sources, usage_window=EXCLUDED.usage_window,
-				runtime=EXCLUDED.runtime, parameters=EXCLUDED.parameters, computation=EXCLUDED.computation,
-				executor=EXCLUDED.executor, attester=EXCLUDED.attester,
-				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
-				created_by_via=EXCLUDED.created_by_via,
-				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
-				updated_by_via=EXCLUDED.updated_by_via,
-				verified_by_kind=EXCLUDED.verified_by_kind, verified_by_name=EXCLUDED.verified_by_name,
-				verified_by_via=EXCLUDED.verified_by_via, verified_at=EXCLUDED.verified_at,
-				rejected_by_kind=EXCLUDED.rejected_by_kind, rejected_by_name=EXCLUDED.rejected_by_name,
-				rejected_by_via=EXCLUDED.rejected_by_via, rejected_at=EXCLUDED.rejected_at,
-				links=EXCLUDED.links, attrs=EXCLUDED.attrs, body=EXCLUDED.body,
-				created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at,
-				deleted_at=NULL
+			VALUES (`+knowledgeParams+`)
+			ON CONFLICT (id) DO UPDATE SET `+knowledgeExcluded+`, deleted_at=NULL
 			WHERE knowledge.deleted_at IS NOT NULL`+revive,
 			args...)
 		if err != nil {
@@ -1581,18 +1613,6 @@ func marshalJSONFields(k *domain.Knowledge) (knowledgeJSON, error) {
 	}
 	return j, nil
 }
-
-// knowledgeColsK is knowledgeCols with every column prefixed by "k", the
-// alias every query that joins another table gives the knowledge table.
-// Built once: the column list is fixed at compile time, so re-splitting it
-// per query bought nothing.
-var knowledgeColsK = func() string {
-	cols := strings.Split(knowledgeCols, ",")
-	for i, c := range cols {
-		cols[i] = "k." + strings.TrimSpace(c)
-	}
-	return strings.Join(cols, ", ")
-}()
 
 // escapeLike neutralizes the LIKE/ILIKE pattern metacharacters '%' and '_'
 // in a user query so it matches literally. PostgreSQL's default LIKE escape

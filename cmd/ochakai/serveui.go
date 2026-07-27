@@ -24,7 +24,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
@@ -35,7 +34,6 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
-	"github.com/na0fu3y/ochakai/internal/webui"
 )
 
 func serveUI(log *slog.Logger) error {
@@ -75,16 +73,10 @@ func serveUI(log *slog.Logger) error {
 // serveUIHandler serves the embedded page at / plus /health, and routes
 // /api/v1 and /mcp through proxy.
 func serveUIHandler(proxy http.Handler) http.Handler {
-	mux := http.NewServeMux()
+	mux := webUIMux(proxy)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(webui.Index)
-	})
-	mux.Handle("/api/v1/", proxy)
-	mux.Handle("/mcp", proxy)
 	return mux
 }
 
@@ -93,49 +85,24 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 // token in X-Serverless-Authorization, the header Cloud Run validates in
 // preference to Authorization.
 //
-// Both credential headers are dropped before that, whatever the browser
-// sent and whether or not a token is available, as `ochakai ui` drops
-// them. httpauth reads Authorization when X-Serverless-Authorization is
-// absent, so a token fetch that fails — the one moment the proxy has no
-// identity of its own — is exactly when a forwarded browser header would
-// get to name the actor instead.
-//
 // When iap is non-nil the request is additionally attributed to the
 // person driving the browser, taken from IAP's signed assertion (design
-// doc 0032). The delegation header is stripped either way: whatever the
-// browser sent is a claim about identity from the one party with no
-// standing to make it.
+// doc 0032). The inbound delegation header is stripped either way, before
+// the IAP identity may set a verified one.
 func newServiceProxy(target *url.URL, tokens serviceTokenSource, iap iapVerifier, log *slog.Logger) http.Handler {
-	// Rewrite rather than Director: it drops the browser's X-Forwarded-*
-	// headers instead of appending to them, which is what we want from a
-	// proxy that trusts nothing the page sends.
-	proxy := &httputil.ReverseProxy{Rewrite: func(r *httputil.ProxyRequest) {
-		r.SetURL(target) // also points the outbound Host at the target
-		// Whatever the browser sent, this proxy speaks as the service.
-		r.Out.Header.Del("Authorization")
-		r.Out.Header.Del("X-Serverless-Authorization")
+	proxy := newCredentialProxy(target, func(h http.Header) {
 		// Cloud Run service-to-service auth; harmless if unavailable
 		// (e.g. running locally against an unrestricted ochakai).
 		if tok, err := tokens.token(); err == nil {
-			r.Out.Header.Set("X-Serverless-Authorization", "Bearer "+tok)
+			h.Set("X-Serverless-Authorization", "Bearer "+tok)
 		} else {
 			log.Warn("no service identity token; forwarding without it", "error", err)
 		}
-	}}
+	})
 	if iap == nil {
 		return stripDelegation(proxy)
 	}
 	return stripDelegation(withIAPIdentity(proxy, iap, log))
-}
-
-// stripDelegation removes an inbound delegation header. It wraps the
-// handler that may legitimately set one, so it runs first and cannot
-// undo it.
-func stripDelegation(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Header.Del(httpauth.OnBehalfOfHeader)
-		next.ServeHTTP(w, r)
-	})
 }
 
 // withIAPIdentity names the end user on each proxied request from IAP's

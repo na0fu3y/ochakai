@@ -188,3 +188,39 @@ func TestUIHandlerStripsDelegationHeader(t *testing.T) {
 		t.Errorf("%s reached the server as %q, want it stripped", httpauth.OnBehalfOfHeader, v)
 	}
 }
+
+// X-Serverless-Authorization is the other credential header httpauth
+// reads, and it reads it *in preference to* Authorization. Forwarding
+// what the browser sent would therefore let a page override the very
+// identity this proxy exists to attach, so it is dropped alongside
+// Authorization rather than only instead of it.
+func TestUIHandlerStripsServerlessAuthorization(t *testing.T) {
+	var got http.Header
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer backend.Close()
+
+	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "id-token"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := httptest.NewServer(h)
+	defer local.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req.Header.Set("X-Serverless-Authorization", "Bearer browser-supplied")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	if v := got.Get("X-Serverless-Authorization"); v != "" {
+		t.Errorf("X-Serverless-Authorization reached the server as %q, want it stripped", v)
+	}
+	if auth := got.Get("Authorization"); auth != "Bearer id-token" {
+		t.Errorf("upstream Authorization = %q, want the CLI user's token", auth)
+	}
+}
