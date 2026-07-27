@@ -56,46 +56,7 @@ func Handler(svc *service.Service) http.Handler {
 			Tags:     q["tag"],
 			Source:   q.Get("source"),
 		}
-		if sort := q.Get("sort"); sort != "" {
-			if !domain.ValidListSort(sort) {
-				writeError(w, service.Invalidf("invalid sort (valid: %s)", strings.Join(domain.ListSorts, ", ")))
-				return
-			}
-			if q.Get("q") != "" {
-				writeError(w, service.Invalidf("sort=%s lists entries; it cannot be combined with a search query (q)", sort))
-				return
-			}
-			var hits []domain.SearchHit
-			switch sort {
-			case "usage":
-				hits, err = svc.ListByUsage(r.Context(), f, limit)
-			case "failed":
-				hits, err = svc.ListByFailed(r.Context(), f, limit)
-			case "stale_after":
-				hits, err = svc.ListByStaleAfter(r.Context(), f, limit)
-			default:
-				hits, err = svc.ListByVerifiedAt(r.Context(), f, limit)
-			}
-			if err != nil {
-				writeError(w, err)
-				return
-			}
-			writeHits(w, r, svc, hits)
-			return
-		}
-		// A source filter with nothing to search by is the reverse lookup:
-		// "what derives from this material" has no text to rank, so it
-		// lists (design doc 0037 §2.3).
-		if q.Get("q") == "" && f.Source != "" {
-			hits, err := svc.ListBySource(r.Context(), f, limit)
-			if err != nil {
-				writeError(w, err)
-				return
-			}
-			writeHits(w, r, svc, hits)
-			return
-		}
-		hits, err := svc.Search(r.Context(), q.Get("q"), f, limit)
+		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
 		if err != nil {
 			writeError(w, err)
 			return

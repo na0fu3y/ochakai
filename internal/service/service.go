@@ -790,61 +790,85 @@ func jsonSize(v any) int {
 	return len(b)
 }
 
-// ListByVerifiedAt lists entries by verification age, oldest first — the
-// feed for canary runs over verified golden queries (see
-// docs/guides/golden-query-canary.md). Not a search: no usage is recorded.
-// Results are SearchHits with score 0, so the REST and MCP responses keep
-// the exact wire shape of a search across both modes.
-func (s *Service) ListByVerifiedAt(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
-	}
-	entries, err := s.Store.ListByVerifiedAt(ctx, f, limit)
-	if err != nil {
-		return nil, err
-	}
-	hits := make([]domain.SearchHit, len(entries))
-	for i, k := range entries {
-		hits[i] = domain.SearchHit{Knowledge: k}
-	}
-	return hits, nil
-}
-
-// ListBySource lists the entries citing one resource — the reverse of
-// sources[].resource (design doc 0037 §2.3). Reached when a caller gives
-// a source filter and nothing to search by: the question is "what derives
-// from this material", which has no text to rank. Not a search: no usage
-// is recorded, and hits carry score 0 like every other list mode.
-func (s *Service) ListBySource(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
-	}
-	entries, err := s.Store.ListBySource(ctx, f, limit)
-	if err != nil {
-		return nil, err
-	}
-	hits := make([]domain.SearchHit, len(entries))
-	for i, k := range entries {
-		hits[i] = domain.SearchHit{Knowledge: k}
-	}
-	return hits, nil
-}
-
-// ListByStaleAfter lists the entries whose declared expiry has passed,
-// most overdue first — the feed for knowledge its own author dated
-// (design doc 0037 §2.1). Only entries stale today: a date that has not
-// come due is not work yet.
+// SearchOrList answers the query surface REST (GET /api/v1/knowledge) and
+// MCP (search_knowledge) both expose, so the two cannot drift: one place
+// decides whether a request searches or lists, validates the mode, and
+// runs it. A sort mode names one of the listing feeds (see list); with no
+// sort, a source filter and no query is the reverse lookup; otherwise it
+// is a search.
 //
-// The one feed verifying does not empty. verified_at and failed are
-// server observations, and re-checking updates them; stale_after is what
-// the writer declared, so clearing it means editing the entry to declare
-// a new expiry (design doc 0037 §2.2). Not a search: no usage recorded,
-// score 0, same wire shape as every other list mode.
-func (s *Service) ListByStaleAfter(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
+// Sort and query are mutually exclusive rather than combined: a feed is a
+// queue a reviewer works through, and ranking it by relevance to a query
+// would leave the reviewer with neither the whole queue nor the best
+// matches. The CLI refuses the same pair before it ever gets here.
+func (s *Service) SearchOrList(ctx context.Context, query, sort string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	if sort != "" {
+		if !domain.ValidListSort(sort) {
+			return nil, Invalidf("invalid sort %q (valid: %s)", sort, strings.Join(domain.ListSorts, ", "))
+		}
+		if strings.TrimSpace(query) != "" {
+			return nil, Invalidf("sort=%s lists entries; it cannot be combined with a search query", sort)
+		}
+		return s.list(ctx, sort, f, limit)
+	}
+	// A source filter with nothing to search by is the reverse lookup:
+	// "what derives from this material" has no text to rank, so it lists
+	// (design doc 0037 §2.3).
+	if strings.TrimSpace(query) == "" && f.Source != "" {
+		return s.list(ctx, sortBySource, f, limit)
+	}
+	return s.Search(ctx, query, f, limit)
+}
+
+// sortBySource is the listing mode a source filter with no query selects.
+// Not one of domain.ListSorts: no caller can ask for it by name, because
+// the filter already says what is wanted.
+const sortBySource = "source"
+
+// list runs one of the listing feeds. None of them is a search: no usage
+// is recorded (reading a review queue must not inflate the very signal it
+// ranks by), and every hit carries score 0, so the REST and MCP responses
+// keep the exact wire shape of a search across all modes.
+//
+//   - verified_at — by verification age, oldest first (never-verified
+//     last): the feed for canary runs over verified golden queries (see
+//     docs/guides/golden-query-canary.md).
+//   - usage — by demand, most-searched first, never-used drafts
+//     oldest-first at the bottom: the web UI's draft review queue. Hits
+//     carry their usage totals so the reviewer sees the evidence inline.
+//   - failed — entries whose failure reports are still unanswered, worst
+//     first: the re-verification feed (design doc 0025), the
+//     evidence-based counterpart to verified_at. Verifying (or rejecting)
+//     takes an entry out of it, so a base that is kept up yields an empty
+//     one. Hits carry their usage totals.
+//   - stale_after — entries whose declared expiry has passed, most
+//     overdue first (design doc 0037 §2.1); only entries stale today, a
+//     date that has not come due is not work yet. The one feed verifying
+//     does not empty: verified_at and failed are server observations,
+//     while stale_after is what the writer declared, so clearing it means
+//     editing the entry to declare a new expiry (design doc 0037 §2.2).
+//   - source — the entries citing one resource, the reverse of
+//     sources[].resource (design doc 0037 §2.3).
+func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	entries, err := s.Store.ListByStaleAfter(ctx, f, limit)
+	// The two usage feeds rank by the usage totals and hand them back with
+	// each hit, so they are hits already.
+	switch sort {
+	case "usage":
+		return s.Store.ListByUsage(ctx, f, limit)
+	case "failed":
+		return s.Store.ListByFailed(ctx, f, limit)
+	}
+	list := s.Store.ListByVerifiedAt
+	switch sort {
+	case "stale_after":
+		list = s.Store.ListByStaleAfter
+	case sortBySource:
+		list = s.Store.ListBySource
+	}
+	entries, err := list(ctx, f, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -853,34 +877,6 @@ func (s *Service) ListByStaleAfter(ctx context.Context, f store.Filter, limit in
 		hits[i] = domain.SearchHit{Knowledge: k}
 	}
 	return hits, nil
-}
-
-// ListByUsage lists entries by demand — most-searched first, never-used
-// drafts oldest-first at the bottom — for the web UI draft review queue.
-// Not a search: no usage is recorded (reading the queue must not inflate
-// the very signal it ranks by). Each hit carries its usage totals; score
-// is 0, keeping the wire shape of a search across all list modes.
-func (s *Service) ListByUsage(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
-	}
-	return s.Store.ListByUsage(ctx, f, limit)
-}
-
-// ListByFailed lists entries whose failure reports are still unanswered,
-// worst first — the re-verification feed (design doc 0025): in-force
-// knowledge that callers report is producing wrong results, the
-// evidence-based counterpart to the verified_at feed. Verifying an entry
-// (or rejecting it) takes it out of the feed, so a base that is kept up
-// yields an empty one. Not a search: no usage is recorded (triaging the
-// queue must not inflate the signal it ranks by). Each hit carries its
-// usage totals; score is 0, keeping the wire shape of a search across all
-// list modes.
-func (s *Service) ListByFailed(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
-	}
-	return s.Store.ListByFailed(ctx, f, limit)
 }
 
 // Revisions returns an entry's change history, newest first — the

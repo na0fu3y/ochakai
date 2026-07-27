@@ -173,13 +173,8 @@ func cmdWhoami(ctx context.Context, args []string) error {
 		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nand whether the server is reachable.",
 		"  ochakai whoami\n  ochakai whoami --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
+	if _, err := exactArgs(fs, args, 0); err != nil {
 		return err
-	}
-	if len(pos) != 0 {
-		fs.Usage()
-		return errReported
 	}
 	if *target == "" {
 		return errors.New("no server selected: run `ochakai use <url>`, set OCHAKAI_URL, or pass --url")

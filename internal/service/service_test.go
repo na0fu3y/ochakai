@@ -112,6 +112,33 @@ func TestSearchRejectsEmptyQuery(t *testing.T) {
 	}
 }
 
+// TestSearchOrListValidation pins the mode rules REST and MCP both
+// delegate here, so the two surfaces cannot answer the same request
+// differently: an unknown sort is a client error, and a sort combined
+// with a query is one for every mode in domain.ListSorts (a feed is a
+// queue to work through, not something to rank by relevance). All of it
+// runs before any store access — the Service below has none.
+func TestSearchOrListValidation(t *testing.T) {
+	s := &Service{}
+	ctx := context.Background()
+	var inputErr *InvalidInputError
+
+	_, err := s.SearchOrList(ctx, "", "created_at", store.Filter{}, 0)
+	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "invalid sort") {
+		t.Errorf("unknown sort: got %v, want an invalid-sort InvalidInputError", err)
+	}
+	for _, sort := range domain.ListSorts {
+		_, err := s.SearchOrList(ctx, "revenue", sort, store.Filter{}, 0)
+		if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "cannot be combined") {
+			t.Errorf("sort=%s with a query: got %v, want a cannot-be-combined InvalidInputError", sort, err)
+		}
+	}
+	if _, err := s.SearchOrList(ctx, "  ", "", store.Filter{}, 0); !errors.As(err, &inputErr) ||
+		!strings.Contains(err.Error(), "needs a query") {
+		t.Errorf("neither query nor sort: got %v, want a needs-a-query InvalidInputError", err)
+	}
+}
+
 // TestReportOutcomeValidation pins the input checks that run before any
 // store access: an unknown outcome and an oversized note are client
 // errors (InvalidInputError → 400), never a nil-store panic.
