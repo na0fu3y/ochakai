@@ -22,6 +22,12 @@ public issue is the wrong place, and the private path exists for exactly that.
 
 Most answers are already written down, and the docs are short enough to check:
 
+- [docs/faq.md](docs/faq.md) — the questions this project's shape invites:
+  whether it runs outside Google Cloud, whether anything leaves your project,
+  what an agent may do to verified knowledge, what happens if you leave.
+- [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md) — symptoms
+  and their causes on the local and client side, from an empty search to a
+  skipped import to a 412.
 - [README](README.md) — what ochakai is, the configuration table, and the
   things it deliberately does not do.
 - [deploy/cloudrun/README.md](deploy/cloudrun/README.md) — the full Cloud Run +

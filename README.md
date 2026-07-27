@@ -600,6 +600,8 @@ local setup and the checks CI runs. A design doc in Japanese is the
 project's own habit, not a requirement: propose in whichever language you
 think in, and say so in the PR.
 
+- [docs/faq.md](docs/faq.md) — the questions this shape invites, and
+  [troubleshooting](docs/guides/troubleshooting.md) for the symptoms
 - [SUPPORT.md](SUPPORT.md) — where to ask a question
 - [ROADMAP.md](ROADMAP.md) — what is being worked on, and what is
   deliberately refused
