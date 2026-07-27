@@ -216,6 +216,9 @@ straight from the source's own line on the entry page. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
 
+![The knowledge base as a folder tree: an entry's id is its path, so the
+sidebar is the way in](docs/images/webui-tree.png)
+
 ![An entry: status, provenance, and the tabs for its attributes, links,
 backlinks, usage and revision history](docs/images/webui-entry.png)
 
