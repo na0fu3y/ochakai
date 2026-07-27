@@ -41,6 +41,17 @@ load-bearing one is `exhaustive`: a `switch` over `domain.Status` or
 `domain.Type` that names every case and no `default` must keep naming
 every case when a value is added.
 
+`go test` runs the fuzz targets' seed corpora like ordinary tests, which
+is what CI does. Fuzzing proper is a local tool — reach for it when
+touching the OKF parser, id validity, or link derivation:
+
+```sh
+go test ./internal/okf/ -run XXX -fuzz FuzzDocumentRoundTrip -fuzztime 60s
+```
+
+A failing input lands in `testdata/fuzz/` and becomes a permanent seed;
+commit it with the fix.
+
 The store integration test is skipped unless a real PostgreSQL is
 available (CI runs one as a service container):
 
