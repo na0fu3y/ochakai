@@ -290,7 +290,7 @@ paths:
                 noQuery:
                   summary: Neither q nor sort was given
                   value:
-                    error: search needs a query; use sort=verified_at, usage, or failed to list entries without one
+                    error: search needs a query; use sort=verified_at|usage|failed|stale_after to list entries without one, or source=URI to list what cites a resource
     post:
       operationId: createKnowledge
       summary: Create a knowledge entry
