@@ -137,6 +137,14 @@ func TestSearchOrListValidation(t *testing.T) {
 		!strings.Contains(err.Error(), "needs a query") {
 		t.Errorf("neither query nor sort: got %v, want a needs-a-query InvalidInputError", err)
 	}
+	// The way out of that error is a listing mode, so the message has to
+	// name all of them. It named three for as long as there were three.
+	_, err = s.SearchOrList(ctx, "", "", store.Filter{}, 0)
+	for _, sort := range domain.ListSorts {
+		if !strings.Contains(err.Error(), sort) {
+			t.Errorf("the needs-a-query message never mentions sort=%s: %v", sort, err)
+		}
+	}
 }
 
 // TestReportOutcomeValidation pins the input checks that run before any

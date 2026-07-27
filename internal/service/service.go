@@ -541,7 +541,11 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	// query into fragments and gets none, so guard here — once, for
 	// every surface — and point the caller at the listing modes.
 	if strings.TrimSpace(query) == "" {
-		return nil, Invalidf("search needs a query; use sort=verified_at, usage, or failed to list entries without one")
+		// The modes come from domain.ListSorts rather than a sentence:
+		// this message named three of them for as long as there were
+		// three, and stale_after (design doc 0037) never reached it.
+		return nil, Invalidf("search needs a query; use sort=%s to list entries without one, "+
+			"or source=URI to list what cites a resource", strings.Join(domain.ListSorts, "|"))
 	}
 	hits, err := s.search(ctx, query, f, limit)
 	if err != nil {
