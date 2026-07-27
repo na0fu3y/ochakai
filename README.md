@@ -487,8 +487,17 @@ markdown footnote in the body can attribute a single claim to it.
 `verified` is who confirmed it — absent means unverified, and a `human:`
 entry is what makes it human-reviewed (SPEC §5.3). ochakai's `verified`
 status is exactly that: `stable` plus a verification, which is where a
-v0.2 consumer looks. The reverse mapping keeps the round-trip exact
-without treating a foreign bundle's `stable` as reviewed.
+v0.2 consumer looks, and reading it back the same way makes ochakai's own
+export round-trip exactly.
+
+A foreign bundle is where that mapping costs something. `stable` with no
+`verified` entry is not read as reviewed — OKF puts human review in
+`verified`, and `stable` alone only says the entry is fit to consume — but
+ochakai has no status meaning *stable and unverified*, so such an entry
+lands as a draft and exports as one. The lifecycle value its producer
+wrote does not survive the trip. Import says so rather than doing it
+quietly, and the content itself is untouched; adding a `verified` entry
+naming who checked it is what makes it verified here.
 
 ochakai **records** these; it never acts on them. It does not fetch a
 source's `resource`, score its credibility signals, or run an Attested

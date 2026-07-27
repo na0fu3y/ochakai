@@ -204,9 +204,22 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, []string, error) {
 		// A v0.1 document says the same thing with the flat keys.
 		_, hasVerified = raw["verified_at"]
 	}
-	status, known := domain.StatusFromOKF(strings.TrimSpace(fm.status), hasVerified)
-	if !known {
+	rawStatus := strings.TrimSpace(fm.status)
+	status, known := domain.StatusFromOKF(rawStatus, hasVerified)
+	switch {
+	case !known:
 		notes = append(notes, fmt.Sprintf("status %q is not an OKF lifecycle value (draft, stable, deprecated); read as %s", fm.status, status))
+	case rawStatus == domain.OKFStatusStable && !hasVerified:
+		// Refusing to read stable as verified is deliberate: SPEC §5.3
+		// puts the trust tier in `verified`, and stable only means
+		// consumable (design doc 0036 §3.4). But ochakai has no status
+		// for "stable and unverified", so the entry lands as a draft and
+		// exports as one — the producer's lifecycle value does not
+		// survive the round trip. That is a reinterpretation, and 0036
+		// §3.4's own rule is that a reinterpretation is never silent.
+		notes = append(notes, "status \"stable\" with no verified entry: read as draft, because "+
+			"OKF puts human review in `verified` (SPEC §5.3) and stable alone does not assert it. "+
+			"The entry keeps its content; if it was reviewed, add a verified entry naming who checked it")
 	}
 	if !domain.ValidStaleAfter(fm.staleAfter) {
 		notes = append(notes, fmt.Sprintf("stale_after %q is not a YYYY-MM-DD date; dropped", fm.staleAfter))
