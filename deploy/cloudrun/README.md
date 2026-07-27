@@ -18,6 +18,14 @@ Cloud SQL dominates the bill. Regions in Asia (e.g. `asia-northeast1`) cost
 slightly more; pick what matches your latency needs. Teardown commands are
 at the bottom.
 
+**Prefer infrastructure as code?**
+[deploy/terraform](../terraform) stands up §1–§4b (and §5b's web UI) as a
+Terraform module, so a deployment can be reviewed as a diff, reproduced per
+environment, and destroyed cleanly. This guide stays the reference: it
+explains why each piece is shaped the way it is, and covers the parts the
+module deliberately leaves out — §5c, §6's org-policy guardrails, and §8's
+upgrade notes.
+
 ## 1. Prerequisites
 
 ```sh

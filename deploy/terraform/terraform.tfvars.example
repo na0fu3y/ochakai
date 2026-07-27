@@ -1,0 +1,43 @@
+# Copy to terraform.tfvars and edit. The three required values first.
+
+project_id = "your-project"
+region     = "us-central1"
+
+# Pin a released version, not "latest", so a redeploy is a decision:
+# https://github.com/na0fu3y/ochakai/releases
+image_tag = "0.13.0"
+
+# Who can reach ochakai. This is the whole access-control surface — whoever
+# reaches it can read and write everything. Never allUsers.
+invoker_members = [
+  "domain:your-org.example",
+]
+
+# Everything below is optional and off by default. Uncommenting nothing gives
+# the ~$10/month baseline: Cloud Run scaled to zero and one db-f1-micro.
+
+# Hybrid search (trigram + Vertex AI embeddings). Recommended for Japanese
+# knowledge bases. Existing entries stay unembedded until `ochakai reembed`.
+# enable_vertex_embeddings = true
+
+# Attachments. Without a bucket the service is markdown-only and attach
+# operations return 501.
+# enable_gcs_attachments = true
+
+# Drop the Cloud SQL public endpoint. Free, but local admin access then needs
+# a VPC-attached workstation or a temporary public IP.
+# enable_private_ip = true
+
+# The browser UI for people who cannot run the CLI, behind IAP.
+# enable_webui      = true
+# webui_iap_members = ["domain:your-org.example"]
+
+# People who need to connect to the database directly for maintenance. They
+# get an IAM login (cloud-sql-proxy --auto-iam-authn), never a password.
+# maintenance_users = ["you@your-org.example"]
+
+# Real knowledge deserves backups; the cost example skips them.
+# database_backups = true
+
+# Set to false and apply once before `terraform destroy`.
+# deletion_protection = true
