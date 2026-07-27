@@ -1,6 +1,26 @@
 output "service_url" {
-  description = "URL of the ochakai service. Not reachable without an identity: a plain curl gets Google's 401, which is the point."
+  description = "URL of the ochakai service. Not reachable without an identity: a plain curl gets Google's 401, which is the point — unless var.public_read_only is on, in which case see demo_url."
   value       = google_cloud_run_v2_service.ochakai.uri
+}
+
+output "demo_url" {
+  description = <<-EOT
+    The public read-only demo URL — anyone with this link can read the whole
+    knowledge base, with no Google account and no token — or null when
+    var.public_read_only is false. It is the same service as service_url; the
+    output exists so that "is this one public?" is answerable from
+    `terraform output` alone, without reading the IAM policy.
+  EOT
+  value       = var.public_read_only ? google_cloud_run_v2_service.ochakai.uri : null
+}
+
+output "posture" {
+  description = "One line naming what this deployment will and will not do, so that a flip between demo and normal shows up in the output diff as well as the plan."
+  value = (var.public_read_only
+    ? "public read-only: anyone with the URL can read; no identity is read, every caller is human:anonymous, and nothing can be written (design doc 0041)"
+    : local.read_only
+    ? "private read-only: only invoker_members can reach it, and nothing can be written (design doc 0040)"
+  : "private read-write: only invoker_members can reach it, and whoever reaches it can read and write everything (design doc 0002)")
 }
 
 output "use_command" {

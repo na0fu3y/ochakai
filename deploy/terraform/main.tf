@@ -12,11 +12,16 @@
 #     change to this module ever needs a generated credential, the change is
 #     wrong for this project (design docs 0002, 0003).
 #
-#   * The service is never publicly invokable. ochakai performs no
-#     authorization of its own: it reads the caller identity Cloud Run has
-#     already verified and records it as provenance. Those headers only mean
-#     something behind Cloud Run's IAM check, so allUsers would not merely
-#     widen access, it would make provenance forgeable.
+#   * The service is not publicly invokable, with exactly one exception.
+#     ochakai performs no authorization of its own: it reads the caller
+#     identity Cloud Run has already verified and records it as provenance.
+#     Those headers only mean something behind Cloud Run's IAM check, so
+#     allUsers would not merely widen access, it would make provenance
+#     forgeable. The exception is var.public_read_only (design doc 0041),
+#     which grants allUsers only together with the flag that makes the
+#     deployment refuse every write and stop reading identity altogether —
+#     there is then no provenance to forge and no author to get wrong. A
+#     public binding from anywhere else in this module is a bug.
 
 data "google_project" "this" {
   project_id = var.project_id
@@ -49,6 +54,13 @@ locals {
 
   iap_audience = "/projects/${data.google_project.this.number}/locations/${var.region}/services/${local.webui_name}"
 
+  # Public read-only implies read-only (design doc 0041): the server refuses
+  # to start if it would be publicly readable and writable. The module states
+  # the implication in the environment rather than leaving it to be
+  # discovered from a crash loop, so the deployed configuration reads the
+  # same way the posture does.
+  read_only = var.read_only || var.public_read_only
+
   server_env = merge(
     {
       # No password appears here, and none exists to appear. This is what
@@ -62,6 +74,8 @@ locals {
         "&user=${local.db_service_account_user}",
       ])
     },
+    local.read_only ? { OCHAKAI_READ_ONLY = "true" } : {},
+    var.public_read_only ? { OCHAKAI_PUBLIC_READ_ONLY = "true" } : {},
     var.enable_gcs_attachments ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
     var.enable_vertex_embeddings ? { OCHAKAI_VERTEX_PROJECT = var.project_id } : {},
     var.enable_vertex_embeddings && var.vertex_model != null ? { OCHAKAI_VERTEX_MODEL = var.vertex_model } : {},
@@ -402,9 +416,9 @@ resource "google_cloud_run_v2_service" "ochakai" {
   ]
 }
 
-# The only thing that decides who can reach ochakai. There is no allUsers
-# binding anywhere in this module, which is also what keeps the deployment
-# compatible with the Domain Restricted Sharing org policy.
+# The only thing that decides who can reach ochakai. allUsers cannot be named
+# here — the variable refuses it — which is also what keeps the default
+# deployment compatible with the Domain Restricted Sharing org policy.
 resource "google_cloud_run_v2_service_iam_member" "invokers" {
   for_each = toset(var.invoker_members)
 
@@ -413,6 +427,37 @@ resource "google_cloud_run_v2_service_iam_member" "invokers" {
   name     = google_cloud_run_v2_service.ochakai.name
   role     = "roles/run.invoker"
   member   = each.value
+}
+
+# The public read-only demo, and the only allUsers grant in this module
+# (design doc 0041). It is deliberately not something an operator can compose
+# out of parts: the same variable that opens the service is the one that makes
+# it refuse every write and stop reading identity, so "public" and "believes
+# nobody" cannot drift apart. A public writable ochakai would record authors
+# it has no way to know, which is worse than recording none.
+#
+# Domain Restricted Sharing (guide §6) rejects this binding, as it should —
+# a demo project is the place to lift it, not the org.
+resource "google_cloud_run_v2_service_iam_member" "public_demo" {
+  count = var.public_read_only ? 1 : 0
+
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.ochakai.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+
+  lifecycle {
+    # Reads the environment the service actually carries rather than the
+    # variable that set it. Today the two cannot disagree; this exists for
+    # the edit that separates them, and it fails at plan time — an allUsers
+    # binding must never outlive the posture that justifies it, not even for
+    # the length of an apply.
+    precondition {
+      condition     = lookup(local.server_env, "OCHAKAI_PUBLIC_READ_ONLY", "") == "true"
+      error_message = "Refusing to grant allUsers: the service is not running with OCHAKAI_PUBLIC_READ_ONLY=true. Public is only safe while ochakai writes nothing and reads no identity (design doc 0041)."
+    }
+  }
 }
 
 # --- 5b. Optional: the team web UI behind IAP -----------------------------
