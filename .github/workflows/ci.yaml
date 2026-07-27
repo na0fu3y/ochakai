@@ -28,17 +28,17 @@ jobs:
           go-version-file: go.mod
           # setup-go's built-in cache keys on go.sum alone and is shared
           # by every job, so the first job to finish freezes it and this
-          # job's build cache (race-instrumented deps, vet facts) never
-          # gets saved. Cache explicitly instead, per job, saving on
-          # every run: the run_id suffix makes each key unique, and
-          # restore-keys start from the most recent previous run.
+          # job's build cache — race-instrumented dependencies, vet facts
+          # — never gets saved. Cache explicitly instead, per job.
           cache: false
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
           key: test-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          # The run_id makes the key unique per run, so a restore is
+          # always a restore-keys prefix hit on the newest entry below it.
           restore-keys: |
             test-go-${{ hashFiles('go.sum') }}-
             test-go-
@@ -51,6 +51,20 @@ jobs:
         env:
           OCHAKAI_TEST_DATABASE_URL: postgres://t:t@localhost:55433/t?sslmode=disable
       - run: CGO_ENABLED=0 go build -trimpath ./...
+      # Save only from main. A cache saved by a pull request run is
+      # scoped to that pull request's merge ref and can only be restored
+      # by re-runs of the same pull request, while every branch can
+      # restore main's — so saving here too would spend ~700 MB of the
+      # repository's 10 GB on an entry almost nobody reads, and eviction
+      # is by least recent access, which would start dropping the main
+      # entries these jobs actually depend on.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: success() && github.ref == 'refs/heads/main'
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: test-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -59,12 +73,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # same shared-key problem as in the test job
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # golangci-lint keeps its own analysis cache, which the action
+      # below handles; this is the Go module and build cache it type
+      # checks us against.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-            ~/.cache/golangci-lint
           key: lint-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
           restore-keys: |
             lint-go-${{ hashFiles('go.sum') }}-
@@ -72,7 +88,24 @@ jobs:
       # Pinned, unlike govulncheck: a new govulncheck release failing CI
       # means a new vulnerability, but a new linter release failing CI
       # only means a new check.
-      - run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
+      #
+      # Via the action rather than `go run`, which built the linter and
+      # every analyzer it bundles from source on each cold cache — about
+      # three minutes, and the reason this job's cache was 586 MB. The
+      # action installs a released binary instead. `args` is explicit
+      # because the default set of packages is not documented.
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          args: ./...
+          skip-save-cache: ${{ github.ref != 'refs/heads/main' }}
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: success() && github.ref == 'refs/heads/main'
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: lint-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
   govulncheck:
     runs-on: ubuntu-latest
     steps:
