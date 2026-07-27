@@ -18,6 +18,11 @@ Cloud SQL dominates the bill. Regions in Asia (e.g. `asia-northeast1`) cost
 slightly more; pick what matches your latency needs. Teardown commands are
 at the bottom.
 
+**Already deployed?** [docs/guides/operating.md](../../docs/guides/operating.md)
+is the day-two half: what each of the two backups recovers, what a restore
+from an OKF bundle loses, which log lines mean degraded-but-running, and
+what raising `--max-instances` costs in database connections.
+
 **Prefer infrastructure as code?**
 [deploy/terraform](../terraform) stands up §1–§4b (plus §5b's web UI and
 §5d's demo posture) as a Terraform module, so a deployment can be reviewed as a diff, reproduced per

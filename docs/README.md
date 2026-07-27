@@ -23,6 +23,10 @@ types, and every environment variable.
   a security hardening checklist, and the upgrade path.
 - [deploy/compose.yaml](../deploy/compose.yaml) — the local stack. Docker
   and nothing else; no Google account needed.
+- [Operating a deployment](guides/operating.md) — the two backups and what
+  each one recovers, what a restore from an OKF bundle does *not* bring
+  back, what the logs say when the deployment is degraded but running, and
+  what is known — and not known — about scale.
 - [Golden query canary](guides/golden-query-canary.md) — running verified
   queries from CI so a knowledge base that has quietly gone wrong says so.
 - [Troubleshooting](guides/troubleshooting.md) — the local and client-side
