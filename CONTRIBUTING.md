@@ -117,3 +117,67 @@ Two decisions worth knowing before proposing features:
   endpoint whose shape drifts from `openapi.yaml` fails CI. A new
   endpoint needs an integration test to come under that check.
 - Write commit messages and code comments in English.
+
+## Releases
+
+A release is a tag. Everything else is automation, but three files carry
+a version number that the tag does not update on its own, so cutting a
+release starts with a PR.
+
+**1. Prepare, in a PR.** With CI green on `main`:
+
+- `CHANGELOG.md` — turn `## [Unreleased]` into `## [x.y.z] - YYYY-MM-DD`,
+  leave a fresh empty `Unreleased` above it, and add the compare link at
+  the bottom (`[x.y.z]: …/compare/v<prev>...vx.y.z`, and repoint
+  `[Unreleased]` at the new tag).
+- `api/openapi.yaml` — `info.version`. It describes the wire surface, so
+  it drifts silently: nothing fails when it is stale.
+- `.github/ISSUE_TEMPLATE/bug_report.yml` — the version placeholder.
+
+While the major version is 0, a release with any **BREAKING** entry takes
+the minor, not the patch.
+
+**2. Tag the merged commit.** Annotated, and the message is the release
+notes — that is the repo's habit, and Japanese is fine there even though
+commits are English:
+
+```sh
+git fetch origin && git checkout -B rel origin/main
+git tag -a v0.14.0 -F -   # then push: git push origin v0.14.0
+```
+
+Pushing the tag runs [release.yaml](.github/workflows/release.yaml): one
+job publishes the multi-arch image to GHCR with SBOM and provenance, the
+other runs goreleaser for the archives, `checksums.txt`, and provenance
+over them.
+
+**3. Write the release body.** goreleaser creates the GitHub release when
+none exists, and because its own changelog generation is disabled
+(`.goreleaser.yaml` — the notes are written by hand) **the body comes out
+empty**. Either create the release with its notes before pushing the tag,
+or fill it in afterwards:
+
+```sh
+git tag -l --format='%(contents)' v0.14.0 | tail -n +3 > notes.md
+gh release edit v0.14.0 --notes-file notes.md   # add upgrade + install notes
+```
+
+Say what an operator upgrading needs: which migrations run, whether
+`updated_at` moves (held ETags, `generated.at`), whether re-embedding is
+needed, and what a client reading the old shape must change.
+
+**4. Check what shipped**, rather than trusting the green check:
+
+```sh
+gh release view v0.14.0 --json assets -q '.assets[].name'   # 6 archives + checksums
+shasum -a 256 -c checksums.txt --ignore-missing
+./ochakai version                                          # must print the tag
+gh attestation verify oci://ghcr.io/na0fu3y/ochakai:0.14.0 -R na0fu3y/ochakai
+gh attestation verify ochakai_0.14.0_linux_amd64.tar.gz -R na0fu3y/ochakai
+curl -s https://proxy.golang.org/github.com/na0fu3y/ochakai/@latest
+```
+
+A tag is effectively permanent — the Go module proxy caches it forever,
+and a bad one can only be retracted in `go.mod`, never withdrawn. That is
+why the checks above come before announcing anything, and why the prep is
+a reviewed PR rather than a push to `main`.
