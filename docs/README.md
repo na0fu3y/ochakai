@@ -28,6 +28,10 @@ types, and every environment variable.
 - [api/openapi.yaml](../api/openapi.yaml) — the REST contract. It is
   checked rather than described: the integration tests validate every
   request and response against it, so an endpoint that drifts fails CI.
+- [examples/demo](../examples/demo) — a ten-entry knowledge base to import
+  and poke at (`ochakai import examples/demo`). Linked entries, mixed
+  statuses, and an entry past its declared expiry, so the feeds and
+  `get_context` have something to show.
 - [examples/claude-code](../examples/claude-code) — drop-in agent
   instructions and the recall / write-back hooks.
 - `ochakai <command> -h` — every command carries its flags and worked
