@@ -519,3 +519,30 @@ func (e *shrinkEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) 
 	}
 	return [][]float32{{1, 0}}, nil
 }
+
+// TestRecommendedTypesAreWritable pins design doc 0038 §4.2: adding a type
+// to the vocabulary adds no server behavior. Every recommended type must
+// pass the write path carrying nothing but an id and a title — the sole
+// exception being the runtime SPEC §10.2 requires on an Attested
+// Computation (design doc 0036 §3.10).
+//
+// This is also the guard the vocabulary change itself needed. Swapping a
+// test fixture's type to Attested Computation without giving it a runtime
+// compiles, passes every unit test, and only fails where a real write
+// happens — which, for the entry types that live in integration tests, is
+// nowhere a developer without a database will see.
+func TestRecommendedTypesAreWritable(t *testing.T) {
+	for _, ty := range domain.Types {
+		k := &domain.Knowledge{Type: ty, ID: "probe/entry", Title: "probe"}
+		if ty == domain.TypeComputations {
+			k.Runtime = "bigquery"
+		}
+		if err := validate(k); err != nil {
+			t.Errorf("recommended type %q is not writable as-is: %v", ty, err)
+		}
+	}
+	bare := &domain.Knowledge{Type: domain.TypeComputations, ID: "probe/entry", Title: "probe"}
+	if err := validate(bare); err == nil {
+		t.Error("an Attested Computation without a runtime must still be refused")
+	}
+}
