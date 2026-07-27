@@ -187,6 +187,7 @@ func cmdWhoami(ctx context.Context, args []string) error {
 		Auth     string `json:"auth,omitempty"`
 		Error    string `json:"error,omitempty"`
 		Health   string `json:"health"`
+		Mode     string `json:"mode,omitempty"`
 	}{URL: *target, Source: urlSource(fs)}
 
 	c, err := newClient(ctx, *target)
@@ -204,6 +205,13 @@ func cmdWhoami(ctx context.Context, args []string) error {
 			report.Health = "error: " + err.Error()
 		} else {
 			report.Health = "ok"
+			// Whether the server accepts writes is the other thing worth
+			// knowing before a command fails (design doc 0040): a
+			// read-only deployment answers every read normally and
+			// refuses every write with a 403.
+			if ro, err := c.ReadOnly(ctx); err == nil {
+				report.Mode = map[bool]string{true: "read-only", false: "read-write"}[ro]
+			}
 		}
 	}
 
@@ -219,6 +227,9 @@ func cmdWhoami(ctx context.Context, args []string) error {
 			fmt.Printf("identity:  %s (%s)\n", report.Identity, report.Auth)
 		}
 		fmt.Printf("health:    %s\n", report.Health)
+		if report.Mode != "" {
+			fmt.Printf("mode:      %s\n", report.Mode)
+		}
 	}
 	if report.Error != "" || report.Health != "ok" {
 		return errReported // details are already on screen

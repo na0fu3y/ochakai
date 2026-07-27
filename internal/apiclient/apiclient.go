@@ -84,6 +84,20 @@ func (c *Client) Health(ctx context.Context) error {
 	return resp.Body.Close()
 }
 
+// ReadOnly reports whether the server refuses changes to knowledge
+// (design doc 0040). It reads the Ochakai-Read-Only header, which a
+// read-only deployment sets on every /api/v1 response; /health is
+// outside that surface, so this is its own request. Servers predating
+// the header omit it and are reported writable, which is what they were.
+func (c *Client) ReadOnly(ctx context.Context) (bool, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/api/v1/browse", nil, nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	return resp.Header.Get("Ochakai-Read-Only") == "true", nil
+}
+
 // APIError is a non-2xx response from the server.
 type APIError struct {
 	StatusCode int

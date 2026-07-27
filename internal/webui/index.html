@@ -424,6 +424,17 @@
     font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 100;
   }
   #toast.show { opacity: .95; }
+
+  /* Read-only deployments (design doc 0040): the server refuses every
+     change, so the page stops offering them. Hidden rather than disabled
+     — a greyed-out Verify invites a click and explains nothing. */
+  body.read-only .write-only { display: none !important; }
+  .read-only-note { display: none; }
+  body.read-only .read-only-note {
+    display: block; background: var(--accent-weak); border: 1px solid var(--border);
+    border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+    font-size: .92rem; color: var(--muted);
+  }
 </style>
 </head>
 <body>
@@ -443,7 +454,7 @@
       <div class="side-head">
         <span class="lbl">Knowledge</span>
         <button class="btn small" id="tree-refresh" title="Reload the tree">↻</button>
-        <a class="btn small" href="#/new" title="Create a knowledge entry">＋</a>
+        <a class="btn small write-only" href="#/new" title="Create a knowledge entry">＋</a>
       </div>
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
@@ -637,6 +648,17 @@ function md(src, resolveImg, resolveEntry) {
 // `ochakai serve`.
 const BASE = location.protocol.startsWith('http') ? location.origin : 'http://localhost:8080';
 
+// READ_ONLY comes from the server's own answer rather than from anything
+// configured here, so the page cannot disagree with the deployment it is
+// pointed at (design doc 0040 §2.3).
+let READ_ONLY = null;
+
+function setReadOnly(on) {
+  if (READ_ONLY === on) return;
+  READ_ONLY = on;
+  document.body.classList.toggle('read-only', on);
+}
+
 async function api(path, opts = {}) {
   const init = { method: opts.method || 'GET' };
   if (opts.raw !== undefined) {
@@ -646,6 +668,10 @@ async function api(path, opts = {}) {
     init.body = JSON.stringify(opts.body);
   }
   const res = await fetch(BASE + path, init);
+  // A read-only deployment says so on every response (design doc 0040).
+  // The page learns it from whatever request it made first and hides the
+  // write affordances; a button that can only ever 403 is a lie.
+  setReadOnly(res.headers.get('Ochakai-Read-Only') === 'true');
   if (!res.ok) {
     let msg = res.status + ' ' + res.statusText;
     try {
@@ -794,7 +820,7 @@ function viewExplore() {
            Uncheck <strong>stale</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
-      <a class="btn" href="#/new" title="Create a knowledge entry">＋ New entry</a>
+      <a class="btn write-only" href="#/new" title="Create a knowledge entry">＋ New entry</a>
     </div>
     <details id="filter-details" class="filterbar" ${wide ? 'open' : ''}>
       <summary>Filters</summary>
@@ -1006,6 +1032,7 @@ function nodeHTML(prefix, label, count) {
   // full path to create knowledge next to its neighbors.
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
     <summary>${label}<span class="count">${count}</span><a class="node-new"
+      class="write-only"
       href="#/new/${prefix.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/"
       title="New entry in ${esc(prefix)}">＋</a></summary>
     <div class="children"><div class="empty">…</div></div>
@@ -1250,7 +1277,7 @@ function viewDir(rawPrefix) {
     <div class="toolbar">
       <div class="section-title" style="margin:0"><span class="type-ico">📁</span> <span class="mono">/${esc(prefix)}</span></div>
       <span class="grow"></span>
-      <a class="btn small" href="${newHref}" title="Create a knowledge entry in ${esc(prefix) || 'the root'}">＋ New entry here</a>
+      <a class="btn small write-only" href="${newHref}" title="Create a knowledge entry in ${esc(prefix) || 'the root'}">＋ New entry here</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;
   loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the entries in them.');
@@ -1269,7 +1296,7 @@ function viewHome() {
     <p style="color:var(--muted);font-size:.9rem">
       <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
       <a href="#/search/reported-wrong">Reported wrong</a> — verified knowledge that came back wrong ·
-      <a href="#/new">＋ New entry</a> ·
+      <a class="write-only" href="#/new">＋ New entry</a> ·
       <a href="${BASE}/api/v1/export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
     </p>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
@@ -1389,12 +1416,12 @@ async function viewDetail(id) {
       <h1>${esc(displayTitle(entry))}</h1>
       <span class="badge status-pick ${esc(entry.status)}" title="Change status">
         <span aria-hidden="true">${esc(entry.status)}</span>
-        <select id="act-status" aria-label="status">
+        <select class="write-only" id="act-status" aria-label="status">
           ${STATUSES.map(s => `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </span>
       ${tags}
-      <span class="actions">
+      <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">Edit</a>
         <details class="menu" id="more-menu">
           <summary class="btn small" title="More actions" aria-label="More actions">⋯</summary>
@@ -1748,6 +1775,9 @@ const review = { staleOnly: false, all: false };
 function viewReview() {
   view.innerHTML = `
     <div class="section-title">Draft review queue</div>
+    <div class="read-only-note">This ochakai is read-only, so the review
+    actions are not shown. The queue is real — it is what a reviewer on a
+    writable deployment would work through.</div>
     <p style="color:var(--muted);max-width:48rem">Drafts agents wrote back, most-demanded first — ranked by search hits, how
     often the draft already surfaces when people search. Verify what's true, reject what isn't (the reason is recorded as
     status_note so agents stop re-proposing it). Never-used drafts sink to the bottom; toggle <em>stale</em> to triage them.</p>
@@ -1823,7 +1853,7 @@ function reviewCard(h) {
       <span class="badge draft">draft</span>
       ${isStaleDraft(h) ? '<span class="badge" title="0 search hits and idle — a candidate to drop">🕸️ stale</span>' : ''}
       ${tags}
-      <span class="actions" style="margin-left:auto;display:flex;gap:.45rem">
+      <span class="actions write-only" style="margin-left:auto;display:flex;gap:.45rem">
         <button class="btn small primary" data-act="verify">✓ Verify</button>
         <button class="btn small danger" data-act="reject">Reject</button>
       </span>

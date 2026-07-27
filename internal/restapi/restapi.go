@@ -583,7 +583,24 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	return mux
+	return announceReadOnly(svc, mux)
+}
+
+// announceReadOnly marks every REST response from a read-only deployment
+// with Ochakai-Read-Only: true (design doc 0040 §2.3). REST has no
+// capability handshake the way MCP does — where read-only shows up as the
+// write tools simply not being offered — so a client learns it from a
+// header, the same way it learns an update changed nothing from
+// Ochakai-Unchanged. The Web UI uses it to stop drawing buttons that
+// would only ever 403.
+func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
+	if svc.Config == nil || !svc.Config.ReadOnly {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Ochakai-Read-Only", "true")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // writeHits responds with a hit list, attachment metadata filled in one
@@ -647,6 +664,10 @@ func writeError(w http.ResponseWriter, err error) {
 	var inputErr *service.InvalidInputError
 	var unsupportedErr *service.UnsupportedError
 	switch {
+	case errors.Is(err, service.ErrReadOnly):
+		// 403, not 404: the route exists and the request was understood.
+		// This deployment declines to write (design doc 0040).
+		status = http.StatusForbidden
 	case errors.Is(err, store.ErrNotFound):
 		status = http.StatusNotFound
 	case errors.Is(err, store.ErrConflict):
