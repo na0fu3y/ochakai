@@ -16,6 +16,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-07-28
+
 ### Added
 
 - `examples/demo` — a ten-entry knowledge base loaded with
@@ -80,18 +82,6 @@ last entry.
   caller asked for. Default: off, so nothing changes for a deployment
   that does not set it.
 
-### Fixed
-
-- Importing an OKF bundle that declares `status: stable` with no
-  `verified` entry no longer demotes it to draft silently. ochakai has no
-  status meaning *stable and unverified*, so such an entry does land as a
-  draft and exports as one — that loss is real and unchanged — but the
-  import now reports it, the way every other reinterpretation already
-  did. Refusing to read `stable` as reviewed stays deliberate: OKF puts
-  human review in `verified` (SPEC §5.3). The README claimed the reverse
-  mapping "keeps the round-trip exact", which held for ochakai's own
-  exports and not for a foreign bundle; it now says which is which.
-
 ### Changed
 
 - **BREAKING** — the recommended type vocabulary is realigned to what OKF
@@ -139,6 +129,28 @@ last entry.
 
 ### Fixed
 
+- Web UI: a plain markdown link to an attachment is drawn as a link. Since
+  design doc 0013 an attachment is any file, not only an image, and a plain
+  link is the only notation that can reference a non-image one — but the
+  renderer resolved links against entries alone, so those references stayed
+  raw markdown on the page while the attachments tab printed exactly that
+  form for authors to paste. Both notations now resolve through the same
+  file resolver: an entry link still wins, and a reference matching no
+  attachment still stays literal text rather than becoming a dead link.
+- The 400 a search without a query or a sort returns names all four listing
+  modes. It had named three since before `stale_after` shipped in 0.14.0,
+  so REST and MCP callers were told a way out that omitted one; the CLI's
+  message was already current. The sentence now reads `domain.ListSorts`
+  instead of restating it.
+- Importing an OKF bundle that declares `status: stable` with no
+  `verified` entry no longer demotes it to draft silently. ochakai has no
+  status meaning *stable and unverified*, so such an entry does land as a
+  draft and exports as one — that loss is real and unchanged — but the
+  import now reports it, the way every other reinterpretation already
+  did. Refusing to read `stable` as reviewed stays deliberate: OKF puts
+  human review in `verified` (SPEC §5.3). The README claimed the reverse
+  mapping "keeps the round-trip exact", which held for ochakai's own
+  exports and not for a foreign bundle; it now says which is which.
 - Shell completion offers `--source` on `ochakai search` and
   `stale_after` as a `--sort` value. Both shipped in 0.14.0 and reached
   none of the three scripts: the sort values were a hand-written subset
@@ -694,7 +706,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/na0fu3y/ochakai/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/na0fu3y/ochakai/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/na0fu3y/ochakai/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/na0fu3y/ochakai/compare/v0.12.0...v0.12.1
