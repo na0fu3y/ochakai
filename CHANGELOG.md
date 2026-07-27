@@ -16,8 +16,12 @@ last entry.
 
 ## [Unreleased]
 
-Targets 0.14.0. The baseline for everything below is **0.13.0**, not
-0.12.x: OKF v0.2 export itself shipped in 0.13.0.
+Nothing yet.
+
+## [0.14.0] - 2026-07-27
+
+The baseline for everything below is **0.13.0**, not 0.12.x: OKF v0.2
+export itself shipped in 0.13.0.
 
 ### Added
 
@@ -553,7 +557,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/na0fu3y/ochakai/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/na0fu3y/ochakai/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/na0fu3y/ochakai/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/na0fu3y/ochakai/compare/v0.11.0...v0.12.0

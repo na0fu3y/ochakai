@@ -10,7 +10,7 @@ info:
     human-facing browse/revisions/backlinks reads, and attachment writes —
     so users can build their own web UIs. ochakai executes no SQL and uses
     no LLM.
-  version: 0.13.0
+  version: 0.14.0
   license:
     name: MIT
 servers:
