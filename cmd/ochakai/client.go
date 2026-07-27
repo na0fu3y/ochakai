@@ -106,6 +106,35 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// exactArgs parses flags and requires exactly n positional arguments. A
+// wrong count prints the command's own usage and returns errReported: the
+// help text says what the command takes, so repeating it in an error
+// message would only be a second, shorter description to keep in sync.
+func exactArgs(fs *flag.FlagSet, args []string, n int) ([]string, error) {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return nil, err
+	}
+	if len(pos) != n {
+		fs.Usage()
+		return nil, errReported
+	}
+	return pos, nil
+}
+
+// idArgs is exactArgs for the commands whose first positional argument is
+// an entry id: it returns that id parsed, and the arguments after it.
+func idArgs(fs *flag.FlagSet, args []string, n int) (id string, rest []string, err error) {
+	pos, err := exactArgs(fs, args, n)
+	if err != nil {
+		return "", nil, err
+	}
+	if id, err = parseRef(pos[0]); err != nil {
+		return "", nil, err
+	}
+	return id, pos[1:], nil
+}
+
 func newClient(ctx context.Context, url string) (*apiclient.Client, error) {
 	if url == "" {
 		return nil, errors.New("server URL required: run `ochakai use <url>`, set OCHAKAI_URL, or pass --url")
@@ -398,15 +427,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 		"Usage: ochakai usage [flags] <id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, reported worked or failed — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
 		"  ochakai usage queries/monthly-revenue\n  ochakai usage metrics/revenue --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -436,15 +457,7 @@ func cmdReport(ctx context.Context, args []string) error {
 		"  ochakai report queries/monthly-revenue worked\n  ochakai report queries/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
 	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong (max 2000 bytes)")
 	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 2 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
 		return err
 	}
@@ -452,14 +465,14 @@ func cmdReport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	u, err := c.ReportOutcome(ctx, id, pos[1], *note)
+	u, err := c.ReportOutcome(ctx, id, rest[0], *note)
 	if err != nil {
 		return err
 	}
 	if *asJSON {
 		return printJSON(u)
 	}
-	fmt.Printf("reported %s ochakai://%s (worked %d, failed %d)\n", pos[1], id, u.Worked, u.Failed)
+	fmt.Printf("reported %s ochakai://%s (worked %d, failed %d)\n", rest[0], id, u.Worked, u.Failed)
 	return nil
 }
 
@@ -469,15 +482,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
 	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response (includes full snapshots)")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -505,15 +510,7 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 		"  ochakai backlinks metrics/revenue\n  ochakai backlinks metrics/revenue --json | jq '.entries[].id'\n")
 	limit := fs.Int("limit", 0, "max entries (server default 20, max 100)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -545,15 +542,7 @@ func cmdGet(ctx context.Context, args []string) error {
 		"  ochakai get metrics/revenue\n  ochakai get queries/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insights/revenue-reading --download ./img\n")
 	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
 	download := fs.String("download", "", "save the entry's attachments into this directory")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -658,15 +647,7 @@ func cmdDetach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
 		"  ochakai detach insights/revenue-reading weekly.png\n")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 2 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
 		return err
 	}
@@ -674,10 +655,10 @@ func cmdDetach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Detach(ctx, id, pos[1]); err != nil {
+	if err := c.Detach(ctx, id, rest[0]); err != nil {
 		return err
 	}
-	fmt.Printf("detached %s/%s\n", id, pos[1])
+	fmt.Printf("detached %s/%s\n", id, rest[0])
 	return nil
 }
 
@@ -732,15 +713,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	file := fs.String("f", "", "input file (default: stdin)")
 	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its updated_at (`ochakai get <id> --json` prints it as .updated_at; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting")
 	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -781,15 +754,7 @@ func cmdVerify(ctx context.Context, args []string) error {
 		"Usage: ochakai verify [flags] <id>\n\nRecord a verification against the entry as it stands: you become\nverified_by and verified_at is stamped now. Promotes a draft, and\nre-affirms an entry that is already verified — which is what takes it\nout of both review feeds (--sort verified_at, --sort failed). Verifying\na rejected entry clears the rejection: the status becomes verified and\nrejected_by/rejected_at are dropped (the revision history keeps both).",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r .verified_at\n")
 	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -812,15 +777,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge entry (history is retained server-side).",
 		"  ochakai delete terms/obsolete-kpi\n")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -844,15 +801,7 @@ func cmdPurge(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai purge [flags] <id>\n\nHard-delete an already soft-deleted entry: the entry, its revisions,\nusage, and attachment metadata are erased and the id is freed for a\nmove. History is gone — `ochakai delete` first, then purge. A live\nentry is refused.",
 		"  ochakai delete terms/obsolete-kpi\n  ochakai purge terms/obsolete-kpi\n")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
+	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -878,13 +827,8 @@ func cmdReembed(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max entries to embed per pass (server default 200)")
 	once := fs.Bool("once", false, "run a single pass instead of continuing until nothing is left")
 	asJSON := fs.Bool("json", false, "print the raw JSON response of each pass")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
+	if _, err := exactArgs(fs, args, 0); err != nil {
 		return err
-	}
-	if len(pos) != 0 {
-		fs.Usage()
-		return errReported
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -939,19 +883,11 @@ func cmdMove(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge entry to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, attrs.model)\nare rewritten so nothing breaks.",
 		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n")
-	pos, err := parseArgs(fs, args)
+	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
 		return err
 	}
-	if len(pos) != 2 {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
-	if err != nil {
-		return err
-	}
-	newID, err := parseRef(pos[1])
+	newID, err := parseRef(rest[0])
 	if err != nil {
 		return err
 	}
@@ -972,13 +908,9 @@ func cmdExport(ctx context.Context, args []string) error {
 		"Usage: ochakai export [flags] <dir | ->\n\nDownload the whole knowledge base as an OKF bundle (markdown + YAML\nfrontmatter) into dir, or stream the tar.gz to stdout with \"-\".\nYour knowledge is yours.",
 		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-attachments - > entries.tar.gz   # bytes are in GCS; copy them from there\n")
 	noAtt := fs.Bool("no-attachments", false, "export the markdown only, skipping attachment files")
-	pos, err := parseArgs(fs, args)
+	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -1006,13 +938,9 @@ func cmdImport(ctx context.Context, args []string) error {
 		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, unknown frontmatter keys are kept as attrs, and\nexisting entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
-	pos, err := parseArgs(fs, args)
+	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
-	}
-	if len(pos) != 1 {
-		fs.Usage()
-		return errReported
 	}
 	files, err := readBundle(pos[0])
 	if err != nil {

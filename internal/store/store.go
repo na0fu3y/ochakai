@@ -253,9 +253,25 @@ func actorPtrs(a *domain.Actor) (kind, name *string, via string) {
 	return &a.Kind, &a.Name, a.Via
 }
 
-func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
+// queryKnowledge runs a query selecting knowledgeCols and collects the
+// entries it returns.
+func (s *Store) queryKnowledge(ctx context.Context, sql string, args ...any) ([]domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
+}
+
+// getOne returns the single entry holding id on the live or the deleted
+// side of the row's lifetime, or ErrNotFound when that side is empty.
+func (s *Store) getOne(ctx context.Context, id string, deleted bool) (*domain.Knowledge, error) {
+	cond := "deleted_at IS NULL"
+	if deleted {
+		cond = "deleted_at IS NOT NULL"
+	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND deleted_at IS NULL`, id)
+		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND `+cond, id)
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +283,10 @@ func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 		return nil, err
 	}
 	return &k, nil
+}
+
+func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
+	return s.getOne(ctx, id, false)
 }
 
 // GetTombstone returns the soft-deleted entry holding id, or ErrNotFound
@@ -275,19 +295,7 @@ func (s *Store) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 // and status_note, so a surface that must not overwrite a ruling has to
 // be able to see the ruling a tombstone still carries.
 func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND deleted_at IS NOT NULL`, id)
-	if err != nil {
-		return nil, err
-	}
-	k, err := pgx.CollectExactlyOneRow(rows, scanKnowledge)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &k, nil
+	return s.getOne(ctx, id, true)
 }
 
 // ListLinkingTo returns live entries whose links point at id, most
@@ -295,17 +303,13 @@ func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge,
 // insight that explains a metric links to the metric, not the other way
 // round. Both bare and ochakai:// target forms match.
 func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
+	return s.queryKnowledge(ctx,
 		`SELECT `+knowledgeCols+` FROM knowledge
 		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2)
 		 ORDER BY updated_at DESC LIMIT $3`,
 		fmt.Sprintf(`[{"target": %q}]`, id),
 		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+id),
 		limit)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
 }
 
 // Create inserts a new entry. A live entry with the same id is
@@ -1103,9 +1107,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
-		return scanHit(row)
-	})
+	return pgx.CollectRows(rows, scanHit)
 }
 
 // SearchVector ranks by cosine distance against stored embeddings.
@@ -1192,9 +1194,7 @@ func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) 
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
-		return scanHit(row)
-	})
+	return pgx.CollectRows(rows, scanHit)
 }
 
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
@@ -1264,13 +1264,8 @@ func sourceContainment(resource string) []byte {
 // order beats a relevance score nothing computed.
 func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
-		ORDER BY id LIMIT %d`, where, limit)
-	rows, err := s.pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+		ORDER BY id LIMIT %d`, where, limit), args...)
 }
 
 // ListByStaleAfter returns the entries whose declared expiry has passed,
@@ -1292,14 +1287,9 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]do
 	// doc 0036 §3.9), and current_date would hand that decision to
 	// whatever TimeZone the database session happens to carry — the same
 	// entry would be stale on one deployment and not on another.
-	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
 		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date
-		ORDER BY stale_after ASC, id LIMIT %d`, where, limit)
-	rows, err := s.pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
+		ORDER BY stale_after ASC, id LIMIT %d`, where, limit), args...)
 }
 
 // ListByVerifiedAt returns filtered entries ordered by verification age,
@@ -1307,13 +1297,8 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]do
 // query canary runs: "which verified queries have gone longest unchecked".
 func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
-		ORDER BY verified_at ASC NULLS LAST, id LIMIT %d`, where, limit)
-	rows, err := s.pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanKnowledge)
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+		ORDER BY verified_at ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
 }
 
 // usageLateral aggregates a knowledge entry's per-event running totals

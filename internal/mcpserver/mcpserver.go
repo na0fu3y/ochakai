@@ -184,36 +184,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source,
 		}
-		if in.Sort != "" {
-			if !domain.ValidListSort(in.Sort) {
-				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: %s)", in.Sort, strings.Join(domain.ListSorts, ", "))
-			}
-			if in.Query != "" {
-				return nil, searchOut{}, fmt.Errorf("sort=%s lists entries; it cannot be combined with a search query", in.Sort)
-			}
-			list := svc.ListByVerifiedAt
-			switch in.Sort {
-			case "usage":
-				list = svc.ListByUsage
-			case "failed":
-				list = svc.ListByFailed
-			case "stale_after":
-				list = svc.ListByStaleAfter
-			}
-			hits, err := list(ctx, f, in.Limit)
-			if err != nil {
-				return nil, searchOut{}, err
-			}
-			return nil, searchOut{Hits: hits}, nil
-		}
-		if in.Query == "" && in.Source != "" {
-			hits, err := svc.ListBySource(ctx, f, in.Limit)
-			if err != nil {
-				return nil, searchOut{}, err
-			}
-			return nil, searchOut{Hits: hits}, nil
-		}
-		hits, err := svc.Search(ctx, in.Query, f, in.Limit)
+		hits, err := svc.SearchOrList(ctx, in.Query, in.Sort, f, in.Limit)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
