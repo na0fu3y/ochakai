@@ -75,6 +75,7 @@ _ochakai() {
     'use:pick the server for later commands'
     'whoami:print target server, identity, and reachability'
     'ui:serve the web UI locally, acting as you'
+    'mcp-stdio:speak MCP on stdin/stdout, forwarding to the server'
     'completion:print a shell completion script'
     'serve:start the MCP + REST server'
     'serve-ui:serve the team web UI as a deployed service'
@@ -157,6 +158,9 @@ _ochakai() {
     ui)
       _arguments '--port[port on 127.0.0.1]:port:' '--url[server URL]:url:'
       ;;
+    mcp-stdio)
+      _arguments '--url[server URL]:url:'
+      ;;
     completion)
       _arguments '1:shell:(zsh bash fish)'
       ;;
@@ -179,7 +183,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update verify delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update verify delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -213,6 +217,7 @@ _ochakai() {
     import)        opts="--dry-run --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
+    mcp-stdio)     opts="--url" ;;
     use)
       if [[ $cur != -* ]]; then
         COMPREPLY=($(compgen -W "$(ochakai use 2>/dev/null | cut -c3- | cut -f1)" -- "$cur"))
@@ -258,6 +263,7 @@ complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
 complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
 complete -c ochakai -n __fish_use_subcommand -a ui -d 'serve the web UI locally, acting as you'
+complete -c ochakai -n __fish_use_subcommand -a mcp-stdio -d 'speak MCP on stdin/stdout, forwarding to the server'
 complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'

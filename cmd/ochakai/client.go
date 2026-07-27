@@ -48,6 +48,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"use":       cmdUse,
 	"whoami":    cmdWhoami,
 	"ui":        cmdUI,
+	"mcp-stdio": cmdMCPStdio,
 
 	"completion": cmdCompletion,
 }

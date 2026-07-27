@@ -107,6 +107,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)
+  mcp-stdio               speak MCP on stdin/stdout, forwarding to the server
+                          (for clients that cannot open an HTTP MCP endpoint)
 
 Server commands (run as deployed services, configured by environment):
   serve                   start the MCP + REST server (runs next to the database)
