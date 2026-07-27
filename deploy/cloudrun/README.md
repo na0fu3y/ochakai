@@ -641,7 +641,25 @@ go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL from above
 
 Those ten entries are recorded as `human:you@your-org.example` — the last
 provenance this base will ever receive, and after the flip the only
-`created_by` any visitor sees.
+`created_by` any visitor sees. (The sequence has been rehearsed against a
+local server: import writable — 10 created, 0 skipped — then restart with
+`OCHAKAI_PUBLIC_READ_ONLY=true`, after which reads serve anonymously and
+every write is refused. Cloud Run adds only the IAM binding.)
+
+### Checking the flip landed
+
+The demo is the one deployment where a plain `curl` is supposed to work, so
+it is also the one you can verify without a proxy:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/knowledge?q=revenue"  # 200, no token
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/knowledge/queries/monthly-revenue"  # 403
+```
+
+200 without a token proves the public grant and `OCHAKAI_PUBLIC_READ_ONLY`
+both landed (before the flip this is Google's 401); 403 on the write proves
+the implied read-only. Sending a bogus `Authorization` header changes
+neither answer — that is the property, not a side effect.
 
 If you want the demo to show **hybrid search** (§4), turn embeddings on
 *before* the import: vectors are written when an entry is written, and
