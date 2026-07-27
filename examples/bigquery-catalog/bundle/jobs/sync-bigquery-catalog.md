@@ -15,19 +15,19 @@ parameters:
   - { name: frequent_threshold, type: integer }
   - { name: prefix, type: string }
   - { name: dry_run, type: boolean }
-computation: /jobs/sync-bigquery-catalog.py
+computation: /jobs/sync-bigquery-catalog/sync-bigquery-catalog.py
 executor:
   resource: /skills/run-a-python-job.md
   receipt: [sync_identity, tables_seen, written, skipped, failed]
 ---
 
 The sanctioned way to get BigQuery table metadata into this knowledge base.
-Run [the script](/jobs/sync-bigquery-catalog.py) with parameter values; do
-not write a projection of your own instead. The computation lives in a file
-rather than a `# Computation` fence because it is a few hundred lines of
-Python (SPEC §10.2), and the rule around it is the same either way: an
-agent supplies parameters and **must not author or edit the computation**
-(SPEC §10.3).
+Run [the script](sync-bigquery-catalog/sync-bigquery-catalog.py) with
+parameter values; do not write a projection of your own instead. The
+computation lives in a file rather than a `# Computation` fence because it
+is a few hundred lines of Python (SPEC §10.2), and the rule around it is
+the same either way: an agent supplies parameters and **must not author or
+edit the computation** (SPEC §10.3).
 
 ochakai has no connectors and is not getting any — a harvester inside the
 server would need warehouse credentials it deliberately does not hold, and
