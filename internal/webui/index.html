@@ -1992,7 +1992,14 @@ async function viewEditor(id, prefix = '') {
   // replacing the container's HTML on a keystroke would drop focus and the
   // caret. Only add and remove re-render, and both mark the form dirty
   // themselves, since the form-level input listener above never sees them.
-  const sources = (entry.sources || []).map(s => ({ ...s, usage_window: { ...(s.usage_window || {}) } }));
+  // A stored source carries only the keys it has (omitempty), so a loaded
+  // row may lack id, title or author entirely; the save path trims every
+  // one of them. The defaults keep those reads on strings — usage_count
+  // stays absent, because absent and 0 are different claims.
+  const sources = (entry.sources || []).map(s => ({
+    resource: '', id: '', title: '', author: '', last_modified: '',
+    ...s, usage_window: { ...(s.usage_window || {}) },
+  }));
   const params = (entry.parameters || []).map(p => ({ ...p }));
 
   const srcRow = (s, i) => `
@@ -2202,9 +2209,13 @@ async function viewEditor(id, prefix = '') {
     }
     // A source with nothing in it is a row the user opened and left, not a
     // citation — dropping it here keeps an accidental ＋ from failing the
-    // save, while a half-filled one still gets the server's answer below.
+    // save, while a half-filled one still gets the resource check below.
+    // "Filled" means any field at all, the dates and the count included:
+    // a row somebody typed a value into is half-filled, not abandoned.
     const filledSources = sources.filter(s =>
-      s.resource.trim() || s.id.trim() || s.title.trim() || s.author.trim());
+      s.resource.trim() || s.id.trim() || s.title.trim() || s.author.trim() ||
+      s.last_modified || String(s.usage_count ?? '').trim() ||
+      s.usage_window.from || s.usage_window.to);
     const blank = filledSources.findIndex(s => !s.resource.trim());
     if (blank >= 0) {
       errBox.innerHTML = `<div class="error-banner">Source ${blank + 1} needs a resource — the artifact it cites. Fill it in or remove the row.</div>`;
