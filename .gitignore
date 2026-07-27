@@ -1,3 +1,8 @@
 /ochakai
 *.test
 dist/
+
+# Claude Code. The shared settings and skills under .claude/ are tracked;
+# these are per-developer or per-session and are not.
+.claude/settings.local.json
+.claude/worktrees/

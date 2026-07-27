@@ -28,16 +28,26 @@ config your everyday CLI reads.
 
 ## Tests and checks
 
-CI runs exactly this — make it pass locally before opening a PR:
+One command, and it is the one CI runs — make it pass before opening a
+PR:
 
 ```sh
-gofmt -l .          # must print nothing
-go vet ./...
-go test -race ./...
-CGO_ENABLED=0 go build -trimpath ./...
-go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+scripts/check
 ```
+
+That is `gofmt -l .`, `go vet ./...`, `go test -race -count=1 ./...`, a
+`CGO_ENABLED=0 go build -trimpath ./...`, golangci-lint, and
+govulncheck, in that order. A step at a time when you are iterating:
+
+```sh
+scripts/check core   # the four fast ones — this is what CI's test job runs
+scripts/check lint
+scripts/check vuln
+```
+
+CI calls the same script for `core` and reads the pinned golangci-lint
+version out of [ci.yaml](.github/workflows/ci.yaml), so there is no
+second copy of any of this to keep in sync.
 
 The linters are configured in [.golangci.yml](.golangci.yml) and chosen so
 a clean tree reports nothing — a finding means new code, not a linter's
@@ -70,12 +80,29 @@ the newest release in `CHANGELOG.md` and the issue template's
 placeholder; see [Releases](#releases).
 
 The store integration test is skipped unless a real PostgreSQL is
-available (CI runs one as a service container):
+available (CI runs one as a service container). `scripts/check --db`
+starts one in Docker and removes it afterwards; by hand it is:
 
 ```sh
 docker run -d --rm -p 55433:5432 -e POSTGRES_PASSWORD=t -e POSTGRES_USER=t -e POSTGRES_DB=t pgvector/pgvector:pg17
 OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go test ./internal/store/
 ```
+
+## Working with Claude Code
+
+The repository checks in a `.claude/settings.json` with **hooks only** —
+currently one that runs `gofmt` on Go files as they are written, since
+that is the cheapest CI failure to avoid. Permissions are a personal
+choice and belong in `.claude/settings.local.json`, which is not tracked.
+
+`.claude/skills/` holds the procedures that are long enough to get wrong
+from memory: `release` and `design-doc`. They are the same procedures
+written out below and in [CLAUDE.md](CLAUDE.md); if you change one,
+change the other.
+
+Unrelated to any of this, `examples/claude-code/` is a *product* example
+— hooks that pull team knowledge out of a running ochakai and write back
+to it. It is not part of this repository's own setup.
 
 ## Design docs
 
@@ -135,7 +162,8 @@ Two decisions worth knowing before proposing features:
 
 A release is a tag. Everything else is automation, but three files carry
 a version number that the tag does not update on its own, so cutting a
-release starts with a PR.
+release starts with a PR. (Working with Claude Code: the `release` skill
+is this section as a running order.)
 
 **1. Prepare, in a PR.** With CI green on `main`:
 

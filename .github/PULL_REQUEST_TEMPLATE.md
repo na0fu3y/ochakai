@@ -4,12 +4,10 @@
 
 ## Checks
 
-CI runs exactly this; make it pass locally first (CONTRIBUTING.md has the
+CI runs the same script; make it pass locally first (CONTRIBUTING.md has the
 context, including the store integration test and the fuzz targets).
 
-- [ ] `gofmt -l .` prints nothing; `go vet ./...`; `go test -race ./...`
-- [ ] `CGO_ENABLED=0 go build -trimpath ./...`
-- [ ] golangci-lint and govulncheck report nothing
+- [ ] `scripts/check` is clean — add `--db` when the change touches the store
 - [ ] Behavior changes come with tests
 
 ## Surfaces and contract

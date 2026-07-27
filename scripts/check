@@ -1,0 +1,136 @@
+#!/bin/sh
+# check: run the checks CI runs, in the order CI runs them.
+#
+#   scripts/check          everything (core, lint, vuln)
+#   scripts/check core     gofmt, go vet, go test -race, CGO_ENABLED=0 build
+#   scripts/check lint     golangci-lint
+#   scripts/check vuln     govulncheck
+#   scripts/check --db …   run a throwaway PostgreSQL for the store tests
+#
+# CI's test job runs `scripts/check core`, so those four stay identical by
+# construction. The lint and vuln jobs run their tools directly — lint via
+# the golangci-lint action, which installs a released binary instead of
+# building one from source — so this script takes the linter version from
+# ci.yaml rather than pinning a second copy of it.
+#
+# The store integration test is skipped unless a PostgreSQL is reachable.
+# `--db` starts one in Docker on port 55433 and removes it on exit;
+# without it, an already-exported OCHAKAI_TEST_DATABASE_URL is used as is.
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+want_db=no
+steps=""
+for arg in "$@"; do
+	case $arg in
+	--db) want_db=yes ;;
+	core | lint | vuln) steps="$steps $arg" ;;
+	-h | --help)
+		awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"
+		exit 0
+		;;
+	*)
+		echo "check: unknown argument: $arg" >&2
+		exit 2
+		;;
+	esac
+done
+[ -n "$steps" ] || steps="core lint vuln"
+
+step() { printf '\n\033[1m==> %s\033[0m\n' "$*" >&2; }
+
+start_db() {
+	if [ -n "${OCHAKAI_TEST_DATABASE_URL:-}" ]; then
+		echo "check: OCHAKAI_TEST_DATABASE_URL is already set — using it, not starting a container" >&2
+		return
+	fi
+	OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable'
+	export OCHAKAI_TEST_DATABASE_URL
+
+	# Reuse whatever already answers on the port. Running this twice, or
+	# alongside a database left up from an earlier session, should not be
+	# an error — and stopping someone else's container is worse.
+	if nc -z localhost 55433 >/dev/null 2>&1; then
+		step "reusing the PostgreSQL already on port 55433"
+		return
+	fi
+
+	command -v docker >/dev/null 2>&1 || {
+		echo "check: --db needs docker, or a PostgreSQL on port 55433" >&2
+		exit 2
+	}
+	step "starting PostgreSQL for the store tests"
+	cid=$(docker run -d --rm -p 55433:5432 --name ochakai-test-pg \
+		-e POSTGRES_USER=t -e POSTGRES_PASSWORD=t -e POSTGRES_DB=t \
+		pgvector/pgvector:pg17)
+	# shellcheck disable=SC2064 # $cid is meant to expand now, not at exit
+	trap "docker stop $cid >/dev/null" EXIT INT TERM
+	i=0
+	until docker exec "$cid" pg_isready -U t >/dev/null 2>&1; do
+		i=$((i + 1))
+		[ "$i" -lt 30 ] || {
+			echo "check: PostgreSQL did not become ready" >&2
+			exit 1
+		}
+		sleep 1
+	done
+}
+
+# The version the golangci-lint action installs in CI. Parsed rather than
+# duplicated: a pin that lives in two files is a pin that drifts.
+linter_version() {
+	awk '/golangci-lint-action/ {f = 1}
+	     f && $1 == "version:" {print $2; exit}' .github/workflows/ci.yaml
+}
+
+run_core() {
+	step "gofmt"
+	test -z "$(gofmt -l .)" || {
+		gofmt -l .
+		exit 1
+	}
+	step "go vet"
+	go vet ./...
+	step "go test -race"
+	if [ -z "${OCHAKAI_TEST_DATABASE_URL:-}" ]; then
+		echo "check: OCHAKAI_TEST_DATABASE_URL unset — store tests will skip (see --db)" >&2
+	fi
+	# -count=1 for the same reason CI passes it: the store tests talk to
+	# Postgres, which the test cache cannot see.
+	go test -race -count=1 ./...
+	step "CGO_ENABLED=0 go build"
+	CGO_ENABLED=0 go build -trimpath ./...
+}
+
+run_lint() {
+	v=$(linter_version)
+	case $v in
+	v*) ;;
+	*)
+		echo "check: could not read the golangci-lint version from .github/workflows/ci.yaml" >&2
+		exit 1
+		;;
+	esac
+	step "golangci-lint $v"
+	go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" run ./...
+}
+
+run_vuln() {
+	step "govulncheck"
+	# Unpinned, like CI: a new govulncheck release failing means a new
+	# vulnerability, not a new check.
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+}
+
+if [ "$want_db" = yes ]; then start_db; fi
+
+for s in $steps; do
+	case $s in
+	core) run_core ;;
+	lint) run_lint ;;
+	vuln) run_vuln ;;
+	esac
+done
+
+step "ok"
