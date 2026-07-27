@@ -18,6 +18,11 @@ last entry.
 
 ### Added
 
+- `examples/demo` — a ten-entry knowledge base loaded with
+  `ochakai import examples/demo`, and now what the quick start registers.
+  Entries link to each other, two are drafts and one is past its declared
+  expiry, so `get_context`, backlinks, the review queue and the stale
+  feed all have something to show on a base that is a minute old.
 - `ochakai mcp-stdio` — speaks MCP on stdin/stdout and forwards to the
   selected server, for clients that can only launch a command and for any
   client against Cloud Run, where the request needs a Google ID token the

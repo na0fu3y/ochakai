@@ -78,15 +78,25 @@ git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up
 ```
 
-Register the example golden query — a knowledge entry like any other —
-and try a search; everything goes through the API, so plain curl works
-too:
+Load the demo knowledge base — ten entries about one invented retail
+domain — and try a search; everything goes through the API, so plain curl
+works too:
 
 ```sh
 export OCHAKAI_URL=http://localhost:8080
-go run ./cmd/ochakai create queries/monthly-revenue -f examples/golden-query.md
+go run ./cmd/ochakai import examples/demo
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
+
+[examples/demo](examples/demo) is a knowledge base rather than a sample
+file: metrics, attested computations, an insight on how to read the
+numbers, a glossary term the others depend on, a table catalog entry.
+They link to each other, so `get_context` and backlinks have something to
+expand; two are drafts, so the review queue is not empty; one is past the
+expiry its author declared, so the stale feed has an occupant. The
+numbers and table names are invented — it is there to be explored, not
+copied into your warehouse. For a single entry instead, there is
+[examples/golden-query.md](examples/golden-query.md).
 
 Every client command needs to know which server it is talking to. The
 environment variable is the explicit way and the right one for a trial;
@@ -200,8 +210,8 @@ and which clients cannot reach an IAM-restricted deployment at all:
 ### Try a prompt
 
 Once an agent is connected, four prompts walk the whole loop. Run them
-against the quick start's knowledge base — the one entry it registered is
-enough to see the shape.
+against the quick start's knowledge base — the demo bundle has enough in
+it that each one comes back with something.
 
 **Recall.** Ask something the knowledge base can answer and watch the
 agent reach for it rather than guess:
