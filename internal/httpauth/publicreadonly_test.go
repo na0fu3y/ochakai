@@ -14,7 +14,7 @@ import (
 // unsignedToken builds a token whose payload names whoever you like and
 // whose signature is the placeholder Cloud Run substitutes. Nothing
 // verifies it — which is the whole reason the public posture exists
-// (design doc 0041 §1).
+// (design doc 0042 §1).
 func unsignedToken(email string) string {
 	part := func(v any) string {
 		b, _ := json.Marshal(v)
@@ -25,7 +25,7 @@ func unsignedToken(email string) string {
 		"SIGNATURE_REMOVED_BY_GOOGLE"
 }
 
-// The claim design doc 0041 §3 makes is not "the actor is anonymous" but
+// The claim design doc 0042 §3 makes is not "the actor is anonymous" but
 // "the actor does not depend on the request". A forged token, a real
 // one, a delegation header and nothing at all must all resolve the same,
 // because on a public deployment none of them is evidence of anything.
@@ -64,7 +64,7 @@ func TestPublicReadOnlyIgnoresEveryIdentityHeader(t *testing.T) {
 }
 
 // A demo visitor arrives with no credentials. Without this posture they
-// get a 401 and never see the product (design doc 0041 §1).
+// get a 401 and never see the product (design doc 0042 §1).
 func TestPublicReadOnlyRefusesNobody(t *testing.T) {
 	var seen domain.Actor
 	h := Middleware(&config.Config{PublicReadOnly: true, ReadOnly: true},

@@ -64,7 +64,7 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 	if cfg.PublicReadOnly {
 		// Anyone may reach this deployment, so nothing verified the token
 		// and believing it would let a stranger name any person (design
-		// doc 0041). Reading it and ignoring the result would be the same
+		// doc 0042). Reading it and ignoring the result would be the same
 		// outcome by a longer road, and would leave a header parser on a
 		// public surface for no reason. No header is read, no caller is
 		// refused, and the answer does not depend on the request — which

@@ -67,7 +67,7 @@ last entry.
   anonymous visitor a demo is made of. It implies `OCHAKAI_READ_ONLY`
   and cannot be separated from it, so a publicly readable *and writable*
   ochakai is not a configuration the server accepts; setting it with
-  `OCHAKAI_INSECURE_DEV` is refused at startup (design doc 0041).
+  `OCHAKAI_INSECURE_DEV` is refused at startup (design doc 0042).
   Default: off, and the private posture is untouched — a caller with no
   token is still a 401 there.
 - `OCHAKAI_READ_ONLY` — serve knowledge without changing it. Every write

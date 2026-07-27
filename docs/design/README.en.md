@@ -76,6 +76,23 @@ For the shape of the system rather than the history of it, read
   at all, the web UI stops drawing buttons that would fail, and
   `ochakai whoami` reports the mode.
 
+- **[0042 The public read-only posture](0042-public-read-only.md)** —
+  *Accepted.* `OCHAKAI_PUBLIC_READ_ONLY=true` is the posture for a
+  deployment anyone may reach — a demo, or a reference-only copy handed
+  out. It reads no identity at all: `Authorization` and the delegation
+  header are ignored, every caller is `human:anonymous`, and nobody gets a
+  401. Reading a token nothing verified would be worse than ignoring it,
+  since without Cloud Run IAM in front a forged one could name any person
+  while the anonymous visitor a demo is made of is turned away. It implies
+  0040's read-only mode and cannot be separated from it: not recording who
+  asked is defensible only because nothing is written. Not a revision of
+  0002 — reading less provenance is the opposite of adding authorization —
+  and deliberately not spelled `OCHAKAI_INSECURE_DEV`, which also lets
+  anyone delegate and must stay a name that means "not this".
+  *For a user:* it is the only way to expose ochakai without IAM in front,
+  and a publicly readable *and* writable deployment is not a configuration
+  the program accepts.
+
 - **[0027 Delegated end-user provenance](0027-delegated-provenance.md)** —
   *Accepted; the web-UI half is 0032.* A caller listed in
   `OCHAKAI_DELEGATING_CALLERS` may name an end user with
@@ -163,10 +180,11 @@ For the shape of the system rather than the history of it, read
 - **[0017 The path is the address; the type is an
   attribute](0017-path-addressing.md)** — *Accepted; the id character set
   was relaxed by 0019 §2, the type vocabulary replaced by 0023 and 0038,
-  and filtering by address added by 0041.* Removes the rule that a path's first segment names the type. The
-  full path is the id and the sole address; the primary key becomes the id
-  alone. A file with no frontmatter `type` is skipped and reported rather
-  than having a type inferred from where it sits.
+  and filtering by address added by 0041.* Removes the rule that a path's
+  first segment names the type. The full path is the id and the sole
+  address; the primary key becomes the id alone. A file with no frontmatter
+  `type` is skipped and reported rather than having a type inferred from
+  where it sits.
   *For a user:* MCP address-taking tools take one argument instead of two,
   and an exported bundle's directory layout comes from ids alone — so
   organize files however you like.
