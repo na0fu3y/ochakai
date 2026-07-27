@@ -42,15 +42,11 @@ jobs:
           restore-keys: |
             test-go-${{ hashFiles('go.sum') }}-
             test-go-
-      - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - run: go vet ./...
-      # -count=1: with a warm build cache go would reuse cached test
-      # results, but the store tests talk to Postgres, which the test
-      # cache cannot see — make them run every time.
-      - run: go test -race -count=1 ./...
+      # gofmt, go vet, go test -race, and the CGO_ENABLED=0 build. Run
+      # through the script contributors run so the two cannot drift.
+      - run: scripts/check core
         env:
           OCHAKAI_TEST_DATABASE_URL: postgres://t:t@localhost:55433/t?sslmode=disable
-      - run: CGO_ENABLED=0 go build -trimpath ./...
       # Save only from main. A cache saved by a pull request run is
       # scoped to that pull request's merge ref and can only be restored
       # by re-runs of the same pull request, while every branch can
@@ -94,6 +90,9 @@ jobs:
       # three minutes, and the reason this job's cache was 586 MB. The
       # action installs a released binary instead. `args` is explicit
       # because the default set of packages is not documented.
+      #
+      # `scripts/check lint` reads the version below out of this file, so
+      # this is the one place it is written.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2

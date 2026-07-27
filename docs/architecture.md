@@ -370,8 +370,10 @@ machines outside the code to check three specific things.
   replay under an ordinary `go test`, so CI needs no new shape.
 
 Alongside those, CI runs `gofmt -l .`, `go vet`, `go test -race`, a
-`CGO_ENABLED=0` build, and `govulncheck`; [CONTRIBUTING.md](../CONTRIBUTING.md)
-has the exact commands and the setup for the store integration tests.
+`CGO_ENABLED=0` build, and `govulncheck` — all of it through
+`scripts/check`, which is also what a contributor runs, so the two cannot
+drift. [CONTRIBUTING.md](../CONTRIBUTING.md) has the invocations and the
+setup for the store integration tests.
 Images are published with SBOM and SLSA provenance, and workflow actions
 are pinned by commit SHA.
 

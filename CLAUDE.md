@@ -14,24 +14,24 @@ first to find which docs describe the current state of an area; a
 superseded or amended doc says so in its `Status:` header.
 
 When a change alters an accepted decision, add a new numbered design
-doc in the same PR and keep the index truthful:
-
-1. Update the `Status:` header of every older doc the new one
-   supersedes or amends, linking to the new number.
-2. Update the index: add the new doc to its area with a one-line
-   summary, adjust the status notes of amended docs.
-3. Avoid amendment chains — if this would be the second partial
-   amendment stacked on the same doc, write a full replacement for the
-   area and mark the older docs Superseded instead.
+doc in the same PR and keep the index truthful — the `design-doc` skill
+has the full procedure (new number, older docs' `Status:` headers, the
+index entry, and why amendment chains get a replacement instead).
 
 ## Checks and conventions
 
-CI runs `gofmt -l .`, `go vet`, `go test -race`, a `CGO_ENABLED=0`
-build, golangci-lint, and govulncheck — see
-[CONTRIBUTING.md](CONTRIBUTING.md) for the exact commands and the store
-integration test setup. Linters are configured in
-[.golangci.yml](.golangci.yml) and chosen so a clean tree reports
-nothing ([docs/design/0035](docs/design/0035-verifiability.md)).
+Run the checks CI runs:
+
+```sh
+scripts/check          # everything; `scripts/check core` is CI's test job
+scripts/check --db     # plus a throwaway PostgreSQL for the store tests
+```
+
+CI calls the same script, so the two cannot drift. Linters are
+configured in [.golangci.yml](.golangci.yml) and chosen so a clean tree
+reports nothing ([docs/design/0035](docs/design/0035-verifiability.md));
+[CONTRIBUTING.md](CONTRIBUTING.md) explains the store test setup and
+fuzzing.
 
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml); keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
@@ -40,3 +40,6 @@ nothing ([docs/design/0035](docs/design/0035-verifiability.md)).
   [docs/design/0015](docs/design/0015-surface-consistency.md)
   (REST / MCP / CLI / Web UI — including deliberate omissions).
 - Write commit messages and code comments in English.
+- Cutting a release is a reviewed PR, then a tag, then verification —
+  use the `release` skill rather than working from memory. A pushed tag
+  is permanent.
