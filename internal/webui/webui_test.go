@@ -254,3 +254,30 @@ func section(t *testing.T, page, open, close string) string {
 	}
 	return rest[:end]
 }
+
+// Since design doc 0013 an attachment is any file, not only an image, and
+// a plain link is the only notation that can reference a non-image one —
+// the attachments tab prints exactly that form for authors to paste. The
+// link renderer used to consult only the entry resolver, which returns
+// null for anything that is not a *.md, so those references rendered as
+// raw markdown: the page told people to write a reference it would not
+// draw. Both notations resolve through the same file resolver now.
+func TestBodyLinksToAttachmentsResolve(t *testing.T) {
+	page := string(Index)
+	i := strings.Index(page, "const link = (m, text, ref)")
+	if i < 0 {
+		t.Fatal("the markdown link renderer moved without updating this guard")
+	}
+	body := page[i:]
+	if end := strings.Index(body, "\n  };"); end >= 0 {
+		body = body[:end]
+	}
+	if !strings.Contains(body, "resolveFile") {
+		t.Errorf("a body link no longer falls back to the entry's attachments:\n%s", body)
+	}
+	// The image notation shares the resolver; a rename that split them
+	// again would take one of the two back to literal text.
+	if !strings.Contains(page, "const img = (m, alt, ref)") || !strings.Contains(page, "resolveFile && resolveFile(ref)") {
+		t.Error("the image renderer no longer shares the attachment resolver")
+	}
+}

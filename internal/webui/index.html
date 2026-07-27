@@ -574,25 +574,31 @@ function crumbTrail(dirs, leaf) {
 }
 
 /* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
-// resolveImg maps an image reference from the body to a URL (the detail
-// view resolves entry-relative references to attachment URLs); references
-// it cannot resolve stay literal text rather than rendering broken images.
-// resolveEntry does the same for links to other entries — the edges the
-// server derives from this very text (design doc 0024) — returning a
-// route or null.
-function md(src, resolveImg, resolveEntry) {
+// resolveFile maps a reference from the body to an attachment URL (the
+// detail view resolves entry-relative references against the entry's
+// files); references it cannot resolve stay literal text rather than
+// rendering broken images and dead links. resolveEntry does the same for
+// links to other entries — the edges the server derives from this very
+// text (design doc 0024) — returning a route or null.
+function md(src, resolveFile, resolveEntry) {
   const lines = String(src ?? '').split('\n');
   let out = '', inCode = false, inList = null, para = [];
   const img = (m, alt, ref) => {
-    const url = /^https?:/.test(ref) ? ref : resolveImg && resolveImg(ref);
+    const url = /^https?:/.test(ref) ? ref : resolveFile && resolveFile(ref);
     return url ? `<img src="${url}" alt="${alt}" loading="lazy">` : m;
   };
   // An http(s) target leaves the app; anything else is a bundle reference,
-  // and becomes a link exactly when it names an entry.
+  // and becomes a link when it names an entry or a file attached to this
+  // one. Since design doc 0013 an attachment is any file, not only an
+  // image, and a link is the only way to reference a non-image one — the
+  // attachments tab tells authors to write exactly this — so the same
+  // resolver serves both notations.
   const link = (m, text, ref) => {
     if (/^https?:/.test(ref)) return `<a href="${ref}" target="_blank" rel="noopener">${text}</a>`;
     const route = resolveEntry && resolveEntry(ref);
-    return route ? `<a href="${route}">${text}</a>` : m;
+    if (route) return `<a href="${route}">${text}</a>`;
+    const file = resolveFile && resolveFile(ref);
+    return file ? `<a href="${file}" target="_blank" rel="noopener">${text}</a>` : m;
   };
   // Everything after the code-span pass is applied outside <code> only:
   // markup shown as an example is text, not markup. That is also the rule
@@ -1512,7 +1518,7 @@ async function viewDetail(id) {
     }
     return out.join('/');
   };
-  const resolveImg = ref => {
+  const resolveFile = ref => {
     const p = normalize(ref.startsWith('/') ? ref : (docDir ? docDir + '/' : '') + ref);
     const canonical = a => entry.id + '/' + a.name;
     let hit = atts.find(a => p === (a.okf_path || canonical(a)) || p === canonical(a));
@@ -1546,7 +1552,7 @@ async function viewDetail(id) {
     // whoever is reading the body is exactly who needs the list.
     overview: () => `
       ${entry.description ? `<p style="font-size:1.02rem">${esc(entry.description)}</p>` : ''}
-      ${entry.body ? `<div class="md">${md(entry.body, resolveImg, resolveEntry)}</div>` : ''}
+      ${entry.body ? `<div class="md">${md(entry.body, resolveFile, resolveEntry)}</div>` : ''}
       ${!entry.description && !entry.body ? '<div class="empty">No description or body.</div>' : ''}
       ${sourcesSection(entry)}`,
     attrs: () => {

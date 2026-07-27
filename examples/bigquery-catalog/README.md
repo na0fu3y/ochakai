@@ -27,13 +27,16 @@ ochakai import examples/bigquery-catalog/bundle
 | [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`, the parameters, the receipt, and every decision the projection makes |
 | [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | what the `executor` points at: the identity to run as, the IAM roles, the receipt fields |
 
-[`sync-bigquery-catalog.py`](bundle/jobs/sync-bigquery-catalog.py) is the
-computation itself. It is named by the entry's `computation` key as a file
-rather than pasted into a `# Computation` fence — the form
+[`sync-bigquery-catalog.py`](bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py)
+is the computation itself. It is named by the entry's `computation` key as
+a file rather than pasted into a `# Computation` fence — the form
 [OKF SPEC](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 §10.2 gives for a computation too long to inline — and it travels with the
 entry as an attachment, so `ochakai get jobs/sync-bigquery-catalog
---download .` brings back the code with the contract.
+--download .` brings back the code with the contract. It sits in the
+entry-named directory beside the document, which is where `ochakai export`
+puts an attachment and what the web UI's attachments tab tells you to
+reference (design doc [0013](../../docs/design/0013-attachment-files-gcs-only.md)).
 
 That shape is the point as much as the sync is. An agent told to refresh
 the catalog gets a contract that says *supply these parameters and run this
@@ -51,7 +54,7 @@ actually granted them.
 ```sh
 pip install google-cloud-bigquery google-auth requests
 
-python bundle/jobs/sync-bigquery-catalog.py \
+python bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py \
   --project my-project --datasets shop \
   --ochakai-url https://ochakai-<hash>.run.app --dry-run
 ```
