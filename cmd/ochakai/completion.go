@@ -92,7 +92,9 @@ _ochakai() {
         '*--type[filter by type]:type:(@TYPES@)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
-        '--sort[list instead of searching: by verification age, demand, or failed reports]:sort:(verified_at usage failed)' \
+        '*--prefix[only entries under this path]:prefix:' \
+        '--source[only entries citing this resource]:source:' \
+        '--sort[list instead of searching: by verification age, demand, failed reports, or declared expiry]:sort:(verified_at usage failed stale_after)' \
         '--limit[max results]:limit:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
@@ -102,6 +104,7 @@ _ochakai() {
         '*--type[filter by type]:type:(@TYPES@)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
+        '*--prefix[only entries under this path]:prefix:' \
         '--limit[max full entries]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
         '--min-score[drop hits below this score]:min-score:' \
@@ -190,14 +193,14 @@ _ochakai() {
   case $prev in
     --type|-type) COMPREPLY=($(compgen -W "@TYPES@" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
-    --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed" -- "$cur")); return ;;
+    --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed stale_after" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --sort --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --sort --limit --json --url" ;;
     browse)        opts="--json --url" ;;
-    context)       opts="--type --status --tag --limit --budget --min-score --json --url" ;;
+    context)       opts="--type --status --tag --prefix --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
@@ -281,8 +284,10 @@ complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attac
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '@TYPES@' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed' -d 'list instead of searching: by verification age, demand, or failed reports'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed stale_after' -d 'list instead of searching: by verification age, demand, failed reports, or declared expiry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'

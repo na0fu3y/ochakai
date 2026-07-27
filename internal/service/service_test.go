@@ -573,3 +573,63 @@ func TestRecommendedTypesAreWritable(t *testing.T) {
 		t.Error("an Attested Computation without a runtime must still be refused")
 	}
 }
+
+// A path scope is normalized the way a browsed path is, so a directory
+// the tree can open can be pasted into a filter unchanged (design doc
+// 0041 §2.4): NFC, no trailing slash. The empty scope is the root, which
+// narrows nothing, so it drops out rather than becoming an error or —
+// worse — a condition matching nothing.
+func TestScopedFilterNormalizesPaths(t *testing.T) {
+	nfd := "データ/売上" // デ decomposed, as macOS hands paths back
+	nfc := domain.Normalize(nfd)
+	if nfd == nfc {
+		t.Fatal("test input is already NFC; it cannot show that normalization happens")
+	}
+	for _, tc := range []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{"trailing slash is the same scope", []string{"teams/growth/"}, []string{"teams/growth"}},
+		{"decomposed path is composed", []string{nfd}, []string{nfc}},
+		{"empty scopes drop out", []string{"", "teams/growth", ""}, []string{"teams/growth"}},
+		{"only-empty leaves no condition", []string{"", "/"}, []string{}},
+		{"several scopes survive in order", []string{"teams/growth", "company"}, []string{"teams/growth", "company"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := scopedFilter(store.Filter{Prefixes: tc.in})
+			if err != nil {
+				t.Fatalf("scopedFilter(%q): %v", tc.in, err)
+			}
+			if !reflect.DeepEqual(got.Prefixes, tc.want) {
+				t.Errorf("scopedFilter(%q) = %q, want %q", tc.in, got.Prefixes, tc.want)
+			}
+		})
+	}
+}
+
+// A scope that could not lead an id is a client error, not something to
+// quietly ignore: a misspelling that returned the whole knowledge base
+// would read as "this scope holds everything".
+func TestScopedFilterRejectsImpossiblePaths(t *testing.T) {
+	for _, bad := range []string{"teams//growth", "//", "teams/.hidden", "teams/g\x00rowth"} {
+		var invalid *InvalidInputError
+		if _, err := scopedFilter(store.Filter{Prefixes: []string{bad}}); !errors.As(err, &invalid) {
+			t.Errorf("scopedFilter(%q) error = %v, want an InvalidInputError", bad, err)
+		}
+	}
+	// A space is not a mistake. Ids are file paths with no prescribed
+	// character set (design doc 0019), so a directory named "sales team"
+	// is addressable and must be scopeable.
+	if got, err := scopedFilter(store.Filter{Prefixes: []string{"teams/sales team"}}); err != nil {
+		t.Errorf("scopedFilter with a space in a segment: %v", err)
+	} else if !reflect.DeepEqual(got.Prefixes, []string{"teams/sales team"}) {
+		t.Errorf("scope with a space = %q", got.Prefixes)
+	}
+	// A filter with no scopes at all is untouched — the ordinary case
+	// must not pay for the check.
+	f, err := scopedFilter(store.Filter{Tags: []string{"core"}})
+	if err != nil || f.Prefixes != nil {
+		t.Errorf("unscoped filter = %+v, %v; want it unchanged", f, err)
+	}
+}

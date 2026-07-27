@@ -476,6 +476,103 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	}
 }
 
+// A path scope selects a subtree, not a string prefix (design doc 0041
+// §2.2). The rows here are the cases that separate the two: a sibling
+// directory whose name starts with the scope must stay out, the entry
+// sitting at the scope itself must come in, and an id containing "_"
+// must not behave like a LIKE wildcard. Several scopes are OR-ed, which
+// is the "our team's space and the company-wide one" question the filter
+// exists for.
+func TestIntegrationPrefixFilterMatchesSegments(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	// Both families this test creates, or a second run trips over its own
+	// leftovers: soft-deleted rows still hold the primary key.
+	for _, table := range []string{"knowledge", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx,
+			`DELETE FROM `+table+` WHERE id LIKE 'it-scope%' OR id LIKE 'it-elsewhere%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	ids := []string{
+		"it-scope",                  // the entry at the scope itself
+		"it-scope/metrics/revenue",  // below it
+		"it-scope/deep/a/b/c",       // arbitrarily deep below it
+		"it-scope-legacy/churn",     // sibling directory sharing the leading text
+		"it-scope_x/underscore",     // "_" is a LIKE wildcard, and must not act like one
+		"it-scopeother",             // no separator at all
+		"it-elsewhere/company/term", // the second scope in the OR
+	}
+	for _, id := range ids {
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeMetrics, ID: id, Title: id,
+			Status: domain.StatusDraft, CreatedBy: actor,
+		}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Sorted in Go, not left in the query's order: ORDER BY id follows the
+	// database's collation, which does not put "/" where byte order would
+	// (this very corpus lists it-scope-legacy/churn before
+	// it-scope/metrics/revenue). Asserting on that order would make the
+	// test agree or disagree depending on the server's locale — the same
+	// trap that keeps the filter itself off a range predicate
+	// (design doc 0041 §2.5).
+	got := func(f Filter) []string {
+		t.Helper()
+		entries, err := s.ListBySource(ctx, f, 100)
+		if err != nil {
+			t.Fatalf("ListBySource: %v", err)
+		}
+		var out []string
+		for _, k := range entries {
+			if strings.HasPrefix(k.ID, "it-scope") || strings.HasPrefix(k.ID, "it-elsewhere") {
+				out = append(out, k.ID)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+
+	one := got(Filter{Prefixes: []string{"it-scope"}})
+	want := []string{"it-scope", "it-scope/deep/a/b/c", "it-scope/metrics/revenue"}
+	if !slices.Equal(one, want) {
+		t.Errorf("prefix it-scope = %v, want %v", one, want)
+	}
+
+	both := got(Filter{Prefixes: []string{"it-scope/metrics", "it-elsewhere/company"}})
+	want = []string{"it-elsewhere/company/term", "it-scope/metrics/revenue"}
+	if !slices.Equal(both, want) {
+		t.Errorf("two scopes = %v, want %v", both, want)
+	}
+
+	// The underscore directory is reachable when it is the scope asked
+	// for — the point is that it is not reachable through "it-scope".
+	if under := got(Filter{Prefixes: []string{"it-scope_x"}}); !slices.Equal(under, []string{"it-scope_x/underscore"}) {
+		t.Errorf("prefix it-scope_x = %v, want the underscore entry", under)
+	}
+
+	// A scope naming no directory is empty, not everything: the filter
+	// cannot silently degrade to "unfiltered" when a path is misspelled.
+	if none := got(Filter{Prefixes: []string{"it-scope/nothing-here"}}); len(none) != 0 {
+		t.Errorf("unknown scope returned %v, want nothing", none)
+	}
+}
+
 // SearchLexical's substring floor must treat the query literally: a query
 // of "%" or "_" is not an ILIKE wildcard. Before the escaping fix, "%"
 // matched every entry and boosted them all; "_" matched any single

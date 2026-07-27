@@ -37,12 +37,14 @@ const exportBatch = 100
 func Handler(svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
-	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&source=...&limit=...
+	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&source=...&prefix=...&limit=...
 	// With sort=verified_at, lists by verification age (oldest first)
 	// instead of searching — the feed for canary runs.
 	// source narrows to the entries citing one resource — the reverse of
 	// sources[].resource (design doc 0037 §2.3) — and composes with a
-	// query or with any sort.
+	// query or with any sort. prefix narrows to the entries addressed
+	// under a path, repeatable and OR-ed, for scoping a search to a team's
+	// subtree and the shared one at once (design doc 0041).
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
@@ -55,6 +57,7 @@ func Handler(svc *service.Service) http.Handler {
 			Statuses: domain.ToStatuses(q["status"]),
 			Tags:     q["tag"],
 			Source:   q.Get("source"),
+			Prefixes: q["prefix"],
 		}
 		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
 		if err != nil {
@@ -77,9 +80,14 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	// GET /api/v1/context?q=...&type=...&status=...&tag=...&limit=...&budget=...
+	// GET /api/v1/context?q=...&type=...&status=...&tag=...&prefix=...&limit=...&budget=...
 	// The one-call read before answering a data question: full entries
 	// behind the top hits, expanded one hop through links.
+	//
+	// prefix scopes the search that picks those hits, not the link
+	// expansion: a scoped entry citing a glossary term outside the scope
+	// still arrives with the term, which is the whole reason this endpoint
+	// follows links (design doc 0041 §2.6).
 	//
 	// budget defaults to 0 (no cap) here, unlike MCP where it is on by
 	// default: a REST caller is a program with a pipe, not an agent with a
@@ -108,6 +116,7 @@ func Handler(svc *service.Service) http.Handler {
 				Types:    domain.ToTypes(q["type"]),
 				Statuses: domain.ToStatuses(q["status"]),
 				Tags:     q["tag"],
+				Prefixes: q["prefix"],
 			},
 			Limit: limit, MinScore: minScore, Budget: budget,
 		})

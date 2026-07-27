@@ -23,6 +23,21 @@ last entry.
   Entries link to each other, two are drafts and one is past its declared
   expiry, so `get_context`, backlinks, the review queue and the stale
   feed all have something to show on a base that is a minute old.
+- A `prefix` filter on search and `context`, across all four surfaces
+  (`?prefix=` repeated, MCP `prefixes`, `--prefix`, and a path box plus a
+  "Search here" action on every directory page in the web UI). An entry's
+  id is its address, so the path is also a scope to search within: several
+  prefixes are OR-ed, so one call can ask a subtree and a shared one
+  together, and each hit's id says which it came from. Matching is on
+  segment boundaries, so `metrics` does not reach `metrics-legacy`; a
+  trailing slash is optional. It composes with a query and with any
+  `sort`, and in `context` it scopes the search that picks the hits, not
+  the link expansion — an entry in scope still arrives with the glossary
+  term it cites (design doc 0041). No migration, no index, and no
+  behavior change for callers that pass no prefix. **This is a filter,
+  not an access control**: any caller may pass any prefix, and passing
+  none returns everything they could already reach (design doc 0002 is
+  unchanged).
 - `ochakai mcp-stdio` — speaks MCP on stdin/stdout and forwards to the
   selected server, for clients that can only launch a command and for any
   client against Cloud Run, where the request needs a Google ID token the
@@ -107,6 +122,16 @@ last entry.
   `attrs.sql` into its `# Computation` fence: SPEC §10.2 makes the fence
   the computation, and keeping a second copy left a consumer no way to
   tell which was authoritative.
+
+### Fixed
+
+- Shell completion offers `--source` on `ochakai search` and
+  `stale_after` as a `--sort` value. Both shipped in 0.14.0 and reached
+  none of the three scripts: the sort values were a hand-written subset
+  in the test, and the per-command flag list agreed with the scripts that
+  `--source` did not exist. The sort values now come from
+  `domain.ListSorts`, so a new one fails the test until every script
+  offers it.
 
 ## [0.14.0] - 2026-07-27
 

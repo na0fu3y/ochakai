@@ -191,13 +191,14 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"author declared an expiry that has now passed, most overdue first — re-check them and, if they " +
 			"still hold, update stale_after; verifying alone does not clear this feed, because the date is " +
 			"the writer's declaration and only an edit changes it. Exactly one of query / sort is required. " +
-			"source is a filter rather than a mode: it narrows to the entries citing one resource — use it " +
-			"when a source document changed and you need everything derived from it — and combines with a " +
-			"query or with any sort.",
+			"source and prefixes are filters rather than modes, and combine with a query or with any sort: " +
+			"source narrows to the entries citing one resource — use it when a source document changed and " +
+			"you need everything derived from it — while prefixes narrows to the entries living under given " +
+			"paths, which is how you separate a team's own knowledge from the company-wide vocabulary.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
-			Tags: in.Tags, Source: in.Source,
+			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
 		}
 		hits, err := svc.SearchOrList(ctx, in.Query, in.Sort, f, in.Limit)
 		if err != nil {
@@ -225,6 +226,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Query: in.Query,
 			Filter: store.Filter{
 				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
+				Prefixes: in.Prefixes,
 			},
 			Limit: in.Limit, Budget: budget,
 		})
@@ -466,6 +468,7 @@ type searchIn struct {
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string   `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
 	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed), \"stale_after\" lists entries past their declared expiry (most overdue first) — all mutually exclusive with query"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
@@ -485,6 +488,7 @@ type contextIn struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
 	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the entries plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows count against the same budget. Raise it when you need whole entries, lower it when context is tight"`
 }

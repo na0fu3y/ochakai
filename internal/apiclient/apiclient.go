@@ -132,7 +132,11 @@ type SearchParams struct {
 	// of sources[].resource (design doc 0037 §2.3). Composes with Query
 	// and with any Sort.
 	Source string
-	Limit  int
+	// Prefixes narrow to entries addressed under one of these paths
+	// (design doc 0041). Repeatable and OR-ed, matched on segment
+	// boundaries. Composes with Query and with any Sort.
+	Prefixes []string
+	Limit    int
 }
 
 func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit, error) {
@@ -154,6 +158,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	}
 	if p.Source != "" {
 		q.Set("source", p.Source)
+	}
+	for _, pre := range p.Prefixes {
+		q.Add("prefix", pre)
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
@@ -178,31 +185,49 @@ type ContextResult struct {
 	Truncated int                     `json:"truncated,omitempty"`
 }
 
-// budget, when positive, caps the response bytes server-side: entries
-// that do not fit come back as Outline instead of being dropped
-// silently. 0 asks for everything, which is what the rendered CLI
-// output wants — it caps at render time, where it can say what it left
-// out.
-func (c *Client) Context(ctx context.Context, query string, types, statuses, tags []string, limit int, minScore float64, budget int) (*ContextResult, error) {
+// ContextParams are the query parameters of GET /api/v1/context. The
+// filters mean what they mean on SearchParams; Prefixes scopes the search
+// that picks the hits and not the link expansion, so an entry in scope
+// still arrives with the companions it cites (design doc 0041 §2.6).
+type ContextParams struct {
+	Query    string
+	Types    []string
+	Statuses []string
+	Tags     []string
+	Prefixes []string
+	Limit    int
+	MinScore float64
+	// Budget, when positive, caps the response bytes server-side: entries
+	// that do not fit come back as Outline instead of being dropped
+	// silently. 0 asks for everything, which is what the rendered CLI
+	// output wants — it caps at render time, where it can say what it
+	// left out.
+	Budget int
+}
+
+func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, error) {
 	q := url.Values{}
-	q.Set("q", query)
-	if minScore > 0 {
-		q.Set("min_score", strconv.FormatFloat(minScore, 'f', -1, 64))
+	q.Set("q", p.Query)
+	if p.MinScore > 0 {
+		q.Set("min_score", strconv.FormatFloat(p.MinScore, 'f', -1, 64))
 	}
-	for _, t := range types {
+	for _, t := range p.Types {
 		q.Add("type", t)
 	}
-	for _, s := range statuses {
+	for _, s := range p.Statuses {
 		q.Add("status", s)
 	}
-	for _, t := range tags {
+	for _, t := range p.Tags {
 		q.Add("tag", t)
 	}
-	if limit > 0 {
-		q.Set("limit", strconv.Itoa(limit))
+	for _, pre := range p.Prefixes {
+		q.Add("prefix", pre)
 	}
-	if budget > 0 {
-		q.Set("budget", strconv.Itoa(budget))
+	if p.Limit > 0 {
+		q.Set("limit", strconv.Itoa(p.Limit))
+	}
+	if p.Budget > 0 {
+		q.Set("budget", strconv.Itoa(p.Budget))
 	}
 	var out ContextResult
 	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/context", q, nil, &out); err != nil {

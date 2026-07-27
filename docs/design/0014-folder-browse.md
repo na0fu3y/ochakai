@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0014: フォルダブラウズ
 
-Status: Accepted(2026-07-18 の議論で決定)。API パラメタ(type + prefix → prefix 一本)は [0017](0017-path-addressing.md) §4.7 が改訂。UI は 2026-07-19 に Browse タブから常設サイドバーへ改訂(§2.2 の追記)
+Status: Accepted(2026-07-18 の議論で決定)。API パラメタ(type + prefix → prefix 一本)は [0017](0017-path-addressing.md) §4.7 が改訂。UI は 2026-07-19 に Browse タブから常設サイドバーへ改訂(§2.2 の追記)。同じ prefix の概念を検索・context のフィルタとしても持つのは [0041](0041-path-scoped-search.md) — こちらは直下 1 階層、あちらはサブツリー全体(0041 §2.2)
 Date: 2026-07-18
 
 ## 1. 目的

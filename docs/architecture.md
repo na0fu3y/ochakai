@@ -169,6 +169,19 @@ is displayed by the last segment of its id, the way a file is named by
 its filename — and ids are NFC-normalized and searchable in their own
 right (design doc [0022](design/0022-filename-as-name.md)).
 
+Because the address is the path, the path is also something to search
+within. `?prefix=` narrows a search or a `context` call to a subtree,
+repeatable and OR-ed, so one call can cover two parts of the tree and
+tell the answers apart by id (design doc
+[0041](design/0041-path-scoped-search.md)). Matching is on segment
+boundaries: `metrics` does not reach `metrics-legacy`. How much this
+buys depends on what the directories mean — a tree grouped by kind is
+already served by `--type`, while directories standing for teams,
+domains or tenants are the case `--type` cannot express. ochakai
+attaches no meaning to any path either way, and the filter is not an
+access control: any caller may pass any prefix, and passing none returns
+everything they could already reach.
+
 **Types are an open set with a recommended vocabulary.** The spellings
 are the OKF knowledge-catalog vocabulary verbatim — `Attested
 Computation`, not a slug — so a bundle's types survive a round-trip with

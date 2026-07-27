@@ -156,6 +156,14 @@ type Filter struct {
 	// about one artifact that changed, and a disjunction of containment
 	// tests would not use the GIN index.
 	Source string
+	// Prefixes narrow to entries addressed under one of these paths —
+	// the id is the address (design doc 0017), so this is how a caller
+	// scopes a search to a team's subtree, the company-wide one, or both
+	// (design doc 0041). Repeatable and OR-ed, unlike Source: the ordinary
+	// question is "my scope and the shared one", and splitting that into
+	// two calls would leave the caller merging two incomparable rankings.
+	// Values arrive normalized by the service — NFC, no trailing slash.
+	Prefixes []string
 }
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
@@ -1274,6 +1282,21 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		// entries (design doc 0037 §2.3).
 		args = append(args, sourceContainment(f.Source))
 		conds = append(conds, fmt.Sprintf("%ssources @> $%d", prefix, len(args)))
+	}
+	if len(f.Prefixes) > 0 {
+		// Matching is on segment boundaries, not raw string prefixes: a
+		// path is a sequence of segments, so "metrics" covers "metrics"
+		// itself and everything under "metrics/" while leaving
+		// "metrics-legacy/churn" alone. A raw prefix would pull a
+		// neighbouring directory into a scope the caller drew around one
+		// (design doc 0041 §2.2). LIKE stays out for the same reason
+		// browsing avoids it — ids may contain "_", which LIKE reads as a
+		// wildcard.
+		args = append(args, f.Prefixes)
+		conds = append(conds, fmt.Sprintf(
+			`EXISTS (SELECT 1 FROM unnest($%d::text[]) AS p
+				WHERE %sid = p OR left(%sid, length(p) + 1) = p || '/')`,
+			len(args), prefix, prefix))
 	}
 	return strings.Join(conds, " AND "), args
 }

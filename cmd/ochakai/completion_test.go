@@ -11,15 +11,15 @@ import (
 )
 
 // Guard: the hand-written completion scripts stay in sync with the real
-// command set and the enum flag values. Type and status values come from
-// the domain package so a new enum value fails this test until every
-// script (and only the scripts) is updated by hand.
+// command set and the enum flag values. Type, status and sort values come
+// from the domain package so a new enum value fails this test until every
+// script (and only the scripts) is updated by hand. Sort used to be a
+// hand-written subset here, and the scripts had gone a release without
+// stale_after because of it.
 func TestCompletionScriptsStayInSync(t *testing.T) {
 	admin := []string{"serve", "serve-ui", "version"}
-	enums := []string{
-		"zsh bash fish",      // completion <shell>
-		"verified_at failed", // --sort
-	}
+	enums := []string{"zsh bash fish"} // completion <shell>
+	enums = append(enums, domain.ListSorts...)
 	enums = append(enums, domain.Outcomes...) // report <outcome>
 	for _, typ := range domain.Types {
 		enums = append(enums, string(typ)) // --type
@@ -64,10 +64,15 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 // spec all three hand-written scripts are checked against, both ways
 // (a flag missing from one shell, and a flag a shell offers that the
 // command does not have). Short flags (-f) are outside the check.
+//
+// This table is transcribed from the commands' flag registration by hand,
+// which is the one edge it does not cover: --source lived on `search` for
+// two releases while this table and all three scripts agreed it did not
+// exist. Adding a flag means editing here and in three scripts.
 var completionLongFlags = map[string][]string{
-	"search":    {"type", "status", "tag", "sort", "limit", "json", "url"},
+	"search":    {"type", "status", "tag", "prefix", "source", "sort", "limit", "json", "url"},
 	"browse":    {"json", "url"},
-	"context":   {"type", "status", "tag", "limit", "budget", "min-score", "json", "url"},
+	"context":   {"type", "status", "tag", "prefix", "limit", "budget", "min-score", "json", "url"},
 	"get":       {"json", "download", "url"},
 	"create":    {"json", "url"},
 	"update":    {"if-match", "json", "url"},
