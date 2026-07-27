@@ -147,7 +147,7 @@ func TestFromBundleNamespaceAttribution(t *testing.T) {
 // is its full canonical path, not just one segment deep.
 func TestFromBundleNamespaceHierarchicalID(t *testing.T) {
 	files := map[string][]byte{
-		"queries/sales/monthly.md":           []byte("---\ntype: Golden Query\ntitle: monthly\n---\n"),
+		"queries/sales/monthly.md":           []byte("---\ntype: Attested Computation\ntitle: monthly\n---\n"),
 		"queries/sales/monthly/expected.txt": []byte("month,revenue\n2026-01,100\n"),
 	}
 	_, atts, skipped, _ := FromBundle(files)

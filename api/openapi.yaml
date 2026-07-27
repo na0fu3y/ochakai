@@ -1771,15 +1771,16 @@ components:
     Type:
       type: string
       description: >
-        The OKF type vocabulary, verbatim — the built-ins (Semantic Model,
-        Metric, Golden Query, Attested Computation, Insight, Glossary Term,
-        BigQuery Dataset, BigQuery Table, Reference) are recommendations,
+        The OKF type vocabulary, verbatim — the built-ins (Metric,
+        Attested Computation, Skill, Playbook, Insight, Policy,
+        Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint,
+        Reference) are recommendations,
         not a closed set, and no server behavior hangs off any of them
-        (design docs 0023, 0028 §3, 0036 §3.6). Any
+        (design doc 0038). Any
         single-line value works as a type; OKF registers no taxonomy, so
         the spelling is the meaning and it round-trips unchanged. Matching
         is case-insensitive; the spelling you write is the one stored.
-      examples: [Semantic Model, Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
+      examples: [Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, Data Contract]
       pattern: "^[^/\\r\\n]{1,128}$"
     Status:
       type: string
@@ -2007,7 +2008,8 @@ components:
           type: object
           description: >
             Producer-defined extension keys (OKF SPEC §4.1) — e.g.
-            question/sql for a Golden Query, spec for a Semantic Model.
+            question/sql for an Attested Computation holding a verified
+            query, spec for a semantic model.
             Kept verbatim and written back at the top level of the exported
             frontmatter. Every key OKF v0.2 itself defines is a field of
             its own above; naming one here is rejected rather than stored

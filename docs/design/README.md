@@ -53,7 +53,8 @@ PR の中に残る。
   違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index)。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) — **Accepted**
   (実装済み、次のリリース 0.14.0 で出る)。**OKF 互換領域の現行ドキュメント**
-  (§5 の 2 項目は 0037 が撤回して実装した)。
+  (§5 の 2 項目は 0037 が撤回して実装した。§3.6 の型の一覧は 0038 が
+  11 型に組み替えた — 型の語彙は「ナレッジモデル」節の 0038 が現行)。
   SPEC が定義するキーは封筒に持つ、と基準を引き直し、§5.1(`sources` /
   `usage_window`)と §10.2(`runtime` / `parameters` / `computation` /
   `executor` / `attester`)を attrs から封筒フィールドへ。trust/lifecycle の
@@ -80,8 +81,14 @@ PR の中に残る。
 - [0022 ファイル名が名前](0022-filename-as-name.md) — **Accepted**。
   title の任意化、ID の検索対象化、NFC 正規化。
 - [0023 型の語彙を OKF に一本化する](0023-okf-type-vocabulary.md) —
-  **Accepted**(§3.1 の一覧に 0036 が `Attested Computation` を追加)。
-  内部スラグと OKF 表示名の二重語彙を廃止し、型の値は OKF の綴りそのものに。
+  **Superseded by 0038**(改訂の履歴: §3.1 の一覧に 0036 が
+  `Attested Computation` を追加)。内部スラグと OKF 表示名の二重語彙を
+  廃止し、型の値は OKF の綴りそのものに。
+- [0038 推奨型の語彙を OKF の証拠に合わせ直す](0038-type-vocabulary-realignment.md)
+  — **Accepted**。**型の語彙領域の現行ドキュメント**。`Semantic Model` と
+  `Golden Query` を外し、`Skill` / `Playbook` / `Policy` / `API Endpoint` を
+  足して 11 型に(退役した綴りは自由型として存続、マイグレーションなし)。
+  語彙を述べる 11 箇所を `domain.TypesHint()` と外側のテストで固定する。
 - [0024 リンクは本文から導出する](0024-links-from-body.md) —
   **Accepted**。構造化 `links` フィールドを廃止し、リンクは本文
   markdown から導出する。
@@ -154,11 +161,12 @@ PR の中に残る。
 ## セマンティックモデルと compile
 
 - [0018 import-ossie の廃止](0018-semantic-model-as-knowledge.md) —
-  **Accepted**(compile 面と書き込み時検証は 0028 が撤去)。
-  セマンティックモデルは専用機構を持たず、通常のナレッジエントリ。
+  **Accepted**(compile 面と書き込み時検証は 0028 が撤去、推奨タイプ
+  `Semantic Model` は 0038 が語彙から外した)。セマンティックモデルは
+  専用機構を持たず、通常のナレッジエントリ。
 - [0028 compile_sql とセマンティックモデル面の撤去](0028-retire-compile-sql.md)
-  — **Accepted**。決定的 SQL コンパイルとその周辺(API・MCP・CLI・UI)を
-  すべて撤去。
+  — **Accepted**(§3 の「`Semantic Model` を語彙に残す」は 0038 が覆した)。
+  決定的 SQL コンパイルとその周辺(API・MCP・CLI・UI)をすべて撤去。
 
 ## MCP OAuth コネクタ(撤去済み)
 

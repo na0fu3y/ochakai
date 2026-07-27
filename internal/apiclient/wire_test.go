@@ -22,7 +22,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 	server := service.BrowseResult{
 		Dirs: []store.DirCount{{Name: "sales", Count: 4}},
 		Entries: []store.BrowseEntry{
-			{Type: domain.TypeQueries, ID: "sales/monthly-revenue", Title: "月次売上",
+			{Type: domain.TypeComputations, ID: "sales/monthly-revenue", Title: "月次売上",
 				Description: "月次の確定売上", Status: domain.StatusVerified, UpdatedAt: when},
 		},
 		Truncated: true,
@@ -38,7 +38,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 	want := BrowseResult{
 		Dirs: []BrowseDir{{Name: "sales", Count: 4}},
 		Entries: []BrowseEntry{
-			{Type: "Golden Query", ID: "sales/monthly-revenue", Title: "月次売上",
+			{Type: "Attested Computation", ID: "sales/monthly-revenue", Title: "月次売上",
 				Description: "月次の確定売上", Status: domain.StatusVerified, UpdatedAt: when},
 		},
 		Truncated: true,

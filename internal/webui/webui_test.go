@@ -3,6 +3,8 @@ package webui
 import (
 	"strings"
 	"testing"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
 // The page is plain JavaScript with no build step and no test runner, so
@@ -208,4 +210,47 @@ func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
 	if !strings.Contains(page, "Verifying does <em>not</em> clear this one") {
 		t.Error("the stale feed banner no longer explains that verifying does not empty it")
 	}
+}
+
+// The page carries its own copy of the type vocabulary — an icon per type
+// and the hint under the new-entry form — because it is a static asset
+// with no build step to interpolate domain.Types into. That copy has
+// drifted before: when Attested Computation joined the vocabulary the
+// icons gained it and the form hint did not, and neither noticed. A
+// retired type is the worse direction, since free types mean the UI would
+// go on recommending a spelling nothing else does, forever, without
+// failing anything (design doc 0038 §4.4).
+func TestTypeVocabularyMatchesDomain(t *testing.T) {
+	page := string(Index)
+	icons := section(t, page, "const TYPE_ICONS = {", "};")
+	hint := section(t, page, "What the entry is:", "</div>")
+	for _, ty := range domain.Types {
+		if !strings.Contains(icons, "'"+string(ty)+"'") {
+			t.Errorf("TYPE_ICONS has no icon for %q", ty)
+		}
+		if !strings.Contains(hint, string(ty)) {
+			t.Errorf("the new-entry hint omits the recommended type %q", ty)
+		}
+	}
+	for _, retired := range []string{"Semantic Model", "Golden Query"} {
+		if strings.Contains(icons, retired) || strings.Contains(hint, retired) {
+			t.Errorf("the page still offers %q, retired by design doc 0038", retired)
+		}
+	}
+}
+
+// section returns the text between the first open and the next close, so a
+// guard reads one construct rather than the whole page.
+func section(t *testing.T, page, open, close string) string {
+	t.Helper()
+	i := strings.Index(page, open)
+	if i < 0 {
+		t.Fatalf("%q is gone from the page; the guard needs updating", open)
+	}
+	rest := page[i:]
+	end := strings.Index(rest, close)
+	if end < 0 {
+		t.Fatalf("%q never closes with %q", open, close)
+	}
+	return rest[:end]
 }

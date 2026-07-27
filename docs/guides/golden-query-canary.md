@@ -8,6 +8,15 @@ result back — the practice OpenAI's in-house data agent runs continuously
 against its golden queries, and the execution-accuracy metric text-to-SQL
 evaluation uses.
 
+**Golden queries are stored as `Attested Computation` entries.** ochakai
+has no type of its own for them (design doc
+[0038](../design/0038-type-vocabulary-realignment.md)): OKF SPEC §10 already
+defines the concept, so a golden query is an Attested Computation whose
+`runtime` says where the SQL runs, whose `# Computation` body fence holds
+the SQL, and whose `attrs.question` carries the question it answers. If
+your base predates this, entries typed `Golden Query` keep working as free
+types — substitute that spelling in the `--type` filters below.
+
 **ochakai does not execute SQL.** The canary runs on your side — a CI job
 or a scheduled agent — and the warehouse credentials stay there. ochakai
 supplies the material and records what you found.
@@ -17,12 +26,12 @@ supplies the material and records what you found.
 ### 1. List — least recently verified first
 
 ```sh
-ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100 --json \
-  | jq -r '.hits[] | [.id, .verified_at, .attrs.sql] | @tsv'
+ochakai search --sort verified_at --type 'Attested Computation' --status verified --limit 100 --json \
+  | jq -r '.hits[] | [.id, .verified_at, .attrs.question] | @tsv'
 ```
 
 Straight REST is
-`GET /api/v1/knowledge?type=Golden%20Query&status=verified&sort=verified_at&limit=100`;
+`GET /api/v1/knowledge?type=Attested%20Computation&status=verified&sort=verified_at&limit=100`;
 over MCP, `search_knowledge` with `sort: "verified_at"` returns the same
 feed. `sort=verified_at` orders by verification time, oldest first, with
 unverified entries last. "Verified queries not re-checked in 90 days" is
@@ -31,8 +40,11 @@ where a canary run starts. Checking out an OKF export
 
 ### 2. Run — with your own credentials
 
-Execute each entry's `attrs.sql` against the warehouse (`bq query` for
-BigQuery). ochakai takes no part in this step.
+Execute each entry's `# Computation` fence against the warehouse
+(`bq query` for BigQuery), reading `runtime` to know which warehouse that
+is. The fence is the computation — SPEC §10.2 puts it there rather than in
+`attrs`, so there is exactly one copy for an attester to canonicalize a
+run against. ochakai takes no part in this step.
 
 ### 3. Judge
 
@@ -95,12 +107,12 @@ jobs:
         run: |
           TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
           curl -s -H "Authorization: Bearer $TOKEN" \
-            "$OCHAKAI_URL/api/v1/knowledge?type=Golden%20Query&status=verified&sort=verified_at&limit=50" \
+            "$OCHAKAI_URL/api/v1/knowledge?type=Attested%20Computation&status=verified&sort=verified_at&limit=50" \
           | jq -c '.hits[]' | while read -r hit; do
               id=$(jq -r .id <<<"$hit")
-              sql=$(jq -r .attrs.sql <<<"$hit")
+              sql=$(jq -r '.body | split("```sql\n")[1] | split("\n```")[0]' <<<"$hit")
               if ! bq query --nouse_legacy_sql --dry_run "$sql" >/dev/null 2>&1; then
-                echo "::error::golden query $id no longer compiles against the warehouse"
+                echo "::error::computation $id no longer compiles against the warehouse"
                 curl -s -X POST -H "Authorization: Bearer $TOKEN" \
                   -H 'Content-Type: application/json' \
                   -d '{"outcome":"failed","note":"canary: dry-run failed"}' \

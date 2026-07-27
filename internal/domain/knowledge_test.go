@@ -234,6 +234,17 @@ func TestValidType(t *testing.T) {
 	if BuiltinType("runbook") {
 		t.Error(`BuiltinType("runbook") = true, want false`)
 	}
+	// Retired from the vocabulary but still perfectly valid to write
+	// (design doc 0038): the narrowing must not have left either spelling
+	// half-in, recommended by one surface and unknown to the next.
+	for _, retired := range []Type{"Semantic Model", "Golden Query"} {
+		if BuiltinType(retired) {
+			t.Errorf("BuiltinType(%q) = true, want false: 0038 retired it", retired)
+		}
+		if !ValidType(retired) {
+			t.Errorf("ValidType(%q) = false: a retired type stays writable as a free type", retired)
+		}
+	}
 }
 
 // Filters match types case-insensitively so a caller need not reproduce
@@ -246,8 +257,8 @@ func TestTypeMatchingIsCaseInsensitive(t *testing.T) {
 	if EqualType("BigQuery Tables", TypeTables) {
 		t.Error("EqualType must not match a different type")
 	}
-	if !BuiltinType("golden query") {
-		t.Error(`BuiltinType("golden query") = false, want true`)
+	if !BuiltinType("attested computation") {
+		t.Error(`BuiltinType("attested computation") = false, want true`)
 	}
 	if got := CanonicalType("bigquery dataset"); got != TypeDatasets {
 		t.Errorf("CanonicalType = %q, want %q", got, TypeDatasets)

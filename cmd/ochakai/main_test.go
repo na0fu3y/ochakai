@@ -76,8 +76,18 @@ func TestShippedInstructionsUseCurrentTypeVocabulary(t *testing.T) {
 				t.Errorf("%s uses the pre-0023 type name %q", f, stale)
 			}
 		}
-		if !strings.Contains(s, "Golden Query") {
-			t.Errorf("%s never names the Golden Query type", f)
+		// Design doc 0038 retired two spellings. They stay valid to write,
+		// which is exactly why a doc can keep recommending one for years
+		// without anything failing — so the retired spellings are pinned
+		// here in the forms that tell a reader to use the type.
+		for _, retired := range []string{"type: Golden Query", "type=Golden%20Query",
+			"--type 'Golden Query'", "type: Semantic Model", "--type 'Semantic Model'"} {
+			if strings.Contains(s, retired) {
+				t.Errorf("%s still instructs the reader to use the retired type: %q", f, retired)
+			}
+		}
+		if !strings.Contains(s, "Attested Computation") {
+			t.Errorf("%s never names the Attested Computation type", f)
 		}
 	}
 }

@@ -39,7 +39,7 @@ func Handler(svc *service.Service) http.Handler {
 
 	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&source=...&limit=...
 	// With sort=verified_at, lists by verification age (oldest first)
-	// instead of searching — the feed for golden query canary runs.
+	// instead of searching — the feed for canary runs.
 	// source narrows to the entries citing one resource — the reverse of
 	// sources[].resource (design doc 0037 §2.3) — and composes with a
 	// query or with any sort.

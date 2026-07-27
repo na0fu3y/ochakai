@@ -1,6 +1,9 @@
 # ochakai 設計ドキュメント 0028: compile_sql とセマンティックモデル面の撤去
 
-Status: Accepted(2026-07-25)
+Status: Accepted(2026-07-25)。§3 の「型 `Semantic Model` は推奨語彙に
+残す」は [0038](0038-type-vocabulary-realignment.md) §3.1 が覆した
+(語彙からは外れるが、エントリは自由型として無傷 — §5「既存エントリを
+削除・移行しない」は有効)
 Date: 2026-07-25
 
 ## 1. 決定

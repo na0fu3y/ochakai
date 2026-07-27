@@ -1,20 +1,25 @@
 ---
-type: Golden Query
+type: Attested Computation
 title: Monthly recognized revenue
 description: Monthly revenue from completed orders (example)
 status: draft
+runtime: bigquery
 question: What is our monthly revenue this year?
-sql: |
-  SELECT
-    DATE_TRUNC(o.created_at, MONTH) AS month,
-    SUM(o.total_price)              AS revenue
-  FROM `myproject.shop.orders` AS o
-  WHERE o.status = 'completed'
-    AND o.created_at >= DATE_TRUNC(CURRENT_DATE(), YEAR)
-  GROUP BY month
-  ORDER BY month
 tags: [sales, revenue]
 ---
+
+# Computation
+
+```sql
+SELECT
+  DATE_TRUNC(o.created_at, MONTH) AS month,
+  SUM(o.total_price)              AS revenue
+FROM `myproject.shop.orders` AS o
+WHERE o.status = 'completed'
+  AND o.created_at >= DATE_TRUNC(CURRENT_DATE(), YEAR)
+GROUP BY month
+ORDER BY month
+```
 
 # Caveats
 

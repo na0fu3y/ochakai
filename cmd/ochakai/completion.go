@@ -7,6 +7,23 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
+)
+
+// typesMark stands in for the recommended vocabulary inside the three
+// scripts below. Interpolating it beats writing the list out three more
+// times: the vocabulary has one home, and narrowing it cannot leave a
+// retired spelling behind in a shell (design doc 0038 §4.4). Each shell
+// already wraps the whole list in one quote style, so the types that
+// contain a space take the other one.
+const typesMark = "@TYPES@"
+
+var (
+	zshCompletion  = strings.ReplaceAll(zshCompletionTmpl, typesMark, domain.TypesQuoted(`"`))
+	bashCompletion = strings.ReplaceAll(bashCompletionTmpl, typesMark, domain.TypesQuoted(`'`))
+	fishCompletion = strings.ReplaceAll(fishCompletionTmpl, typesMark, domain.TypesQuoted(`"`))
 )
 
 func cmdCompletion(_ context.Context, args []string) error {
@@ -29,7 +46,7 @@ func cmdCompletion(_ context.Context, args []string) error {
 // Server names for `ochakai use <Tab>` come from the bare list output
 // (name\turl per line, current marked in column 1-2): cut -c3- | cut -f1.
 
-const zshCompletion = `#compdef ochakai
+const zshCompletionTmpl = `#compdef ochakai
 # zsh completion for ochakai. Either source <(ochakai completion zsh)
 # in ~/.zshrc, or install it as an fpath file (no sourcing needed):
 #   ochakai completion zsh > "${fpath[1]}/_ochakai"
@@ -71,7 +88,7 @@ _ochakai() {
   case $words[2] in
     search)
       _arguments \
-        '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" "Attested Computation" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
+        '*--type[filter by type]:type:(@TYPES@)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--sort[list instead of searching: by verification age, demand, or failed reports]:sort:(verified_at usage failed)' \
@@ -81,7 +98,7 @@ _ochakai() {
       ;;
     context)
       _arguments \
-        '*--type[filter by type]:type:("Semantic Model" Metric "Golden Query" "Attested Computation" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference)' \
+        '*--type[filter by type]:type:(@TYPES@)' \
         '*--status[filter by status]:status:(draft verified deprecated rejected)' \
         '*--tag[filter by tag]:tag:' \
         '--limit[max full entries]:limit:' \
@@ -154,7 +171,7 @@ else
 fi
 `
 
-const bashCompletion = `# bash completion for ochakai — source <(ochakai completion bash)
+const bashCompletionTmpl = `# bash completion for ochakai — source <(ochakai completion bash)
 _ochakai() {
   local cur prev cmd opts
   cur=${COMP_WORDS[COMP_CWORD]}
@@ -167,7 +184,7 @@ _ochakai() {
   fi
 
   case $prev in
-    --type|-type) COMPREPLY=($(compgen -W "'Semantic Model' Metric 'Golden Query' 'Attested Computation' Insight 'Glossary Term' 'BigQuery Dataset' 'BigQuery Table' Reference" -- "$cur")); return ;;
+    --type|-type) COMPREPLY=($(compgen -W "@TYPES@" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
     --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
@@ -216,7 +233,7 @@ _ochakai() {
 complete -F _ochakai ochakai
 `
 
-const fishCompletion = `# fish completion for ochakai — ochakai completion fish | source
+const fishCompletionTmpl = `# fish completion for ochakai — ochakai completion fish | source
 complete -c ochakai -f
 
 complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
@@ -256,7 +273,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '"Semantic Model" Metric "Golden Query" "Attested Computation" Insight "Glossary Term" "BigQuery Dataset" "BigQuery Table" Reference' -d 'filter by type'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '@TYPES@' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed' -d 'list instead of searching: by verification age, demand, or failed reports'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'

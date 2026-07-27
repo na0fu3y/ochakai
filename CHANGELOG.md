@@ -16,7 +16,50 @@ last entry.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **BREAKING** — the recommended type vocabulary is realigned to what OKF
+  itself spells out, going from nine types to eleven (design doc 0038).
+  The test is SPEC §4.1's one demand of a producer — that a spelling be
+  descriptive and self-explanatory — applied in both directions.
+  - **Retired: `Semantic Model` and `Golden Query`.** `Semantic Model`
+    failed the test: since 0.13.0 removed compile and its write-time
+    validation, all that remained was a convention to put an Apache Ossie
+    object in `attrs.spec`, which nothing on the server reads and no
+    spelling explains. `Golden Query` is what an `Attested Computation`
+    with a `runtime` already is — SPEC §10.2 requires only `runtime` and
+    leaves `parameters`/`executor`/`attester` optional — so store a
+    golden query as one: the SQL in a `# Computation` body fence, the
+    question in `attrs.question`.
+  - **Added: `Skill`, `Playbook`, `Policy`, `API Endpoint`.** `Playbook`
+    and `API Endpoint` are SPEC §4.1 examples, and §4.4 writes a Playbook
+    out in full as its example of a concept bound to no resource.
+    `Policy` and `Skill` come from the reference bundles, and they close
+    a real gap: an entry's `sources[].resource` cites a Policy and its
+    `executor.resource` points at a Skill, so ochakai was storing both
+    ends of an edge while naming only one.
+  - **No migration runs and no stored entry changes.** The retired
+    spellings stay valid to write and are matched, searched, exported and
+    updated exactly as before — they are now free types (design doc
+    0005). The type is not renamed for you, because `runtime` is required
+    on an Attested Computation and only the author knows it.
+  - `domain.TypeModels` and `domain.TypeQueries` are gone from the Go
+    API. `--type 'Golden Query'` still returns those entries.
+  - No server behavior attaches to any of the four new types. The one
+    type-specific rule stays the `runtime` requirement on an Attested
+    Computation (design doc 0036 §3.10).
+  - The vocabulary was previously written out in eleven places at three
+    different lengths, with `Semantic Model` already missing from four of
+    them. Every list that Go emits — the MCP tool descriptions and all
+    three shell completions — now comes from `domain.TypesHint()`, and
+    the static ones (OpenAPI, the Web UI, the MCP jsonschema tags) are
+    pinned by tests that fail when a type is missing or a retired
+    spelling is still recommended (design doc 0038 §4.4).
+- The shipped example `examples/golden-query.md` and the canary guide are
+  rewritten onto `Attested Computation`. The example's SQL moves out of
+  `attrs.sql` into its `# Computation` fence: SPEC §10.2 makes the fence
+  the computation, and keeping a second copy left a consumer no way to
+  tell which was authoritative.
 
 ## [0.14.0] - 2026-07-27
 

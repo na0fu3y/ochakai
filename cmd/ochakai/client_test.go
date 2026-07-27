@@ -142,12 +142,12 @@ func TestRenderContext(t *testing.T) {
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	res := &apiclient.ContextResult{
 		Hits: []domain.ContextRank{
-			{Type: domain.TypeQueries, ID: "queries/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue", Score: 0.9},
+			{Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue", Score: 0.9},
 			{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR", Score: 0.1},
 		},
 		Entries: []domain.Knowledge{
 			{
-				Type: domain.TypeQueries, ID: "queries/monthly-revenue", Status: domain.StatusVerified,
+				Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusVerified,
 				Title:      "Monthly revenue",
 				CreatedBy:  domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
 				VerifiedBy: &human, VerifiedAt: &now,
@@ -305,7 +305,7 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(domain.Knowledge{
-			Type: domain.TypeQueries, ID: r.PathValue("id"), Status: domain.StatusVerified,
+			Type: domain.TypeComputations, ID: r.PathValue("id"), Status: domain.StatusVerified,
 			Title: "Monthly revenue", VerifiedBy: &human, VerifiedAt: &verified,
 		})
 	})

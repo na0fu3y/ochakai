@@ -59,7 +59,10 @@ func TestContextIntegration(t *testing.T) {
 		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
 			Status: domain.StatusVerified,
 			Body:   "Answered by [the monthly query](/" + queryID + ".md)."},
-		{Type: domain.TypeQueries, ID: queryID, Title: "monthly numbers"},
+		// A verified query is an Attested Computation, and SPEC §10.2 makes
+		// runtime required on that type — the one schema the write path
+		// enforces (design doc 0036 §3.10).
+		{Type: domain.TypeComputations, ID: queryID, Title: "monthly numbers", Runtime: "bigquery"},
 		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
 			Body: "Explains ochakai://" + metricID + "."},
 		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
