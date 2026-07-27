@@ -109,6 +109,7 @@ func defaultURL() string {
 
 func cmdUse(_ context.Context, args []string) error {
 	fs := newBareFlagSet(
+		"use",
 		"Usage: ochakai use [flags] [name | url]\n\nPick the server later client commands talk to, saved to\n~/.config/ochakai/config.json ($XDG_CONFIG_HOME honored;\n%AppData%\\ochakai on Windows).\nWith a URL: save it (named by --name, default its host) and switch.\nWith a name: switch to a saved server. With no argument: list.\n--url and $OCHAKAI_URL always override the saved selection.",
 		"  ochakai use http://localhost:8080 --name local\n  ochakai use https://ochakai-prod.run.app --name prod\n  ochakai use prod\n")
 	name := fs.String("name", "", "name to save the URL under (default: its host)")
@@ -170,6 +171,7 @@ func cmdUse(_ context.Context, args []string) error {
 
 func cmdWhoami(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
+		"whoami",
 		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nand whether the server is reachable.",
 		"  ochakai whoami\n  ochakai whoami --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
