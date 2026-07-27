@@ -171,6 +171,8 @@ Flags:
     	max full entries (server default 5, max 20)
   -min-score float
     	drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)
+  -prefix path
+    	only entries under this path, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands
   -status value
     	filter by status: draft|verified|deprecated|rejected (repeatable)
   -tag value
@@ -184,6 +186,7 @@ Examples:
   ochakai context "why did revenue drop in March?"
   ochakai context "monthly revenue" --type 'Attested Computation' --status verified --json
   ochakai context "$PROMPT" --budget 4000   # hooks: cap the injected bytes
+  ochakai context "activation rate" --prefix teams/growth --prefix company
 ```
 
 ## ochakai create
@@ -480,15 +483,19 @@ With --sort stale_after it lists entries whose declared stale_after has
 passed, most overdue first; output leads with that date. Verifying does
 not empty this one — the date is the writer's declaration, so clearing it
 means editing the entry to re-declare an expiry.
---source is a filter, not a mode: it narrows to the entries citing one
-resource (the reverse of sources[].resource) and combines with a query
-or with any --sort.
+--source and --prefix are filters, not modes: both combine with a query
+or with any --sort. --source narrows to the entries citing one resource
+(the reverse of sources[].resource); --prefix narrows to the entries
+living under a path, which is how a team's own knowledge is told apart
+from the company-wide vocabulary.
 
 Flags:
   -json
     	print the raw JSON response
   -limit int
     	max results (server default 10, max 50; with --sort: 100, max 1000)
+  -prefix path
+    	only entries under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
   -sort string
     	list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first
   -source resource
@@ -510,6 +517,7 @@ Examples:
   ochakai search --sort failed --status verified            # re-verification queue
   ochakai search --sort stale_after                         # past their declared expiry
   ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
+  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
 ```
 
 ## ochakai ui
