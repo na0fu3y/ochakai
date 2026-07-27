@@ -98,6 +98,23 @@ For the shape of the system rather than the history of it, read
 
 ## The knowledge model — structure, ids, types, names, links
 
+- **[0041 Narrowing a search by address](0041-path-scoped-search.md)** —
+  *Accepted.* Carries 0017's "the path is the address" through to search
+  and `get_context`, which could filter by type, status, tag and source but
+  never by id. A repeatable `prefix` filter narrows to a subtree — the
+  prefix's own entry and everything under it — matched at segment
+  boundaries, so `prefix=metrics` does not reach `metrics-legacy/churn`.
+  It is a filter rather than a mode, so it combines with a query and with
+  any `sort`, and repeating it ORs the scopes together, because the
+  ordinary question is "my team's *and* the company's". No index and no
+  migration. The record is unusually candid that the demand for this was
+  weaker than for 0037, and that the feature only earns its place where
+  directories mean something a type cannot say — a team, a domain, a
+  tenant.
+  *For a user:* `--prefix` on the CLI, `prefix` on REST and MCP; scoping
+  by path stops meaning a second, parallel tagging scheme that drifts from
+  the tree.
+
 - **[0037 Making declared expiry and cited sources
   queryable](0037-stale-and-source-lookup.md)** — *Accepted, shipped in
   0.14.0.* `stale_after` and `sources` were writable but not askable.
@@ -145,8 +162,8 @@ For the shape of the system rather than the history of it, read
 
 - **[0017 The path is the address; the type is an
   attribute](0017-path-addressing.md)** — *Accepted; the id character set
-  was relaxed by 0019 §2 and the type vocabulary replaced by 0023 and
-  0038.* Removes the rule that a path's first segment names the type. The
+  was relaxed by 0019 §2, the type vocabulary replaced by 0023 and 0038,
+  and filtering by address added by 0041.* Removes the rule that a path's first segment names the type. The
   full path is the id and the sole address; the primary key becomes the id
   alone. A file with no frontmatter `type` is skipped and reported rather
   than having a type inferred from where it sits.
