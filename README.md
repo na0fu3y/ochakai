@@ -154,6 +154,45 @@ Opening this repository in Claude Code connects automatically via the
 committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
 proxy) on `localhost:8787`.
 
+### Try a prompt
+
+Once an agent is connected, four prompts walk the whole loop. Run them
+against the quick start's knowledge base — the one entry it registered is
+enough to see the shape.
+
+**Recall.** Ask something the knowledge base can answer and watch the
+agent reach for it rather than guess:
+
+> What do we already know about revenue? Use ochakai before answering.
+
+One `get_context` call comes back with the entries in full, so the agent
+starts from your definitions instead of inventing one.
+
+**Write back.** Tell it something worth keeping:
+
+> Revenue in August runs about 15% below a normal month — it's seasonal,
+> not a problem. Save that to ochakai so the next session has it.
+
+It lands as a **draft**, attributed to the agent that wrote it. It is not
+trusted yet, and search says so.
+
+**Review.** Open `ochakai ui`, find it in the review queue, and press
+Verify — or Reject with a reason, which is kept so agents stop
+re-proposing it. This is the half no agent does for you.
+
+**Close the loop.** When knowledge turns out to be wrong, say so:
+
+> That golden query returned a number that doesn't match the finance
+> close. Report it as failed in ochakai, with why.
+
+`report_outcome` moves the entry into the re-verification feed instead of
+letting the next agent trust it blind. Verifying it again empties the
+feed.
+
+If nothing comes back on the first prompt, the agent has not actually
+connected — `ochakai whoami` says which server it is talking to and as
+whom.
+
 ### Web UI: the human half of the loop
 
 Agents write drafts; somebody has to read them. The bundled web UI is
