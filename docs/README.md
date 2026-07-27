@@ -30,6 +30,9 @@ types, and every environment variable.
   request and response against it, so an endpoint that drifts fails CI.
 - [examples/claude-code](../examples/claude-code) — drop-in agent
   instructions and the recall / write-back hooks.
+- [Connecting an MCP client](guides/mcp-clients.md) — the URL or the
+  `mcp-stdio` bridge, per client, with the config file each one reads and
+  the ones that cannot reach an IAM-restricted deployment at all.
 - `ochakai <command> -h` — every command carries its flags and worked
   examples, generated from the domain model where the values come from it.
 
