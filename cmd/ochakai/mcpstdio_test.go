@@ -43,7 +43,7 @@ func remoteMCP(t *testing.T) (base string, tools []string) {
 // The bridge carries whatever the remote offers. It must not hold a copy
 // of the tool list: what a client sees through it is what the server
 // said, including a tool the bridge has never heard of (design doc
-// 0038 §2.2, §3).
+// 0039 §2.2, §3).
 func TestBridgePassesMessagesThrough(t *testing.T) {
 	base, want := remoteMCP(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -93,7 +93,7 @@ func TestBridgePassesMessagesThrough(t *testing.T) {
 
 // In stdio mode stdout *is* the wire. One stray human-readable line
 // breaks the session, so the bridge must put every diagnostic on stderr
-// (design doc 0038 §2.4). Not parallel: it swaps the process's own
+// (design doc 0039 §2.4). Not parallel: it swaps the process's own
 // stdin and stdout.
 func TestBridgeStdoutCarriesOnlyProtocol(t *testing.T) {
 	base, _ := remoteMCP(t)

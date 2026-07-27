@@ -1,4 +1,4 @@
-# ochakai 設計ドキュメント 0038: stdio しか話せないクライアントに橋を架ける
+# ochakai 設計ドキュメント 0039: stdio しか話せないクライアントに橋を架ける
 
 Status: Accepted(2026-07-27)。[0012](0012-retire-mcp-oauth-connector.md) が
 retire した「公開 OAuth コネクタ」を復活させずに同じ需要を満たす。
