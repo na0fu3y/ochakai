@@ -40,11 +40,16 @@ gcloud artifacts repositories create ghcr \
   --remote-docker-repo=https://ghcr.io \
   --location=$REGION
 
-export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:0.9.0
+export VERSION=$(gh release view --repo na0fu3y/ochakai --json tagName -q .tagName | tr -d v)
+export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 ```
 
-(Check [tags](https://github.com/na0fu3y/ochakai/tags) for the latest.
-This guide assumes 0.9.0 or later; earlier releases are
+Pin a version rather than `:latest`, so a redeploy is a decision. Without
+the `gh` CLI, read the number off the
+[releases page](https://github.com/na0fu3y/ochakai/releases) and set it by
+hand — `export VERSION=0.13.0`.
+
+(This guide assumes 0.9.0 or later; earlier releases are
 [retracted](https://go.dev/ref/mod#go-mod-file-retract) and unsupported —
 if you run one, see §8 for the upgrade path.)
 

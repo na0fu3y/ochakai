@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question, or an idea that is not a proposal yet
+    url: https://github.com/na0fu3y/ochakai/discussions
+    about: >-
+      How to deploy it, whether something is the intended way, what a design doc
+      means. Issues are for reproducible bugs and concrete proposals.
+  - name: Documentation
+    url: https://github.com/na0fu3y/ochakai#readme
+    about: >-
+      README, the Cloud Run deploy guide under deploy/cloudrun, the guides under
+      docs/guides, and the numbered design docs under docs/design.
+  - name: Report a vulnerability
+    url: https://github.com/na0fu3y/ochakai/security/advisories/new
+    about: >-
+      Private disclosure through GitHub Security Advisories, never a public
+      issue. See SECURITY.md for what is in scope.

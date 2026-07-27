@@ -1,6 +1,8 @@
 # Publishes ghcr.io/na0fu3y/ochakai on version tags with SBOM and SLSA
-# provenance attestation. Actions are pinned by commit SHA; images can be
-# verified with `gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai`.
+# provenance attestation, and attaches prebuilt binaries to the GitHub
+# release. Actions are pinned by commit SHA; images can be verified with
+# `gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai`,
+# archives with `gh attestation verify <file> -R na0fu3y/ochakai`.
 name: release
 on:
   push:
@@ -45,3 +47,42 @@ jobs:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+  # Independent of `publish`: the image and the archives are separate
+  # artifacts, and a registry outage should not cost us the binaries.
+  binaries:
+    runs-on: ubuntu-latest
+    permissions:
+      # Narrower than the workflow default on purpose: this job needs to
+      # write release assets, but has no business with packages.
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # goreleaser derives the version from the tag and walks the
+          # history to find the previous one; a shallow clone has
+          # neither.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # Same shared-key problem as in ci.yaml, and a release runs
+          # once per tag — there is nothing to warm.
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          # The config declares `version: 2`; keep the tool on that
+          # major so a v3 release cannot silently change the output.
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The image carries provenance; the archives people actually
+      # download should too.
+      - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt

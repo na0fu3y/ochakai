@@ -16,10 +16,15 @@ docker compose -f deploy/compose.yaml up
 Seed it and poke around:
 
 ```sh
+export OCHAKAI_URL=http://localhost:8080
 go run ./cmd/ochakai create queries/monthly-revenue -f examples/golden-query.md
-go run ./cmd/ochakai use http://localhost:8080
 go run ./cmd/ochakai search "revenue"
 ```
+
+`OCHAKAI_URL` has to come first: there is no default server, and a client
+command without one fails rather than guessing. `ochakai use` saves the
+choice instead, but an exported variable keeps a checkout from editing the
+config your everyday CLI reads.
 
 ## Tests and checks
 
@@ -65,7 +70,14 @@ OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go 
 Architecture decisions live in [docs/design](docs/design) as numbered
 documents (mostly Japanese). Start from the
 [index](docs/design/README.md), which groups them by area and marks
-which ones describe the current state. A change that alters an accepted
+which ones describe the current state.
+[docs/architecture.md](docs/architecture.md) summarizes the accepted ones
+in English if you would rather read the shape of the system first.
+
+The Japanese is the maintainer's habit, not a rule — write your design
+doc in English if that is what you think in, and say so in the PR. What
+the review cares about is that the decision and its rejected
+alternatives are legible, not which language they are legible in. A change that alters an accepted
 decision — new interface, new dependency on a Google Cloud service, a
 change to the auth model — should add a new numbered doc in the same
 PR. Small fixes and additions within existing decisions don't need one.

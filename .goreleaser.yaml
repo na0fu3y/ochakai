@@ -1,0 +1,86 @@
+# Prebuilt binaries for people without a Go toolchain. The CLI is the
+# recommended interface for agents, so `go install` and the container
+# image alone leave non-Go teams with no way in.
+#
+# Deliberately no `dockers:`/`docker_manifests:` here. The image is
+# already published by .github/workflows/release.yaml through buildx,
+# with an SBOM and SLSA provenance attached to the manifest; goreleaser
+# would have to rebuild it per-architecture and stitch the manifest
+# itself, losing those. Two publishers for one image is worse than one
+# good one.
+version: 2
+project_name: ochakai
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: ochakai
+    # The repository ships exactly one binary.
+    main: ./cmd/ochakai
+    binary: ochakai
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # main.version is the only variable the source lets us stamp; see
+    # cmd/ochakai/main.go. .Tag rather than .Version because .Version
+    # strips the leading "v", and every other path that reports a
+    # version — the Dockerfile's VERSION build arg, and the module
+    # version debug.ReadBuildInfo yields for `go install …@v0.13.0` —
+    # keeps it. Users comparing `ochakai version` across install
+    # methods should not see two spellings of one release.
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+# The release notes are written by hand in CHANGELOG.md and assembled by
+# .github/release.yml. A generator here would compete with both.
+changelog:
+  disable: true
+
+release:
+  # This job's output is the archives, not the prose. If a release for
+  # the tag already exists — drafted by hand, or by GitHub's generated
+  # notes — attach to it and leave its body alone.
+  mode: keep-existing
+
+# Homebrew is off until the maintainer opts in: publishing a formula
+# needs a second repository (na0fu3y/homebrew-tap) and a PAT, because
+# GITHUB_TOKEN cannot write across repositories — and a long-lived
+# token in CI is exactly the secret this project otherwise refuses to
+# hold (docs/design/0002, 0003).
+#
+# To turn it on: create na0fu3y/homebrew-tap, store a PAT with `contents:
+# write` on it as the HOMEBREW_TAP_TOKEN secret, then uncomment the
+# block below and pass that secret to the goreleaser step in
+# .github/workflows/release.yaml.
+#
+# brews:
+#   - repository:
+#       owner: na0fu3y
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+#     homepage: https://github.com/na0fu3y/ochakai
+#     description: Knowledge store for data-analysis agents
+#     license: MIT

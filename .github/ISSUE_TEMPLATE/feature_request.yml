@@ -1,0 +1,107 @@
+name: Feature request
+description: Propose something ochakai should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ochakai stays small by refusing things — the README table and
+        [docs/design/0015](https://github.com/na0fu3y/ochakai/blob/main/docs/design/0015-surface-consistency.md)
+        list what is deliberately absent, and
+        [ROADMAP.md](https://github.com/na0fu3y/ochakai/blob/main/ROADMAP.md)
+        collects the refusals in English. Worth a look before writing: the
+        answer may already be recorded, with the condition under which it would
+        be reconsidered.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What you or your agent cannot do today, and what you do instead. A
+        concrete situation is more useful than a feature name.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: What ochakai would do instead. Sketch the request and response, or the command, if you have one in mind.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surfaces
+    attributes:
+      label: Surfaces this would land on
+      description: >-
+        Every feature lands consistently across surfaces, including the
+        deliberate omissions (design doc 0015). REST is the only contract — the
+        other three are its clients — so anything that exists at all exists
+        there.
+      multiple: true
+      options:
+        - REST (/api/v1)
+        - MCP (/mcp)
+        - CLI (ochakai ...)
+        - Web UI (ochakai ui / serve-ui)
+    validations:
+      required: true
+
+  - type: textarea
+    id: omissions
+    attributes:
+      label: Surfaces it should stay off, and why
+      description: >-
+        MCP tool schemas cost the agent's context and bulk operations belong to
+        the CLI, so "not on MCP" is a normal answer. Name the surfaces you left
+        unchecked above and say what makes them the wrong place.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Hard constraints
+      description: >-
+        Two decisions frame everything, and a proposal that crosses either is
+        out of scope rather than a matter of priority. Check both.
+      options:
+        - label: >-
+            No LLM inside, no SQL execution — ochakai stores and serves
+            knowledge; interpretation and execution belong to the client agent
+            (design doc 0001).
+          required: true
+        - label: >-
+            Google Cloud only, secret-zero — auth is Cloud Run IAM + Cloud SQL
+            IAM, and this introduces no token, password, or API key to issue or
+            rotate (design docs 0002, 0003).
+          required: true
+
+  - type: dropdown
+    id: design_doc
+    attributes:
+      label: Does this need a design doc?
+      description: >-
+        A change that alters an accepted decision — a new interface, a new
+        dependency on a Google Cloud service, a change to the auth model — adds
+        a numbered doc under docs/design in the same PR. Additions inside
+        existing decisions do not.
+      options:
+        - "No: it fits inside decisions already recorded"
+        - "Yes: it changes an accepted decision"
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and prior art
+      description: >-
+        What you tried first, and how other tools solve it if you know. Also
+        fine here: why an existing path (write-back as a draft, `report_outcome`,
+        a client-side loop over existing endpoints) is not enough.
+    validations:
+      required: false
