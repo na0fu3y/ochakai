@@ -45,34 +45,43 @@ func (gcloudSource) Token() (*oauth2.Token, error) {
 	return &oauth2.Token{AccessToken: tok, Expiry: jwtExpiry(tok)}, nil
 }
 
-// jwtExpiry reads exp from the (Google-signed, already trusted) token so
-// ReuseTokenSource refreshes on time; unparseable tokens get a short TTL.
+// jwtClaims holds the payload claims the client reads from a
+// (Google-signed, already trusted) token — decoded, never verified.
+type jwtClaims struct {
+	Exp   int64  `json:"exp"`
+	Email string `json:"email"`
+}
+
+// parseJWTClaims decodes a token's payload; ok is false when it does not
+// parse as a JWT.
+func parseJWTClaims(tok string) (jwtClaims, bool) {
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		return jwtClaims{}, false
+	}
+	data, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return jwtClaims{}, false
+	}
+	var claims jwtClaims
+	if err := json.Unmarshal(data, &claims); err != nil {
+		return jwtClaims{}, false
+	}
+	return claims, true
+}
+
+// jwtExpiry reads exp from the token so ReuseTokenSource refreshes on
+// time; unparseable tokens get a short TTL.
 func jwtExpiry(tok string) time.Time {
-	if parts := strings.Split(tok, "."); len(parts) == 3 {
-		if data, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-			var claims struct {
-				Exp int64 `json:"exp"`
-			}
-			if json.Unmarshal(data, &claims) == nil && claims.Exp > 0 {
-				return time.Unix(claims.Exp, 0)
-			}
-		}
+	if claims, ok := parseJWTClaims(tok); ok && claims.Exp > 0 {
+		return time.Unix(claims.Exp, 0)
 	}
 	return time.Now().Add(5 * time.Minute)
 }
 
-// jwtEmail reads the email claim from the (Google-signed, already
-// trusted) token; empty when absent or unparseable.
+// jwtEmail reads the email claim from the token; empty when absent or
+// unparseable.
 func jwtEmail(tok string) string {
-	if parts := strings.Split(tok, "."); len(parts) == 3 {
-		if data, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-			var claims struct {
-				Email string `json:"email"`
-			}
-			if json.Unmarshal(data, &claims) == nil {
-				return claims.Email
-			}
-		}
-	}
-	return ""
+	claims, _ := parseJWTClaims(tok)
+	return claims.Email
 }

@@ -7,21 +7,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"golang.org/x/oauth2"
-
-	"github.com/na0fu3y/ochakai/internal/httpauth"
-	"github.com/na0fu3y/ochakai/internal/webui"
 )
 
 func cmdUI(ctx context.Context, args []string) error {
@@ -52,63 +46,31 @@ func cmdUI(ctx context.Context, args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	server := &http.Server{
-		Addr:              fmt.Sprintf("127.0.0.1:%d", *port),
-		Handler:           handler,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdownCtx)
-	}()
-
 	fmt.Printf("ochakai ui: http://127.0.0.1:%d → %s as %s (%s); Ctrl-C to stop\n",
 		*port, *target, identity, auth)
-	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
+	return runServer(ctx, fmt.Sprintf("127.0.0.1:%d", *port), handler)
 }
 
 // uiHandler serves the embedded page at / and reverse-proxies /api/v1
-// and /mcp to target, replacing any browser-supplied Authorization with
+// and /mcp to target, replacing any browser-supplied credentials with
 // a fresh ID token from tokens (nil = plain-http development server,
-// forward without credentials).
+// forward without credentials). The delegation header is stripped too:
+// this proxy has no verified source for one (serve-ui gets its from
+// IAP, design doc 0032), and a page that could set it would be forging
+// an author on a server where you are permitted to delegate.
 func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("invalid server URL %q: %w", target, err)
 	}
-	// Rewrite rather than Director: it drops the browser's X-Forwarded-*
-	// headers instead of appending to them, which is what we want from a
-	// proxy that trusts nothing the page sends.
-	proxy := &httputil.ReverseProxy{Rewrite: func(r *httputil.ProxyRequest) {
-		r.SetURL(u) // also points the outbound Host at the target
-		// Never forward whatever the browser sent; the proxy's whole job
-		// is to substitute the CLI user's identity. That covers the
-		// delegation header too: this proxy has no verified source for
-		// one (serve-ui gets its from IAP, design doc 0032), and a page
-		// that could set it would be forging an author on a server where
-		// you are permitted to delegate.
-		r.Out.Header.Del("Authorization")
-		r.Out.Header.Del(httpauth.OnBehalfOfHeader)
+	proxy := newCredentialProxy(u, func(h http.Header) {
 		if tokens != nil {
 			if tok, err := tokens.Token(); err == nil {
-				r.Out.Header.Set("Authorization", "Bearer "+tok.AccessToken)
+				h.Set("Authorization", "Bearer "+tok.AccessToken)
 			}
 		}
-	}}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(webui.Index)
 	})
-	mux.Handle("/api/v1/", proxy)
-	mux.Handle("/mcp", proxy)
-	return localBrowserGuard(mux), nil
+	return localBrowserGuard(webUIMux(stripDelegation(proxy))), nil
 }
 
 // localBrowserGuard fends off the two ways a web page in the user's

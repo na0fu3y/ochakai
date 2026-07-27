@@ -26,10 +26,16 @@ import (
 const attachmentCols = `a.name, b.media_type, b.size, a.sha256, a.okf_path,
 	a.created_by_kind, a.created_by_name, a.created_at`
 
+// attachmentDests returns the scan destinations matching attachmentCols,
+// in column order — the one place the two lists are paired.
+func attachmentDests(a *domain.Attachment) []any {
+	return []any{&a.Name, &a.MediaType, &a.Size, &a.SHA256, &a.OKFPath,
+		&a.CreatedBy.Kind, &a.CreatedBy.Name, &a.CreatedAt}
+}
+
 func scanAttachment(row pgx.CollectableRow) (domain.Attachment, error) {
 	var a domain.Attachment
-	err := row.Scan(&a.Name, &a.MediaType, &a.Size, &a.SHA256, &a.OKFPath,
-		&a.CreatedBy.Kind, &a.CreatedBy.Name, &a.CreatedAt)
+	err := row.Scan(attachmentDests(&a)...)
 	return a, err
 }
 
@@ -109,18 +115,7 @@ var errNoBlobStore = errors.New("attachments are not supported without GCS: set 
 // GetAttachment returns one attachment with its bytes. Attachments of
 // soft-deleted entries are gone with the entry.
 func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.Attachment, []byte, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		WHERE a.knowledge_id=$1 AND a.name=$2`, id, name)
-	if err != nil {
-		return nil, nil, err
-	}
-	att, err := pgx.CollectExactlyOneRow(rows, scanAttachment)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, ErrNotFound
-	}
+	att, err := s.GetAttachmentMeta(ctx, id, name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,7 +126,7 @@ func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.Att
 	if err != nil {
 		return nil, nil, err
 	}
-	return &att, data, nil
+	return att, data, nil
 }
 
 // ListAttachments returns the metadata (no bytes) of a live entry's
@@ -165,8 +160,7 @@ func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[str
 	for rows.Next() {
 		var id string
 		var a domain.Attachment
-		if err := rows.Scan(&id, &a.Name, &a.MediaType, &a.Size, &a.SHA256, &a.OKFPath,
-			&a.CreatedBy.Kind, &a.CreatedBy.Name, &a.CreatedAt); err != nil {
+		if err := rows.Scan(append([]any{&id}, attachmentDests(&a)...)...); err != nil {
 			return nil, err
 		}
 		out[id] = append(out[id], a)
