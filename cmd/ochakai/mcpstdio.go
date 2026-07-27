@@ -1,6 +1,6 @@
 // `ochakai mcp-stdio`: bridge a stdio-only MCP client to the selected
 // server's /mcp, carrying the caller's own Google identity (design doc
-// 0038). ochakai's MCP is streamable HTTP only, so a client that speaks
+// 0039). ochakai's MCP is streamable HTTP only, so a client that speaks
 // nothing but stdio had no way in — and against Cloud Run no client can
 // mint the ID token the request needs. This process is the missing half:
 // it listens on no port, holds no state, and copies JSON-RPC messages
@@ -62,7 +62,7 @@ func cmdMCPStdio(ctx context.Context, args []string) error {
 // an MCP client and server pair. Enumerating the remote's tools and
 // re-registering them locally would put a second copy of every tool
 // schema here, to be updated whenever one gains an argument (design doc
-// 0038 §2.2). Copying means initialize, notifications, resources and
+// 0039 §2.2). Copying means initialize, notifications, resources and
 // anything added later pass through a bridge that never heard of them.
 //
 // tokens is nil for a plain-http development server, which is then

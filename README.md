@@ -144,7 +144,7 @@ claude mcp add ochakai -- ochakai mcp-stdio
 It listens on no port and holds no state; it copies JSON-RPC messages, so
 it carries whatever the server offers rather than a second copy of the
 tool list that could go stale (design doc
-[0038](docs/design/0038-mcp-stdio-bridge.md)). Add `--url` to point it at
+[0039](docs/design/0039-mcp-stdio-bridge.md)). Add `--url` to point it at
 a specific server. `ochakai ui` exposes the same authenticated `/mcp` over
 HTTP for clients that would rather have a URL, and
 `gcloud run services proxy` is the third way, documented in the

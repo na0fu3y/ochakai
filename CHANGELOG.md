@@ -16,6 +16,27 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- `ochakai mcp-stdio` — speaks MCP on stdin/stdout and forwards to the
+  selected server, for clients that can only launch a command and for any
+  client against Cloud Run, where the request needs a Google ID token the
+  client cannot mint. It resolves identity the way every other client
+  command does, so the client is configured with no credentials; it
+  listens on no port and copies JSON-RPC messages rather than holding a
+  second copy of the tool schemas (design doc 0039). No server surface is
+  added and the MCP tool count is unchanged.
+- A Terraform module at `deploy/terraform` for the deployment the Cloud
+  Run guide describes, so it can be reviewed as a diff, reproduced per
+  environment and destroyed cleanly. Private IP, Vertex embeddings, GCS
+  attachments and the IAP-fronted web UI are behind flags, all off by
+  default. It creates no password and cannot run the §3 bootstrap SQL —
+  `terraform output -raw database_bootstrap_sql` prints those statements
+  instead. The gcloud guide stays the reference.
+- Request and response examples throughout `api/openapi.yaml`, which
+  previously carried exactly one. Every example is validated against the
+  schema it sits under.
+
 ### Changed
 
 - **BREAKING** — the recommended type vocabulary is realigned to what OKF
