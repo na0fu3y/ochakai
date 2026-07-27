@@ -428,8 +428,24 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		return nil, usageOut{Usage: *u}, nil
 	})
 
+	// A read-only deployment does not offer the write tools at all
+	// (design doc 0040 §2.3). Offering one that always fails would spend
+	// the agent's context on a schema and then refuse the call — the
+	// opposite of what the tool budget in design doc 0015 §3.1 is for.
+	// MCP already has a way to say what a server can do, so read-only is
+	// said in that vocabulary rather than announced separately.
+	if svc.Config != nil && svc.Config.ReadOnly {
+		s.RemoveTools(writeTools...)
+	}
+
 	return s
 }
+
+// writeTools are the tools that change knowledge, removed on a read-only
+// deployment. The service refuses these operations anyway (that is the
+// guarantee); removing them here is what stops an agent from wasting a
+// turn discovering it.
+var writeTools = []string{"create_knowledge", "update_knowledge", "delete_knowledge", "report_outcome"}
 
 // Tool annotations let clients apply auto-approval policies without reading
 // prose. readOnlyHint here describes the knowledge domain: search/get

@@ -123,6 +123,19 @@ The consequences to plan around:
   (design docs [0009](design/0009-provenance-portability.md),
   [0035](design/0035-verifiability.md)).
 
+A deployment can be made **read-only** with `OCHAKAI_READ_ONLY=true`
+(design doc [0040](design/0040-read-only-mode.md)). This is not
+authorization either, and for a sharper reason: it never looks at the
+caller. It cannot be narrowed to some entries or some people, and it
+refuses whoever operates the deployment exactly as it refuses anyone
+else. The check sits in the service layer, which both REST and MCP come
+through, so a write endpoint added later is covered without its author
+knowing about it. Each surface says it in its own vocabulary — REST
+answers 403 and marks every response `Ochakai-Read-Only: true`, MCP
+simply does not offer the write tools, and the web UI stops drawing the
+buttons. Usage telemetry keeps recording: a search hit is the server's
+own observation, not content a caller wrote.
+
 There is one narrow exception to "no authorization", and it is
 deliberately framed as not being one: MCP refuses to overwrite, delete,
 or change the status of an entry a human has curated — `verified`,

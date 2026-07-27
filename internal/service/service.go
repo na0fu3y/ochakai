@@ -28,6 +28,28 @@ type Service struct {
 	Log      *slog.Logger
 }
 
+// ErrReadOnly is returned by every operation that would change knowledge
+// when the deployment runs with OCHAKAI_READ_ONLY (design doc 0040).
+//
+// The check lives here rather than in the transports because REST and MCP
+// both come through this package: a write endpoint added later is covered
+// without its author having to know a middleware exists. It is not
+// authorization — it never looks at the actor, and it refuses the
+// operator exactly as it refuses anyone else (0040 §2.1).
+var ErrReadOnly = errors.New("this ochakai is read-only: it serves knowledge but does not change it")
+
+// readOnly reports whether writes are refused. Usage telemetry does not
+// go through it: recording a search hit is the server's own observation,
+// not content a caller wrote, and freezing it would empty the usage feeds
+// on exactly the deployments most likely to be demonstrating them
+// (0040 §2.2).
+func (s *Service) readOnly() error {
+	if s.Config != nil && s.Config.ReadOnly {
+		return ErrReadOnly
+	}
+	return nil
+}
+
 // InvalidInputError marks a failure caused by the client's input, so
 // transport layers can classify it (REST: 400) without string matching.
 type InvalidInputError struct{ msg string }
@@ -69,6 +91,9 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 }
 
 func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
 	return s.create(ctx, k, actor, false)
 }
 
@@ -81,6 +106,9 @@ func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.
 // so a curation landing in between loses the race rather than being
 // erased by it.
 func (s *Service) CreateKeepingCurated(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
 	if err := s.RefuseIfRevivingCurated(ctx, k.ID); err != nil {
 		return nil, err
 	}
@@ -166,6 +194,9 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 // rather than silently clobbering the other write. nil keeps the prior
 // last-write-wins behavior for callers that do not opt in.
 func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) (updated *domain.Knowledge, changed bool, err error) {
+	if err := s.readOnly(); err != nil {
+		return nil, false, err
+	}
 	normalizeKeys(k)
 	if err := validate(k); err != nil {
 		return nil, false, err
@@ -298,6 +329,9 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 }
 
 func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
+	if err := s.readOnly(); err != nil {
+		return err
+	}
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }
 
@@ -317,6 +351,9 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 // status verified, which records the agent as verified_by (design docs
 // 0002, 0015 §3.1).
 func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
 	id = domain.Normalize(id)
 	k, err := s.Store.Verify(ctx, id, actor)
 	if err != nil {
@@ -337,6 +374,9 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 // table a purge does not touch, and in the log. An operation that leaves
 // no trace has no place in a product whose value is provenance.
 func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) error {
+	if err := s.readOnly(); err != nil {
+		return err
+	}
 	id = domain.Normalize(id)
 	if err := s.Store.Purge(ctx, id, actor); err != nil {
 		return err
@@ -350,6 +390,9 @@ func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) erro
 // references so nothing breaks (design doc 0021). Moving to the current
 // id is a no-op read.
 func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
 	id, newID = domain.Normalize(id), domain.Normalize(newID)
 	if !domain.ValidID(newID) {
 		return nil, Invalidf(`invalid destination id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, newID)
@@ -920,6 +963,9 @@ const maxOutcomeNote = 2000
 // passive usage recording, a failed write is returned — the reporter
 // should know the report was lost.
 func (s *Service) ReportOutcome(ctx context.Context, id, outcome, note string) (*domain.Usage, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
 	id = domain.Normalize(id)
 	if !domain.ValidOutcome(outcome) {
 		return nil, Invalidf("invalid outcome %q (valid: %s)", outcome, strings.Join(domain.Outcomes, ", "))
@@ -1066,6 +1112,9 @@ const (
 // Failures are counted, not fatal: one entry the provider chokes on must
 // not strand the rest of the corpus.
 func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*ReembedResult, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
 	if s.Embedder == nil {
 		return nil, Unsupportedf("semantic search is not configured: set OCHAKAI_VERTEX_PROJECT")
 	}

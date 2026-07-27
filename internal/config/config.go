@@ -35,6 +35,14 @@ type Config struct {
 	// can already read and write everything (design doc 0002).
 	Delegators []string
 
+	// ReadOnly makes the deployment refuse every change to knowledge
+	// (design doc 0040). It is not authorization: it does not look at the
+	// caller, and it cannot be narrowed to some entries or some people —
+	// it says this deployment does not write, for everyone equally,
+	// including whoever operates it. Usage telemetry still records, being
+	// the server's own observation rather than content a caller wrote.
+	ReadOnly bool
+
 	// GCSBucket names the bucket holding attachment bytes as GCS objects
 	// (blob/<sha256>, design doc 0013). Auth is ADC. When empty,
 	// attachments are unsupported — markdown entries only.
@@ -73,6 +81,7 @@ func FromEnv() (*Config, error) {
 		DatabaseURL: os.Getenv("OCHAKAI_DATABASE_URL"),
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
 		InsecureDev: os.Getenv("OCHAKAI_INSECURE_DEV") == "true",
+		ReadOnly:    os.Getenv("OCHAKAI_READ_ONLY") == "true",
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
 	}

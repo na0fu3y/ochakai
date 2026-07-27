@@ -35,6 +35,11 @@ PR の中に残る。
   「IAP JWT 検証」は 0032 が実装済み)。認可機構を
   持たない —「到達できた者は読み書きできる」。ヘッダから読むのは
   provenance だけで、信頼の判断は参照側が provenance を見て行う。
+- [0040 デプロイ単位の read-only](0040-read-only-mode.md) —
+  **Accepted**。`OCHAKAI_READ_ONLY` でデプロイ全体を読み取り専用にする。
+  呼び出し元を区別しないので 0002 の「認可を持たない」は維持される。
+  強制点はサービス層 1 箇所、各面は自分の語彙で告げる(REST は 403 と
+  ヘッダ、MCP は書き込みツールを出さない)。
 - [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
   — **Accepted**。信頼済みの呼び出し元が `X-Ochakai-On-Behalf-Of` で
   エンドユーザーを名乗り、provenance がサービスアカウント 1 つに
