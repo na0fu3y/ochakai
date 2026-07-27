@@ -16,9 +16,19 @@ ochakai's security posture is deliberately narrow (see
 - It does **no authorization**: whoever can reach a deployment can read
   and write; identity is recorded as provenance only. Reachability is
   Cloud Run IAM's job: ochakai trusts the identity headers Cloud Run
-  forwards after its IAM check and must **never run publicly invokable**.
+  forwards after its IAM check, and a deployment that reads those headers
+  must **never run publicly invokable** — nothing verified their
+  signature, so a public one would let any caller name any person.
   (The publicly reachable MCP OAuth connector service existed briefly
   and was retired in 0.9.0.)
+- There is exactly one public posture, and it is public because it
+  believes nothing: `OCHAKAI_PUBLIC_READ_ONLY` reads no identity at all
+  and refuses every write (design docs
+  [0040](docs/design/0040-read-only-mode.md),
+  [0041](docs/design/0041-public-read-only.md)). A deployment that is
+  publicly readable and writable is not a configuration ochakai accepts.
+  A report that this posture reads a header it should not, or that a
+  write reaches the database through it, is a vulnerability.
 
 Especially interesting reports, given that design:
 
