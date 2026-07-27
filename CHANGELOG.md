@@ -36,6 +36,15 @@ last entry.
 - Request and response examples throughout `api/openapi.yaml`, which
   previously carried exactly one. Every example is validated against the
   schema it sits under.
+- `OCHAKAI_READ_ONLY` — serve knowledge without changing it. Every write
+  is a 403, the MCP surface does not offer the write tools at all, and
+  the web UI stops drawing the buttons that would only fail. For a
+  reference-only instance, a public demo, or freezing a base during a
+  migration. It is not authorization: it does not look at the caller, and
+  it refuses the operator too (design doc 0040). Usage recording
+  continues, being the server's own observation rather than a write a
+  caller asked for. Default: off, so nothing changes for a deployment
+  that does not set it.
 
 ### Changed
 

@@ -55,7 +55,7 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 Pin a version rather than `:latest`, so a redeploy is a decision. Without
 the `gh` CLI, read the number off the
 [releases page](https://github.com/na0fu3y/ochakai/releases) and set it by
-hand — `export VERSION=0.13.0`.
+hand — `export VERSION=0.14.0`.
 
 (This guide assumes 0.9.0 or later; earlier releases are
 [retracted](https://go.dev/ref/mod#go-mod-file-retract) and unsupported —

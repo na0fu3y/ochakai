@@ -19,23 +19,36 @@ if the proposal is concrete.
 
 ## Now
 
-- **Get 0.14.0 out.** The latest release is 0.13.0. Two accepted design docs
-  are implemented on `main` and unreleased:
-  [0036](docs/design/0036-okf-schema-first.md), which takes OKF v0.2's schema
-  as ochakai's own and moves the keys the spec defines (`sources`,
-  `usage_window`, and the Attested Computation contract) out of `attrs` and
-  into first-class fields, and
-  [0037](docs/design/0037-stale-and-source-lookup.md), which makes those keys
-  something you can ask for: the `sort=stale_after` feed of entries past the
-  expiry their author declared, and the `?source=<uri>` reverse lookup for
-  everything derived from a document that changed. The release baseline for
-  breaking changes is 0.13.0, not 0.12.
+- **Get 0.15.0 out.** The latest release is
+  [0.14.0](https://github.com/na0fu3y/ochakai/releases/tag/v0.14.0)
+  (2026-07-27), which shipped 0035, 0036 and 0037. What is implemented on
+  `main` and unreleased is listed in the changelog's
+  [Unreleased](CHANGELOG.md) section; the breaking one is
+  [0038](docs/design/0038-type-vocabulary-realignment.md), which realigns
+  the recommended type vocabulary to what OKF itself spells out — nine
+  spellings become eleven, with `Semantic Model` and `Golden Query`
+  retired to free types. No migration runs and no stored entry changes.
+  Beside it, [0039](docs/design/0039-mcp-stdio-bridge.md) gives
+  stdio-only MCP clients a way in (`ochakai mcp-stdio`) and
+  [0040](docs/design/0040-read-only-mode.md) adds `OCHAKAI_READ_ONLY`,
+  for a deployment that serves knowledge without changing it. The release
+  baseline for breaking changes is 0.14.0.
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response
   past `api/openapi.yaml`, and fuzzing on the OKF parser. This is maintenance,
   not a feature — but it is where new endpoints acquire an obligation, since an
   endpoint only comes under the contract check once it has an integration test.
+- **Make the project legible to somebody who has not read it.** An audit of
+  what a newcomer can learn from this repository found the writing good and
+  the way in poor: the runtime requirement is stated only in
+  `docs/architecture.md`, MCP setup exists for one client out of the several
+  the README names, the CLI's help is the best documentation here and is
+  invisible until you have a binary, and the design records that the English
+  prose calls authoritative are Japanese-only. That is now
+  [a set of issues](https://github.com/na0fu3y/ochakai/issues) rather than a
+  paragraph here. None of it is a feature, and it is the work most likely to
+  decide whether anyone else can use this.
 
 ## Next
 
@@ -52,11 +65,11 @@ if the proposal is concrete.
   embeddings is the current answer. A better lexical index has not been
   designed, and nothing here promises one.
 
-Beyond that this roadmap is thin, and honestly so. There are no open issues and
-no other proposed design docs at the time of writing; work has been arriving
-from use and from release reviews rather than from a plan. If something you
-need is missing from this list, that is a reason to say so, not a sign it was
-already considered.
+Beyond that this roadmap is thin, and honestly so. Work has been arriving from
+use and from release reviews rather than from a plan; the open issues are the
+current exception, and no design doc is proposed but unlanded except 0009. If
+something you need is missing from this list, that is a reason to say so, not a
+sign it was already considered.
 
 ## Considered and deliberately not doing
 

@@ -15,15 +15,16 @@ humans and agents together, and served to Claude Code and every other
 data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
 a bundled web UI. More at [ochak.ai](https://ochak.ai).
 
-[Quick start](#quick-start) · [Architecture](docs/architecture.md) ·
+[Quick start](#quick-start) · [Requirements](#requirements) ·
+[All docs](docs/README.md) · [Architecture](docs/architecture.md) ·
 [Deploy on Cloud Run](deploy/cloudrun/README.md) ·
 [REST API](api/openapi.yaml) · [Changelog](CHANGELOG.md) ·
 [Roadmap](ROADMAP.md) · [Support](SUPPORT.md) ·
 [Contributing](CONTRIBUTING.md)
 
 The whole thing is one Go binary and Postgres, deployable on Cloud Run +
-Cloud SQL for [about $10/month](deploy/cloudrun/README.md). Local
-development needs only Docker.
+Cloud SQL for [about $10/month](deploy/cloudrun/README.md). The local
+stack is Docker and nothing else.
 
 ![The draft review queue: entries agents wrote back, waiting for a human
 to verify or reject them](docs/images/webui-review.png)
@@ -31,6 +32,44 @@ to verify or reject them](docs/images/webui-review.png)
 This README describes `main`. For what is in the version you are running,
 see the [changelog](CHANGELOG.md) — features documented here may not have
 reached a tagged release yet.
+
+## Requirements
+
+**Running it for real means Google Cloud.** Cloud Run's IAM check decides
+who reaches a deployment and Cloud SQL authenticates the service account,
+which is how ochakai holds no secret of its own — and it is also why
+there is no supported way to run it on another cloud or on-prem (design
+docs [0002](docs/design/0002-authn-authz.md),
+[0003](docs/design/0003-gcp-only.md)). What is portable is the knowledge,
+not the runtime: it round-trips through OKF bundles, so leaving does not
+depend on what you are leaving. `deploy/compose.yaml` runs the same
+binary locally with authentication switched off — a development harness,
+not the small end of production.
+
+**There is no authorization.** Whoever can reach a deployment can read
+and write everything. If you need per-entry permissions, this is the
+wrong tool; see the [refusals](#why-ochakai) for what that buys.
+
+**PostgreSQL, plus `pg_trgm`.** The first migration creates the
+extension, so a database whose user may not `CREATE EXTENSION` needs an
+admin to create it once — that is what the deploy guide's bootstrap SQL
+is for. Turning embeddings on adds `vector` (pgvector) the same way;
+without them, plain PostgreSQL is enough. CI and the deploy guide both
+exercise Postgres 17.
+
+**The server needs Docker; the client commands need a binary.** The quick
+start below runs the CLI with `go run`, which wants the toolchain named
+in `go.mod` — Go 1.21 and newer download it for you. To stay
+toolchain-free, take a
+[release archive](https://github.com/na0fu3y/ochakai/releases) instead,
+or talk to the API directly, since that is all the CLI does:
+
+```sh
+curl -X POST http://localhost:8080/api/v1/knowledge \
+  -H 'content-type: application/json' \
+  -d '{"id": "metrics/revenue", "type": "Metric",
+       "body": "Completed orders only, net of refunds."}'
+```
 
 ## Quick start
 
