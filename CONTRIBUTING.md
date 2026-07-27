@@ -57,6 +57,18 @@ go test ./internal/okf/ -run XXX -fuzz FuzzDocumentRoundTrip -fuzztime 60s
 A failing input lands in `testdata/fuzz/` and becomes a permanent seed;
 commit it with the fix.
 
+Two checked-in files are generated, and the test that generates them
+fails when the copy is stale. [docs/cli.md](docs/cli.md) is the CLI's own
+help rendered — change a synopsis, a flag or an example and regenerate:
+
+```sh
+go test ./cmd/ochakai -run TestCLIReferenceIsCurrent -update
+```
+
+The other is the version number in `api/openapi.yaml`, checked against
+the newest release in `CHANGELOG.md` and the issue template's
+placeholder; see [Releases](#releases).
+
 The store integration test is skipped unless a real PostgreSQL is
 available (CI runs one as a service container):
 
@@ -130,9 +142,13 @@ release starts with a PR.
   leave a fresh empty `Unreleased` above it, and add the compare link at
   the bottom (`[x.y.z]: …/compare/v<prev>...vx.y.z`, and repoint
   `[Unreleased]` at the new tag).
-- `api/openapi.yaml` — `info.version`. It describes the wire surface, so
-  it drifts silently: nothing fails when it is stale.
+- `api/openapi.yaml` — `info.version`.
 - `.github/ISSUE_TEMPLATE/bug_report.yml` — the version placeholder.
+
+These three used to drift silently, since nothing fails when a version
+number is stale. `TestReleaseVersionsAgree` now does: it reads the newest
+dated heading in the changelog and requires the other two to say the same
+thing, so the prep PR is green only once all three have moved.
 
 While the major version is 0, a release with any **BREAKING** entry takes
 the minor, not the patch.

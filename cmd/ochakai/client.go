@@ -70,8 +70,15 @@ func runClient(name string, args []string) int {
 // errReported means the FlagSet already printed the problem.
 var errReported = errors.New("usage error")
 
+// helpOutput is where a command's own help goes. It is os.Stderr, which
+// is where the flag package would have put it anyway; naming it is what
+// lets docs/cli.md be generated from the help itself rather than written
+// beside it (cmd/ochakai/clidocs_test.go).
+var helpOutput io.Writer = os.Stderr
+
 func newBareFlagSet(synopsis, examples string) *flag.FlagSet {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.SetOutput(helpOutput)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "%s\n\nFlags:\n", synopsis)
 		fs.PrintDefaults()
