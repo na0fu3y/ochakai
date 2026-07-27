@@ -146,6 +146,14 @@ last entry.
   `--source` did not exist. The sort values now come from
   `domain.ListSorts`, so a new one fails the test until every script
   offers it.
+- The per-command flag list itself is no longer transcribed: it is read
+  from the commands' own FlagSets, so a flag cannot be missing from the
+  completions and from the list that checks them at the same time — which
+  is how `--source` stayed invisible for two releases with every test
+  passing. Adding a flag to a client command now fails the test until
+  zsh, bash and fish all offer it. `ochakai mcp-stdio --url`, which fish
+  had never offered because that command was absent from the old list
+  altogether, is the first thing this caught.
 
 ## [0.14.0] - 2026-07-27
 

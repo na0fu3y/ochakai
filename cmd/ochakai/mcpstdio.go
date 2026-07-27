@@ -23,6 +23,7 @@ import (
 
 func cmdMCPStdio(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
+		"mcp-stdio",
 		"Usage: ochakai mcp-stdio [flags]\n\nSpeak MCP over stdin/stdout, forwarding every message to the\nselected server's /mcp. For clients that cannot open an HTTP MCP\nendpoint themselves, and for any client talking to Cloud Run, where\nthe request needs a Google ID token this resolves for you (the same\nway every other client command does) — so the client itself is\nconfigured with no credentials.\n\nstdout carries the protocol and nothing else; diagnostics go to\nstderr. Run it as the client's command, not by hand.",
 		"  ochakai mcp-stdio\n  ochakai mcp-stdio --url https://your-service.run.app\n\n  # Claude Desktop / any client taking a command, in its JSON config:\n  #   \"ochakai\": { \"command\": \"ochakai\", \"args\": [\"mcp-stdio\"] }\n  claude mcp add ochakai -- ochakai mcp-stdio\n")
 	pos, err := parseArgs(fs, args)

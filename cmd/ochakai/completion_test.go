@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
+	"io"
 	"regexp"
 	"slices"
 	"strings"
@@ -60,38 +63,50 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 	}
 }
 
-// The canonical long-flag surface of every client command — the single
-// spec all three hand-written scripts are checked against, both ways
-// (a flag missing from one shell, and a flag a shell offers that the
-// command does not have). Short flags (-f) are outside the check.
+// commandLongFlags is the canonical long-flag surface of every client
+// command — the spec all three hand-written scripts are checked against,
+// both ways (a flag missing from one shell, and a flag a shell offers
+// that the command does not have). Short flags (-f) are outside the
+// check.
 //
-// This table is transcribed from the commands' flag registration by hand,
-// which is the one edge it does not cover: --source lived on `search` for
-// two releases while this table and all three scripts agreed it did not
-// exist. Adding a flag means editing here and in three scripts.
-var completionLongFlags = map[string][]string{
-	"search":    {"type", "status", "tag", "prefix", "source", "sort", "limit", "json", "url"},
-	"browse":    {"json", "url"},
-	"context":   {"type", "status", "tag", "prefix", "limit", "budget", "min-score", "json", "url"},
-	"get":       {"json", "download", "url"},
-	"create":    {"json", "url"},
-	"update":    {"if-match", "json", "url"},
-	"verify":    {"json", "url"},
-	"delete":    {"url"},
-	"purge":     {"url"},
-	"reembed":   {"limit", "once", "json", "url"},
-	"move":      {"url"},
-	"attach":    {"name", "json", "url"},
-	"detach":    {"url"},
-	"usage":     {"json", "url"},
-	"report":    {"note", "json", "url"},
-	"revisions": {"limit", "json", "url"},
-	"backlinks": {"limit", "json", "url"},
-	"export":    {"no-attachments", "url"},
-	"import":    {"dry-run", "url"},
-	"use":       {"name"},
-	"whoami":    {"json", "url"},
-	"ui":        {"port", "url"},
+// It is read from the commands rather than transcribed beside them. Each
+// one registers its flags inside its own body, so they exist only once
+// the command has run: "-h" runs it precisely that far — every command
+// parses before it acts — and leaves its FlagSet in commandFlagSets,
+// the same probe docs/cli.md is rendered by. A hand-copied list is what
+// let --source live on `search` for two releases while the table and all
+// three scripts agreed it did not exist.
+func commandLongFlags(t *testing.T) map[string][]string {
+	t.Helper()
+	// The --url default reads the CLI config: keep the probe off the
+	// developer's own. The help every -h prints is noise here.
+	t.Setenv("OCHAKAI_URL", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	prev := helpOutput
+	helpOutput = io.Discard
+	defer func() { helpOutput = prev }()
+
+	flags := map[string][]string{}
+	for name, cmd := range clientCommands {
+		delete(commandFlagSets, name)
+		if err := cmd(context.Background(), []string{"-h"}); !errors.Is(err, flag.ErrHelp) {
+			t.Errorf("`ochakai %s -h` = %v, want flag.ErrHelp: a command must register and parse its flags before it does anything", name, err)
+			continue
+		}
+		fs := commandFlagSets[name]
+		if fs == nil {
+			t.Errorf("%q registered no FlagSet under its own name; pass %q to newFlagSet/newBareFlagSet", name, name)
+			continue
+		}
+		var names []string
+		fs.VisitAll(func(f *flag.Flag) {
+			if len(f.Name) > 1 { // a one-letter name is a short flag (-f)
+				names = append(names, f.Name)
+			}
+		})
+		flags[name] = names
+	}
+	return flags
 }
 
 // caseArms parses the "label) ... ;;" arms of a shell case statement,
@@ -147,8 +162,8 @@ func fishFlags(script string) map[string]map[string]bool {
 }
 
 // Guard: each shell script offers exactly the long flags each command
-// has — per command, both directions — so a flag added to one script
-// (or to the command itself) cannot silently miss the other shells.
+// registers — per command, both directions — so a flag added to a
+// command (or to one script) cannot silently miss the other shells.
 func TestCompletionFlagsStayInSyncAcrossShells(t *testing.T) {
 	byShell := map[string]map[string]map[string]bool{
 		// zsh spells a flag "--name[help]", bash lists them in opts="...".
@@ -156,8 +171,9 @@ func TestCompletionFlagsStayInSyncAcrossShells(t *testing.T) {
 		"bash": armFlags(caseArms(bashCompletion), `--([a-z-]+)`),
 		"fish": fishFlags(fishCompletion),
 	}
+	longFlags := commandLongFlags(t)
 	for shell, byCmd := range byShell {
-		for cmd, want := range completionLongFlags {
+		for cmd, want := range longFlags {
 			for _, f := range want {
 				if !byCmd[cmd][f] {
 					t.Errorf("%s script misses --%s for %q", shell, f, cmd)
