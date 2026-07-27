@@ -193,6 +193,10 @@ Opening this repository in Claude Code connects automatically via the
 committed [.mcp.json](.mcp.json), which expects ochakai (or the Cloud Run
 proxy) on `localhost:8787`.
 
+Which of the two forms a given client wants, where it keeps its config,
+and which clients cannot reach an IAM-restricted deployment at all:
+[docs/guides/mcp-clients.md](docs/guides/mcp-clients.md).
+
 ### Try a prompt
 
 Once an agent is connected, four prompts walk the whole loop. Run them
