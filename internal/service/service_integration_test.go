@@ -509,47 +509,68 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	}
 
 	// A pass smaller than the corpus must say what it did not reach.
-	res, err := svc.Reembed(ctx, "", 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Embedded > 2 {
-		t.Fatalf("bounded pass embedded %d, over its limit of 2", res.Embedded)
-	}
-	if res.Embedded < 2 {
+	//
+	// Attempted several times, because one attempt cannot tell drift from
+	// the bug. Missing is counted inside Reembed, between the two counts
+	// taken here, so an entry another package creates after the baseline
+	// and deletes before the one below lands in Missing and in neither of
+	// them: both measurements agree, the corpus looks still, and the
+	// equality fails on a row this test never saw. Bracketing it tighter
+	// is not possible from out here — the fix is repetition. Drift is a
+	// coincidence of timing and misses most attempts; the two-off this
+	// covers is in the arithmetic and misses every one.
+	var stable bool // an attempt whose corpus did hold still
+	var missing, left int
+	for range reembedPinAttempts {
+		base, err := svc.Store.CountUnembedded(ctx, model)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := svc.Reembed(ctx, "", 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Embedded > 2 {
+			t.Fatalf("bounded pass embedded %d, over its limit of 2", res.Embedded)
+		}
+		// Missing is a fresh count taken after the pass, so the assertion
+		// is an equality against a count taken the same way — not
+		// arithmetic on the baseline. The bug this covers is a two-off
+		// (subtracting the pass's work from a total that already excluded
+		// it), which no tolerance wide enough for the drift could catch.
+		after, err := svc.Store.CountUnembedded(ctx, model)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// The pass takes the oldest unembedded entries in the whole
 		// database, so a parallel package deleting one of its own
-		// candidates mid-pass leaves this short. Nothing about the
-		// reporting is wrong; there is just nothing to pin it against.
-		t.Skipf("bounded pass embedded %d of 2; another package's entries moved under it", res.Embedded)
+		// candidates mid-pass leaves the pass short, and one writing
+		// entries moves the baseline under it. Neither says anything
+		// about the reporting, so that attempt measured nothing.
+		if res.Embedded < 2 || base-res.Embedded != after {
+			continue
+		}
+		stable, missing, left = true, res.Missing, after
+		if missing == left {
+			return
+		}
 	}
-	if res.Missing == 0 {
-		t.Error("a bounded pass over a larger corpus reported nothing left")
+	if !stable {
+		t.Skipf("the corpus moved under all %d attempts; the count Reembed reports "+
+			"cannot be pinned against a moving baseline", reembedPinAttempts)
 	}
-
-	// Missing is a fresh count taken after the pass, so the assertion is
-	// an equality against a count taken the same way — not arithmetic on
-	// the baseline above. The test database is shared by every package
-	// (CONTRIBUTING) and CountUnembedded counts live entries only, so
-	// between the baseline and the pass another package can both add
-	// entries and delete its own; the bug this covers is a two-off
-	// (subtracting the pass's work from a total that already excluded
-	// it), which no tolerance wide enough for that drift could catch.
-	//
-	// So: measure again, and only compare when nothing moved.
-	after, err := svc.Store.CountUnembedded(ctx, model)
-	if err != nil {
-		t.Fatal(err)
+	if missing == 0 {
+		t.Fatal("a bounded pass over a larger corpus reported nothing left")
 	}
-	if before-res.Embedded != after {
-		t.Skipf("another package changed the corpus during the pass (%d unembedded before, %d after, %d embedded); "+
-			"the count Reembed reports cannot be pinned against a moving baseline", before, after, res.Embedded)
-	}
-	if res.Missing != after {
-		t.Errorf("Missing = %d, want %d — the pass must report what is left, not what is left minus its own work",
-			res.Missing, after)
-	}
+	t.Errorf("Missing = %d, want %d — the pass must report what is left, not what is left minus its own work",
+		missing, left)
 }
+
+// reembedPinAttempts is how many times TestReembedReportsWhatIsLeft will
+// try for a measurement the shared database did not move under. Passing
+// needs one attempt to come back clean; failing needs all of them to
+// agree, which is what keeps a retry from hiding the bug it covers.
+const reembedPinAttempts = 5
 
 // newEmbeddingService is newIntegrationService plus the pgvector schema,
 // which exists only where an embedding dimension was configured. Reembed

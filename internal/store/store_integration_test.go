@@ -1519,16 +1519,32 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	// Registered rather than deferred, and before the fixture cleanup
+	// below: a deferred Close runs before any t.Cleanup, which would leave
+	// the delete swallowing "pool closed" and the corpus in the database
+	// for every later run to search through. Cleanups are LIFO, so this
+	// one runs last.
+	t.Cleanup(s.Close)
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	const target, decoy = "it-q-target", "it-q-decoy"
+	// The corpus is the fixture: the assertions are about how these 22
+	// entries rank against each other, and a search over the whole table
+	// answers a different question. A database that other tests have run
+	// against holds hundreds of unrelated rows, and the English question —
+	// four common words — matches enough of them to push the subject past
+	// the limit, failing recall on a corpus the test never planted. So
+	// every entry carries a run tag and every search is scoped to it,
+	// which is what the rest of this file does (see the 0037 feeds).
+	run := fmt.Sprintf("it-q-%d", time.Now().UnixNano())
+	mine := Filter{Tags: []string{run}}
+
+	target, decoy := run+"/target", run+"/decoy"
 	ids := []string{target, decoy}
 	for i := range 20 {
-		ids = append(ids, fmt.Sprintf("it-q-filler-%d", i))
+		ids = append(ids, fmt.Sprintf("%s/filler-%d", run, i))
 	}
 	clean := func() {
 		for _, id := range ids {
@@ -1536,12 +1552,11 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 		}
 	}
-	clean()
 	t.Cleanup(clean)
 	create := func(id, title, body string) {
 		t.Helper()
 		if err := s.Create(ctx, &domain.Knowledge{
-			Type: domain.TypeInsights, ID: id, Title: title,
+			Type: domain.TypeInsights, ID: id, Title: title, Tags: []string{run},
 			Status: domain.StatusDraft, CreatedBy: actor, Body: body,
 		}, false); err != nil {
 			t.Fatalf("create %s: %v", id, err)
@@ -1552,7 +1567,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 	create(target, "売上の読み方", "売上は前年同期比で見ないと誤読する。monthly revenue by quarter.")
 	create(decoy, "棚卸の運用", "棚卸は毎月行っているのか、四半期ごとなのか。why is this down to the site?")
 	for i := range 20 {
-		create(fmt.Sprintf("it-q-filler-%d", i), fmt.Sprintf("運用メモ %d", i),
+		create(fmt.Sprintf("%s/filler-%d", run, i), fmt.Sprintf("運用メモ %d", i),
 			"これは毎日行っているのかを記録している。why is it down again, and is it down for long?")
 	}
 
@@ -1583,7 +1598,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 		// embeddings — so here we require only that the subject is found.
 		{"why is revenue down", false, "English question: recall only"},
 	} {
-		hits, err := s.SearchLexical(ctx, tc.query, Filter{}, 50)
+		hits, err := s.SearchLexical(ctx, tc.query, mine, 50)
 		if err != nil {
 			t.Fatalf("SearchLexical(%q): %v", tc.query, err)
 		}
@@ -1601,7 +1616,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 
 	// A query that shares nothing must still come back empty: fragment
 	// matching widens recall, it does not turn the floor off.
-	hits, err := s.SearchLexical(ctx, "zzzznothingmatchesthiszzzz", Filter{}, 50)
+	hits, err := s.SearchLexical(ctx, "zzzznothingmatchesthiszzzz", mine, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
