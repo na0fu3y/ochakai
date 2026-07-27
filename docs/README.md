@@ -6,6 +6,9 @@ types, and every environment variable.
 
 ## For someone evaluating ochakai
 
+- [FAQ](faq.md) — can it run outside Google Cloud, does anything leave
+  your project, how it differs from RAG and from a memory layer, what an
+  agent may do to verified knowledge, and what leaving looks like.
 - [Architecture](architecture.md) — how the pieces fit, what the data
   model is, and why there is no authorization layer. English summary of
   the decision records.
@@ -22,6 +25,10 @@ types, and every environment variable.
   and nothing else; no Google account needed.
 - [Golden query canary](guides/golden-query-canary.md) — running verified
   queries from CI so a knowledge base that has quietly gone wrong says so.
+- [Troubleshooting](guides/troubleshooting.md) — the local and client-side
+  half: an empty search, a skipped import, a 409 or 412, an empty web UI,
+  a server that refuses to start. Google Cloud symptoms stay in the deploy
+  guide's §7.
 
 ## For someone building against it
 
