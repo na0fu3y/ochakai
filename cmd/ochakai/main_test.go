@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -88,6 +89,36 @@ func TestShippedInstructionsUseCurrentTypeVocabulary(t *testing.T) {
 		}
 		if !strings.Contains(s, "Attested Computation") {
 			t.Errorf("%s never names the Attested Computation type", f)
+		}
+	}
+}
+
+// Guard: docs/design/README.en.md summarizes the decision records for
+// people who cannot read them, and the records are cited by number from
+// the README, the architecture doc and api/openapi.yaml. A record that
+// lands without a summary leaves those citations dead ends again, and
+// nothing else would notice — the English file is prose, and prose does
+// not fail to compile.
+func TestEnglishDesignIndexCoversEveryRecord(t *testing.T) {
+	const index = "../../docs/design/README.en.md"
+	content, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatalf("read %s: %v", index, err)
+	}
+	summarized := string(content)
+
+	records, err := filepath.Glob("../../docs/design/[0-9]*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) == 0 {
+		t.Fatal("no design records found: this check now guards nothing")
+	}
+	for _, path := range records {
+		name := filepath.Base(path)
+		if !strings.Contains(summarized, name) {
+			t.Errorf("docs/design/README.en.md never links %s. Summarize it there, "+
+				"or an English reader hits a Japanese dead end", name)
 		}
 	}
 }

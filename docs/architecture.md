@@ -4,7 +4,9 @@ This page is a summary. The decisions it describes are recorded in the
 numbered decision records under [docs/design](design) — mostly in
 Japanese, and authoritative where this page and they disagree. Start from
 [the index](design/README.md): it groups every record by area and marks
-which ones still describe the current state. Sections below cite the
+which ones still describe the current state, and
+[README.en.md](design/README.en.md) beside it summarizes each record in
+English. Sections below cite the
 record they rest on as `(design doc NNNN)`, the way the
 [README](../README.md) does.
 
