@@ -744,6 +744,13 @@ function route() {
       explore.expiredFeed = rest[0] === 'stale';
       explore.source = '';
       explore.feedAll = false;
+    } else if (rest[0] === 'in') {
+      // Search scoped to a directory — where the tree's "Search here"
+      // lands. A route rather than a click handler so it is a real link:
+      // openable in a new tab, and shareable as "search our team's space"
+      // (design doc 0041 §2.8). The scope is a filter, so it leaves the
+      // query and the other filters alone.
+      explore.prefix = rest.slice(1).map(decodeURIComponent).join('/').replace(/^\/+|\/+$/g, '');
     } else if (rest[0] === 'cites') {
       // The reverse lookup: which entries cite one resource. The resource
       // is a URI, so it travels as one encoded segment.
@@ -777,7 +784,7 @@ view.addEventListener('click', e => {
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false };
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -831,6 +838,9 @@ function viewExplore() {
         ${statusChips}
         <span class="fb-sep"></span>
         <input type="text" id="f-tag" placeholder="tag" aria-label="tag" value="${esc(explore.tag)}" style="width:6rem">
+        <input type="text" id="f-prefix" placeholder="path" aria-label="path scope"
+               title="Only entries under this path, e.g. teams/growth — the tree's “Search here” fills this in"
+               value="${esc(explore.prefix)}" style="width:8rem">
         <span class="fb-sep"></span>
         <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
           type="checkbox" id="f-age" aria-label="verification age feed" ${explore.ageFeed ? 'checked' : ''}>verification age</label>
@@ -856,6 +866,7 @@ function viewExplore() {
     if (e.key === 'Enter' && e.target.value.trim()) { explore.types.add(e.target.value.trim()); viewExplore(); }
   });
   $('#f-tag').addEventListener('input', () => { explore.tag = $('#f-tag').value.trim(); debounce(rerun, 250); });
+  $('#f-prefix').addEventListener('input', () => { explore.prefix = $('#f-prefix').value.replace(/^\/+|\/+$/g, '').trim(); debounce(rerun, 250); });
   // The three feeds are listing modes, not filters: each replaces the
   // query, so picking one clears the others.
   const feeds = [['#f-age', 'ageFeed'], ['#f-failed', 'failedFeed'], ['#f-expired', 'expiredFeed']];
@@ -908,16 +919,38 @@ async function runSearch() {
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
   if (explore.tag) p.append('tag', explore.tag);
+  // A path scope is a filter like tag, so it rides along with whatever
+  // mode the chain above picked (design doc 0041 §2.1). The UI takes one
+  // scope where the API takes many: a person narrows to the directory
+  // they are looking at, while "my scope and the shared one at once" is
+  // the agent's question, asked in one call through REST or MCP.
+  if (explore.prefix) p.append('prefix', explore.prefix);
   // Search caps at 50 server-side; the feeds page larger (100, expandable
   // to the server max of 1000 via the load-more note).
   const limit = isFeed ? (explore.feedAll ? 1000 : 100) : 50;
   p.set('limit', String(limit));
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
+  // A scope narrows every result below it, so it is stated above them
+  // rather than only in the filter bar — which collapses on narrow
+  // screens, where an empty result would otherwise look like an empty
+  // knowledge base.
+  const scopeNote = explore.prefix
+    ? `<div class="truncation-note">Scoped to <code>/${esc(explore.prefix)}</code> and everything under it ·
+         <a href="#" id="scope-clear">search everywhere</a></div>`
+    : '';
+  const wireScope = () => $('#scope-clear')?.addEventListener('click', e => {
+    e.preventDefault();
+    explore.prefix = '';
+    const box = $('#f-prefix');
+    if (box) box.value = '';
+    runSearch();
+  });
   try {
     const { hits } = await api('/api/v1/knowledge?' + p);
     if (my !== runSearch._seq || out !== $('#results')) return; // stale response
     if (!hits || !hits.length) {
-      out.innerHTML = `<div class="empty">No knowledge found${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
+      out.innerHTML = scopeNote + `<div class="empty">No knowledge found${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
+      wireScope();
       return;
     }
     // With a query, split off low-relevance hits so junk doesn't render as
@@ -947,7 +980,8 @@ async function runSearch() {
         : `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
              (server cap) — narrow with filters or a more specific query.</div>`;
     }
-    out.innerHTML = html;
+    out.innerHTML = scopeNote + html;
+    wireScope();
     $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); explore.feedAll = true; runSearch(); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
@@ -1277,6 +1311,8 @@ function viewDir(rawPrefix) {
     <div class="toolbar">
       <div class="section-title" style="margin:0"><span class="type-ico">📁</span> <span class="mono">/${esc(prefix)}</span></div>
       <span class="grow"></span>
+      ${clean ? `<a class="btn small" href="#/search/in/${idPath(clean)}"
+        title="Search only what lives under ${esc(prefix)}">🔍 Search here</a>` : ''}
       <a class="btn small write-only" href="${newHref}" title="Create a knowledge entry in ${esc(prefix) || 'the root'}">＋ New entry here</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;

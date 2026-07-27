@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -293,8 +294,11 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 			Entries: []domain.Knowledge{{Type: "metrics", ID: "revenue", Title: "売上"}},
 		})
 	})
-	res, err := c.Context(context.Background(), "why did revenue drop",
-		[]string{"metrics"}, []string{"verified"}, []string{"core"}, 7, 0.5, 0)
+	res, err := c.Context(context.Background(), ContextParams{
+		Query: "why did revenue drop", Types: []string{"metrics"},
+		Statuses: []string{"verified"}, Tags: []string{"core"},
+		Prefixes: []string{"teams/growth", "company"}, Limit: 7, MinScore: 0.5,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,6 +309,11 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 		got.Get("status") != "verified" || got.Get("tag") != "core" ||
 		got.Get("limit") != "7" || got.Get("min_score") != "0.5" {
 		t.Errorf("query = %v", got)
+	}
+	// Every scope travels as its own repeated parameter: joining them into
+	// one value would ask the server for a single path with a comma in it.
+	if want := []string{"teams/growth", "company"}; !slices.Equal(got["prefix"], want) {
+		t.Errorf("prefix = %v, want %v", got["prefix"], want)
 	}
 }
 
@@ -447,7 +456,7 @@ func TestContextSendsBudgetOnlyWhenSet(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(ContextResult{})
 	})
 	for _, budget := range []int{0, 4000} {
-		if _, err := c.Context(context.Background(), "q", nil, nil, nil, 0, 0, budget); err != nil {
+		if _, err := c.Context(context.Background(), ContextParams{Query: "q", Budget: budget}); err != nil {
 			t.Fatal(err)
 		}
 	}

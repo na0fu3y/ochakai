@@ -126,6 +126,7 @@ ochakai context "why is revenue down?"  # the one-call read before a data questi
 ochakai search "revenue" --type Metric --status verified
 ochakai search --sort stale_after   # past the expiry their author declared
 ochakai search --source https://wiki.example/revenue-policy  # what derives from this
+ochakai search "revenue" --prefix queries/sales   # only what lives under one subtree
 ochakai get queries/monthly-revenue
 ochakai verify metrics/revenue      # promotes a draft — and re-affirms a verified entry, clearing the review feeds
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
@@ -434,6 +435,19 @@ with no translation layer (design docs 0023, 0038). Matching is case-insensitive
 the spelling you write is the one stored. A type is not an address — the
 directory layout of an exported bundle comes from entry IDs alone (design
 doc 0017), so you are free to organize files however you like.
+
+Because an ID is an address, it is also something to search within.
+`--prefix` (REST `?prefix=`, MCP `prefixes`) narrows a search or a
+`context` call to a subtree, and repeating it ORs the scopes, so one call
+can cover two parts of the tree and each hit's ID says which it came from
+(design doc 0041). Matching is on segment boundaries: `--prefix metrics`
+does not reach `metrics-legacy`. Whether that is worth using depends on
+your layout — `examples/demo` groups by kind (`metrics/`, `glossary/`,
+`queries/sales/`), where `--type` already does most of this; it earns its
+keep when directories mean something `--type` cannot say, such as one
+team's own vocabulary beside a shared one. ochakai reads no meaning into
+any path either way. Note that this is a filter, not a permission —
+anyone who can reach the server can pass any prefix, or none.
 
 Entries relate to each other through **the markdown links in their body**
 — there is no links field to fill in. Write `[revenue](/metrics/revenue.md)`

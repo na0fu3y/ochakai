@@ -543,6 +543,10 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	if strings.TrimSpace(query) == "" {
 		return nil, Invalidf("search needs a query; use sort=verified_at, usage, or failed to list entries without one")
 	}
+	f, err := scopedFilter(f)
+	if err != nil {
+		return nil, err
+	}
 	hits, err := s.search(ctx, query, f, limit)
 	if err != nil {
 		return nil, err
@@ -868,6 +872,37 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort string, f store.
 // the filter already says what is wanted.
 const sortBySource = "source"
 
+// scopedFilter returns f with its path scopes normalized, rejecting one
+// that could not lead an id. Every surface hands its prefixes through
+// here — the contract lives on the server (design doc 0015 §2), so REST,
+// MCP and the CLI cannot disagree about whether "teams/growth/" is the
+// same scope as "teams/growth".
+//
+// An empty prefix is the root, which narrows nothing: it drops out rather
+// than erroring, because asking for everything is a request the server can
+// answer, not a mistake to report.
+//
+// This is not an access check. A caller may pass any prefix or none, and
+// none returns the whole base — reading is bounded by who can reach the
+// service, not by what they ask for (design doc 0002, and 0041 §4).
+func scopedFilter(f store.Filter) (store.Filter, error) {
+	if len(f.Prefixes) == 0 {
+		return f, nil
+	}
+	scoped := make([]string, 0, len(f.Prefixes))
+	for _, p := range f.Prefixes {
+		clean, err := normalizePrefix(p)
+		if err != nil {
+			return f, err
+		}
+		if clean != "" {
+			scoped = append(scoped, clean)
+		}
+	}
+	f.Prefixes = scoped
+	return f, nil
+}
+
 // list runs one of the listing feeds. None of them is a search: no usage
 // is recorded (reading a review queue must not inflate the very signal it
 // ranks by), and every hit carries score 0, so the REST and MCP responses
@@ -895,6 +930,10 @@ const sortBySource = "source"
 func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit int) ([]domain.SearchHit, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
+	}
+	f, err := scopedFilter(f)
+	if err != nil {
+		return nil, err
 	}
 	// The two usage feeds rank by the usage totals and hand them back with
 	// each hit, so they are hits already.

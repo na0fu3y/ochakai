@@ -52,7 +52,8 @@ paths:
         edits it to declare a new expiry (or removes the declaration).
         Exactly one of q and sort is required: combining them is a 400,
         and so is omitting both (searching needs a query to rank by).
-        source is a filter rather than a mode, so it composes with either.
+        source and prefix are filters rather than modes, so they compose
+        with either.
       parameters:
         - name: q
           in: query
@@ -85,6 +86,28 @@ paths:
             identifying an artifact across entries. Single-valued, unlike
             tag. Composes with q and with any sort.
           schema: { type: string }
+        - name: prefix
+          in: query
+          description: >
+            Only entries addressed under this path. An id is an address
+            (design doc 0017), so this scopes a search to a subtree:
+            prefix=metrics covers metrics itself and everything under
+            metrics/, and does not match metrics-legacy/churn — matching
+            is on segment boundaries, not raw string prefixes (design doc
+            0041 §2.2). A trailing slash is optional and the empty value
+            is the root, which narrows nothing. Repeatable and OR-ed,
+            unlike source: "my team's scope and the company-wide one" is
+            the ordinary question, and two calls would produce two
+            rankings that cannot be merged. Composes with q and with any
+            sort. This is a filter, not an access control — any caller may
+            pass any prefix, and passing none returns the whole base
+            (design doc 0002).
+          schema: { type: array, items: { type: string } }
+          explode: true
+          # A path is segments joined by "/", so the separator travels
+          # literally rather than percent-encoded — as it does for the
+          # prefix of GET /api/v1/browse.
+          allowReserved: true
         - name: limit
           in: query
           description: >
@@ -474,6 +497,7 @@ paths:
           in: query
           description: ID prefix ("a/b" or "a/b/"); omit for the root.
           schema: { type: string }
+          allowReserved: true
       responses:
         "200":
           description: One level of the tree.
@@ -567,6 +591,18 @@ paths:
           in: query
           schema: { type: array, items: { type: string } }
           explode: true
+        - name: prefix
+          in: query
+          description: >
+            Only entries addressed under this path, repeatable and OR-ed —
+            the same subtree filter GET /api/v1/knowledge takes (design doc
+            0041). It scopes the search that picks the hits, not the link
+            expansion: an entry inside the scope that cites a glossary term
+            outside it still arrives with the term, which is the reason
+            this endpoint follows links at all (design doc 0041 §2.6).
+          schema: { type: array, items: { type: string } }
+          explode: true
+          allowReserved: true
         - name: limit
           in: query
           schema: { type: integer, default: 5, maximum: 20 }

@@ -10,7 +10,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -715,5 +717,154 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	getJSON(t, srv.URL+"/api/v1/usage/"+moved, &usage)
 	if usage.Worked != 1 {
 		t.Errorf("usage after the move = %+v, want the worked report to have followed", usage)
+	}
+}
+
+// The path scope reaching the wire (design doc 0041): a search narrowed
+// to one subtree, the same search widened to two, and the sibling
+// directory whose name merely starts with the scope staying out of both.
+// Running through checkedServer also validates the new `prefix` parameter
+// against api/openapi.yaml, so the spec cannot describe a filter the
+// server does not have (design doc 0035 §3.2).
+//
+// The link expansion is the part worth pinning: get_context follows links
+// out of the scope on purpose, because a team's metric citing the shared
+// glossary is exactly the case the one-call read exists for
+// (design doc 0041 §2.6).
+func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := checkedServer(t, Handler(svc))
+	defer srv.Close()
+
+	// A run-unique root keeps other tests' rows (and reruns) out of the
+	// assertions, the way the other REST integration tests do it.
+	root := fmt.Sprintf("scope%d", time.Now().UnixNano())
+	term := root + "/company/glossary/activation"
+	entries := []struct{ id, body string }{
+		// The team metric cites the shared term, so context must reach it.
+		{root + "/teams/growth/metrics/activation", "see [activation](/" + term + ".md)"},
+		{term, "the company-wide definition"},
+		{root + "/teams/growth-archive/metrics/activation", "retired"},
+	}
+	var ids []string
+	for _, e := range entries {
+		payload, _ := json.Marshal(map[string]any{
+			"type": "Metric", "id": e.id, "title": "activation " + root,
+			"description": "an entry about " + root, "body": e.body,
+		})
+		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s: status %d", e.id, resp.StatusCode)
+		}
+		ids = append(ids, e.id)
+	}
+	defer func() {
+		for _, id := range ids {
+			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		}
+	}()
+
+	search := func(query string) []string {
+		t.Helper()
+		resp, err := http.Get(srv.URL + "/api/v1/knowledge?" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET ?%s: status %d", query, resp.StatusCode)
+		}
+		var got struct {
+			Hits []domain.SearchHit `json:"hits"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, h := range got.Hits {
+			if strings.HasPrefix(h.ID, root+"/") {
+				out = append(out, h.ID)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+
+	// Unscoped, the query reaches all three — otherwise the scoped
+	// assertions below would pass for the wrong reason.
+	if all := search("q=" + root + "&limit=50"); len(all) != 3 {
+		t.Fatalf("unscoped search found %v, want all 3 entries", all)
+	}
+
+	scoped := search("q=" + root + "&limit=50&prefix=" + root + "/teams/growth")
+	want := []string{root + "/teams/growth/metrics/activation"}
+	if !slices.Equal(scoped, want) {
+		t.Errorf("scoped search = %v, want %v (growth-archive is a different directory)", scoped, want)
+	}
+
+	widened := search(fmt.Sprintf("q=%s&limit=50&prefix=%s/teams/growth&prefix=%s/company", root, root, root))
+	want = []string{term, root + "/teams/growth/metrics/activation"}
+	if !slices.Equal(widened, want) {
+		t.Errorf("two scopes = %v, want %v", widened, want)
+	}
+
+	// A scope that cannot lead an id is a 400, not a silent everything.
+	resp, err := http.Get(srv.URL + "/api/v1/knowledge?q=" + root + "&prefix=" + url.QueryEscape("a//b"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("malformed prefix status = %d, want 400", resp.StatusCode)
+	}
+
+	// Context: scoped to the team, the shared term still arrives, pulled
+	// in by the link rather than by the search.
+	cresp, err := http.Get(fmt.Sprintf("%s/api/v1/context?q=%s&limit=5&prefix=%s/teams/growth", srv.URL, root, root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cresp.Body.Close()
+	if cresp.StatusCode != http.StatusOK {
+		t.Fatalf("context status = %d", cresp.StatusCode)
+	}
+	var pack struct {
+		Hits    []domain.ContextRank `json:"hits"`
+		Entries []domain.Knowledge   `json:"entries"`
+	}
+	if err := json.NewDecoder(cresp.Body).Decode(&pack); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, e := range pack.Entries {
+		got[e.ID] = true
+	}
+	if !got[term] {
+		t.Errorf("entries = %v; the cited glossary term must travel with the scoped entry", got)
+	}
+	for _, h := range pack.Hits {
+		if h.ID == term {
+			t.Error("the out-of-scope term ranked as a hit; the scope must bound the search itself")
+		}
 	}
 }

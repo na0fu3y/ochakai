@@ -41,6 +41,44 @@ func TestBuildWhereFoldsFreeTypes(t *testing.T) {
 	}
 }
 
+// A path scope must be matched on segment boundaries, not as a raw string
+// prefix (design doc 0041 §2.2), and it must not reach for LIKE — ids
+// contain "_", which LIKE reads as a wildcard. This pins the shape of the
+// predicate; TestIntegrationPrefixFilterMatchesSegments proves the
+// behaviour against real rows.
+func TestBuildWherePrefixMatchesSegmentBoundaries(t *testing.T) {
+	where, args := Filter{Prefixes: []string{"metrics", "teams/growth"}}.buildWhere("k.")
+
+	if !strings.Contains(where, "k.id = p") || !strings.Contains(where, "left(k.id, length(p) + 1) = p || '/'") {
+		t.Errorf("prefix condition must match the root and its subtree, got %q", where)
+	}
+	for _, bad := range []string{"LIKE", "ILIKE"} {
+		if strings.Contains(where, bad) {
+			t.Errorf("prefix condition must not use %s (ids may contain _), got %q", bad, where)
+		}
+	}
+	// One array argument, not one placeholder per scope: the count of
+	// scopes must not change the query text, or every extra scope is a
+	// new plan for the database to compile.
+	want := []string{"metrics", "teams/growth"}
+	if len(args) != 1 || !reflect.DeepEqual(args[0], want) {
+		t.Errorf("prefix args = %#v, want one array %#v", args, want)
+	}
+}
+
+// No scopes means no condition. A filter that narrows nothing must render
+// nothing, or the listing feeds would carry a predicate matching every row.
+func TestBuildWhereOmitsAbsentPrefixes(t *testing.T) {
+	where, args := Filter{}.buildWhere("")
+
+	if strings.Contains(where, "unnest") {
+		t.Errorf("empty filter rendered a prefix condition: %q", where)
+	}
+	if len(args) != 0 {
+		t.Errorf("empty filter produced args %#v", args)
+	}
+}
+
 // SearchLexical's substring floor feeds the query into an ILIKE pattern.
 // '%' and '_' are ILIKE wildcards; unescaped, they would turn a literal
 // search into a match-anything and flatten the ranking. TestIntegration
