@@ -127,7 +127,11 @@ For the shape of the system rather than the history of it, read
   migration. The record is unusually candid that the demand for this was
   weaker than for 0037, and that the feature only earns its place where
   directories mean something a type cannot say — a team, a domain, a
-  tenant.
+  tenant. It is emphatically **not an access boundary**: anyone may pass
+  any prefix, passing none returns everything, and reading stays bounded
+  by who can reach the service (0002). The record spends a paragraph on
+  that, because a scope filter and a read ACL look alike from outside and
+  running a deployment as though they were the same would hollow out 0002.
   *For a user:* `--prefix` on the CLI, `prefix` on REST and MCP; scoping
   by path stops meaning a second, parallel tagging scheme that drifts from
   the tree.
