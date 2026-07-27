@@ -56,6 +56,20 @@ last entry.
 - Request and response examples throughout `api/openapi.yaml`, which
   previously carried exactly one. Every example is validated against the
   schema it sits under.
+- `OCHAKAI_PUBLIC_READ_ONLY` — the posture for a deployment anyone may
+  reach, so a demo can exist without breaking the project's own rule
+  about public services. It **reads no identity at all**: the
+  Authorization header is ignored, delegation is ignored, every caller is
+  `human:anonymous`, and nobody is refused. That is not a relaxation but
+  the opposite — without Cloud Run IAM in front nothing verifies a
+  token's signature, and until now a public deployment would have
+  accepted a forged one naming any person while turning away the
+  anonymous visitor a demo is made of. It implies `OCHAKAI_READ_ONLY`
+  and cannot be separated from it, so a publicly readable *and writable*
+  ochakai is not a configuration the server accepts; setting it with
+  `OCHAKAI_INSECURE_DEV` is refused at startup (design doc 0041).
+  Default: off, and the private posture is untouched — a caller with no
+  token is still a 401 there.
 - `OCHAKAI_READ_ONLY` — serve knowledge without changing it. Every write
   is a 403, the MCP surface does not offer the write tools at all, and
   the web UI stops drawing the buttons that would only fail. For a

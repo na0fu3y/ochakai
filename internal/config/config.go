@@ -43,6 +43,20 @@ type Config struct {
 	// the server's own observation rather than content a caller wrote.
 	ReadOnly bool
 
+	// PublicReadOnly is the posture for a deployment anyone may reach: a
+	// demo, or a reference-only copy handed out (design doc 0041). It
+	// reads no identity at all — the Authorization header is ignored,
+	// because without Cloud Run IAM in front nothing verified its
+	// signature and believing it would let any caller name any person;
+	// delegation is ignored for the same reason; every caller is
+	// human:anonymous and none is refused.
+	//
+	// It implies ReadOnly and cannot be separated from it. Not reading
+	// provenance is only defensible because nothing is written, so a
+	// deployment that is publicly readable and writable is not a
+	// configuration this program accepts.
+	PublicReadOnly bool
+
 	// GCSBucket names the bucket holding attachment bytes as GCS objects
 	// (blob/<sha256>, design doc 0013). Auth is ADC. When empty,
 	// attachments are unsupported — markdown entries only.
@@ -84,6 +98,23 @@ func FromEnv() (*Config, error) {
 		ReadOnly:    os.Getenv("OCHAKAI_READ_ONLY") == "true",
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
+	}
+	if os.Getenv("OCHAKAI_PUBLIC_READ_ONLY") == "true" {
+		// The implication is applied here, not checked here: there is no
+		// way to ask for the public posture and not get read-only, so the
+		// dangerous combination never exists to be rejected (design doc
+		// 0041 §2.1). Setting OCHAKAI_READ_ONLY=false alongside it does
+		// not turn writes back on.
+		cfg.PublicReadOnly = true
+		cfg.ReadOnly = true
+	}
+	if cfg.PublicReadOnly && cfg.InsecureDev {
+		// Both make every caller anonymous, but insecure dev also lets
+		// anyone delegate, which in public is a stranger naming any
+		// person they like. Refuse rather than silently pick one
+		// (design doc 0041 §2.3).
+		return nil, fmt.Errorf("OCHAKAI_PUBLIC_READ_ONLY and OCHAKAI_INSECURE_DEV are both set: " +
+			"the public posture reads no identity, while insecure dev lets any caller claim one")
 	}
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL is required")
