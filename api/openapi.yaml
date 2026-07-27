@@ -1034,7 +1034,10 @@ components:
             stale — OKF's lifecycle date (SPEC §5.5, design doc 0036
             §3.9). A date rather than a TTL so staleness is a plain
             comparison against today. Advisory: nothing hides a stale
-            entry, and no feed sorts by it.
+            entry and search ranking never reads it — a passed date means
+            due for a re-check, not wrong. The one surface that reads it
+            is sort=stale_after, the feed of entries whose declared date
+            has passed (design doc 0037 §2.1).
         runtime:
           type: string
           description: >

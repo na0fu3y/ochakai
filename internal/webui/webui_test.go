@@ -98,6 +98,38 @@ func TestEveryWritableFieldReachesBothSavePaths(t *testing.T) {
 	}
 }
 
+// A stored source carries only the keys it has (JSON omitempty), so a
+// loaded row can lack id, title and author entirely. The save path trims
+// every one of those to tell an abandoned blank row from a half-filled
+// one — and on a source stored with only a resource, clearing that
+// resource in the editor made the walk reach the missing keys: the click
+// handler threw, no banner appeared, and the save died silently instead
+// of saying "Source N needs a resource". The editor therefore fills in
+// string defaults when it copies entry.sources into the form's backing
+// array (usage_count stays absent — absent and 0 are different claims).
+func TestLoadedSourcesGetStringDefaults(t *testing.T) {
+	page := string(Index)
+	i := strings.Index(page, "const sources = (entry.sources || [])")
+	if i < 0 {
+		t.Fatal("the editor's sources initializer moved without updating this guard")
+	}
+	init := page[i:]
+	if end := strings.Index(init, "));"); end >= 0 {
+		init = init[:end]
+	}
+	for _, want := range []string{"resource: ''", "id: ''", "title: ''", "author: ''", "last_modified: ''"} {
+		if !strings.Contains(init, want) {
+			t.Errorf("loaded sources get no default for %s, so the save path can trim undefined:\n%s", want, init)
+		}
+	}
+	if !strings.Contains(init, "...s") {
+		t.Errorf("the defaults no longer merge under the stored source, so stored values would be lost:\n%s", init)
+	}
+	if strings.Contains(init, "usage_count: ") {
+		t.Errorf("usage_count has a default; absent and 0 are different claims (OKF SPEC §5.1):\n%s", init)
+	}
+}
+
 // Date inputs were left out of the input rule, so stale_after arrived with
 // the UA's own font, padding and intrinsic width — and, with no
 // color-scheme declared, a white calendar popup on a dark page. Both are
