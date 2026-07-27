@@ -109,7 +109,165 @@ paths:
                   hits:
                     type: array
                     items: { $ref: "#/components/schemas/SearchHit" }
-        "400": { $ref: "#/components/responses/Error" }
+              examples:
+                search:
+                  summary: GET /api/v1/knowledge?q=monthly+revenue&limit=3
+                  description: >
+                    A hit is the whole entry plus its score, so the golden
+                    query's SQL is already here — no second call to read it.
+                    Attachment metadata rides along (filled in one batch),
+                    which is what lets a UI render thumbnails from a search.
+                  value:
+                    hits:
+                      - type: Golden Query
+                        id: queries/monthly-revenue
+                        description: Monthly net revenue for the last 12 complete months.
+                        tags: [finance]
+                        status: verified
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        verified_by: { kind: human, name: sato@example.co.jp }
+                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        links:
+                          - { target: metrics/revenue, text: Revenue }
+                        attrs:
+                          question: How much revenue did we make each month last year?
+                          sql: |
+                            SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                                   SUM(net_amount) AS revenue
+                            FROM `example-analytics.shop.orders`
+                            WHERE status = 'completed'
+                              AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                              AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                            GROUP BY month
+                            ORDER BY month
+                        body: |
+                          Answers "how much did we make each month last year?"
+                          against [Revenue](/metrics/revenue.md). Completed
+                          orders only; the month boundary is `order_date`, not
+                          the settlement date.
+                        created_at: "2026-06-09T07:41:02.110945Z"
+                        updated_at: "2026-07-10T01:52:16.774301Z"
+                        score: 1.35
+                      - type: Metric
+                        id: metrics/revenue
+                        title: Revenue
+                        description: Net revenue from completed orders, excluding tax and shipping.
+                        resource: bigquery://example-analytics.shop.orders
+                        tags: [finance, core]
+                        status: verified
+                        stale_after: "2026-12-31"
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        verified_by: { kind: human, name: sato@example.co.jp }
+                        verified_at: "2026-07-14T02:33:41.019778Z"
+                        links:
+                          - { target: glossary/completed-order, text: completed order }
+                          - { target: tables/shop-orders, text: shop.orders }
+                        attrs: { unit: JPY, grain: order }
+                        body: |
+                          Revenue is the sum of `net_amount` over every
+                          [completed order](/glossary/completed-order.md) in
+                          [shop.orders](/tables/shop-orders.md). Tax and
+                          shipping are excluded.
+                        attachments:
+                          - name: revenue-2026h1.png
+                            media_type: image/png
+                            size: 48213
+                            sha256: 9f2c1d0a7b3e5648c1d9f0a2b7e4c8d63f5a1b2c9e0d7a4f6b3c8e1d5a0f7b29
+                            created_by: { kind: human, name: tanaka@example.co.jp }
+                            created_at: "2026-06-02T04:20:11.663210Z"
+                        created_at: "2026-06-02T04:11:38.201044Z"
+                        updated_at: "2026-07-14T02:33:41.019778Z"
+                        score: 0.48
+                      - type: Insight
+                        id: insights/revenue-seasonality
+                        title: Reading revenue month over month
+                        description: Why a December spike and a January drop are normal.
+                        tags: [finance]
+                        status: draft
+                        stale_after: "2027-01-31"
+                        created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        links:
+                          - { target: metrics/revenue, text: Revenue }
+                        body: |
+                          [Revenue](/metrics/revenue.md) is seasonal: December
+                          runs well above the trailing median and January falls
+                          back below it. Comparing either month with the one
+                          before it says nothing about the business — compare
+                          year over year instead.
+                        created_at: "2026-07-21T06:14:55.402881Z"
+                        updated_at: "2026-07-21T06:14:55.402881Z"
+                        score: 0.43
+                usageFeed:
+                  summary: GET /api/v1/knowledge?sort=usage&status=draft
+                  description: >
+                    The draft review feed. A listing ranks by demand rather
+                    than by text, so every hit carries score 0 and the usage
+                    totals that make the promotion case.
+                  value:
+                    hits:
+                      - type: Insight
+                        id: insights/revenue-seasonality
+                        title: Reading revenue month over month
+                        description: Why a December spike and a January drop are normal.
+                        tags: [finance]
+                        status: draft
+                        stale_after: "2027-01-31"
+                        created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        links:
+                          - { target: metrics/revenue, text: Revenue }
+                        body: |
+                          [Revenue](/metrics/revenue.md) is seasonal: December
+                          runs well above the trailing median and January falls
+                          back below it.
+                        created_at: "2026-07-21T06:14:55.402881Z"
+                        updated_at: "2026-07-21T06:14:55.402881Z"
+                        score: 0
+                        usage:
+                          search_hits: 74
+                          fetches: 31
+                          worked: 6
+                          failed: 0
+                          last_used_at: "2026-07-26T23:58:07.336114Z"
+                      - type: Glossary Term
+                        id: glossary/completed-order
+                        description: An order that shipped and was not refunded within the return window.
+                        status: draft
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        body: |
+                          `status = 'completed'` in
+                          [shop.orders](/tables/shop-orders.md): shipped, paid,
+                          and past the 14-day return window.
+                        created_at: "2026-06-02T04:09:12.774903Z"
+                        updated_at: "2026-06-02T04:09:12.774903Z"
+                        score: 0
+                        usage:
+                          search_hits: 12
+                          fetches: 4
+                          worked: 1
+                          failed: 0
+                          last_used_at: "2026-07-25T02:41:19.008457Z"
+        "400":
+          description: Error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              examples:
+                queryAndSortTogether:
+                  summary: q and sort are mutually exclusive
+                  value:
+                    error: sort=usage lists entries; it cannot be combined with a search query (q)
+                noQuery:
+                  summary: Neither q nor sort was given
+                  value:
+                    error: search needs a query; use sort=verified_at, usage, or failed to list entries without one
     post:
       operationId: createKnowledge
       summary: Create a knowledge entry
@@ -126,16 +284,179 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/Knowledge" }
+            examples:
+              goldenQuery:
+                summary: A Golden Query — question and SQL in attrs
+                description: >
+                  question and sql are producer keys, so they belong in
+                  attrs; the keys OKF v0.2 defines (sources, usage_window,
+                  the computation contract) are envelope fields instead.
+                  No title: the id's last segment names the entry (design
+                  doc 0022). Links are not sent — the body's markdown link
+                  to /metrics/revenue.md becomes one.
+                value:
+                  type: Golden Query
+                  id: queries/monthly-revenue
+                  description: Monthly net revenue for the last 12 complete months.
+                  tags: [finance]
+                  attrs:
+                    question: How much revenue did we make each month last year?
+                    sql: |
+                      SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                             SUM(net_amount) AS revenue
+                      FROM `example-analytics.shop.orders`
+                      WHERE status = 'completed'
+                        AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                        AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                      GROUP BY month
+                      ORDER BY month
+                  body: |
+                    Answers "how much did we make each month last year?"
+                    against [Revenue](/metrics/revenue.md). Completed
+                    orders only; the month boundary is `order_date`, not
+                    the settlement date.
+              insightCaveat:
+                summary: An Insight — the caveat that keeps a metric from being misread
+                description: >
+                  stale_after dates the knowledge from the writer's side:
+                  the seasonal claim is worth re-checking once next January
+                  is in. sources cites the material it rests on.
+                value:
+                  type: Insight
+                  id: insights/revenue-seasonality
+                  title: Reading revenue month over month
+                  description: Why a December spike and a January drop are normal.
+                  tags: [finance]
+                  stale_after: "2027-01-31"
+                  sources:
+                    - id: fy2025-review
+                      resource: https://wiki.example.co.jp/finance/fy2025-review
+                      title: FY2025 revenue review
+                      author: human:sato@example.co.jp
+                      last_modified: "2026-04-08"
+                  body: |
+                    [Revenue](/metrics/revenue.md) is seasonal: December runs
+                    well above the trailing median and January falls back
+                    below it. Comparing either month with the one before it
+                    says nothing about the business[^fy2025-review].
+
+                    Compare year over year, or against the same month's
+                    three-year median. A month-over-month drop in January is
+                    not a regression to investigate.
+
+                    [^fy2025-review]: FY2025 revenue review.
+              attestedComputation:
+                summary: An Attested Computation — the contract as envelope fields
+                description: >
+                  runtime is required for this type and for no other (design
+                  doc 0036 §3.4); executor.receipt names what a run must hand
+                  back. ochakai records all of it and runs none of it.
+                value:
+                  type: Attested Computation
+                  id: computations/monthly-revenue
+                  description: Sanctioned monthly revenue run, with a checkable receipt.
+                  runtime: bigquery
+                  parameters:
+                    - { name: year, type: integer, required: true }
+                    - { name: currency, type: string }
+                  computation: computations/monthly-revenue.sql
+                  executor:
+                    resource: references/skills/run-on-bigquery.md
+                    receipt: [job_id, executed_sql, result]
+                  attester:
+                    resource: references/attesters/monthly-revenue.py
+                  body: |
+                    Runs the revenue figure the finance review quotes. Supply
+                    the parameters; do not edit the computation — an edited
+                    run is not the sanctioned one.
       responses:
         "201":
           description: Created.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+              examples:
+                goldenQuery:
+                  summary: The Golden Query above, as stored
+                  description: >
+                    Entries default to draft. created_by and updated_by come
+                    from the caller's identity, never from the payload, and
+                    links were derived from the body. The ETag response
+                    header carries the same value as updated_at.
+                  value:
+                    type: Golden Query
+                    id: queries/monthly-revenue
+                    description: Monthly net revenue for the last 12 complete months.
+                    tags: [finance]
+                    status: draft
+                    created_by: { kind: human, name: tanaka@example.co.jp }
+                    updated_by: { kind: human, name: tanaka@example.co.jp }
+                    links:
+                      - { target: metrics/revenue, text: Revenue }
+                    attrs:
+                      question: How much revenue did we make each month last year?
+                      sql: |
+                        SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                               SUM(net_amount) AS revenue
+                        FROM `example-analytics.shop.orders`
+                        WHERE status = 'completed'
+                          AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                          AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                        GROUP BY month
+                        ORDER BY month
+                    body: |
+                      Answers "how much did we make each month last year?"
+                      against [Revenue](/metrics/revenue.md). Completed
+                      orders only; the month boundary is `order_date`, not
+                      the settlement date.
+                    created_at: "2026-06-09T07:41:02.110945Z"
+                    updated_at: "2026-06-09T07:41:02.110945Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
-        "400": { $ref: "#/components/responses/Error" }
-        "409": { $ref: "#/components/responses/Error" }
+        "400":
+          description: Error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              examples:
+                envelopeKeyInAttrs:
+                  summary: attrs carried a key OKF v0.2 defines
+                  description: >
+                    The key would have been dropped on export, where nothing
+                    would ever read it again, so the write is refused instead
+                    (design doc 0036 §3.5). Move the value to the top level
+                    of the payload.
+                  value:
+                    error: 'attrs must not carry "sources": it is an OKF envelope field, so write it at the top level of the payload instead'
+                missingRuntime:
+                  summary: An Attested Computation without a runtime
+                  value:
+                    error: "an Attested Computation needs a runtime (e.g. bigquery, postgres, dbt, python): it is what tells a consumer how to read the parameters"
+                sourceWithoutResource:
+                  summary: A source that names no artifact
+                  value:
+                    error: sources[0] needs a resource (the artifact it cites); id and title alone do not name one
+        "409":
+          description: Error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              examples:
+                alreadyExists:
+                  summary: A live entry already holds that id
+                  description: >
+                    Update it (PUT), or free the id with
+                    DELETE ...?purge=true if the entry there is already
+                    soft-deleted. Creating over a soft-deleted entry revives
+                    it rather than conflicting.
+                  value:
+                    error: knowledge already exists
   /api/v1/browse:
     get:
       operationId: browseKnowledge
@@ -182,6 +503,35 @@ paths:
                   truncated:
                     type: boolean
                     description: The entry list hit the 1000-per-level cap.
+              examples:
+                root:
+                  summary: GET /api/v1/browse
+                  description: The top-level segments of the ID hierarchy, with the entry count beneath each.
+                  value:
+                    dirs:
+                      - { name: glossary, count: 18 }
+                      - { name: insights, count: 24 }
+                      - { name: metrics, count: 31 }
+                      - { name: queries, count: 57 }
+                      - { name: tables, count: 96 }
+                level:
+                  summary: GET /api/v1/browse?prefix=metrics
+                  description: >
+                    One level down. The projection carries no body — a
+                    directory listing renders from the description.
+                  value:
+                    entries:
+                      - type: Metric
+                        id: metrics/average-order-value
+                        description: Revenue divided by completed orders, over the same window.
+                        status: verified
+                        updated_at: "2026-07-02T05:26:44.712009Z"
+                      - type: Metric
+                        id: metrics/revenue
+                        title: Revenue
+                        description: Net revenue from completed orders, excluding tax and shipping.
+                        status: verified
+                        updated_at: "2026-07-14T02:33:41.019778Z"
         "400": { $ref: "#/components/responses/Error" }
   /api/v1/context:
     get:
@@ -280,6 +630,122 @@ paths:
                   truncated:
                     description: How many entries went to the outline.
                     type: integer
+              examples:
+                pack:
+                  summary: GET /api/v1/context?q=monthly+revenue&limit=2&budget=4000
+                  description: >
+                    Two entries matched and two more arrived through their
+                    links — the metric the query rests on, and the glossary
+                    term the metric rests on. The budget could not afford the
+                    fourth, so it is named under outline with what it would
+                    have cost. `hits` is the ranking only: every body in this
+                    response appears exactly once, under `entries`.
+                  value:
+                    hits:
+                      - id: queries/monthly-revenue
+                        type: Golden Query
+                        title: monthly-revenue
+                        status: verified
+                        score: 1.35
+                      - id: metrics/revenue
+                        type: Metric
+                        title: Revenue
+                        status: verified
+                        score: 0.48
+                      - id: insights/revenue-seasonality
+                        type: Insight
+                        title: Reading revenue month over month
+                        status: draft
+                        score: 0.43
+                    entries:
+                      - type: Golden Query
+                        id: queries/monthly-revenue
+                        description: Monthly net revenue for the last 12 complete months.
+                        tags: [finance]
+                        status: verified
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        verified_by: { kind: human, name: sato@example.co.jp }
+                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        links:
+                          - { target: metrics/revenue, text: Revenue }
+                        attrs:
+                          question: How much revenue did we make each month last year?
+                          sql: |
+                            SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                                   SUM(net_amount) AS revenue
+                            FROM `example-analytics.shop.orders`
+                            WHERE status = 'completed'
+                              AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                              AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                            GROUP BY month
+                            ORDER BY month
+                        body: |
+                          Answers "how much did we make each month last year?"
+                          against [Revenue](/metrics/revenue.md). Completed
+                          orders only; the month boundary is `order_date`, not
+                          the settlement date.
+                        created_at: "2026-06-09T07:41:02.110945Z"
+                        updated_at: "2026-07-10T01:52:16.774301Z"
+                      - type: Metric
+                        id: metrics/revenue
+                        title: Revenue
+                        description: Net revenue from completed orders, excluding tax and shipping.
+                        resource: bigquery://example-analytics.shop.orders
+                        tags: [finance, core]
+                        sources:
+                          - id: revenue-policy
+                            resource: https://wiki.example.co.jp/finance/revenue-recognition
+                            title: Revenue recognition policy (FY2026)
+                            author: human:finance@example.co.jp
+                            usage_count: 24
+                            last_modified: "2026-05-30"
+                        usage_window: { from: "2026-06-01", to: "2026-06-30" }
+                        status: verified
+                        stale_after: "2026-12-31"
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        verified_by: { kind: human, name: sato@example.co.jp }
+                        verified_at: "2026-07-14T02:33:41.019778Z"
+                        links:
+                          - { target: glossary/completed-order, text: completed order }
+                          - { target: tables/shop-orders, text: shop.orders }
+                        attrs: { unit: JPY, grain: order }
+                        body: |
+                          Revenue is the sum of `net_amount` over every
+                          [completed order](/glossary/completed-order.md) in
+                          [shop.orders](/tables/shop-orders.md). Tax and
+                          shipping are excluded.
+
+                          A refund is subtracted in the month it settles, not
+                          the month of the order it reverses[^revenue-policy].
+
+                          [^revenue-policy]: Revenue recognition policy (FY2026).
+                        created_at: "2026-06-02T04:11:38.201044Z"
+                        updated_at: "2026-07-14T02:33:41.019778Z"
+                      - type: Glossary Term
+                        id: glossary/completed-order
+                        description: An order that shipped and was not refunded within the return window.
+                        status: draft
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        links:
+                          - { target: tables/shop-orders, text: shop.orders }
+                        body: |
+                          `status = 'completed'` in
+                          [shop.orders](/tables/shop-orders.md): shipped, paid,
+                          and past the 14-day return window. Cancellations
+                          never reach this state; refunds leave it.
+                        created_at: "2026-06-02T04:09:12.774903Z"
+                        updated_at: "2026-06-02T04:09:12.774903Z"
+                    outline:
+                      - id: tables/shop-orders
+                        type: BigQuery Table
+                        title: shop.orders
+                        description: One row per order, including cancelled and refunded ones.
+                        status: verified
+                        bytes: 2144
+                    truncated: 1
         "400": { $ref: "#/components/responses/Error" }
   /api/v1/knowledge/{id}:
     parameters:
@@ -301,7 +767,114 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
-        "404": { $ref: "#/components/responses/Error" }
+              examples:
+                metric:
+                  summary: GET /api/v1/knowledge/metrics/revenue
+                  description: >
+                    A verified entry with everything the envelope holds:
+                    the citations under sources with the window their
+                    usage_count was counted over, the declared expiry, the
+                    producer keys left in attrs, the links derived from the
+                    body, and attachment metadata (the bytes are a separate
+                    fetch). The ETag header carries "2026-07-14T02:33:41.019778Z"
+                    — updated_at, quoted — for a later If-Match.
+                  value:
+                    type: Metric
+                    id: metrics/revenue
+                    title: Revenue
+                    description: Net revenue from completed orders, excluding tax and shipping.
+                    resource: bigquery://example-analytics.shop.orders
+                    tags: [finance, core]
+                    sources:
+                      - id: revenue-policy
+                        resource: https://wiki.example.co.jp/finance/revenue-recognition
+                        title: Revenue recognition policy (FY2026)
+                        author: human:finance@example.co.jp
+                        usage_count: 24
+                        last_modified: "2026-05-30"
+                      - id: orders-schema
+                        resource: bigquery://example-analytics.shop.orders
+                        title: shop.orders table schema
+                        last_modified: "2026-06-18"
+                        usage_window: { from: "2026-01-01", to: "2026-06-30" }
+                    usage_window: { from: "2026-06-01", to: "2026-06-30" }
+                    status: verified
+                    stale_after: "2026-12-31"
+                    created_by: { kind: human, name: tanaka@example.co.jp }
+                    updated_by: { kind: human, name: tanaka@example.co.jp }
+                    verified_by: { kind: human, name: sato@example.co.jp }
+                    verified_at: "2026-07-14T02:33:41.019778Z"
+                    links:
+                      - { target: glossary/completed-order, text: completed order }
+                      - { target: tables/shop-orders, text: shop.orders }
+                    attrs: { unit: JPY, grain: order }
+                    body: |
+                      Revenue is the sum of `net_amount` over every
+                      [completed order](/glossary/completed-order.md) in
+                      [shop.orders](/tables/shop-orders.md). Tax and shipping
+                      are excluded.
+
+                      A refund is subtracted in the month it settles, not the
+                      month of the order it reverses[^revenue-policy].
+
+                      ![Revenue, 2026 H1](revenue/revenue-2026h1.png)
+
+                      [^revenue-policy]: Revenue recognition policy (FY2026).
+                    attachments:
+                      - name: revenue-2026h1.png
+                        media_type: image/png
+                        size: 48213
+                        sha256: 9f2c1d0a7b3e5648c1d9f0a2b7e4c8d63f5a1b2c9e0d7a4f6b3c8e1d5a0f7b29
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        created_at: "2026-06-02T04:20:11.663210Z"
+                    created_at: "2026-06-02T04:11:38.201044Z"
+                    updated_at: "2026-07-14T02:33:41.019778Z"
+                delegated:
+                  summary: An entry written through an application acting for a person
+                  description: >
+                    The end user forwarded with X-Ochakai-On-Behalf-Of is the
+                    actor; the application that forwarded them is kept as via
+                    (design doc 0027), never dropped.
+                  value:
+                    type: Insight
+                    id: insights/revenue-seasonality
+                    title: Reading revenue month over month
+                    description: Why a December spike and a January drop are normal.
+                    tags: [finance]
+                    status: draft
+                    stale_after: "2027-01-31"
+                    created_by:
+                      kind: human
+                      name: tanaka@example.co.jp
+                      via: agent:insightflow@example.iam.gserviceaccount.com
+                    updated_by:
+                      kind: human
+                      name: tanaka@example.co.jp
+                      via: agent:insightflow@example.iam.gserviceaccount.com
+                    links:
+                      - { target: metrics/revenue, text: Revenue }
+                    body: |
+                      [Revenue](/metrics/revenue.md) is seasonal: December runs
+                      well above the trailing median and January falls back
+                      below it.
+                    created_at: "2026-07-21T06:14:55.402881Z"
+                    updated_at: "2026-07-21T06:14:55.402881Z"
+        "404":
+          description: Error.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              examples:
+                notFound:
+                  summary: No live entry at that id
+                  description: >
+                    A soft-deleted entry reads as missing here; its history is
+                    still at /api/v1/revisions/{id}.
+                  value:
+                    error: knowledge not found
     put:
       operationId: updateKnowledge
       summary: Update a knowledge entry (full replacement; revisions retained)
@@ -318,6 +891,45 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/Knowledge" }
+            examples:
+              fullReplacement:
+                summary: PUT /api/v1/knowledge/metrics/revenue, If-Match "2026-07-14T02:33:41.019778Z"
+                description: >
+                  A full replacement: what the payload omits is cleared, so
+                  send the entry as it should end up, not just the fields
+                  that changed. Here a second source is dropped and the
+                  declared expiry moved out a year. type is always required,
+                  even though the path already names the entry. Server-owned
+                  fields (created_by, verified_*, links, attachments) are
+                  ignored if sent.
+                value:
+                  type: Metric
+                  id: metrics/revenue
+                  title: Revenue
+                  description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
+                  resource: bigquery://example-analytics.shop.orders
+                  tags: [finance, core]
+                  sources:
+                    - id: revenue-policy
+                      resource: https://wiki.example.co.jp/finance/revenue-recognition
+                      title: Revenue recognition policy (FY2027)
+                      author: human:finance@example.co.jp
+                      usage_count: 31
+                      last_modified: "2026-07-20"
+                  usage_window: { from: "2026-07-01", to: "2026-07-31" }
+                  status: verified
+                  stale_after: "2027-12-31"
+                  attrs: { unit: JPY, grain: order }
+                  body: |
+                    Revenue is the sum of `net_amount` over every
+                    [completed order](/glossary/completed-order.md) in
+                    [shop.orders](/tables/shop-orders.md). Tax, shipping, and
+                    gift wrapping are excluded.
+
+                    A refund is subtracted in the month it settles, not the
+                    month of the order it reverses[^revenue-policy].
+
+                    [^revenue-policy]: Revenue recognition policy (FY2027).
       responses:
         "200":
           description: Updated, or unchanged (see the Ochakai-Unchanged header).
@@ -332,6 +944,52 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+              examples:
+                updated:
+                  summary: The replacement above, as stored
+                  description: >
+                    updated_by is now the caller who made this edit, while
+                    created_by still names whoever wrote the entry.
+                    verified_by and verified_at are carried over unchanged —
+                    a PUT does not re-affirm an entry; POST /api/v1/verify/{id}
+                    does. The new ETag is "2026-07-27T00:18:52.640117Z".
+                  value:
+                    type: Metric
+                    id: metrics/revenue
+                    title: Revenue
+                    description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
+                    resource: bigquery://example-analytics.shop.orders
+                    tags: [finance, core]
+                    sources:
+                      - id: revenue-policy
+                        resource: https://wiki.example.co.jp/finance/revenue-recognition
+                        title: Revenue recognition policy (FY2027)
+                        author: human:finance@example.co.jp
+                        usage_count: 31
+                        last_modified: "2026-07-20"
+                    usage_window: { from: "2026-07-01", to: "2026-07-31" }
+                    status: verified
+                    stale_after: "2027-12-31"
+                    created_by: { kind: human, name: tanaka@example.co.jp }
+                    updated_by: { kind: human, name: sato@example.co.jp }
+                    verified_by: { kind: human, name: sato@example.co.jp }
+                    verified_at: "2026-07-14T02:33:41.019778Z"
+                    links:
+                      - { target: glossary/completed-order, text: completed order }
+                      - { target: tables/shop-orders, text: shop.orders }
+                    attrs: { unit: JPY, grain: order }
+                    body: |
+                      Revenue is the sum of `net_amount` over every
+                      [completed order](/glossary/completed-order.md) in
+                      [shop.orders](/tables/shop-orders.md). Tax, shipping, and
+                      gift wrapping are excluded.
+
+                      A refund is subtracted in the month it settles, not the
+                      month of the order it reverses[^revenue-policy].
+
+                      [^revenue-policy]: Revenue recognition policy (FY2027).
+                    created_at: "2026-06-02T04:11:38.201044Z"
+                    updated_at: "2026-07-27T00:18:52.640117Z"
         "400":
           description: >
             Invalid entry, or a malformed If-Match value (one that is
@@ -342,6 +1000,21 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+              examples:
+                malformedIfMatch:
+                  summary: 'If-Match: "2026-07-14 02:33:41" — not an RFC3339Nano version'
+                  description: >
+                    The precondition is the entry's updated_at in
+                    RFC3339Nano, exactly as the ETag returned it. A value
+                    that is neither that nor "*" is refused rather than
+                    ignored: ignoring it would silently make the write
+                    unconditional.
+                  value:
+                    error: 'malformed If-Match: parsing time "2026-07-14 02:33:41" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse " 02:33:41" as "T"'
+                invalidStaleAfter:
+                  summary: A stale_after that is not an absolute date
+                  value:
+                    error: invalid stale_after "30d" (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)
         "404": { $ref: "#/components/responses/Error" }
         "412":
           description: >
@@ -354,6 +1027,14 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+              examples:
+                staleVersion:
+                  summary: Someone else wrote the entry since it was read
+                  description: >
+                    GET the entry again, reapply the edit to what is there
+                    now, and retry with the ETag from that read.
+                  value:
+                    error: knowledge changed since it was read
     delete:
       operationId: deleteKnowledge
       summary: Soft-delete a knowledge entry (history retained)
@@ -414,12 +1095,49 @@ paths:
                 to:
                   type: string
                   description: The new id (bundle path).
+            examples:
+              rename:
+                summary: Move a metric one level deeper
+                description: >
+                  Everything keyed by the id follows — revisions, usage,
+                  attachments, embeddings — and every entry linking to the
+                  old id is rewritten to the new one.
+                value:
+                  from: metrics/revenue
+                  to: metrics/finance/revenue
       responses:
         "200":
           description: The moved entry, now at its new id.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+              examples:
+                moved:
+                  summary: The entry at its new address
+                  value:
+                    type: Metric
+                    id: metrics/finance/revenue
+                    title: Revenue
+                    description: Net revenue from completed orders, excluding tax and shipping.
+                    resource: bigquery://example-analytics.shop.orders
+                    tags: [finance, core]
+                    status: verified
+                    stale_after: "2026-12-31"
+                    created_by: { kind: human, name: tanaka@example.co.jp }
+                    updated_by: { kind: human, name: tanaka@example.co.jp }
+                    verified_by: { kind: human, name: sato@example.co.jp }
+                    verified_at: "2026-07-14T02:33:41.019778Z"
+                    links:
+                      - { target: glossary/completed-order, text: completed order }
+                      - { target: tables/shop-orders, text: shop.orders }
+                    attrs: { unit: JPY, grain: order }
+                    body: |
+                      Revenue is the sum of `net_amount` over every
+                      [completed order](/glossary/completed-order.md) in
+                      [shop.orders](/tables/shop-orders.md). Tax and shipping
+                      are excluded.
+                    created_at: "2026-06-02T04:11:38.201044Z"
+                    updated_at: "2026-07-27T01:02:33.518604Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
         "400": { $ref: "#/components/responses/Error" }
@@ -455,6 +1173,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
+              examples:
+                promoted:
+                  summary: POST /api/v1/verify/insights/revenue-seasonality
+                  description: >
+                    The draft became verified, verified_by is the caller, and
+                    verified_at is now — as is updated_at, since a
+                    verification is a change to the entry. updated_by is
+                    untouched: it names who last changed the content, and a
+                    verification changes none.
+                  value:
+                    type: Insight
+                    id: insights/revenue-seasonality
+                    title: Reading revenue month over month
+                    description: Why a December spike and a January drop are normal.
+                    tags: [finance]
+                    status: verified
+                    stale_after: "2027-01-31"
+                    created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                    updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                    verified_by: { kind: human, name: tanaka@example.co.jp }
+                    verified_at: "2026-07-27T00:41:12.905337Z"
+                    links:
+                      - { target: metrics/revenue, text: Revenue }
+                    body: |
+                      [Revenue](/metrics/revenue.md) is seasonal: December runs
+                      well above the trailing median and January falls back
+                      below it.
+                    created_at: "2026-07-21T06:14:55.402881Z"
+                    updated_at: "2026-07-27T00:41:12.905337Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
         "404": { $ref: "#/components/responses/Error" }
@@ -479,6 +1226,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Usage" }
+              examples:
+                totals:
+                  summary: GET /api/v1/usage/queries/monthly-revenue
+                  description: >
+                    search_hits and fetches are recorded by reads;
+                    worked and failed only by report_outcome. An entry never
+                    reported on has both at zero — which is not the same
+                    signal as one that failed.
+                  value:
+                    search_hits: 412
+                    fetches: 168
+                    worked: 23
+                    failed: 2
+                    last_used_at: "2026-07-26T23:58:07.336114Z"
         "404": { $ref: "#/components/responses/Error" }
     post:
       operationId: reportOutcome
@@ -508,12 +1269,38 @@ paths:
                   type: string
                   maxLength: 2000
                   description: What was run, what went wrong. Recorded with the raw event (pruned with it after 180 days).
+            examples:
+              worked:
+                summary: The golden query gave the right answer
+                value:
+                  outcome: worked
+                  note: Ran it for FY2025; the total matched the finance close to the yen.
+              failed:
+                summary: It did not
+                description: >
+                  A failed report against a verified entry puts it on the
+                  re-verification feed (sort=failed), where it stays until
+                  someone verifies it again.
+                value:
+                  outcome: failed
+                  note: >-
+                    Double-counts orders split across two shipments since the
+                    2026-07 fulfilment change.
       responses:
         "200":
           description: Updated usage totals.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Usage" }
+              examples:
+                afterReport:
+                  summary: The totals with this report counted
+                  value:
+                    search_hits: 412
+                    fetches: 168
+                    worked: 23
+                    failed: 3
+                    last_used_at: "2026-07-27T02:07:44.291508Z"
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/revisions/{id}:
@@ -551,6 +1338,62 @@ paths:
                   revisions:
                     type: array
                     items: { $ref: "#/components/schemas/Revision" }
+              examples:
+                history:
+                  summary: GET /api/v1/revisions/insights/revenue-seasonality
+                  description: >
+                    Newest first, and never empty — the create is rev 1. Each
+                    revision carries the whole entry as it stood after that
+                    change, so a diff is a comparison between two snapshots
+                    rather than a replay.
+                  value:
+                    revisions:
+                      - rev: 2
+                        change: verify
+                        changed_by: { kind: human, name: tanaka@example.co.jp }
+                        changed_at: "2026-07-27T00:41:12.905337Z"
+                        snapshot:
+                          type: Insight
+                          id: insights/revenue-seasonality
+                          title: Reading revenue month over month
+                          description: Why a December spike and a January drop are normal.
+                          tags: [finance]
+                          status: verified
+                          stale_after: "2027-01-31"
+                          created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                          updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                          verified_by: { kind: human, name: tanaka@example.co.jp }
+                          verified_at: "2026-07-27T00:41:12.905337Z"
+                          links:
+                            - { target: metrics/revenue, text: Revenue }
+                          body: |
+                            [Revenue](/metrics/revenue.md) is seasonal: December
+                            runs well above the trailing median and January falls
+                            back below it.
+                          created_at: "2026-07-21T06:14:55.402881Z"
+                          updated_at: "2026-07-27T00:41:12.905337Z"
+                      - rev: 1
+                        change: create
+                        changed_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        changed_at: "2026-07-21T06:14:55.402881Z"
+                        snapshot:
+                          type: Insight
+                          id: insights/revenue-seasonality
+                          title: Reading revenue month over month
+                          description: Why a December spike and a January drop are normal.
+                          tags: [finance]
+                          status: draft
+                          stale_after: "2027-01-31"
+                          created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                          updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                          links:
+                            - { target: metrics/revenue, text: Revenue }
+                          body: |
+                            [Revenue](/metrics/revenue.md) is seasonal: December
+                            runs well above the trailing median and January falls
+                            back below it.
+                          created_at: "2026-07-21T06:14:55.402881Z"
+                          updated_at: "2026-07-21T06:14:55.402881Z"
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/backlinks/{id}:
@@ -589,6 +1432,49 @@ paths:
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/Knowledge" }
+              examples:
+                linkedFrom:
+                  summary: GET /api/v1/backlinks/metrics/revenue
+                  description: >
+                    The reverse edge: the insight and the golden query name
+                    the metric in their bodies, so they link to it. The metric
+                    does not link back — which is why a UI has to ask for this
+                    side separately.
+                  value:
+                    entries:
+                      - type: Insight
+                        id: insights/revenue-seasonality
+                        title: Reading revenue month over month
+                        description: Why a December spike and a January drop are normal.
+                        tags: [finance]
+                        status: draft
+                        stale_after: "2027-01-31"
+                        created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        links:
+                          - { target: metrics/revenue, text: Revenue }
+                        body: |
+                          [Revenue](/metrics/revenue.md) is seasonal: December
+                          runs well above the trailing median and January falls
+                          back below it.
+                        created_at: "2026-07-21T06:14:55.402881Z"
+                        updated_at: "2026-07-21T06:14:55.402881Z"
+                      - type: Golden Query
+                        id: queries/monthly-revenue
+                        description: Monthly net revenue for the last 12 complete months.
+                        tags: [finance]
+                        status: verified
+                        created_by: { kind: human, name: tanaka@example.co.jp }
+                        updated_by: { kind: human, name: tanaka@example.co.jp }
+                        verified_by: { kind: human, name: sato@example.co.jp }
+                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        links:
+                          - { target: metrics/revenue, text: Revenue }
+                        body: |
+                          Answers "how much did we make each month last year?"
+                          against [Revenue](/metrics/revenue.md).
+                        created_at: "2026-06-09T07:41:02.110945Z"
+                        updated_at: "2026-07-10T01:52:16.774301Z"
         "400": { $ref: "#/components/responses/Error" }
   /api/v1/attachments/{path}:
     parameters:
@@ -638,6 +1524,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Attachment" }
+              examples:
+                stored:
+                  summary: PUT /api/v1/attachments/metrics/revenue/revenue-2026h1.png
+                  description: >
+                    The media type was sniffed from the bytes, not taken from
+                    the request. sha256 is the content address and the ETag a
+                    later GET answers If-None-Match with.
+                  value:
+                    name: revenue-2026h1.png
+                    media_type: image/png
+                    size: 48213
+                    sha256: 9f2c1d0a7b3e5648c1d9f0a2b7e4c8d63f5a1b2c9e0d7a4f6b3c8e1d5a0f7b29
+                    created_by: { kind: human, name: tanaka@example.co.jp }
+                    created_at: "2026-06-02T04:20:11.663210Z"
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
@@ -793,6 +1693,28 @@ paths:
                       missing; unchanged from the one sent in means the
                       corpus is exhausted and what remains only fails.
                     type: string
+              examples:
+                partial:
+                  summary: A pass with work still left
+                  description: >
+                    missing is above zero, so call again with this cursor.
+                    The cursor is opaque — it carries the entry and the
+                    attachment position in one token; pass it back unchanged
+                    rather than parsing it.
+                  value:
+                    embedded: 200
+                    attachments: 0
+                    failed: 0
+                    missing: 613
+                    cursor: "metrics/revenue\u0000"
+                done:
+                  summary: The last pass
+                  description: Nothing is missing, so no cursor comes back.
+                  value:
+                    embedded: 13
+                    attachments: 4
+                    failed: 0
+                    missing: 0
         "400": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
 components:
