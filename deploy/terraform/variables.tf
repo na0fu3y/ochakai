@@ -69,9 +69,59 @@ variable "invoker_members" {
     # behind Cloud Run's IAM check. A public service would let any caller
     # claim to be anyone, so this state is made unrepresentable rather than
     # merely discouraged (deploy/cloudrun/README.md §3).
+    #
+    # There is exactly one posture where public is intended, and it is not
+    # reachable from here: var.public_read_only grants allUsers itself, and
+    # only together with the flag that stops the service believing anyone.
+    # Keeping the two in one variable is what makes "public and writable"
+    # unrepresentable instead of merely checked.
     condition     = !contains(var.invoker_members, "allUsers") && !contains(var.invoker_members, "allAuthenticatedUsers")
-    error_message = "ochakai must never be publicly invokable: its provenance headers are only trustworthy behind Cloud Run IAM. Grant a domain, group, user or service account instead."
+    error_message = "ochakai must never be publicly invokable by naming it here: its provenance headers are only trustworthy behind Cloud Run IAM. Grant a domain, group, user or service account instead — or, for the public read-only demo, set public_read_only = true, which grants allUsers itself and only alongside OCHAKAI_PUBLIC_READ_ONLY (deploy/cloudrun/README.md §5d)."
   }
+}
+
+# --- Posture: read-only, and the one intended public deployment -----------
+
+variable "read_only" {
+  description = <<-EOT
+    Serve the knowledge base without changing it (OCHAKAI_READ_ONLY, design
+    doc 0040): every write is a 403, MCP does not offer the write tools at
+    all, and the web UI stops drawing buttons that would only fail. For a
+    reference-only instance, or for freezing a base during a migration or an
+    audit. The service stays private and still records who reached it; this
+    is not the public demo below.
+
+    It is not authorization — it does not look at the caller, and it refuses
+    the operator too. Note the ordering it forces: a read-only deployment
+    cannot be seeded, so import first and set this afterwards
+    (deploy/cloudrun/README.md §5d).
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "public_read_only" {
+  description = <<-EOT
+    The public read-only demo (OCHAKAI_PUBLIC_READ_ONLY, design doc 0041).
+    This is the one posture where a publicly invokable ochakai is intended:
+    the module grants allUsers roles/run.invoker, so anyone with the URL can
+    read the base with no Google account and no token.
+
+    It is safe only because of the two things it gives up at once, and they
+    are one variable for that reason. Nothing can be written: this implies
+    var.read_only, and the server refuses to start if it would be publicly
+    readable and writable. And no identity is believed: the Authorization
+    header is not read at all — its signature is unverifiable without Cloud
+    Run IAM in front — X-Ochakai-On-Behalf-Of is ignored, and every caller is
+    human:anonymous. Provenance would be forgeable on a public service, so
+    none is read; nothing is written, so there is none to record.
+
+    Everything else in this module stays private. Do not reach for this to
+    "share a knowledge base more easily": for anything but a demo or a
+    reference-only copy, Cloud Run IAM is the answer.
+  EOT
+  type        = bool
+  default     = false
 }
 
 variable "delegating_callers" {

@@ -32,6 +32,20 @@ invoker_members = [
 # enable_webui      = true
 # webui_iap_members = ["domain:your-org.example"]
 
+# Serve the base without changing it: every write is a 403, MCP hides the
+# write tools, the UI stops drawing buttons that would only fail. Still
+# private, still records who reached it. Note the ordering — a read-only
+# deployment cannot be seeded, so import first and set this afterwards.
+# read_only = true
+
+# The public read-only demo, and the only posture in which this module grants
+# allUsers (guide §5d, design doc 0041). Anyone with the URL reads the base
+# with no Google account. Safe only because of what comes with it: writes are
+# refused (this implies read_only) and no identity is read at all — the
+# Authorization header is ignored, every caller is human:anonymous. Do not use
+# it to share a real knowledge base; deploy writable, import, then flip.
+# public_read_only = true
+
 # People who need to connect to the database directly for maintenance. They
 # get an IAM login (cloud-sql-proxy --auto-iam-authn), never a password.
 # maintenance_users = ["you@your-org.example"]
