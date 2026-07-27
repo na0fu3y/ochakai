@@ -37,6 +37,18 @@ last entry.
   previously carried exactly one. Every example is validated against the
   schema it sits under.
 
+### Fixed
+
+- Importing an OKF bundle that declares `status: stable` with no
+  `verified` entry no longer demotes it to draft silently. ochakai has no
+  status meaning *stable and unverified*, so such an entry does land as a
+  draft and exports as one — that loss is real and unchanged — but the
+  import now reports it, the way every other reinterpretation already
+  did. Refusing to read `stable` as reviewed stays deliberate: OKF puts
+  human review in `verified` (SPEC §5.3). The README claimed the reverse
+  mapping "keeps the round-trip exact", which held for ochakai's own
+  exports and not for a foreign bundle; it now says which is which.
+
 ### Changed
 
 - **BREAKING** — the recommended type vocabulary is realigned to what OKF

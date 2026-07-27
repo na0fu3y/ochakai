@@ -240,7 +240,12 @@ func TestParseStatusMapping(t *testing.T) {
 		wantNote          bool
 	}{
 		{"stable with a verification is verified", "status: stable\n" + verified, domain.StatusVerified, false},
-		{"stable alone is not a review", "status: stable\n", domain.StatusDraft, false},
+		// Reported, unlike the two rows around it: the value is understood,
+		// but its meaning is not preserved. ochakai has no status for
+		// "stable and unverified", so the entry lands as a draft and
+		// exports as one — a lifecycle demotion the producer never wrote.
+		// 0036 §3.4 says a reinterpretation is never silent.
+		{"stable alone is not a review, and says so", "status: stable\n", domain.StatusDraft, true},
 		{"a bare verified mapping counts too (SPEC §5.2)", "status: stable\nverified: { by: human:na0, at: 2026-07-01T00:00:00Z }\n", domain.StatusVerified, false},
 		{"draft stays draft", "status: draft\n", domain.StatusDraft, false},
 		{"deprecated stays deprecated", "status: deprecated\n", domain.StatusDeprecated, false},
@@ -518,5 +523,45 @@ func TestDocumentDoesNotReExportShadowedEnvelopeAttrs(t *testing.T) {
 	}
 	if strings.Contains(string(out), "ghost.md") {
 		t.Errorf("a shadowed attr must not be re-exported:\n%s", out)
+	}
+}
+
+// A foreign bundle that declares OKF's stable lifecycle without a
+// verification does not survive a round trip through ochakai: there is no
+// ochakai status for "stable and unverified", so it lands as a draft and
+// exports as a draft. Refusing to read stable as verified is deliberate
+// (SPEC §5.3 puts human review in `verified`), but the demotion of the
+// lifecycle value is a real loss, and this test exists so that it is a
+// known and reported one rather than a surprise. If ochakai ever gains
+// somewhere to keep the producer's lifecycle, this is the test that
+// should start failing.
+func TestStableWithoutVerificationIsDemotedButReported(t *testing.T) {
+	const in = "---\ntype: Metric\ntitle: Average order value\nstatus: stable\n---\n\nThe average revenue per order.\n"
+	k, notes, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Status != domain.StatusDraft {
+		t.Fatalf("status = %q, want draft", k.Status)
+	}
+	var reported bool
+	for _, n := range notes {
+		if strings.Contains(n, "stable") && strings.Contains(n, "draft") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Errorf("the demotion was silent; notes = %v", notes)
+	}
+
+	out, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "status: draft") {
+		t.Errorf("re-export should show the demotion plainly; got:\n%s", out)
+	}
+	if strings.Contains(string(out), "status: stable") {
+		t.Errorf("stable came back without a verification, which would assert a review nobody made:\n%s", out)
 	}
 }
