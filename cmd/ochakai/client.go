@@ -154,13 +154,14 @@ func parseRef(s string) (string, error) {
 
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.",
-		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --status verified            # re-verification queue\n")
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the golden-query\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source is a filter, not a mode: it narrows to the entries citing one\nresource (the reverse of sources[].resource) and combines with a query\nor with any --sort.",
+		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Golden Query' --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --status verified            # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n")
 	var types, statuses, tags repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed)`)
+	source := fs.String("source", "", "only entries citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
+	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -170,8 +171,8 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if *sortBy != "" && len(pos) > 0 {
 		return fmt.Errorf("--sort lists entries; it cannot be combined with a search query")
 	}
-	if *sortBy == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
-		return fmt.Errorf("search needs a query; use --sort to list entries without one")
+	if *sortBy == "" && *source == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
+		return fmt.Errorf("search needs a query; use --sort to list entries without one, or --source to list what cites a resource")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -179,7 +180,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 	}
 	hits, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
-		Sort: *sortBy, Limit: *limit,
+		Source: *source, Sort: *sortBy, Limit: *limit,
 	})
 	if err != nil {
 		return err
@@ -205,6 +206,8 @@ func cmdSearch(ctx context.Context, args []string) error {
 			if h.Usage != nil {
 				lead = strconv.FormatInt(h.Usage.Failed, 10)
 			}
+		case "stale_after":
+			lead = h.StaleAfter
 		}
 		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.DisplayTitle())
 		if h.Description != "" {

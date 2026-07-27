@@ -712,10 +712,21 @@ function route() {
     // directly. Both are entrances to the review loop, and the filter bar
     // was the only way in — a queue nobody can find stops being read as
     // surely as one nobody can empty (design doc 0025 §6).
-    if (rest[0] === 'reported-wrong' || rest[0] === 'verification-age') {
+    if (rest[0] === 'reported-wrong' || rest[0] === 'verification-age' || rest[0] === 'stale') {
       explore.failedFeed = rest[0] === 'reported-wrong';
-      explore.staleFeed = rest[0] === 'verification-age';
+      explore.ageFeed = rest[0] === 'verification-age';
+      explore.expiredFeed = rest[0] === 'stale';
+      explore.source = '';
       explore.feedAll = false;
+    } else if (rest[0] === 'cites') {
+      // The reverse lookup: which entries cite one resource. The resource
+      // is a URI, so it travels as one encoded segment.
+      explore.source = decodeURIComponent(rest.slice(1).join('/'));
+      explore.q = '';
+      explore.failedFeed = explore.ageFeed = explore.expiredFeed = false;
+      explore.feedAll = false;
+    } else if (rest.length === 0) {
+      explore.source = '';
     }
     viewExplore();
   } else {
@@ -740,7 +751,7 @@ view.addEventListener('click', e => {
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', staleFeed: false, failedFeed: false, feedAll: false };
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -765,13 +776,22 @@ function viewExplore() {
   view.innerHTML = `
   <section>
     <div class="searchbox">
-      ${explore.staleFeed
+      ${explore.ageFeed
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Verification-age feed — oldest verified first,
            the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
         : explore.failedFeed
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — entries whose failure reports
            (report_outcome failed) are still unanswered, worst first. Open one, re-read it, and verify it to take it
            out of the feed. Uncheck <strong>reported wrong</strong> to search.</div>`
+        : explore.source
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Entries citing
+           <code>${esc(explore.source)}</code> — everything that derives from this material.
+           <a href="#/search">Back to search</a>.</div>`
+        : explore.expiredFeed
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Stale feed — entries past the <code>stale_after</code>
+           their author declared, most overdue first. Verifying does <em>not</em> clear this one: the date is the writer's
+           claim, so re-check the entry and then edit it to declare a new expiry (or remove it).
+           Uncheck <strong>stale</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
       <a class="btn" href="#/new" title="Create a knowledge entry">＋ New entry</a>
@@ -787,9 +807,11 @@ function viewExplore() {
         <input type="text" id="f-tag" placeholder="tag" aria-label="tag" value="${esc(explore.tag)}" style="width:6rem">
         <span class="fb-sep"></span>
         <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
-          type="checkbox" id="f-stale" aria-label="verification age feed" ${explore.staleFeed ? 'checked' : ''}>verification age</label>
+          type="checkbox" id="f-age" aria-label="verification age feed" ${explore.ageFeed ? 'checked' : ''}>verification age</label>
         <label class="chip" title="Entries reported wrong (report_outcome failed) and not verified since — the re-verification feed"><input
           type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>reported wrong</label>
+        <label class="chip" title="Past the stale_after their author declared — cleared by editing the entry, not by verifying"><input
+          type="checkbox" id="f-expired" aria-label="stale feed" ${explore.expiredFeed ? 'checked' : ''}>stale</label>
       </div>
     </details>
     <div id="results"><div class="empty">…</div></div>
@@ -808,8 +830,18 @@ function viewExplore() {
     if (e.key === 'Enter' && e.target.value.trim()) { explore.types.add(e.target.value.trim()); viewExplore(); }
   });
   $('#f-tag').addEventListener('input', () => { explore.tag = $('#f-tag').value.trim(); debounce(rerun, 250); });
-  $('#f-stale').addEventListener('change', () => { explore.staleFeed = $('#f-stale').checked; if (explore.staleFeed) explore.failedFeed = false; explore.feedAll = false; viewExplore(); });
-  $('#f-failed').addEventListener('change', () => { explore.failedFeed = $('#f-failed').checked; if (explore.failedFeed) explore.staleFeed = false; explore.feedAll = false; viewExplore(); });
+  // The three feeds are listing modes, not filters: each replaces the
+  // query, so picking one clears the others.
+  const feeds = [['#f-age', 'ageFeed'], ['#f-failed', 'failedFeed'], ['#f-expired', 'expiredFeed']];
+  for (const [sel, key] of feeds) {
+    $(sel).addEventListener('change', () => {
+      const on = $(sel).checked;
+      for (const [, k] of feeds) explore[k] = false;
+      explore[key] = on;
+      explore.feedAll = false;
+      viewExplore();
+    });
+  }
 
   runSearch();
 }
@@ -831,18 +863,22 @@ async function runSearch() {
   const out = $('#results');
   if (!out) return;
   const p = new URLSearchParams();
-  const isFeed = explore.staleFeed || explore.failedFeed;
+  const isFeed = explore.ageFeed || explore.failedFeed || explore.expiredFeed || !!explore.source;
   // The query as the server and the messages below see it: a box holding
   // only spaces is no query, and saying `No knowledge found for “  ”`
   // describes something the user did not ask.
   const q = explore.q.trim();
-  if (explore.staleFeed) p.set('sort', 'verified_at');
+  // source is a filter, not a mode: it rides along with whatever the
+  // chain below picks (design doc 0037 §2.3).
+  if (explore.source) p.set('source', explore.source);
+  if (explore.ageFeed) p.set('sort', 'verified_at');
   else if (explore.failedFeed) p.set('sort', 'failed');
+  else if (explore.expiredFeed) p.set('sort', 'stale_after');
   else if (q) p.set('q', explore.q);
-  // No query typed yet (or only whitespace): the landing view lists by
-  // demand instead of searching — an empty q is a 400 (searching needs
-  // a query to rank by).
-  else p.set('sort', 'usage');
+  // Nothing selects a mode: the landing view lists by demand instead of
+  // searching, since an empty q is a 400 (searching needs a query to rank
+  // by). A source filter alone is already a listing, so it stays put.
+  else if (!explore.source) p.set('sort', 'usage');
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
   if (explore.tag) p.append('tag', explore.tag);
@@ -1278,8 +1314,11 @@ function sourcesSection(entry) {
       s.last_modified ? `modified ${esc(s.last_modified)}` : '',
       windowText(s.usage_window) ? `window ${esc(windowText(s.usage_window))}` : '',
     ].filter(Boolean).join(' · ');
+    // The reverse lookup belongs where somebody is already looking at the
+    // source: "what else derives from this?" (design doc 0037 §2.3).
+    const cites = `<a href="#/search/cites/${encodeURIComponent(s.resource)}" title="Entries citing this resource">cited elsewhere?</a>`;
     return `<tr><td class="k">${esc(name)}</td><td>${resourceHTML(s.resource)}
-      ${meta ? `<div class="provenance" style="margin:.15rem 0 0">${meta}</div>` : ''}</td></tr>`;
+      <div class="provenance" style="margin:.15rem 0 0">${meta ? meta + ' · ' : ''}${cites}</div></td></tr>`;
   }).join('');
   return `
     <div class="section-title" style="font-size:1.05rem;margin:1.6rem 0 .6rem">Sources</div>
@@ -1714,7 +1753,9 @@ function viewReview() {
     status_note so agents stop re-proposing it). Never-used drafts sink to the bottom; toggle <em>stale</em> to triage them.</p>
     <p style="color:var(--muted);font-size:.9rem;max-width:48rem">Verified knowledge has two queues of its own:
     <a href="#/search/reported-wrong">reported wrong</a> — entries whose failure reports are unanswered — and
-    <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying an entry empties it from both.</p>
+    <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying an entry empties it from both.
+    A third, <a href="#/search/stale">stale</a>, lists entries past the expiry their author declared — that one is cleared by
+    editing the entry, not by verifying.</p>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
         stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>

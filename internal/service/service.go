@@ -810,6 +810,51 @@ func (s *Service) ListByVerifiedAt(ctx context.Context, f store.Filter, limit in
 	return hits, nil
 }
 
+// ListBySource lists the entries citing one resource — the reverse of
+// sources[].resource (design doc 0037 §2.3). Reached when a caller gives
+// a source filter and nothing to search by: the question is "what derives
+// from this material", which has no text to rank. Not a search: no usage
+// is recorded, and hits carry score 0 like every other list mode.
+func (s *Service) ListBySource(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	entries, err := s.Store.ListBySource(ctx, f, limit)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]domain.SearchHit, len(entries))
+	for i, k := range entries {
+		hits[i] = domain.SearchHit{Knowledge: k}
+	}
+	return hits, nil
+}
+
+// ListByStaleAfter lists the entries whose declared expiry has passed,
+// most overdue first — the feed for knowledge its own author dated
+// (design doc 0037 §2.1). Only entries stale today: a date that has not
+// come due is not work yet.
+//
+// The one feed verifying does not empty. verified_at and failed are
+// server observations, and re-checking updates them; stale_after is what
+// the writer declared, so clearing it means editing the entry to declare
+// a new expiry (design doc 0037 §2.2). Not a search: no usage recorded,
+// score 0, same wire shape as every other list mode.
+func (s *Service) ListByStaleAfter(ctx context.Context, f store.Filter, limit int) ([]domain.SearchHit, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	entries, err := s.Store.ListByStaleAfter(ctx, f, limit)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]domain.SearchHit, len(entries))
+	for i, k := range entries {
+		hits[i] = domain.SearchHit{Knowledge: k}
+	}
+	return hits, nil
+}
+
 // ListByUsage lists entries by demand — most-searched first, never-used
 // drafts oldest-first at the bottom — for the web UI draft review queue.
 // Not a search: no usage is recorded (reading the queue must not inflate

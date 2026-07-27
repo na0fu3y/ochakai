@@ -1,6 +1,9 @@
 # ochakai 設計ドキュメント 0025: 書き戻しループを締める — failed が再検証を呼ぶ
 
-Status: Accepted(2026-07-22)
+Status: Accepted(2026-07-22)。[0037](0037-stale-and-source-lookup.md) が
+3 つめのフィード `sort=stale_after` を足した — 本ドキュメントの 2 フィードが
+*サーバーの観測*で並び verify で空になるのに対し、あちらは*書き手の宣言*で
+並び編集で空になる(0037 §2.2)
 Date: 2026-07-22
 
 ## 1. 目的
