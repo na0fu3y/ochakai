@@ -2,6 +2,9 @@
 
 - **[demo/](demo)** — a whole knowledge base, ten entries, importable in one
   command. Described below.
+- **[bigquery-catalog/](bigquery-catalog)** — a daily job that projects BigQuery
+  table metadata in, shipped as an Attested Computation with its Python beside
+  it. What connector ingestion looks like when it stays outside the server.
 - **[claude-code/](claude-code)** — the recall and write-back loop as Claude Code
   instructions and hooks.
 - **[golden-query.md](golden-query.md)** — one entry on its own, for

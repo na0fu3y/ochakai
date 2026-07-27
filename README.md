@@ -300,7 +300,7 @@ And it stays small by refusing things:
 |---|---|
 | LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job |
 | SQL execution | it holds no warehouse credentials. Your agent executes |
-| connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume |
+| connector ingestion | knowledge is curated by humans and agents, not harvested by pipelines. Trust density over volume. A harvester in the server would also need warehouse credentials it does not hold — so when you do want a catalog projected in, it runs as an ordinary client under your own service account: [examples/bigquery-catalog](examples/bigquery-catalog) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
 | authorization | reachability is the whole access model: **whoever can reach the deployment can read and write everything**. ochakai identifies the caller and records it as provenance, and stops there. Deciding who may reach it is Cloud Run IAM's job, and running it publicly invokable is a misconfiguration, not a deployment mode (design doc [0002](docs/design/0002-authn-authz.md)). If you need per-entry permissions, this is the wrong tool |
