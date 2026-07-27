@@ -9,9 +9,10 @@ sources:
     title: Revenue Recognition Policy (FY2026)
     author: human:tanaka@example.co.jp
     last_modified: "2026-04-01"
-status: stable
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-18T05:40:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-20T02:15:00Z }
+status: stable
 grain: order
 synonyms: [net sales, top line, 売上]
 unit: JPY
@@ -44,3 +45,5 @@ swing is larger than most of the changes anyone investigates.
 Revenue says nothing about whether the customers came back. That is
 [repeat purchase rate](/metrics/repeat-purchase-rate.md), which is still a
 draft.
+
+[^rev-policy]: Revenue Recognition Policy (FY2026)

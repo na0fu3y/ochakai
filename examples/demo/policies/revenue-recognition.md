@@ -4,9 +4,10 @@ resource: https://wiki.example.co.jp/finance/revenue-recognition
 title: Revenue recognition (FY2026)
 description: Which orders count as revenue, when, and what is deliberately not deducted
 tags: [finance, revenue, policy]
-status: stable
+generated: { by: human:sato@example.co.jp, at: 2026-07-16T06:00:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-20T02:05:00Z }
+status: stable
 ---
 
 The rule the numbers follow. It is a mirror of the finance wiki page linked as

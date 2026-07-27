@@ -10,11 +10,17 @@ sources:
     author: human:tanaka@example.co.jp
     last_modified: "2026-04-01"
 usage_window: { from: "2026-06-01", to: "2026-06-30" }
-status: stable
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-18T06:10:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-20T02:30:00Z }
+status: stable
 stale_after: "2026-12-31"
 runtime: bigquery
+executor:
+  resource: /skills/run-bigquery-query.md
+  receipt: [job_id, executed_sql, row_count]
+attester:
+  resource: https://git.example.co.jp/analytics/attesters/sql_equality.py
 question: What is our monthly revenue this year?
 ---
 
@@ -49,6 +55,16 @@ ORDER BY month
   [the revenue recognition policy](/policies/revenue-recognition.md).
 - The output is one row per month with a hole where a month had no orders —
   there is no calendar join. Nobody has needed one yet.
+
+# Running it
+
+`executor.resource` points at [run a BigQuery computation](/skills/run-bigquery-query.md),
+and a run has to come back with the three `receipt` fields declared above:
+`job_id`, `executed_sql`, `row_count`. The `attester` is the code that decides
+whether the run counts — it compares `executed_sql` against the fence above and
+rejects anything rewritten, which is what makes the number attested rather than
+merely sanctioned. Neither is ochakai's job: it stores the contract and never
+executes it.
 
 Read the result with
 [how to read the revenue series](/insights/reading-revenue.md) before calling a

@@ -3,9 +3,10 @@ type: Insight
 title: How to read the revenue series
 description: Baselines, the seasonal shape, the two artifacts that fake a move, and when a drop is worth escalating
 tags: [sales, revenue, seasonality, interpretation]
-status: stable
+generated: { by: human:sato@example.co.jp, at: 2026-07-19T08:30:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-21T01:00:00Z }
+status: stable
 ---
 
 [Monthly revenue](/queries/sales/monthly-revenue.md) tells you the number. This

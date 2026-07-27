@@ -4,9 +4,10 @@ resource: bigquery://demo-shop.shop.orders
 title: shop.orders
 description: One row per order, loaded hourly from the storefront database
 tags: [sales, orders, bigquery]
-status: stable
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-17T03:10:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-21T01:20:00Z }
+status: stable
 ---
 
 The order table every revenue number in this bundle comes from. One row per

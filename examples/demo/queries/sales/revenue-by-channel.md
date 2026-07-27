@@ -3,12 +3,16 @@ type: Attested Computation
 title: Revenue by acquisition channel
 description: Monthly revenue split by the channel the order came through (draft — the channel codes are mid-migration)
 tags: [sales, revenue, marketing, bigquery]
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-06-12T09:45:00Z }
 status: draft
 stale_after: "2026-06-30"
 runtime: bigquery
 parameters:
   - { name: from_date, type: DATE, required: true }
   - { name: to_date, type: DATE, required: true }
+executor:
+  resource: /skills/run-bigquery-query.md
+  receipt: [job_id, executed_sql, row_count]
 question: Which channel is revenue growing in?
 ---
 
@@ -46,3 +50,8 @@ ORDER BY month, revenue DESC
 - `stale_after` was set to the end of the migration window and has passed, so
   this entry shows up in the stale feed. That is the point: nobody has come
   back to it, and the feed is how you find out.
+- There is no `attester`. It has an `executor`, so
+  [it can be run](/skills/run-bigquery-query.md) — but nothing checks that a
+  run used *this* SQL, so a number quoted from it is a number you are taking on
+  trust. [Monthly revenue](/queries/sales/monthly-revenue.md) has one; that is
+  the difference between the two entries that matters most.

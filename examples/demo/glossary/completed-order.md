@@ -3,9 +3,10 @@ type: Glossary Term
 title: Completed order
 description: The order state every revenue figure here counts, and the states it leaves out
 tags: [sales, orders, glossary]
-status: stable
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-17T04:20:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-20T02:10:00Z }
+status: stable
 ---
 
 An order is **completed** when it has shipped and its payment has settled.

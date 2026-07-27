@@ -3,6 +3,7 @@ type: Metric
 title: Repeat purchase rate
 description: Share of a month's buyers who had bought at least once before (draft — the lookback is not settled)
 tags: [sales, retention, customers]
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-14T07:05:00Z }
 status: draft
 grain: customer-month
 unit: ratio

@@ -4,6 +4,7 @@ resource: https://storefront.example.co.jp/docs/enums/channel-code
 title: Order channel codes
 description: The storefront's channel_code enum, mirrored (deprecated — superseded by the FY2026H2 taxonomy)
 tags: [orders, marketing, enum]
+generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-15T02:00:00Z }
 status: deprecated
 status_note: The storefront moved to a two-level taxonomy in FY2026H2; kept because historical rows still carry these codes.
 ---
