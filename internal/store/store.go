@@ -150,6 +150,12 @@ type Filter struct {
 	Types    []domain.Type
 	Statuses []domain.Status
 	Tags     []string
+	// Source narrows to entries citing this exact resource — the reverse
+	// of sources[].resource, for "what derives from this material"
+	// (design doc 0037 §2.3). Single-valued on purpose: the question is
+	// about one artifact that changed, and a disjunction of containment
+	// tests would not use the GIN index.
+	Source string
 }
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
@@ -1229,7 +1235,71 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		args = append(args, f.Tags)
 		conds = append(conds, fmt.Sprintf("%stags && $%d", prefix, len(args)))
 	}
+	if f.Source != "" {
+		// Containment, so the GIN index on sources answers it directly.
+		// Matching is on resource alone: sources[].id is a key for the
+		// body's footnotes within one document, and means nothing across
+		// entries (design doc 0037 §2.3).
+		args = append(args, sourceContainment(f.Source))
+		conds = append(conds, fmt.Sprintf("%ssources @> $%d", prefix, len(args)))
+	}
 	return strings.Join(conds, " AND "), args
+}
+
+// sourceContainment builds the jsonb value that matches an entry citing
+// resource. Marshalled rather than formatted, so a resource containing a
+// quote or a backslash cannot break out of the literal.
+func sourceContainment(resource string) []byte {
+	b, err := json.Marshal([]map[string]string{{"resource": resource}})
+	if err != nil { // a string always marshals
+		panic(fmt.Sprintf("marshalling source filter %q: %v", resource, err))
+	}
+	return b
+}
+
+// ListBySource lists the entries a filter matches, by id. It exists for
+// the source lookup: "what cites this resource" is a question with no
+// text to rank by, so it lists rather than searches (design doc 0037
+// §2.3). Ordered by id because the answer is a set — a stable, readable
+// order beats a relevance score nothing computed.
+func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+	where, args := f.buildWhere("")
+	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+		ORDER BY id LIMIT %d`, where, limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
+}
+
+// ListByStaleAfter returns the entries whose declared expiry has passed,
+// most overdue first — the feed for "what did we say needed re-checking
+// by now" (design doc 0037 §2.1).
+//
+// Only entries that are stale today. A declaration that has not come due
+// is not work, and 0025 asked feeds to be queues a reviewer can finish;
+// the same reason sort=failed lists only entries with failures.
+//
+// Unlike the other two feeds, verifying does not empty this one: the date
+// is the writer's declaration, not something the server observed, so
+// clearing it means editing the entry to re-declare an expiry
+// (design doc 0037 §2.2).
+func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+	where, args := f.buildWhere("")
+	// "Today" is UTC, spelled out rather than left to current_date. The
+	// column is a bare date so that staleness needs no timezone (design
+	// doc 0036 §3.9), and current_date would hand that decision to
+	// whatever TimeZone the database session happens to carry — the same
+	// entry would be stale on one deployment and not on another.
+	q := fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date
+		ORDER BY stale_after ASC, id LIMIT %d`, where, limit)
+	rows, err := s.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanKnowledge)
 }
 
 // ListByVerifiedAt returns filtered entries ordered by verification age,

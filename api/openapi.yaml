@@ -43,8 +43,16 @@ paths:
         drops out once it is verified after its last failure report
         (POST /api/v1/verify/{id}), so a base that is kept up shows an
         empty feed.
+        With sort=stale_after it lists entries whose author declared a
+        stale_after that has now passed, most overdue first — the feed for
+        knowledge dated by whoever wrote it (design doc 0037 §2.1).
+        Entries whose expiry has not come due are not listed. Unlike the
+        two feeds above, verifying does not clear this one: the date is
+        the writer's declaration, so an entry leaves only when someone
+        edits it to declare a new expiry (or removes the declaration).
         Exactly one of q and sort is required: combining them is a 400,
         and so is omitting both (searching needs a query to rank by).
+        source is a filter rather than a mode, so it composes with either.
       parameters:
         - name: q
           in: query
@@ -53,7 +61,7 @@ paths:
         - name: sort
           in: query
           description: Mutually exclusive with q.
-          schema: { type: string, enum: [verified_at, usage, failed] }
+          schema: { type: string, enum: [verified_at, usage, failed, stale_after] }
         - name: type
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Type" } }
@@ -66,11 +74,22 @@ paths:
           in: query
           schema: { type: array, items: { type: string } }
           explode: true
+        - name: source
+          in: query
+          description: >
+            Only entries citing this resource — the reverse of
+            sources[].resource, for "this material changed, what derives
+            from it?" (design doc 0037 §2.3). Matched exactly: no prefix
+            or substring matching, and sources[].id is not consulted
+            because it keys a document's own footnotes rather than
+            identifying an artifact across entries. Single-valued, unlike
+            tag. Composes with q and with any sort.
+          schema: { type: string }
         - name: limit
           in: query
           description: >
-            Searching: default 10, max 50. With sort=verified_at,
-            sort=usage, or sort=failed the feed reads more per page:
+            Searching: default 10, max 50. With any sort the feed reads
+            more per page:
             default 100, max 1000. Out-of-range values fall back to the
             default; non-integer values are a 400.
           schema: { type: integer }

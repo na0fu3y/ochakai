@@ -168,16 +168,25 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
 			"each hit carries its usage totals — the draft review/promotion feed. With sort=\"failed\" it " +
 			"lists entries callers reported wrong (report_outcome failed), worst first — the re-verification " +
-			"feed; empty when nothing was reported wrong. Exactly one of query / sort is required.",
+			"feed; empty when nothing was reported wrong. With sort=\"stale_after\" it lists entries whose " +
+			"author declared an expiry that has now passed, most overdue first — re-check them and, if they " +
+			"still hold, update stale_after; verifying alone does not clear this feed, because the date is " +
+			"the writer's declaration and only an edit changes it. Exactly one of query / sort is required. " +
+			"source is a filter rather than a mode: it narrows to the entries citing one resource — use it " +
+			"when a source document changed and you need everything derived from it — and combines with a " +
+			"query or with any sort.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		ctx, _, err := requestCtx(ctx, svc.Config, req)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
-		f := store.Filter{Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags}
+		f := store.Filter{
+			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
+			Tags: in.Tags, Source: in.Source,
+		}
 		if in.Sort != "" {
-			if in.Sort != "verified_at" && in.Sort != "usage" && in.Sort != "failed" {
-				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: verified_at, usage, failed)", in.Sort)
+			if !domain.ValidListSort(in.Sort) {
+				return nil, searchOut{}, fmt.Errorf("invalid sort %q (valid: %s)", in.Sort, strings.Join(domain.ListSorts, ", "))
 			}
 			if in.Query != "" {
 				return nil, searchOut{}, fmt.Errorf("sort=%s lists entries; it cannot be combined with a search query", in.Sort)
@@ -188,8 +197,17 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 				list = svc.ListByUsage
 			case "failed":
 				list = svc.ListByFailed
+			case "stale_after":
+				list = svc.ListByStaleAfter
 			}
 			hits, err := list(ctx, f, in.Limit)
+			if err != nil {
+				return nil, searchOut{}, err
+			}
+			return nil, searchOut{Hits: hits}, nil
+		}
+		if in.Query == "" && in.Source != "" {
+			hits, err := svc.ListBySource(ctx, f, in.Limit)
 			if err != nil {
 				return nil, searchOut{}, err
 			}
@@ -476,7 +494,8 @@ type searchIn struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed) — all mutually exclusive with query"`
+	Source   string   `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed), \"stale_after\" lists entries past their declared expiry (most overdue first) — all mutually exclusive with query"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
 

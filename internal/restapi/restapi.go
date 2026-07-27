@@ -37,9 +37,12 @@ const exportBatch = 100
 func Handler(svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
-	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&limit=...
+	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&source=...&limit=...
 	// With sort=verified_at, lists by verification age (oldest first)
 	// instead of searching — the feed for golden query canary runs.
+	// source narrows to the entries citing one resource — the reverse of
+	// sources[].resource (design doc 0037 §2.3) — and composes with a
+	// query or with any sort.
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
@@ -51,10 +54,11 @@ func Handler(svc *service.Service) http.Handler {
 			Types:    domain.ToTypes(q["type"]),
 			Statuses: domain.ToStatuses(q["status"]),
 			Tags:     q["tag"],
+			Source:   q.Get("source"),
 		}
 		if sort := q.Get("sort"); sort != "" {
-			if sort != "verified_at" && sort != "usage" && sort != "failed" {
-				writeError(w, service.Invalidf("invalid sort (valid: verified_at, usage, failed)"))
+			if !domain.ValidListSort(sort) {
+				writeError(w, service.Invalidf("invalid sort (valid: %s)", strings.Join(domain.ListSorts, ", ")))
 				return
 			}
 			if q.Get("q") != "" {
@@ -67,9 +71,23 @@ func Handler(svc *service.Service) http.Handler {
 				hits, err = svc.ListByUsage(r.Context(), f, limit)
 			case "failed":
 				hits, err = svc.ListByFailed(r.Context(), f, limit)
+			case "stale_after":
+				hits, err = svc.ListByStaleAfter(r.Context(), f, limit)
 			default:
 				hits, err = svc.ListByVerifiedAt(r.Context(), f, limit)
 			}
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeHits(w, r, svc, hits)
+			return
+		}
+		// A source filter with nothing to search by is the reverse lookup:
+		// "what derives from this material" has no text to rank, so it
+		// lists (design doc 0037 §2.3).
+		if q.Get("q") == "" && f.Source != "" {
+			hits, err := svc.ListBySource(r.Context(), f, limit)
 			if err != nil {
 				writeError(w, err)
 				return

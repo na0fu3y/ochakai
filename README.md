@@ -50,6 +50,8 @@ ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
 ochakai search "revenue" --type Metric --status verified
+ochakai search --sort stale_after   # past the expiry their author declared
+ochakai search --source https://wiki.example/revenue-policy  # what derives from this
 ochakai get queries/monthly-revenue
 ochakai verify metrics/revenue      # promotes a draft — and re-affirms a verified entry, clearing the review feeds
 ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
@@ -98,7 +100,13 @@ and a *needs review* feed (`sort=failed`) that lists the entries agents
 reported wrong, worst first. Both empty the same way: re-verifying an
 entry — "I checked it again and it is still right" — stamps a fresh
 `verified_at` and takes it out of either feed, so the queues are
-something a reviewer can finish rather than a ledger that only grows. One
+something a reviewer can finish rather than a ledger that only grows.
+A third feed, *stale* (`sort=stale_after`), lists entries past the expiry
+their own author declared — that one clears by editing the entry to
+re-declare the date, since the date is a claim the writer made rather
+than something the server observed. And when a cited document changes,
+`?source=<uri>` answers the other direction: every entry derived from it,
+straight from the source's own line on the entry page. One
 self-contained page, no build step; deliberately **not** a BI tool — no
 charts, no query execution, no chat.
 

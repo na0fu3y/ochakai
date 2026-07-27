@@ -494,3 +494,62 @@ func TestRequestActorFallsBackToContext(t *testing.T) {
 		}
 	}
 }
+
+// Both lookups design doc 0037 adds ride on search_knowledge rather than
+// on new tools — tool count is a budget (0015 §2). An argument an agent
+// cannot see is an argument it will not use, so the schema has to carry
+// both, and the descriptions have to say what they match.
+func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	for _, tool := range res.Tools {
+		if tool.Name != "search_knowledge" {
+			continue
+		}
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal schema: %v", err)
+		}
+		var schema struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal schema: %v", err)
+		}
+		src, ok := schema.Properties["source"]
+		if !ok {
+			t.Fatal("search_knowledge has no source argument")
+		}
+		if !strings.Contains(src.Description, "sources[].resource") {
+			t.Errorf("the source argument does not say what it matches: %q", src.Description)
+		}
+		if !strings.Contains(schema.Properties["sort"].Description, "stale_after") {
+			t.Errorf("sort does not offer stale_after: %q", schema.Properties["sort"].Description)
+		}
+		// The feed only pays off if the agent knows verifying will not
+		// empty it (design doc 0037 §2.2).
+		if !strings.Contains(tool.Description, "verifying alone does not clear this feed") {
+			t.Error("the tool description no longer warns that verifying does not clear the stale feed")
+		}
+		return
+	}
+	t.Fatal("search_knowledge is gone")
+}
+
+// The listing modes live in one list so no surface can offer a value
+// another rejects (design doc 0037 §2.5).
+func TestListSortsAreTheSameEverywhere(t *testing.T) {
+	for _, want := range []string{"verified_at", "usage", "failed", "stale_after"} {
+		if !domain.ValidListSort(want) {
+			t.Errorf("domain.ListSorts is missing %q", want)
+		}
+	}
+	if domain.ValidListSort("stale") {
+		t.Error("ValidListSort accepts a value no surface implements")
+	}
+}

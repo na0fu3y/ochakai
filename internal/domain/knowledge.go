@@ -283,6 +283,16 @@ const (
 	EventFailed    = "failed"     // caller reports the entry led to a wrong or unusable result
 )
 
+// ListSorts are the listing modes: the values of ?sort that replace
+// searching with a feed. verified_at and failed rank by what the server
+// observed and are emptied by verifying (design doc 0025); usage ranks by
+// demand; stale_after ranks by the expiry a writer declared and is
+// emptied by editing, not verifying (design doc 0037 §2.2). The single
+// source for every surface's validation and help text.
+var ListSorts = []string{"verified_at", "usage", "failed", "stale_after"}
+
+func ValidListSort(s string) bool { return slices.Contains(ListSorts, s) }
+
 // Outcomes lists the reportable outcome kinds — the single source for
 // every user-facing enumeration (tool schema, CLI help, completions).
 var Outcomes = []string{EventWorked, EventFailed}
