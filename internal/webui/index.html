@@ -468,7 +468,7 @@ function esc(s) {
 // Keys are the OKF type vocabulary, which is what the server stores
 // (design doc 0023). Lookup is case-insensitive to match the server's
 // filter matching — the stored spelling is whatever the writer used.
-const TYPE_ICONS = { 'Semantic Model': '🧩', 'Metric': '📊', 'Golden Query': '🧾', 'Attested Computation': '🧮', 'Insight': '💡', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'Reference': '🔖' };
+const TYPE_ICONS = { 'Metric': '📊', 'Attested Computation': '🧮', 'Skill': '🛠️', 'Playbook': '📘', 'Insight': '💡', 'Policy': '⚖️', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'API Endpoint': '🔌', 'Reference': '🔖' };
 const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
@@ -1898,7 +1898,7 @@ async function viewEditor(id, prefix = '') {
           <label class="top" for="e-type">Type</label>
           <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" required>
           <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
-          <div class="hint">What the entry is: Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — or any type of your own.</div>
+          <div class="hint">What the entry is: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference — or any type of your own.</div>
         </div>
         ${idField}
       </div>
@@ -1970,8 +1970,8 @@ async function viewEditor(id, prefix = '') {
       <div class="field">
         <label class="top" for="e-attrs">Attributes (JSON)</label>
         <textarea id="e-attrs" rows="6" class="mono" placeholder='{"question": "…", "sql": "SELECT …"}'>${esc(attrsText)}</textarea>
-        <div class="hint">Anything OKF does not define, kept as written: <code>question</code>/<code>sql</code> for a Golden Query,
-          <code>spec</code> for a Semantic Model. The fields above have their own boxes — putting one here is refused rather than
+        <div class="hint">Anything OKF does not define, kept as written: <code>question</code>/<code>sql</code> for an Attested
+          Computation holding a verified query, <code>spec</code> for a semantic model. The fields above have their own boxes — putting one here is refused rather than
           stored where nothing reads it.</div>
       </div>
       <div id="editor-error"></div>

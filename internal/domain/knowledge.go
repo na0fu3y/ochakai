@@ -23,20 +23,23 @@ import (
 type Type string
 
 const (
-	TypeModels       Type = "Semantic Model"       // Apache Ossie semantic model, spec verbatim in attrs.spec (design doc 0018; unvalidated since 0028)
-	TypeMetrics      Type = "Metric"               // semantic metric definition (Apache Ossie)
-	TypeQueries      Type = "Golden Query"         // golden query: question + verified SQL
+	TypeMetrics      Type = "Metric"               // semantic metric definition, synonyms
 	TypeComputations Type = "Attested Computation" // sanctioned computation and the means to check a run of it (OKF SPEC §10, design doc 0036 §3.6)
+	TypeSkills       Type = "Skill"                // the procedure an executor.resource points at (OKF SPEC §10.2)
+	TypePlaybooks    Type = "Playbook"             // an operational procedure people and agents follow (OKF SPEC §4.4)
 	TypeInsights     Type = "Insight"              // how to read a metric: baselines, caveats
+	TypePolicies     Type = "Policy"               // the rule that decides a number; what a sources[].resource cites
 	TypeTerms        Type = "Glossary Term"        // glossary term
 	TypeDatasets     Type = "BigQuery Dataset"     // dataset: a container grouping tables
 	TypeTables       Type = "BigQuery Table"       // table catalog entry
+	TypeEndpoints    Type = "API Endpoint"         // catalog entry for an asset that is not a BigQuery one
 	TypeReferences   Type = "Reference"            // mirror of external material (enums, licenses, schema docs)
 )
 
-// Types lists the recommended (built-in) knowledge types, in display order
-// (containers before their contents: models define metrics, datasets
-// group tables).
+// Types lists the recommended (built-in) knowledge types, in display order:
+// definitions, then the things you run, then interpretation and the rules
+// behind it, then catalog assets (containers before their contents), then
+// mirrors of outside material.
 //
 // No server behavior hangs off any of them — the list is a vocabulary, not
 // a registry (design doc 0028 §3). Attested Computation is the clearest
@@ -45,7 +48,21 @@ const (
 // acting on it — executing the computation and checking the receipt belong
 // to the consumer (OKF SPEC §10.5), which is the same line design doc 0028
 // drew when compile_sql went away.
-var Types = []Type{TypeModels, TypeMetrics, TypeQueries, TypeComputations, TypeInsights, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
+//
+// What earns a place is SPEC §4.1's one requirement of a producer — that
+// the spelling be descriptive and self-explanatory — read against what OKF
+// itself spells out (design doc 0038). "Semantic Model" and "Golden Query"
+// left on the first count: the one carried its meaning in a foreign spec
+// rather than in its spelling, and the other is what an Attested
+// Computation with a runtime already is. Skill, Playbook, Policy and API
+// Endpoint joined on the second — Skill and Policy are what an entry's own
+// executor.resource and sources[].resource point at, so leaving them out
+// left both ends of an edge ochakai already stores without a name.
+//
+// The retired spellings stay first-class as free types; only the
+// recommendation is gone.
+var Types = []Type{TypeMetrics, TypeComputations, TypeSkills, TypePlaybooks, TypeInsights,
+	TypePolicies, TypeTerms, TypeDatasets, TypeTables, TypeEndpoints, TypeReferences}
 
 // TypesHint renders the recommended vocabulary for help and error text,
 // so no surface keeps its own copy of the list to fall behind.
@@ -55,6 +72,22 @@ func TypesHint() string {
 		names[i] = string(t)
 	}
 	return strings.Join(names, ", ")
+}
+
+// TypesQuoted renders the recommended vocabulary as shell words, wrapping
+// the types that contain a space in q so the shell sees one word per type.
+// Completion scripts interpolate this rather than spelling the list out,
+// so the vocabulary has one home (design doc 0038 §4.4); q differs per
+// shell because each already uses the other quote around the whole list.
+func TypesQuoted(q string) string {
+	names := make([]string, len(Types))
+	for i, t := range Types {
+		names[i] = string(t)
+		if strings.Contains(names[i], " ") {
+			names[i] = q + names[i] + q
+		}
+	}
+	return strings.Join(names, " ")
 }
 
 // BuiltinType reports whether t is one of the recommended types, matched

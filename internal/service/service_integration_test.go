@@ -194,7 +194,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 
 	t.Run("drafts stay writable", func(t *testing.T) {
 		id := "queries/" + uid("guard-draft")
-		k, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeQueries, ID: id, Title: "draft"}, actor)
+		k, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeMetrics, ID: id, Title: "draft"}, actor)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,7 +221,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		t.Run(string(status)+" is refused", func(t *testing.T) {
 			id := "queries/" + uid("guard-"+string(status))
 			k, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeQueries, ID: id, Title: string(status),
+				Type: domain.TypeMetrics, ID: id, Title: string(status),
 				StatusNote: "because the numbers were wrong",
 			}, actor)
 			if err != nil {
@@ -255,7 +255,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	t.Run("a rejection cannot be laundered into a draft", func(t *testing.T) {
 		id := "queries/" + uid("guard-launder")
 		k, err := svc.Create(ctx, &domain.Knowledge{
-			Type: domain.TypeQueries, ID: id, Title: "rejected proposal",
+			Type: domain.TypeMetrics, ID: id, Title: "rejected proposal",
 			StatusNote: "duplicate of an existing golden query",
 		}, actor)
 		if err != nil {
@@ -287,7 +287,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		} {
 			id := "queries/" + uid("guard-tomb-"+string(status))
 			k, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeQueries, ID: id, Title: "ruled on then deleted",
+				Type: domain.TypeMetrics, ID: id, Title: "ruled on then deleted",
 				StatusNote: "duplicate of an existing golden query",
 			}, actor)
 			if err != nil {
@@ -308,7 +308,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			}
 			// The human surfaces still revive it, ruling and all.
 			revived, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeQueries, ID: id, Title: "revived by a human"}, human)
+				Type: domain.TypeMetrics, ID: id, Title: "revived by a human"}, human)
 			if err != nil {
 				t.Fatalf("a human surface must still be able to reuse the id: %v", err)
 			}
@@ -321,7 +321,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	t.Run("a draft tombstone stays revivable", func(t *testing.T) {
 		id := "queries/" + uid("guard-tomb-draft")
 		if _, err := svc.Create(ctx, &domain.Knowledge{
-			Type: domain.TypeQueries, ID: id, Title: "abandoned draft"}, actor); err != nil {
+			Type: domain.TypeMetrics, ID: id, Title: "abandoned draft"}, actor); err != nil {
 			t.Fatal(err)
 		}
 		if err := svc.Delete(ctx, id, actor); err != nil {
@@ -331,7 +331,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Fatalf("a deleted draft must stay revivable: %v", err)
 		}
 		if _, err := svc.Create(ctx, &domain.Knowledge{
-			Type: domain.TypeQueries, ID: id, Title: "second attempt"}, actor); err != nil {
+			Type: domain.TypeMetrics, ID: id, Title: "second attempt"}, actor); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
@@ -345,7 +345,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		}
 		id := "queries/" + uid("guard-tomb-live")
 		k, err := svc.Create(ctx, &domain.Knowledge{
-			Type: domain.TypeQueries, ID: id, Title: "live"}, actor)
+			Type: domain.TypeMetrics, ID: id, Title: "live"}, actor)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -370,7 +370,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		} {
 			id := "queries/" + uid("guard-live-"+string(status))
 			k, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeQueries, ID: id, Title: "ruled on",
+				Type: domain.TypeMetrics, ID: id, Title: "ruled on",
 				StatusNote: "duplicate of an existing golden query"}, actor)
 			if err != nil {
 				t.Fatal(err)
@@ -381,7 +381,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			}
 
 			_, err = svc.CreateKeepingCurated(ctx, &domain.Knowledge{
-				Type: domain.TypeQueries, ID: id, Title: "re-proposal"}, actor)
+				Type: domain.TypeMetrics, ID: id, Title: "re-proposal"}, actor)
 			if !errors.Is(err, store.ErrAlreadyExists) {
 				t.Fatalf("create over a live %s entry: got %v, want ErrAlreadyExists", status, err)
 			}

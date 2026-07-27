@@ -60,7 +60,7 @@ func TestSearchSortSendsSortParam(t *testing.T) {
 		got = r.URL.Query()
 		// The verified_at feed returns entries without scores.
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.Knowledge{
-			{Type: domain.TypeQueries, ID: "monthly-revenue", Title: "月次売上"},
+			{Type: domain.TypeComputations, ID: "monthly-revenue", Title: "月次売上"},
 		}})
 	})
 	hits, err := c.Search(context.Background(), SearchParams{Sort: "verified_at", Limit: 100})

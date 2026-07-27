@@ -1,8 +1,11 @@
 # ochakai 設計ドキュメント 0018: import-ossie の廃止 — セマンティックモデルを通常ナレッジにする
 
 Status: Accepted(2026-07-19)。[0028](0028-retire-compile-sql.md) が
-compile_sql と書き込み時検証(§4.2・§4.3)を撤去 — import-ossie 廃止と
-「モデルは通常のナレッジエントリ」の決定は有効
+compile_sql と書き込み時検証(§4.2・§4.3)を撤去し、
+[0038](0038-type-vocabulary-realignment.md) §3.1 が §4.1 の推奨タイプ
+`Semantic Model` を語彙から外した(モデルは自由型として引き続き
+第一級)— import-ossie 廃止と「モデルは通常のナレッジエントリ」の
+決定は有効
 Date: 2026-07-19
 
 ## 1. 目的

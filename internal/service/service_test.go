@@ -332,23 +332,31 @@ func TestExampleGoldenQueryRegisters(t *testing.T) {
 		t.Errorf("the shipped example should parse without reinterpretation: %v", notes)
 	}
 	k.ID = "queries/monthly-revenue"
-	if k.Type != domain.TypeQueries {
-		t.Errorf("type = %q, want %q", k.Type, domain.TypeQueries)
+	if k.Type != domain.TypeComputations {
+		t.Errorf("type = %q, want %q", k.Type, domain.TypeComputations)
 	}
 	if err := validate(k); err != nil {
 		t.Errorf("example entry rejected: %v", err)
 	}
 	if q, _ := k.Attrs["question"].(string); q == "" {
-		t.Error("attrs.question missing: a golden query without its question is not searchable as one")
+		t.Error("attrs.question missing: a verified query without its question is not searchable as one")
 	}
-	if sql, _ := k.Attrs["sql"].(string); !strings.Contains(sql, "SELECT") {
-		t.Errorf("attrs.sql = %q", k.Attrs["sql"])
+	// The computation belongs in the body fence, not in attrs: SPEC §10.2
+	// makes the fence the computation when no external file is named, and
+	// an attester canonicalizes what a run executed against it. Keeping a
+	// second copy under attrs.sql would leave a consumer no way to tell
+	// which of the two is authoritative (design doc 0038 §3.3).
+	if !strings.Contains(k.Body, "# Computation") || !strings.Contains(k.Body, "SELECT") {
+		t.Errorf("the computation must be a # Computation fence in the body, got %q", k.Body)
+	}
+	if _, ok := k.Attrs["sql"]; ok {
+		t.Error("attrs.sql duplicates the body fence: one computation, one home")
 	}
 }
 
 // packWithinBudget delivers whole entries or none: a body cut in half
-// still looks like a body, and half of a golden query's SQL still looks
-// executable.
+// still looks like a body, and half of an attested computation's SQL
+// still looks executable.
 func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	entry := func(id string, bodyBytes int) domain.Knowledge {
 		return domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: id,
@@ -385,7 +393,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 		}
 	})
 
-	// A Semantic Model carries its whole spec in attrs and can outweigh the
+	// A model entry carries its whole spec in attrs and can outweigh the
 	// entire budget. A prefix cut would let it starve everything below it;
 	// greedy packing keeps the rest and names the giant.
 	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
@@ -442,10 +450,10 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 		}
 	})
 
-	// attrs, not just the body: a Semantic Model's spec is the largest
+	// attrs, not just the body: a semantic model's spec is the largest
 	// payload in the base and lives entirely in attrs.
 	t.Run("size counts attrs", func(t *testing.T) {
-		bare := domain.Knowledge{Type: domain.TypeModels, ID: "models/m"}
+		bare := domain.Knowledge{Type: domain.Type("Semantic Model"), ID: "models/m"}
 		withSpec := bare
 		withSpec.Attrs = map[string]any{"spec": strings.Repeat("y", 2000)}
 		if serializedSize(&withSpec) <= serializedSize(&bare)+1000 {

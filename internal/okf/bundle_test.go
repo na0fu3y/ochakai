@@ -56,9 +56,9 @@ func writeTarGz(t *testing.T, w io.Writer, files map[string][]byte, modTime time
 func TestBundleNestedDirectories(t *testing.T) {
 	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	entries := []domain.Knowledge{
-		{Type: domain.TypeQueries, ID: "queries/sales/monthly-revenue", Title: "月次売上",
+		{Type: domain.TypeComputations, ID: "queries/sales/monthly-revenue", Title: "月次売上",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
-		{Type: domain.TypeQueries, ID: "queries/sales/refunds/by-region", Title: "地域別返金",
+		{Type: domain.TypeComputations, ID: "queries/sales/refunds/by-region", Title: "地域別返金",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
 		{Type: "runbook", ID: "ops/restore", Title: "リストア手順",
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"}, Status: domain.StatusDraft, UpdatedAt: now},
@@ -95,7 +95,7 @@ func TestBundleRoundTrip(t *testing.T) {
 		{Type: "Data Contract", ID: "contracts/orders", Title: "注文契約", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
 			Attrs:     map[string]any{"owner": "sales"}, UpdatedAt: now},
-		{Type: domain.TypeQueries, ID: "queries/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
+		{Type: domain.TypeComputations, ID: "queries/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
 			Description: "月ごとの売上",
 			CreatedBy:   domain.Actor{Kind: "human", Name: "na0"},
 			Tags:        []string{"sales"},

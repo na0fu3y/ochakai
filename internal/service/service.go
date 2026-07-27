@@ -679,12 +679,12 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 // both. budget <= 0 means no cap.
 //
 // Entries are atomic: an entry is delivered whole or not at all. Cutting a
-// body mid-way would be worse than dropping it — half of a Golden Query's
-// attrs.sql still looks executable, and half a semantic model spec is not
-// a spec. Nothing downstream can tell a truncated field from a short one.
+// body mid-way would be worse than dropping it — half of an attested
+// computation's SQL still looks executable, and half a model spec is not a
+// spec. Nothing downstream can tell a truncated field from a short one.
 //
 // Packing is greedy rather than a prefix cut: one oversized entry high in
-// the ranking (a Semantic Model carries its entire spec in attrs) would
+// the ranking (a model entry carries its entire spec in attrs) would
 // otherwise starve everything below it. An entry larger than the whole
 // budget always becomes an outline row, even at rank 1 — the caller sees
 // its size and can fetch it deliberately.
@@ -771,8 +771,8 @@ func outlineRow(k *domain.Knowledge, size int) domain.ContextOutline {
 }
 
 // serializedSize is what the entry costs on the wire — attrs included. A
-// body-only measure would miss the largest payload in the base, a
-// Semantic Model's attrs.spec.
+// body-only measure would miss the largest payload in the base, the spec
+// a model entry keeps in attrs.
 func serializedSize(k *domain.Knowledge) int {
 	b, err := json.Marshal(k)
 	if err != nil {

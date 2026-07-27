@@ -157,9 +157,15 @@ its filename — and ids are NFC-normalized and searchable in their own
 right (design doc [0022](design/0022-filename-as-name.md)).
 
 **Types are an open set with a recommended vocabulary.** The spellings
-are the OKF knowledge-catalog vocabulary verbatim — `Golden Query`, not a
-slug — so a bundle's types survive a round-trip with no translation layer
-in between (design doc [0023](design/0023-okf-type-vocabulary.md)). Any
+are the OKF knowledge-catalog vocabulary verbatim — `Attested
+Computation`, not a slug — so a bundle's types survive a round-trip with
+no translation layer in between (design doc
+[0023](design/0023-okf-type-vocabulary.md)). What earns a place in the
+recommended eleven is SPEC §4.1's one demand of a producer — that the
+spelling be descriptive and self-explanatory — read against the spellings
+OKF itself supplies, in the spec's own examples and in its reference
+bundles (design doc
+[0038](design/0038-type-vocabulary-realignment.md)). Any
 single-line string works as a type. `status`, by contrast, is a closed
 set: `draft`, `verified`, `deprecated`, `rejected`. `rejected` is the
 one that most stores lack — it records that a proposal was considered and

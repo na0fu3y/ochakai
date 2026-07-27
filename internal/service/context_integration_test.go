@@ -59,7 +59,7 @@ func TestContextIntegration(t *testing.T) {
 		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
 			Status: domain.StatusVerified,
 			Body:   "Answered by [the monthly query](/" + queryID + ".md)."},
-		{Type: domain.TypeQueries, ID: queryID, Title: "monthly numbers"},
+		{Type: domain.TypeComputations, ID: queryID, Title: "monthly numbers"},
 		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
 			Body: "Explains ochakai://" + metricID + "."},
 		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",

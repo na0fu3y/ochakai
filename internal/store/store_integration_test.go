@@ -226,7 +226,7 @@ func TestIntegration(t *testing.T) {
 	// the default filter.
 	oldAt := time.Now().UTC().Add(-365 * 24 * time.Hour)
 	older := &domain.Knowledge{
-		Type: domain.TypeQueries, ID: "it-old-query", Title: "古い検証済みクエリ",
+		Type: domain.TypeComputations, ID: "it-old-query", Title: "古い検証済みクエリ",
 		Status:     domain.StatusVerified,
 		CreatedBy:  domain.Actor{Kind: "human", Name: "test"},
 		VerifiedBy: &domain.Actor{Kind: "human", Name: "test"}, VerifiedAt: &oldAt,
@@ -314,7 +314,7 @@ func TestIntegration(t *testing.T) {
 	verifiedAt := time.Now().UTC().Add(-30 * 24 * time.Hour)
 	newFail := func(id, title string, status domain.Status, verified bool) *domain.Knowledge {
 		k := &domain.Knowledge{
-			Type: domain.TypeQueries, ID: id, Title: title, Tags: []string{failTag},
+			Type: domain.TypeComputations, ID: id, Title: title, Tags: []string{failTag},
 			Status: status, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 		}
 		if verified {
@@ -1641,7 +1641,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	}
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.com"}
 	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
-	k := &domain.Knowledge{Type: domain.TypeQueries, ID: id, Title: "月次売上",
+	k := &domain.Knowledge{Type: domain.TypeComputations, ID: id, Title: "月次売上",
 		Status: domain.StatusDraft, CreatedBy: agent}
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)

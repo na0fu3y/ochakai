@@ -12,16 +12,16 @@ service-account ADC; there are no tokens to configure:
 it is reachable.
 -->
 
-ochakai holds metric definitions, verified golden queries, interpretation
-knowledge (how to read a metric), glossary terms, and table catalog
-entries. Search it before writing analytics SQL; write learnings back.
+ochakai holds metric definitions, attested computations (sanctioned SQL,
+including verified golden queries), interpretation knowledge (how to read
+a metric), glossary terms, and table catalog entries. Search it before writing analytics SQL; write learnings back.
 
 - `ochakai context "<question>"` — the one call to make before answering
   a data question: prints the full entries behind the top hits (verified
   entries rank higher), expanded one hop through links so the insight
   explaining a metric arrives with it. Start here; use search/get below
   for precise lookups.
-- `ochakai search "<question or keyword>" [--type Metric|'Golden Query'|Insight|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|Reference] [--status verified]`
+- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Playbook|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|'API Endpoint'|Reference] [--status verified]`
   — one hit per line: score, uri, status, title. Trust `verified` entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
 - `ochakai get <id>` — full entry as markdown (YAML frontmatter +
@@ -37,7 +37,7 @@ entries. Search it before writing analytics SQL; write learnings back.
   attachment, write it into the body with `ochakai update` — knowledge
   locked in pixels is invisible to search.
 - `ochakai report <id> worked|failed [--note "what went wrong"]`
-  — after acting on knowledge (running a golden query, running SQL you
+  — after acting on knowledge (running an attested computation, running SQL you
   wrote from a metric definition), report whether the result was actually correct. `failed` reports
   flag verified entries for re-verification, so the next agent doesn't
   trust a stale entry blind. Always report `failed` when a verified entry
@@ -54,5 +54,6 @@ IDs may be hierarchical (`queries/sales/monthly-revenue`) to group
 related knowledge.
 
 When a query you wrote turns out to be correct and useful,
-save it: `type: Golden Query` with `attrs.question` (the natural-language
-question) and `attrs.sql`. A human can promote it to `verified` later.
+save it: `type: Attested Computation` with `runtime` (where the SQL runs),
+the SQL in a `# Computation` fence in the body, and `attrs.question` (the
+natural-language question). A human can promote it to `verified` later.

@@ -426,7 +426,7 @@ func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 	body := strings.Repeat("x", 4000)
 	hits := []domain.SearchHit{{
 		Knowledge: domain.Knowledge{
-			Type: domain.TypeQueries, ID: "queries/monthly-revenue",
+			Type: domain.TypeComputations, ID: "queries/monthly-revenue",
 			Status: domain.StatusVerified, Body: body,
 			Attrs: map[string]any{"sql": "SELECT 1"},
 		},
@@ -551,5 +551,49 @@ func TestListSortsAreTheSameEverywhere(t *testing.T) {
 	}
 	if domain.ValidListSort("stale") {
 		t.Error("ValidListSort accepts a value no surface implements")
+	}
+}
+
+// TestToolSchemasCarryTheTypeVocabulary pins what an agent actually sees.
+// The tool descriptions interpolate domain.TypesHint(), but the jsonschema
+// struct tags cannot — they are compile-time constants — so their copy of
+// the vocabulary drifts silently. It already had: before design doc 0038
+// the search filters listed seven types, create listed eight, and the
+// server's own instructions listed nine. An agent picks its --type value
+// from these strings, so a missing type is a type nobody filters on and a
+// retired one is a type nobody has (design doc 0038 §4.4).
+func TestToolSchemasCarryTheTypeVocabulary(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	// Only the tools that take a type: the read filters and the writes.
+	want := map[string]bool{"search_knowledge": true, "get_context": true,
+		"create_knowledge": true, "update_knowledge": true}
+	seen := 0
+	for _, tool := range res.Tools {
+		if !want[tool.Name] {
+			continue
+		}
+		seen++
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s schema: %v", tool.Name, err)
+		}
+		text := tool.Description + string(raw)
+		for _, ty := range domain.Types {
+			if !strings.Contains(text, string(ty)) {
+				t.Errorf("%s never names the recommended type %q", tool.Name, ty)
+			}
+		}
+		for _, retired := range []string{"Semantic Model", "Golden Query"} {
+			if strings.Contains(text, retired) {
+				t.Errorf("%s still recommends %q, retired by design doc 0038", tool.Name, retired)
+			}
+		}
+	}
+	if seen != len(want) {
+		t.Errorf("checked %d type-taking tools, want %d", seen, len(want))
 	}
 }

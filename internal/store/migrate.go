@@ -174,7 +174,7 @@ const hnswMaxDim = 2000
 // migrateVectorIndexes builds the HNSW indexes behind semantic search.
 // 0001 left them out on the grounds that an exact scan is fine at
 // knowledge-base scale — true at a few thousand rows, but a table
-// specification plus a glossary plus the Golden Queries and Insights the
+// specification plus a glossary plus the computations and insights the
 // write-back loop accumulates passes that within a year, and every search
 // reads every vector until it does not.
 //

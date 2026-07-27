@@ -22,7 +22,7 @@ import (
 // been told the entry came from a parser.
 func FuzzParse(f *testing.F) {
 	f.Add([]byte("---\ntype: Metric\ntitle: Revenue\n---\n\nThe headline number.\n"))
-	f.Add([]byte("---\ntype: Golden Query\nstatus: stable\nverified:\n  - by: human:a@b.c\n---\n"))
+	f.Add([]byte("---\ntype: Attested Computation\nstatus: stable\nverified:\n  - by: human:a@b.c\n---\n"))
 	f.Add([]byte("---\ntype: Insight\nstale_after: 2026-12-31\ntags: [sales, orders]\n---\nbody"))
 	f.Add([]byte("---\ntype: Insight\ntags: sales, orders\nstatus: nonsense\n---\n"))
 	f.Add([]byte("---\ntype: Reference\nsources:\n  - last_modified: 2026-01-02\n---\n"))
@@ -91,7 +91,7 @@ func FuzzParse(f *testing.F) {
 // about them. Worth extending when someone next touches them.
 func FuzzDocumentRoundTrip(f *testing.F) {
 	f.Add("Metric", "Revenue", "The headline number", "sales,orders", "verified", "2026-12-31", "Body text.")
-	f.Add("Golden Query", "", "", "", "draft", "", "")
+	f.Add("Attested Computation", "", "", "", "draft", "", "")
 	f.Add("Attested Computation", "T", "D", "one", "rejected", "", "- a list\n- of things")
 	f.Add("カスタム型", "タイトル", "説明", "タグ", "deprecated", "", "本文です。")
 	f.Add("Insight", "  padded  ", "", "a,,b", "", "not-a-date", "  \n  ")

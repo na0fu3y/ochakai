@@ -1,5 +1,5 @@
 // ochakai is a context provider for data agents: one knowledge base for
-// metric definitions, verified golden queries, interpretation knowledge,
+// metric definitions, attested computations, interpretation knowledge,
 // glossary terms, and table catalogs, served over MCP and REST.
 package main
 

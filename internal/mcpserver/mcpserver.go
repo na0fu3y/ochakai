@@ -85,11 +85,13 @@ func requestCtx(ctx context.Context, cfg *config.Config, req extraProvider) (con
 
 func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
-		Instructions: "ochakai is a context provider for data agents: semantic models, " +
-			"metric definitions, verified golden queries, interpretation knowledge (how to " +
-			"read a metric), glossary terms, dataset and table catalog entries, and references " +
+		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
+			"attested computations (sanctioned SQL and other computations, including verified " +
+			"question-and-answer queries), interpretation knowledge (how to read a metric), " +
+			"glossary terms, dataset and table catalog entries, and references " +
 			"(mirrors of external material such as enum definitions or schema docs) — those " +
-			"types are recommendations, and any slug works as a type for your own document kinds. " +
+			"types are recommendations, and any single-line string works as a type for your own " +
+			"document kinds. " +
 			"An entry's id is its path: slash-separated segments (e.g. metrics/revenue, " +
 			"ga4/tables/orders) forming directories. Place together what should be read " +
 			"together; the type is metadata, not a location. " +
@@ -98,7 +100,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"entries in full, links expanded. " +
 			"Prefer verified knowledge and judge trust from provenance (created_by / updated_by / verified_by), " +
 			"and treat an entry whose stale_after has passed as due for re-checking, not as wrong. " +
-			"After acting on knowledge (running a golden query, writing SQL from a metric definition), report " +
+			"After acting on knowledge (running an attested computation, writing SQL from a metric definition), report " +
 			"whether it actually worked with report_outcome — failed reports are how stale " +
 			"verified knowledge gets caught. " +
 			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
@@ -157,14 +159,14 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_knowledge",
 		Annotations: readOnly,
-		Description: "Search the knowledge base across all types (recommended: Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference; custom types welcome). " +
+		Description: "Search the knowledge base across all types (recommended: " + domain.TypesHint() + "; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Attachments count too — filenames and file contents — and a hit is always the owning entry. " +
 			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +
 			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
-			"golden-query canary runs and for finding stale verified knowledge. With sort=\"usage\" it " +
+			"canary runs and for finding stale verified knowledge. With sort=\"usage\" it " +
 			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
 			"each hit carries its usage totals — the draft review/promotion feed. With sort=\"failed\" it " +
 			"lists entries callers reported wrong (report_outcome failed), worst first — the re-verification " +
@@ -225,8 +227,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Annotations: readOnly,
 		Description: "The one call to make before answering a data question: searches the knowledge " +
 			"base (verified entries rank higher), returns the full entries behind the top hits, " +
-			"and expands one hop through links so the insight explaining a metric and the golden " +
-			"query answering the question arrive together. Prefer this over search+get chains; " +
+			"and expands one hop through links so the insight explaining a metric and the " +
+			"computation answering the question arrive together. Prefer this over search+get chains; " +
 			"fall back to search_knowledge/get_knowledge for precise lookups. \"entries\" is the " +
 			"knowledge; \"hits\" is only the ranking behind it. Entries that do not fit the byte " +
 			"budget are listed under \"outline\" — fetch any of them by id with get_knowledge.",
@@ -285,13 +287,14 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"An \"Attested Computation\" entry records a sanctioned computation others must run instead of " +
 			"improvising: put the computation in a # Computation fence in body and the contract in the " +
 			"runtime, parameters, executor and attester fields. ochakai stores it and never runs it. " +
+			"A verified question-and-SQL pair is one of these: runtime says where the SQL runs, and " +
+			"attrs.question carries the natural-language question it answers. " +
 			"Cite the material an entry derives from in sources — each needs a resource, and an id lets " +
 			"markdown footnotes in body attribute single claims to it. " +
 			"Set stale_after when the knowledge has a known expiry date. " +
-			"A semantic model is a \"Semantic Model\" entry with the Apache Ossie model object in attrs.spec " +
-			"(one entry per model). Give each metric its own entry too (last id segment = the metric " +
-			"name, e.g. metrics/<name>) with attrs.expression holding the expression, so the " +
-			"definitions are searchable on their own; have table entries link to the Semantic Model entry from their body. " +
+			"Give each metric its own \"Metric\" entry (last id segment = the metric name, e.g. " +
+			"metrics/<name>) so definitions are searchable on their own, and have table entries link " +
+			"to it from their body. " +
 			"Links are never a field: write a markdown link to the other entry's path in body — " +
 			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other entry gains a backlink). " +
 			"An id whose entry was deleted can be reused, which revives it as your draft — unless a human had " +
@@ -433,7 +436,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "report_outcome",
 		Annotations: nonDestructive,
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
-			"write-back loop. After running a golden query or SQL you wrote from an entry, report worked " +
+			"write-back loop. After running an attested computation or SQL you wrote from an entry, report worked " +
 			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
 			"Reports feed the entry's usage totals (get_knowledge_usage), where failed counts " +
 			"against verified entries flag them for re-verification. Your identity is recorded " +
@@ -491,7 +494,7 @@ type searchIn struct {
 	// rejects it — exactly one of query / sort must be set (the service
 	// rejects an empty search, the handler rejects the combination).
 	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string   `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
@@ -511,7 +514,7 @@ type searchOut struct {
 // actually needs to bound a response is budget.
 type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Golden Query, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
@@ -582,7 +585,7 @@ type deleteOut struct {
 }
 
 type writeIn struct {
-	Type        string              `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Golden Query, Attested Computation, Insight, Glossary Term, BigQuery Dataset, BigQuery Table, Reference — any custom type works"`
+	Type        string              `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference — any custom type works"`
 	ID          string              `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
 	Title       string              `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
 	Description string              `json:"description,omitempty"`
@@ -598,7 +601,7 @@ type writeIn struct {
 	Computation string              `json:"computation,omitempty" jsonschema:"path to the file holding the computation; omit to put it inline in a # Computation fence in body"`
 	Executor    *domain.Executor    `json:"executor,omitempty" jsonschema:"how the computation is run and what a run must return as evidence: {resource, receipt}; ochakai records this and never runs it"`
 	Attester    *domain.Attester    `json:"attester,omitempty" jsonschema:"the deterministic checker for a run: {resource}; ochakai records the path and never executes it"`
-	Attrs       map[string]any      `json:"attrs,omitempty" jsonschema:"producer-defined extension keys, e.g. question/sql for a query; the keys OKF itself defines are fields of their own above and are rejected here"`
+	Attrs       map[string]any      `json:"attrs,omitempty" jsonschema:"producer-defined extension keys, e.g. question/sql for an Attested Computation holding a verified query; the keys OKF itself defines are fields of their own above and are rejected here"`
 	Body        string              `json:"body,omitempty" jsonschema:"markdown body; link to other entries by writing a markdown link to their path — [revenue](/metrics/revenue.md) — and those links become the entry's links"`
 }
 

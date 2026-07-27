@@ -53,10 +53,11 @@ func TestParseRoundTrip(t *testing.T) {
 
 func TestParseAcceptsRawTypeAndHandWrittenDoc(t *testing.T) {
 	k, _, err := Parse([]byte(`---
-type: Golden Query
+type: Attested Computation
 id: monthly-revenue
 title: 月次売上
 status: draft
+runtime: bigquery
 question: 月ごとの売上は？
 sql: SELECT 1
 ---
@@ -66,7 +67,7 @@ Body text here.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Type != domain.TypeQueries || k.ID != "monthly-revenue" {
+	if k.Type != domain.TypeComputations || k.ID != "monthly-revenue" {
 		t.Errorf("got %s/%s", k.Type, k.ID)
 	}
 	if k.Attrs["sql"] != "SELECT 1" {

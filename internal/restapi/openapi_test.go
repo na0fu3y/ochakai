@@ -24,6 +24,8 @@ import (
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 	valerrors "github.com/pb33f/libopenapi-validator/errors"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
 const specPath = "../../api/openapi.yaml"
@@ -184,4 +186,37 @@ func reportSpecErrors(t *testing.T, what string, r *http.Request, errs []*valerr
 		}
 	}
 	t.Errorf("%s %s: %s does not match api/openapi.yaml:%s", r.Method, r.URL.RequestURI(), what, b.String())
+}
+
+// TestOpenAPITypeVocabularyMatchesDomain pins the Type schema against
+// domain.Types. The spec is a static document, so its copy of the
+// vocabulary can only drift, and a free-type model means drift is silent:
+// a retired spelling left in `examples` goes on recommending itself to
+// every reader of the public wire surface without failing anything
+// (design doc 0038 §4.4).
+func TestOpenAPITypeVocabularyMatchesDomain(t *testing.T) {
+	raw, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := string(raw)
+	i := strings.Index(spec, "    Type:\n")
+	if i < 0 {
+		t.Fatal("the Type schema is gone from api/openapi.yaml")
+	}
+	// Up to the next sibling schema (four-space key), which is Status.
+	block := spec[i:]
+	if end := strings.Index(block, "\n    Status:"); end >= 0 {
+		block = block[:end]
+	}
+	for _, ty := range domain.Types {
+		if !strings.Contains(block, string(ty)) {
+			t.Errorf("the Type schema never mentions the recommended type %q", ty)
+		}
+	}
+	for _, retired := range []string{"Semantic Model", "Golden Query"} {
+		if strings.Contains(block, retired) {
+			t.Errorf("the Type schema still lists %q, retired by design doc 0038", retired)
+		}
+	}
 }

@@ -4,7 +4,9 @@ Status: Accepted(2026-07-27)。[0005](0005-okf-compatibility.md) と
 [0016](0016-knowledge-catalog-alignment.md) を Superseded にし、
 [0009](0009-provenance-portability.md) §4 と
 [0023](0023-okf-type-vocabulary.md) §3.1 を改訂する。
-**OKF 互換領域の現行ドキュメント**。実装は同 PR、次のリリース(0.14.0)で出る
+**OKF 互換領域の現行ドキュメント**。実装は同 PR、次のリリース(0.14.0)で出る。
+§3.6 の 9 型は [0038](0038-type-vocabulary-realignment.md) が 11 型に組み替えた
+(`Attested Computation` を語彙に足した決定そのものは有効)
 Date: 2026-07-27
 
 ## 1. 目的

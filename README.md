@@ -299,14 +299,16 @@ over time, run them as canaries from your CI:
 
 | Type | What it holds |
 |---|---|
-| `Semantic Model` | Apache Ossie semantic model, spec verbatim in `attrs.spec` |
-| `Metric` | Semantic metric definition (Apache Ossie), synonyms |
-| `Golden Query` | Golden query: natural-language question + verified SQL |
-| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it |
+| `Metric` | Semantic metric definition, synonyms |
+| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it. A golden query is one of these: `runtime` says where the SQL runs, `attrs.question` carries the question it answers |
+| `Skill` | A procedure an entry's `executor.resource` points at — how to actually run a computation on a given runtime |
+| `Playbook` | An operational procedure people and agents follow, bound to no resource: incident triage, an on-call runbook |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
+| `Policy` | The rule that decides a number — revenue recognition, cost allocation. What an entry's `sources[].resource` cites |
 | `Glossary Term` | Glossary term |
 | `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
 | `BigQuery Table` | BigQuery table catalog entry: source, column notes, known issues |
+| `API Endpoint` | Catalog entry for an asset that is not a BigQuery one |
 | `Reference` | Mirror of external material: enum definitions, licenses, schema docs |
 
 These are recommendations, not a closed set — any single-line value works as a type for your
@@ -315,7 +317,7 @@ own document kinds, and IDs may be hierarchical
 The type values are the [OKF knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf/bundles)
 vocabulary verbatim: OKF registers no taxonomy, so the spelling is the
 meaning, and a bundle's types survive an import/export round-trip unchanged
-with no translation layer (design doc 0023). Matching is case-insensitive;
+with no translation layer (design docs 0023, 0038). Matching is case-insensitive;
 the spelling you write is the one stored. A type is not an address — the
 directory layout of an exported bundle comes from entry IDs alone (design
 doc 0017), so you are free to organize files however you like.
@@ -352,7 +354,8 @@ entry carries its provenance, trust and lifecycle (SPEC §5) where a
 consumer that has never heard of ochakai will look for them.
 
 ```yaml
-type: Golden Query
+type: Attested Computation
+runtime: bigquery
 title: Monthly revenue by channel
 sources:
   - id: rev-policy
