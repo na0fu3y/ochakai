@@ -555,7 +555,7 @@ func validate(k *domain.Knowledge) error {
 		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
-		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
+		return Invalidf("invalid status %q (valid: %s)", k.Status, domain.StatusesHint())
 	}
 	if !domain.ValidStaleAfter(k.StaleAfter) {
 		return Invalidf("invalid stale_after %q (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)", k.StaleAfter)

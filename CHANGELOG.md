@@ -71,6 +71,17 @@ last entry.
 
 ### Fixed
 
+- The invalid-status error names the statuses there are. It offered
+  `draft, verified, deprecated, rejected` — two of which stopped being
+  statuses when design doc
+  [0043](docs/design/0043-document-first.md) §§3.2-3.3 moved confirmation
+  into the verification ledger and rejection into a ruling — and omitted
+  `stable`, the value the writer usually wants. A caller who wrote
+  `status: published` was told to retry with `verified`, which fails the
+  same way. It now renders `domain.Statuses` like every other
+  enumeration, and a test reads the whole tree for a lifecycle list
+  spelled by hand, so this copy cannot come back.
+
 - Producer-defined keys **inside** a `sources` entry, a `parameter`, an
   `executor` or an `attester` are kept rather than dropped (SPEC §4.1,
   design doc [0043](docs/design/0043-document-first.md) §3.6). They ride

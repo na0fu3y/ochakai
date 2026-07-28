@@ -257,7 +257,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	status, known := domain.StatusFromOKF(strings.TrimSpace(fm.status))
 	if !known {
 		notes = append(notes, fmt.Sprintf("status %q is not an OKF lifecycle value (%s); read as %s",
-			fm.status, statusesHint(), status))
+			fm.status, domain.StatusesHint(), status))
 	}
 	if !domain.ValidStaleAfter(fm.staleAfter) {
 		notes = append(notes, fmt.Sprintf("stale_after %q is not a YYYY-MM-DD date; dropped", fm.staleAfter))
@@ -306,16 +306,6 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		// §2.2), and the fields above are the index derived from it.
 		Doc: string(StripServerKeys(NormalizeText([]byte(s)))),
 	}}, fm.typ, notes, nil
-}
-
-// statusesHint renders the lifecycle vocabulary for a note, from the one
-// place it is spelled.
-func statusesHint() string {
-	names := make([]string, len(domain.Statuses))
-	for i, st := range domain.Statuses {
-		names[i] = string(st)
-	}
-	return strings.Join(names, ", ")
 }
 
 // The v0.2 family readers. All of them follow the same rule: never reject
