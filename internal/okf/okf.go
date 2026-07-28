@@ -319,12 +319,11 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 	}
 }
 
-// actorEvent renders one trust event. The actor's kind:name form already
-// matches SPEC §7 for people ("human:tanaka@example.co.jp"); agents keep
-// ochakai's "agent:" prefix rather than being dressed up as a versioned
-// producer or relabelled process, because §5.3 keys trust tiers off the
-// human: prefix alone and nothing else in the convention is load-bearing
-// (design doc 0036 §3.11).
+// actorEvent renders one trust event. The actor's kind:name form is SPEC
+// §7 verbatim on both kinds — "human:tanaka@example.co.jp" and
+// "process:sync@example.iam.gserviceaccount.com" (design doc 0043 §3.8).
+// The convention's third form, "<producer>/<version>", stays unused: a
+// service account has no version to name.
 func actorEvent(a *domain.Actor, at *time.Time) event {
 	var e event
 	if a != nil && (a.Kind != "" || a.Name != "") {

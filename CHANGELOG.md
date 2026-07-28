@@ -20,6 +20,21 @@ last entry.
 
 ### Changed
 
+- **BREAKING**: the actor kind for anything that is not a person is
+  `process`, not `agent` — the spelling OKF SPEC §7 defines (design doc
+  [0043](docs/design/0043-document-first.md) §3.8). `agent` was never a
+  spelling the spec offered, and the distinction it drew is one nothing
+  in ochakai ever read: SPEC §5.3 derives trust from the `human:` prefix
+  alone. A client reading `actor.kind` must accept `process`, and
+  `X-Ochakai-On-Behalf-Of: agent:…` is now a 400 — send `process:…`.
+  Exported bundles write `generated: { by: process:… }` and
+  `created_by: process:…`, so the next export of a git-tracked bundle
+  shows that diff. Migration `0022` rewrites every stored actor kind and
+  every `via` (which holds a whole `kind:name` string), in the entries,
+  their revisions and revision snapshots, the usage events, the
+  attachments and the purge log. It moves no `updated_at`, so no held
+  ETag is invalidated and nothing needs re-embedding.
+
 - `api/openapi.yaml`'s examples stop teaching `type: Golden Query` with
   the SQL in `attrs`. 0.15.0 retired that spelling and rewrote the shipped
   example and the canary guide onto `Attested Computation`, but the spec's

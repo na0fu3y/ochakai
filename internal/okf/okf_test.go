@@ -22,8 +22,8 @@ func sample() []domain.Knowledge {
 			Title: "売上の季節性", Description: "12月は繁忙期",
 			Tags: []string{"sales"}, Status: domain.StatusVerified,
 			StaleAfter: "2026-12-31",
-			CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
-			UpdatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
+			CreatedBy:  domain.Actor{Kind: "process", Name: "claude-code"},
+			UpdatedBy:  domain.Actor{Kind: "process", Name: "claude-code"},
 			VerifiedBy: &domain.Actor{Kind: "human", Name: "na0"}, VerifiedAt: &verifiedAt,
 			Attrs:     map[string]any{"kind": "seasonality"},
 			Body:      "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
@@ -33,7 +33,7 @@ func sample() []domain.Knowledge {
 			Type: domain.TypeTables, ID: "tables/orders",
 			Title: "orders", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
-			UpdatedBy: domain.Actor{Kind: "human", Name: "na0", Via: "agent:insightflow"},
+			UpdatedBy: domain.Actor{Kind: "human", Name: "na0", Via: "process:insightflow"},
 			Resource:  "myproject.shop.orders",
 			Attrs:     map[string]any{"model": "sales_analytics"},
 			UpdatedAt: verifiedAt,
@@ -68,7 +68,7 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 		"title":       "売上の季節性",
 		"status":      "stable",
 		"stale_after": "2026-12-31",
-		"created_by":  "agent:claude-code",
+		"created_by":  "process:claude-code",
 	} {
 		if fm[key] != want {
 			t.Errorf("frontmatter %s = %v, want %v", key, fm[key], want)
@@ -80,7 +80,7 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 		}
 	}
 	generated, _ := fm["generated"].(map[string]any)
-	if generated["by"] != "agent:claude-code" || generated["at"] != "2026-07-01T00:00:00Z" {
+	if generated["by"] != "process:claude-code" || generated["at"] != "2026-07-01T00:00:00Z" {
 		t.Errorf("generated = %v, want the last content author and change time", fm["generated"])
 	}
 	verified, _ := fm["verified"].([]any)
@@ -154,7 +154,7 @@ func TestDocumentDelegatedActor(t *testing.T) {
 		t.Fatal(err)
 	}
 	generated, _ := fm["generated"].(map[string]any)
-	if generated["by"] != "human:na0" || generated["via"] != "agent:insightflow" {
+	if generated["by"] != "human:na0" || generated["via"] != "process:insightflow" {
 		t.Errorf("generated = %v, want by and via kept apart", fm["generated"])
 	}
 }

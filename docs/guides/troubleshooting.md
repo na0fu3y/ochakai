@@ -137,7 +137,7 @@ last curl went to. Its startup line and `ochakai whoami` both say which.
 loopback. A deployed `ochakai serve-ui` records the service account
 instead, unless `OCHAKAI_IAP_AUDIENCE` is set and the webui's service
 account is listed in the server's `OCHAKAI_DELEGATING_CALLERS`, which is
-what turns browser edits into `human:you via agent:webui-sa` (design doc
+what turns browser edits into `human:you via process:webui-sa` (design doc
 0032).
 
 ## Startup

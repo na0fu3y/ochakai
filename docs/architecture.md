@@ -95,7 +95,7 @@ What ochakai does with an identity is *record* it. Cloud Run performs the
 IAM check and forwards the verified caller identity in a header; ochakai
 reads that header for one purpose — deciding whose name goes on the
 entry. An email ending in `.gserviceaccount.com` becomes
-`agent:<sa-email>`, anything else `human:<email>`. Nothing else consults
+`process:<sa-email>`, anything else `human:<email>`. Nothing else consults
 it. Promotion to `verified` is not restricted either: who verified an
 entry is always recorded, so the decision about whether to trust it is
 made by whoever reads the provenance, not by a gate at the write. The
@@ -112,7 +112,7 @@ The consequences to plan around:
   app that calls ochakai with its own service account records every one
   of its users as that service account. `X-Ochakai-On-Behalf-Of` fixes
   this for callers you list in `OCHAKAI_DELEGATING_CALLERS`; both
-  identities are then recorded (`human:… via agent:…`), never just the
+  identities are then recorded (`human:… via process:…`), never just the
   forwarded one, and a delegation header from an unlisted caller is
   refused rather than quietly downgraded (design doc
   [0027](design/0027-delegated-provenance.md)). The team web UI does the

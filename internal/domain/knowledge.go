@@ -359,14 +359,14 @@ type Usage struct {
 // delegation becomes indistinguishable from a forgery. Empty for the
 // ordinary case, where the caller acted as itself.
 type Actor struct {
-	Kind string `json:"kind"` // "human" | "agent"
+	Kind string `json:"kind"` // "human" | "process"
 	Name string `json:"name"`
 	Via  string `json:"via,omitempty"` // the delegating caller's identity, "" when there is none
 }
 
 // String renders an actor the way every surface shows provenance:
 // "human:tanaka@example.co.jp", or "human:tanaka@example.co.jp via
-// agent:insightflow@example.iam.gserviceaccount.com" when the write came
+// process:insightflow@example.iam.gserviceaccount.com" when the write came
 // through a delegating application.
 func (a Actor) String() string {
 	s := a.Kind + ":" + a.Name
@@ -376,10 +376,27 @@ func (a Actor) String() string {
 	return s
 }
 
+// The actor kinds, spelled as OKF SPEC §7 spells them. ochakai wrote
+// "agent:" until 0.15 (design doc 0043 §3.8): the spelling was ochakai's
+// own, and the distinction it drew — an LLM agent rather than any other
+// automation — is one nothing in the system ever branched on, while SPEC
+// §5.3 lumps everything that is not human: into one machine-confirmed
+// tier. A distinction that costs conformance and buys nothing is not one
+// worth keeping.
+//
+// SPEC §7's third form, "<producer>/<version>", stays unused: ochakai's
+// non-human writers are IAM service accounts, which have no version, and
+// inventing one would make the provenance say something the server never
+// observed.
 const (
-	ActorHuman = "human"
-	ActorAgent = "agent"
+	ActorHuman   = "human"
+	ActorProcess = "process"
 )
+
+// ValidActorKind reports whether kind is one ochakai records.
+func ValidActorKind(kind string) bool {
+	return kind == ActorHuman || kind == ActorProcess
+}
 
 // Link is an edge to another knowledge entry, derived from a markdown
 // link in the body — never authored as a field (design doc 0024). Links

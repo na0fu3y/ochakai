@@ -161,9 +161,9 @@ func parseOnBehalfOf(v string) (domain.Actor, error) {
 	}
 	kind, name, ok := strings.Cut(v, ":")
 	name = strings.TrimSpace(name)
-	if !ok || name == "" || (kind != domain.ActorHuman && kind != domain.ActorAgent) {
+	if !ok || name == "" || !domain.ValidActorKind(kind) {
 		return domain.Actor{}, fmt.Errorf(
-			`%s: want "human:<identity>" or "agent:<identity>", got %q`, OnBehalfOfHeader, v)
+			`%s: want "human:<identity>" or "process:<identity>", got %q`, OnBehalfOfHeader, v)
 	}
 	if strings.ContainsAny(name, " \t") {
 		return domain.Actor{}, fmt.Errorf("%s: identity must not contain whitespace", OnBehalfOfHeader)
@@ -172,7 +172,7 @@ func parseOnBehalfOf(v string) (domain.Actor, error) {
 }
 
 // actorFromIDToken extracts provenance from ID token claims: the email is
-// the actor name; service accounts are agents, people are humans.
+// the actor name; service accounts are processes, people are humans.
 func actorFromIDToken(token string) (domain.Actor, error) {
 	if token == "" {
 		return domain.Actor{}, errors.New("no identity token; is the service non-public with Cloud Run IAM enforced? (for local development set OCHAKAI_INSECURE_DEV=true)")
@@ -193,7 +193,7 @@ func actorFromIDToken(token string) (domain.Actor, error) {
 	}
 	kind := domain.ActorHuman
 	if strings.HasSuffix(claims.Email, ".gserviceaccount.com") {
-		kind = domain.ActorAgent
+		kind = domain.ActorProcess
 	}
 	return domain.Actor{Kind: kind, Name: claims.Email}, nil
 }
@@ -210,11 +210,11 @@ func WithActor(ctx context.Context, a domain.Actor) context.Context {
 	return context.WithValue(ctx, ctxKey{}, a)
 }
 
-// Actor returns the authenticated actor, defaulting to agent/unknown so a
-// missing context never grants human provenance.
+// Actor returns the authenticated actor, defaulting to process/unknown so
+// a missing context never grants human provenance.
 func Actor(ctx context.Context) domain.Actor {
 	if a, ok := ctx.Value(ctxKey{}).(domain.Actor); ok {
 		return a
 	}
-	return domain.Actor{Kind: domain.ActorAgent, Name: "unknown"}
+	return domain.Actor{Kind: domain.ActorProcess, Name: "unknown"}
 }

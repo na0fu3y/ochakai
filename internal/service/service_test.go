@@ -48,7 +48,7 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 func TestApplyVerificationStampsProvenance(t *testing.T) {
 	svc := &Service{}
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
-	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
+	agent := domain.Actor{Kind: domain.ActorProcess, Name: "claude-code"}
 
 	verified := &domain.Knowledge{Status: domain.StatusVerified}
 	svc.applyVerification(verified, nil, human)

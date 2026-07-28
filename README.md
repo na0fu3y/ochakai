@@ -495,7 +495,7 @@ sources:
     author: human:jsmith@example.co.jp
     last_modified: "2026-06-15"
 usage_window: { from: "2026-06-01", to: "2026-06-30" }
-generated: { by: agent:analyst@example.iam.gserviceaccount.com, at: 2026-07-26T04:12:00Z }
+generated: { by: process:analyst@example.iam.gserviceaccount.com, at: 2026-07-26T04:12:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
 status: stable                 # draft | stable | deprecated
@@ -568,8 +568,8 @@ back fits what you asked for.
 | `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
 | `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, lexical-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys. **Recommended for Japanese knowledge bases** (see below) |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`). Vectors are written when an entry is written, so enabling this on an existing base — or changing the model — leaves entries unembedded until you run `ochakai reembed` (design doc 0020). Dimensions above 2000 exceed pgvector's indexing limit, so those deployments fall back to an exact scan. Changing `OCHAKAI_EMBEDDING_DIM` on a base that already holds vectors is refused at startup, with the two ways out: put it back, or drop the vector tables and re-embed |
-| `OCHAKAI_DELEGATING_CALLERS` | Comma-separated caller identities allowed to forward an end user's identity with `X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp` (`*` for any authenticated caller). For applications that embed ochakai and serve many people — without it, every one of their users collapses into the application's one service account. Both identities are recorded (`human:tanaka@… via agent:app-sa@…`), never just the forwarded one. Default: empty, delegation off; a header from an unlisted caller is a 403, not a silent downgrade (design doc 0027) |
-| `OCHAKAI_IAP_AUDIENCE` | `ochakai serve-ui` only: the IAP JWT audience to verify, which turns browser edits from `agent:<webui-sa>` into the person signed in (`human:tanaka@… via agent:<webui-sa>`). Requires the webui's service account in the server's `OCHAKAI_DELEGATING_CALLERS`. Once set, a request IAP did not sign is refused rather than recorded as the service account. Default: empty, per-user provenance off (design doc 0032) |
+| `OCHAKAI_DELEGATING_CALLERS` | Comma-separated caller identities allowed to forward an end user's identity with `X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp` (`*` for any authenticated caller). For applications that embed ochakai and serve many people — without it, every one of their users collapses into the application's one service account. Both identities are recorded (`human:tanaka@… via process:app-sa@…`), never just the forwarded one. Default: empty, delegation off; a header from an unlisted caller is a 403, not a silent downgrade (design doc 0027) |
+| `OCHAKAI_IAP_AUDIENCE` | `ochakai serve-ui` only: the IAP JWT audience to verify, which turns browser edits from `process:<webui-sa>` into the person signed in (`human:tanaka@… via process:<webui-sa>`). Requires the webui's service account in the server's `OCHAKAI_DELEGATING_CALLERS`. Once set, a request IAP did not sign is refused rather than recorded as the service account. Default: empty, per-user provenance off (design doc 0032) |
 | `OCHAKAI_READ_ONLY` | `true` makes the deployment serve knowledge without changing it: every write is a 403, MCP does not offer the write tools at all, and the web UI stops drawing buttons that would only fail. For a reference-only instance or freezing a base during a migration; a *public* demo needs `OCHAKAI_PUBLIC_READ_ONLY` below, because read-only alone still refuses anonymous callers. It is not authorization — it does not look at the caller, and it refuses the operator too (design doc [0040](docs/design/0040-read-only-mode.md)). Usage telemetry still records, being the server's own observation. Default: off |
 | `OCHAKAI_PUBLIC_READ_ONLY` | `true` is the posture for a deployment anyone may reach — a demo, or a reference-only copy handed out. It **reads no identity at all**: the `Authorization` header is ignored (without Cloud Run IAM in front nothing verified its signature, so believing it would let any caller name any person), delegation is ignored, every caller is `human:anonymous`, and nobody is refused. It **implies** `OCHAKAI_READ_ONLY` and cannot be separated from it — not recording who asked is only defensible because nothing is written, so a publicly readable *and writable* ochakai is not a configuration this program accepts (design doc [0042](docs/design/0042-public-read-only.md)). Setting it together with `OCHAKAI_INSECURE_DEV` is refused at startup. Default: off |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
@@ -577,7 +577,7 @@ back fits what you asked for.
 
 Authentication has no configuration: ochakai reads the caller identity
 that Cloud Run forwards after its IAM check (`human:<email>` for people,
-`agent:<sa-email>` for service accounts) and records it as provenance.
+`process:<sa-email>` for service accounts) and records it as provenance.
 Reachability is Cloud Run IAM's job; ochakai does no authorization.
 
 The complete, cost-minimized deployment walkthrough (~$10/month) lives in

@@ -5,7 +5,7 @@
 // service's identity token in X-Serverless-Authorization for Cloud Run
 // service-to-service auth. The ochakai deployment therefore stays
 // IAM-restricted, and browser users are recorded as this service's
-// identity (agent:<sa-email>). Same image as `serve`: deploy it with
+// identity (process:<sa-email>). Same image as `serve`: deploy it with
 // `--args=serve-ui` (deploy guide §5b).
 //
 // OCHAKAI_URL is required: the page always talks to its own origin

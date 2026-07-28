@@ -149,14 +149,14 @@ func TestRenderContext(t *testing.T) {
 			{
 				Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusVerified,
 				Title:      "Monthly revenue",
-				CreatedBy:  domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
+				CreatedBy:  domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
 				VerifiedBy: &human, VerifiedAt: &now,
 				Attrs: map[string]any{"question": "Revenue by month?", "sql": "SELECT 1\n"},
 				Body:  "Prefer this over writing new SQL.",
 			},
 			{
 				Type: domain.TypeInsights, ID: "insights/revenue-seasonality", Status: domain.StatusDraft,
-				Title: "Seasonality", CreatedBy: domain.Actor{Kind: domain.ActorAgent, Name: "claude"},
+				Title: "Seasonality", CreatedBy: domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
 				Body: "Q4 peaks ~40% above baseline.",
 			},
 		},
@@ -167,7 +167,7 @@ func TestRenderContext(t *testing.T) {
 	s := out.String()
 	for _, want := range []string{
 		"## ochakai://queries/monthly-revenue (verified) — Monthly revenue",
-		"verified by human:na0 on 2026-06-01; created by agent:claude",
+		"verified by human:na0 on 2026-06-01; created by process:claude",
 		"Q: Revenue by month?",
 		"```sql\nSELECT 1\n```",
 		"Prefer this over writing new SQL.",
