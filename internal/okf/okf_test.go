@@ -472,3 +472,82 @@ func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
 		t.Errorf("rulings changed the canonical form:\n%s\nvs\n%s", canon, bareCanon)
 	}
 }
+
+// A producer key inside a structured object survives the round trip, in
+// place (SPEC §4.1, design doc 0043 §3.6). It was dropped with a note
+// until 0.16, on the reasoning that four surfaces should be able to
+// describe one shape — a premise that went when the document became the
+// stored form, since a key discarded on the way in is a key no later
+// release can recover.
+func TestProducerKeysInsideStructuredObjectsRoundTrip(t *testing.T) {
+	const in = `---
+type: Attested Computation
+title: 月次売上
+runtime: bigquery
+sources:
+  - resource: policies/revenue.md
+    id: rev
+    license: CC-BY
+    reviewed_by: finance
+parameters:
+  - name: year
+    type: integer
+    ui_hint: dropdown
+executor:
+  resource: run.md
+  receipt: [job_id]
+  timeout_s: 300
+attester:
+  resource: check.py
+  language: python
+---
+
+本文。
+`
+	d, notes, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 0 {
+		t.Errorf("keeping a key is not a reinterpretation, so nothing should be reported: %v", notes)
+	}
+	if got := d.Sources[0].Extra; got["license"] != "CC-BY" || got["reviewed_by"] != "finance" {
+		t.Errorf("source producer keys = %v", got)
+	}
+	if got := d.Parameters[0].Extra; got["ui_hint"] != "dropdown" {
+		t.Errorf("parameter producer keys = %v", got)
+	}
+	if got := d.Executor.Extra; got["timeout_s"] != 300 {
+		t.Errorf("executor producer keys = %v", got)
+	}
+	if got := d.Attester.Extra; got["language"] != "python" {
+		t.Errorf("attester producer keys = %v", got)
+	}
+
+	// They come back out beside the keys the spec defines, not nested
+	// under one of ochakai's own.
+	out, err := Canonical(&d.Knowledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"license: CC-BY", "reviewed_by: finance",
+		"ui_hint: dropdown", "timeout_s: 300", "language: python"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("re-export lost %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(string(out), "extra:") {
+		t.Errorf("producer keys must ride inline, not under an ochakai key:\n%s", out)
+	}
+
+	// And the entry is unchanged by the trip, so a re-import writes
+	// nothing — the property the whole round trip is stated in.
+	back, _, err := Parse(out)
+	if err != nil {
+		t.Fatalf("our own output does not parse: %v\n%s", err, out)
+	}
+	back.ID = d.ID
+	if !back.SameContent(&d.Knowledge) {
+		t.Errorf("round trip changed the entry:\n got %+v\nwant %+v", back.Knowledge, d.Knowledge)
+	}
+}

@@ -508,11 +508,22 @@ attester: {}
 			k.UsageWindow, k.Executor, k.Attester, k.Parameters)
 	}
 	for _, want := range []string{
-		"last_modified", "names no resource", "dropped keys OKF does not define: license",
+		"last_modified", "names no resource",
 		"usage_count", "usage_window", "parameters[0]", "executor", "attester",
 	} {
 		if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, want) }) {
 			t.Errorf("no note mentions %q: %v", want, notes)
+		}
+	}
+	// The producer key is kept, and reported by nothing: a note is for a
+	// value read differently than written (design doc 0036 §3.4), and a
+	// key carried through untouched is not one (design doc 0043 §3.6).
+	if len(k.Sources) > 0 && k.Sources[0].Extra["license"] != "CC-BY" {
+		t.Errorf("sources[0] lost its producer key: %+v", k.Sources[0].Extra)
+	}
+	for _, n := range notes {
+		if strings.Contains(n, "license") {
+			t.Errorf("a kept key was reported as dropped: %q", n)
 		}
 	}
 }

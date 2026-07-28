@@ -2,7 +2,6 @@ package okf
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -377,15 +376,17 @@ func sourcesFrom(v any) ([]domain.Source, []string) {
 		}
 		w, wn := windowFrom(m["usage_window"], fmt.Sprintf("sources[%d].usage_window", i))
 		s.UsageWindow, notes = w, append(notes, wn...)
-		if extra := unknownKeys(m, sourceKeys); len(extra) > 0 {
-			notes = append(notes, fmt.Sprintf("sources[%d]: dropped keys OKF does not define: %s", i, strings.Join(extra, ", ")))
-		}
+		s.Extra = extraKeys(m, sourceKeys)
 		out = append(out, s)
 	}
 	return out, notes
 }
 
-var parameterKeys = map[string]bool{"name": true, "type": true, "required": true}
+var (
+	parameterKeys = map[string]bool{"name": true, "type": true, "required": true}
+	executorKeys  = map[string]bool{"resource": true, "receipt": true}
+	attesterKeys  = map[string]bool{"resource": true}
+)
 
 func parametersFrom(v any) ([]domain.Parameter, []string) {
 	if v == nil {
@@ -409,9 +410,7 @@ func parametersFrom(v any) ([]domain.Parameter, []string) {
 			continue
 		}
 		p.Required, _ = m["required"].(bool)
-		if extra := unknownKeys(m, parameterKeys); len(extra) > 0 {
-			notes = append(notes, fmt.Sprintf("parameters[%d]: dropped keys OKF does not define: %s", i, strings.Join(extra, ", ")))
-		}
+		p.Extra = extraKeys(m, parameterKeys)
 		out = append(out, p)
 	}
 	return out, notes
@@ -425,7 +424,7 @@ func executorFrom(v any) (*domain.Executor, []string) {
 	if !ok {
 		return nil, []string{"executor is not a mapping; dropped"}
 	}
-	e := &domain.Executor{Resource: strOf(m, "resource")}
+	e := &domain.Executor{Resource: strOf(m, "resource"), Extra: extraKeys(m, executorKeys)}
 	switch r := m["receipt"].(type) {
 	case []any:
 		for _, f := range r {
@@ -454,7 +453,7 @@ func attesterFrom(v any) (*domain.Attester, []string) {
 	if !ok {
 		return nil, []string{"attester is not a mapping; dropped"}
 	}
-	a := &domain.Attester{Resource: strOf(m, "resource")}
+	a := &domain.Attester{Resource: strOf(m, "resource"), Extra: extraKeys(m, attesterKeys)}
 	if !a.Valid() {
 		return nil, []string{"attester needs a resource (SPEC §10.2); dropped"}
 	}
@@ -479,13 +478,24 @@ func intFrom(v any) (int, bool) {
 	return 0, false
 }
 
-func unknownKeys(m map[string]any, known map[string]bool) []string {
-	var extra []string
-	for k := range m {
-		if !known[k] {
-			extra = append(extra, k)
+// extraKeys collects the producer-defined keys of a structured object —
+// everything the spec does not name (SPEC §4.1). They are kept rather
+// than dropped: the document is the stored form, so a key discarded here
+// is a key no later release can recover (design doc 0043 §3.6).
+//
+// Nothing is reported, because nothing was reinterpreted. A note is for a
+// value read differently than written (design doc 0036 §3.4), and a key
+// carried through untouched is not one.
+func extraKeys(m map[string]any, known map[string]bool) domain.Extra {
+	var extra domain.Extra
+	for k, v := range m {
+		if known[k] {
+			continue
 		}
+		if extra == nil {
+			extra = domain.Extra{}
+		}
+		extra[k] = yamlScalar(v)
 	}
-	sort.Strings(extra) // map iteration order must not reach a user-visible note
 	return extra
 }

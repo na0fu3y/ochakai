@@ -77,14 +77,20 @@ type frontmatter struct {
 // otherwise resolve to a timestamp, so last_modified goes out as
 // "2026-05-30" and comes back the plain day the producer wrote — the same
 // treatment stale_after gets (design doc 0036 §3.7).
+// The Extra fields below are yaml ",inline": a producer key comes back
+// out beside the keys the spec defines, exactly where its writer put it
+// (SPEC §4.1, design doc 0043 §3.6). yaml.v3 sorts an inlined map's
+// keys, so the rendering stays deterministic — which the content hash
+// depends on.
 type source struct {
-	Resource     text         `yaml:"resource"`
-	ID           text         `yaml:"id,omitempty"`
-	Title        text         `yaml:"title,omitempty"`
-	Author       text         `yaml:"author,omitempty"`
-	UsageCount   *int         `yaml:"usage_count,omitempty"` // a pointer: zero uses and no count at all are different claims
-	LastModified text         `yaml:"last_modified,omitempty"`
-	UsageWindow  *usageWindow `yaml:"usage_window,omitempty"`
+	Resource     text           `yaml:"resource"`
+	ID           text           `yaml:"id,omitempty"`
+	Title        text           `yaml:"title,omitempty"`
+	Author       text           `yaml:"author,omitempty"`
+	UsageCount   *int           `yaml:"usage_count,omitempty"` // a pointer: zero uses and no count at all are different claims
+	LastModified text           `yaml:"last_modified,omitempty"`
+	UsageWindow  *usageWindow   `yaml:"usage_window,omitempty"`
+	Extra        map[string]any `yaml:",inline"`
 }
 
 type usageWindow struct {
@@ -93,18 +99,21 @@ type usageWindow struct {
 }
 
 type parameter struct {
-	Name     text `yaml:"name"`
-	Type     text `yaml:"type"`
-	Required bool `yaml:"required,omitempty"` // absent and false mean the same thing (SPEC §10.2)
+	Name     text           `yaml:"name"`
+	Type     text           `yaml:"type"`
+	Required bool           `yaml:"required,omitempty"` // absent and false mean the same thing (SPEC §10.2)
+	Extra    map[string]any `yaml:",inline"`
 }
 
 type executor struct {
-	Resource text   `yaml:"resource"`
-	Receipt  []text `yaml:"receipt"`
+	Resource text           `yaml:"resource"`
+	Receipt  []text         `yaml:"receipt"`
+	Extra    map[string]any `yaml:",inline"`
 }
 
 type attester struct {
-	Resource text `yaml:"resource"`
+	Resource text           `yaml:"resource"`
+	Extra    map[string]any `yaml:",inline"`
 }
 
 // event is one entry of the trust family: who, when, and — as a producer
@@ -188,6 +197,19 @@ func texts(in []string) []text {
 // producer extension keys are emitted under the same rule as the envelope
 // (see text). Attrs arrive from JSON or YAML, so these are the only kinds
 // that can hold one.
+// textifyMap is textify over a producer's extension keys, returning nil
+// for an empty map so an inlined field adds nothing to the rendering.
+func textifyMap(m domain.Extra) map[string]any {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = textify(v)
+	}
+	return out
+}
+
 func textify(v any) any {
 	switch v := v.(type) {
 	case string:
@@ -349,6 +371,7 @@ func sourcesOut(in []domain.Source) []source {
 			Resource: text(s.Resource), ID: text(s.ID), Title: text(s.Title), Author: text(s.Author),
 			UsageCount: s.UsageCount, LastModified: text(s.LastModified),
 			UsageWindow: windowOut(s.UsageWindow),
+			Extra:       textifyMap(s.Extra),
 		})
 	}
 	return out
@@ -400,13 +423,15 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 		fm.CreatedBy = text(k.CreatedBy.String())
 	}
 	for _, p := range k.Parameters {
-		fm.Parameters = append(fm.Parameters, parameter{Name: text(p.Name), Type: text(p.Type), Required: p.Required})
+		fm.Parameters = append(fm.Parameters, parameter{
+			Name: text(p.Name), Type: text(p.Type), Required: p.Required, Extra: textifyMap(p.Extra)})
 	}
 	if k.Executor != nil {
-		fm.Executor = &executor{Resource: text(k.Executor.Resource), Receipt: texts(k.Executor.Receipt)}
+		fm.Executor = &executor{Resource: text(k.Executor.Resource), Receipt: texts(k.Executor.Receipt),
+			Extra: textifyMap(k.Executor.Extra)}
 	}
 	if k.Attester != nil {
-		fm.Attester = &attester{Resource: text(k.Attester.Resource)}
+		fm.Attester = &attester{Resource: text(k.Attester.Resource), Extra: textifyMap(k.Attester.Extra)}
 	}
 	// The whole verification ledger, oldest first — SPEC §5.2's list, with
 	// as many entries as the instance recorded. The key's presence is what
