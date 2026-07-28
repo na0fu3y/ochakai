@@ -141,7 +141,11 @@ last entry.
   [0046](docs/design/0046-bundle-address-space.md) §§3.7-3.8).
   `GET /api/v1/bundle/{path}` answers `index.md` (SPEC §8's directory
   listing) and `log.md` (SPEC §9's update history); both are generated
-  from the bundle, so `PUT` and `DELETE` are `405`.
+  from the bundle, so `PUT` and `DELETE` against either are `409`.
+  Any other path under `/api/v1/bundle/` is `404` on read and `501` on
+  write: the rest of the bundle joins this address in a later change
+  (0046 §3.5), and a refusal there says so rather than explaining
+  itself in terms of two files the caller never named.
 
   - **`GET /api/v1/browse` is gone.** A directory listing is what
     `index.md` is, and ochakai was serving it at an address of its own
