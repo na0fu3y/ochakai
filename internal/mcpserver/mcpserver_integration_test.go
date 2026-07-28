@@ -87,7 +87,7 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	id := fmt.Sprintf("mcpit%d/delegation", time.Now().UnixNano())
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "create_knowledge",
-		Arguments: map[string]any{"id": id, "type": "glossary", "body": "written on behalf of bob"},
+		Arguments: map[string]any{"id": id, "document": "---\ntype: glossary\n---\n\nwritten on behalf of bob\n"},
 	})
 	if err != nil {
 		t.Fatalf("create_knowledge: %v", err)

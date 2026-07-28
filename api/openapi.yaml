@@ -323,222 +323,6 @@ paths:
                   value:
                     error: search needs a query; use sort=verified_at|usage|failed|stale_after to list entries without one, or source=URI to list what cites a resource
         "403": { $ref: "#/components/responses/Forbidden" }
-    post:
-      operationId: createKnowledge
-      summary: Create a knowledge entry
-      description: >
-        Entries default to draft. status is the lifecycle value alone
-        (draft, stable, deprecated); confirming an entry is a separate
-        act with its own endpoint, POST /api/v1/verify/{id}, and anyone
-        who can reach ochakai may perform it — the ledger records who did
-        (provenance over authorization). A live entry with the same id is
-        a 409 — including rejected ones — but creating over a soft-deleted
-        entry revives it (its prior history stays in the revisions, and
-        its rulings do not carry over: a create is a new entry).
-      parameters:
-        - $ref: "#/components/parameters/OnBehalfOf"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/Knowledge" }
-            examples:
-              goldenQuery:
-                summary: A golden query — an Attested Computation with a runtime
-                description: >
-                  This is the type a golden query has: SPEC §10.2 requires
-                  only runtime and leaves parameters, executor and attester
-                  optional, so the sanctioned query and the fully attested
-                  one are the same type at different levels of detail
-                  (design doc 0038). The SQL goes in the body's
-                  "# Computation" fence rather than in attrs, because a
-                  second copy leaves a consumer no way to tell which is
-                  authoritative. question is a producer key, so it stays in
-                  attrs. No title: the id's last segment names the entry
-                  (design doc 0022). Links are not sent — the body's
-                  markdown link to /metrics/revenue.md becomes one, while
-                  the one inside the fence is an example and is skipped.
-                value:
-                  type: Attested Computation
-                  id: queries/monthly-revenue
-                  description: Monthly net revenue for the last 12 complete months.
-                  tags: [finance]
-                  runtime: bigquery
-                  attrs:
-                    question: How much revenue did we make each month last year?
-                  body: |
-                    Answers the question above against
-                    [Revenue](/metrics/revenue.md). Completed orders only;
-                    the month boundary is `order_date`, not the settlement
-                    date.
-
-                    # Computation
-
-                    ```sql
-                    SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                           SUM(net_amount) AS revenue
-                    FROM `example-analytics.shop.orders`
-                    WHERE status = 'completed'
-                      AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                      AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                    GROUP BY month
-                    ORDER BY month
-                    ```
-              insightCaveat:
-                summary: An Insight — the caveat that keeps a metric from being misread
-                description: >
-                  stale_after dates the knowledge from the writer's side:
-                  the seasonal claim is worth re-checking once next January
-                  is in. sources cites the material it rests on.
-                value:
-                  type: Insight
-                  id: insights/revenue-seasonality
-                  title: Reading revenue month over month
-                  description: Why a December spike and a January drop are normal.
-                  tags: [finance]
-                  stale_after: "2027-01-31"
-                  sources:
-                    - id: fy2025-review
-                      resource: https://wiki.example.co.jp/finance/fy2025-review
-                      title: FY2025 revenue review
-                      author: human:sato@example.co.jp
-                      last_modified: "2026-04-08"
-                  body: |
-                    [Revenue](/metrics/revenue.md) is seasonal: December runs
-                    well above the trailing median and January falls back
-                    below it. Comparing either month with the one before it
-                    says nothing about the business[^fy2025-review].
-
-                    Compare year over year, or against the same month's
-                    three-year median. A month-over-month drop in January is
-                    not a regression to investigate.
-
-                    [^fy2025-review]: FY2025 revenue review.
-              attestedComputation:
-                summary: An Attested Computation — the contract as envelope fields
-                description: >
-                  runtime is required for this type and for no other (design
-                  doc 0036 §3.4); executor.receipt names what a run must hand
-                  back. ochakai records all of it and runs none of it.
-                value:
-                  type: Attested Computation
-                  id: computations/monthly-revenue
-                  description: Sanctioned monthly revenue run, with a checkable receipt.
-                  runtime: bigquery
-                  parameters:
-                    - { name: year, type: integer, required: true }
-                    - { name: currency, type: string }
-                  computation: computations/monthly-revenue.sql
-                  executor:
-                    resource: references/skills/run-on-bigquery.md
-                    receipt: [job_id, executed_sql, result]
-                  attester:
-                    resource: references/attesters/monthly-revenue.py
-                  body: |
-                    Runs the revenue figure the finance review quotes. Supply
-                    the parameters; do not edit the computation — an edited
-                    run is not the sanctioned one.
-      responses:
-        "201":
-          description: Created.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
-              examples:
-                goldenQuery:
-                  summary: The golden query above, as stored
-                  description: >
-                    Entries default to draft. created_by and updated_by come
-                    from the caller's identity, never from the payload, and
-                    links were derived from the body — one link, not two:
-                    the target inside the "# Computation" fence is an
-                    example rather than an edge (design doc 0024). The ETag
-                    response header carries the same value as updated_at.
-                  value:
-                    type: Attested Computation
-                    id: queries/monthly-revenue
-                    description: Monthly net revenue for the last 12 complete months.
-                    tags: [finance]
-                    status: draft
-                    runtime: bigquery
-                    created_by: { kind: human, name: tanaka@example.co.jp }
-                    updated_by: { kind: human, name: tanaka@example.co.jp }
-                    links:
-                      - { target: metrics/revenue, text: Revenue }
-                    attrs:
-                      question: How much revenue did we make each month last year?
-                    body: |
-                      Answers the question above against
-                      [Revenue](/metrics/revenue.md). Completed orders only;
-                      the month boundary is `order_date`, not the settlement
-                      date.
-
-                      # Computation
-
-                      ```sql
-                      SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                             SUM(net_amount) AS revenue
-                      FROM `example-analytics.shop.orders`
-                      WHERE status = 'completed'
-                        AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                        AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                      GROUP BY month
-                      ORDER BY month
-                      ```
-                    created_at: "2026-06-09T07:41:02.110945Z"
-                    updated_at: "2026-06-09T07:41:02.110945Z"
-          headers:
-            ETag: { $ref: "#/components/headers/ETag" }
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-        "400":
-          description: Error.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-              examples:
-                envelopeKeyInAttrs:
-                  summary: attrs carried a key OKF v0.2 defines
-                  description: >
-                    The key would have been dropped on export, where nothing
-                    would ever read it again, so the write is refused instead
-                    (design doc 0036 §3.5). Move the value to the top level
-                    of the payload.
-                  value:
-                    error: 'attrs must not carry "sources": it is an OKF envelope field, so write it at the top level of the payload instead'
-                missingRuntime:
-                  summary: An Attested Computation without a runtime
-                  value:
-                    error: "an Attested Computation needs a runtime (e.g. bigquery, postgres, dbt, python): it is what tells a consumer how to read the parameters"
-                sourceWithoutResource:
-                  summary: A source that names no artifact
-                  value:
-                    error: sources[0] needs a resource (the artifact it cites); id and title alone do not name one
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "409":
-          description: Error.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-              examples:
-                alreadyExists:
-                  summary: A live entry already holds that id
-                  description: >
-                    Update it (PUT), or free the id with
-                    DELETE ...?purge=true if the entry there is already
-                    soft-deleted. Creating over a soft-deleted entry revives
-                    it rather than conflicting.
-                  value:
-                    error: knowledge already exists
   /api/v1/browse:
     get:
       operationId: browseKnowledge
@@ -875,6 +659,11 @@ paths:
     get:
       operationId: getKnowledge
       summary: Get one knowledge entry
+      description: >
+        Answers JSON by default. With "Accept: text/markdown" it answers
+        the OKF document instead — the same text an export writes, keys
+        the server owns included, which is what `ochakai get` hands to an
+        editor and what a PUT takes straight back (design doc 0043 §3.5).
       responses:
         "200":
           description: The entry.
@@ -882,6 +671,8 @@ paths:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
+            text/markdown:
+              schema: { type: string }
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
               examples:
@@ -893,8 +684,8 @@ paths:
                     usage_count was counted over, the declared expiry, the
                     producer keys left in attrs, the links derived from the
                     body, and attachment metadata (the bytes are a separate
-                    fetch). The ETag header carries "2026-07-14T02:33:41.019778Z"
-                    — updated_at, quoted — for a later If-Match.
+                    fetch). The ETag header carries the same value as
+                    content_hash, quoted, for a later If-Match.
                   value:
                     type: Metric
                     id: metrics/revenue
@@ -997,63 +788,77 @@ paths:
                   value:
                     error: knowledge not found
     put:
-      operationId: updateKnowledge
-      summary: Update a knowledge entry (full replacement; revisions retained)
+      operationId: putKnowledge
+      summary: Write a knowledge entry from an OKF document
       description: >
-        The path is the address; the body carries the metadata — type
-        included, always (design doc 0016). With If-Match, the update is
-        conditional on the entry's version — see the parameter; without
-        it, last write wins.
+        The one way to write knowledge. The body is an OKF document —
+        YAML frontmatter, then markdown — which is what an entry is
+        (design doc 0043 §3.5): the path is the address, the document is
+        what the entry says, and there is no typed JSON write surface
+        beside it to drift from the format. A JSON body is a 415 naming
+        the document form.
+        It is create-or-replace, and a full replacement: what the document
+        omits is cleared, so send the entry as it should end up. A PUT
+        states what the entry should say; whether an entry already held
+        the id is not something the writer of a document is saying
+        anything about, which is why there is no separate create. The
+        preconditions are where existence is expressed — If-None-Match "*"
+        writes only if the id is free (an occupied one is a 409), and
+        If-Match a version writes only if the entry still says that.
+        A 201 means the entry was created, a 200 that it was replaced.
+        Keys the server owns (generated, verified, created_by,
+        rejected_by, rejected_at) are ignored if present, so a document
+        read back from ochakai can be edited and sent as it came. Values
+        read differently than they were written come back as
+        Ochakai-Note headers rather than being applied in silence.
       parameters:
         - $ref: "#/components/parameters/IfMatch"
+        - name: If-None-Match
+          in: header
+          required: false
+          description: >
+            "*" writes only if the id is free; an occupied id is a 409.
+            Any other value is ignored — ochakai has no conditional read,
+            and a caller that means "only if absent" says "*".
+          schema: { type: string, enum: ["*"] }
         - $ref: "#/components/parameters/OnBehalfOf"
       requestBody:
         required: true
         content:
-          application/json:
-            schema: { $ref: "#/components/schemas/Knowledge" }
-            examples:
-              fullReplacement:
-                summary: PUT /api/v1/knowledge/metrics/revenue, If-Match "2026-07-14T02:33:41.019778Z"
-                description: >
-                  A full replacement: what the payload omits is cleared, so
-                  send the entry as it should end up, not just the fields
-                  that changed. Here a second source is dropped and the
-                  declared expiry moved out a year. type is always required,
-                  even though the path already names the entry. Server-owned
-                  fields (created_by, verified_*, links, attachments) are
-                  ignored if sent.
-                value:
-                  type: Metric
-                  id: metrics/revenue
-                  title: Revenue
-                  description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
-                  resource: bigquery://example-analytics.shop.orders
-                  tags: [finance, core]
-                  sources:
-                    - id: revenue-policy
-                      resource: https://wiki.example.co.jp/finance/revenue-recognition
-                      title: Revenue recognition policy (FY2027)
-                      author: human:finance@example.co.jp
-                      usage_count: 31
-                      last_modified: "2026-07-20"
-                  usage_window: { from: "2026-07-01", to: "2026-07-31" }
-                  status: stable
-                  stale_after: "2027-12-31"
-                  attrs: { unit: JPY, grain: order }
-                  body: |
-                    Revenue is the sum of `net_amount` over every
-                    [completed order](/glossary/completed-order.md) in
-                    [shop.orders](/tables/shop-orders.md). Tax, shipping, and
-                    gift wrapping are excluded.
+          text/markdown:
+            schema: { type: string }
+            example: |
+              ---
+              type: Metric
+              title: Revenue
+              description: Net revenue, refunds excluded.
+              tags:
+                  - finance
+              sources:
+                  - resource: https://wiki.example/finance/revenue-recognition
+                    id: rev-rec
+              status: stable
+              stale_after: "2027-06-30"
+              ---
 
-                    A refund is subtracted in the month it settles, not the
-                    month of the order it reverses[^revenue-policy].
-
-                    [^revenue-policy]: Revenue recognition policy (FY2027).
+              Net of refunds, per [revenue recognition](/policies/revenue-recognition.md).
       responses:
+        "201":
+          description: The id was free, so the entry was created.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Note: { $ref: "#/components/headers/Note" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+            text/markdown:
+              schema: { type: string }
+        # If-None-Match "*" was sent and the id is taken. Without that
+        # precondition the write would have replaced the entry.
+        "409": { $ref: "#/components/responses/Error" }
         "200":
-          description: Updated, or unchanged (see the Ochakai-Unchanged header).
+          description: Replaced, or unchanged (see the Ochakai-Unchanged header).
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Unchanged:
@@ -1062,8 +867,11 @@ paths:
                 exactly, so nothing was written — no revision, no
                 updated_at bump. Absent on a real update.
               schema: { type: string, enum: ["true"] }
+            Ochakai-Note: { $ref: "#/components/headers/Note" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
+            text/markdown:
+              schema: { type: string }
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
               examples:
@@ -1962,6 +1770,14 @@ components:
         attaching a file all leave a held precondition valid. Treat it as
         opaque — two entries that say the same thing carry the same
         version.
+      schema: { type: string }
+    Note:
+      description: >
+        A value the server accepted but read differently than it was
+        written — an unrecognized status, a date it could not parse.
+        Repeatable, one per reinterpretation. A reinterpretation is never
+        silent (design doc 0036 §3.4), and there is no room for it in a
+        response whose body is the entry.
       schema: { type: string }
     ReadOnly:
       description: >

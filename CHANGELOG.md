@@ -20,6 +20,36 @@ last entry.
 
 ### Changed
 
+- **BREAKING**: knowledge is written as an OKF document, and `PUT` is the
+  whole write surface (design doc
+  [0043](docs/design/0043-document-first.md) §§3.5, 3.11).
+
+  - `PUT /api/v1/knowledge/{id}` takes `text/markdown` — frontmatter and
+    body, the same text `ochakai get` prints and an export writes, so
+    read → edit → write is one loop with no translation in it. A JSON
+    body is a `415` naming the document form. Keys the server owns
+    (`generated`, `verified`, `created_by`, `rejected_*`) are ignored
+    rather than refused, which is what makes a served document sendable
+    back as it came.
+  - **`POST /api/v1/knowledge` is gone.** PUT is create-or-replace: a
+    document says what the entry should say and nothing about whether the
+    id was taken. `If-None-Match: *` writes only if the id is free (an
+    occupied one is a `409`), `If-Match` only if the entry still says
+    what you read. A create answers `201`, a replacement `200`.
+  - `GET /api/v1/knowledge/{id}` answers the document when asked with
+    `Accept: text/markdown`; JSON is still the default.
+  - Values the server read differently than they were written come back
+    as `Ochakai-Note` response headers instead of being applied in
+    silence.
+  - **MCP**: `create_knowledge` and `update_knowledge` take `{id,
+    document}`. The eighteen-field mirror of the envelope is gone — it
+    was a fourth place the field list was written out, and an agent that
+    trusted the enumeration could silently drop whatever it had fallen
+    behind on. Notes come back in the tool result.
+  - **CLI**: unchanged to use. `create` and `update` still read an OKF
+    document or JSON from `-f`/stdin; JSON is now rendered to a document
+    locally, so the server keeps one write format.
+
 - **BREAKING**: the canonical OKF document is the stored form, and its
   hash is the entry's version (design doc
   [0043](docs/design/0043-document-first.md) §§3.1, 3.4, 3.7, 3.9).

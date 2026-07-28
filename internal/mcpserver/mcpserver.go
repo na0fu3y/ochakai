@@ -281,20 +281,24 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
 			"different id instead.",
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		k, err := svc.CreateKeepingCurated(ctx, in.toKnowledge(), actor)
+		write, notes, err := in.toKnowledge()
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: *k}, nil
+		k, err := svc.CreateKeepingCurated(ctx, write, actor)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
+		return nil, knowledgeOut{Knowledge: *k, Notes: notes}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update_knowledge",
 		Annotations: nonDestructive,
-		Description: "Update a knowledge entry (full replacement of title/description/resource/tags/sources/usage_window/" +
-			"status/stale_after/runtime/parameters/computation/executor/attester/attrs/body — " +
-			"an omitted title clears it, making the filename the name, and omitted sources clear the citations). " +
-			"Links are not a field: they come from the markdown links in body, so keep the ones you want to keep. " +
+		Description: "Update a knowledge entry by replacing its document. The document you send is the " +
+			"whole entry: a key you leave out is cleared, so get_knowledge first, change what you mean " +
+			"to change, and send the rest back as it came. " +
+			"Links are not a key: they come from the markdown links in the body, so keep the ones you want to keep. " +
 			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
 			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be updated from " +
 			"this surface: if a verified entry is wrong, report_outcome failed; otherwise create_knowledge " +
@@ -315,11 +319,15 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		// entry curated in the window between the two is a conflict rather
 		// than a clobber — the surface has no If-Match channel of its own,
 		// but the check can supply one.
-		k, _, err := svc.Update(ctx, in.toKnowledge(), actor, version)
+		write, notes, err := in.toKnowledge()
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: *k}, nil
+		k, _, err := svc.Update(ctx, write, actor, version)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
+		return nil, knowledgeOut{Knowledge: *k, Notes: notes}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -535,6 +543,11 @@ type getIn struct {
 
 type knowledgeOut struct {
 	Knowledge domain.Knowledge `json:"knowledge"`
+	// Notes carry what the server read differently than the document
+	// wrote it — a reinterpretation is never silent (design doc 0036
+	// §3.4), and an agent that gets one back can fix the document rather
+	// than discover the change on the next read.
+	Notes []string `json:"notes,omitempty"`
 }
 
 type attachmentIn struct {
@@ -561,46 +574,30 @@ type deleteOut struct {
 	URI     string `json:"uri"`
 }
 
+// writeIn is an id and a document. It was a field-by-field mirror of the
+// envelope until 0.16 — a fourth place the field list was written out,
+// which had to be found and extended every time OKF gained a key, and
+// which an agent that trusted the enumeration could use to silently drop
+// whatever the list had fallen behind on. A document has no list to fall
+// behind (design doc 0043 §3.11).
+//
+// It is also the shape an LLM handles best: frontmatter and markdown is
+// what the entries it reads look like, so editing one means returning it
+// changed rather than translating it into a schema and back.
 type writeIn struct {
-	Type        string              `json:"type" jsonschema:"what the entry is: the OKF type, one line; recommended: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference — any custom type works"`
-	ID          string              `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
-	Title       string              `json:"title,omitempty" jsonschema:"display name; optional — when omitted, the id's last segment (the filename) is the name; set one only when the filename isn't enough"`
-	Description string              `json:"description,omitempty"`
-	Resource    string              `json:"resource,omitempty" jsonschema:"canonical URI of the underlying asset (the table/dataset URI, or for references the external source URL); omit for abstract concepts"`
-	Tags        []string            `json:"tags,omitempty"`
-	Sources     []domain.Source     `json:"sources,omitempty" jsonschema:"the material this entry derives from: a list of {resource, id, title, author, usage_count, last_modified}; resource is required and names the artifact; give each an id so footnotes in body can attribute single claims to it"`
-	UsageWindow *domain.UsageWindow `json:"usage_window,omitempty" jsonschema:"the date range the sources' usage_count values were counted over: {from, to} as YYYY-MM-DD"`
-	Status      string              `json:"status,omitempty" jsonschema:"draft, verified, deprecated, or rejected; defaults to draft"`
-	StatusNote  string              `json:"status_note,omitempty" jsonschema:"free-form reason for the current status (why rejected/deprecated)"`
-	StaleAfter  string              `json:"stale_after,omitempty" jsonschema:"absolute date (YYYY-MM-DD) after which this entry should be re-checked, e.g. when the quarter it describes closes; omit when nothing dates it"`
-	Runtime     string              `json:"runtime,omitempty" jsonschema:"for an Attested Computation, the execution environment (bigquery, postgres, dbt, python...); required for that type because it is what tells a consumer how to read the parameters"`
-	Parameters  []domain.Parameter  `json:"parameters,omitempty" jsonschema:"an Attested Computation's declared inputs: a list of {name, type, required}; you supply values for these, never edits to the computation itself"`
-	Computation string              `json:"computation,omitempty" jsonschema:"path to the file holding the computation; omit to put it inline in a # Computation fence in body"`
-	Executor    *domain.Executor    `json:"executor,omitempty" jsonschema:"how the computation is run and what a run must return as evidence: {resource, receipt}; ochakai records this and never runs it"`
-	Attester    *domain.Attester    `json:"attester,omitempty" jsonschema:"the deterministic checker for a run: {resource}; ochakai records the path and never executes it"`
-	Attrs       map[string]any      `json:"attrs,omitempty" jsonschema:"producer-defined extension keys, e.g. question/sql for an Attested Computation holding a verified query; the keys OKF itself defines are fields of their own above and are rejected here"`
-	Body        string              `json:"body,omitempty" jsonschema:"markdown body; link to other entries by writing a markdown link to their path — [revenue](/metrics/revenue.md) — and those links become the entry's links"`
+	ID       string `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
+	Document string `json:"document" jsonschema:"the entry as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — recommended: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; defaults to draft — whether anyone confirmed the entry is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified} — the material this derives from), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other entries with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the entry's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) are ignored if present, so a document read back from ochakai can be edited and returned as-is"`
 }
 
-func (in writeIn) toKnowledge() *domain.Knowledge {
-	return &domain.Knowledge{
-		Type:        domain.Type(in.Type),
-		ID:          in.ID,
-		Title:       in.Title,
-		Description: in.Description,
-		Resource:    in.Resource,
-		Tags:        in.Tags,
-		Sources:     in.Sources,
-		UsageWindow: in.UsageWindow,
-		Status:      domain.Status(in.Status),
-		StatusNote:  in.StatusNote,
-		StaleAfter:  in.StaleAfter,
-		Runtime:     in.Runtime,
-		Parameters:  in.Parameters,
-		Computation: in.Computation,
-		Executor:    in.Executor,
-		Attester:    in.Attester,
-		Attrs:       in.Attrs,
-		Body:        in.Body,
+// toKnowledge parses the document. Notes — values read differently than
+// written — come back with it, for the tool to hand to the agent: a
+// reinterpretation is never silent (design doc 0036 §3.4).
+func (in writeIn) toKnowledge() (*domain.Knowledge, []string, error) {
+	d, notes, err := okf.Parse([]byte(in.Document))
+	if err != nil {
+		return nil, nil, service.Invalidf("%s", err.Error())
 	}
+	k := d.Knowledge
+	k.ID = in.ID
+	return &k, notes, nil
 }

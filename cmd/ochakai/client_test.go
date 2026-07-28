@@ -19,6 +19,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/apiclient"
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 func TestParseArgsAllowsFlagsAfterPositionals(t *testing.T) {
@@ -217,16 +218,23 @@ func TestImportReportsUnchanged(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "already exists"})
-	})
 	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		var k domain.Knowledge
-		if err := json.NewDecoder(r.Body).Decode(&k); err != nil {
-			t.Errorf("bad PUT payload: %v", err)
+		// The payload is a document now (design doc 0043 §3.5), and the
+		// import loop makes one call per entry rather than create-then-
+		// update: whether the id was free is not something a bundle says.
+		if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/markdown") {
+			t.Errorf("Content-Type = %q, want text/markdown", ct)
 		}
-		if r.PathValue("id") == "metrics/same" {
+		body, _ := io.ReadAll(r.Body)
+		d, _, err := okf.Parse(body)
+		if err != nil {
+			t.Errorf("bad PUT payload: %v\n%s", err, body)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		k := d.Knowledge
+		k.ID = r.PathValue("id")
+		if k.ID == "metrics/same" {
 			w.Header().Set("Ochakai-Unchanged", "true")
 		}
 		_ = json.NewEncoder(w).Encode(k)

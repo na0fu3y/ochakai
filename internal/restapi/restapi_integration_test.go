@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
@@ -70,13 +71,10 @@ func TestRESTIntegration(t *testing.T) {
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
 	id := typ + "/sales/orders"
 	entry := map[string]any{"type": typ, "id": id, "title": "REST round trip"}
-	payload, _ := json.Marshal(entry)
+	payload := docFrom(t, entry)
 
 	// Create.
-	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp := putDoc(t, srv.URL, id, payload, true)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d", resp.StatusCode)
 	}
@@ -90,12 +88,8 @@ func TestRESTIntegration(t *testing.T) {
 	}
 
 	// A content-identical PUT writes nothing and says so in the header.
-	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", bytes.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err = http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// No If-None-Match this time: the same call replaces what it finds.
+	resp = putDoc(t, srv.URL, typ+"/sales/orders", payload, false)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
 		t.Errorf("no-op PUT: status = %d, Ochakai-Unchanged = %q",
@@ -199,11 +193,8 @@ func TestRESTIntegration(t *testing.T) {
 	for i := range exportBatch + 3 {
 		id := fmt.Sprintf("%s/batch/%d", typ, i)
 		planted = append(planted, id)
-		body, _ := json.Marshal(map[string]any{"type": typ, "id": id, "title": fmt.Sprintf("batch %d", i)})
-		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
-		}
+		body := docFrom(t, map[string]any{"type": typ, "id": id, "title": fmt.Sprintf("batch %d", i)})
+		resp := putDoc(t, srv.URL, id, body, true)
 		resp.Body.Close()
 	}
 	t.Cleanup(func() {
@@ -241,7 +232,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 
 	// Delete, then the entry is gone.
-	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", nil)
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", nil)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -285,11 +276,8 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	defer srv.Close()
 
 	typ := fmt.Sprintf("restatt%d", time.Now().UnixNano())
-	payload, _ := json.Marshal(map[string]any{"type": typ, "id": typ + "/reading", "title": "attachment hits"})
-	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		t.Fatal(err)
-	}
+	payload := docFrom(t, map[string]any{"type": typ, "id": typ + "/reading", "title": "attachment hits"})
+	resp := putDoc(t, srv.URL, typ+"/reading", payload, true)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d", resp.StatusCode)
@@ -412,6 +400,45 @@ func (m memBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 	return data, nil
 }
 
+// docFrom renders a test's entry map as the OKF document the server takes
+// (design doc 0043 §3.5). The maps stay: they are how these tests say
+// "an entry with these fields", and only the wire format changed.
+func docFrom(t *testing.T, entry map[string]any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var k domain.Knowledge
+	if err := json.Unmarshal(raw, &k); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := okf.Canonical(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+// putDoc writes a document to id. onlyIfAbsent asks for a create, which
+// is what the tests that used to POST mean.
+func putDoc(t *testing.T, base, id string, doc []byte, onlyIfAbsent bool) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPut, base+"/api/v1/knowledge/"+id, bytes.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "text/markdown")
+	if onlyIfAbsent {
+		req.Header.Set("If-None-Match", "*")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
 func getJSON(t *testing.T, url string, v any) {
 	t.Helper()
 	resp, err := http.Get(url)
@@ -452,11 +479,8 @@ func TestRESTIntegrationVerify(t *testing.T) {
 
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
 	id := typ + "/verify-me"
-	payload, _ := json.Marshal(map[string]any{"type": typ, "id": id, "title": "verify round trip"})
-	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
-	if err != nil {
-		t.Fatal(err)
-	}
+	payload := docFrom(t, map[string]any{"type": typ, "id": id, "title": "verify round trip"})
+	resp := putDoc(t, srv.URL, id, payload, true)
 	if resp.StatusCode != http.StatusCreated {
 		resp.Body.Close()
 		t.Fatalf("create status = %d", resp.StatusCode)
@@ -559,14 +583,11 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 	var ids []string
 	for i := range 4 {
 		id := fmt.Sprintf("%s/entry-%d", typ, i)
-		payload, _ := json.Marshal(map[string]any{
+		payload := docFrom(t, map[string]any{
 			"type": typ, "id": id, "title": typ + " budget",
 			"description": "an entry about " + typ, "body": body,
 		})
-		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
-		if err != nil {
-			t.Fatal(err)
-		}
+		resp := putDoc(t, srv.URL, id, payload, true)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusCreated {
 			t.Fatalf("create %s: status %d", id, resp.StatusCode)
@@ -652,13 +673,10 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	metric, insight := root+"/revenue", root+"/revenue-reading"
 	create := func(id, title, body string) {
 		t.Helper()
-		payload, _ := json.Marshal(map[string]any{
+		payload := docFrom(t, map[string]any{
 			"type": root, "id": id, "title": title, "body": body,
 		})
-		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
-		if err != nil {
-			t.Fatal(err)
-		}
+		resp := putDoc(t, srv.URL, id, payload, true)
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusCreated {
 			b, _ := io.ReadAll(resp.Body)
@@ -767,14 +785,11 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 	}
 	var ids []string
 	for _, e := range entries {
-		payload, _ := json.Marshal(map[string]any{
+		payload := docFrom(t, map[string]any{
 			"type": "Metric", "id": e.id, "title": "activation " + root,
 			"description": "an entry about " + root, "body": e.body,
 		})
-		resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json", bytes.NewReader(payload))
-		if err != nil {
-			t.Fatal(err)
-		}
+		resp := putDoc(t, srv.URL, e.id, payload, true)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusCreated {
 			t.Fatalf("create %s: status %d", e.id, resp.StatusCode)
@@ -872,5 +887,108 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 		if h.ID == term {
 			t.Error("the out-of-scope term ranked as a hit; the scope must bound the search itself")
 		}
+	}
+}
+
+// The write path is a document, and PUT is the whole of it (design doc
+// 0043 §3.5): create-or-replace, with the preconditions carrying what
+// used to be the difference between POST and PUT.
+func TestRESTIntegrationDocumentWrites(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := checkedServer(t, Handler(svc))
+	defer srv.Close()
+
+	id := fmt.Sprintf("restdoc%d/revenue", time.Now().UnixNano())
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id+"?purge=true", nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	const doc = "---\ntype: Metric\ntitle: 売上\nowner: finance\n---\n\n本文。\n"
+
+	// A create-only write on a free id is a 201.
+	resp := putDoc(t, srv.URL, id, []byte(doc), true)
+	var created domain.Knowledge
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	// The producer key rode along in the document and is kept.
+	if created.Attrs["owner"] != "finance" {
+		t.Errorf("producer key lost: %v", created.Attrs)
+	}
+
+	// The same write again is a 409: create-only means create.
+	resp = putDoc(t, srv.URL, id, []byte(doc), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("create-only over a live entry = %d, want 409", resp.StatusCode)
+	}
+
+	// Without the precondition it replaces — and an identical document
+	// writes nothing.
+	resp = putDoc(t, srv.URL, id, []byte(doc), false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("identical replace = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+
+	// A document ochakai wrote can be edited and sent back as it came:
+	// the keys the server owns are ignored rather than refused, which is
+	// what makes get → edit → put a loop a human can run.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req.Header.Set("Accept", "text/markdown")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(served), "generated:") || !strings.Contains(string(served), "created_by:") {
+		t.Fatalf("the served document carries no server-owned provenance:\n%s", served)
+	}
+	edited := strings.Replace(string(served), "title: 売上", "title: 売上(改)", 1)
+	resp = putDoc(t, srv.URL, id, []byte(edited), false)
+	var back domain.Knowledge
+	if err := json.NewDecoder(resp.Body).Decode(&back); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || back.Title != "売上(改)" {
+		t.Errorf("round-tripped edit = %d, title %q", resp.StatusCode, back.Title)
+	}
+	if back.CreatedBy.Name != created.CreatedBy.Name {
+		t.Errorf("a document's created_by was read back as provenance: %+v", back.CreatedBy)
+	}
+
+	// A stale version is refused and writes nothing.
+	req, _ = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/knowledge/"+id, strings.NewReader(doc))
+	req.Header.Set("Content-Type", "text/markdown")
+	req.Header.Set("If-Match", `"`+created.ContentHash+`"`)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Errorf("stale If-Match = %d, want 412", resp.StatusCode)
 	}
 }
