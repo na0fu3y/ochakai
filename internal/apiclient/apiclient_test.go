@@ -361,14 +361,16 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 	}
 }
 
-func TestAttachSendsBytesAndOKFPath(t *testing.T) {
+// A file goes to the address it lives at, with nothing beside it saying
+// where it really lives (design doc 0046 §3.3).
+func TestAttachSendsBytesToTheAddress(t *testing.T) {
 	body := []byte("attachment bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/attachments/insights/sales/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		if r.URL.Query().Get("okf_path") != "images/weekly.png" {
-			t.Errorf("okf_path = %q", r.URL.Query().Get("okf_path"))
+		if r.URL.RawQuery != "" {
+			t.Errorf("the write carries a parameter: %q", r.URL.RawQuery)
 		}
 		got, _ := io.ReadAll(r.Body)
 		if string(got) != string(body) {
@@ -376,7 +378,7 @@ func TestAttachSendsBytesAndOKFPath(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Attachment{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
 	})
-	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", "images/weekly.png", body)
+	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", body)
 	if err != nil {
 		t.Fatal(err)
 	}

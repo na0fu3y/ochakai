@@ -181,7 +181,7 @@ func TestAttachmentPath(t *testing.T) {
 	if p := AttachmentPath("insights/sales/revenue-reading", native); p != "insights/sales/revenue-reading/weekly.png" {
 		t.Errorf("canonical path = %q", p)
 	}
-	foreign := &domain.Attachment{Name: "er.png", OKFPath: "diagrams/er.png"}
+	foreign := &domain.Attachment{Name: "er.png", Path: "diagrams/er.png"}
 	if p := AttachmentPath("tables/orders", foreign); p != "diagrams/er.png" {
 		t.Errorf("foreign path = %q", p)
 	}

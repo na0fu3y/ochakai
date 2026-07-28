@@ -468,15 +468,10 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 
 // Attach uploads data as an attachment of the entry (PUT
 // /api/v1/attachments/{id}/{name}), replacing any attachment of
-// the same name. okfPath preserves a foreign bundle location for
-// round-trips; "" for attachments born here. The server sniffs the media
-// type from the bytes.
-func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
-	var q url.Values
-	if okfPath != "" {
-		q = url.Values{"okf_path": {okfPath}}
-	}
-	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), q,
+// the same name. The file lands at <id>/<name>; one that lives elsewhere
+// in the bundle is written with PutBundleFile, at the path it lives at.
+func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.Attachment, error) {
+	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err

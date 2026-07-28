@@ -7,9 +7,23 @@ info:
     terms, dataset and table catalog entries, and references (mirrors of
     external material) in one knowledge base. The REST API is a superset
     of the MCP tools — the same operations plus bulk export, the
-    human-facing browse/revisions/backlinks reads, and attachment writes —
-    so users can build their own web UIs. ochakai executes no SQL and uses
-    no LLM.
+    human-facing backlinks read, and file writes — so users can build
+    their own web UIs. ochakai executes no SQL and uses no LLM.
+
+
+    **Which address to build on.** A concept and a file are both objects
+    of one bundle, and `/api/v1/bundle/{path}` is the address that says
+    so (design doc 0046 §3.5). Several older addresses still answer for
+    the same objects and are on their way out; where a replacement is
+    already serving, the operation below is marked `deprecated` and names
+    it. `/api/v1/knowledge` (the list), `/api/v1/backlinks/{id}` and
+    `/api/v1/export` are retired by the same section, but their
+    successors — a ranking face at `/api/v1/search` with `links_to=`, and
+    a subtree under `Accept: application/gzip` — are not built yet, so
+    they are the only way to ask those questions today and carry no such
+    mark. Every interface is unstable while the major version is 0
+    (docs/compatibility.md): a removal arrives in a minor release with a
+    changelog entry, not after a deprecation window.
   version: 0.15.0
   license:
     name: MIT
@@ -195,7 +209,7 @@ paths:
                   description: >
                     A hit names an entry and says what ranked it; it does
                     not hand the entry over. Read the ones worth reading
-                    with GET /api/v1/knowledge/{id}, or ask
+                    with GET /api/v1/bundle/{id}.md, or ask
                     GET /api/v1/context for the documents behind the top
                     hits in one call.
                     Attachment metadata rides along (filled in one batch),
@@ -480,6 +494,11 @@ paths:
 
         index.md and log.md are 409: they are generated from the bundle,
         so a write there is a conflict with what the address is.
+
+        Writing a file needs the server to have GCS configured
+        (OCHAKAI_GCS_BUCKET); without it an instance stores concepts and
+        nothing else, and a write that is not a concept is a 501 (design
+        doc 0013). A concept is unaffected.
       responses:
         "200":
           description: The object as stored — a View for a concept, file metadata otherwise.
@@ -868,7 +887,13 @@ paths:
     get:
       operationId: getKnowledge
       summary: Get one knowledge entry
+      deprecated: true
       description: >
+        Build on `GET /api/v1/bundle/{id}.md`, which answers exactly this
+        — the same View, the same document under `Accept: text/markdown`,
+        the same ETag — at the address a concept has in the bundle. This
+        one is retired by design doc 0046 §3.5.
+
         Answers a View by default: the entry's document as it was
         written, the projection to read it by, and what this instance
         observed about it (design docs 0043 §3.5, 0046 §2.2). Comments,
@@ -1054,13 +1079,17 @@ paths:
     put:
       operationId: putKnowledge
       summary: Write a knowledge entry from an OKF document
+      deprecated: true
       description: >
-        The one way to write knowledge. The body is an OKF document —
-        YAML frontmatter, then markdown — which is what an entry is
-        (design doc 0043 §3.5): the path is the address, the document is
-        what the entry says, and there is no typed JSON write surface
-        beside it to drift from the format. A JSON body is a 415 naming
-        the document form.
+        Build on `PUT /api/v1/bundle/{id}.md`, which writes exactly this
+        — the same document, the same preconditions, the same answer.
+        This one is retired by design doc 0046 §3.5.
+
+        The body is an OKF document — YAML frontmatter, then markdown —
+        which is what an entry is (design doc 0043 §3.5): the path is the
+        address, the document is what the entry says, and there is no
+        typed JSON write surface beside it to drift from the format. A
+        JSON body is a 415 naming the document form.
         It is create-or-replace, and a full replacement: what the document
         omits is cleared, so send the entry as it should end up. A PUT
         states what the entry should say; whether an entry already held
@@ -1283,7 +1312,13 @@ paths:
     delete:
       operationId: deleteKnowledge
       summary: Soft-delete a knowledge entry (history retained)
+      deprecated: true
       description: >
+        The soft delete is `DELETE /api/v1/bundle/{id}.md`; build on
+        that. `purge=true` has no bundle-address form yet — design doc
+        0046 §3.5 gives it one and it is not built — so a purge is still
+        asked for here. This one is retired by the same section.
+
         Soft-deletes by default: the entry disappears from reads, its
         history stays, and creating the same id revives it. With
         `purge=true` the entry is hard-deleted instead — entry,
@@ -1819,7 +1854,14 @@ paths:
     put:
       operationId: putAttachment
       summary: Attach a file to a knowledge entry
+      deprecated: true
       description: >
+        Build on `PUT /api/v1/bundle/{path}`, which stores the same bytes
+        at the path they live at — so there is nothing for `okf_path` to
+        preserve and no entry to attribute the file to at write time
+        (whether an entry shows a file is a question its body answers).
+        This one is retired by design doc 0046 §§3.3, 3.5.
+
         Stores the raw request body as a file of the bundle, replacing
         any file of the same name (kept as a revision). The media type is
         sniffed from the bytes and nothing is refused for being what it
@@ -1835,15 +1877,6 @@ paths:
         the request fails with 501.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
-        - name: okf_path
-          in: query
-          required: false
-          description: >
-            Bundle path a foreign OKF import carried this file at
-            (clean, bundle-relative). Export writes the file back there
-            so the original body links keep working. Omit for
-            attachments born in ochakai.
-          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -1879,7 +1912,12 @@ paths:
     get:
       operationId: getAttachment
       summary: Fetch attachment bytes
+      deprecated: true
       description: >
+        Build on `GET /api/v1/bundle/{path}`, which answers the same
+        bytes, the same ETag and the same delivery headers. This one is
+        retired by design doc 0046 §3.5.
+
         Returns the file bytes with the stored (sniffed) media type; the
         ETag is the content's SHA-256, and a matching If-None-Match gets
         a 304 answered from metadata alone (no blob read, so repeat
@@ -1927,7 +1965,11 @@ paths:
     delete:
       operationId: deleteAttachment
       summary: Detach a file from a knowledge entry
+      deprecated: true
       description: >
+        Build on `DELETE /api/v1/bundle/{path}`, which removes the same
+        file. This one is retired by design doc 0046 §3.5.
+
         Removes the attachment (kept as a revision; the content-addressed
         bytes remain referenced by history).
       parameters:
@@ -2035,10 +2077,9 @@ paths:
         endpoints already here, so a server-side version would add a
         second path to the same outcome without adding a capability.
         To write your own importer against any OKF bundle: walk the
-        tar.gz, POST each `<id>.md` to /api/v1/knowledge (PUT to
-        /api/v1/knowledge/{id} if it exists), and PUT each non-markdown
-        file to /api/v1/attachments/{id}/{name}, attributing it to the
-        entry whose directory it sits in or whose body links to it.
+        tar.gz and PUT every member to /api/v1/bundle/{path} at the path
+        it arrived at. One address takes both kinds — the bytes decide
+        which — so there is nothing to attribute and nothing to route.
         `index.md` files are generated on export and are not entries.
         Frontmatter keys the server owns — `generated`, `verified`,
         `created_by`, `rejected_by`, `rejected_at`, and the pre-v0.2
@@ -2046,8 +2087,10 @@ paths:
         ignored on write; provenance comes from the caller's identity
         (design docs 0009, 0036 §3.2). The one exception is that the
         presence of a `verified` key decides how OKF's `stable` status
-        maps onto ochakai's (design doc 0036 §3.4). `ochakai import` is
-        exactly this loop.
+        maps onto ochakai's (design doc 0036 §3.4). `ochakai import`
+        walks the same loop, still routing a concept and an attachment
+        through the older addresses it was written against — the same
+        outcome by a longer route, until they go.
       parameters:
         - name: attachments
           in: query
@@ -2552,8 +2595,8 @@ components:
           items: { $ref: "#/components/schemas/Attachment" }
           description: >
             Attachment metadata (no bytes — fetch them via
-            /api/v1/attachments/{id}/{name}). Managed through the
-            attachment endpoints. Absent when the entry has none.
+            /api/v1/bundle/{path}, which is also where they are written).
+            Absent when the entry has none.
         created_at: { type: string, format: date-time, readOnly: true }
         updated_at: { type: string, format: date-time, readOnly: true }
         trust:
@@ -2591,12 +2634,15 @@ components:
             what a browser may do with it is decided when it is served.
         size: { type: integer }
         sha256: { type: string, description: Content hash; attachments are content-addressed and immutable. }
-        okf_path:
+        path:
           type: string
           description: >
-            Bundle path a foreign OKF import carried this file at; export
-            writes it back there so body links keep working. Absent for
-            attachments born in ochakai (exported to "<id>/<name>").
+            Where the file lives in the bundle — its address, and what an
+            export writes it back as. A file written through this address
+            is at `<id>/<name>`; one written at its own bundle path is
+            there, which is how a foreign layout round-trips (design doc
+            0046 §3.3). `name` is the last segment, beside it the way a
+            concept keeps its id beside its path.
         created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         created_at: { type: string, format: date-time, readOnly: true }
     Usage:

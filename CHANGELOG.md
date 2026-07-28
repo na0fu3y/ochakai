@@ -46,6 +46,45 @@ last entry.
   drafting and reporting outcomes, both of which lengthen a queue rather
   than read it.
 
+- **BREAKING** — a file reports the path it lives at. `okf_path` is gone
+  from the wire and from the attach call; `Attachment` carries `path`
+  instead (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.3).
+
+  `okf_path` meant "this file is not where ochakai would have put it" —
+  a second identity for one object, and one that could disagree with the
+  row it described. Since files became objects at paths, where a file
+  lives is simply its address: a file written through
+  `/api/v1/attachments/{id}/{name}` is at `<id>/<name>`, and one written
+  at its own bundle path is there. `name` stays beside `path` as the last
+  segment, the way a concept keeps its id beside its path.
+
+  The `?okf_path=` parameter on attach is gone with it. A file that
+  belongs elsewhere in the bundle is written at the path it belongs at
+  (`PUT /api/v1/bundle/{path}`), which is what `ochakai import` now does
+  — where a file lives is an address, not an annotation on a write to
+  something else.
+
+- **BREAKING** — the MCP write face is one tool. `create_knowledge` and
+  `update_knowledge` are `put_knowledge`: it creates when the id is free
+  and replaces when it is taken (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.14).
+
+  The two tools asked the agent a question the document does not answer.
+  A write states what the entry should say, and whether the id was
+  already taken is not part of that statement — the same reasoning that
+  gave REST one `PUT` instead of a POST beside it. The guards are
+  unchanged and still apply to the half they belong to: reviving a
+  curated tombstone is refused on the create side, replacing an entry a
+  human ruled on is refused on the other, and both refusals still name
+  the way forward.
+
+  It is also where the tool budget actually is. The whole surface is
+  33.5 KB of JSON schema; this merge saves about 6 KB of it, which is
+  nearly twice what dropping `delete_knowledge`, `get_knowledge_usage`
+  and `get_attachment` would have bought — so those three stay
+  (issue #272), and the surface is eight tools.
+
 - **What enters the bundle leaves it** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.2). `ochakai
   import` now keeps every file the bundle carried, at the path it
@@ -245,6 +284,33 @@ last entry.
   a write that only repeats it is still a no-op.
 
 ### Changed
+
+- **The published contract says which address to build on.** While
+  [0046](docs/design/0046-bundle-address-space.md) §3.5's fold is in
+  flight, three addresses answer for the same object, and
+  `api/openapi.yaml` did not say which one survives it.
+  `/api/v1/bundle/{path}` does. The operations it replaces —
+  `GET|PUT|DELETE /api/v1/knowledge/{id}` and
+  `GET|PUT|DELETE /api/v1/attachments/{path}` — are now marked
+  `deprecated`, each naming the bundle call that answers the same
+  question. Nothing is removed and no behaviour changes: a removal
+  arrives in a minor release with a changelog entry, as
+  [the compatibility policy](docs/compatibility.md) says, not after a
+  deprecation window.
+
+  `/api/v1/knowledge` (the list), `/api/v1/backlinks/{id}` and
+  `/api/v1/export` are retired by the same section but carry no mark:
+  their successors are not built yet, so they are still the only way to
+  ask what they answer. The document says so rather than leaving a
+  reader to find out.
+
+  Two things that read as holes are closed with it. The `501` on
+  `PUT /api/v1/bundle/{path}` now says what it is — writing a file needs
+  GCS (design doc 0013), and a concept is unaffected — rather than
+  standing unexplained where a "not built yet" placeholder used to be.
+  And `/api/v1/export`'s recipe for writing your own importer no longer
+  sends the reader to a `POST /api/v1/knowledge` that does not exist:
+  it is one PUT per bundle member, at the path it arrived at.
 
 - **A file is an object in the bundle** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.3, 3.13). Migration
