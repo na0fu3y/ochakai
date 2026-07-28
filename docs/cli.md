@@ -78,7 +78,7 @@ Flags:
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
-  ochakai attach insights/revenue-reading weekly.png
+  ochakai attach insights/reading-revenue weekly.png
   ochakai attach tables/orders seeds.txt
   ochakai attach tables/orders er-diagram.png --name schema.png
 ```
@@ -243,7 +243,7 @@ Flags:
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
-  ochakai detach insights/revenue-reading weekly.png
+  ochakai detach insights/reading-revenue weekly.png
 ```
 
 ## ochakai export
@@ -287,8 +287,8 @@ Flags:
 
 Examples:
   ochakai get metrics/revenue
-  ochakai get queries/monthly-revenue --json | jq -r '.attrs.sql'
-  ochakai get insights/revenue-reading --download ./img
+  ochakai get queries/sales/monthly-revenue --json | jq -r '.attrs.sql'
+  ochakai get insights/reading-revenue --download ./img
 ```
 
 ## ochakai import
@@ -436,8 +436,8 @@ Flags:
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
-  ochakai report queries/monthly-revenue worked
-  ochakai report queries/monthly-revenue failed --note "joins dropped 2024 rows after schema change"
+  ochakai report queries/sales/monthly-revenue worked
+  ochakai report queries/sales/monthly-revenue failed --note "joins dropped 2024 rows after schema change"
 ```
 
 ## ochakai revisions
@@ -460,7 +460,7 @@ Flags:
 
 Examples:
   ochakai revisions metrics/revenue
-  ochakai revisions queries/monthly-revenue --json | jq '.revisions[0].snapshot'
+  ochakai revisions queries/sales/monthly-revenue --json | jq '.revisions[0].snapshot'
 ```
 
 ## ochakai search
@@ -588,7 +588,7 @@ Flags:
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
-  ochakai usage queries/monthly-revenue
+  ochakai usage queries/sales/monthly-revenue
   ochakai usage metrics/revenue --json
 ```
 
