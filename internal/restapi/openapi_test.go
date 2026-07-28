@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -218,5 +219,19 @@ func TestOpenAPITypeVocabularyMatchesDomain(t *testing.T) {
 		if strings.Contains(block, retired) {
 			t.Errorf("the Type schema still lists %q, retired by design doc 0038", retired)
 		}
+	}
+
+	// The comment above named `examples` as the place a retired spelling
+	// keeps recommending itself, and the check did not look there: the
+	// create example taught `type: Golden Query` with the SQL in attrs for
+	// two releases after 0038 (issue #222). Examples are what a reader
+	// copies, so they are held to the same vocabulary as the schema.
+	//
+	// The value form only. Prose that has to name a retired spelling — a
+	// migration note, say — is still free to.
+	for _, m := range regexp.MustCompile(`(?m)^\s*(?:- )?type: (Golden Query|Semantic Model)\s*$`).
+		FindAllStringSubmatch(spec, -1) {
+		t.Errorf("an example still writes %q as a type. It is a free type and still works, "+
+			"but the spec is where people copy from (design doc 0038)", m[1])
 	}
 }
