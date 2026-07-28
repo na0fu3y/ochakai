@@ -177,16 +177,14 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
-	// PUT and DELETE /api/v1/bundle/{path...} — two refusals, and which
-	// one the caller gets depends on the path.
+	// PUT and DELETE /api/v1/bundle/{path...} — the write face of the one
+	// address space (design doc 0046 §3.5).
 	//
-	// The reserved names are generated from the bundle rather than stored
-	// in it, so a write is a conflict with what the address is: 409, as
-	// design doc 0046 §3.5 says. Every other path is the write face that
-	// same section describes, and it lands in a later change: 501, which
-	// is what "not built yet" means. Answering the reserved-file reason
-	// there would explain a refusal in terms of two files the caller never
-	// named.
+	// The reserved names are the one refusal the address itself makes:
+	// they are generated from the bundle rather than stored in it, so a
+	// write there is a conflict with what the address is (409). Every
+	// other path is an object, and what it becomes is decided by the
+	// bytes rather than by the caller — see below.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
