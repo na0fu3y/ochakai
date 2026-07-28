@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
@@ -145,4 +146,63 @@ func (s *Service) Detach(ctx context.Context, id, name string, actor domain.Acto
 		return err
 	}
 	return s.Store.DeleteAttachment(ctx, domain.Normalize(id), domain.Normalize(name), actor)
+}
+
+// PutFile writes a file at a bundle path (design doc 0046 §§3.2, 3.5).
+// It is Attach's counterpart for an object that belongs to no entry: a
+// producer's seed data in a shared directory, a diagram two entries
+// show, a markdown file carrying no type and so not a concept.
+//
+// Attribution is not asked for and not recorded. Whether an entry is
+// shown by this file is a question its body answers (§3.3), so a file
+// written under an entry's namespace, or one an entry already links,
+// arrives attributed and one nothing points at is simply a file.
+func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	p = domain.Normalize(p)
+	if !s.Store.HasBlobStore() {
+		return nil, Unsupportedf("files are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
+	}
+	if !domain.ValidBundlePath(p) {
+		return nil, Invalidf("invalid bundle path %q (path segments separated by \"/\"; segments must not start with \".\", and index.md and log.md are generated rather than stored)", p)
+	}
+	if len(data) == 0 {
+		return nil, Invalidf("the file is empty")
+	}
+	if len(data) > domain.MaxAttachmentSize {
+		return nil, Invalidf("the file exceeds %d MiB", domain.MaxAttachmentSize>>20)
+	}
+	mediaType, err := domain.DetectAttachmentMediaType(data)
+	if err != nil {
+		return nil, Invalidf("%v", err)
+	}
+	att, err := s.Store.PutFile(ctx, p, mediaType, data, actor)
+	if err != nil {
+		return nil, err
+	}
+	// The vector is keyed by the entry the file is attributed to, which
+	// a file at a path nothing points at has none of. Reembed picks it up
+	// as soon as an entry names it (design doc 0020).
+	if owner, ok := strings.CutSuffix(p, "/"+att.Name); ok {
+		s.updateAttachmentEmbedding(ctx, owner, att, data)
+	}
+	return att, nil
+}
+
+// GetFile returns the file at a bundle path with its bytes.
+func (s *Service) GetFile(ctx context.Context, p string) (*domain.Attachment, []byte, error) {
+	if !s.Store.HasBlobStore() {
+		return nil, nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
+	}
+	return s.Store.GetFile(ctx, domain.Normalize(p))
+}
+
+// DeleteFile removes the file at a bundle path.
+func (s *Service) DeleteFile(ctx context.Context, p string, actor domain.Actor) error {
+	if err := s.readOnly(); err != nil {
+		return err
+	}
+	return s.Store.DeleteFile(ctx, domain.Normalize(p), actor)
 }

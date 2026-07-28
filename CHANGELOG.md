@@ -20,6 +20,30 @@ last entry.
 
 ### Added
 
+- **The bundle address reads and writes every object in it** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.5).
+  `GET|PUT|DELETE /api/v1/bundle/{path}` now serves a concept at
+  `<id>.md`, a file at its own path, and the two generated files as
+  before.
+
+  A concept answers and is written exactly as it is on
+  `/api/v1/knowledge/{id}` — the same View, the same document under
+  `Accept: text/markdown`, the same `ETag`, the same `If-Match` and
+  `If-None-Match: *`, the same `Ochakai-Unchanged`. One object, two
+  addresses, one answer: an address is not a second surface.
+
+  What the bytes are decides what they become. A markdown document whose
+  frontmatter carries a `type` is a concept; anything else is a file —
+  **including a markdown document with no `type`**, which SPEC §11 makes
+  not-a-concept and which a bundle that carried one now gets back
+  instead of losing (§3.2). A file needs no owner: whether an entry
+  shows it is a question its body answers (§3.3), so a file written
+  under an entry's namespace arrives attributed and one nothing points
+  at is simply a file.
+
+  `index.md` and `log.md` stay 409 on write, and a file's history lands
+  in the same ledger the concepts use — created and deleted, by whom.
+
 - **`ochakai log [path]`** prints the update history as OKF's `log.md`
   (SPEC §9): date-grouped, newest first, for a path or the whole bundle
   (design doc [0046](docs/design/0046-bundle-address-space.md) §3.8).

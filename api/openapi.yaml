@@ -326,10 +326,21 @@ paths:
   /api/v1/bundle/{path}:
     get:
       operationId: getBundleFile
-      summary: Read one of the files OKF reserves
+      summary: Read one object of the bundle
       description: >
-        The two filenames SPEC §3.1 reserves, generated from the bundle
-        rather than stored in it (design doc 0046 §§3.7-3.8).
+        One object at its bundle path (design doc 0046 §3.5): a concept
+        at `<id>.md`, a file at its own path, or one of the two names OKF
+        reserves per directory — which are generated from the bundle
+        rather than stored in it (§§3.7-3.8).
+
+        A concept answers exactly as `GET /api/v1/knowledge/{id}` does,
+        the same View or the same document under `Accept: text/markdown`,
+        with the same ETag. One object, two addresses, one answer: an
+        address is not a second surface.
+
+        A file answers with its bytes, its content hash as the ETag, and
+        the headers that decide what a browser may do with them (see
+        `GET /api/v1/attachments/{path}`).
 
         `index.md` is one level of the tree — the subdirectories directly
         under the path, each with the count of entries beneath, plus the
@@ -348,18 +359,16 @@ paths:
         names. Two representations of one thing, at one address — the
         JSON is what a web UI's tree needs, not a second surface.
 
-        PUT and DELETE against these two names are 409: a generated file
-        is not one anybody writes. Paths other than the two reserved
-        names are 404 on read and 501 on write for now — the rest of the
-        bundle joins this address in a later change (0046 §3.5).
+        PUT and DELETE against the two reserved names are 409: a
+        generated file is not one anybody writes.
       parameters:
         - name: path
           in: path
           required: true
           description: >
-            The reserved file's bundle path — "index.md" or "log.md" at
-            the root, "metrics/index.md" below it. Slashes are real path
-            separators.
+            The object's bundle path — "metrics/revenue.md",
+            "metrics/revenue/chart.png", or a reserved "index.md" /
+            "metrics/log.md". Slashes are real path separators.
           schema: { type: string }
         - name: limit
           in: query
@@ -367,10 +376,18 @@ paths:
           schema: { type: integer }
       responses:
         "200":
-          description: The generated file, or its structured form.
+          description: >
+            The object: a concept's document or View, a file's bytes, or
+            a generated file and its structured form.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+            ETag: { $ref: "#/components/headers/ETag" }
+            Content-Disposition:
+              description: Files only — inline for an image, a PDF or plain text; attachment otherwise (design doc 0046 §3.2).
+              schema: { type: string }
           content:
+            "*/*":
+              schema: { type: string, format: binary, description: A file's bytes, under the media type sniffed when it was stored. }
             text/markdown:
               schema: { type: string }
               example: |
@@ -435,10 +452,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
-          description: >
-            No object at this path. Today that is every path but the two
-            reserved names: the concepts and files join this address in a
-            later change (design doc 0046 §3.5).
+          description: No object at this path.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -448,17 +462,56 @@ paths:
                 properties:
                   error: { type: string }
               example:
-                error: 'no object at "metrics/revenue.md": the bundle surface serves index.md and log.md'
+                error: knowledge not found
     put:
       operationId: putBundleFile
-      summary: Refused — generated at the reserved names, not built yet elsewhere
+      summary: Write one object of the bundle
       description: >
-        Two refusals, and the path decides which. index.md and log.md are
-        derived from the bundle (design doc 0046 §§3.7-3.8), so a write
-        there is a conflict with what the address is: 409. Every other
-        path is the write face 0046 §3.5 describes, which lands in a
-        later change: 501. The same goes for DELETE.
+        Stores the request body at the path (design doc 0046 §3.5). What
+        it becomes is decided by the bytes, not by a parameter:
+
+        A markdown path whose document carries a `type` is a concept, and
+        the write is exactly `PUT /api/v1/knowledge/{id}` — the same
+        preconditions (`If-Match`, `If-None-Match: *`), the same
+        `Ochakai-Unchanged`, the same answer. Anything else is a file,
+        including a markdown document with no `type`: SPEC §11 makes the
+        key what a concept has, and a bundle that carried a typeless
+        markdown file gets it back rather than losing it (§3.2).
+
+        index.md and log.md are 409: they are generated from the bundle,
+        so a write there is a conflict with what the address is.
       responses:
+        "200":
+          description: The object as stored — a View for a concept, file metadata otherwise.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Unchanged:
+              description: Concepts only — the payload matched what was stored, so nothing was written.
+              schema: { type: string, enum: ["true"] }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: "#/components/schemas/View"
+                  - $ref: "#/components/schemas/Attachment"
+            text/markdown:
+              schema: { type: string }
+        "201":
+          description: A concept was created (If-None-Match "*", or the path was free).
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/View" }
+            text/markdown:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "412": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
         "409":
           description: A generated file is not one anybody writes.
           headers:
@@ -471,35 +524,23 @@ paths:
                   error: { type: string }
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
-        "501":
-          description: The bundle write surface is not built yet.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-              example:
-                error: the bundle write surface lands in a later change (design doc 0046 §3.5)
     delete:
       operationId: deleteBundleFile
-      summary: Refused — generated at the reserved names, not built yet elsewhere
-      description: See PUT.
+      summary: Delete one object of the bundle
+      description: >
+        Removes the object at the path: a concept is soft-deleted, as
+        `DELETE /api/v1/knowledge/{id}` does, and a file is removed (its
+        bytes stay, named by the revisions that came before). index.md
+        and log.md are 409 for the same reason PUT gives.
       responses:
-        "409":
-          description: A generated file is not one anybody deletes.
+        "204":
+          description: Deleted.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-        "501":
-          description: The bundle write surface is not built yet.
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: A generated file is not one anybody deletes.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:

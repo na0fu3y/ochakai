@@ -1,0 +1,11 @@
+-- A file's history goes in the ledger the concepts use (design doc 0046
+-- §3.1): creating and deleting a file is a change to the bundle, and a
+-- second place to record it would be a second history to read.
+--
+-- The ledger is keyed by path (0028) and carries the concept id beside
+-- it, for the reads that still ask by id. A file has no concept id — an
+-- id is a concept's address, and the path with ".md" removed is not one
+-- for a .png — so the column stops being NOT NULL. NULL rather than '':
+-- the same reason object.id took, and it keeps "which revisions are this
+-- concept's" an equality rather than a special case.
+ALTER TABLE knowledge_revision ALTER COLUMN id DROP NOT NULL;

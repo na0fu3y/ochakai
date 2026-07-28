@@ -107,21 +107,35 @@ func forSpecRouting(p string) string {
 	return p
 }
 
-// carriesOpaqueBytes reports whether this is one of the two operations
-// whose body is raw attachment bytes: PUT (the file being stored) and GET
-// (the file coming back with its sniffed media type).
+// carriesOpaqueBytes reports whether this request stores raw bytes: a
+// PUT of a file, whose body is the file and whose Content-Type is
+// whatever the client sent, or nothing at all.
 //
-// Both are declared "*/*" in the spec, and the validator resolves media
-// types by exact match — it reads "*/*" as a literal type name, so an
-// image/png response, or a PUT that sends no Content-Type at all, is
-// reported as undeclared. Skipping them costs nothing that could have
-// drifted: `{type: string, format: binary}` under a wildcard asserts
-// nothing about the bytes, which is the whole point of an attachment.
-// DELETE on the same path keeps its 204 checked, and export — a tarball
-// under a named media type — validates normally.
+// The validator resolves media types by exact match — it reads "*/*" as
+// a literal type name — so a body under a wildcard is reported as
+// undeclared. Skipping costs nothing that could have drifted:
+// `{type: string, format: binary}` asserts nothing about the bytes,
+// which is the whole point of a file.
 func carriesOpaqueBytes(r *http.Request) bool {
-	return strings.HasPrefix(r.URL.Path, "/api/v1/attachments/") &&
-		(r.Method == http.MethodPut || r.Method == http.MethodGet)
+	return r.Method == http.MethodPut &&
+		(strings.HasPrefix(r.URL.Path, "/api/v1/attachments/") ||
+			strings.HasPrefix(r.URL.Path, "/api/v1/bundle/"))
+}
+
+// sniffedResponse reports whether a response's media type was decided by
+// sniffing the bytes rather than chosen by the handler — a file coming
+// back from the attachment or bundle address. Same exact-match problem,
+// same reasoning: the declared schema is a wildcard over bytes.
+//
+// Everything the handler does choose stays checked, which is what
+// matters here: a concept read through the bundle address answers
+// application/json or text/markdown and is validated like any other.
+func sniffedResponse(res *http.Response) bool {
+	switch mt, _, _ := strings.Cut(res.Header.Get("Content-Type"), ";"); strings.TrimSpace(mt) {
+	case "", "application/json", "text/markdown", "application/gzip":
+		return false
+	}
+	return true
 }
 
 // checkedServer is httptest.NewServer(Handler(svc)) with the spec in the
@@ -170,8 +184,10 @@ func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 		h.ServeHTTP(rec, r)
 		res := rec.Result()
 		res.Body = io.NopCloser(bytes.NewReader(rec.Body.Bytes()))
-		if ok, errs := v.ValidateHttpResponse(specReq(), res); !ok {
-			reportSpecErrors(t, "response", r, errs)
+		if !sniffedResponse(res) {
+			if ok, errs := v.ValidateHttpResponse(specReq(), res); !ok {
+				reportSpecErrors(t, "response", r, errs)
+			}
 		}
 
 		for k, vs := range rec.Header() {
