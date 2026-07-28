@@ -105,28 +105,51 @@ func TestRESTIntegration(t *testing.T) {
 			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
 	}
 
-	// Browse: under the run-unique top segment the "sales" directory
-	// shows, and the prefix level shows the entry (with its type as
+	// index.md: under the run-unique top segment the "sales" directory
+	// shows, and the level below shows the entry (with its type as
 	// metadata in the projection).
 	var root service.BrowseResult
-	getJSON(t, srv.URL+"/api/v1/browse?prefix="+typ, &root)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &root)
 	if len(root.Dirs) != 1 || root.Dirs[0].Name != "sales" || root.Dirs[0].Count != 1 {
-		t.Errorf("browse root = %+v", root)
+		t.Errorf("index.md root = %+v", root)
 	}
 	var level service.BrowseResult
-	getJSON(t, srv.URL+"/api/v1/browse?prefix="+typ+"/sales", &level)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/sales/index.md", &level)
 	if len(level.Entries) != 1 || level.Entries[0].ID != id || string(level.Entries[0].Type) != typ {
-		t.Errorf("browse level = %+v", level)
+		t.Errorf("index.md level = %+v", level)
+	}
+	// And the same address without the Accept header is the file itself.
+	doc := getText(t, srv.URL+"/api/v1/bundle/"+typ+"/sales/index.md")
+	if !strings.Contains(doc, "# "+typ+"/sales") || !strings.Contains(doc, "(orders.md)") {
+		t.Errorf("generated index.md:\n%s", doc)
 	}
 
-	// Revisions: exactly the create, with a snapshot.
+	// log.md: exactly the create, in both representations.
 	var revs struct {
 		Revisions []domain.Revision `json:"revisions"`
 	}
-	getJSON(t, srv.URL+"/api/v1/revisions/"+typ+"/sales/orders", &revs)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/sales/orders/log.md", &revs)
 	if len(revs.Revisions) != 1 || revs.Revisions[0].Change != "create" ||
 		!strings.Contains(revs.Revisions[0].Document, "title: REST round trip") {
 		t.Errorf("revisions = %+v", revs.Revisions)
+	}
+	logDoc := getText(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md")
+	if !strings.Contains(logDoc, "**Create**") || !strings.Contains(logDoc, "/"+id+".md") {
+		t.Errorf("generated log.md:\n%s", logDoc)
+	}
+
+	// Neither is writable: they are generated, not stored.
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+typ+"/index.md", strings.NewReader("x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("PUT index.md = %d, want 405", resp.StatusCode)
 	}
 
 	// Export: the bundle carries the entry at its canonical path.
@@ -241,7 +264,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 
 	// Delete, then the entry is gone.
-	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", nil)
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", nil)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -448,9 +471,35 @@ func putDoc(t *testing.T, base, id string, doc []byte, onlyIfAbsent bool) *http.
 	return resp
 }
 
-func getJSON(t *testing.T, url string, v any) {
+// getText fetches a path without asking for JSON — what a reader of the
+// bundle gets.
+func getText(t *testing.T, url string) string {
 	t.Helper()
 	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s = %d: %s", url, resp.StatusCode, body)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/markdown") {
+		t.Errorf("GET %s: content-type = %q, want markdown", url, ct)
+	}
+	return string(body)
+}
+
+func getJSON(t *testing.T, url string, v any) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The reserved paths answer with a file unless asked otherwise
+	// (design doc 0046 §§3.7-3.8); every other path ignores this.
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

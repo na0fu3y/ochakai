@@ -1247,6 +1247,47 @@ func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]doma
 	return revs, nil
 }
 
+// LogRow is one line of a subtree's history: enough to render log.md
+// (SPEC §9) and no more. The document each revision holds is
+// deliberately not selected — a history that shipped every past version
+// of every entry in a directory would be the whole knowledge base
+// several times over, and what log.md publishes is what changed and by
+// whom (design doc 0046 §3.8).
+type LogRow struct {
+	ID        string
+	Title     string
+	Change    string
+	ChangedBy domain.Actor
+	ChangedAt time.Time
+}
+
+// ListRevisionsUnder returns the newest changes anywhere under a path
+// prefix, newest first. An empty prefix is the whole bundle.
+//
+// The title comes from the entry as it stands rather than from the
+// revision: a log names what changed, and naming it by a title it has
+// since stopped having would send a reader looking for something that is
+// not there. An entry that has since been purged keeps its history and
+// loses its title, which is why the join is left.
+func (s *Store) ListRevisionsUnder(ctx context.Context, prefix string, limit int) ([]LogRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT r.id, COALESCE(k.title, ''), r.change,
+		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_at
+		 FROM knowledge_revision r
+		 LEFT JOIN knowledge k ON k.id = r.id
+		 WHERE $1 = '' OR r.id = $1 OR r.id LIKE $2
+		 ORDER BY r.changed_at DESC, r.id, r.rev DESC LIMIT $3`,
+		prefix, prefix+"/%", limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (LogRow, error) {
+		var l LogRow
+		return l, row.Scan(&l.ID, &l.Title, &l.Change,
+			&l.ChangedBy.Kind, &l.ChangedBy.Name, &l.ChangedBy.Via, &l.ChangedAt)
+	})
+}
+
 func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
 	// The full document, server-owned keys included: a revision records
 	// what the entry was, and who had confirmed it at the time is part of

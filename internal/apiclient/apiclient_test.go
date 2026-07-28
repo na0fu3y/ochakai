@@ -100,13 +100,19 @@ func TestSearchUsageSortDecodesUsage(t *testing.T) {
 	}
 }
 
-func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
-	var got url.Values
+// Browsing reads the JSON representation of a directory's index.md
+// (design doc 0046 §3.7), so the path carries the directory rather than
+// a query parameter.
+func TestBrowseReadsTheDirectorysIndex(t *testing.T) {
+	var path string
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/browse" {
+		if r.Method != http.MethodGet {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		got = r.URL.Query()
+		if a := r.Header.Get("Accept"); a != "application/json" {
+			t.Errorf("Accept = %q, want the structured representation", a)
+		}
+		path = r.URL.Path
 		_ = json.NewEncoder(w).Encode(BrowseResult{
 			Dirs:    []BrowseDir{{Name: "sales", Count: 4}},
 			Entries: []BrowseEntry{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusStable}},
@@ -116,27 +122,27 @@ func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Get("prefix") != "queries/" {
-		t.Errorf("query = %v", got)
+	if path != "/api/v1/bundle/queries/index.md" {
+		t.Errorf("path = %s", path)
 	}
 	if len(res.Dirs) != 1 || res.Dirs[0].Name != "sales" ||
 		len(res.Entries) != 1 || res.Entries[0].ID != "monthly-revenue" {
 		t.Errorf("res = %+v", res)
 	}
 
-	// Root level: no parameters at all.
+	// The root's own index.
 	if _, err := c.Browse(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 0 {
-		t.Errorf("root query = %v, want empty", got)
+	if path != "/api/v1/bundle/index.md" {
+		t.Errorf("root path = %s", path)
 	}
 }
 
 func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 	var got url.Values
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/revisions/queries/sales/monthly-revenue" {
+		if r.URL.Path != "/api/v1/bundle/queries/sales/monthly-revenue/log.md" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		got = r.URL.Query()

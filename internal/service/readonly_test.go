@@ -26,6 +26,9 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	reads := map[string]bool{
 		"Get": true, "Search": true, "SearchOrList": true, "Context": true,
 		"Revisions": true, "Backlinks": true, "Usage": true, "Browse": true,
+		// The two derived files are reads of the same tree and ledger
+		// (design doc 0046 §§3.7-3.8).
+		"IndexDocument": true, "LogDocument": true,
 		"Export": true, "Attachment": true, "AttachmentMeta": true,
 		"FillAttachments": true, "RefuseIfCurated": true,
 		"RefuseIfRevivingCurated": true, "Close": true,

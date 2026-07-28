@@ -311,31 +311,28 @@ func (d *dir) subdirNames() []string {
 // where an okf_version declaration is the one permitted block (§11) — and
 // list their entries with relative links, as in the spec's examples.
 func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
-	var b strings.Builder
-	if prefix == "" {
-		fmt.Fprintf(&b, "---\nokf_version: %q\n---\n\n# ochakai knowledge bundle\n\n", Version)
-	} else {
-		fmt.Fprintf(&b, "# %s\n\n", strings.TrimSuffix(prefix, "/"))
-	}
+	var dirs, concepts []IndexLine
 	for _, name := range d.subdirNames() {
 		noun := "concepts"
 		if d.subdirs[name].count == 1 {
 			noun = "concept"
 		}
-		fmt.Fprintf(&b, "* [%s/](%s/index.md) - %d %s\n", name, name, d.subdirs[name].count, noun)
+		dirs = append(dirs, IndexLine{Text: name + "/", Target: name + "/index.md",
+			Description: fmt.Sprintf("%d %s", d.subdirs[name].count, noun)})
 	}
 	for _, e := range d.entries {
 		title := e.k.Title
 		if title == "" {
 			title = e.name
 		}
-		desc := e.k.Description
-		if desc != "" {
-			desc = " - " + desc
-		}
-		fmt.Fprintf(&b, "* [%s](%s.md)%s\n", title, e.name, desc)
+		concepts = append(concepts, IndexLine{Text: title, Target: e.name + ".md", Description: e.k.Description})
 	}
-	files[prefix+"index.md"] = []byte(b.String())
+	// One renderer for both callers: an export writes the whole tree,
+	// a read generates one directory, and a bundle whose index.md
+	// changed shape depending on which asked would be two formats
+	// (design doc 0046 §3.7).
+	files[prefix+"index.md"] = IndexDocument(strings.TrimSuffix(prefix, "/"),
+		[]IndexSection{{Lines: dirs}, {Lines: concepts}})
 	for name, sub := range d.subdirs {
 		sub.writeIndexes(files, prefix+name+"/")
 	}

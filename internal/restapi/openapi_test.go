@@ -79,7 +79,7 @@ var idAddressed = []string{
 	"/api/v1/knowledge/",
 	"/api/v1/verify/",
 	"/api/v1/usage/",
-	"/api/v1/revisions/",
+	"/api/v1/bundle/",
 	"/api/v1/backlinks/",
 	"/api/v1/attachments/",
 }

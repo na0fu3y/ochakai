@@ -38,6 +38,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   usage <id>              show usage totals (search hits, fetches, outcomes)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
+  log [path]              print the history under a path as OKF's log.md
   backlinks <id>          list entries whose links point at this one
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
@@ -341,6 +342,30 @@ Examples:
   ochakai import ga4-bundle.tar.gz --dry-run
   ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
+```
+
+## ochakai log
+
+```
+Usage: ochakai log [flags] [path]
+
+Print the update history under a path as OKF's log.md (SPEC §9):
+date-grouped, newest first. With no path, the whole bundle.
+
+It is generated from the revision ledger, so it says the same thing
+`ochakai revisions` does — in the format a bundle carries, which is
+what makes the history portable.
+
+Flags:
+  -limit int
+    	max entries (default 1000)
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai log
+  ochakai log metrics
+  ochakai log metrics/revenue --limit 20
 ```
 
 ## ochakai mcp-stdio

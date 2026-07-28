@@ -103,6 +103,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   usage <id>              show usage totals (search hits, fetches, outcomes)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
+  log [path]              print the history under a path as OKF's log.md
   backlinks <id>          list entries whose links point at this one
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
