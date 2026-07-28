@@ -21,9 +21,7 @@ import (
 // from drifting apart again.
 func readOnlyServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	srv := checkedServer(t, Handler(&service.Service{Config: &config.Config{ReadOnly: true}}))
-	t.Cleanup(srv.Close)
-	return srv
+	return checkedServer(t, Handler(&service.Service{Config: &config.Config{ReadOnly: true}}))
 }
 
 // Every write verb is refused with 403 — not 404, because the route

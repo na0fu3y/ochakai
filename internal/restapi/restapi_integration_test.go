@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"slices"
@@ -25,15 +26,29 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
+// testDatabaseURL is the test database, or a skip (see the store
+// integration test for the docker one-liner).
+func testDatabaseURL(t *testing.T) string {
+	t.Helper()
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	return dbURL
+}
+
 // lockLiveAttachments serializes, across the test packages sharing the
 // test database, the tests that hold live attachments or scan them all
 // (OKF export, ExportSnapshot.AttachmentMeta): bytes resolve against each
 // own in-memory blob fake, so a foreign live attachment breaks a
 // whole-KB scan. Key shared with the store and service test packages.
-func lockLiveAttachments(t *testing.T, dbURL string) {
+//
+// Call it before newIntegrationServer: cleanups are LIFO, so the lock is
+// released only after the test's rows are gone.
+func lockLiveAttachments(t *testing.T) {
 	t.Helper()
 	ctx := context.Background() // outlives t.Context()'s pre-Cleanup cancel
-	conn, err := pgx.Connect(ctx, dbURL)
+	conn, err := pgx.Connect(ctx, testDatabaseURL(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +58,59 @@ func lockLiveAttachments(t *testing.T, dbURL string) {
 	t.Cleanup(func() { _ = conn.Close(ctx) }) // closing the session releases the lock
 }
 
+// newIntegrationServer serves a real PostgreSQL through the REST handler,
+// skipping the test without OCHAKAI_TEST_DATABASE_URL. The store comes
+// back with it for the tests that swap in a blob fake.
+//
+// Like checkedServer's close, the pool's is registered rather than
+// deferred, and registered here so that it is the last cleanup to run:
+// the rows a test wrote are removed over HTTP (removeEntries), and a
+// deferred Close would take the pool out from under those requests —
+// leaving the rows behind in a database the next run reuses (issue #278).
+func newIntegrationServer(t *testing.T) (*httptest.Server, *store.Store) {
+	t.Helper()
+	ctx := context.Background() // outlives t.Context()'s pre-Cleanup cancel
+	s, err := store.New(ctx, testDatabaseURL(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	return checkedServer(t, Handler(svc)), s
+}
+
+// removeEntries frees the ids a test wrote once it ends, so that a
+// developer reusing a test database across runs does not accumulate them:
+// twenty leftover entries are enough to push a test's own entry out of a
+// bounded hit list, and the failure reads as a search bug (issue #278).
+//
+// Two requests per id, because that is what freeing an id takes: the soft
+// delete, then the purge that requires it — purging a live entry is a
+// 409. A 404 from either is the state this wants, so only a request that
+// never got an answer is worth reporting.
+func removeEntries(t *testing.T, srv *httptest.Server, ids ...string) {
+	t.Helper()
+	t.Cleanup(func() {
+		for _, id := range ids {
+			for _, q := range []string{"", "?purge=true"} {
+				req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id+q, nil)
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Errorf("cleaning up %s%s: %v", id, q, err)
+					continue
+				}
+				resp.Body.Close()
+				if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+					t.Errorf("cleaning up %s%s: status %d", id, q, resp.StatusCode)
+				}
+			}
+		}
+	})
+}
+
 // TestRESTIntegration walks one entry through the REST surface against a
 // real PostgreSQL (skipped unless OCHAKAI_TEST_DATABASE_URL is set; see
 // the store integration test for the docker one-liner): create, read,
@@ -50,23 +118,8 @@ func lockLiveAttachments(t *testing.T, dbURL string) {
 // A run-unique top-level id segment (doubling as a custom type) keeps
 // reruns and other tests' rows out of the browse assertions.
 func TestRESTIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	lockLiveAttachments(t, dbURL) // the export step scans every live attachment
-	ctx := t.Context()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	lockLiveAttachments(t) // the export step scans every live attachment
+	srv, _ := newIntegrationServer(t)
 
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
 	id := typ + "/sales/orders"
@@ -229,14 +282,7 @@ func TestRESTIntegration(t *testing.T) {
 		resp := putDoc(t, srv.URL, id, body, true)
 		resp.Body.Close()
 	}
-	t.Cleanup(func() {
-		for _, id := range planted {
-			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
-			if resp, err := http.DefaultClient.Do(req); err == nil {
-				resp.Body.Close()
-			}
-		}
-	})
+	removeEntries(t, srv, planted...)
 	resp, err = http.Get(srv.URL + "/api/v1/export?attachments=false")
 	if err != nil {
 		t.Fatal(err)
@@ -288,24 +334,9 @@ func TestRESTIntegration(t *testing.T) {
 // and attachment GETs answer conditional requests from metadata alone
 // (ETag = content hash, If-None-Match → 304).
 func TestRESTIntegrationAttachments(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	lockLiveAttachments(t, dbURL)
-	ctx := t.Context()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
 
 	typ := fmt.Sprintf("restatt%d", time.Now().UnixNano())
 	payload := docFrom(t, map[string]any{"type": typ, "id": typ + "/reading", "title": "attachment hits"})
@@ -318,7 +349,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("hit thumbnail bytes")...)
 	attURL := srv.URL + "/api/v1/attachments/" + typ + "/reading/weekly.png"
 	req, _ := http.NewRequest(http.MethodPut, attURL, bytes.NewReader(png))
-	resp, err = http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,22 +549,7 @@ func getJSON(t *testing.T, url string, v any) {
 // already verified is what empties the review feeds, and PUT cannot do it
 // (design doc 0025 §6).
 func TestRESTIntegrationVerify(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := t.Context()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	srv, _ := newIntegrationServer(t)
 
 	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
 	id := typ + "/verify-me"
@@ -603,7 +619,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 			first.Observed.LastVerified().At, second.Observed.LastVerified().At)
 	}
 
-	resp, err = http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)
+	resp, err := http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -631,22 +647,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 // outline row pointed at knowledge the response had already spent the
 // budget on twice (design doc 0033).
 func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := t.Context()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	srv, _ := newIntegrationServer(t)
 
 	typ := fmt.Sprintf("ctxbudget%d", time.Now().UnixNano())
 	body := strings.Repeat("x", 2000)
@@ -664,14 +665,7 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 		}
 		ids = append(ids, id)
 	}
-	defer func() {
-		for _, id := range ids {
-			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
-			if resp, err := http.DefaultClient.Do(req); err == nil {
-				resp.Body.Close()
-			}
-		}
-	}()
+	removeEntries(t, srv, ids...)
 
 	const budget = 2500
 	resp, err := http.Get(fmt.Sprintf("%s/api/v1/context?q=%s&limit=5&budget=%d", srv.URL, typ, budget))
@@ -722,22 +716,7 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 // rewrites inbound references, so the insight that linked to the metric
 // must still link to it afterwards, at its new address.
 func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := t.Context()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	srv, _ := newIntegrationServer(t)
 
 	root := fmt.Sprintf("restumb%d", time.Now().UnixNano())
 	metric, insight := root+"/revenue", root+"/revenue-reading"
@@ -755,6 +734,7 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	}
 	create(metric, "Revenue", "The headline number.")
 	create(insight, "Reading revenue", "Seasonality caveats for [Revenue](/"+metric+".md).")
+	removeEntries(t, srv, metric, insight)
 
 	// Backlinks: the insight links to the metric, not the other way round.
 	var backlinks struct {
@@ -786,7 +766,11 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	}
 
 	// Move, and check the insight's link came along (design doc 0021).
+	// The destination is registered for removal as well: the id the move
+	// frees and the id it takes are two rows to clean up, and which of
+	// them exists at the end depends on how far this test got.
 	moved := root + "/finance/revenue"
+	removeEntries(t, srv, moved)
 	move, _ := json.Marshal(map[string]string{"from": metric, "to": moved})
 	resp, err = http.Post(srv.URL+"/api/v1/move", "application/json", bytes.NewReader(move))
 	if err != nil {
@@ -826,22 +810,7 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 // glossary is exactly the case the one-call read exists for
 // (design doc 0041 §2.6).
 func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := t.Context()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	srv, _ := newIntegrationServer(t)
 
 	// A run-unique root keeps other tests' rows (and reruns) out of the
 	// assertions, the way the other REST integration tests do it.
@@ -866,14 +835,7 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 		}
 		ids = append(ids, e.id)
 	}
-	defer func() {
-		for _, id := range ids {
-			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
-			if resp, err := http.DefaultClient.Do(req); err == nil {
-				resp.Body.Close()
-			}
-		}
-	}()
+	removeEntries(t, srv, ids...)
 
 	search := func(query string) []string {
 		t.Helper()
@@ -964,30 +926,10 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 // 0043 §3.5): create-or-replace, with the preconditions carrying what
 // used to be the difference between POST and PUT.
 func TestRESTIntegrationDocumentWrites(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := context.Background()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	srv, _ := newIntegrationServer(t)
 
 	id := fmt.Sprintf("restdoc%d/revenue", time.Now().UnixNano())
-	t.Cleanup(func() {
-		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id+"?purge=true", nil)
-		if resp, err := http.DefaultClient.Do(req); err == nil {
-			resp.Body.Close()
-		}
-	})
+	removeEntries(t, srv, id)
 	const doc = "---\ntype: Metric\ntitle: 売上\nowner: finance\n---\n\n本文。\n"
 
 	// A create-only write on a free id is a 201.
@@ -1027,7 +969,7 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	// what makes get → edit → put a loop a human can run.
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
 	req.Header.Set("Accept", "text/markdown")
-	resp, err = http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1081,35 +1023,10 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 // asked for text/markdown. The property is stated as a round trip
 // because that is how it is broken: read, send back, nothing happened.
 func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
-	ctx := context.Background()
-	s, err := store.New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	srv := checkedServer(t, Handler(svc))
-	defer srv.Close()
+	srv, _ := newIntegrationServer(t)
 
 	id := fmt.Sprintf("restbytes%d/revenue", time.Now().UnixNano())
-	// Cleaned up at the end of the body rather than from t.Cleanup: the
-	// cleanups run after this function's defers, so the server the
-	// request would go to is already closed by then.
-	defer func() {
-		for _, u := range []string{"", "?purge=true"} {
-			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id+u, nil)
-			if resp, err := http.DefaultClient.Do(req); err == nil {
-				resp.Body.Close()
-			}
-		}
-	}()
+	removeEntries(t, srv, id)
 
 	// Everything a rendering would quietly normalize: a comment, the
 	// title after a producer key, a lowercase recommended type, and no
