@@ -89,6 +89,33 @@ last entry.
 
 ### Security
 
+- **A bundle carries what it carries** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2). The write path
+  refuses no media type: the allowlist of png, jpeg, webp, pdf and plain
+  text is gone, and so is the cap of 20 files per entry. A file is still
+  sniffed rather than trusted, and still bounded at 5 MiB.
+
+  The allowlist was reasoned from a knowledge store that should hold only
+  what an agent can read (design doc
+  [0013](docs/design/0013-attachment-files-gcs-only.md)). What it missed
+  is that what ochakai holds is a *bundle*: refusing a producer's zip of
+  seed data, a `.parquet`, or an SVG diagram does not keep them out of
+  the knowledge base — it keeps them out of the copy ochakai hands back.
+  The cap was the same mistake in miniature; a limit on how many objects
+  a directory may hold is a limit on what a bundle may be.
+
+  What the allowlist protected against is protected against on delivery
+  instead, where it belongs, and has been since the entry below: an SVG
+  or an HTML file is served as a download under
+  `Content-Security-Policy: sandbox`, with no origin to run script in.
+  "Receive it, do not render it" is one rule with two halves, and both
+  halves are now true.
+
+  A file the embedding model does not take — an archive, a font — is
+  stored, served and exported like any other and found by its name. It is
+  no longer offered to the embedder, so a bundle full of them logs
+  nothing.
+
 - **A file is served the way its media type deserves** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.2). An image, a PDF
   or plain text is served `inline` as before; anything else now goes out

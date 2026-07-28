@@ -62,10 +62,9 @@ Run "ochakai <command> -h" for flags and examples.
 ```
 Usage: ochakai attach [flags] <id> <file...>
 
-Attach files to a knowledge entry (png, jpeg, webp, pdf, plain
-text — the type is sniffed from the bytes; max 5 MiB each, 20 per
-entry). An attachment of the same name is replaced (the change is kept
-as a revision). Reference the file from the entry's body so its
+Attach files to a knowledge entry (any file, up to 5 MiB each — the
+media type is sniffed from the bytes). A file of the same name is
+replaced (the change is kept as a revision). Reference the file from the entry's body so its
 caption is searchable and it survives OKF export/import — the hint
 printed after attaching shows the canonical relative link. Requires
 the server to have GCS configured (OCHAKAI_GCS_BUCKET).

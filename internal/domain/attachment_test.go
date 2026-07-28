@@ -24,41 +24,43 @@ func TestValidAttachmentName(t *testing.T) {
 	}
 }
 
+// Bytes decide what a file is, and nothing is refused for being what it
+// is (design doc 0046 §3.2): a bundle whose files come back missing is
+// not the bundle that was handed over. What a browser may do with them
+// is decided on the way out, by InlineServable.
 func TestDetectAttachmentMediaType(t *testing.T) {
 	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)
-	if mt, err := DetectAttachmentMediaType(png); err != nil || mt != "image/png" {
-		t.Errorf("png: got %q, %v", mt, err)
+	mustSniff(t, png, "image/png")
+	mustSniff(t, append([]byte("GIF89a"), make([]byte, 16)...), "image/gif")
+	mustSniff(t, []byte("%PDF-1.7 fake pdf body"), "application/pdf")
+	mustSniff(t, []byte("seed,urls\nhttps://example.com\n"), "text/plain")
+	// The two that carry script are stored as what they are, and never
+	// served inline — the delivery rule is what stands between them and
+	// the web UI's origin.
+	for _, tc := range []struct{ data, mediaType string }{
+		{`<!DOCTYPE html><script>alert(1)</script>`, "text/html"},
+		{`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>`, "text/xml"},
+	} {
+		mt := mustSniff(t, []byte(tc.data), tc.mediaType)
+		if InlineServable(mt) {
+			t.Errorf("%s is served inline", mt)
+		}
 	}
-	// gif fell out of the allowlist with the grandfather clause (Claude
-	// reads it, gemini-embedding-2 cannot embed it).
-	gif := append([]byte("GIF89a"), make([]byte, 16)...)
-	if _, err := DetectAttachmentMediaType(gif); err == nil {
-		t.Error("gif accepted")
+	// An archive, a font, anything at all: stored as what it sniffs as.
+	mustSniff(t, append([]byte("PK\x03\x04"), make([]byte, 16)...), "application/zip")
+	mustSniff(t, []byte{0x00, 0x01, 0x02, 0x03}, "application/octet-stream")
+}
+
+func mustSniff(t *testing.T, data []byte, want string) string {
+	t.Helper()
+	mt, err := DetectAttachmentMediaType(data)
+	if err != nil {
+		t.Errorf("sniffing %q: %v", want, err)
 	}
-	if mt, err := DetectAttachmentMediaType([]byte("%PDF-1.7 fake pdf body")); err != nil || mt != "application/pdf" {
-		t.Errorf("pdf: got %q, %v", mt, err)
+	if mt != want {
+		t.Errorf("sniffed %q, want %q", mt, want)
 	}
-	if mt, err := DetectAttachmentMediaType([]byte("seed,urls\nhttps://example.com\n")); err != nil || mt != "text/plain" {
-		t.Errorf("text: got %q, %v", mt, err)
-	}
-	// Markup with an HTML signature sniffs as text/html — refused
-	// (script-bearing; design doc 0013).
-	if _, err := DetectAttachmentMediaType([]byte(`<!DOCTYPE html><script>alert(1)</script>`)); err == nil {
-		t.Error("html accepted")
-	}
-	// An XML declaration sniffs as text/xml (SVG's usual shape) — refused.
-	if _, err := DetectAttachmentMediaType([]byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>`)); err == nil {
-		t.Error("xml/svg accepted")
-	}
-	// SVG without the XML declaration has no HTML signature and passes as
-	// text/plain — stored and served inert, never as image/svg+xml.
-	if mt, err := DetectAttachmentMediaType([]byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)); err != nil || mt != "text/plain" {
-		t.Errorf("bare svg: got %q, %v (want inert text/plain)", mt, err)
-	}
-	// Binary that is no allowlisted format sniffs application/octet-stream.
-	if _, err := DetectAttachmentMediaType([]byte{0x00, 0x01, 0x02, 0x03}); err == nil {
-		t.Error("arbitrary binary accepted")
-	}
+	return mt
 }
 
 func TestValidateAttachment(t *testing.T) {
