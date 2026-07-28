@@ -728,7 +728,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 		if attName == "" {
 			attName = filepath.Base(file)
 		}
-		att, err := c.Attach(ctx, id, attName, "", data)
+		att, err := c.Attach(ctx, id, attName, data)
 		if err != nil {
 			return fmt.Errorf("%s: %w", file, err)
 		}
@@ -1246,17 +1246,14 @@ func cmdImport(ctx context.Context, args []string) error {
 			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 			continue
 		}
-		// A file already at the canonical layout needs no okf_path — the
-		// preserved-location rule is for foreign layouts only.
-		okfPath := a.Path
-		if okfPath == a.ID+"/"+a.Name {
-			okfPath = ""
-		}
-		if _, err := c.Attach(ctx, a.ID, a.Name, okfPath, a.Data); err != nil {
-			return fmt.Errorf("attach %s/%s: %w", a.ID, a.Name, err)
+		// At the path the bundle carried it at, which is the whole of
+		// what preserving a foreign location means now (design doc 0046
+		// §3.3): the entry claims it because its body points there.
+		if err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
+			return fmt.Errorf("write %s: %w", a.Path, err)
 		}
 		attached++
-		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
+		fmt.Printf("attached %s (%s)\n", a.Path, a.ID)
 	}
 	// The files that belong to no entry, at the paths they arrived at.
 	// A bundle carries more than its concepts, and what enters it leaves
