@@ -18,6 +18,27 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- `ochakai import --strict` — fail on a bundle that was not read exactly
+  as written, instead of reporting it. A note is still the default and
+  still not an error: OKF tells a consumer to take a document rather than
+  reject it, and an operator watching the output sees every
+  reinterpretation as it scrolls past. Nobody watches a sync running in
+  CI, and a knowledge base whose entries quietly landed as drafts is a
+  knowledge base whose agents stopped trusting the right things.
+
+  Parse-time notes and skips are known before the first write, so
+  `--strict` refuses there: the import lands whole or writes nothing.
+  What only the server can judge — a document it read differently, or one
+  it refused — is checked again after the run, so the summary still says
+  how far it got and the exit code still says it was not clean.
+  `--dry-run --strict` is the gate to put in front of a CI sync.
+
+  The summary line now carries the note count on both paths
+  (`… 0 skipped, 0 notes`), because a count that only appears in the
+  scrollback is a count nobody reads.
+
 ### Fixed
 
 - Producer-defined keys **inside** a `sources` entry, a `parameter`, an

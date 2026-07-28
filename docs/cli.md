@@ -319,16 +319,25 @@ directory (<id>/<name>) attach to that entry. The packed shape is
 the structure: an archive wrapped in a single directory imports
 under that directory — the bundle keeps its own namespace. Works
 with any OKF bundle, not just ochakai's own.
+A file that cannot be read is skipped; a value read differently than
+it was written is a note and the entry still imports. Both are
+reported and neither fails the command, because a consumer takes the
+document rather than rejecting it. --strict is the opposite posture,
+for a sync nobody watches: a bundle that is not read exactly as
+written fails, and the counts land in the summary line either way.
 
 Flags:
   -dry-run
     	parse and list what would be written, write nothing
+  -strict
+    	refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai import ./knowledge
   ochakai import ga4-bundle.tar.gz --dry-run
+  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
 ```
 
