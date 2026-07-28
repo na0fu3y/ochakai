@@ -102,18 +102,18 @@ variable "read_only" {
 
 variable "public_read_only" {
   description = <<-EOT
-    The public read-only demo (OCHAKAI_PUBLIC_READ_ONLY, design doc 0041).
+    The public read-only demo (OCHAKAI_PUBLIC_READ_ONLY, design doc 0042).
     This is the one posture where a publicly invokable ochakai is intended:
     the module grants allUsers roles/run.invoker, so anyone with the URL can
     read the base with no Google account and no token.
 
     It is safe only because of the two things it gives up at once, and they
     are one variable for that reason. Nothing can be written: this implies
-    var.read_only, and the server refuses to start if it would be publicly
-    readable and writable. And no identity is believed: the Authorization
-    header is not read at all — its signature is unverifiable without Cloud
-    Run IAM in front — X-Ochakai-On-Behalf-Of is ignored, and every caller is
-    human:anonymous. Provenance would be forgeable on a public service, so
+    var.read_only and cannot be separated from it, so a publicly readable
+    and writable ochakai is not a configuration the server accepts. And no
+    identity is believed: the Authorization header is not read at all — its
+    signature is unverifiable without Cloud Run IAM in front —
+    X-Ochakai-On-Behalf-Of is ignored, and every caller is human:anonymous. Provenance would be forgeable on a public service, so
     none is read; nothing is written, so there is none to record.
 
     Everything else in this module stays private. Do not reach for this to

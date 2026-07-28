@@ -17,7 +17,7 @@
 #     identity Cloud Run has already verified and records it as provenance.
 #     Those headers only mean something behind Cloud Run's IAM check, so
 #     allUsers would not merely widen access, it would make provenance
-#     forgeable. The exception is var.public_read_only (design doc 0041),
+#     forgeable. The exception is var.public_read_only (design doc 0042),
 #     which grants allUsers only together with the flag that makes the
 #     deployment refuse every write and stop reading identity altogether —
 #     there is then no provenance to forge and no author to get wrong. A
@@ -54,11 +54,12 @@ locals {
 
   iap_audience = "/projects/${data.google_project.this.number}/locations/${var.region}/services/${local.webui_name}"
 
-  # Public read-only implies read-only (design doc 0041): the server refuses
-  # to start if it would be publicly readable and writable. The module states
-  # the implication in the environment rather than leaving it to be
-  # discovered from a crash loop, so the deployed configuration reads the
-  # same way the posture does.
+  # Public read-only implies read-only (design doc 0042): the server applies
+  # the implication itself and cannot be separated from it, so a publicly
+  # readable and writable ochakai is not a configuration it accepts. The
+  # module states the implication in the environment rather than leaving it
+  # to be read back off the running service, so the deployed configuration
+  # reads the same way the posture does.
   read_only = var.read_only || var.public_read_only
 
   server_env = merge(
@@ -430,7 +431,7 @@ resource "google_cloud_run_v2_service_iam_member" "invokers" {
 }
 
 # The public read-only demo, and the only allUsers grant in this module
-# (design doc 0041). It is deliberately not something an operator can compose
+# (design doc 0042). It is deliberately not something an operator can compose
 # out of parts: the same variable that opens the service is the one that makes
 # it refuse every write and stop reading identity, so "public" and "believes
 # nobody" cannot drift apart. A public writable ochakai would record authors
@@ -455,7 +456,7 @@ resource "google_cloud_run_v2_service_iam_member" "public_demo" {
     # the length of an apply.
     precondition {
       condition     = lookup(local.server_env, "OCHAKAI_PUBLIC_READ_ONLY", "") == "true"
-      error_message = "Refusing to grant allUsers: the service is not running with OCHAKAI_PUBLIC_READ_ONLY=true. Public is only safe while ochakai writes nothing and reads no identity (design doc 0041)."
+      error_message = "Refusing to grant allUsers: the service is not running with OCHAKAI_PUBLIC_READ_ONLY=true. Public is only safe while ochakai writes nothing and reads no identity (design doc 0042)."
     }
   }
 }

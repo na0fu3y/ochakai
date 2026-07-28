@@ -53,7 +53,7 @@ Without the IAM check in front, those headers would be forgeable, and every
 recorded author would be a guess. The same rule keeps the deployment
 compatible with the Domain Restricted Sharing org policy.
 
-The exception is `public_read_only` (guide §5d, design doc 0041), which grants
+The exception is `public_read_only` (guide §5d, design doc 0042), which grants
 `allUsers` itself. It is one variable rather than two because public is only
 safe together with what it comes with: the deployment refuses every write and
 reads no identity at all, so there is no provenance to forge and no author to
