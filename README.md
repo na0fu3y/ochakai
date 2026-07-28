@@ -528,10 +528,11 @@ ochakai **records** these; it never acts on them. It does not fetch a
 source's `resource`, score its credibility signals, or run an Attested
 Computation's `executor` and `attester` — weighing the signals and
 running the computation belong to whoever consumes the entry (SPEC §5.1,
-§10.5). Keys OKF does not define pass through `attrs` untouched, in
-place. Provenance itself is never read back from a bundle: it is what
-this instance observed, not what a document claims (design docs 0009,
-0035).
+§10.5). Keys OKF does not define pass through untouched and in place —
+at the top level, and inside a `sources` entry, a `parameter`, an
+`executor` or an `attester` too. Provenance itself is never read back
+from a bundle: it is what this instance observed, not what a document
+claims (design docs 0009, 0043).
 
 **Japanese knowledge bases should turn embeddings on.** PostgreSQL's
 full-text search does not tokenize Japanese, so the lexical half of search

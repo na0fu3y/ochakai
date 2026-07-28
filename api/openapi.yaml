@@ -1983,8 +1983,8 @@ components:
         §5.1, design doc 0036). ochakai records sources: it never fetches
         resource, checks that it resolves, or turns the credibility signals
         into a score — §5.1 leaves weighing raw signals to the consumer.
-        The spec's keys are modeled exhaustively; a key OKF does not define
-        is dropped on bundle import with a note.
+        The spec's keys are modeled; anything else a producer wrote is kept
+        under extra (design doc 0043 §3.6).
       required: [resource]
       properties:
         resource:
@@ -2015,6 +2015,16 @@ components:
         usage_window:
           allOf: [{ $ref: "#/components/schemas/UsageWindow" }]
           description: Overrides the entry's usage_window for this source.
+        extra:
+          type: object
+          additionalProperties: true
+          description: >
+            The producer-defined keys of this object (SPEC §4.1), kept as
+            written. In a document they ride inline beside the keys the
+            spec defines, exactly where their writer put them; here they
+            are nested, because this JSON is ochakai's shape rather than
+            OKF's, and nesting keeps a producer key from ever colliding
+            with one a later spec adds (design doc 0043 §3.6).
     Parameter:
       type: object
       description: >
@@ -2027,6 +2037,16 @@ components:
         name: { type: string }
         type: { type: string, description: "The parameter's data type, e.g. integer or string." }
         required: { type: boolean, description: Absent and false mean the same thing. }
+        extra:
+          type: object
+          additionalProperties: true
+          description: >
+            The producer-defined keys of this object (SPEC §4.1), kept as
+            written. In a document they ride inline beside the keys the
+            spec defines, exactly where their writer put them; here they
+            are nested, because this JSON is ochakai's shape rather than
+            OKF's, and nesting keeps a producer key from ever colliding
+            with one a later spec adds (design doc 0043 §3.6).
     Executor:
       type: object
       description: >
@@ -2041,6 +2061,16 @@ components:
           type: array
           items: { type: string }
           description: "The fields a run must return as evidence, e.g. [job_id, executed_sql, result]."
+        extra:
+          type: object
+          additionalProperties: true
+          description: >
+            The producer-defined keys of this object (SPEC §4.1), kept as
+            written. In a document they ride inline beside the keys the
+            spec defines, exactly where their writer put them; here they
+            are nested, because this JSON is ochakai's shape rather than
+            OKF's, and nesting keeps a producer key from ever colliding
+            with one a later spec adds (design doc 0043 §3.6).
     Attester:
       type: object
       description: >
@@ -2050,6 +2080,16 @@ components:
       required: [resource]
       properties:
         resource: { type: string, description: Path to the attester code. }
+        extra:
+          type: object
+          additionalProperties: true
+          description: >
+            The producer-defined keys of this object (SPEC §4.1), kept as
+            written. In a document they ride inline beside the keys the
+            spec defines, exactly where their writer put them; here they
+            are nested, because this JSON is ochakai's shape rather than
+            OKF's, and nesting keeps a producer key from ever colliding
+            with one a later spec adds (design doc 0043 §3.6).
     Knowledge:
       type: object
       required: [type, id]

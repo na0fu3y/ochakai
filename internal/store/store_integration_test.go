@@ -2648,3 +2648,71 @@ func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
 		t.Errorf("stored hash %q does not match the document's %q", read.ContentHash, hash)
 	}
 }
+
+// A producer key inside a source or a parameter survives storage, which
+// is the point of keeping it (design doc 0043 §3.6): the document is the
+// stored form, so a key dropped on the way in is a key no later release
+// can recover. It has to round-trip through the jsonb index columns as
+// well as through the document.
+func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+	id := fmt.Sprintf("it-extra-%d", time.Now().UnixNano())
+	k := &domain.Knowledge{
+		Type: domain.TypeComputations, ID: id, Title: "extras", Runtime: "bigquery",
+		Status: domain.StatusDraft, CreatedBy: actor,
+		Sources: []domain.Source{{Resource: "policies/revenue.md",
+			Extra: domain.Extra{"license": "CC-BY"}}},
+		Parameters: []domain.Parameter{{Name: "year", Type: "integer",
+			Extra: domain.Extra{"ui_hint": "dropdown"}}},
+		Executor: &domain.Executor{Resource: "run.md", Receipt: []string{"job_id"},
+			Extra: domain.Extra{"timeout_s": float64(300)}},
+		Attester: &domain.Attester{Resource: "check.py",
+			Extra: domain.Extra{"language": "python"}},
+	}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id) })
+
+	got, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Sources[0].Extra["license"] != "CC-BY" || got.Parameters[0].Extra["ui_hint"] != "dropdown" {
+		t.Errorf("producer keys lost: %+v %+v", got.Sources[0].Extra, got.Parameters[0].Extra)
+	}
+	if got.Executor.Extra["timeout_s"] != float64(300) || got.Attester.Extra["language"] != "python" {
+		t.Errorf("contract producer keys lost: %+v %+v", got.Executor.Extra, got.Attester.Extra)
+	}
+	// The stored document carries them too, inline — and a write that
+	// changes nothing else is still a no-op, so they are part of the
+	// content the hash is over.
+	var doc string
+	if err := s.pool.QueryRow(ctx, `SELECT doc FROM knowledge WHERE id = $1`, id).Scan(&doc); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doc, "license: CC-BY") {
+		t.Errorf("the stored document dropped a producer key:\n%s", doc)
+	}
+	before := got.ContentHash
+	got.Sources[0].Extra["license"] = "MIT"
+	if err := s.Update(ctx, got, actor, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got.ContentHash == before {
+		t.Error("changing a producer key left the version where it was; it is content")
+	}
+}

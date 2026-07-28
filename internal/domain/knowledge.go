@@ -413,15 +413,42 @@ func (w *UsageWindow) sameAs(o *UsageWindow) bool {
 	return *w == *o
 }
 
+// Extra carries the producer-defined keys of a structured OKF object —
+// the ones inside a source, a parameter, an executor or an attester
+// (SPEC §4.1). They are kept, not dropped (design doc 0043 §3.6).
+//
+// 0036 §3.5 dropped them with a note, reasoning that the point of
+// promoting these families to typed fields was that four surfaces could
+// describe one shape, and an open map defeats that. The premise went
+// when the document became the stored form (0043 §3.1): storage keeps
+// whatever the writer wrote, a schema is only needed by the projections
+// that read it, and dropping a key on the way in is a loss no later
+// release can undo. A round trip that silently narrows its input is not
+// a round trip.
+//
+// In a document these ride inline, beside the keys the spec defines,
+// exactly where the producer put them. In ochakai's own JSON they are
+// nested under "extra": that JSON is ochakai's shape, not OKF's, and
+// nesting keeps a producer key from ever colliding with a key a later
+// SPEC adds.
+type Extra map[string]any
+
+func (e Extra) sameAs(o Extra) bool {
+	if len(e) == 0 && len(o) == 0 {
+		return true
+	}
+	ja, errA := json.Marshal(e)
+	jb, errB := json.Marshal(o)
+	return errA == nil && errB == nil && bytes.Equal(ja, jb)
+}
+
 // Source is one piece of external material a concept derives from (OKF
 // SPEC §5.1). ochakai records sources; it never fetches Resource, checks
 // that it resolves, or scores the credibility signals — SPEC §5.1 is
 // explicit that raw signals are for the consumer to weigh.
 //
-// The spec's six keys are modeled exhaustively, so a producer key inside a
-// source mapping is dropped on import with a note rather than kept
-// (design doc 0036 §3.5): the whole point of the promotion is that four
-// surfaces can describe one shape.
+// The spec's six keys are modeled; anything else a producer wrote is
+// kept in Extra (SPEC §4.1, design doc 0043 §3.6).
 type Source struct {
 	Resource string `json:"resource"` // REQUIRED within an entry: the artifact this came from
 	ID       string `json:"id,omitempty"`
@@ -432,6 +459,7 @@ type Source struct {
 	UsageCount   *int         `json:"usage_count,omitempty"`
 	LastModified string       `json:"last_modified,omitempty"` // YYYY-MM-DD
 	UsageWindow  *UsageWindow `json:"usage_window,omitempty"`  // overrides the entry's window for this source
+	Extra        Extra        `json:"extra,omitempty"`
 }
 
 // Valid reports whether s is a usable source. A source that names no
@@ -447,7 +475,7 @@ func (s Source) sameAs(o Source) bool {
 		s.Author != o.Author || s.LastModified != o.LastModified {
 		return false
 	}
-	if !s.UsageWindow.sameAs(o.UsageWindow) {
+	if !s.UsageWindow.sameAs(o.UsageWindow) || !s.Extra.sameAs(o.Extra) {
 		return false
 	}
 	if s.UsageCount == nil || o.UsageCount == nil {
@@ -467,9 +495,15 @@ type Parameter struct {
 	Name     string `json:"name"` // REQUIRED within an entry
 	Type     string `json:"type"` // REQUIRED within an entry
 	Required bool   `json:"required,omitempty"`
+	Extra    Extra  `json:"extra,omitempty"`
 }
 
 func (p Parameter) Valid() bool { return p.Name != "" && p.Type != "" }
+
+func (p Parameter) sameAs(o Parameter) bool {
+	return p.Name == o.Name && p.Type == o.Type && p.Required == o.Required &&
+		p.Extra.sameAs(o.Extra)
+}
 
 // Executor says how an Attested Computation is run and what a run must
 // hand back as evidence (OKF SPEC §10.2). ochakai stores it and never
@@ -478,6 +512,7 @@ func (p Parameter) Valid() bool { return p.Name != "" && p.Type != "" }
 type Executor struct {
 	Resource string   `json:"resource"` // REQUIRED within executor: run instructions or code
 	Receipt  []string `json:"receipt"`  // REQUIRED within executor: the fields a run must return
+	Extra    Extra    `json:"extra,omitempty"`
 }
 
 func (e *Executor) Valid() bool {
@@ -489,6 +524,7 @@ func (e *Executor) Valid() bool {
 // Executor, ochakai records the path and never executes it.
 type Attester struct {
 	Resource string `json:"resource"` // REQUIRED within attester
+	Extra    Extra  `json:"extra,omitempty"`
 }
 
 func (a *Attester) Valid() bool { return a == nil || a.Resource != "" }
@@ -665,7 +701,7 @@ func (k *Knowledge) SameContent(o *Knowledge) bool {
 		slices.Equal(k.Tags, o.Tags) &&
 		slices.EqualFunc(k.Sources, o.Sources, Source.sameAs) &&
 		k.UsageWindow.sameAs(o.UsageWindow) &&
-		slices.Equal(k.Parameters, o.Parameters) &&
+		slices.EqualFunc(k.Parameters, o.Parameters, Parameter.sameAs) &&
 		executorsEqual(k.Executor, o.Executor) &&
 		attestersEqual(k.Attester, o.Attester) &&
 		slices.Equal(k.Links, o.Links) &&
@@ -676,14 +712,15 @@ func executorsEqual(a, b *Executor) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return a.Resource == b.Resource && slices.Equal(a.Receipt, b.Receipt)
+	return a.Resource == b.Resource && slices.Equal(a.Receipt, b.Receipt) &&
+		a.Extra.sameAs(b.Extra)
 }
 
 func attestersEqual(a, b *Attester) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	return *a == *b
+	return a.Resource == b.Resource && a.Extra.sameAs(b.Extra)
 }
 
 func attrsEqual(a, b map[string]any) bool {

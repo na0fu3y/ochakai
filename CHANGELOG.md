@@ -18,6 +18,28 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- Producer-defined keys **inside** a `sources` entry, a `parameter`, an
+  `executor` or an `attester` are kept rather than dropped (SPEC §4.1,
+  design doc [0043](docs/design/0043-document-first.md) §3.6). They ride
+  inline in a document, exactly where their writer put them, and are
+  nested under `extra` in ochakai's JSON — where nesting keeps a producer
+  key from ever colliding with one a later spec adds.
+
+  0036 §3.5 dropped them with a note, reasoning that the point of
+  promoting these families to typed fields was that four surfaces could
+  describe one shape. The premise went when the document became the
+  stored form: storage keeps whatever the writer wrote, a schema is only
+  needed by the projections that read it, and a key discarded on the way
+  in is a key no later release can recover. Nothing is reported any more,
+  because nothing is reinterpreted — a note is for a value read
+  differently than written, and a key carried through untouched is not
+  one.
+
+  A producer key is content: changing one moves the entry's version, and
+  a write that only repeats it is still a no-op.
+
 ### Changed
 
 - **BREAKING**: knowledge is written as an OKF document, and `PUT` is the
