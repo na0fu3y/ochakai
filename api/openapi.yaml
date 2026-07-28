@@ -85,6 +85,23 @@ paths:
             (SPEC §§5.3-5.4).
           schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
           explode: true
+        - name: fm.{key}
+          in: query
+          description: >
+            Filter by any frontmatter key, exactly: `fm.owner=finance`
+            finds the entries whose frontmatter says owner is finance,
+            matching a scalar or a member of a list. Repeat with
+            different keys to AND them.
+
+            This is the filter that does not need a release. A key OKF
+            adds in a later version, or one a producer invented, is
+            askable the day somebody writes it — the whole frontmatter is
+            indexed, not the subset ochakai happens to name (design doc
+            0046 §3.11). Exact match and list membership are the only two
+            comparisons: ranges and boolean expressions are the doorway
+            to a query language, and what ochakai returns is knowledge
+            rather than rows.
+          schema: { type: string }
         - name: rejected
           in: query
           description: >
@@ -409,6 +426,23 @@ paths:
             somebody turned down.
           schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
           explode: true
+        - name: fm.{key}
+          in: query
+          description: >
+            Filter by any frontmatter key, exactly: `fm.owner=finance`
+            finds the entries whose frontmatter says owner is finance,
+            matching a scalar or a member of a list. Repeat with
+            different keys to AND them.
+
+            This is the filter that does not need a release. A key OKF
+            adds in a later version, or one a producer invented, is
+            askable the day somebody writes it — the whole frontmatter is
+            indexed, not the subset ochakai happens to name (design doc
+            0046 §3.11). Exact match and list membership are the only two
+            comparisons: ranges and boolean expressions are the doorway
+            to a query language, and what ochakai returns is knowledge
+            rather than rows.
+          schema: { type: string }
         - name: tag
           in: query
           schema: { type: array, items: { type: string } }

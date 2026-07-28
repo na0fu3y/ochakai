@@ -58,13 +58,14 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		f := store.Filter{
-			Types:    domain.ToTypes(q["type"]),
-			Statuses: domain.ToStatuses(q["status"]),
-			Tags:     q["tag"],
-			Source:   q.Get("source"),
-			Prefixes: q["prefix"],
-			Trust:    domain.ToTrusts(q["trust"]),
-			Rejected: rejected,
+			Types:       domain.ToTypes(q["type"]),
+			Statuses:    domain.ToStatuses(q["status"]),
+			Tags:        q["tag"],
+			Source:      q.Get("source"),
+			Prefixes:    q["prefix"],
+			Trust:       domain.ToTrusts(q["trust"]),
+			Rejected:    rejected,
+			Frontmatter: frontmatterFilter(q),
 		}
 		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
 		if err != nil {
@@ -120,11 +121,12 @@ func Handler(svc *service.Service) http.Handler {
 		res, err := svc.Context(r.Context(), service.ContextRequest{
 			Query: q.Get("q"),
 			Filter: store.Filter{
-				Types:    domain.ToTypes(q["type"]),
-				Statuses: domain.ToStatuses(q["status"]),
-				Tags:     q["tag"],
-				Prefixes: q["prefix"],
-				Trust:    domain.ToTrusts(q["trust"]),
+				Types:       domain.ToTypes(q["type"]),
+				Statuses:    domain.ToStatuses(q["status"]),
+				Tags:        q["tag"],
+				Prefixes:    q["prefix"],
+				Trust:       domain.ToTrusts(q["trust"]),
+				Frontmatter: frontmatterFilter(q),
 			},
 			Limit: limit, MinScore: minScore, Budget: budget,
 		})
@@ -753,6 +755,30 @@ func readDocument(w http.ResponseWriter, r *http.Request) (*domain.Knowledge, bo
 		w.Header().Add("Ochakai-Note", n)
 	}
 	return &d.Knowledge, true
+}
+
+// frontmatterFilter reads the "fm." query parameters — `?fm.question=…`,
+// `?fm.owner=finance` — into the filter that asks the frontmatter index
+// (design doc 0046 §3.11). The prefix is what keeps the surface
+// additive: a key the spec adds later needs no parameter of its own, and
+// none of the ones ochakai already names can be shadowed by one.
+//
+// A repeated parameter keeps its last value. The pairs are AND-ed, and
+// "the same key twice" is a contradiction rather than a question, so
+// there is nothing sensible to OR.
+func frontmatterFilter(q url.Values) map[string]string {
+	var out map[string]string
+	for key, vals := range q {
+		name, ok := strings.CutPrefix(key, "fm.")
+		if !ok || name == "" || len(vals) == 0 {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[name] = vals[len(vals)-1]
+	}
+	return out
 }
 
 // wantsDocument reports whether the caller asked for the entry as a

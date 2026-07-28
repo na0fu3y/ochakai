@@ -20,6 +20,30 @@ last entry.
 
 ### Added
 
+- **Any frontmatter key is a filter**: `?fm.owner=finance` on REST,
+  `fm: {owner: finance}` on MCP, `--fm owner=finance` on the CLI (design
+  doc [0046](docs/design/0046-bundle-address-space.md) §3.11). It matches
+  a scalar exactly or a member of a list, and repeating it with different
+  keys ANDs them.
+
+  The whole frontmatter is now indexed as `jsonb`, so a key OKF adds in a
+  later version — or one a producer invented — is askable the day
+  somebody writes it, with no column, no migration and no release.
+  Storage became additive when the document became the stored form;
+  querying did not follow until now.
+
+  Exact match and list membership are the only two comparisons. Ranges,
+  negation and boolean expressions are the doorway to a query language,
+  and what ochakai returns is knowledge rather than rows.
+
+  The typed columns stay where they are — they are the same values with
+  better indexes (trigram over the text, a date for `stale_after`, an
+  array for tags) — so `type`, `status`, `tag`, `source` and
+  `stale_after` keep answering from them. Migration 0027 adds the column
+  and a GIN index and backfills from each stored document; no timestamp
+  moves and no hash changes, since indexing what an entry already said is
+  not a change to what it says.
+
 - `ochakai import --strict` — fail on a bundle that was not read exactly
   as written, instead of reporting it. A note is still the default and
   still not an error: OKF tells a consumer to take a document rather than

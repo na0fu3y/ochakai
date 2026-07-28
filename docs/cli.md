@@ -165,6 +165,8 @@ context window. No hits print nothing (exit 0).
 Flags:
   -budget int
     	cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under "outline"
+  -fm key=value
+    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's
   -json
     	print the raw JSON response
   -limit int
@@ -536,6 +538,8 @@ living under a path, which is how a team's own knowledge is told apart
 from the company-wide vocabulary.
 
 Flags:
+  -fm key=value
+    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's
   -json
     	print the raw JSON response
   -limit int

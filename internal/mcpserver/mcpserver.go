@@ -200,7 +200,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
-			Trust: domain.ToTrusts(in.Trust), Rejected: in.Rejected,
+			Trust: domain.ToTrusts(in.Trust), Rejected: in.Rejected, Frontmatter: in.FM,
 		}
 		hits, err := svc.SearchOrList(ctx, in.Query, in.Sort, f, in.Limit)
 		if err != nil {
@@ -228,7 +228,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Query: in.Query,
 			Filter: store.Filter{
 				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
-				Prefixes: in.Prefixes, Trust: domain.ToTrusts(in.Trust),
+				Prefixes: in.Prefixes, Trust: domain.ToTrusts(in.Trust), Frontmatter: in.FM,
 			},
 			Limit: in.Limit, Budget: budget,
 		})
@@ -488,16 +488,17 @@ type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
 	// rejects it — exactly one of query / sort must be set (the service
 	// rejects an empty search, the handler rejects the combination).
-	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
-	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
-	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only entries a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected entries stay out of results"`
-	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Source   string   `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed), \"stale_after\" lists entries past their declared expiry (most overdue first) — all mutually exclusive with query"`
-	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
+	Query    string            `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
+	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
+	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
+	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
+	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by any frontmatter key, exactly: {\"owner\": \"finance\"} finds entries whose frontmatter says owner is finance, matching a scalar or a member of a list. Every pair must match. Use it for keys this tool does not name — a producer's own, or one a later OKF version added"`
+	Rejected *bool             `json:"rejected,omitempty" jsonschema:"true to list only entries a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected entries stay out of results"`
+	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Source   string            `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
+	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
+	Sort     string            `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed), \"stale_after\" lists entries past their declared expiry (most overdue first) — all mutually exclusive with query"`
+	Limit    int               `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
 }
 
 type searchOut struct {
@@ -511,14 +512,15 @@ type searchOut struct {
 // parameter whose own documentation says to leave it alone. What an agent
 // actually needs to bound a response is budget.
 type contextIn struct {
-	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
-	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
-	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
-	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the entries plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows count against the same budget. Raise it when you need whole entries, lower it when context is tight"`
+	Query    string            `json:"query" jsonschema:"the data question to gather context for"`
+	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
+	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
+	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
+	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by any frontmatter key, exactly: {\"owner\": \"finance\"} finds entries whose frontmatter says owner is finance, matching a scalar or a member of a list. Every pair must match. Use it for keys this tool does not name — a producer's own, or one a later OKF version added"`
+	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
+	Limit    int               `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
+	Budget   int               `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the entries plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows count against the same budget. Raise it when you need whole entries, lower it when context is tight"`
 }
 
 type contextOut struct {

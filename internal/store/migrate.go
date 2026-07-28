@@ -99,6 +99,9 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 	if err := s.backfillLinkForms(ctx); err != nil {
 		return fmt.Errorf("backfill link forms: %w", err)
 	}
+	if err := s.backfillFrontmatter(ctx); err != nil {
+		return fmt.Errorf("backfill frontmatter: %w", err)
+	}
 
 	if embedDim > 0 {
 		if err := s.migrateEmbedding(ctx, embedDim); err != nil {
@@ -228,6 +231,63 @@ func (s *Store) backfillLinkForms(ctx context.Context) error {
 			ids[i] = batch[i].ID
 		}
 		if _, err := s.pool.Exec(ctx, `DELETE FROM link_form_backfill WHERE id = ANY($1)`, ids); err != nil {
+			return err
+		}
+	}
+}
+
+// backfillFrontmatter fills the queryable index over each stored
+// document (design doc 0046 §3.11), for the entries migration 0027
+// listed.
+//
+// Go rather than SQL for the reason the link-form backfill is: reading a
+// key out of a document means parsing YAML the way the parser parses it,
+// dates included, and a second reading written in SQL would be a second
+// definition of what the document says.
+//
+// No timestamp moves and no hash changes. Building an index over what an
+// entry already said is not a change to what it says.
+func (s *Store) backfillFrontmatter(ctx context.Context) error {
+	for {
+		rows, err := s.pool.Query(ctx,
+			`SELECT id, doc FROM knowledge
+			 WHERE id IN (SELECT id FROM frontmatter_backfill) ORDER BY id LIMIT $1`,
+			backfillBatch)
+		if err != nil {
+			if isUndefinedTable(err) {
+				return nil // migration 0027 has not run yet on this database
+			}
+			return err
+		}
+		type row struct{ id, doc string }
+		batch, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+			var out row
+			err := r.Scan(&out.id, &out.doc)
+			return out, err
+		})
+		if err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			return nil
+		}
+		ids := make([]string, len(batch))
+		for i, b := range batch {
+			ids[i] = b.id
+			fm, err := storedFrontmatter(b.doc)
+			if err != nil {
+				// An index that cannot be built is a gap in querying, not
+				// a reason to hold up a start: the document still answers
+				// everything the index would have.
+				s.log.Warn("cannot index an entry's frontmatter", "id", b.id, "err", err)
+				continue
+			}
+			if _, err := s.pool.Exec(ctx,
+				`UPDATE knowledge SET frontmatter = $2 WHERE id = $1`, b.id, fm); err != nil {
+				return err
+			}
+		}
+		if _, err := s.pool.Exec(ctx, `DELETE FROM frontmatter_backfill WHERE id = ANY($1)`, ids); err != nil {
 			return err
 		}
 	}

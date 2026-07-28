@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 // hitScore returns the score of id among hits, or -1 when it is absent.
@@ -2722,5 +2724,87 @@ func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
 	}
 	if got.ContentHash == before {
 		t.Error("changing a producer key left the version where it was; it is content")
+	}
+}
+
+// The frontmatter index is what makes the query surface additive: a key
+// no release of ochakai has ever heard of is askable the day a writer
+// writes it (design doc 0046 §3.11). The test therefore asks for one
+// deliberately outside every vocabulary the program knows.
+func TestIntegrationFrontmatterFilter(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	prefix := fmt.Sprintf("it-fm-%d", time.Now().UnixNano())
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	// Written as documents, because the index is derived from the
+	// document and not from the fields beside it.
+	docs := map[string]string{
+		"owned":  "---\ntype: Metric\nowner: finance\nsystems:\n  - dbt\n  - looker\n---\n\n本文。\n",
+		"other":  "---\ntype: Metric\nowner: growth\n---\n\n本文。\n",
+		"silent": "---\ntype: Metric\n---\n\n本文。\n",
+	}
+	for name, text := range docs {
+		d, _, err := okf.Parse([]byte(text))
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.ID = prefix + "/" + name
+		d.CreatedBy, d.UpdatedBy = actor, actor
+		// What the service does for a document that names no status: the
+		// index column holds what a reader reads (design doc 0046 §3.9).
+		d.Status = d.Lifecycle()
+		if err := s.Create(ctx, &d.Knowledge, false); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, d.ID) })
+	}
+
+	find := func(fm map[string]string) []string {
+		t.Helper()
+		// Any listing takes the same filter; the verification-age feed is
+		// the one that needs no query and no other precondition.
+		hits, err := s.ListByVerifiedAt(ctx, Filter{Prefixes: []string{prefix}, Frontmatter: fm}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]string, len(hits))
+		for i := range hits {
+			ids[i] = strings.TrimPrefix(hits[i].ID, prefix+"/")
+		}
+		sort.Strings(ids)
+		return ids
+	}
+
+	for _, tc := range []struct {
+		name string
+		fm   map[string]string
+		want []string
+	}{
+		{"a scalar key ochakai does not know", map[string]string{"owner": "finance"}, []string{"owned"}},
+		{"a member of a list", map[string]string{"systems": "dbt"}, []string{"owned"}},
+		{"a value nobody wrote", map[string]string{"owner": "nobody"}, nil},
+		{"a key nobody wrote", map[string]string{"unheard-of": "x"}, nil},
+		{"two keys are AND-ed", map[string]string{"owner": "finance", "systems": "looker"}, []string{"owned"}},
+		{"one of them missing excludes the entry", map[string]string{"owner": "finance", "systems": "airflow"}, nil},
+		{"a key the spec does define, indexed like any other", map[string]string{"type": "Metric"},
+			[]string{"other", "owned", "silent"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := find(tc.fm); !slices.Equal(got, tc.want) {
+				t.Errorf("fm=%v matched %v, want %v", tc.fm, got, tc.want)
+			}
+		})
 	}
 }

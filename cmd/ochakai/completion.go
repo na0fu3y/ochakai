@@ -118,6 +118,7 @@ _ochakai() {
         '*--prefix[only entries under this path]:prefix:' \
         '--source[only entries citing this resource]:source:' \
         '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
+        '*--fm[filter by a frontmatter key=value]:fm:' \
         '--rejected[only entries a human turned down]' \
         '--sort[list instead of searching: by verification age, demand, failed reports, or declared expiry]:sort:(verified_at usage failed stale_after)' \
         '--limit[max results]:limit:' \
@@ -131,6 +132,7 @@ _ochakai() {
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
         '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
+        '*--fm[filter by a frontmatter key=value]:fm:' \
         '--limit[max full entries]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
         '--min-score[drop hits below this score]:min-score:' \
@@ -228,9 +230,9 @@ _ochakai() {
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --trust --rejected --sort --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --trust --fm --rejected --sort --limit --json --url" ;;
     browse)        opts="--json --url" ;;
-    context)       opts="--type --status --tag --prefix --trust --limit --budget --min-score --json --url" ;;
+    context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
@@ -322,6 +324,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the entry (OKF SPEC §5.3)'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 'filter by a frontmatter key=value'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l lift -d 'withdraw the rejection'
