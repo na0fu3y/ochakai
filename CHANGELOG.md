@@ -20,6 +20,25 @@ last entry.
 
 ### Added
 
+- **BREAKING** — a file reports the path it lives at. `okf_path` is gone
+  from the wire and from the attach call; `Attachment` carries `path`
+  instead (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.3).
+
+  `okf_path` meant "this file is not where ochakai would have put it" —
+  a second identity for one object, and one that could disagree with the
+  row it described. Since files became objects at paths, where a file
+  lives is simply its address: a file written through
+  `/api/v1/attachments/{id}/{name}` is at `<id>/<name>`, and one written
+  at its own bundle path is there. `name` stays beside `path` as the last
+  segment, the way a concept keeps its id beside its path.
+
+  The `?okf_path=` parameter on attach is gone with it. A file that
+  belongs elsewhere in the bundle is written at the path it belongs at
+  (`PUT /api/v1/bundle/{path}`), which is what `ochakai import` now does
+  — where a file lives is an address, not an annotation on a write to
+  something else.
+
 - **BREAKING** — the MCP write face is one tool. `create_knowledge` and
   `update_knowledge` are `put_knowledge`: it creates when the id is free
   and replaces when it is taken (design doc

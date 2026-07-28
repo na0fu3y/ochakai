@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -2960,17 +2961,17 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	if len(atts) != 2 {
 		t.Fatalf("attributed files = %+v, want the one under the namespace and the one the body links", atts)
 	}
-	// The one under the namespace needs no naming; the one elsewhere
-	// reports where it lives, which is what an export puts it back as.
+	// Each reports where it lives, which is what an export puts it back
+	// as — the one under the namespace and the one elsewhere alike.
 	byName := map[string]domain.Attachment{}
 	for _, a := range atts {
 		byName[a.Name] = a
 	}
-	if got := byName["chart.png"].OKFPath; got != "" {
-		t.Errorf("a file at the canonical path reports okf_path %q", got)
+	if got, want := byName["chart.png"].Path, id+"/chart.png"; got != want {
+		t.Errorf("path = %q, want %q", got, want)
 	}
-	if got, want := byName["orders.csv"].OKFPath, base+"/seeds/orders.csv"; got != want {
-		t.Errorf("okf_path = %q, want %q", got, want)
+	if got, want := byName["orders.csv"].Path, base+"/seeds/orders.csv"; got != want {
+		t.Errorf("path = %q, want %q", got, want)
 	}
 	// It is stored where the body says, not where the entry is.
 	var n int
@@ -3018,5 +3019,71 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("the file object outlived the detach")
+	}
+}
+
+// A file's path is the whole of where it lives (design doc 0046 §3.3).
+// It used to take two fields: a name, and an okf_path that said "not
+// where ochakai would have put it" — a second identity for the same
+// object, and one that could disagree with the row it described.
+func TestIntegrationAFileReportsItsPath(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.UseBlobStore(newFakeBlobStore())
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "t"}
+	base := fmt.Sprintf("it-path-%d", time.Now().UnixNano())
+	id := base + "/revenue"
+	defer func() {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE path LIKE $1 || '%'`, base)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE path LIKE $1 || '%'`, base)
+	}()
+
+	body := fmt.Sprintf("![chart](revenue/chart.png)\n\n[CSV](/%s/seeds/orders.csv)\n", base)
+	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: id, Title: "it path",
+		Status: domain.StatusDraft, Body: body, CreatedBy: actor, UpdatedBy: actor}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutAttachment(ctx, id, "chart.png", "image/png", "", []byte("png"), actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutFile(ctx, base+"/seeds/orders.csv", "text/plain", []byte("a,b\n"), actor); err != nil {
+		t.Fatal(err)
+	}
+
+	atts, err := s.ListAttachments(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, a := range atts {
+		got[a.Name] = a.Path
+	}
+	// Both report where they are. The one under the entry's namespace is
+	// not a special case with an empty field — it has an address like
+	// everything else, and it is the address an export writes it back at.
+	want := map[string]string{
+		"chart.png":  id + "/chart.png",
+		"orders.csv": base + "/seeds/orders.csv",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("paths = %v, want %v", got, want)
+	}
+	for _, a := range atts {
+		if okf.AttachmentPath(id, &a) != a.Path {
+			t.Errorf("the export path of %s disagrees with its own: %q vs %q",
+				a.Name, okf.AttachmentPath(id, &a), a.Path)
+		}
 	}
 }

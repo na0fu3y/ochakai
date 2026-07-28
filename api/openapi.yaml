@@ -1877,15 +1877,6 @@ paths:
         the request fails with 501.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
-        - name: okf_path
-          in: query
-          required: false
-          description: >
-            Bundle path a foreign OKF import carried this file at
-            (clean, bundle-relative). Export writes the file back there
-            so the original body links keep working. Omit for
-            attachments born in ochakai.
-          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -2572,12 +2563,15 @@ components:
             what a browser may do with it is decided when it is served.
         size: { type: integer }
         sha256: { type: string, description: Content hash; attachments are content-addressed and immutable. }
-        okf_path:
+        path:
           type: string
           description: >
-            Bundle path a foreign OKF import carried this file at; export
-            writes it back there so body links keep working. Absent for
-            attachments born in ochakai (exported to "<id>/<name>").
+            Where the file lives in the bundle — its address, and what an
+            export writes it back as. A file written through this address
+            is at `<id>/<name>`; one written at its own bundle path is
+            there, which is how a foreign layout round-trips (design doc
+            0046 §3.3). `name` is the last segment, beside it the way a
+            concept keeps its id beside its path.
         created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         created_at: { type: string, format: date-time, readOnly: true }
     Usage:
