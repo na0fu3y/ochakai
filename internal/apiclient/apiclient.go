@@ -146,9 +146,22 @@ type SearchParams struct {
 	FM       map[string]string
 	Rejected *bool
 	Limit    int
+	// Cursor resumes a listing where the previous page ended: pass back
+	// the Cursor of that page, with the same Sort and filters (design doc
+	// 0049 §2.1). The server refuses it beside a Query — a search is
+	// bounded by Limit, and a ranking has no page to resume from.
+	Cursor string
 }
 
-func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit, error) {
+// SearchResult is one page of the query surface. Cursor is set only when
+// a listing has more entries behind this page; a search never sets it,
+// and no total count comes with either (design doc 0049 §2.3).
+type SearchResult struct {
+	Hits   []domain.SearchHit `json:"hits"`
+	Cursor string             `json:"cursor,omitempty"`
+}
+
+func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, error) {
 	q := url.Values{}
 	if p.Query != "" {
 		q.Set("q", p.Query)
@@ -183,11 +196,12 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
 	}
-	var out struct {
-		Hits []domain.SearchHit `json:"hits"`
+	if p.Cursor != "" {
+		q.Set("cursor", p.Cursor)
 	}
+	var out SearchResult
 	err := c.doJSON(ctx, http.MethodGet, "/api/v1/knowledge", q, nil, &out)
-	return out.Hits, err
+	return &out, err
 }
 
 // ContextResult mirrors the /api/v1/context response: the ranking plus

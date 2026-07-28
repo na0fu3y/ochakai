@@ -237,7 +237,7 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -252,6 +252,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
+	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -271,18 +272,18 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	hits, err := c.Search(ctx, apiclient.SearchParams{
+	page, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
 		Source: *source, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
-		Trust: trust, Rejected: optBool(*rejected), FM: pairs,
+		Trust: trust, Rejected: optBool(*rejected), FM: pairs, Cursor: *cursor,
 	})
 	if err != nil {
 		return err
 	}
 	if *asJSON {
-		return printJSON(map[string]any{"hits": hits})
+		return printJSON(page)
 	}
-	for _, h := range hits {
+	for _, h := range page.Hits {
 		lead := fmt.Sprintf("%.3f", h.Score)
 		switch *sortBy {
 		case "verified_at":
@@ -308,6 +309,14 @@ func cmdSearch(ctx context.Context, args []string) error {
 			line += " — " + h.Description
 		}
 		fmt.Println(line)
+	}
+	// The way on, on stderr: stdout stays one hit per line, so a pipe
+	// reads the same whether or not there is another page (design doc
+	// 0049 §4). The command does not walk the pages itself — --limit is
+	// the bound the caller set, and a listing that grew past it on its
+	// own would surprise whoever piped it into head.
+	if page.Cursor != "" {
+		fmt.Fprintf(os.Stderr, "note: more entries — rerun with --cursor %s\n", page.Cursor)
 	}
 	return nil
 }

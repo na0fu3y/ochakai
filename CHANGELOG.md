@@ -20,6 +20,40 @@ last entry.
 
 ### Added
 
+- **A listing walks past the limit** (design doc
+  [0049](docs/design/0049-listings-page-rankings-do-not.md)). Every
+  listing mode of `GET /api/v1/knowledge` — the four `sort` feeds and the
+  `source` lookup — answers with a `cursor` when more entries follow, and
+  takes it back as `?cursor=` to continue. The feeds are ledgers a
+  reviewer works through, and one that stopped at 1000 with no way
+  forward was indistinguishable from one that was finished.
+
+  The cursor is opaque and keyset, like `reembed`'s: it carries a
+  position in that listing's order, so paging costs the same on page 40
+  as on page 1, and it names the listing it came from — one from another
+  feed is a 400 rather than a page starting somewhere surprising. Pass it
+  back with the same `sort` and the same filters; changing them mid-walk
+  asks a new question from an old position.
+
+  **A search still does not page.** `q` with `cursor` is a 400: a
+  relevance ranking is a fused window rather than an order to resume
+  from, so there is no honest page two, and 50 hits remain the whole
+  contract for a search. The way past them is a narrower question —
+  which is what the filters are for.
+
+  No total count comes with a page either. The absence of a cursor is the
+  end of the listing; an exact count over a filtered feed costs a second
+  scan of it, and a cursor is a position rather than a snapshot — the
+  feeds are live, so an entry that moves while you walk may be missed or
+  seen twice.
+
+  On the surfaces: MCP's `search_knowledge` takes and returns `cursor`;
+  `ochakai search --cursor` resumes a listing and prints the way on to
+  stderr, leaving stdout one hit per line (the command does not walk the
+  pages for you — `--limit` is your bound); and the web UI's review queue
+  and feeds now have a "load more" that appends a page, replacing the
+  "load up to 1000" note that was the cap made visible.
+
 - **What enters the bundle leaves it** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.2). `ochakai
   import` now keeps every file the bundle carried, at the path it

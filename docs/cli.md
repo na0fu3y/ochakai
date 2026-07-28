@@ -563,8 +563,13 @@ or with any --sort. --source narrows to the entries citing one resource
 (the reverse of sources[].resource); --prefix narrows to the entries
 living under a path, which is how a team's own knowledge is told apart
 from the company-wide vocabulary.
+A listing that has more behind it prints the way on to stderr; pass it
+back with --cursor to read the next page. A search prints none: it is
+bounded by --limit, and a ranking has no page two.
 
 Flags:
+  -cursor cursor
+    	resume a listing where the last page ended: the cursor the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit
   -fm key=value
     	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead
   -json

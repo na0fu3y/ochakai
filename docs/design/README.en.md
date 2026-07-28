@@ -453,10 +453,27 @@ For the shape of the system rather than the history of it, read
 
 ## The verification loop and usage measurement
 
+- **[0049 Listings page, rankings do
+  not](0049-listings-page-rankings-do-not.md)** — *Accepted.* The listing
+  modes — every `sort` feed, and the `source` lookup — take an opaque
+  keyset `cursor` and return one when more entries follow, so a review
+  queue is walked to its end instead of stopping at the limit. A search
+  refuses a cursor with a 400: relevance is a fused window rather than an
+  order to resume from, so a ranking has no page two, and the way past 50
+  hits is a narrower question. No total count comes back either — the
+  absence of a cursor is the end of the listing, and an exact count over a
+  filtered feed costs a second scan of it. A cursor is a position, not a
+  snapshot: the feeds are live, so an entry that moves while you walk may
+  be missed or seen twice.
+  *For a user:* pass the cursor back with the same sort and filters —
+  REST `?cursor=`, MCP's `cursor`, `ochakai search --cursor` (which prints
+  the way on to stderr and does not walk the pages for you), and the web
+  UI's "load more", which now appends a page instead of asking for 1000.
+
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
-  *Accepted; 0037 later added a third feed, and 0043 turns verify's record
+  *Accepted; 0037 later added a third feed, 0043 turns verify's record
   into an append to a verification ledger, so re-verification accumulates
-  as history.* Adds the `sort=failed`
+  as history, and 0049 gives the feeds a cursor.* Adds the `sort=failed`
   re-verification feed of entries agents reported wrong, worst first, and
   `POST /api/v1/verify/{id}` so that re-checking can be recorded — an
   unchanged PUT writes nothing and therefore cannot express "I looked

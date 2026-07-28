@@ -34,9 +34,9 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
-| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio) |
+| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0049](0049-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md) |
+| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-listings-page-rankings-do-not.md)(一覧のページング) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -143,7 +143,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
   期限切れフィード(verify ではなく編集で空になる — 0025 の 2 フィードとの
   違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index。
   0046 §3.11 は frontmatter の jsonb 上の containment に置き換えるとしたが、
-  0047 がそれを取り消し、どちらも列のまま残る)。
+  0047 がそれを取り消し、どちらも列のまま残る。どちらの一覧も
+  0049 の `cursor` で歩ける)。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) —
   **Superseded by 0043**(document-first への全面置き換え。0043 の実装が
   ランドするまでコードとリリースは 0036 の姿。§5 の 2 項目は 0037 が撤回して
@@ -250,10 +251,18 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 
 ## 検証ループと利用測定
 
+- [0049 一覧はカーソルでページングし、順位はしない](0049-listings-page-rankings-do-not.md)
+  — **Accepted**。フィード(0025 §6、0037 §2.1)と source 逆引き
+  (0037 §2.3)に不透明な keyset `cursor` を足し、`limit` の上限で
+  キューが静かに切れる状態を無くす。**検索は `limit` が契約のままで、
+  `cursor` を 400 で拒否する** — 順位は融合の窓であって再開できる順序では
+  ないという refusal(§2.2)。総件数は返さず、`cursor` の不在が終わりを
+  意味する(§2.3)。REST / MCP / CLI / Web UI の 4 面に載り、CLI が
+  ページを自分で歩かないことだけが意図的な省略(§4)。
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
   **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した。フィードは
   0037 が 3 つめを足した。§6 の verify の記録は 0043 が検証台帳への
-  追記に改め、再検証が履歴として残る)。
+  追記に改め、再検証が履歴として残る。フィードのページングは 0049)。
   検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。
   再検証を記録する `POST /api/v1/verify/{id}` はここが出所。
 - [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
