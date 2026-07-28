@@ -14,9 +14,14 @@ import (
 // store, so these need no database: a Service with a nil Store is enough,
 // and a handler that got past the guard would panic rather than quietly
 // pass (design doc 0040 §2.2).
+//
+// The server is checkedServer, not a plain one: a 403 nowhere declared in
+// api/openapi.yaml is a refusal the one REST contract does not mention
+// (design doc 0015 §2), and going through the spec is what keeps the two
+// from drifting apart again.
 func readOnlyServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(Handler(&service.Service{Config: &config.Config{ReadOnly: true}}))
+	srv := checkedServer(t, Handler(&service.Service{Config: &config.Config{ReadOnly: true}}))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -32,7 +37,7 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 		{http.MethodDelete, "/api/v1/knowledge/m", ""},
 		{http.MethodPost, "/api/v1/verify/m", ""},
 		{http.MethodPost, "/api/v1/usage/m", `{"outcome":"worked"}`},
-		{http.MethodPost, "/api/v1/move", `{"id":"m","new_id":"n"}`},
+		{http.MethodPost, "/api/v1/move", `{"from":"m","to":"n"}`},
 		{http.MethodPost, "/api/v1/reembed", ""},
 		{http.MethodPut, "/api/v1/attachments/m/f.txt", "x"},
 		{http.MethodDelete, "/api/v1/attachments/m/f.txt", ""},
@@ -66,17 +71,30 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 // (design doc 0040 §2.3).
 func TestReadOnlyAnnouncesItselfOnEveryResponse(t *testing.T) {
 	srv := readOnlyServer(t)
-	// A refused write and a route that does not exist both carry it: the
-	// header describes the deployment, not the outcome of one call.
-	for _, path := range []string{"/api/v1/knowledge", "/api/v1/nope"} {
-		resp, err := http.Post(srv.URL+path, "application/json", strings.NewReader("{}"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp.Body.Close()
-		if got := resp.Header.Get("Ochakai-Read-Only"); got != "true" {
-			t.Errorf("POST %s: Ochakai-Read-Only = %q, want \"true\"", path, got)
-		}
+	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json",
+		strings.NewReader(`{"type":"Metric","id":"m","title":"m"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got := resp.Header.Get("Ochakai-Read-Only"); got != "true" {
+		t.Errorf("POST /api/v1/knowledge: Ochakai-Read-Only = %q, want \"true\"", got)
+	}
+
+	// A route that does not exist carries it too: the header describes the
+	// deployment, not the outcome of one call. This one stays on a plain
+	// server — a path api/openapi.yaml never declares is nothing the spec
+	// can be asked about, and running it through checkedServer would only
+	// report the test's own 404 as undocumented traffic.
+	plain := httptest.NewServer(Handler(&service.Service{Config: &config.Config{ReadOnly: true}}))
+	defer plain.Close()
+	resp, err = http.Post(plain.URL+"/api/v1/nope", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got := resp.Header.Get("Ochakai-Read-Only"); got != "true" {
+		t.Errorf("POST /api/v1/nope: Ochakai-Read-Only = %q, want \"true\"", got)
 	}
 }
 

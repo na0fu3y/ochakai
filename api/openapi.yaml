@@ -124,6 +124,8 @@ paths:
             sort=usage or sort=failed, hits carry score 0 and each
             populates the usage object (demand order, resp. worst-failed
             first).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -282,6 +284,8 @@ paths:
                           last_used_at: "2026-07-25T02:41:19.008457Z"
         "400":
           description: Error.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -297,6 +301,7 @@ paths:
                   summary: Neither q nor sort was given
                   value:
                     error: search needs a query; use sort=verified_at|usage|failed|stale_after to list entries without one, or source=URI to list what cites a resource
+        "403": { $ref: "#/components/responses/Forbidden" }
     post:
       operationId: createKnowledge
       summary: Create a knowledge entry
@@ -460,8 +465,11 @@ paths:
                     updated_at: "2026-06-09T07:41:02.110945Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400":
           description: Error.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -486,8 +494,11 @@ paths:
                   summary: A source that names no artifact
                   value:
                     error: sources[0] needs a resource (the artifact it cites); id and title alone do not name one
+        "403": { $ref: "#/components/responses/Forbidden" }
         "409":
           description: Error.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -525,6 +536,8 @@ paths:
       responses:
         "200":
           description: One level of the tree.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -581,6 +594,7 @@ paths:
                         status: verified
                         updated_at: "2026-07-14T02:33:41.019778Z"
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/context:
     get:
       operationId: getContext
@@ -663,6 +677,8 @@ paths:
       responses:
         "200":
           description: The ranking plus the full entries behind the top hits.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -812,6 +828,7 @@ paths:
                         bytes: 2144
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/knowledge/{id}:
     parameters:
       - name: id
@@ -829,6 +846,7 @@ paths:
           description: The entry.
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
@@ -924,8 +942,11 @@ paths:
                       below it.
                     created_at: "2026-07-21T06:14:55.402881Z"
                     updated_at: "2026-07-21T06:14:55.402881Z"
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404":
           description: Error.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1006,6 +1027,7 @@ paths:
                 exactly, so nothing was written — no revision, no
                 updated_at bump. Absent on a real update.
               schema: { type: string, enum: ["true"] }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Knowledge" }
@@ -1059,6 +1081,8 @@ paths:
           description: >
             Invalid entry, or a malformed If-Match value (one that is
             neither "*" nor an RFC3339Nano version, quoted or bare).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1080,12 +1104,15 @@ paths:
                   summary: A stale_after that is not an absolute date
                   value:
                     error: invalid stale_after "30d" (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "412":
           description: >
             The If-Match precondition failed: the entry changed since it
             was read. Nothing was written — re-read the entry, redo the
             edit, and retry with the new version.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1125,8 +1152,12 @@ paths:
           schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/OnBehalfOf"
       responses:
-        "204": { description: Deleted. }
+        "204":
+          description: Deleted.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /api/v1/move:
@@ -1205,7 +1236,9 @@ paths:
                     updated_at: "2026-07-27T01:02:33.518604Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
   /api/v1/verify/{id}:
@@ -1269,6 +1302,8 @@ paths:
                     updated_at: "2026-07-27T00:41:12.905337Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
@@ -1288,6 +1323,8 @@ paths:
       responses:
         "200":
           description: Usage totals.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Usage" }
@@ -1305,6 +1342,7 @@ paths:
                     worked: 23
                     failed: 2
                     last_used_at: "2026-07-26T23:58:07.336114Z"
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
     post:
       operationId: reportOutcome
@@ -1354,6 +1392,8 @@ paths:
       responses:
         "200":
           description: Updated usage totals.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Usage" }
@@ -1367,6 +1407,7 @@ paths:
                     failed: 3
                     last_used_at: "2026-07-27T02:07:44.291508Z"
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/revisions/{id}:
     parameters:
@@ -1395,6 +1436,8 @@ paths:
       responses:
         "200":
           description: Revisions, newest first (never empty — create writes rev 1).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1460,6 +1503,7 @@ paths:
                           created_at: "2026-07-21T06:14:55.402881Z"
                           updated_at: "2026-07-21T06:14:55.402881Z"
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/backlinks/{id}:
     parameters:
@@ -1489,6 +1533,8 @@ paths:
       responses:
         "200":
           description: Live entries linking to this one, most recently updated first.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1542,6 +1588,7 @@ paths:
                         created_at: "2026-06-09T07:41:02.110945Z"
                         updated_at: "2026-07-10T01:52:16.774301Z"
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/attachments/{path}:
     parameters:
       - name: path
@@ -1587,6 +1634,8 @@ paths:
       responses:
         "200":
           description: Attachment metadata (bytes are fetched with GET).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Attachment" }
@@ -1605,6 +1654,7 @@ paths:
                     created_by: { kind: human, name: tanaka@example.co.jp }
                     created_at: "2026-06-02T04:20:11.663210Z"
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
@@ -1622,10 +1672,16 @@ paths:
       responses:
         "200":
           description: The attachment bytes.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             "*/*":
               schema: { type: string, format: binary }
-        "304": { description: Not modified (If-None-Match matched the content hash). }
+        "304":
+          description: Not modified (If-None-Match matched the content hash).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteAttachment
@@ -1636,7 +1692,11 @@ paths:
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
       responses:
-        "204": { description: Detached. }
+        "204":
+          description: Detached.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/export:
     get:
@@ -1688,10 +1748,13 @@ paths:
       responses:
         "200":
           description: OKF bundle.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/gzip:
               schema: { type: string, format: binary }
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/reembed:
     post:
       operationId: reembedKnowledge
@@ -1735,6 +1798,8 @@ paths:
       responses:
         "200":
           description: What the pass did.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1782,6 +1847,7 @@ paths:
                     failed: 0
                     missing: 0
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "501": { $ref: "#/components/responses/Error" }
 components:
   headers:
@@ -1791,6 +1857,19 @@ components:
         client echoes it in If-Match on a later update to write only if
         nothing changed meanwhile (design doc 0030).
       schema: { type: string }
+    ReadOnly:
+      description: >
+        Set to "true" on every /api/v1 response — reads, writes, and
+        errors alike — when the deployment is read-only
+        (OCHAKAI_READ_ONLY, design doc 0040 §2.3). It describes the
+        deployment, not the outcome of the call. Absent means the
+        deployment accepts writes, which is what every server predating
+        the flag says. MCP announces read-only by not offering the write
+        tools; REST has no such handshake, so it says so in a header, the
+        way Ochakai-Unchanged reports that an update wrote nothing. A
+        client reads it to stop offering writes that would only ever be
+        refused with 403.
+      schema: { type: string, enum: ["true"] }
   parameters:
     IfMatch:
       name: If-Match
@@ -1827,12 +1906,43 @@ components:
   responses:
     Error:
       description: Error.
+      headers:
+        Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
       content:
         application/json:
           schema:
             type: object
             properties:
               error: { type: string }
+    Forbidden:
+      description: >
+        Refused — the route exists and the request was understood, but
+        this deployment declines it. Two things answer 403, and the
+        message says which: a write against a read-only deployment
+        (design doc 0040 §4 — 403 rather than 404, because the endpoint
+        did not go away), and X-Ochakai-On-Behalf-Of from a caller that
+        is not on the delegator allowlist (design doc 0027, which refuses
+        rather than silently downgrading to the caller's own identity).
+        The second reaches every operation, since the header is honored
+        on every call; the first only the writes. Same JSON envelope as
+        every other error here.
+      headers:
+        Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+          examples:
+            readOnly:
+              summary: A write against a read-only deployment
+              value:
+                error: "this ochakai is read-only: it serves knowledge but does not change it"
+            notADelegator:
+              summary: X-Ochakai-On-Behalf-Of from a caller not permitted to delegate
+              value:
+                error: "auth: X-Ochakai-On-Behalf-Of: app@example.iam.gserviceaccount.com is not permitted to act on behalf of others (add it to OCHAKAI_DELEGATING_CALLERS)"
   schemas:
     Type:
       type: string
