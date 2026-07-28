@@ -17,6 +17,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
@@ -221,7 +222,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	// §§3.2-3.3). Carrying them over keeps the returned entry honest.
 	k.Verifications, k.Rejection = old.Verifications, old.Rejection
 	// Three outcomes, because the document being the writer's own bytes
-	// (design doc 0044 §2.2) separates two questions that used to be one.
+	// (design doc 0046 §2.2) separates two questions that used to be one.
 	//
 	// The same bytes: nothing happened. No row written, no revision, and
 	// the surface says so.
@@ -235,7 +236,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	// Different bytes saying the same thing — a reformat, a comment, a
 	// reordered frontmatter. The file changed, so it is written and its
 	// version moves; what the entry says did not, so generated stays with
-	// whoever the content already stood by (design doc 0044 §3.4).
+	// whoever the content already stood by (design doc 0046 §3.4).
 	if k.SameContent(old) {
 		k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
 	} else {
@@ -519,7 +520,7 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 // The casing is not touched. A recommended type used to settle on its
 // canonical spelling here, which meant the stored entry no longer said
 // what its writer wrote — and once the document is what is stored
-// (design doc 0044 §2.2), it would also mean the index disagreeing with
+// (design doc 0046 §2.2), it would also mean the index disagreeing with
 // the document it is derived from. The type is the writer's vocabulary
 // (design doc 0038); matching folds case, storage keeps it.
 //
@@ -696,7 +697,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 // caller can spend a round trip on.
 type ContextResult struct {
 	Hits      []domain.ContextRank    `json:"hits"`
-	Entries   []domain.Knowledge      `json:"entries"`
+	Entries   []domain.View           `json:"entries"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 }
@@ -794,17 +795,32 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 			addFetched(&linking[j])
 		}
 	}
-	entries, outline := packWithinBudget(entries, req.Budget)
+	// Entries become views here: a context pack hands over the document
+	// (design doc 0043 §3.5), and the budget below has to measure what is
+	// actually sent.
+	views := make([]domain.View, 0, len(entries))
+	for i := range entries {
+		v, err := okf.ViewOf(&entries[i])
+		if err != nil {
+			// The entry came from the store, so this means the renderer
+			// cannot express something it holds. Naming it and leaving it
+			// out beats failing the whole pack.
+			s.Log.Warn("cannot render an entry for a context pack", "id", entries[i].ID, "error", err)
+			continue
+		}
+		views = append(views, v)
+	}
+	kept, outline := packWithinBudget(views, req.Budget)
 	// Only delivered entries count as fetched. An outline row names an
 	// entry; it does not hand over the knowledge, so counting it as a use
 	// would inflate the demand signal that drives the review feeds.
-	ids := make([]string, len(entries))
-	for i := range entries {
-		ids[i] = entries[i].ID
+	ids := make([]string, len(kept))
+	for i := range kept {
+		ids[i] = kept[i].ID
 	}
 	s.recordUsage(ctx, domain.EventFetched, ids)
 	return &ContextResult{
-		Hits: domain.ContextRanks(hits), Entries: entries,
+		Hits: domain.ContextRanks(hits), Entries: kept,
 		Outline: outline, Truncated: len(outline),
 	}, nil
 }
@@ -837,7 +853,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 // dropping entries the caller never hears about is worse than a response
 // slightly over budget, and the caller can raise the budget only if it
 // knows there was something there.
-func packWithinBudget(entries []domain.Knowledge, budget int) ([]domain.Knowledge, []domain.ContextOutline) {
+func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domain.ContextOutline) {
 	if budget <= 0 {
 		return entries, nil
 	}
@@ -877,7 +893,7 @@ func packWithinBudget(entries []domain.Knowledge, budget int) ([]domain.Knowledg
 		used -= sizes[last]
 		outlineBytes += rowSizes[last]
 	}
-	kept := make([]domain.Knowledge, 0, len(entries))
+	kept := make([]domain.View, 0, len(entries))
 	var outline []domain.ContextOutline
 	for i := range entries {
 		if deliver[i] {
@@ -897,21 +913,21 @@ func packWithinBudget(entries []domain.Knowledge, budget int) ([]domain.Knowledg
 // fetch is for.
 const outlineDescriptionBytes = 200
 
-func outlineRow(k *domain.Knowledge, size int) domain.ContextOutline {
+func outlineRow(v *domain.View, size int) domain.ContextOutline {
 	return domain.ContextOutline{
-		ID: k.ID, Type: k.Type, Title: k.DisplayTitle(),
-		Description: truncateUTF8(k.Description, outlineDescriptionBytes),
-		Status:      k.Status, Bytes: size,
+		ID: v.Summary.ID, Type: v.Summary.Type, Title: v.Summary.Title,
+		Description: truncateUTF8(v.Summary.Description, outlineDescriptionBytes),
+		Status:      v.Summary.Status, Bytes: size,
 	}
 }
 
-// serializedSize is what the entry costs on the wire — attrs included. A
-// body-only measure would miss the largest payload in the base, the spec
-// a model entry keeps in attrs.
-func serializedSize(k *domain.Knowledge) int {
-	b, err := json.Marshal(k)
+// serializedSize is what the entry costs on the wire. It measures the
+// whole view, document included: the document is the entry, so a measure
+// that skipped it would be budgeting for a fraction of what is sent.
+func serializedSize(v *domain.View) int {
+	b, err := json.Marshal(v)
 	if err != nil {
-		return len(k.Body) // unreachable in practice; never drop on a marshal quirk
+		return len(v.Document) // unreachable in practice; never drop on a marshal quirk
 	}
 	return len(b)
 }
@@ -1043,8 +1059,8 @@ func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit i
 		return nil, err
 	}
 	hits := make([]domain.SearchHit, len(entries))
-	for i, k := range entries {
-		hits[i] = domain.SearchHit{Knowledge: k}
+	for i := range entries {
+		hits[i] = domain.SearchHit{Summary: domain.SummaryOf(&entries[i])}
 	}
 	return hits, nil
 }
@@ -1148,7 +1164,7 @@ func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 	}
 	out := make([]domain.SearchHit, 0, len(byKey))
 	for _, e := range byKey {
-		if e.hit.Verified() {
+		if e.hit.Verified {
 			e.score += 0.002
 		}
 		e.hit.Score = e.score

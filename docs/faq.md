@@ -91,7 +91,7 @@ curates from.
 
 Last write wins, unless the client asks for better. Every `GET` and `PUT`
 returns an `ETag` — the hash of the entry's canonical OKF document,
-quoted, and also in the body as `content_hash` — and a `PUT` carrying
+quoted, and also in the body as `summary.content_hash` — and a `PUT` carrying
 `If-Match` with a stale value gets `412` and writes nothing (design docs
 0030, 0043 §3.4). It is a hash of the content alone, so verifying or
 rejecting the entry, or attaching a file to it, leaves your precondition

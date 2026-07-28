@@ -4,7 +4,7 @@ Status: Accepted(2026-07-14 の議論で主要論点を決定)。§3 の共通�
 表現と §9.1 の rejected ステータスは [0043](0043-document-first.md) が改訂した
 (保存とワイヤは OKF 文書そのものになり、却下は status ではなく
 インスタンス台帳の裁定になる)。§9.1 の一覧面と検索フィルタの語彙は
-[0044](0044-bundle-address-space.md) が `GET /api/v1/search` と trust tier に
+[0046](0046-bundle-address-space.md) が `GET /api/v1/search` と trust tier に
 言い直した
 Date: 2026-07-14
 

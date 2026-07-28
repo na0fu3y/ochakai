@@ -160,7 +160,7 @@ func Handler(svc *service.Service) http.Handler {
 			writeDocument(w, http.StatusOK, k)
 			return
 		}
-		writeJSON(w, http.StatusOK, k)
+		writeView(w, http.StatusOK, k)
 	})
 
 	// PUT /api/v1/knowledge/{id...} — the one way to write knowledge. The
@@ -221,7 +221,7 @@ func Handler(svc *service.Service) http.Handler {
 			writeDocument(w, status, out)
 			return
 		}
-		writeJSON(w, status, out)
+		writeView(w, status, out)
 	})
 
 	// POST /api/v1/verify/{id...} — record a verification against the
@@ -239,7 +239,7 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("ETag", etagOf(k))
-		writeJSON(w, http.StatusOK, k)
+		writeView(w, http.StatusOK, k)
 	})
 
 	// POST /api/v1/reject/{id...} — record that a reviewer turned the
@@ -262,7 +262,7 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("ETag", etagOf(k))
-		writeJSON(w, http.StatusOK, k)
+		writeView(w, http.StatusOK, k)
 	})
 
 	mux.HandleFunc("DELETE /api/v1/reject/{id...}", func(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +272,7 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("ETag", etagOf(k))
-		writeJSON(w, http.StatusOK, k)
+		writeView(w, http.StatusOK, k)
 	})
 
 	// GET /api/v1/usage/{id...} — how often the entry was actually used
@@ -342,15 +342,14 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		ptrs := make([]*domain.Knowledge, len(entries))
+		// A backlink row names an entry; it does not hand it over. The
+		// projection is what a caller needs to decide whether to follow
+		// the edge (design doc 0043 §3.5).
+		rows := make([]domain.Summary, len(entries))
 		for i := range entries {
-			ptrs[i] = &entries[i]
+			rows[i] = domain.SummaryOf(&entries[i])
 		}
-		if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+		writeJSON(w, http.StatusOK, map[string]any{"entries": rows})
 	})
 	// Attachments (design docs 0008, 0013): files attached to an entry
 	// (images, PDFs, plain text), bytes fetched on demand — entry reads
@@ -498,7 +497,7 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("ETag", etagOf(moved))
-		writeJSON(w, http.StatusOK, moved)
+		writeView(w, http.StatusOK, moved)
 	})
 
 	// GET /api/v1/export — the whole knowledge base as an OKF bundle
@@ -683,13 +682,19 @@ func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 // batch — the REST list surface carries it so UIs can render image
 // previews; MCP search results stay lean (design doc 0015).
 func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, hits []domain.SearchHit) {
+	// A row is a projection now (design doc 0043 §3.5), so the batch fill
+	// runs against stand-ins carrying only the ids and the metadata is
+	// copied back onto the rows.
 	ptrs := make([]*domain.Knowledge, len(hits))
 	for i := range hits {
-		ptrs[i] = &hits[i].Knowledge
+		ptrs[i] = &domain.Knowledge{ID: hits[i].ID}
 	}
 	if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
 		writeError(w, err)
 		return
+	}
+	for i := range hits {
+		hits[i].Attachments = ptrs[i].Attachments
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 }
@@ -772,6 +777,18 @@ func wantsDocument(r *http.Request) bool {
 // conditional read, and a caller that means "only if absent" says "*".
 func onlyIfAbsent(r *http.Request) bool {
 	return strings.TrimSpace(r.Header.Get("If-None-Match")) == "*"
+}
+
+// writeView responds with a read of one entry: the canonical document,
+// the projection, and what this instance observed (design doc 0043 §3.5).
+func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
+	v, err := okf.ViewOf(k)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError,
+			map[string]string{"error": "render document: " + err.Error()})
+		return
+	}
+	writeJSON(w, status, v)
 }
 
 // writeDocument renders the entry as the document an export would write

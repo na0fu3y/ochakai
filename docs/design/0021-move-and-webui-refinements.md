@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0021: ナレッジの move(パス変更)と Web UI の微調整
 
-Status: Accepted(2026-07-20)。[0044](0044-bundle-address-space.md) §3.3 が
+Status: Accepted(2026-07-20)。[0046](0046-bundle-address-space.md) §3.3 が
 move の対象に `<id>/` 名前空間のオブジェクトを加え、本文の書き換えを
 SPEC §6 のリンク形に合わせる
 Date: 2026-07-20

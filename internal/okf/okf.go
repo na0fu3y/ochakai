@@ -383,7 +383,7 @@ func sourcesOut(in []domain.Source) []source {
 // This is what an export writes, what a read with Accept: text/markdown
 // returns, and what `ochakai get` hands to an editor.
 //
-// The stored document is the writer's own bytes (design doc 0044 §2.2),
+// The stored document is the writer's own bytes (design doc 0046 §2.2),
 // so the keys are appended to its frontmatter rather than merged into a
 // re-serialization of it. An entry that was composed in memory instead of
 // parsed from a document has no such bytes; its canonical form is its
@@ -403,7 +403,7 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 }
 
 // Canonical renders an entry in one normal form, with no server-owned key
-// in it. It is no longer the stored shape (design doc 0044 §2.2 stores
+// in it. It is no longer the stored shape (design doc 0046 §2.2 stores
 // the bytes as received); it is the derived value the store compares to
 // decide whether a write changed what the entry says, and the form
 // ochakai writes when it composes a document itself rather than being
@@ -496,6 +496,29 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 		b.WriteString("\n" + body + "\n")
 	}
 	return []byte(b.String()), nil
+}
+
+// ViewOf assembles a read of one entry: the canonical document it is,
+// the projection to read it by, and what this instance observed about it
+// (design doc 0043 §3.5).
+//
+// The document is rendered rather than fetched. It is a pure function of
+// the columns a read already returns, and the store pins that rendering
+// against the stored bytes — so re-rendering here reproduces what is
+// stored, and no read has to carry the document twice over the wire from
+// the database.
+func ViewOf(k *domain.Knowledge) (domain.View, error) {
+	doc, err := Canonical(k)
+	if err != nil {
+		return domain.View{}, err
+	}
+	return domain.View{
+		ID:          k.ID,
+		Document:    string(doc),
+		Summary:     domain.SummaryOf(k),
+		Observed:    domain.ObservedOf(k),
+		Attachments: k.Attachments,
+	}, nil
 }
 
 // TarGzWriter writes a bundle one file at a time. A caller that can

@@ -536,11 +536,13 @@ function actorStr(a) {
 // The ledgers a read carries beside the document (design doc 0043
 // §§3.2-3.3). Verification is plural and stored oldest-first, so the
 // newest is the last one.
-function lastVerification(entry) {
-  const vs = entry.verifications || [];
+function lastVerification(observed) {
+  const vs = (observed || {}).verified || [];
   return vs.length ? vs[vs.length - 1] : null;
 }
-function isVerified(entry) { return (entry.verifications || []).length > 0; }
+// A summary answers "has anyone confirmed this" as a bool; the ledger
+// itself travels in observed (design doc 0043 §3.5).
+function isVerified(e) { return !!e.verified; }
 
 // Whole days since an ISO timestamp (null for unparseable input).
 function daysSince(s) {
@@ -1416,75 +1418,43 @@ const windowText = w => w && (w.from || w.to) ? `${w.from || '…'} → ${w.to |
 // The material an entry derives from (OKF SPEC §5.1). ochakai shows the
 // signals as the writer recorded them and scores nothing: §5.1 leaves
 // weighing them to whoever is reading.
-function sourcesSection(entry) {
-  const sources = entry.sources || [];
-  const window = windowText(entry.usage_window);
-  if (!sources.length && !window) return '';
-  const rows = sources.map(s => {
-    const name = s.title || s.id || s.resource;
-    const meta = [
-      s.id && s.title ? `id ${esc(s.id)}` : '',
-      s.author ? esc(s.author) : '',
-      s.usage_count !== undefined && s.usage_count !== null ? `${s.usage_count} uses` : '',
-      s.last_modified ? `modified ${esc(s.last_modified)}` : '',
-      windowText(s.usage_window) ? `window ${esc(windowText(s.usage_window))}` : '',
-    ].filter(Boolean).join(' · ');
-    // The reverse lookup belongs where somebody is already looking at the
-    // source: "what else derives from this?" (design doc 0037 §2.3).
-    const cites = `<a href="#/search/cites/${encodeURIComponent(s.resource)}" title="Entries citing this resource">cited elsewhere?</a>`;
-    return `<tr><td class="k">${esc(name)}</td><td>${resourceHTML(s.resource)}
-      <div class="provenance" style="margin:.15rem 0 0">${meta ? meta + ' · ' : ''}${cites}</div></td></tr>`;
-  }).join('');
-  return `
-    <div class="section-title" style="font-size:1.05rem;margin:1.6rem 0 .6rem">Sources</div>
-    ${rows ? `<table class="kv">${rows}</table>` : ''}
-    ${window ? `<div class="provenance">usage counted over ${esc(window)}</div>` : ''}`;
-}
-
-// The Attested Computation contract (OKF SPEC §10.2), shown above the free
-// attrs because it is the same kind of thing: structured detail about how
-// to use the entry. Displayed only — ochakai never runs any of it.
-function contractSection(entry) {
-  const rows = [
-    ['runtime', entry.runtime ? `<span class="mono">${esc(entry.runtime)}</span>` : ''],
-    ['parameters', (entry.parameters || []).map(p =>
-      `<span class="mono">${esc(p.name)}</span>: ${esc(p.type)}${p.required ? ' <span class="badge">required</span>' : ''}`).join('<br>')],
-    ['computation', entry.computation ? resourceHTML(entry.computation) : ''],
-    ['executor', entry.executor
-      ? resourceHTML(entry.executor.resource) +
-        `<div class="provenance" style="margin:.15rem 0 0">receipt: ${esc((entry.executor.receipt || []).join(', '))}</div>`
-      : ''],
-    ['attester', entry.attester ? resourceHTML(entry.attester.resource) : ''],
-  ].filter(([, v]) => v);
-  if (!rows.length) return '';
-  return `<table class="kv">${rows.map(([k, v]) => `<tr><td class="k mono">${k}</td><td>${v}</td></tr>`).join('')}</table>
-    <p class="provenance">The contract for running this computation. ochakai records it and never runs, checks, or
-    fetches any of it — executing it and checking the receipt belong to the consumer.</p>`;
-}
 
 async function viewDetail(id) {
   revealInTree(id); // in parallel with the entry fetch; harmless on 404
   view.innerHTML = '<div class="empty">…</div>';
-  let entry;
+  let entry, observed, document_;
   try {
-    entry = await api('/api/v1/knowledge/' + idPath(id));
+    // A read is {id, document, summary, observed, attachments} (design
+    // doc 0043 §3.5). The summary is flattened onto entry so the header
+    // reads one object; the document is the entry itself.
+    const v = await api('/api/v1/knowledge/' + idPath(id));
+    entry = Object.assign({ id: v.id, attachments: v.attachments || [] }, v.summary);
+    observed = v.observed || {};
+    document_ = v.document || '';
   } catch (e) {
     view.innerHTML = `<div class="error-banner">Could not load ${esc(id)}: ${esc(e.message)}</div>`;
     return;
   }
+  // The body, cut from the document at the closing delimiter. Cutting on
+  // a delimiter is not parsing: nothing here reads a frontmatter value
+  // (design doc 0044 §2.3).
+  const docBody = (() => {
+    const m = document_.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
+    return (m ? m[1] : document_).trim();
+  })();
 
   const prov = [
-    entry.created_by && entry.created_by.name ? `created by ${actorStr(entry.created_by)} ${fmtDate(entry.created_at)}` : `created ${fmtDate(entry.created_at)}`,
-    lastVerification(entry)
-      ? `verified by ${actorStr(lastVerification(entry).by)} ${fmtDate(lastVerification(entry).at)}`
-        + ((entry.verifications || []).length > 1 ? ` (${entry.verifications.length} verifications)` : '')
+    observed.created_by && observed.created_by.name ? `created by ${actorStr(observed.created_by)} ${fmtDate(entry.created_at)}` : `created ${fmtDate(entry.created_at)}`,
+    lastVerification(observed)
+      ? `verified by ${actorStr(lastVerification(observed).by)} ${fmtDate(lastVerification(observed).at)}`
+        + ((observed.verified || []).length > 1 ? ` (${observed.verified.length} verifications)` : '')
       : '',
-    entry.rejection ? `rejected by ${actorStr(entry.rejection.by)} ${fmtDate(entry.rejection.at)}` : '',
+    observed.rejection ? `rejected by ${actorStr(observed.rejection.by)} ${fmtDate(observed.rejection.at)}` : '',
     // updated_by is OKF's generated.by: who the content stands by now,
     // which is not always who created it (design doc 0036 §3.3).
     entry.updated_at && entry.updated_at !== entry.created_at
-      ? (entry.updated_by && entry.updated_by.name
-          ? `updated by ${actorStr(entry.updated_by)} ${fmtDate(entry.updated_at)}`
+      ? ((observed.generated || {}).by && observed.generated.by.name
+          ? `updated by ${actorStr(observed.generated.by)} ${fmtDate(entry.updated_at)}`
           : `updated ${fmtDate(entry.updated_at)}`)
       : '',
   ].filter(Boolean).join(' · ');
@@ -1512,7 +1482,7 @@ async function viewDetail(id) {
         </select>
       </span>
       ${isVerified(entry) ? '<span class="badge verified-mark" title="Somebody confirmed this entry">✓ verified</span>' : ''}
-      ${entry.rejection ? '<span class="badge rejected-mark" title="Reviewed and not accepted">rejected</span>' : ''}
+      ${entry.rejected ? '<span class="badge rejected-mark" title="Reviewed and not accepted">rejected</span>' : ''}
       ${tags}
       <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">Edit</a>
@@ -1522,7 +1492,7 @@ async function viewDetail(id) {
             <button id="act-verify" title="${isVerified(entry)
               ? 'Checked again and still right — appends a verification, which is what clears the review feeds'
               : 'Confirm this entry — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
-            ${entry.rejection
+            ${entry.rejected
               ? `<button id="act-unreject" title="Withdraw the ruling and return the entry to the ordinary pool">Lift rejection</button>`
               : `<button class="danger" id="act-reject" title="Reviewed and not accepted — hidden from search, with the reason kept for the next agent">Reject…</button>`}
             <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
@@ -1532,8 +1502,8 @@ async function viewDetail(id) {
       </span>
     </div>
     <div class="provenance">${esc(prov)}</div>
-    ${entry.rejection && entry.rejection.note
-      ? `<div class="status-note">Rejected: ${esc(entry.rejection.note)}</div>` : ''}
+    ${observed.rejection && observed.rejection.note
+      ? `<div class="status-note">Rejected: ${esc(observed.rejection.note)}</div>` : ''}
     <div id="move-panel" style="display:none;margin-top:.7rem">
       <div class="toolbar" style="margin-bottom:0">
         <input type="text" id="move-to" class="mono" list="move-dirs" value="${esc(entry.id)}"
@@ -1550,7 +1520,7 @@ async function viewDetail(id) {
     ${entry.resource ? `<div class="provenance">resource: ${resourceHTML(entry.resource)}</div>` : ''}
     <div class="tabs" id="tabs">
       <button data-tab="overview" class="active">Overview</button>
-      <button data-tab="attrs">Attributes</button>
+      <button data-tab="document">Document</button>
       <button data-tab="links">Links${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
       <button data-tab="attachments">Attachments${atts.length ? ' (' + atts.length + ')' : ''}</button>
       <button data-tab="linked">Linked from</button>
@@ -1608,22 +1578,16 @@ async function viewDetail(id) {
     // whoever is reading the body is exactly who needs the list.
     overview: () => `
       ${entry.description ? `<p style="font-size:1.02rem">${esc(entry.description)}</p>` : ''}
-      ${entry.body ? `<div class="md">${md(entry.body, resolveFile, resolveEntry)}</div>` : ''}
-      ${!entry.description && !entry.body ? '<div class="empty">No description or body.</div>' : ''}
-      ${sourcesSection(entry)}`,
-    attrs: () => {
-      const attrs = entry.attrs || {};
-      const keys = Object.keys(attrs);
-      const contract = contractSection(entry);
-      if (!keys.length) return contract || '<div class="empty">No structured attributes.</div>';
-      return contract + '<table class="kv">' + keys.map(k => {
-        const v = attrs[k];
-        const rendered = typeof v === 'string' && (k === 'sql' || v.includes('\n'))
-          ? `<pre>${esc(v)}</pre>`
-          : typeof v === 'string' ? esc(v) : `<pre>${esc(JSON.stringify(v, null, 2))}</pre>`;
-        return `<tr><td class="k mono">${esc(k)}</td><td>${rendered}</td></tr>`;
-      }).join('') + '</table>';
-    },
+      ${docBody ? `<div class="md">${md(docBody, resolveFile, resolveEntry)}</div>` : ''}
+      ${!entry.description && !docBody ? '<div class="empty">No description or body.</div>' : ''}`,
+    // The document, whole and unrendered. It replaced tabs that each
+    // redrew a slice of the frontmatter in some other shape — which is
+    // the duplication document-first exists to remove, and the reason
+    // design doc 0044 puts the format itself in front of the reader.
+    document: () => `
+      <p class="provenance" style="margin:0 0 .8rem">The entry as ochakai stores it —
+      OKF frontmatter and markdown. This is the text Edit opens, and the text an export writes.</p>
+      <pre class="mono">${esc(document_)}</pre>`,
     // Read-only: links come from the body's markdown links (design doc
     // 0024), so the body editor is where they are changed.
     links: () => {
@@ -1766,7 +1730,7 @@ async function viewDetail(id) {
   statusPick.addEventListener('change', async () => {
     const status = statusPick.value;
     try {
-      if (await applyStatus(entry, status, status === 'deprecated')) {
+      if (await applyStatus(entry.id, status)) {
         toast(`Marked ${status}.`);
         refreshTree(); // the tree shows status badges
         viewDetail(entry.id);
@@ -1831,49 +1795,19 @@ async function viewDetail(id) {
   });
 }
 
-// The frontmatter keys a writer owns, in the spec's family order. A PUT
-// is a full replacement, so a key left out is a key erased — which is why
-// the form and the status picker both render from this one list rather
-// than each assembling their own (design doc 0035 §4, where a status
-// change erased resource because one path had forgotten it).
+// withStatus returns doc with its status line set. A canonical document
+// always carries one — the server writes status unconditionally — so this
+// is a line replacement on text ochakai itself produced, not a parser
+// (design doc 0044 §2.1 refuses the parser; this refuses to need one).
 //
-// links is not here: the server derives links from the body (design doc
-// 0024). Neither are the keys the server owns — generated, verified,
-// created_by, rejected_* — which it ignores on the way in.
-const WRITABLE = ['type', 'resource', 'title', 'description', 'tags',
-  'sources', 'usage_window', 'status', 'status_note', 'stale_after',
-  'runtime', 'parameters', 'computation', 'executor', 'attester'];
-
-// Render an entry as the OKF document the server takes (design doc 0043
-// §3.5). Every value goes out as JSON, which is a subset of YAML: it
-// needs no quoting rules of its own, cannot be misread as a date or a
-// number, and survives a body full of colons and newlines. The server
-// canonicalizes what it stores, so this has to be correct, not pretty.
-//
-// Producer extension keys ride along from attrs, so editing an entry
-// through the form keeps the keys the form knows nothing about.
-function toDocument(e) {
-  const lines = [];
-  const put = (k, v) => {
-    if (v === undefined || v === null) return;
-    if (typeof v === 'string' && v === '') return;
-    if (Array.isArray(v) && v.length === 0) return;
-    lines.push(k + ': ' + JSON.stringify(v));
-  };
-  for (const k of WRITABLE) put(k, e[k]);
-  for (const [k, v] of Object.entries(e.attrs || {})) {
-    if (!WRITABLE.includes(k)) put(k, v);
-  }
-  const body = (e.body || '').trim();
-  return '---\n' + lines.join('\n') + '\n---\n' + (body ? '\n' + body + '\n' : '');
-}
-
-// writeEntry PUTs the entry as a document. onlyIfAbsent asks for a
-// create: an occupied id is a 409 rather than a replacement.
-function writeEntry(e, onlyIfAbsent) {
-  return api('/api/v1/knowledge/' + idPath(e.id), {
-    method: 'PUT', doc: toDocument(e), onlyIfAbsent,
-  });
+// The alternative, rebuilding a document from the fields the page holds,
+// is what erased data before: the page holds the projection, and a
+// document assembled from it would drop everything the projection does
+// not carry — the citations, the contract, the body (design doc 0035 §4
+// is the same bug with fewer fields).
+function withStatus(doc, status) {
+  const line = 'status: ' + status;
+  return /^status:.*$/m.test(doc) ? doc.replace(/^status:.*$/m, line) : doc;
 }
 
 // Apply a status transition (full-replacement PUT), prompting for a
@@ -1882,15 +1816,15 @@ function writeEntry(e, onlyIfAbsent) {
 // failure so callers can toast it. Shared by the detail view and the
 // review queue; the entry may be a full Knowledge or a SearchHit (which
 // embeds one), since both carry the writable fields.
-async function applyStatus(entry, status, askNote) {
-  let note;
-  if (askNote) {
-    note = prompt(`Why ${status}? (recorded as status_note so agents stop re-proposing it)`, entry.status_note || '');
-    if (note === null) return false;
-  }
-  const next = Object.assign({}, entry, { status });
-  if (note !== undefined) next.status_note = note;
-  await writeEntry(next, false);
+async function applyStatus(id, status) {
+  // Read the document, change the one line, write it back. The read is
+  // what makes this safe: the page never holds the whole entry, only the
+  // projection, so anything assembled from what it holds would be missing
+  // the rest of the document.
+  const v = await api('/api/v1/knowledge/' + idPath(id));
+  await api('/api/v1/knowledge/' + idPath(id), {
+    method: 'PUT', doc: withStatus(v.document || '', status),
+  });
   return true;
 }
 
@@ -2037,411 +1971,136 @@ function wireReviewActions(container) {
 
 /* ============================== editor ============================== */
 
+// Templates for a new entry, one per recommended type (design doc 0038),
+// so a create starts from a shape rather than an empty textarea. The
+// frontmatter is what that type actually needs: an Attested Computation
+// without a runtime is refused by the server, and a Reference with no
+// resource is a mirror of nothing.
+const TEMPLATES = {
+  'Attested Computation': 'runtime: bigquery\nparameters:\n    - name: year\n      type: integer\n      required: true\n',
+  'BigQuery Dataset': 'resource: bigquery://project/dataset\n',
+  'BigQuery Table': 'resource: bigquery://project/dataset/table\n',
+  'API Endpoint': 'resource: https://api.example.com/v1/thing\n',
+  Reference: 'resource: https://example.com/the-original\n',
+};
+
+function templateDocument(type, title) {
+  const extra = TEMPLATES[type] || '';
+  return '---\ntype: ' + type + '\n'
+    + (title ? 'title: ' + JSON.stringify(title) + '\n' : '')
+    + 'description: ""\nstatus: draft\n' + extra
+    + '---\n\n';
+}
+
 // prefix (create only) seeds the ID field — the per-directory ＋
 // in the tree routes here as #/new/<prefix>/.
+//
+// Editing is editing the document (design doc 0044). The row editors for
+// sources and parameters are gone: filling them meant parsing YAML in the
+// browser, and a hand-written parser whose failure mode is silently
+// dropping a producer key is the one thing 0043 §3.6 had just decided
+// against. What comes back instead is a parse check before save and a
+// template per type.
 async function viewEditor(id, prefix = '') {
   const editing = id !== null;
-  let entry = { type: 'Insight', id: prefix, title: '', description: '', resource: '', tags: [],
-    sources: [], usage_window: null, status: 'draft', status_note: '', stale_after: '',
-    runtime: '', parameters: [], computation: '', executor: null, attester: null, attrs: {}, body: '' };
+  let doc = templateDocument('Insight', '');
+  let entryID = prefix;
   if (editing) {
     try {
-      entry = await api('/api/v1/knowledge/' + idPath(id));
+      const v = await api('/api/v1/knowledge/' + idPath(id));
+      doc = v.document || '';
+      entryID = v.id;
     } catch (e) {
       view.innerHTML = `<div class="error-banner">Could not load ${esc(id)}: ${esc(e.message)}</div>`;
       return;
     }
   }
-  const attrsText = entry.attrs && Object.keys(entry.attrs).length ? JSON.stringify(entry.attrs, null, 2) : '';
 
   // The id is one field, the way the address is one string (design doc
   // 0016) and the way the Move panel already takes it. Its last segment
   // is the entry's name unless a title overrides it (design doc 0022).
-  // No datalist here, unlike Move: a focused input that gains one makes
-  // Chrome scroll the page to seat the suggestion popup, and this form
-  // focuses the field itself.
   const idField = `
         <div class="field">
           <label class="top" for="e-id">ID</label>
-          <input type="text" id="e-id" class="mono" value="${esc(editing ? entry.id : prefix)}"
+          <input type="text" id="e-id" class="mono" value="${esc(entryID)}"
                  placeholder="sales/monthly-revenue"
                  ${editing ? 'disabled' : 'required'}>
           <div class="hint">${editing
             ? 'Where the entry lives (move it from the entry page).'
             : 'The full path, directories separated by “/”. The last segment is the entry’s name, e.g. 売上 or monthly-revenue; place together what should be read together.'}</div>
         </div>`;
+
   view.innerHTML = `
-    <div class="section-title">${editing ? `Edit ${esc(entry.id)}` : 'New knowledge entry'}</div>
+    <div class="section-title">${editing ? `Edit ${esc(entryID)}` : 'New knowledge entry'}</div>
     <form class="form" id="editor">
       <div class="row">
-        <div class="field">
-          <label class="top" for="e-type">Type</label>
-          <input type="text" id="e-type" list="type-list" value="${esc(entry.type)}" required>
-          <datalist id="type-list">${KNOWN_TYPES.map(t => `<option value="${t}">`).join('')}</datalist>
-          <div class="hint">What the entry is: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference — or any type of your own.</div>
-        </div>
         ${idField}
-      </div>
-      <div class="field">
-        <label class="top" for="e-title">Title</label>
-        <input type="text" id="e-title" value="${esc(entry.title || '')}">
-        <div class="hint">Optional — the file name is the display name; set a title only when that isn't enough.</div>
-      </div>
-      <div class="field">
-        <label class="top" for="e-desc">Description</label>
-        <input type="text" id="e-desc" value="${esc(entry.description || '')}">
-      </div>
-      <div class="row">
+        ${editing ? '' : `
         <div class="field">
-          <label class="top" for="e-resource">Resource</label>
-          <input type="text" id="e-resource" class="mono" value="${esc(entry.resource || '')}"
-                 placeholder="bq://project.dataset.table">
-          <div class="hint">The underlying asset's canonical URI — a table or dataset URI, or the external source's URL. Leave empty for an abstract concept.</div>
-        </div>
-        <div class="field">
-          <label class="top" for="e-tags">Tags</label>
-          <input type="text" id="e-tags" value="${esc((entry.tags || []).join(', '))}" placeholder="finance, monthly">
-          <div class="hint">Comma-separated.</div>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label class="top" for="e-status">Status</label>
-          <select id="e-status">${STATUSES.map(s => `<option ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
-        </div>
-        <div class="field">
-          <label class="top" for="e-stale">Stale after</label>
-          <input type="date" id="e-stale" value="${esc(entry.stale_after || '')}">
-          <div class="hint">Optional — the day this is due for a re-check.</div>
-        </div>
+          <label class="top" for="e-template">Start from</label>
+          <select id="e-template">${KNOWN_TYPES.map(t =>
+            `<option value="${t}"${t === 'Insight' ? ' selected' : ''}>${t}</option>`).join('')}</select>
+          <div class="hint">Seeds the document below with that type's frontmatter. Change the type in the document itself.</div>
+        </div>`}
       </div>
       <div class="field">
-        <label class="top" for="e-note">Status note</label>
-        <input type="text" id="e-note" value="${esc(entry.status_note || '')}" placeholder="why deprecated / rejected">
-      </div>
-      <div class="fieldset">
-        <div class="legend">Sources</div>
-        <div class="rows" id="e-sources"></div>
-        <p class="hint" id="e-sources-empty" style="margin:0"></p>
-        <p style="margin:.7rem 0 0">
-          <button class="btn small" type="button" id="src-add">＋ Add source</button>
-        </p>
-        <div class="hint" style="margin-top:.5rem">Where this entry's knowledge comes from. Give a source an id and a
-          markdown footnote in the body — <code>[^rev-policy]</code> — can attribute a single claim to it.
-          ochakai records sources; it never fetches or checks them.</div>
-        <div class="row" style="margin-top:.7rem">
-          <div class="field" style="margin-bottom:0">
-            <label class="top" for="e-win-from">Usage window from</label>
-            <input type="date" id="e-win-from" value="${esc((entry.usage_window || {}).from || '')}">
-          </div>
-          <div class="field" style="margin-bottom:0">
-            <label class="top" for="e-win-to">Usage window to</label>
-            <input type="date" id="e-win-to" value="${esc((entry.usage_window || {}).to || '')}">
-          </div>
-        </div>
-        <div class="hint" style="margin-top:.3rem">The range the sources' usage counts were measured over. A source can override it.</div>
-      </div>
-      <div id="e-contract"></div>
-      <div class="field">
-        <label class="top" for="e-body">Body (markdown)</label>
-        <textarea id="e-body" rows="10" class="mono">${esc(entry.body || '')}</textarea>
-        <div class="hint">Link to another entry with a markdown link to its path — <code>[revenue](/metrics/revenue.md)</code>. Those links become the entry's links, and a backlink on the other side.</div>
-      </div>
-      <div class="field">
-        <label class="top" for="e-attrs">Attributes (JSON)</label>
-        <textarea id="e-attrs" rows="6" class="mono" placeholder='{"question": "…", "sql": "SELECT …"}'>${esc(attrsText)}</textarea>
-        <div class="hint">Anything OKF does not define, kept as written: <code>question</code>/<code>sql</code> for an Attested
-          Computation holding a verified query, <code>spec</code> for a semantic model. The fields above have their own boxes — putting one here is refused rather than
-          stored where nothing reads it.</div>
+        <label class="top" for="e-doc">Document</label>
+        <textarea id="e-doc" rows="26" class="mono" spellcheck="false" required>${esc(doc)}</textarea>
+        <div class="hint">OKF frontmatter between <code>---</code> lines, then markdown.
+        Link to another entry with a markdown link to its path — <code>[revenue](/metrics/revenue.md)</code> —
+        and it becomes a link both ways. Keys ochakai does not define are kept as written.
+        The keys the server owns (<code>generated</code>, <code>verified</code>, <code>created_by</code>)
+        are not yours to set and are ignored if present.</div>
       </div>
       <div id="editor-error"></div>
-      <div class="read-only-note">This ochakai is read-only, so nothing here can be
-      saved. The form is what an editor on a writable deployment would fill in.</div>
-      <p>
-        <button class="btn primary write-only" type="submit">${editing ? 'Save' : 'Create draft'}</button>
-        <a class="btn" href="${editing ? '#/k/' + idPath(entry.id) : '#/'}">Cancel</a>
-      </p>
-    </form>
-    `;
+      <div class="toolbar" style="justify-content:flex-end">
+        <a class="btn" href="${editing ? '#/k/' + idPath(entryID) : '#/search'}">Cancel</a>
+        <button class="btn primary write-only" type="submit">${editing ? 'Save' : 'Create'}</button>
+      </div>
+    </form>`;
 
   let dirty = false;
   $('#editor').addEventListener('input', () => { dirty = true; });
-  unsaved = () => dirty;
-
-  // Repeatable rows are the one part of the form that is not a single
-  // innerHTML pass: the list changes while the user is in it. Editing a
-  // field writes straight into the backing array and never re-renders —
-  // replacing the container's HTML on a keystroke would drop focus and the
-  // caret. Only add and remove re-render, and both mark the form dirty
-  // themselves, since the form-level input listener above never sees them.
-  // A stored source carries only the keys it has (omitempty), so a loaded
-  // row may lack id, title or author entirely; the save path trims every
-  // one of them. The defaults keep those reads on strings — usage_count
-  // stays absent, because absent and 0 are different claims.
-  const sources = (entry.sources || []).map(s => ({
-    resource: '', id: '', title: '', author: '', last_modified: '',
-    ...s, usage_window: { ...(s.usage_window || {}) },
-  }));
-  const params = (entry.parameters || []).map(p => ({ ...p }));
-
-  const srcRow = (s, i) => `
-    <div class="row-card" data-row="src" data-i="${i}">
-      <div class="row-head"><span class="n">Source ${i + 1}</span>
-        <button class="btn small danger" type="button" data-del="src">Remove</button></div>
-      <div class="field">
-        <label class="top">Resource <span class="req">required</span></label>
-        <input type="text" class="mono" data-k="resource" value="${esc(s.resource || '')}"
-               placeholder="https://wiki.example/finance/revenue-recognition">
-      </div>
-      <div class="row">
-        <div class="field">
-          <label class="top">ID</label>
-          <input type="text" class="mono" data-k="id" value="${esc(s.id || '')}" placeholder="rev-policy">
-        </div>
-        <div class="field">
-          <label class="top">Title</label>
-          <input type="text" data-k="title" value="${esc(s.title || '')}">
-        </div>
-      </div>
-      <div class="row-trio">
-        <div class="field">
-          <label class="top">Author</label>
-          <input type="text" data-k="author" value="${esc(s.author || '')}" placeholder="human:jsmith@example.co.jp">
-        </div>
-        <div class="field">
-          <label class="top">Usage count</label>
-          <input type="number" min="0" step="1" data-k="usage_count"
-                 value="${s.usage_count === undefined || s.usage_count === null ? '' : esc(String(s.usage_count))}">
-        </div>
-        <div class="field">
-          <label class="top">Last modified</label>
-          <input type="date" data-k="last_modified" value="${esc(s.last_modified || '')}">
-        </div>
-      </div>
-      <details ${s.usage_window && (s.usage_window.from || s.usage_window.to) ? 'open' : ''}>
-        <summary class="hint">Override the usage window for this source</summary>
-        <div class="row" style="margin-top:.5rem">
-          <div class="field" style="margin-bottom:0">
-            <label class="top">From</label>
-            <input type="date" data-k="win_from" value="${esc((s.usage_window || {}).from || '')}">
-          </div>
-          <div class="field" style="margin-bottom:0">
-            <label class="top">To</label>
-            <input type="date" data-k="win_to" value="${esc((s.usage_window || {}).to || '')}">
-          </div>
-        </div>
-      </details>
-    </div>`;
-
-  const paramRow = (p, i) => `
-    <div class="row-card" data-row="param" data-i="${i}">
-      <div class="row-head"><span class="n">Parameter ${i + 1}</span>
-        <button class="btn small danger" type="button" data-del="param">Remove</button></div>
-      <div class="row-trio">
-        <div class="field">
-          <label class="top">Name <span class="req">required</span></label>
-          <input type="text" class="mono" data-k="name" value="${esc(p.name || '')}" placeholder="year">
-        </div>
-        <div class="field">
-          <label class="top">Type <span class="req">required</span></label>
-          <input type="text" class="mono" data-k="type" value="${esc(p.type || '')}" placeholder="integer">
-        </div>
-        <div class="field" style="align-self:end">
-          <label class="check"><input type="checkbox" data-k="required" ${p.required ? 'checked' : ''}> required</label>
-        </div>
-      </div>
-    </div>`;
-
-  // Writing an edit back into the row's object. usage_window lives one
-  // level down, so its two inputs are keyed apart from the flat ones.
-  function setRowValue(obj, key, el) {
-    if (key === 'required') { obj.required = el.checked; return; }
-    if (key === 'win_from' || key === 'win_to') {
-      obj.usage_window = obj.usage_window || {};
-      obj.usage_window[key === 'win_from' ? 'from' : 'to'] = el.value;
-      return;
-    }
-    obj[key] = el.value;
-  }
-
-  function renderRows(sel, list, render, focusLast) {
-    const box = $(sel);
-    if (!box) return; // navigated away mid-edit
-    box.innerHTML = list.map(render).join('');
-    box.querySelectorAll('[data-row]').forEach(card => {
-      const obj = list[Number(card.dataset.i)];
-      card.querySelectorAll('[data-k]').forEach(el =>
-        el.addEventListener('input', () => setRowValue(obj, el.dataset.k, el)));
-      card.querySelector('[data-del]').addEventListener('click', () => {
-        list.splice(Number(card.dataset.i), 1);
-        dirty = true;
-        renderRows(sel, list, render);
-      });
-    });
-    if (focusLast) {
-      const first = box.querySelector('.row-card:last-child input');
-      if (first) first.focus({ preventScroll: true });
-    }
-  }
-
-  function renderSources(focusLast) {
-    renderRows('#e-sources', sources, srcRow, focusLast);
-    const empty = $('#e-sources-empty');
-    if (empty) empty.textContent = sources.length ? '' : 'No sources recorded.';
-  }
-  renderSources();
-  $('#src-add').addEventListener('click', () => {
-    sources.push({ resource: '', id: '', title: '', author: '', last_modified: '', usage_window: {} });
-    dirty = true;
-    renderSources(true);
-  });
-
-  // The Attested Computation contract shows only for that type, but the
-  // values ride along whatever the type says: the envelope is not
-  // type-scoped, so switching type away and back must not silently drop a
-  // contract somebody wrote.
-  function renderContract() {
-    const box = $('#e-contract');
-    if (!box) return;
-    if (!sameType($('#e-type').value, 'Attested Computation')) { box.innerHTML = ''; return; }
-    box.innerHTML = `
-      <div class="fieldset">
-        <div class="legend">Computation contract</div>
-        <div class="row">
-          <div class="field">
-            <label class="top" for="e-runtime">Runtime <span class="req">required</span></label>
-            <input type="text" id="e-runtime" list="runtime-list" value="${esc(entry.runtime || '')}" placeholder="bigquery">
-            <datalist id="runtime-list">${['bigquery', 'postgres', 'dbt', 'python', 'Looker'].map(r => `<option value="${r}">`).join('')}</datalist>
-            <div class="hint">What runs it — this is what tells a reader how to read the parameters.</div>
-          </div>
-          <div class="field">
-            <label class="top" for="e-computation">Computation path</label>
-            <input type="text" id="e-computation" class="mono" value="${esc(entry.computation || '')}" placeholder="queries/revenue.sql">
-            <div class="hint">Leave empty to keep the computation inline, in a <code># Computation</code> fence in the body.</div>
-          </div>
-        </div>
-        <div class="legend">Parameters</div>
-        <div class="rows" id="e-params"></div>
-        <p style="margin:.7rem 0 0"><button class="btn small" type="button" id="param-add">＋ Add parameter</button></p>
-        <div class="row" style="margin-top:.9rem">
-          <div class="field">
-            <label class="top" for="e-exec">Executor resource</label>
-            <input type="text" id="e-exec" class="mono" value="${esc((entry.executor || {}).resource || '')}" placeholder="references/skills/run-on-bq.md">
-          </div>
-          <div class="field">
-            <label class="top" for="e-receipt">Executor receipt</label>
-            <input type="text" id="e-receipt" class="mono" value="${esc(((entry.executor || {}).receipt || []).join(', '))}" placeholder="job_id, executed_sql, result">
-            <div class="hint">Comma-separated. What a run must hand back as evidence.</div>
-          </div>
-        </div>
-        <div class="field">
-          <label class="top" for="e-attester">Attester resource</label>
-          <input type="text" id="e-attester" class="mono" value="${esc((entry.attester || {}).resource || '')}" placeholder="references/attesters/revenue.py">
-        </div>
-        <div class="hint">ochakai records this contract and never runs, checks, or fetches any of it. Executing the
-          computation and checking the receipt belong to whoever consumes the entry.</div>
-      </div>`;
-    renderRows('#e-params', params, paramRow);
-    $('#param-add').addEventListener('click', () => {
-      params.push({ name: '', type: '', required: false });
-      dirty = true;
-      renderRows('#e-params', params, paramRow, true);
+  const tmpl = $('#e-template');
+  if (tmpl) {
+    tmpl.addEventListener('change', () => {
+      // Only reseed while the document is still a template: an edit is
+      // never thrown away by a dropdown.
+      if (dirty) return;
+      $('#e-doc').value = templateDocument(tmpl.value, '');
     });
   }
-  renderContract();
-  // Keep the entry object current so a re-render of the section does not
-  // reset fields the user already filled in.
-  $('#e-contract').addEventListener('input', () => {
-    for (const [id, set] of [
-      ['#e-runtime', v => entry.runtime = v],
-      ['#e-computation', v => entry.computation = v],
-    ]) { const el = $(id); if (el) set(el.value); }
-    const ex = $('#e-exec'), rc = $('#e-receipt'), at = $('#e-attester');
-    entry.executor = ex && (ex.value.trim() || (rc && rc.value.trim()))
-      ? { resource: ex.value.trim(), receipt: splitList(rc ? rc.value : '') } : null;
-    entry.attester = at && at.value.trim() ? { resource: at.value.trim() } : null;
-  });
-  $('#e-type').addEventListener('input', renderContract);
-
-  // Creating: put the caret past the folder the ＋ seeded, so only the
-  // name is left to type. Deferred by a tick — focusing a field this
-  // form just wrote scrolls the page, preventScroll notwithstanding.
-  if (!editing) {
-    setTimeout(() => {
-      const idBox = $('#e-id');
-      if (!idBox) return; // navigated away
-      idBox.focus({ preventScroll: true });
-      idBox.setSelectionRange(idBox.value.length, idBox.value.length);
-    });
-  }
+  window.onbeforeunload = () => (dirty ? '' : undefined);
 
   $('#editor').addEventListener('submit', async ev => {
     ev.preventDefault();
     const errBox = $('#editor-error');
     errBox.innerHTML = '';
-    // A leading "/" is dropped (ids are relative), but a trailing one is
-    // not: the ＋ seeds the field with a folder, so "insights/" means the
-    // name is still missing — trimming it would quietly create a root
-    // entry called "insights" instead.
-    const newID = editing ? '' : $('#e-id').value.trim().replace(/^\/+/, '');
-    if (!editing && (!newID || newID.endsWith('/'))) {
-      errBox.innerHTML = '<div class="error-banner">ID needs a name after the folder, e.g. <code>insights/aov-baseline</code>.</div>';
-      $('#e-id').focus();
+    const entryId = editing ? entryID : $('#e-id').value.trim().replace(/^\/+|\/+$/g, '');
+    if (!entryId) {
+      errBox.innerHTML = '<div class="error-banner">An ID is required.</div>';
       return;
     }
-    // A source with nothing in it is a row the user opened and left, not a
-    // citation — dropping it here keeps an accidental ＋ from failing the
-    // save, while a half-filled one still gets the resource check below.
-    // "Filled" means any field at all, the dates and the count included:
-    // a row somebody typed a value into is half-filled, not abandoned.
-    const filledSources = sources.filter(s =>
-      s.resource.trim() || s.id.trim() || s.title.trim() || s.author.trim() ||
-      s.last_modified || String(s.usage_count ?? '').trim() ||
-      s.usage_window.from || s.usage_window.to);
-    const blank = filledSources.findIndex(s => !s.resource.trim());
-    if (blank >= 0) {
-      errBox.innerHTML = `<div class="error-banner">Source ${blank + 1} needs a resource — the artifact it cites. Fill it in or remove the row.</div>`;
+    const document_ = $('#e-doc').value;
+    // Say what is wrong here rather than waiting for the 400. The server
+    // stays the only judge of a document; this just saves a round trip on
+    // the mistake a text editor makes most (design doc 0044 §2.3).
+    if (!/^---\r?\n[\s\S]*?\r?\n---/.test(document_.trim())) {
+      errBox.innerHTML = '<div class="error-banner">The document needs YAML frontmatter: a <code>---</code> line, the keys, then a closing <code>---</code> line.</div>';
       return;
     }
-    const payload = {
-      type: $('#e-type').value.trim(),
-      id: editing ? entry.id : newID,
-      title: $('#e-title').value.trim(),
-      description: $('#e-desc').value.trim(),
-      resource: $('#e-resource').value.trim(),
-      tags: $('#e-tags').value.split(',').map(s => s.trim()).filter(Boolean),
-      sources: filledSources.map(sourcePayload),
-      usage_window: windowPayload($('#e-win-from').value, $('#e-win-to').value),
-      status: $('#e-status').value,
-      status_note: $('#e-note').value.trim(),
-      stale_after: $('#e-stale').value,
-      // The contract rides along whatever the type is: it is an envelope
-      // field, and hiding the section must not erase what it holds.
-      runtime: (entry.runtime || '').trim(),
-      parameters: params.filter(p => p.name.trim() || p.type.trim())
-        .map(p => ({ name: p.name.trim(), type: p.type.trim(), required: !!p.required })),
-      computation: (entry.computation || '').trim(),
-      executor: entry.executor,
-      attester: entry.attester,
-      body: $('#e-body').value,
-    };
-    const attrsRaw = $('#e-attrs').value.trim();
-    if (attrsRaw) {
-      try { payload.attrs = JSON.parse(attrsRaw); }
-      catch (e) { errBox.innerHTML = `<div class="error-banner">Attributes is not valid JSON: ${esc(e.message)}</div>`; return; }
-    }
-    // No links in the payload: the server derives them from the body
-    // (design doc 0024).
     try {
-      const saved = await writeEntry(payload, !editing);
+      const saved = await api('/api/v1/knowledge/' + idPath(entryId), {
+        method: 'PUT', doc: document_, onlyIfAbsent: !editing,
+      });
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
       refreshTree();
-      location.hash = entryHash(saved || payload);
+      location.hash = '#/k/' + idPath((saved && saved.id) || entryId);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
       const dupLink = !editing && /already exists/.test(e.message)
-        ? ` — <a href="#/k/${idPath(payload.id)}">view the existing ${esc(payload.id)}</a> (edit it, or pick another ID)`
+        ? ` — <a href="#/k/${idPath(entryId)}">view the existing ${esc(entryId)}</a> (edit it, or pick another ID)`
         : '';
       errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
     }

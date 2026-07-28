@@ -1,7 +1,7 @@
 # ochakai 設計ドキュメント 0024: リンクは本文から導出する
 
 Status: Accepted(2026-07-20)。本文リンクの `ochakai://` は
-[0044](0044-bundle-address-space.md) §3.6 が退役させた(SPEC §6 の
+[0046](0046-bundle-address-space.md) §3.6 が退役させた(SPEC §6 の
 バンドル絶対 `/path.md` と相対だけが正準形。導出そのものの決定は不変)
 Date: 2026-07-20
 

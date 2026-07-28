@@ -21,7 +21,7 @@ PR の中に残る。
 
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Accepted**(§3 の
   エンベロープ表現と §9.1 の rejected ステータスは 0043 が改訂、§9.1 の
-  一覧面と検索フィルタの語彙は 0044 が言い直した)。
+  一覧面と検索フィルタの語彙は 0046 が言い直した)。
   LLM を内蔵せず SQL を実行しないナレッジストアという中核。双方向ループ
   (エージェントが下書きし、人が検証する)、Postgres + pgvector 一本、
   利用テレメトリ。
@@ -63,7 +63,7 @@ PR の中に残る。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
-- [0044 バンドルがアドレス空間](0044-bundle-address-space.md) —
+- [0046 バンドルがアドレス空間](0046-bundle-address-space.md) —
   **Accepted**(実装は後続 PR、0.15.0 の次のリリースで 0043 の実装と
   束ねて出る)。**OKF 互換領域の現行ドキュメント**。バンドルを
   「パス → オブジェクト」の写像そのものとし、概念でないファイルも
@@ -74,10 +74,10 @@ PR の中に残る。
   `/api/v1/bundle/{path}` を中心とした 8 面に畳まれ、添付という概念が
   対象消滅する。
 - [0043 文書を真とする](0043-document-first.md) —
-  **Superseded by 0044**(§2 の世界観と status / 台帳 / actor の決定は
-  0044 が引き継ぎ、保存形・ハッシュの対象・ワイヤ・正準化・リビジョン・
-  サーフェスを 0044 が改める。0044 の実装がランドするまでコードは
-  本ドキュメントの姿)。保存もワイヤも正準化した OKF 文書
+  **Superseded by 0046**(§2 の世界観と status / 台帳 / actor の決定は
+  0046 が引き継ぎ、保存形・ハッシュの対象・ワイヤ・正準化・リビジョン・
+  サーフェスを 0046 が改める。§3.11 の Web UI のフォーム糖衣は 0044 が
+  先に撤回した)。保存もワイヤも正準化した OKF 文書
   そのものにし、DB は索引とインスタンス台帳(検証・却下・利用・履歴)に
   徹する。status は OKF の 3 値、検証は台帳への追記(複数可)、却下は
   rejection 台帳、ETag は内容ハッシュ、actor は `process:`。写像が恒等に
@@ -93,7 +93,7 @@ PR の中に残る。
   `stale_after` / `sources` を引けるようにする: `sort=stale_after` の
   期限切れフィード(verify ではなく編集で空になる — 0025 の 2 フィードとの
   違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index。
-  0044 §3.11 で frontmatter の jsonb 上の containment になる)。
+  0046 §3.11 で frontmatter の jsonb 上の containment になる)。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) —
   **Superseded by 0043**(document-first への全面置き換え。0043 の実装が
   ランドするまでコードとリリースは 0036 の姿。§5 の 2 項目は 0037 が撤回して
@@ -130,31 +130,31 @@ PR の中に残る。
   `Attested Computation` を追加)。内部スラグと OKF 表示名の二重語彙を
   廃止し、型の値は OKF の綴りそのものに。
 - [0038 推奨型の語彙を OKF の証拠に合わせ直す](0038-type-vocabulary-realignment.md)
-  — **Accepted**(書き込み時の case 正規化は 0044 §3.9 が撤去)。
+  — **Accepted**(書き込み時の case 正規化は 0046 §3.9 が撤去)。
   **型の語彙領域の現行ドキュメント**。`Semantic Model` と
   `Golden Query` を外し、`Skill` / `Playbook` / `Policy` / `API Endpoint` を
   足して 11 型に(退役した綴りは自由型として存続、マイグレーションなし)。
   語彙を述べる 11 箇所を `domain.TypesHint()` と外側のテストで固定する。
 - [0024 リンクは本文から導出する](0024-links-from-body.md) —
-  **Accepted**(本文の `ochakai://` は 0044 §3.6 が退役させ、SPEC §6 の
+  **Accepted**(本文の `ochakai://` は 0046 §3.6 が退役させ、SPEC §6 の
   バンドル絶対と相対だけが正準形になる)。構造化 `links` フィールドを
   廃止し、リンクは本文 markdown から導出する。
 
-## 添付ファイル(0044 でバンドルのオブジェクトになった)
+## 添付ファイル(0046 でバンドルのオブジェクトになった)
 
-- [0008 画像添付](0008-image-attachments.md) — **Superseded by 0044**
+- [0008 画像添付](0008-image-attachments.md) — **Superseded by 0046**
   (先行して Superseded in part by 0011/0013)。画像添付の導入。
-  「原本ではなく根拠」の位置づけと `<id>/<name>` は、0044 では帰属の
+  「原本ではなく根拠」の位置づけと `<id>/<name>` は、0046 では帰属の
   **導出規則**として残る。
 - [0011 添付画像バイト列の GCS 移行](0011-gcs-attachment-storage.md) —
-  **Superseded by 0044**(先行して Superseded in part by 0013)。
+  **Superseded by 0046**(先行して Superseded in part by 0013)。
   バイト列を GCS に置くという判断だけが残る。
 - [0013 添付ファイルの一般化と GCS 一本化](0013-attachment-files-gcs-only.md)
-  — **Superseded by 0044**。任意ファイル形式への一般化と GCS 一本化。
-  sniff によるメディアタイプ判定と markdown-only 運用は 0044 も維持し、
+  — **Superseded by 0046**。任意ファイル形式への一般化と GCS 一本化。
+  sniff によるメディアタイプ判定と markdown-only 運用は 0046 も維持し、
   SVG / HTML の書き込み拒否だけが配信側の防御に置き換わる。
 - [0020 添付ファイルの検索](0020-attachment-search.md) — **Accepted**
-  (鍵は 0044 §3.3 でバンドルパスになる)。ファイル名のレキシカル一致と
+  (鍵は 0046 §3.3 でバンドルパスになる)。ファイル名のレキシカル一致と
   全ファイルのベクトル検索。
 
 ## ブラウズと Web UI
@@ -163,13 +163,20 @@ PR の中に残る。
   (2026-07-19 改訂、§6 の非目標のうち per-user provenance は 0032 が
   覆した)。自己完結 1 ファイルの UI を、認証モデルの異なる
   二経路(`ochakai ui` / `ochakai serve-ui`)で配信する。
-- [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0044**
+- [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**
   (browse は SPEC §8 の `index.md` の導出面になる。API パラメタは
   0017 §4.7、UI は常設サイドバーへ改訂されていた)。prefix に
   よるツリー閲覧。
 - [0021 ナレッジの move と Web UI の微調整](0021-move-and-webui-refinements.md)
-  — **Accepted**(0044 §3.3 が `<id>/` 名前空間のオブジェクトも一緒に
+  — **Accepted**(0046 §3.3 が `<id>/` 名前空間のオブジェクトも一緒に
   動かすよう改訂)。move(パス変更)の導入と表示の整理。
+- [0044 Web UI は文書を編集する](0044-web-ui-edits-documents.md) —
+  **Accepted**。0043 §3.11 のフォーム糖衣を撤回し、編集を正準 OKF 文書の
+  テキスト編集一本にする(詳細画面は投影のまま)。ブラウザに YAML パーサを
+  抱えるか、読み取りの既定形を二重にするかの二択を避けた判断で、
+  キュレーション面が形式そのものを教えるという理由づけ。行エディタを失う
+  ことは支払いだと明記し、戻すときはサーバ側に「文書 → 構造」面を足すと
+  条件を書いてある。
 - [0032 Web UI の書き込みを IAP の identity で記録する](0032-webui-iap-identity.md)
   — **Accepted**。両プロキシはブラウザ由来の委譲ヘッダを常に削り、
   serve-ui は IAP の検証済み JWT からのみ作り直す(0027 §6 の実装)。
@@ -183,10 +190,10 @@ PR の中に残る。
   データの出し入れを API 経由に一本化。DB 直結で残るのは `serve` のみ。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) —
   **Accepted**(§4 の verify 糖衣の判断は 0025 §6 が覆し、サーフェス表は
-  0044 §3.14 が現在の姿に言い直した)。
+  0046 §3.14 が現在の姿に言い直した)。
   4 サーフェスの役割分担と、意図して実装しないもの。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
-  — **Accepted**(0044 §3.10 が行に trust tier を足す)。バイト予算の決定を記録し、`hits` から知識の複製を外す
+  — **Accepted**(0046 §3.10 が行に trust tier を足す)。バイト予算の決定を記録し、`hits` から知識の複製を外す
   (全サーフェスで `id`/`type`/`title`/`status`/`score` のみ)。REST の
   応答形が変わる。
 
@@ -207,9 +214,9 @@ PR の中に残る。
 
 - [0030 If-Match による楽観ロック](0030-optimistic-locking.md) —
   **Accepted**(§3.1 の「版は `updated_at`」は 0043 が内容ハッシュに、
-  0044 がその対象を保存バイト列に改訂。機構そのものは維持)。ETag / If-Match で条件付き更新を
+  0046 がその対象を保存バイト列に改訂。機構そのものは維持)。ETag / If-Match で条件付き更新を
   opt-in で提供する。MCP は通り道を持たず、キュレーション保護が内部で使う。
-- [0031 purge](0031-purge.md) — **Accepted**(面の綴りは 0044 §3.5)。ソフト削除済みエントリを
+- [0031 purge](0031-purge.md) — **Accepted**(面の綴りは 0046 §3.5)。ソフト削除済みエントリを
   完全に破棄して id を解放する二段階目の削除。REST / CLI のみ、監査行を
   残し、GCS の blob は回収しない。
 

@@ -232,7 +232,7 @@ var (
 	knowledgeSelect  = withoutDoc(knowledgeCols) + ", " + ledgerCols("knowledge")
 	knowledgeSelectK = withoutDoc(knowledgeColsK) + ", " + ledgerCols("k")
 	// knowledgeSelectDoc is the same read with the stored document, for
-	// the paths that hand one out (design doc 0044 §2.2): a single get,
+	// the paths that hand one out (design doc 0046 §2.2): a single get,
 	// an export, and the move that rewrites a body in place.
 	knowledgeSelectDoc = knowledgeCols + ", " + ledgerCols("knowledge")
 )
@@ -360,7 +360,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 
 // storedDoc returns what the row holds as the entry's document, and the
 // entry's version: the document as received, and the SHA-256 of exactly
-// those bytes (design doc 0044 §§2.2, 3.4).
+// those bytes (design doc 0046 §§2.2, 3.4).
 //
 // A write that came from a document carries it. One that did not — an
 // entry composed in memory — is written in the canonical form, which is
@@ -385,7 +385,7 @@ func storedDoc(k *domain.Knowledge) (doc, hash string, err error) {
 // as received when it still says what k says, and the canonical
 // rendering otherwise (storedDoc). The service compares it with the
 // stored one to tell a write that changes nothing at all from a write
-// that changes only the layout (design doc 0044 §3.4).
+// that changes only the layout (design doc 0046 §3.4).
 func StoredDocument(k *domain.Knowledge) (doc, hash string, err error) { return storedDoc(k) }
 
 // documentSays reports whether doc still says what k says. A caller that
@@ -409,7 +409,7 @@ func documentSays(doc []byte, k *domain.Knowledge) bool {
 	d.ID, d.Links = k.ID, k.Links
 	// Nor is a document that names no status disagreeing about one: it is
 	// saying nothing, and the write path still fills a default in until
-	// the read projection applies OKF's (design doc 0044 §3.9).
+	// the read projection applies OKF's (design doc 0046 §3.9).
 	if d.Status == "" {
 		d.Status = k.Status
 	}
@@ -624,7 +624,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) error {
 	k.UpdatedAt = NowStored()
 	// The caller decides whether this write changed what the entry says;
-	// only then does generated.at move (design doc 0044 §3.4). A write
+	// only then does generated.at move (design doc 0046 §3.4). A write
 	// that reformats the document leaves it where it was.
 	if k.ContentChangedAt.IsZero() {
 		k.ContentChangedAt = k.UpdatedAt
@@ -1108,7 +1108,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		}
 		// A repaired link is a change to what the entry says, so
 		// generated moves with it — both halves of it, the actor above
-		// and the timestamp here (design doc 0044 §3.4).
+		// and the timestamp here (design doc 0046 §3.4).
 		r.ContentChangedAt = r.UpdatedAt
 		// deleted_at IS NULL restates what the locked read already
 		// established, so the statement does not depend on the reader
@@ -1118,7 +1118,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		// The stored document and its hash move with the body: the body
 		// is swapped inside the bytes the entry is stored as, and the
 		// index columns beside them are derived from the same value
-		// (design docs 0043 §3.1, 0044 §2.2).
+		// (design docs 0043 §3.1, 0046 §2.2).
 		doc, hash, err := storedDoc(r)
 		if err != nil {
 			return err
@@ -1145,7 +1145,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			moved.Attrs = r.Attrs
 			// And the document the body was rewritten inside, with the
 			// version that goes with it: the "move" revision the caller
-			// records is written from this entry (design doc 0044 §2.2).
+			// records is written from this entry (design doc 0046 §2.2).
 			moved.Doc = r.Doc
 			moved.ContentHash = r.ContentHash
 			continue
@@ -1511,13 +1511,23 @@ func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) 
 	return pgx.CollectRows(rows, scanHit)
 }
 
+// scanHit reads a knowledge row and projects it: a search result carries
+// the summary, not the entry (design doc 0043 §3.5). The row is still
+// selected whole — the projection is derived from the same columns every
+// other read uses, and narrowing the SELECT per caller would put a second
+// column list in the file to fall behind.
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
-	dests, finish := knowledgeDest(&h.Knowledge)
+	var k domain.Knowledge
+	dests, finish := knowledgeDest(&k)
 	if err := row.Scan(append(dests, &h.Score)...); err != nil {
 		return h, err
 	}
-	return h, finish()
+	if err := finish(); err != nil {
+		return h, err
+	}
+	h.Summary = domain.SummaryOf(&k)
+	return h, nil
 }
 
 // buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
@@ -1738,8 +1748,9 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 // ListByUsage projection). Score stays 0 — this is a listing, not a search.
 func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
+	var k domain.Knowledge
 	var u domain.Usage
-	dests, finish := knowledgeDest(&h.Knowledge)
+	dests, finish := knowledgeDest(&k)
 	if err := row.Scan(append(dests,
 		&u.SearchHits, &u.Fetches, &u.Worked, &u.Failed, &u.LastUsedAt)...); err != nil {
 		return h, err
@@ -1747,6 +1758,7 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	if err := finish(); err != nil {
 		return h, err
 	}
+	h.Summary = domain.SummaryOf(&k)
 	h.Usage = &u
 	return h, nil
 }

@@ -42,8 +42,64 @@ last entry.
 
 ### Changed
 
+- **BREAKING**: a read of one entry is a *view* — `{id, document,
+  summary, observed}` — and a listing row is the `summary` alone (design
+  doc [0043](docs/design/0043-document-first.md) §3.5). The flat JSON
+  entry is gone from every read.
+
+  - `GET`, `PUT`, `POST /api/v1/move`, `/verify/{id}` and `/reject/{id}`
+    answer a view. `document` is the entry's canonical OKF document —
+    the same text `ochakai get` prints — and it is *canonical*, so there
+    are no server-owned keys to strip before editing it and sending it
+    back. `summary` is the projection listing surfaces sort and filter
+    by; `observed` is what this instance recorded (`created_by`,
+    `generated`, the verification ledger, a live rejection). A client
+    reading `k.title` reads `v.summary.title`, and one reading
+    `k.verifications` reads `v.observed.verified`.
+  - **A search hit is a projection, not an entry.** `hits[]` on
+    `GET /api/v1/knowledge` (and `search_knowledge`, and
+    `ochakai search --json`) carries id, type, title, description,
+    resource, tags, status, `stale_after`, `verified` / `verified_at`,
+    `rejected`, links, `content_hash` and the timestamps — plus `score`,
+    `usage` on the feeds that populate it, and attachment metadata on
+    REST. Bodies, sources and the computation contract are no longer in
+    a result page: an entry is a document now, and shipping ten of them
+    to answer "which of these should I read" spends the caller's context
+    on the nine it will not. Fetch the ones worth reading by id, or ask
+    `GET /api/v1/context`, which is the call that returns entries.
+  - `GET /api/v1/backlinks/{id}` returns the same projection: a backlink
+    names an entry, it does not hand it over.
+  - `context.hits[]` gains `verified`, since the lifecycle status no
+    longer carries it.
+  - **CLI**: `ochakai get` prints the canonical document and nothing
+    else, so `ochakai get <id> | $EDITOR | ochakai update <id>` needs no
+    stripping; who created and confirmed the entry goes to stderr, where
+    the attachment hints already go. `--json` prints the whole view, so
+    `--if-match` reads `.summary.content_hash` and the newest
+    confirmation is `.observed.verified[-1]`. `ochakai context` prints
+    each entry's document rather than a hand-picked summary of selected
+    fields.
+  - **Web UI**: the detail page renders from the projection, with the
+    body cut from the document and the frontmatter available raw under a
+    "Document" tab.
+
+- **BREAKING**: the web UI edits documents, and the form sugar is gone
+  (design doc [0046](docs/design/0044-web-ui-edits-documents.md)). The
+  editor is the canonical document in a textarea, checked for parse
+  errors before it is sent; new entries start from a per-type template.
+  The row editors for `sources` and `parameters`, and the contract
+  section that appeared for an Attested Computation, are removed.
+
+  They were genuinely useful, and losing them is a payment rather than a
+  discount. The alternative was a hand-written YAML parser in the
+  browser — a parser that "only ever sees our own output" is the kind
+  that fails on an unexpected value, and here it would fail by silently
+  dropping a field from a form. If the demand comes back, the answer is
+  a server-side "give me this document as structure" surface, not a
+  second wire shape for reads.
+
 - **BREAKING**: a document is stored as it was written (design doc
-  [0044](docs/design/0044-bundle-address-space.md) §§2.2, 3.4, 3.9). The
+  [0046](docs/design/0046-bundle-address-space.md) §§2.2, 3.4, 3.9). The
   bytes a writer sends are the bytes the entry holds: frontmatter
   comments, key order and quoting style survive a round trip, because
   nothing re-serializes them. Only the line endings are normalized, and
@@ -90,10 +146,13 @@ last entry.
     as `Ochakai-Note` response headers instead of being applied in
     silence.
   - **MCP**: `create_knowledge` and `update_knowledge` take `{id,
-    document}`. The eighteen-field mirror of the envelope is gone — it
-    was a fourth place the field list was written out, and an agent that
-    trusted the enumeration could silently drop whatever it had fallen
-    behind on. Notes come back in the tool result.
+    document}`, and `get_knowledge`, `create_knowledge` and
+    `update_knowledge` return the view under `knowledge`; `get_context`
+    returns views under `entries`. The eighteen-field mirror of the
+    envelope is gone — it was a fourth place the field list was written
+    out, and an agent that trusted the enumeration could silently drop
+    whatever it had fallen behind on. Notes come back in the tool
+    result.
   - **CLI**: unchanged to use. `create` and `update` still read an OKF
     document or JSON from `-f`/stdin; JSON is now rendered to a document
     locally, so the server keeps one write format.

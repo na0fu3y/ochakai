@@ -2,7 +2,7 @@
 
 Status: Accepted(2026-07-26)。§3.1 の「版は `updated_at`」と §3.2 の
 精度不変条件は [0043](0043-document-first.md) §3.4 が内容ハッシュの ETag に
-改訂し、[0044](0044-bundle-address-space.md) §3.4 がハッシュの対象を
+改訂し、[0046](0046-bundle-address-space.md) §3.4 がハッシュの対象を
 保存バイト列に改めた(opt-in・条件付き UPDATE 内判定・412 という機構
 そのものは維持)
 Date: 2026-07-26

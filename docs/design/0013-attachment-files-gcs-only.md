@@ -1,10 +1,10 @@
 # ochakai 設計ドキュメント 0013: 添付ファイルの一般化と GCS 一本化
 
-Status: **Superseded by [0044](0044-bundle-address-space.md)**(添付は
+Status: **Superseded by [0046](0046-bundle-address-space.md)**(添付は
 バンドルの 1 オブジェクトになり、`attach` / `detach` と `okf_path` は
 対象消滅する。バイト列を GCS に置くこと・メディアタイプを sniff で決めること・
 GCS 未設定なら markdown-only の知識ベースとして動くことは維持され、
-SVG / HTML の**書き込み拒否**だけが配信側の防御に置き換わる — 0044 §3.2)。
+SVG / HTML の**書き込み拒否**だけが配信側の防御に置き換わる — 0046 §3.2)。
 当初 Accepted(2026-07-18 の議論で決定)
 Date: 2026-07-18
 

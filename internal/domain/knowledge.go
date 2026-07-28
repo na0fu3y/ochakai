@@ -568,11 +568,11 @@ type Knowledge struct {
 	// what OKF's generated.at means (SPEC §5.2). It parted ways with
 	// UpdatedAt when the document became the writer's own bytes:
 	// reformatting an entry writes the row and moves its version without
-	// changing a word of what it says (design doc 0044 §3.4).
+	// changing a word of what it says (design doc 0046 §3.4).
 	ContentChangedAt time.Time `json:"content_changed_at"`
 	// Doc is the document as it was received: the writer's own bytes,
 	// normalized for line endings and stripped of the keys this instance
-	// owns, and nothing else (design doc 0044 §2.2). It is what the store
+	// owns, and nothing else (design doc 0046 §2.2). It is what the store
 	// holds and what ContentHash covers.
 	//
 	// Empty in two cases, both of which fall back to the canonical
@@ -582,7 +582,7 @@ type Knowledge struct {
 	// document.
 	Doc string `json:"-"`
 	// ContentHash is the entry's version: the SHA-256 of the document as
-	// stored (design docs 0043 §3.4, 0044 §3.4), which is what the ETag
+	// stored (design docs 0043 §3.4, 0046 §3.4), which is what the ETag
 	// carries and what If-Match is checked against. It covers the
 	// content alone, so a verification, a rejection or a file beside the
 	// entry leaves it where it was — only an edit moves it.
@@ -828,14 +828,132 @@ func ToStatuses(ss []string) []Status {
 	return out
 }
 
+// Summary is the read-only projection of an entry: what a listing row
+// carries, and what a single read shows beside the document (design doc
+// 0043 §3.5).
+//
+// It holds nothing the document holds. The entry's content — its
+// citations, its computation contract, its producer keys, its body — is
+// in the document, once; a projection that repeated any of it would be a
+// second copy to keep in step, which is exactly what document-first
+// exists to remove. What is here is either an address (id), a signal a
+// caller ranks or filters on, or a ledger's answer reduced to a bool.
+//
+// Verified and Rejected are those answers. A row does not carry the
+// ledgers themselves: "has anyone confirmed this" is what a reader of a
+// list wants, and who and when is a question about one entry.
+type Summary struct {
+	ID          string   `json:"id"`
+	Type        Type     `json:"type"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Resource    string   `json:"resource,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Status      Status   `json:"status"`
+	StaleAfter  string   `json:"stale_after,omitempty"`
+	Verified    bool     `json:"verified"`
+	// VerifiedAt is the newest verification's time, absent when there is
+	// none. A row carries it because it is what the verification-age feed
+	// ranks by — a reviewer reading that feed is reading these times.
+	VerifiedAt  *time.Time `json:"verified_at,omitempty"`
+	Rejected    bool       `json:"rejected"`
+	Links       []Link     `json:"links,omitempty"`
+	ContentHash string     `json:"content_hash"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// SummaryOf projects an entry. Title falls back to the id's last segment
+// (design doc 0022), so a row never has to work that out for itself.
+func SummaryOf(k *Knowledge) Summary {
+	s := Summary{
+		ID: k.ID, Type: k.Type, Title: k.DisplayTitle(), Description: k.Description,
+		Resource: k.Resource, Tags: k.Tags, Status: k.Status, StaleAfter: k.StaleAfter,
+		Verified: k.Verified(), Rejected: k.Rejection != nil, Links: k.Links,
+		ContentHash: k.ContentHash, CreatedAt: k.CreatedAt, UpdatedAt: k.UpdatedAt,
+	}
+	if v := k.LastVerified(); v != nil {
+		at := v.At
+		s.VerifiedAt = &at
+	}
+	return s
+}
+
+// URI is the entry's canonical address, as on Knowledge: every shape that
+// names an entry should name it the same way.
+func (s *Summary) URI() string { return fmt.Sprintf("ochakai://%s", s.ID) }
+
+// Generated is OKF's generated family (SPEC §5.2): who the content
+// stands by, and when it last changed.
+type Generated struct {
+	By Actor     `json:"by"`
+	At time.Time `json:"at"`
+}
+
+// Observed is what this instance saw happen to an entry, as against what
+// the entry says. The split is design doc 0009's: a bundle carries
+// knowledge, and provenance is an observation this instance made — so it
+// travels beside the document rather than inside it, and import never
+// reads it back.
+type Observed struct {
+	CreatedBy Actor          `json:"created_by"`
+	Generated Generated      `json:"generated"`
+	Verified  []Verification `json:"verified,omitempty"`
+	Rejection *Rejection     `json:"rejection,omitempty"`
+}
+
+func ObservedOf(k *Knowledge) Observed {
+	return Observed{
+		CreatedBy: k.CreatedBy,
+		Generated: Generated{By: k.UpdatedBy, At: k.UpdatedAt},
+		Verified:  k.Verifications,
+		Rejection: k.Rejection,
+	}
+}
+
+// View is a read of one entry: the document it is, the projection to read
+// it by, and what this instance observed about it (design doc 0043 §3.5).
+type View struct {
+	ID          string       `json:"id"`
+	Document    string       `json:"document"`
+	Summary     Summary      `json:"summary"`
+	Observed    Observed     `json:"observed"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// URI is the entry's canonical address, as on Knowledge and Summary.
+func (v *View) URI() string { return fmt.Sprintf("ochakai://%s", v.ID) }
+
+// LastVerified returns the newest verification this instance recorded,
+// or nil when there is none. The ledger is stored oldest-first.
+func (o *Observed) LastVerified() *Verification {
+	if len(o.Verified) == 0 {
+		return nil
+	}
+	return &o.Verified[len(o.Verified)-1]
+}
+
 // SearchHit is one search result with its ranking score. Usage is
 // populated only by the sort=usage listing (the draft review feed), where
 // the promotion signal is the point; it stays nil for search results and
 // the verified_at feed so their wire shape is unchanged.
+//
+// It carries the projection, not the entry. Search used to return whole
+// entries on the reasoning that there they are the answer rather than a
+// duplicate of one (design doc 0033) — true while an entry was a bag of
+// fields, and false once it is a document: a result list that shipped ten
+// documents to answer "which of these should I read" spends the caller's
+// context on nine it will not. The document is one fetch away by id, and
+// get_context is the call that returns entries.
 type SearchHit struct {
-	Knowledge
+	Summary
 	Score float64 `json:"score"`
 	Usage *Usage  `json:"usage,omitempty"`
+	// Attachments is metadata only, and only on the REST list surface,
+	// so a UI can draw a thumbnail without a round trip per row (design
+	// doc 0015). It is not part of Summary: a row is a projection of the
+	// entry, and an attachment is a file beside it.
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // ContextRank is what a hit is worth once the entries travel in the same
@@ -849,11 +967,15 @@ type SearchHit struct {
 // own cut-off arrive only this way. Search itself keeps returning full
 // hits — there the entries are the answer, not a duplicate of one.
 type ContextRank struct {
-	ID     string  `json:"id"`
-	Type   Type    `json:"type"`
-	Title  string  `json:"title"`
-	Status Status  `json:"status"`
-	Score  float64 `json:"score"`
+	ID     string `json:"id"`
+	Type   Type   `json:"type"`
+	Title  string `json:"title"`
+	Status Status `json:"status"`
+	// Verified is the ledger's answer, which the lifecycle status no
+	// longer carries (design doc 0043 §3.2): a caller deciding whether to
+	// spend a round trip wants to know whether anyone confirmed the entry.
+	Verified bool    `json:"verified"`
+	Score    float64 `json:"score"`
 }
 
 // URI is the entry's canonical address, as on Knowledge: a rank is a
@@ -865,8 +987,8 @@ func ContextRanks(hits []SearchHit) []ContextRank {
 	out := make([]ContextRank, len(hits))
 	for i := range hits {
 		out[i] = ContextRank{
-			ID: hits[i].ID, Type: hits[i].Type, Title: hits[i].DisplayTitle(),
-			Status: hits[i].Status, Score: hits[i].Score,
+			ID: hits[i].ID, Type: hits[i].Type, Title: hits[i].Title,
+			Status: hits[i].Status, Verified: hits[i].Verified, Score: hits[i].Score,
 		}
 	}
 	return out

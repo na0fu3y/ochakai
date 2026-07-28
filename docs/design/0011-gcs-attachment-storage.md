@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0011: 添付画像バイト列の GCS 移行
 
-Status: **Superseded by [0044](0044-bundle-address-space.md)**(添付行が
+Status: **Superseded by [0046](0046-bundle-address-space.md)**(添付行が
 `object` 行になり、バイト列を GCS に置くという判断だけが残る)。先行して
 Superseded in part by 0013(bytea との二重化は廃止され GCS のみに。
 §2.1 の「未設定なら従来どおり bytea」と §2.4 の二重読み出し・再インライン

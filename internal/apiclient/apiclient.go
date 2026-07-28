@@ -193,7 +193,7 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 // stays empty unless the caller passes a budget.
 type ContextResult struct {
 	Hits      []domain.ContextRank    `json:"hits"`
-	Entries   []domain.Knowledge      `json:"entries"`
+	Entries   []domain.View           `json:"entries"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 }
@@ -285,9 +285,9 @@ func (c *Client) Revisions(ctx context.Context, id string, limit int) ([]domain.
 // Backlinks fetches live entries whose links point at the given entry,
 // most recently updated first (GET /api/v1/backlinks/{id}).
 // limit 0 uses the server default.
-func (c *Client) Backlinks(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
+func (c *Client) Backlinks(ctx context.Context, id string, limit int) ([]domain.Summary, error) {
 	var out struct {
-		Entries []domain.Knowledge `json:"entries"`
+		Entries []domain.Summary `json:"entries"`
 	}
 	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/backlinks/", id), limitQuery(limit), nil, &out)
 	return out.Entries, err
@@ -302,8 +302,8 @@ func limitQuery(limit int) url.Values {
 	return url.Values{"limit": {strconv.Itoa(limit)}}
 }
 
-func (c *Client) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
-	var k domain.Knowledge
+func (c *Client) Get(ctx context.Context, id string) (*domain.View, error) {
+	var k domain.View
 	if err := c.doJSON(ctx, http.MethodGet, entryPath(id), nil, nil, &k); err != nil {
 		return nil, err
 	}
@@ -327,8 +327,7 @@ func (c *Client) Get(ctx context.Context, id string) (*domain.Knowledge, error) 
 // Ochakai-Unchanged response header). notes carry values the server
 // accepted but read differently than they were written — a
 // reinterpretation is never silent (design doc 0036 §3.4).
-func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string, onlyIfAbsent bool) (
-	out *domain.Knowledge, created, changed bool, notes []string, err error) {
+func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string, onlyIfAbsent bool) (out *domain.View, created, changed bool, notes []string, err error) {
 	hdr := http.Header{}
 	if ifMatch != "" {
 		hdr.Set("If-Match", etagValue(ifMatch))
@@ -341,7 +340,7 @@ func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string,
 		return nil, false, false, nil, err
 	}
 	defer resp.Body.Close()
-	var k domain.Knowledge
+	var k domain.View
 	if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
 		return nil, false, false, nil, err
 	}
@@ -370,8 +369,8 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 // the same call — the re-check is what takes an entry out of the review
 // feeds (design doc 0025 §6), and Update cannot do it. It does not touch
 // the document, so the entry's status and ETag do not move.
-func (c *Client) Verify(ctx context.Context, id string) (*domain.Knowledge, error) {
-	var k domain.Knowledge
+func (c *Client) Verify(ctx context.Context, id string) (*domain.View, error) {
+	var k domain.View
 	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, nil, &k); err != nil {
 		return nil, err
 	}
@@ -382,8 +381,8 @@ func (c *Client) Verify(ctx context.Context, id string) (*domain.Knowledge, erro
 // (POST /api/v1/reject/{id}). Like Verify it is a ruling, not an edit:
 // the document keeps its lifecycle status, and the entry drops out of
 // searches that did not ask for rejected ones (design doc 0043 §3.3).
-func (c *Client) Reject(ctx context.Context, id, note string) (*domain.Knowledge, error) {
-	var k domain.Knowledge
+func (c *Client) Reject(ctx context.Context, id, note string) (*domain.View, error) {
+	var k domain.View
 	body := struct {
 		Note string `json:"note"`
 	}{Note: note}
@@ -395,8 +394,8 @@ func (c *Client) Reject(ctx context.Context, id, note string) (*domain.Knowledge
 
 // LiftRejection withdraws a ruling (DELETE /api/v1/reject/{id}). A 404
 // when the entry carries no rejection.
-func (c *Client) LiftRejection(ctx context.Context, id string) (*domain.Knowledge, error) {
-	var k domain.Knowledge
+func (c *Client) LiftRejection(ctx context.Context, id string) (*domain.View, error) {
+	var k domain.View
 	if err := c.doJSON(ctx, http.MethodDelete, escapedPath("/api/v1/reject/", id), nil, nil, &k); err != nil {
 		return nil, err
 	}
@@ -412,12 +411,12 @@ func (c *Client) Purge(ctx context.Context, id string) error {
 // Move renames the entry at id to newID (POST /api/v1/move). The server
 // carries revisions, usage, and attachments along and rewrites inbound
 // references so nothing breaks (design doc 0021).
-func (c *Client) Move(ctx context.Context, id, newID string) (*domain.Knowledge, error) {
+func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, error) {
 	in := struct {
 		From string `json:"from"`
 		To   string `json:"to"`
 	}{id, newID}
-	var moved domain.Knowledge
+	var moved domain.View
 	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/move", nil, in, &moved); err != nil {
 		return nil, err
 	}

@@ -343,7 +343,7 @@ func TestParseStaleAfter(t *testing.T) {
 		t.Errorf("stale_after is an envelope key, not an attr: %v", k.Attrs)
 	}
 	// The export is the document as written, so the writer's own bare
-	// date comes back (design doc 0044 §2.2) — while the canonical
+	// date comes back (design doc 0046 §2.2) — while the canonical
 	// rendering, which composes a date rather than passing one through,
 	// quotes it so YAML does not type it as a timestamp on the way back
 	// in (design doc 0036 §3.7).
@@ -459,7 +459,7 @@ dialect: standard-sql
 	// document itself; it is also what the index has to be able to
 	// reproduce, so the spellings and the key order are asserted on it
 	// rather than on the export, which now hands back the writer's bytes
-	// (design doc 0044 §2.2).
+	// (design doc 0046 §2.2).
 	out, err := Canonical(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)

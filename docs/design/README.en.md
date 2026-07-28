@@ -118,7 +118,7 @@ For the shape of the system rather than the history of it, read
 
 ## The knowledge model — structure, ids, types, names, links
 
-- **[0044 The bundle is the address space](0044-bundle-address-space.md)**
+- **[0046 The bundle is the address space](0046-bundle-address-space.md)**
   — *Accepted; the current record for OKF compatibility, superseding 0043,
   0008, 0011, 0013 and 0014. Implementation follows in later pull requests,
   released together with 0043's.* Turns the remaining mapping inside out:
@@ -144,10 +144,11 @@ For the shape of the system rather than the history of it, read
   until the ledger says otherwise.
 
 - **[0043 The document is the truth](0043-document-first.md)** —
-  *Superseded by 0044, which keeps its world-view, status vocabulary,
+  *Superseded by 0046, which keeps its world-view, status vocabulary,
   ledgers and actor spelling and replaces the stored shape, the wire, the
-  hash's subject, canonicalization, revisions and the surface list. Until
-  0044's implementation lands, the code keeps 0043's shape.* Both storage and the wire become the
+  hash's subject, canonicalization, revisions and the surface list; §3.11's
+  web UI form sugar had already been withdrawn by 0044. Implemented across
+  later pull requests and not yet released.* Both storage and the wire become the
   canonical OKF document itself (frontmatter + markdown); the database is
   reduced to derived index columns and instance-local ledgers. Status
   becomes OKF's three values verbatim; "a human confirmed this" is a row
@@ -278,7 +279,7 @@ For the shape of the system rather than the history of it, read
   spellings keep working as free types.
 
 - **[0024 Links are derived from the body](0024-links-from-body.md)** —
-  *Accepted; 0044 §3.6 retires the `ochakai://` form from bodies in favour
+  *Accepted; 0046 §3.6 retires the `ochakai://` form from bodies in favour
   of SPEC §6's bundle-absolute and relative paths.* The structured `links` input field is removed. Links come
   from the markdown in the body — bundle-absolute, relative, `ochakai://`,
   autolinked — with fenced and inline code excluded, because a link in an
@@ -289,7 +290,7 @@ For the shape of the system rather than the history of it, read
 ## Attachments
 
 - **[0008 Image attachments](0008-image-attachments.md)** — *Superseded by
-  0044, which dissolves attachments into bundle objects; the "evidence, not
+  0046, which dissolves attachments into bundle objects; the "evidence, not
   originals" framing and the `<id>/<name>` layout survive as the rule that
   derives which entry a file belongs to.* An image is knowledge only together
   with the text around it, so search and retrieval are per-entry and an
@@ -298,12 +299,12 @@ For the shape of the system rather than the history of it, read
   20 files per entry.
 
 - **[0011 Moving attachment bytes to GCS](0011-gcs-attachment-storage.md)**
-  — *Superseded by 0044; only "the bytes live in GCS" survives.* Only the bytes move; attachment rows,
+  — *Superseded by 0046; only "the bytes live in GCS" survives.* Only the bytes move; attachment rows,
   revisions and metadata stay in PostgreSQL. Signed URLs were refused —
   the API keeps proxying bytes, so clients see no change.
 
 - **[0013 Any file type, GCS only](0013-attachment-files-gcs-only.md)** —
-  *Superseded by 0044; sniffing the media type and running markdown-only
+  *Superseded by 0046; sniffing the media type and running markdown-only
   without a bucket carry forward, while refusing SVG and HTML at write time
   becomes a serving-side defence.* Widens attachments from
   images to the intersection of what Claude reads and what Gemini embeds:
@@ -312,7 +313,7 @@ For the shape of the system rather than the history of it, read
   *For a user:* attachments need `OCHAKAI_GCS_BUCKET`; without it the
   instance runs as a markdown-only knowledge base and attach returns 501.
 
-- **[0020 Attachment search](0020-attachment-search.md)** — *Accepted; 0044
+- **[0020 Attachment search](0020-attachment-search.md)** — *Accepted; 0046
   rekeys it by bundle path.*
   Filenames join the lexical haystack, and attachments are embedded at
   attach time as a third list in the rank fusion. ochakai still refuses to
@@ -331,7 +332,7 @@ For the shape of the system rather than the history of it, read
   *For a user:* `ochakai ui` also proxies `/mcp`, so an MCP client can use
   `http://127.0.0.1:<port>/mcp` under your own identity.
 
-- **[0014 Folder browse](0014-folder-browse.md)** — *Superseded by 0044,
+- **[0014 Folder browse](0014-folder-browse.md)** — *Superseded by 0046,
   which makes browse the derived `index.md`; its parameters had been
   revised by 0017 §4.7.* `GET /api/v1/browse` returns one
   level of the id hierarchy at a time. A level is cut off at 1000 entries
@@ -344,6 +345,26 @@ For the shape of the system rather than the history of it, read
   transaction, carrying revisions, attachments, usage, embeddings and the
   inbound references that point at it. An occupied destination is a 409
   even when soft-deleted. Not on MCP.
+
+- **[0044 The web UI edits documents](0044-web-ui-edits-documents.md)** —
+  *Accepted; revises 0043 §3.11.* Withdraws the form sugar: editing in the
+  web UI is editing the canonical OKF document as text, while the detail
+  view still renders from the projection. Filling a form needs the browser
+  to parse real YAML, and the two ways out — a hand-written YAML subset
+  parser in JS, or a thicker read shape carrying the envelope beside the
+  document — were both refused: the first plants a parser whose failure
+  mode is silently dropping a key, days after 0043 §3.6 decided that a key
+  dropped on the way in is unrecoverable; the second leaves the duplicate
+  representation that document-first exists to remove. The stated reason
+  to prefer the document is that the one surface humans touch should teach
+  the format the CLI, MCP, export and git bundles all use. The record is
+  candid that losing the row editors for `sources` and `parameters` is a
+  cost, not a saving, and names what comes back instead: a parse check
+  before save, and type templates for new entries. If the demand returns,
+  the answer is a server-side "parse this document" surface, not a second
+  default read shape.
+  *For a user:* the web UI's edit screen is a document; the detail screen
+  is unchanged.
 
 - **[0032 Recording web UI writes under the IAP
   identity](0032-webui-iap-identity.md)** — *Accepted.* Both proxies always
@@ -370,7 +391,7 @@ For the shape of the system rather than the history of it, read
 
 - **[0015 Surface consistency](0015-surface-consistency.md)** —
   *Accepted; §4's verify-as-sugar judgment was overturned by 0025 §6 and
-  its surface table restated by 0044 §3.14.*
+  its surface table restated by 0046 §3.14.*
   Fixes what each surface is for and, more usefully, what each deliberately
   omits. REST is the contract; MCP's tool count is a context budget, so
   browse, revisions, backlinks, attachment writes, bulk export/import,
@@ -381,7 +402,7 @@ For the shape of the system rather than the history of it, read
   outcome or drafts a replacement; humans edit from REST, CLI or the web UI.
 
 - **[0033 Context hits are a ranking](0033-context-hits-are-a-ranking.md)**
-  — *Accepted; 0044 adds the trust tier to each row.* Records the byte-budget decision for `/context` and strips
+  — *Accepted; 0046 adds the trust tier to each row.* Records the byte-budget decision for `/context` and strips
   entry bodies out of `hits`, which now carry `id`, `type`, `title`,
   `status` and `score` on every surface — otherwise the budget could be
   bypassed by the duplicate copy.
@@ -414,7 +435,7 @@ For the shape of the system rather than the history of it, read
 
 - **[0030 Optimistic locking with If-Match](0030-optimistic-locking.md)** —
   *Accepted; 0043 moves the version from `updated_at` to a content hash and
-  0044 makes that hash cover the bytes as stored, keeping the mechanism.* Conditional updates are opt-in,
+  0046 makes that hash cover the bytes as stored, keeping the mechanism.* Conditional updates are opt-in,
   exposed as an ETag and accepted as `If-Match`.
   A mismatch is a 412 with nothing written, and the check lives inside the
   conditional UPDATE, so there is no window between reading and writing.

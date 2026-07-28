@@ -19,14 +19,14 @@ import (
 )
 
 func hit(id string, status domain.Status) domain.SearchHit {
-	return domain.SearchHit{Knowledge: domain.Knowledge{Type: domain.TypeMetrics, ID: id, Status: status}}
+	return domain.SearchHit{Summary: domain.Summary{Type: domain.TypeMetrics, ID: id, Status: status}}
 }
 
 // verifiedHit is hit plus a confirmation. The rank boost keys off the
 // ledger rather than the status now (design doc 0043 §3.2).
 func verifiedHit(id string) domain.SearchHit {
 	h := hit(id, domain.StatusStable)
-	h.Verifications = []domain.Verification{{By: domain.Actor{Kind: domain.ActorHuman, Name: "na0"}}}
+	h.Verified = true
 	return h
 }
 
@@ -360,9 +360,14 @@ func TestExampleGoldenQueryRegisters(t *testing.T) {
 // still looks like a body, and half of an attested computation's SQL
 // still looks executable.
 func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
-	entry := func(id string, bodyBytes int) domain.Knowledge {
-		return domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: id,
+	entry := func(id string, bodyBytes int) domain.View {
+		k := domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: id,
 			Description: "desc " + id, Status: domain.StatusDraft, Body: strings.Repeat("x", bodyBytes)}
+		v, err := okf.ViewOf(&k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
 	}
 	small := entry("insights/small", 100)
 	big := entry("insights/big", 5000)
@@ -373,25 +378,25 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	oneAndARow := one + jsonSize(outlineRow(&big, serializedSize(&big))) + 10
 
 	t.Run("no budget keeps everything", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 0)
+		kept, outline := packWithinBudget([]domain.View{small, big}, 0)
 		if len(kept) != 2 || outline != nil {
 			t.Errorf("budget 0 must not truncate: %d kept, %d outlined", len(kept), len(outline))
 		}
 	})
 
 	t.Run("overflow becomes an outline row", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, oneAndARow)
+		kept, outline := packWithinBudget([]domain.View{small, big}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want only the small entry in full, got %d", len(kept))
 		}
 		if len(outline) != 1 || outline[0].ID != big.ID {
 			t.Fatalf("want the big entry outlined, got %v", outline)
 		}
-		if outline[0].Bytes != serializedSize(&big) || outline[0].Description != big.Description {
+		if outline[0].Bytes != serializedSize(&big) || outline[0].Description != big.Summary.Description {
 			t.Errorf("outline row must carry size and description: %+v", outline[0])
 		}
-		if outline[0].Title != big.DisplayTitle() {
-			t.Errorf("outline title = %q, want the display title %q", outline[0].Title, big.DisplayTitle())
+		if outline[0].Title != big.Summary.Title {
+			t.Errorf("outline title = %q, want the display title %q", outline[0].Title, big.Summary.Title)
 		}
 	})
 
@@ -399,7 +404,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// entire budget. A prefix cut would let it starve everything below it;
 	// greedy packing keeps the rest and names the giant.
 	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{big, small}, oneAndARow)
+		kept, outline := packWithinBudget([]domain.View{big, small}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want the small entry delivered behind the giant, got %+v", kept)
 		}
@@ -413,7 +418,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// answer, a half-entry is not. Naming everything is also the floor —
 	// a caller cannot raise a budget for entries it never heard about.
 	t.Run("a budget below one entry outlines everything", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.Knowledge{small, big}, 1)
+		kept, outline := packWithinBudget([]domain.View{small, big}, 1)
 		if len(kept) != 0 || len(outline) != 2 {
 			t.Errorf("want everything outlined, got %d kept / %d outlined", len(kept), len(outline))
 		}
@@ -423,10 +428,17 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// carries a description — unbounded on the entry — so a budget that
 	// only counted delivered entries left the actual payload unbounded.
 	t.Run("the outline is inside the budget", func(t *testing.T) {
-		wordy := make([]domain.Knowledge, 6)
+		wordy := make([]domain.View, 6)
 		for i := range wordy {
-			wordy[i] = entry(fmt.Sprintf("insights/wordy-%d", i), 900)
-			wordy[i].Description = strings.Repeat("長い説明。", 400) // ~6 kB each
+			k := domain.Knowledge{Type: domain.TypeInsights,
+				ID: fmt.Sprintf("insights/wordy-%d", i), Title: "wordy",
+				Description: strings.Repeat("長い説明。", 400), // ~6 kB each
+				Status:      domain.StatusDraft, Body: strings.Repeat("x", 900)}
+			v, err := okf.ViewOf(&k)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wordy[i] = v
 		}
 		const budget = 4000
 		kept, outline := packWithinBudget(wordy, budget)
@@ -452,14 +464,21 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 		}
 	})
 
-	// attrs, not just the body: a semantic model's spec is the largest
-	// payload in the base and lives entirely in attrs.
-	t.Run("size counts attrs", func(t *testing.T) {
-		bare := domain.Knowledge{Type: domain.Type("Semantic Model"), ID: "models/m"}
-		withSpec := bare
-		withSpec.Attrs = map[string]any{"spec": strings.Repeat("y", 2000)}
-		if serializedSize(&withSpec) <= serializedSize(&bare)+1000 {
-			t.Error("serializedSize ignores attrs")
+	// The whole document, not just the body: a producer key can be the
+	// largest thing an entry carries, and it is in the frontmatter.
+	t.Run("size counts the whole document", func(t *testing.T) {
+		render := func(k domain.Knowledge) domain.View {
+			v, err := okf.ViewOf(&k)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return v
+		}
+		bare := render(domain.Knowledge{Type: domain.Type("Data Contract"), ID: "contracts/c"})
+		withKey := render(domain.Knowledge{Type: domain.Type("Data Contract"), ID: "contracts/c",
+			Attrs: map[string]any{"spec": strings.Repeat("y", 2000)}})
+		if serializedSize(&withKey) <= serializedSize(&bare)+1000 {
+			t.Error("serializedSize ignores what the frontmatter carries")
 		}
 	})
 }

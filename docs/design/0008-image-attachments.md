@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0008: 画像添付
 
-Status: **Superseded by [0044](0044-bundle-address-space.md)**(添付という概念そのものが対象消滅し、バンドルのパスに置かれた 1 つのオブジェクトになる。「原本ではなく根拠」の位置づけと `<id>/<name>` の正準レイアウトは、保存された関係ではなく**帰属の導出規則**として残る — 0044 §3.3)。先行して Superseded in part by [0011](0011-gcs-attachment-storage.md) / [0013](0013-attachment-files-gcs-only.md)(バイト列の bytea 保存は GCS のみに、対象は画像限定から任意ファイル形式に)
+Status: **Superseded by [0046](0046-bundle-address-space.md)**(添付という概念そのものが対象消滅し、バンドルのパスに置かれた 1 つのオブジェクトになる。「原本ではなく根拠」の位置づけと `<id>/<name>` の正準レイアウトは、保存された関係ではなく**帰属の導出規則**として残る — 0046 §3.3)。先行して Superseded in part by [0011](0011-gcs-attachment-storage.md) / [0013](0013-attachment-files-gcs-only.md)(バイト列の bytea 保存は GCS のみに、対象は画像限定から任意ファイル形式に)
 Date: 2026-07-17
 
 ## 1. 目的

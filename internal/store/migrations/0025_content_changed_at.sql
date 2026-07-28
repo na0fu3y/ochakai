@@ -1,11 +1,11 @@
--- generated.at gets a column of its own (design doc 0044 §3.4).
+-- generated.at gets a column of its own (design doc 0046 §3.4).
 --
 -- updated_at has been standing in for it. That worked while the stored
 -- document was the canonical rendering: a write that changed no content
 -- rendered the same bytes, so it was refused as a no-op and updated_at
 -- could not move without the content moving with it.
 --
--- Storing the document as received (0044 §2.2) breaks that coincidence.
+-- Storing the document as received (0046 §2.2) breaks that coincidence.
 -- Reformatting an entry — reordering its frontmatter, adding a comment —
 -- changes the file and therefore its version, while what the entry says
 -- is exactly what it said before. SPEC §5.2 defines generated.at as the

@@ -19,7 +19,7 @@ import (
 )
 
 // A document that is reformatted but says the same thing is a change to
-// the file and not to the entry, and design doc 0044 §3.4 splits the two:
+// the file and not to the entry, and design doc 0046 §3.4 splits the two:
 // the bytes are stored and the version moves, while generated — the actor
 // and the timestamp — stays with whoever the content already stood by.
 // Byte-identical bytes are still nothing happening at all.

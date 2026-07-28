@@ -12,7 +12,7 @@ import (
 // This file holds the operations ochakai performs on a document *as
 // text*, rather than by parsing it into a struct and rendering it back.
 //
-// The distinction is the whole of design doc 0044 §2.2: what is stored is
+// The distinction is the whole of design doc 0046 §2.2: what is stored is
 // the document as it was handed over. Re-serializing loses frontmatter
 // comments and key order, and OKF asks for neither — what SPEC §4.1 asks
 // is that unknown keys be preserved and round-tripped, which a byte-for-
@@ -173,7 +173,7 @@ func ownedKeyRanges(fm string, lines int) []lineRange {
 func WithServerKeys(raw []byte, k *domain.Knowledge) ([]byte, error) {
 	// generated is SPEC §5.2's "who the content stands by, and when it
 	// last meaningfully changed" — so the timestamp is the content's, not
-	// the row's (design doc 0044 §3.4).
+	// the row's (design doc 0046 §3.4).
 	g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
 	own := serverKeysOnly{Generated: &g, CreatedBy: text(k.CreatedBy.String())}
 	for i := range k.Verifications {

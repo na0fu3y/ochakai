@@ -87,7 +87,7 @@ func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.
 		return nil, err
 	}
 	// With the document: an export writes what the entry is stored as,
-	// plus this instance's own keys (design doc 0044 §2.2). Composing it
+	// plus this instance's own keys (design doc 0046 §2.2). Composing it
 	// from the index columns instead would hand back a reformatted copy
 	// of what the writer wrote.
 	return pgx.CollectRows(rows, scanKnowledgeDoc)

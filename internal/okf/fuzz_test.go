@@ -107,7 +107,7 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 			// Without it the property is about entries that cannot exist:
 			// "Metric " is a valid type by ValidType, but Parse trims it
 			// and no write would have stored the trailing space either.
-			// The casing is *not* normalized (design doc 0044 §3.9), so
+			// The casing is *not* normalized (design doc 0046 §3.9), so
 			// whatever the fuzzer produces has to survive as written.
 			Type:  domain.Type(strings.TrimSpace(domain.Normalize(typ))),
 			Title: title, Description: desc,

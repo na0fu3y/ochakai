@@ -7,6 +7,8 @@ Status: **Superseded by [0043](0043-document-first.md)**(document-first への
 [0016](0016-knowledge-catalog-alignment.md) を Superseded にし、
 [0009](0009-provenance-portability.md) §4 と
 [0023](0023-okf-type-vocabulary.md) §3.1 を改訂した。実装は同 PR、0.14.0 で出た。
+§3.15 の Web UI の行エディタは
+[0044](0044-web-ui-edits-documents.md) で対象消滅。
 改訂の履歴: §3.6 の 9 型は
 [0038](0038-type-vocabulary-realignment.md) が 11 型に組み替えた
 (`Attested Computation` を語彙に足した決定そのものは有効)

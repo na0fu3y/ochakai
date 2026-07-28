@@ -22,7 +22,7 @@ func testEntry() *domain.Knowledge {
 
 // The document a writer sends is the document that is stored: comments,
 // key order and quoting style are the writer's, and OKF asks nothing of
-// any of them (design doc 0044 §2.2). This is the property the whole
+// any of them (design doc 0046 §2.2). This is the property the whole
 // change exists for, so it is asserted on a document that would look
 // nothing like the canonical rendering.
 func TestParseKeepsTheDocumentAsWritten(t *testing.T) {
@@ -117,7 +117,7 @@ func TestServerKeysRoundTrip(t *testing.T) {
 }
 
 // A move rewrites a referring entry's body. Its frontmatter is not what
-// changed, and must come out byte for byte (design doc 0044 §2.2).
+// changed, and must come out byte for byte (design doc 0046 §2.2).
 func TestReplaceBodyLeavesFrontmatterAlone(t *testing.T) {
 	in := "---\n# a comment\ntitle: 'Revenue'\ntype: Metric\n---\n\nold body\n"
 	got := string(ReplaceBody([]byte(in), "new [body](/metrics/net.md)"))
