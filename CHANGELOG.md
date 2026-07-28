@@ -38,6 +38,15 @@ last entry.
   Storage became additive when the document became the stored form;
   querying did not follow until now.
 
+  A value is text, and one that spells a number or a boolean matches the
+  typed value the document wrote as well: YAML types frontmatter, so
+  `required: true` is indexed as a boolean and `usage_count: 5` as a
+  number, and asking for them by their text alone found nothing —
+  silently, since a filter matching nothing is zero rows rather than an
+  error. `fm.required=true` now finds both the document that wrote
+  `true` and the one that wrote `"true"`, while text that only looks
+  numeric stays text (`fm.code=007` finds `code: "007"`).
+
   Exact match and list membership are the only two comparisons. Ranges,
   negation and boolean expressions are the doorway to a query language,
   and what ochakai returns is knowledge rather than rows.
@@ -69,7 +78,41 @@ last entry.
   (`… 0 skipped, 0 notes`), because a count that only appears in the
   scrollback is a count nobody reads.
 
+### Security
+
+- **A file is served the way its media type deserves** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2). An image, a PDF
+  or plain text is served `inline` as before; anything else now goes out
+  as a download, under `Content-Security-Policy: sandbox`, and
+  `X-Content-Type-Options: nosniff` is set on both.
+
+  Nothing stored today takes the second branch — the write path still
+  refuses every media type but those (design doc
+  [0013](docs/design/0013-attachment-files-gcs-only.md)), and it refuses
+  `text/html` and `image/svg+xml` by name. That is exactly why the rule
+  belongs on the way out as well: an SVG is an image by every convention
+  and a document that carries script by specification, and the only thing
+  standing between one and the web UI's own origin was a sniffer check at
+  write time. A row written before that check, or bytes a browser reads
+  differently than `http.DetectContentType` did, had nothing behind it.
+
+  It is also the half that has to exist first. 0046 §3.2 stops refusing
+  media types on the way in — a bundle whose files come back missing does
+  not round-trip — and "receive it, do not render it" is only a policy
+  once the second half is true.
+
 ### Fixed
+
+- The invalid-status error names the statuses there are. It offered
+  `draft, verified, deprecated, rejected` — two of which stopped being
+  statuses when design doc
+  [0043](docs/design/0043-document-first.md) §§3.2-3.3 moved confirmation
+  into the verification ledger and rejection into a ruling — and omitted
+  `stable`, the value the writer usually wants. A caller who wrote
+  `status: published` was told to retry with `verified`, which fails the
+  same way. It now renders `domain.Statuses` like every other
+  enumeration, and a test reads the whole tree for a lifecycle list
+  spelled by hand, so this copy cannot come back.
 
 - The shipped Claude Code write-back hook told the agent to search with
   `--status rejected`, which is not an invocation `ochakai search`
@@ -104,7 +147,11 @@ last entry.
   [0046](docs/design/0046-bundle-address-space.md) §§3.7-3.8).
   `GET /api/v1/bundle/{path}` answers `index.md` (SPEC §8's directory
   listing) and `log.md` (SPEC §9's update history); both are generated
-  from the bundle, so `PUT` and `DELETE` are `405`.
+  from the bundle, so `PUT` and `DELETE` against either are `409`.
+  Any other path under `/api/v1/bundle/` is `404` on read and `501` on
+  write: the rest of the bundle joins this address in a later change
+  (0046 §3.5), and a refusal there says so rather than explaining
+  itself in terms of two files the caller never named.
 
   - **`GET /api/v1/browse` is gone.** A directory listing is what
     `index.md` is, and ochakai was serving it at an address of its own

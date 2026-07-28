@@ -3,6 +3,7 @@ package restapi
 import (
 	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,6 +73,60 @@ func TestBadRequestValidation(t *testing.T) {
 			}
 			if !strings.Contains(rec.Body.String(), c.wantSubstr) {
 				t.Errorf("GET %s body %q does not mention %q", c.url, rec.Body, c.wantSubstr)
+			}
+		})
+	}
+}
+
+// TestBundleAddressesRefuseByPath pins what /api/v1/bundle answers for
+// the paths it does not serve yet. Three different refusals, and which
+// one a caller gets is the whole point: a reserved name is a generated
+// file and never writable (409), any other path is the write face design
+// doc 0046 §3.5 describes and simply has not landed (501), and reading
+// one of those is a 404 for as long as that is true. One reason for all
+// three — "index.md and log.md are generated" — would answer a request
+// about metrics/revenue.md by talking about two files it never named.
+//
+// Through checkedServer, so each status is one the contract declares:
+// the spec only covers what a test exercises, and until this one there
+// was no request here to cover the refusals at all (issue #270).
+func TestBundleAddressesRefuseByPath(t *testing.T) {
+	srv := checkedServer(t, Handler(&service.Service{}))
+	defer srv.Close()
+
+	cases := []struct {
+		name, method, path string
+		want               int
+		wantSubstr         string
+	}{
+		{"put index.md", http.MethodPut, "index.md", http.StatusConflict, "generated from the bundle"},
+		{"put nested log.md", http.MethodPut, "metrics/log.md", http.StatusConflict, "log.md is generated"},
+		{"delete index.md", http.MethodDelete, "index.md", http.StatusConflict, "index.md is generated"},
+		{"put a concept", http.MethodPut, "metrics/revenue.md", http.StatusNotImplemented, "later change"},
+		{"delete a concept", http.MethodDelete, "metrics/revenue.md", http.StatusNotImplemented, "later change"},
+		{"put a file", http.MethodPut, "metrics/revenue/chart.png", http.StatusNotImplemented, "later change"},
+		{"get a concept", http.MethodGet, "metrics/revenue.md", http.StatusNotFound, "no object at"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req, err := http.NewRequest(c.method, srv.URL+"/api/v1/bundle/"+c.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != c.want {
+				t.Fatalf("%s %s = %d, want %d (body: %s)", c.method, c.path, resp.StatusCode, c.want, body)
+			}
+			if !strings.Contains(string(body), c.wantSubstr) {
+				t.Errorf("%s %s said %q, which does not mention %q", c.method, c.path, body, c.wantSubstr)
 			}
 		})
 	}

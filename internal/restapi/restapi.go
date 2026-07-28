@@ -91,9 +91,9 @@ func Handler(svc *service.Service) http.Handler {
 	// web UI's tree, which should not have to parse a document to draw a
 	// sidebar. A representation is not a second surface.
 	//
-	// PUT and DELETE are refused (405): a derived file is not one anybody
-	// writes. The rest of the bundle joins this address in a later change;
-	// today a path that is not one of the two reserved names is a 404.
+	// PUT and DELETE are refused, for two different reasons (below). The
+	// rest of the bundle joins this address in a later change; today a
+	// path that is not one of the two reserved names is a 404 on read.
 	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
 		dir, base := splitReserved(path)
@@ -146,10 +146,26 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
+	// PUT and DELETE /api/v1/bundle/{path...} — two refusals, and which
+	// one the caller gets depends on the path.
+	//
+	// The reserved names are generated from the bundle rather than stored
+	// in it, so a write is a conflict with what the address is: 409, as
+	// design doc 0046 §3.5 says. Every other path is the write face that
+	// same section describes, and it lands in a later change: 501, which
+	// is what "not built yet" means. Answering the reserved-file reason
+	// there would explain a refusal in terms of two files the caller never
+	// named.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
-				"error": "index.md and log.md are generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)",
+			if _, base := splitReserved(r.PathValue("path")); isReserved(base) {
+				writeJSON(w, http.StatusConflict, map[string]string{
+					"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)", base),
+				})
+				return
+			}
+			writeJSON(w, http.StatusNotImplemented, map[string]string{
+				"error": "the bundle write surface lands in a later change (design doc 0046 §3.5)",
 			})
 		})
 	}
@@ -470,12 +486,7 @@ func Handler(svc *service.Service) http.Handler {
 			ct = "text/plain; charset=utf-8"
 		}
 		w.Header().Set("Content-Type", ct)
-		// The bytes are user-uploaded and served inline; the media type is
-		// sniffed and allowlisted (design doc 0013 — nothing executable, no
-		// text/html, no image/svg+xml), but nosniff keeps a browser from
-		// overriding that and interpreting them as anything else.
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
+		serveDefensively(w, att.MediaType, att.Name)
 		_, _ = w.Write(data)
 	})
 
@@ -838,6 +849,12 @@ func splitReserved(path string) (dir, base string) {
 	return "", path
 }
 
+// isReserved reports whether a bundle path's last segment is one of the
+// two filenames OKF reserves (SPEC §3.1) — the generated ones.
+func isReserved(base string) bool {
+	return base == "index.md" || base == "log.md"
+}
+
 // wantsJSON reports whether the caller asked for the structured form of
 // a derived file. Only an explicit JSON Accept counts: a browser or a
 // curl sends */* and should get the file that lives at the path.
@@ -1020,6 +1037,39 @@ func queryFloat(q url.Values, name string) (float64, error) {
 		return 0, service.Invalidf("invalid %s %q (want a number)", name, s)
 	}
 	return f, nil
+}
+
+// serveDefensively sets the headers that decide what a browser is
+// allowed to do with bytes somebody uploaded (design doc 0046 §3.2).
+//
+// nosniff on everything: the media type is decided here, by sniffing the
+// bytes, and a browser that overrides it would be deciding it again from
+// a filename or a guess.
+//
+// What may render in place is an image, a PDF or plain text
+// (domain.InlineServable). Anything else is handed over as a download,
+// under a sandbox with no origin, so that a document which happens to
+// carry script — an SVG, an HTML file — has nowhere to run even if it
+// arrives here. The web UI is served from this same origin, so "nowhere
+// to run" is the whole of the protection: an inline SVG would be script
+// in the origin holding the reader's IAP session.
+//
+// This is the delivery half of "receive it, do not render it". The write
+// half still refuses those media types (design doc 0013), and this does
+// not depend on it: a row written before that rule, or one whose bytes
+// sniff differently here than in a browser, is covered either way.
+func serveDefensively(w http.ResponseWriter, mediaType, name string) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	disposition := "inline"
+	if !domain.InlineServable(mediaType) {
+		disposition = "attachment"
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	}
+	// The name is one path segment with no control characters
+	// (domain.ValidAttachmentName), so the only character left that could
+	// end the quoted string early is the quote itself.
+	w.Header().Set("Content-Disposition",
+		disposition+`; filename="`+strings.ReplaceAll(name, `"`, `\"`)+`"`)
 }
 
 // splitAttachmentPath cuts "{id...}/{name}" at the final slash: attachment

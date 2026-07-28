@@ -170,6 +170,19 @@ func ValidStatus(s Status) bool {
 	return slices.Contains(Statuses, s)
 }
 
+// StatusesHint renders the lifecycle vocabulary for help and error text,
+// so no surface keeps a copy of the list to fall behind. The write path's
+// invalid-status error did, and named `verified` and `rejected` for years
+// after they stopped being statuses (design doc 0043 §§3.2-3.3) — telling
+// a caller to retry with a value that fails the same way.
+func StatusesHint() string {
+	names := make([]string, len(Statuses))
+	for i, s := range Statuses {
+		names[i] = string(s)
+	}
+	return strings.Join(names, ", ")
+}
+
 // Trust is the tier a consumer derives from an entry's verification
 // ledger, in OKF's own vocabulary (SPEC §5.3). It is not a lifecycle
 // value and not a field a writer can set: status says whether the entry

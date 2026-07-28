@@ -75,3 +75,39 @@ func TestValidateAttachment(t *testing.T) {
 		t.Error(".md attachment accepted")
 	}
 }
+
+// What a browser may render in place, and what it may only be handed
+// (design doc 0046 §3.2). The write path still refuses most of these
+// media types (design doc 0013); the delivery rule must not depend on
+// that, because a row written before the rule — or bytes that sniff
+// differently in a browser than they did here — reaches this function
+// either way.
+func TestInlineServable(t *testing.T) {
+	for _, tc := range []struct {
+		mediaType string
+		inline    bool
+	}{
+		{"image/png", true},
+		{"image/jpeg", true},
+		{"image/webp", true},
+		{"image/gif", true}, // not writable, but nothing executable about it
+		{"application/pdf", true},
+		{"text/plain", true},
+		{"text/plain; charset=utf-8", true},
+		{"TEXT/PLAIN", true},
+		// The two that carry script, and the reason this rule exists: an
+		// SVG is an image by every convention and a document by spec.
+		{"image/svg+xml", false},
+		{"IMAGE/SVG+XML", false},
+		{"image/svg+xml; charset=utf-8", false},
+		{"text/html", false},
+		{"application/xhtml+xml", false},
+		{"application/zip", false},
+		{"application/octet-stream", false},
+		{"", false},
+	} {
+		if got := InlineServable(tc.mediaType); got != tc.inline {
+			t.Errorf("InlineServable(%q) = %v, want %v", tc.mediaType, got, tc.inline)
+		}
+	}
+}

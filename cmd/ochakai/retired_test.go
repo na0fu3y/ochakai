@@ -66,6 +66,13 @@ var retiredSpellings = []retiredSpelling{
 // thing. Naming it as history is how a removal gets explained, so
 // "/api/v1/browse and /api/v1/revisions/{id}. Design doc 0046 §§3.7-3.8
 // stops inventing" is not a hit and should not be.
+//
+// TestNoSurfaceSpellsItsOwnStatusVocabulary reads the tree for the
+// neighbouring mistake: a hand-written list of statuses, which falls
+// behind Statuses whether or not any value in it was retired. The two do
+// not overlap — a list is caught there by starting with `draft`, and one
+// retired value written as a status ("--status rejected") begins with no
+// such thing, which is why it survived until this guard.
 func TestRetiredSpellingsAreNotTaught(t *testing.T) {
 	files := repoTextFiles(t)
 	if len(files) == 0 {

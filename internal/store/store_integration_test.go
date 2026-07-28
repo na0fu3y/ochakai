@@ -2751,8 +2751,12 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 	// Written as documents, because the index is derived from the
 	// document and not from the fields beside it.
 	docs := map[string]string{
-		"owned":  "---\ntype: Metric\nowner: finance\nsystems:\n  - dbt\n  - looker\n---\n\n本文。\n",
-		"other":  "---\ntype: Metric\nowner: growth\n---\n\n本文。\n",
+		"owned": "---\ntype: Metric\nowner: finance\nsystems:\n  - dbt\n  - looker\n" +
+			// YAML types these: a boolean, a number and a list of numbers,
+			// none of which is text by the time it reaches the index.
+			"required: true\nusage_count: 5\nports:\n  - 80\n  - 443\n---\n\n本文。\n",
+		"other":  "---\ntype: Metric\nowner: growth\nrequired: false\nusage_count: 12\n---\n\n本文。\n",
+		"quoted": "---\ntype: Metric\nowner: ops\nrequired: \"true\"\ncode: \"007\"\n---\n\n本文。\n",
 		"silent": "---\ntype: Metric\n---\n\n本文。\n",
 	}
 	for name, text := range docs {
@@ -2799,7 +2803,22 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 		{"two keys are AND-ed", map[string]string{"owner": "finance", "systems": "looker"}, []string{"owned"}},
 		{"one of them missing excludes the entry", map[string]string{"owner": "finance", "systems": "airflow"}, nil},
 		{"a key the spec does define, indexed like any other", map[string]string{"type": "Metric"},
-			[]string{"other", "owned", "silent"}},
+			[]string{"other", "owned", "quoted", "silent"}},
+		// A boolean and a number are askable in the spelling the document
+		// used, without the caller knowing how YAML typed it. Text is the
+		// only thing a query string can carry, so the filter tries the
+		// typed reading beside it.
+		{"a boolean key", map[string]string{"required": "true"}, []string{"owned", "quoted"}},
+		{"the other boolean", map[string]string{"required": "false"}, []string{"other"}},
+		{"a number key", map[string]string{"usage_count": "5"}, []string{"owned"}},
+		{"a number nobody wrote", map[string]string{"usage_count": "6"}, nil},
+		{"a member of a list of numbers", map[string]string{"ports": "443"}, []string{"owned"}},
+		// The text reading does not go away: a producer who quoted the
+		// value wrote a string, and the same question finds it. Nor does
+		// it turn text that looks numeric into a number — "007" is a code.
+		{"a quoted number stays text", map[string]string{"code": "007"}, []string{"quoted"}},
+		{"a typed key still AND-s", map[string]string{"required": "true", "owner": "finance"},
+			[]string{"owned"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := find(tc.fm); !slices.Equal(got, tc.want) {
