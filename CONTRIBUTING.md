@@ -196,15 +196,22 @@ job publishes the multi-arch image to GHCR with SBOM and provenance, the
 other runs goreleaser for the archives, `checksums.txt`, and provenance
 over them.
 
-**3. Write the release body.** goreleaser creates the GitHub release when
-none exists, and because its own changelog generation is disabled
-(`.goreleaser.yaml` — the notes are written by hand) **the body comes out
-empty**. Either create the release with its notes before pushing the tag,
-or fill it in afterwards:
+**3. The release body arrives with the tag.** goreleaser creates the
+GitHub release when none exists, and because its own changelog generation
+is disabled (`.goreleaser.yaml` — the notes are written by hand) the body
+would come out empty. So the workflow fills an empty body from the
+annotated tag's message, which is where the notes already are, and the
+Releases page is never a bare tag. Two cases still want a person:
+
+- **A release drafted before the tag was pushed** keeps the body it was
+  given — the workflow only writes into an empty one.
+- **Anything beyond the tag message** — upgrade and install sections,
+  links into `CHANGELOG.md` — is still an edit, and it overwrites:
 
 ```sh
 git tag -l --format='%(contents)' v0.14.0 | tail -n +3 > notes.md
-gh release edit v0.14.0 --notes-file notes.md   # add upgrade + install notes
+# then add the upgrade + install sections to notes.md
+gh release edit v0.14.0 --notes-file notes.md
 ```
 
 Say what an operator upgrading needs: which migrations run, whether
