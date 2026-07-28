@@ -116,10 +116,14 @@ history with copies.
 markdown entries only. This is a whole-deployment setting, not a
 per-request one.
 
-**A file is refused.** The media type is decided by sniffing the bytes,
-never by what the client claims: png, jpeg, webp, pdf and plain text are
-accepted, and 5 MiB per file / 20 files per entry are the limits. HTML and
-SVG are refused on purpose — both can carry script into the web UI.
+**A file is refused.** Only for its size: 5 MiB per file is the limit,
+and there is no limit on how many. No media type is refused — a bundle
+whose files come back missing is not the bundle you handed over. What a
+file *is* is decided by sniffing the bytes, never by what the client
+claims, and what a browser may do with it is decided when it is served:
+an image, a PDF or plain text renders in place, and everything else is
+handed over as a download under a sandbox, so an SVG or an HTML file has
+no origin to run script in.
 
 **Attachment contents do not turn up in search.** Filenames match in every
 search, but contents join only when embeddings are on, and images and PDFs

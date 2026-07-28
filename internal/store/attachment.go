@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -136,15 +135,6 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, okfPath 
 			return err
 		}
 		path := filePath(k, name, okfPath)
-		var count int
-		if err := tx.QueryRow(ctx, `SELECT count(*)
-			FROM object k JOIN object f ON `+attributedTo+`
-			WHERE k.id=$1 AND f.path<>$2`, id, path).Scan(&count); err != nil {
-			return err
-		}
-		if count >= domain.MaxAttachmentsPerEntry {
-			return fmt.Errorf("invalid attachment: entry already has %d attachments (max %d)", count, domain.MaxAttachmentsPerEntry)
-		}
 		// The blob row is metadata only now — the object row carries the
 		// media type and size a read answers with — but it stays the
 		// registry of which content exists, and a revision names bytes by

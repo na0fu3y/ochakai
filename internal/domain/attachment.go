@@ -25,24 +25,25 @@ type Attachment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// MaxAttachmentSize bounds one attachment (screenshots, diagrams, seed
-// files — not originals). MaxAttachmentsPerEntry bounds how many an entry
-// may carry.
-const (
-	MaxAttachmentSize      = 5 << 20
-	MaxAttachmentsPerEntry = 20
-)
+// MaxAttachmentSize bounds one file (screenshots, diagrams, seed files —
+// not originals).
+//
+// There is no bound on how many files an entry may carry. There was one,
+// of 20, from the days when a file was something an entry *had*: a cap
+// on a property of an entry. A file is an object in the bundle now
+// (design doc 0046 §§2.1, 3.3), and a cap on how many objects may sit in
+// a directory is a cap on what a bundle may contain — which is not
+// ochakai's to set, any more than it sets how many entries a directory
+// may hold. A bundle whose files come back missing is not a bundle that
+// round-trips (§3.2).
+const MaxAttachmentSize = 5 << 20
 
-// attachmentMediaTypes is the allowlist of what an attachment may be
-// (design doc 0013): exactly the intersection of what Claude accepts as
-// an upload and what gemini-embedding-2 takes as input — gif, in the
-// original image-only list (design doc 0008), is not embeddable and was
-// dropped. Never text/html or image/svg+xml: both can carry scripts, and
-// serving them from the API would hand every knowledge author an XSS
-// vector into web UIs. Note that sniffing decides — CSV/JSON/markup
-// without an HTML signature all pass as text/plain and are always served
-// as such, never as something executable.
-var attachmentMediaTypes = map[string]bool{
+// embeddableMediaTypes is what the file-embedding model takes as input
+// (gemini-embedding-2, design doc 0020). Anything else is stored and
+// served like everything else and is findable by its name alone — the
+// list decides what is worth a call to the embedder, not what a bundle
+// may hold.
+var embeddableMediaTypes = map[string]bool{
 	"image/png":       true,
 	"image/jpeg":      true,
 	"image/webp":      true,
@@ -50,20 +51,23 @@ var attachmentMediaTypes = map[string]bool{
 	"text/plain":      true,
 }
 
+// Embeddable reports whether a file of this media type can be handed to
+// the embedding model. A file that cannot is not a lesser file: it is
+// stored, served and exported the same, and found by its name.
+func Embeddable(mediaType string) bool {
+	mt, _, _ := strings.Cut(mediaType, ";")
+	return embeddableMediaTypes[strings.ToLower(strings.TrimSpace(mt))]
+}
+
 // InlineServable reports whether bytes of this media type may be handed
 // to a browser to render in place. Images (bar SVG), PDFs and plain text
 // may; everything else is served as a download instead (design doc 0046
 // §3.2).
 //
-// The rule is on the delivery side because that is where it belongs. A
-// write-time allowlist decides what a knowledge base may hold, and the
-// two questions are not the same one: 0046 §3.2 stops refusing media
-// types, on the grounds that a bundle whose files come back missing is
-// not a bundle that round-trips — "receive it, do not render it". Even
-// while the write side still refuses (design doc 0013), this is the
-// check that has to be true: a row written before that allowlist, or a
-// sniffer that reads one byte differently than a browser does, is a
-// script in the web UI's origin if the only guard is upstream.
+// This is the whole of the protection now. The write side accepts any
+// media type — a bundle whose files come back missing is not a bundle
+// that round-trips — so "receive it, do not render it" rests entirely on
+// this half. Nothing upstream will have refused the bytes on the way in.
 //
 // SVG is the case worth naming. It is an image by every convention and
 // an executable document by specification, so it is served the way an
@@ -87,13 +91,32 @@ func ValidAttachmentName(name string) bool {
 	return validSegment(name) && !strings.HasSuffix(strings.ToLower(name), ".md")
 }
 
-// DetectAttachmentMediaType sniffs data's media type and checks it against
-// the allowlist. The client's declared type is never trusted; bytes decide.
+// DetectAttachmentMediaType is the media type of these bytes, as
+// sniffed. The client's declared type is never trusted; bytes decide.
+//
+// Nothing is refused. It used to be: an allowlist of five types stood
+// here, on the reasoning that a knowledge store should hold only what an
+// agent could read (design doc 0013). What that reasoning missed is that
+// ochakai holds a *bundle*, and a bundle whose files come back missing
+// is not the bundle that was handed over (design doc 0046 §3.2). A
+// producer's zip of seed data, a `.parquet`, an SVG diagram — refusing
+// them does not keep them out of the knowledge base, it keeps them out
+// of the copy ochakai hands back.
+//
+// The error the allowlist prevented is prevented on delivery instead,
+// which is where it belongs: what a browser is allowed to do with bytes
+// is decided when they are served, by InlineServable and the headers
+// beside it. "Receive it, do not render it" is one rule with two halves,
+// and this is the half that receives.
+//
+// The signature still decides what the type *is*, so a file that only
+// claims to be an image is stored as what it sniffs as, never as what it
+// was called.
 func DetectAttachmentMediaType(data []byte) (string, error) {
 	mt, _, _ := strings.Cut(http.DetectContentType(data), ";")
 	mt = strings.TrimSpace(mt)
-	if !attachmentMediaTypes[mt] {
-		return "", fmt.Errorf("unsupported attachment content %q (allowed: png, jpeg, webp, pdf, plain text)", mt)
+	if mt == "" {
+		return "application/octet-stream", nil
 	}
 	return mt, nil
 }

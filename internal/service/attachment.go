@@ -71,6 +71,13 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 		}
 		vec = vecs[0]
 	} else {
+		// A file the model does not take is not embedded and not
+		// complained about: since design doc 0046 §3.2 a bundle may carry
+		// anything, and most of what it carries — an archive, a parquet
+		// file, a font — was never embeddable. It stays findable by name.
+		if !domain.Embeddable(att.MediaType) {
+			return
+		}
 		fe, ok := s.Embedder.(embed.FileEmbedder)
 		if !ok {
 			return

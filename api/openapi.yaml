@@ -1779,11 +1779,13 @@ paths:
       operationId: putAttachment
       summary: Attach a file to a knowledge entry
       description: >
-        Stores the raw request body as an attachment, replacing any
-        attachment of the same name (kept as a revision). The media type
-        is sniffed from the bytes — png, jpeg, webp, pdf, and plain
-        text are accepted (never text/html or image/svg+xml: they can
-        carry scripts), at most 5 MiB and 20 attachments per entry.
+        Stores the raw request body as a file of the bundle, replacing
+        any file of the same name (kept as a revision). The media type is
+        sniffed from the bytes and nothing is refused for being what it
+        is: a bundle whose files come back missing is not the bundle that
+        was handed over (design doc 0046 §3.2). What a browser is allowed
+        to do with them is decided when they are served — see the GET
+        above. At most 5 MiB per file; no limit on how many.
         Reference the file from the entry's markdown body
         (`![baseline](<id last segment>/weekly.png)` or
         `[seeds](<id last segment>/seeds.txt)`) so it is findable and
@@ -2469,7 +2471,12 @@ components:
         agent context is never flooded with base64.
       properties:
         name: { type: string, description: Filename, unique within the entry. }
-        media_type: { type: string, enum: [image/png, image/jpeg, image/webp, application/pdf, text/plain] }
+        media_type:
+          type: string
+          description: >
+            Sniffed from the bytes, never taken from the client. Any type:
+            a bundle carries what it carries (design doc 0046 §3.2), and
+            what a browser may do with it is decided when it is served.
         size: { type: integer }
         sha256: { type: string, description: Content hash; attachments are content-addressed and immutable. }
         okf_path:

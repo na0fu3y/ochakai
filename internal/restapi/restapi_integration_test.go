@@ -386,8 +386,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	}
 	// A PNG renders in place, and says so with no sandbox on it; the
 	// sniffed type is never re-decided by the browser (design doc 0046
-	// §3.2, and serveDefensively for the half this entry cannot exercise —
-	// the write path still refuses the media types that would).
+	// §3.2).
 	if d := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(d, "inline;") {
 		t.Errorf("Content-Disposition = %q, want inline for an image", d)
 	}
@@ -1101,5 +1100,97 @@ func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
 		t.Errorf("sending back what was read = %d, Ochakai-Unchanged = %q",
 			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+}
+
+// A bundle carries what it carries (design doc 0046 §3.2): the write
+// path refuses no media type, and the delivery rule is what keeps the
+// dangerous ones from running. This is the pair #280 could only test one
+// half of, because nothing that takes the defended branch could be
+// stored yet.
+func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := fmt.Sprintf("restany%d", time.Now().UnixNano())
+	id := typ + "/diagram"
+	// Soft-delete at the end, like every other test that holds live
+	// files: the shared test database is scanned whole by the export and
+	// by the re-embed backlog, and those resolve bytes against their own
+	// blob fake. A defer rather than t.Cleanup — cleanups run after this
+	// function's defers, by which time the server is closed.
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "anything the bundle carried"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	for _, tc := range []struct {
+		name, mediaType string
+		data            []byte
+		inline          bool
+	}{
+		// The two that carry script, and the two that were simply not on
+		// the old list. None of them is refused; the first two are handed
+		// over rather than rendered.
+		{"er.svg", "text/xml", []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>`), false},
+		{"report.html", "text/html", []byte(`<!DOCTYPE html><script>alert(1)</script>`), false},
+		{"seeds.zip", "application/zip", append([]byte("PK\x03\x04"), make([]byte, 16)...), false},
+		{"shot.gif", "image/gif", append([]byte("GIF89a"), make([]byte, 16)...), true},
+	} {
+		attURL := srv.URL + "/api/v1/attachments/" + id + "/" + tc.name
+		req, _ := http.NewRequest(http.MethodPut, attURL, bytes.NewReader(tc.data))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("attaching %s = %d: %s", tc.name, resp.StatusCode, body)
+			continue
+		}
+
+		resp, err = http.Get(attURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if string(got) != string(tc.data) {
+			t.Errorf("%s came back as %d bytes, want %d", tc.name, len(got), len(tc.data))
+		}
+		if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, tc.mediaType) {
+			t.Errorf("%s is served as %q, want %q", tc.name, ct, tc.mediaType)
+		}
+		if resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: no nosniff", tc.name)
+		}
+		want, csp := "attachment;", "sandbox"
+		if tc.inline {
+			want, csp = "inline;", ""
+		}
+		if d := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(d, want) {
+			t.Errorf("%s: Content-Disposition = %q, want %s…", tc.name, d, want)
+		}
+		if got := resp.Header.Get("Content-Security-Policy"); got != csp {
+			t.Errorf("%s: Content-Security-Policy = %q, want %q", tc.name, got, csp)
+		}
+	}
+
+	// And the entry carries all four: no cap on how many objects a
+	// directory of the bundle may hold.
+	var view domain.View
+	getJSON(t, srv.URL+"/api/v1/knowledge/"+id, &view)
+	if len(view.Attachments) != 4 {
+		t.Errorf("the entry carries %d files, want 4 — nothing caps how many", len(view.Attachments))
 	}
 }
