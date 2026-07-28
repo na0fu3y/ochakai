@@ -1071,8 +1071,7 @@ function nodeHTML(prefix, label, count) {
   // The ＋ prefills the editor's ID with this directory — no retyping the
   // full path to create knowledge next to its neighbors.
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
-    <summary>${label}<span class="count">${count}</span><a class="node-new"
-      class="write-only"
+    <summary>${label}<span class="count">${count}</span><a class="node-new write-only"
       href="#/new/${prefix.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/"
       title="New entry in ${esc(prefix)}">＋</a></summary>
     <div class="children"><div class="empty">…</div></div>
@@ -1084,13 +1083,16 @@ function nodeHTML(prefix, label, count) {
 // and full status ride in the tooltip. A directory's name is a link to
 // its index page (the ▸ marker and the rest of the row still toggle
 // expansion). Entries are draggable: dropping one on a directory moves
-// it there (references rewritten server-side).
+// it there (references rewritten server-side) — except on a read-only
+// deployment, where the move would only 403 (design doc 0040 §2.3). A
+// level is rendered from a browse response, so READ_ONLY is known by
+// the time this runs; the drag handlers check it again at drag time.
 function levelHTML(res, prefix) {
   const dirs = (res.dirs || []).map(dir => nodeHTML(prefix + dir.name + '/',
     `<span class="type-ico">📁</span><a class="dir-name mono" href="${dirHash(prefix + dir.name)}"
        title="Open the index of ${esc(prefix + dir.name)}/">${esc(dir.name)}/</a>`, dir.count)).join('');
   const entries = (res.entries || []).map(e => `
-    <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="true"
+    <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="${READ_ONLY ? 'false' : 'true'}"
        title="${esc(e.id)} · ${esc(e.status)}">
       <span class="type-ico" title="${esc(e.type)}">${icon(e.type)}</span>
       <span class="entry-title">${esc(displayTitle(e))}</span>
@@ -1233,6 +1235,13 @@ async function moveEntry(from, to) {
     tree.querySelectorAll('summary.drop-hover').forEach(s => s.classList.remove('drop-hover'));
   };
   tree.addEventListener('dragstart', e => {
+    // No drag ever starts on a read-only deployment, so dragId stays null
+    // and dragover/drop do nothing either: the move could only 403, and a
+    // gesture that always fails is the same lie as a button that always
+    // fails (design doc 0040 §2.3). Checked here rather than only on the
+    // rendered draggable attribute so a row rendered before the first
+    // response settled READ_ONLY cannot slip through.
+    if (READ_ONLY) { e.preventDefault(); return; }
     const entry = e.target.closest('.tree-entry');
     if (!entry) return;
     dragId = entry.dataset.id;
@@ -1596,19 +1605,19 @@ async function viewDetail(id) {
             <span class="mono">${esc(a.name)}</span>
             <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
             <span class="meta">body reference: <code>${ref}</code></span>
-            <button class="btn small danger" data-detach="${esc(a.name)}">Detach</button>
+            <button class="btn small danger write-only" data-detach="${esc(a.name)}">Detach</button>
           </div>
         </div>`;
       }).join('');
       return `
         ${cards || '<div class="empty">No attachments.</div>'}
-        <div class="toolbar" style="margin-top:1rem">
+        <div class="toolbar write-only" style="margin-top:1rem">
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
           <button class="btn small" id="att-choose">Choose files…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">Attach</button>
         </div>
-        <p class="provenance">png / jpeg / webp / pdf / plain text, max 5 MiB each, 20 per entry. Reference a file from the
+        <p class="provenance write-only">png / jpeg / webp / pdf / plain text, max 5 MiB each, 20 per entry. Reference a file from the
         body (<code>![alt](${esc(lastSeg)}/name.png)</code> or <code>[name](${esc(lastSeg)}/name.txt)</code>) so it is findable and survives OKF export.</p>`;
     },
     linked: () => '<div class="empty">…</div>',
@@ -2047,8 +2056,10 @@ async function viewEditor(id, prefix = '') {
           stored where nothing reads it.</div>
       </div>
       <div id="editor-error"></div>
+      <div class="read-only-note">This ochakai is read-only, so nothing here can be
+      saved. The form is what an editor on a writable deployment would fill in.</div>
       <p>
-        <button class="btn primary" type="submit">${editing ? 'Save' : 'Create draft'}</button>
+        <button class="btn primary write-only" type="submit">${editing ? 'Save' : 'Create draft'}</button>
         <a class="btn" href="${editing ? '#/k/' + idPath(entry.id) : '#/'}">Cancel</a>
       </p>
     </form>

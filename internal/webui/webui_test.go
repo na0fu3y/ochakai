@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -236,6 +237,159 @@ func TestTypeVocabularyMatchesDomain(t *testing.T) {
 		if strings.Contains(icons, retired) || strings.Contains(hint, retired) {
 			t.Errorf("the page still offers %q, retired by design doc 0038", retired)
 		}
+	}
+}
+
+// A read-only deployment must not offer a control that can only ever 403:
+// a button that is pressed and always fails is a lie (design doc 0040
+// §2.3). The whole mechanism on this page is one CSS rule — a write
+// affordance is hidden exactly when the class `write-only` reaches it, on
+// the control itself or on a container.
+//
+// The tree's per-directory ＋ shipped visible on a read-only deployment
+// because it carried the class in a *second* class attribute: HTML keeps
+// the first `class` and drops the rest, so the rule never matched. Nothing
+// failed, because nothing on this page was checked for read-only at all.
+// This is that check: every affordance below writes through /api/v1, so
+// every one of them has to be gated.
+func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
+	page := string(Index)
+	// The rule and the state that drives it. Renaming either without
+	// renaming the class everywhere would unhide the lot.
+	for _, want := range []string{
+		"body.read-only .write-only { display: none !important; }",
+		"Ochakai-Read-Only",
+		"classList.toggle('read-only', on)",
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("the read-only mechanism is gone: %q", want)
+		}
+	}
+
+	// Controls that carry the class themselves. Every link into the editor
+	// counts: the sidebar ＋, the tree's per-directory ＋, and the two the
+	// search view offers.
+	if n := strings.Count(page, `href="#/new`); n != 4 {
+		t.Errorf("the page has %d literal links to the editor, not the 4 this guard knows; gate the new one and update the count", n)
+	}
+	for _, i := range indexesOf(page, `href="#/new`) {
+		if _, tag := tagAt(t, page, i); !hidesOnReadOnly(tag) {
+			t.Errorf("a link to the editor is not hidden on a read-only deployment:\n%s", tag)
+		}
+	}
+	for _, aff := range []struct{ what, marker string }{
+		{"the directory view's New entry here", `href="${newHref}"`}, // the fifth, built as a variable
+		{"the status picker on an entry", `id="act-status"`},
+		{"Detach on an attachment", "data-detach="},
+		{"the editor's save button", `type="submit"`},
+	} {
+		if _, tag := tagAt(t, page, indexOf(t, page, aff.marker)); !hidesOnReadOnly(tag) {
+			t.Errorf("%s is not hidden on a read-only deployment:\n%s", aff.what, tag)
+		}
+	}
+
+	// Controls gated by the container they sit in: the entry's action bar
+	// and the review card's. Each marker must occur once, so a second copy
+	// added somewhere ungated fails here rather than shipping visible.
+	for _, aff := range []struct{ what, marker, open, close string }{
+		{"attaching a file", `id="att-upload"`, `<div class="toolbar write-only"`, "</div>"},
+		{"Edit", `href="#/edit/`, `<span class="actions write-only">`, "</span>"},
+		{"Re-verify", `id="act-reverify"`, `<span class="actions write-only">`, "</span>"},
+		{"Move…", `id="act-move"`, `<span class="actions write-only">`, "</span>"},
+		{"Delete…", `id="act-delete"`, `<span class="actions write-only">`, "</span>"},
+		{"Verify", `data-act="verify"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},
+		{"Reject", `data-act="reject"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},
+	} {
+		if n := strings.Count(page, aff.marker); n != 1 {
+			t.Errorf("%s appears %d times; every copy needs gating, so this guard needs updating", aff.what, n)
+			continue
+		}
+		if !strings.Contains(section(t, page, aff.open, aff.close), aff.marker) {
+			t.Errorf("%s is no longer inside an action bar that hides it on a read-only deployment", aff.what)
+		}
+	}
+
+	// Drag-to-move is a write affordance with no button: dropping an entry
+	// on a directory calls moveEntry, which can only 403 here. The rendered
+	// attribute stops the gesture being offered; the handler is what makes
+	// it impossible.
+	if !strings.Contains(page, `draggable="${READ_ONLY ? 'false' : 'true'}"`) {
+		t.Error("tree entries are draggable unconditionally, so a read-only deployment still invites a move")
+	}
+	if drag := section(t, page, "tree.addEventListener('dragstart'", "\n  });"); !strings.Contains(drag, "if (READ_ONLY)") {
+		t.Errorf("the dragstart handler does not check READ_ONLY, so a drag-to-move can still start:\n%s", drag)
+	}
+}
+
+// The ＋ above was hidden in review and still shipped visible, because the
+// class it was given was the second `class` attribute on the tag and the
+// browser had already taken the first. Nothing about that reads as wrong
+// in a diff, and it silences any guard written in terms of the class.
+func TestNoTagDeclaresClassTwice(t *testing.T) {
+	page := string(Index)
+	seen := map[int]bool{}
+	for _, i := range indexesOf(page, "class=") {
+		start, tag := tagAt(t, page, i)
+		if seen[start] {
+			continue
+		}
+		seen[start] = true
+		if n := strings.Count(tag, "class="); n > 1 {
+			t.Errorf("this tag declares class %d times; the browser keeps the first and drops the rest:\n%s", n, tag)
+		}
+	}
+}
+
+// hidesOnReadOnly reports whether a tag carries write-only in the class
+// the browser actually applies — the first class attribute, since a
+// second one is dropped rather than merged.
+func hidesOnReadOnly(tag string) bool {
+	i := strings.Index(tag, "class=")
+	if i < 0 {
+		return false
+	}
+	rest := tag[i+len("class="):]
+	if rest == "" || (rest[0] != '"' && rest[0] != '\'') {
+		return false
+	}
+	end := strings.IndexByte(rest[1:], rest[0])
+	if end < 0 {
+		return false
+	}
+	return slices.Contains(strings.Fields(rest[1:1+end]), "write-only")
+}
+
+// tagAt returns the tag enclosing offset i — from the "<" that opens it to
+// the ">" that closes it — with the offset it starts at.
+func tagAt(t *testing.T, page string, i int) (int, string) {
+	t.Helper()
+	start := strings.LastIndex(page[:i], "<")
+	end := strings.Index(page[i:], ">")
+	if start < 0 || end < 0 {
+		t.Fatalf("no tag encloses offset %d", i)
+	}
+	return start, page[start : i+end+1]
+}
+
+// indexOf finds the first marker, naming it when it is gone.
+func indexOf(t *testing.T, page, marker string) int {
+	t.Helper()
+	i := strings.Index(page, marker)
+	if i < 0 {
+		t.Fatalf("%q is gone from the page; the guard needs updating", marker)
+	}
+	return i
+}
+
+func indexesOf(page, marker string) []int {
+	var out []int
+	for i := 0; ; {
+		j := strings.Index(page[i:], marker)
+		if j < 0 {
+			return out
+		}
+		out = append(out, i+j)
+		i += j + len(marker)
 	}
 }
 
