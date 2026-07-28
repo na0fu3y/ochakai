@@ -1077,9 +1077,10 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
-		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be read is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
+		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
+	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1096,8 +1097,16 @@ func cmdImport(ctx context.Context, args []string) error {
 	// differently than it was written. Reporting them keeps a foreign
 	// bundle's reinterpreted status or dropped stale_after visible without
 	// pretending the document was rejected (OKF SPEC §11).
+	noted := len(notes)
 	for _, n := range notes {
 		fmt.Fprintln(os.Stderr, "note:", n)
+	}
+	// Everything the parser reinterpreted is known before the first write,
+	// so --strict refuses here and the knowledge base is left untouched.
+	// The alternative — writing 65 entries and failing on the 66th — is
+	// the half-applied sync this flag exists to prevent.
+	if *strict && (noted > 0 || len(skipped) > 0) {
+		return strictErr(noted, len(skipped), "nothing was written")
 	}
 	if *dryRun {
 		for i := range entries {
@@ -1106,7 +1115,8 @@ func cmdImport(ctx context.Context, args []string) error {
 		for _, a := range atts {
 			fmt.Printf("would attach %s/%s (from %s)\n", a.ID, a.Name, a.Path)
 		}
-		fmt.Printf("dry run: %d entries, %d attachments, %d skipped\n", len(entries), len(atts), len(skipped))
+		fmt.Printf("dry run: %d entries, %d attachments, %d skipped, %d notes\n",
+			len(entries), len(atts), len(skipped), noted)
 		return nil
 	}
 	c, err := newClient(ctx, *url)
@@ -1134,6 +1144,7 @@ func cmdImport(ctx context.Context, args []string) error {
 			return
 		}
 		if _, err := c.Verify(ctx, d.ID); err != nil {
+			noted++
 			fmt.Fprintf(os.Stderr, "note: %s imported, but recording its verification failed: %v\n", d.ID, err)
 		}
 	}
@@ -1157,6 +1168,7 @@ func cmdImport(ctx context.Context, args []string) error {
 			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
+		noted += len(notes)
 		reportNotes(notes)
 		if wasCreated {
 			created++
@@ -1192,9 +1204,32 @@ func cmdImport(ctx context.Context, args []string) error {
 		attached++
 		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped)\n",
-		created+updated+unchanged, created, updated, unchanged, attached, len(skipped))
+	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped, %d notes)\n",
+		created+updated+unchanged, created, updated, unchanged, attached, len(skipped), noted)
+	// The parse-time gate above cannot see what the server read differently
+	// or refused, so --strict asks again with the writes already done. The
+	// summary is printed first: the exit code says the sync is not clean,
+	// and the line above it says how far it got.
+	if *strict && (noted > 0 || len(skipped) > 0) {
+		return strictErr(noted, len(skipped), "the entries above are already written")
+	}
 	return nil
+}
+
+// strictErr is what --strict fails with. It counts rather than repeats:
+// every note and skip has already been printed to stderr as it happened,
+// and the error's job is to name the exit code's reason and say what the
+// knowledge base looks like now.
+func strictErr(notes, skipped int, state string) error {
+	return fmt.Errorf("--strict: the bundle was not read exactly as written (%d %s, %d %s); %s",
+		notes, plural(notes, "note"), skipped, plural(skipped, "skipped file"), state)
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return word + "s"
 }
 
 // isInvalid reports a 400: the server understood the request and judged

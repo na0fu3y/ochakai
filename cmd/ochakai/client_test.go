@@ -273,11 +273,73 @@ func TestImportReportsUnchanged(t *testing.T) {
 	for _, want := range []string{
 		"unchanged ochakai://metrics/same\n",
 		"updated ochakai://metrics/diff\n",
-		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 skipped)\n",
+		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 skipped, 0 notes)\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestImportStrictRefusesBeforeWriting pins the whole point of --strict:
+// a note is a report by default and an entry carrying one still imports,
+// but under --strict the same bundle fails — and fails before the first
+// PUT, so a sync that would drift lands nothing at all. Without the flag
+// the identical bundle is written, which is what makes this a posture and
+// not a parser change.
+func TestImportStrictRefusesBeforeWriting(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// "verified" was never an OKF lifecycle value, so the parser reads it
+	// as a draft and says so. That reinterpretation is exactly the one an
+	// unattended import must not absorb quietly.
+	doc := "---\ntype: Metric\ntitle: Revenue\nstatus: verified\n---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "revenue.md"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	puts := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		puts++
+		body, _ := io.ReadAll(r.Body)
+		d, _, err := okf.Parse(body)
+		if err != nil {
+			t.Errorf("bad PUT payload: %v\n%s", err, body)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		k := d.Knowledge
+		k.ID = r.PathValue("id")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(k)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	err := cmdImport(context.Background(), []string{dir, "--strict", "--url", srv.URL})
+	if err == nil {
+		t.Fatal("--strict imported a bundle with a note, want an error")
+	}
+	if !strings.Contains(err.Error(), "nothing was written") {
+		t.Errorf("--strict error = %v, want it to say nothing was written", err)
+	}
+	if puts != 0 {
+		t.Errorf("--strict wrote %d entries before failing, want 0", puts)
+	}
+
+	// --dry-run --strict is the CI gate: same verdict, still no writes.
+	if err := cmdImport(context.Background(), []string{dir, "--dry-run", "--strict", "--url", srv.URL}); err == nil {
+		t.Error("--dry-run --strict accepted a bundle with a note, want an error")
+	}
+
+	if err := cmdImport(context.Background(), []string{dir, "--url", srv.URL}); err != nil {
+		t.Fatalf("without --strict the same bundle must import: %v", err)
+	}
+	if puts != 1 {
+		t.Errorf("import without --strict wrote %d entries, want 1", puts)
 	}
 }
 

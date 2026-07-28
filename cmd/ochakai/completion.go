@@ -171,7 +171,7 @@ _ochakai() {
       _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
       ;;
     import)
-      _arguments '--dry-run[parse and list, write nothing]' '--url[server URL]:url:' '1:bundle:_files'
+      _arguments '--dry-run[parse and list, write nothing]' '--strict[fail on any note or skip]' '--url[server URL]:url:' '1:bundle:_files'
       ;;
     use)
       local -a servers
@@ -242,7 +242,7 @@ _ochakai() {
     attach)        opts="--name --json --url" ;;
     reembed)       opts="--limit --once --json --url" ;;
     export)        opts="--url --no-attachments" ;;
-    import)        opts="--dry-run --url" ;;
+    import)        opts="--dry-run --strict --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
     mcp-stdio)     opts="--url" ;;
@@ -301,6 +301,7 @@ complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage report revisions backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
+complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
