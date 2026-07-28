@@ -564,6 +564,12 @@ type Knowledge struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
+	// ContentChangedAt is when what the entry says last changed, which is
+	// what OKF's generated.at means (SPEC §5.2). It parted ways with
+	// UpdatedAt when the document became the writer's own bytes:
+	// reformatting an entry writes the row and moves its version without
+	// changing a word of what it says (design doc 0044 §3.4).
+	ContentChangedAt time.Time `json:"content_changed_at"`
 	// Doc is the document as it was received: the writer's own bytes,
 	// normalized for line endings and stripped of the keys this instance
 	// owns, and nothing else (design doc 0044 §2.2). It is what the store

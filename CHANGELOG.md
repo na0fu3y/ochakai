@@ -52,9 +52,12 @@ last entry.
   sent straight back.
 
   - The **ETag is the hash of those bytes**, so reformatting an entry
-    moves its version. `generated.at` does not: whether the content
-    changed is still decided by comparing what the document says, not
-    how it is laid out.
+    moves its version: the file did change. What the entry *says* did
+    not, so `generated` stays with whoever the content already stood by
+    — which needs a column of its own, `content_changed_at`, since
+    `updated_at` had been standing in for it. It rides on the wire
+    beside `updated_at`. Sending byte-identical bytes is still nothing
+    happening: no row written, no revision, `Ochakai-Unchanged: true`.
   - A **recommended type keeps the writer's casing**. `type: metric` is
     stored as written rather than corrected to `Metric`; filters still
     match case-insensitively. The type is the writer's vocabulary

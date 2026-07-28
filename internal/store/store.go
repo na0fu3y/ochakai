@@ -180,7 +180,7 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
-	links, attrs, body, created_at, updated_at, doc, content_hash`
+	links, attrs, body, created_at, updated_at, content_changed_at, doc, content_hash`
 
 // ledgerCols is the two instance ledgers — verifications and the
 // rejection — read as JSON beside the entry's own columns (design doc
@@ -325,7 +325,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
 		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
-		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt}
+		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentChangedAt}
 	if withDoc {
 		dests = append(dests, &k.Doc)
 	}
@@ -380,6 +380,13 @@ func storedDoc(k *domain.Knowledge) (doc, hash string, err error) {
 	sum := sha256.Sum256(b)
 	return string(b), hex.EncodeToString(sum[:]), nil
 }
+
+// StoredDocument is what a write of k would put in the row: the document
+// as received when it still says what k says, and the canonical
+// rendering otherwise (storedDoc). The service compares it with the
+// stored one to tell a write that changes nothing at all from a write
+// that changes only the layout (design doc 0044 §3.4).
+func StoredDocument(k *domain.Knowledge) (doc, hash string, err error) { return storedDoc(k) }
 
 // documentSays reports whether doc still says what k says. A caller that
 // edited the entry's fields without editing the document it came from is
@@ -543,7 +550,7 @@ func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]doma
 // either way.
 func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTombstones bool) error {
 	now := NowStored()
-	k.CreatedAt, k.UpdatedAt = now, now
+	k.CreatedAt, k.UpdatedAt, k.ContentChangedAt = now, now, now
 	// Reviving a tombstone overwrites its status in place. When the caller
 	// must not replace a human ruling (design doc 0015 §3.1), the revival
 	// carries the same restriction as the UPDATE itself, so a curation
@@ -572,7 +579,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, doc, hash,
+			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, hash,
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES (`+knowledgeParams+`)
@@ -616,6 +623,12 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 // the prior last-write-wins behavior for callers that do not opt in.
 func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) error {
 	k.UpdatedAt = NowStored()
+	// The caller decides whether this write changed what the entry says;
+	// only then does generated.at move (design doc 0044 §3.4). A write
+	// that reformats the document leaves it where it was.
+	if k.ContentChangedAt.IsZero() {
+		k.ContentChangedAt = k.UpdatedAt
+	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		j, err := marshalJSONFields(k)
 		if err != nil {
@@ -634,7 +647,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.UpdatedAt, doc, hash}
+			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, hash}
 		if ifMatch != nil {
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
@@ -643,7 +656,8 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
-			links=$20, attrs=$21, body=$22, updated_at=$23, doc=$24, content_hash=$25
+			links=$20, attrs=$21, body=$22, updated_at=$23, content_changed_at=$24,
+			doc=$25, content_hash=$26
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -917,6 +931,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		return nil, err
 	}
 	k.UpdatedAt = NowStored()
+	k.ContentChangedAt = k.UpdatedAt
 	// A move rewrites the entry's own relative links and every referrer's
 	// body, so the mover is who the content now stands by: generated.by
 	// in an export (design doc 0036 §3.3).
@@ -945,7 +960,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// exactly as in SoftDelete: the Get above ran outside this
 		// transaction.
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET id=$2, updated_at=$3,
+			`UPDATE knowledge SET id=$2, updated_at=$3, content_changed_at=$3,
 			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6
 			 WHERE id=$1 AND deleted_at IS NULL`,
 			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via)
@@ -1091,6 +1106,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		} else {
 			r.UpdatedAt = now
 		}
+		// A repaired link is a change to what the entry says, so
+		// generated moves with it — both halves of it, the actor above
+		// and the timestamp here (design doc 0044 §3.4).
+		r.ContentChangedAt = r.UpdatedAt
 		// deleted_at IS NULL restates what the locked read already
 		// established, so the statement does not depend on the reader
 		// having filtered: rewriting a tombstone would plant a repaired
@@ -1108,9 +1127,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		tag, err := tx.Exec(ctx,
 			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8,
-			 doc=$9, content_hash=$10
+			 doc=$9, content_hash=$10, content_changed_at=$11
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash)
+			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash,
+			r.ContentChangedAt)
 		if err != nil {
 			return err
 		}

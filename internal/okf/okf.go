@@ -429,7 +429,7 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 		Computation: text(k.Computation),
 	}
 	if serverKeys {
-		g := actorEvent(&k.UpdatedBy, &k.UpdatedAt)
+		g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
 		fm.Generated = &g
 		fm.CreatedBy = text(k.CreatedBy.String())
 	}

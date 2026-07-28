@@ -2241,6 +2241,17 @@ components:
             attachment endpoints, never through create/update payloads.
         created_at: { type: string, format: date-time, readOnly: true }
         updated_at: { type: string, format: date-time, readOnly: true }
+        content_changed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: >
+            When what the entry says last changed — OKF's generated.at
+            (SPEC §5.2). Distinct from updated_at, which is when the row
+            was last written: reformatting a document (reordering its
+            frontmatter, adding a comment) changes the file and moves the
+            ETag, while what the entry says stays put (design doc 0044
+            §3.4).
     Attachment:
       type: object
       description: >

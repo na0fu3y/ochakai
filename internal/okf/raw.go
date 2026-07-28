@@ -171,7 +171,10 @@ func ownedKeyRanges(fm string, lines int) []lineRange {
 // that nobody re-serializes them. SPEC constrains neither key order nor
 // position (§4.1), and a reader that cares reads keys, not offsets.
 func WithServerKeys(raw []byte, k *domain.Knowledge) ([]byte, error) {
-	g := actorEvent(&k.UpdatedBy, &k.UpdatedAt)
+	// generated is SPEC §5.2's "who the content stands by, and when it
+	// last meaningfully changed" — so the timestamp is the content's, not
+	// the row's (design doc 0044 §3.4).
+	g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
 	own := serverKeysOnly{Generated: &g, CreatedBy: text(k.CreatedBy.String())}
 	for i := range k.Verifications {
 		v := &k.Verifications[i]

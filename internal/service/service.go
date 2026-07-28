@@ -220,13 +220,29 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	// replaces the document and rules on nothing (design doc 0043
 	// §§3.2-3.3). Carrying them over keeps the returned entry honest.
 	k.Verifications, k.Rejection = old.Verifications, old.Rejection
-	if k.SameContent(old) {
+	// Three outcomes, because the document being the writer's own bytes
+	// (design doc 0044 §2.2) separates two questions that used to be one.
+	//
+	// The same bytes: nothing happened. No row written, no revision, and
+	// the surface says so.
+	doc, _, err := store.StoredDocument(k)
+	if err != nil {
+		return nil, false, err
+	}
+	if doc == old.Doc {
 		return old, false, nil
 	}
-	// Past this point the content really changes, so the caller is who the
-	// entry now stands by — OKF's generated.by (design doc 0036 §3.3).
-	// Unchanged writes return above and leave the old one in place.
-	k.UpdatedBy = actor
+	// Different bytes saying the same thing — a reformat, a comment, a
+	// reordered frontmatter. The file changed, so it is written and its
+	// version moves; what the entry says did not, so generated stays with
+	// whoever the content already stood by (design doc 0044 §3.4).
+	if k.SameContent(old) {
+		k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
+	} else {
+		// Past this point the content really changes, so the caller is who
+		// the entry now stands by — OKF's generated (design doc 0036 §3.3).
+		k.UpdatedBy, k.ContentChangedAt = actor, store.NowStored()
+	}
 	// Pass the precondition through so the write is also guarded against a
 	// concurrent update landing between the Get above and the write.
 	if err := s.Store.Update(ctx, k, actor, ifMatch); err != nil {
