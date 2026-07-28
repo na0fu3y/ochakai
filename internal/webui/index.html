@@ -1550,7 +1550,7 @@ async function viewDetail(id) {
   const resolveFile = ref => {
     const p = normalize(ref.startsWith('/') ? ref : (docDir ? docDir + '/' : '') + ref);
     const canonical = a => entry.id + '/' + a.name;
-    let hit = atts.find(a => p === (a.okf_path || canonical(a)) || p === canonical(a));
+    let hit = atts.find(a => p === a.path || p === canonical(a));
     // Forgiving fallback: names are unique within the entry, so a filename
     // match resolves references written against a layout we don't know.
     hit = hit || atts.find(a => a.name === ref.split('/').pop());

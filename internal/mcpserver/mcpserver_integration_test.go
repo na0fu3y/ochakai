@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -86,14 +87,14 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	sw.set("human:bob@example.co.jp")
 	id := fmt.Sprintf("mcpit%d/delegation", time.Now().UnixNano())
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "create_knowledge",
+		Name:      "put_knowledge",
 		Arguments: map[string]any{"id": id, "document": "---\ntype: glossary\n---\n\nwritten on behalf of bob\n"},
 	})
 	if err != nil {
-		t.Fatalf("create_knowledge: %v", err)
+		t.Fatalf("put_knowledge: %v", err)
 	}
 	if res.IsError {
-		t.Fatalf("create_knowledge failed: %+v", res.Content)
+		t.Fatalf("put_knowledge failed: %+v", res.Content)
 	}
 
 	k, err := svc.Get(context.Background(), id)
@@ -135,5 +136,108 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	}
 	if kind != string(domain.ActorHuman) || name != "carol@example.co.jp" {
 		t.Errorf("outcome recorded %s:%s, want human:carol@example.co.jp (actor pinned to the session initializer?)", kind, name)
+	}
+}
+
+// put_knowledge creates on a free id and replaces on a taken one, and
+// the guards that used to belong to two tools still apply to the right
+// half: reviving a curated tombstone is refused on the create side, and
+// replacing a curated entry on the other (design docs 0015 §3.1, 0046
+// §3.14).
+func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{InsecureDev: true}
+	svc := &service.Service{Store: s, Config: cfg, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(httpauth.Middleware(cfg, Handler(svc, "test")))
+	defer srv.Close()
+	transport := &mcp.StreamableClientTransport{Endpoint: srv.URL}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "host", Version: "0"}, nil).Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	id := fmt.Sprintf("mcpput%d/revenue", time.Now().UnixNano())
+	defer func() {
+		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"})
+	}()
+
+	put := func(t *testing.T, doc string) *mcp.CallToolResult {
+		t.Helper()
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "put_knowledge",
+			Arguments: map[string]any{"id": id, "document": doc},
+		})
+		if err != nil {
+			t.Fatalf("put_knowledge: %v", err)
+		}
+		if res.IsError {
+			t.Fatalf("put_knowledge failed: %+v", res.Content)
+		}
+		return res
+	}
+
+	// A title of this test's own: the test database is shared with the
+	// packages running beside it, and a live entry called 売上 would
+	// crowd their search assertions while this one runs.
+	title := "mcp put " + id
+	put(t, "---\ntype: Metric\ntitle: "+title+"\nstatus: draft\n---\n\n受注合計。\n")
+	k, err := svc.Get(ctx, id)
+	if err != nil {
+		t.Fatalf("the entry was not created: %v", err)
+	}
+	if k.Title != title {
+		t.Errorf("title = %q", k.Title)
+	}
+
+	// The same id again is a replace, not a conflict: a write says what
+	// the entry should say, and the id being taken is not the agent's
+	// question to answer.
+	put(t, "---\ntype: Metric\ntitle: "+title+"(改)\nstatus: draft\n---\n\n受注合計。返品を除く。\n")
+	k, err = svc.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Title != title+"(改)" {
+		t.Errorf("the second write did not replace: title = %q", k.Title)
+	}
+
+	// A human ruling still stops the replace half, with the advice the
+	// two tools used to carry between them.
+	if _, err := svc.Verify(ctx, id, domain.Actor{Kind: domain.ActorHuman, Name: "na0"}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "put_knowledge",
+		Arguments: map[string]any{"id": id, "document": "---\ntype: Metric\ntitle: 上書き\n---\n\nx\n"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Fatal("put_knowledge replaced a verified entry")
+	}
+	var said string
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			said += tc.Text
+		}
+	}
+	for _, want := range []string{"report_outcome failed", "verified"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("the refusal does not mention %q: %s", want, said)
+		}
 	}
 }

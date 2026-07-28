@@ -121,7 +121,7 @@ func (e *ExportSnapshot) AttachmentMeta(ctx context.Context) ([]ExportAttachment
 		if err := row.Scan(&a.ID, &path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
 			return a, err
 		}
-		a.Att = asAttachment(a.ID, path, mediaType, size, hash, by, at)
+		a.Att = asAttachment(path, mediaType, size, hash, by, at)
 		return a, nil
 	})
 	if err != nil {

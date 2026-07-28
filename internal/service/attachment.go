@@ -16,14 +16,18 @@ import (
 // interpretation.
 
 // Attach stores data as an attachment of the entry, replacing any
-// attachment of the same name. The media type is sniffed from the bytes,
-// never taken from the caller. okfPath preserves a foreign bundle
-// location for round-trips; "" for attachments born here.
-func (s *Service) Attach(ctx context.Context, id, name, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+// file of the same name. The media type is sniffed from the bytes, never
+// taken from the caller.
+//
+// The file lands at <id>/<name>. One that belongs somewhere else in the
+// bundle is written at the path it belongs at (PutFile): where a file
+// lives is its address, not an annotation on a write to another one
+// (design doc 0046 §3.3).
+func (s *Service) Attach(ctx context.Context, id, name string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
-	id, name, okfPath = domain.Normalize(id), domain.Normalize(name), domain.Normalize(okfPath)
+	id, name = domain.Normalize(id), domain.Normalize(name)
 	if !s.Store.HasBlobStore() {
 		return nil, Unsupportedf("attachments are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
 	}
@@ -36,7 +40,7 @@ func (s *Service) Attach(ctx context.Context, id, name, okfPath string, data []b
 	if err != nil {
 		return nil, Invalidf("%v", err)
 	}
-	att, err := s.Store.PutAttachment(ctx, id, name, mediaType, okfPath, data, actor)
+	att, err := s.Store.PutAttachment(ctx, id, name, mediaType, "", data, actor)
 	if err != nil {
 		return nil, err
 	}
