@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -65,7 +66,8 @@ func (e *ExportSnapshot) Close(ctx context.Context) {
 // does not carry them.
 func (e *ExportSnapshot) IndexRows(ctx context.Context) ([]domain.Knowledge, error) {
 	rows, err := e.tx.Query(ctx,
-		`SELECT type, id, title, description FROM object WHERE deleted_at IS NULL ORDER BY id`)
+		`SELECT type, id, title, description FROM object
+		  WHERE deleted_at IS NULL AND id IS NOT NULL ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -103,19 +105,24 @@ func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.
 // makes that failure visible as a missing file rather than as an archive
 // quietly disagreeing with its own index.
 func (e *ExportSnapshot) AttachmentMeta(ctx context.Context) ([]ExportAttachment, error) {
-	rows, err := e.tx.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		ORDER BY a.knowledge_id, a.name`)
+	rows, err := e.tx.Query(ctx, `SELECT k.id, `+fileCols+`
+		FROM object k JOIN object f ON `+attributedTo+`
+		WHERE k.id IS NOT NULL AND k.deleted_at IS NULL
+		ORDER BY k.id, f.path`)
 	if err != nil {
 		return nil, err
 	}
 	atts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
 		var a ExportAttachment
-		err := row.Scan(&a.ID, &a.Att.Name, &a.Att.MediaType, &a.Att.Size, &a.Att.SHA256, &a.Att.OKFPath,
-			&a.Att.CreatedBy.Kind, &a.Att.CreatedBy.Name, &a.Att.CreatedAt)
-		return a, err
+		var path, mediaType, hash string
+		var size int64
+		var by domain.Actor
+		var at time.Time
+		if err := row.Scan(&a.ID, &path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
+			return a, err
+		}
+		a.Att = asAttachment(a.ID, path, mediaType, size, hash, by, at)
+		return a, nil
 	})
 	if err != nil {
 		return nil, err

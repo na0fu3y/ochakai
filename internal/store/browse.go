@@ -44,7 +44,10 @@ type BrowseEntry struct {
 // a status (design doc 0043 §3.3), so the id is qualified — the ledger
 // has an id column of its own, and a bare one inside the subquery would
 // bind to it and match everything.
-const browseNotRejected = `deleted_at IS NULL
+// id IS NOT NULL keeps files out: browsing lists the concepts in a
+// directory, and a file in the same directory is listed as a file
+// (design doc 0046 §3.7), not as an entry with no title.
+const browseNotRejected = `deleted_at IS NULL AND id IS NOT NULL
 	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = object.id)`
 
 // MaxBrowseEntries bounds one directory listing. A directory this wide

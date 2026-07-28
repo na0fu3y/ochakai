@@ -549,6 +549,24 @@ func (s *Store) getOneTx(ctx context.Context, tx pgx.Tx, id string, deleted bool
 }
 
 // querier is the part of pgxpool.Pool and pgx.Tx that reads.
+
+// bodyFiles is the paths of the non-concept objects an entry's body
+// points at, as the column stores them (design doc 0046 §3.3). It is
+// derived on every write for the same reason links are (design doc
+// 0024): the body is the record, and a list beside it that a writer
+// could edit separately would be a second one to keep true.
+func bodyFiles(k *domain.Knowledge) []byte {
+	files := domain.FilesFromBody(k.ID, k.Body)
+	if files == nil {
+		files = []string{}
+	}
+	b, err := json.Marshal(files)
+	if err != nil { // a []string never fails to marshal
+		return []byte("[]")
+	}
+	return b
+}
+
 type querier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
@@ -674,10 +692,10 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		// ON CONFLICT still names the id: reviving a tombstone is about the
 		// entry at that address, and for a concept the two keys move
 		// together.
-		args = append(args, domain.ConceptPath(k.ID))
-		tag, err := tx.Exec(ctx, `INSERT INTO object (`+knowledgeCols+`, path)
-			VALUES (`+knowledgeParams+`, $`+strconv.Itoa(len(args))+`)
-			ON CONFLICT (id) DO UPDATE SET `+knowledgeExcluded+`, deleted_at=NULL
+		args = append(args, domain.ConceptPath(k.ID), bodyFiles(k))
+		tag, err := tx.Exec(ctx, `INSERT INTO object (`+knowledgeCols+`, path, files)
+			VALUES (`+knowledgeParams+`, $`+strconv.Itoa(len(args)-1)+`, $`+strconv.Itoa(len(args))+`)
+			ON CONFLICT (id) DO UPDATE SET `+knowledgeExcluded+`, files=EXCLUDED.files, deleted_at=NULL
 			WHERE object.deleted_at IS NOT NULL`+revive,
 			args...)
 		if err != nil {
@@ -751,7 +769,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash}
+			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash, bodyFiles(k)}
 		if ifMatch != nil {
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
@@ -761,7 +779,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
 			links=$20, attrs=$21, body=$22, updated_at=$23, content_changed_at=$24,
-			doc=$25, frontmatter=$26, content_hash=$27
+			doc=$25, frontmatter=$26, content_hash=$27, files=$28
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -986,6 +1004,7 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			return err
 		}
 		for _, q := range []string{
+			`DELETE FROM object f WHERE f.id IS NULL AND f.path LIKE $1 || '/%'`,
 			`DELETE FROM attachment WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_usage WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_event WHERE knowledge_id=$1`,
@@ -1083,6 +1102,21 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			return ErrNotFound
 		}
 		for _, q := range []string{
+			// The entry's namespace moves with it (design doc 0046 §3.3):
+			// the address is part of what a file is, and leaving the
+			// files behind would leave them under a directory whose
+			// concept is gone. Only the files — a concept under there has
+			// an id, an address and a history of its own, and moves when
+			// somebody moves it.
+			`UPDATE object SET path = $2 || substr(path, length($1) + 1)
+			 WHERE id IS NULL AND path LIKE $1 || '/%'`,
+			// The naming follows the files it names.
+			`UPDATE object SET files = (
+			     SELECT COALESCE(jsonb_agg(
+			         CASE WHEN x LIKE $1 || '/%' THEN $2 || substr(x, length($1) + 1) ELSE x END), '[]'::jsonb)
+			       FROM jsonb_array_elements_text(files) x)
+			 WHERE id IS NOT NULL
+			   AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(files) x WHERE x LIKE $1 || '/%')`,
 			`UPDATE knowledge_revision SET id=$2, path=$2 || '.md' WHERE id=$1`,
 			`UPDATE knowledge_verification SET id=$2 WHERE id=$1`,
 			`UPDATE knowledge_rejection SET id=$2 WHERE id=$1`,
@@ -1687,7 +1721,12 @@ func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 // answers, but remains queryable on request so agents can check whether a
 // proposal was already rejected.
 func (f Filter) buildWhere(prefix string) (string, []any) {
-	conds := []string{prefix + "deleted_at IS NULL"}
+	// A file is an object in the same table now (design doc 0046 §3.13),
+	// and it is not an entry: no type, no title, nothing to rank. The id
+	// is what a concept has and a file has not, so every scan that
+	// returns entries says so here — once, where every filtered read goes
+	// through, rather than in each of them.
+	conds := []string{prefix + "deleted_at IS NULL", prefix + "id IS NOT NULL"}
 	var args []any
 	if len(f.Types) > 0 {
 		// Types match case-insensitively (design doc 0023 §3.3): the stored
@@ -2034,7 +2073,7 @@ func (s *Store) ListUnembedded(ctx context.Context, model, after string, limit i
 	rows, err := s.pool.Query(ctx,
 		`SELECT k.id FROM object k
 		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
-		 WHERE k.deleted_at IS NULL AND e.id IS NULL AND ($2 = '' OR k.id > $2)
+		 WHERE k.deleted_at IS NULL AND k.id IS NOT NULL AND e.id IS NULL AND ($2 = '' OR k.id > $2)
 		 ORDER BY k.id LIMIT $3`, model, after, limit)
 	if err != nil {
 		return nil, err
@@ -2055,13 +2094,15 @@ type UnembeddedAttachment struct {
 // cursor is the (knowledge_id, name) pair, for the same reason.
 func (s *Store) ListUnembeddedAttachments(ctx context.Context, model, afterID, afterName string, limit int) ([]UnembeddedAttachment, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT a.knowledge_id, a.name FROM attachment a
-		 JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		 LEFT JOIN attachment_embedding e
-		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
-		 WHERE e.knowledge_id IS NULL
-		   AND ($2 = '' OR (a.knowledge_id, a.name) > ($2, $3))
-		 ORDER BY a.knowledge_id, a.name LIMIT $4`, model, afterID, afterName, limit)
+		`SELECT k.id, split_part(f.path, '/', array_length(string_to_array(f.path, '/'), 1))
+		   FROM object k JOIN object f ON `+attributedTo+`
+		   LEFT JOIN attachment_embedding e
+		     ON e.knowledge_id = k.id
+		    AND e.name = split_part(f.path, '/', array_length(string_to_array(f.path, '/'), 1))
+		    AND e.model = $1
+		  WHERE k.id IS NOT NULL AND k.deleted_at IS NULL AND e.knowledge_id IS NULL
+		    AND ($2 = '' OR (k.id, f.path) > ($2, $3))
+		  ORDER BY k.id, f.path LIMIT $4`, model, afterID, afterName, limit)
 	if err != nil {
 		if isUndefinedTable(err) {
 			return nil, nil // embedding tables appear with semantic search
@@ -2083,11 +2124,13 @@ func (s *Store) ListUnembeddedAttachments(ctx context.Context, model, afterID, a
 func (s *Store) CountUnembeddedAttachments(ctx context.Context, model string) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM attachment a
-		 JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		 LEFT JOIN attachment_embedding e
-		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
-		 WHERE e.knowledge_id IS NULL`, model).Scan(&n)
+		`SELECT count(*)
+		   FROM object k JOIN object f ON `+attributedTo+`
+		   LEFT JOIN attachment_embedding e
+		     ON e.knowledge_id = k.id
+		    AND e.name = split_part(f.path, '/', array_length(string_to_array(f.path, '/'), 1))
+		    AND e.model = $1
+		  WHERE k.id IS NOT NULL AND k.deleted_at IS NULL AND e.knowledge_id IS NULL`, model).Scan(&n)
 	if err != nil && isUndefinedTable(err) {
 		return 0, nil
 	}
@@ -2102,7 +2145,7 @@ func (s *Store) CountUnembedded(ctx context.Context, model string) (int, error) 
 	err := s.pool.QueryRow(ctx,
 		`SELECT count(*) FROM object k
 		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
-		 WHERE k.deleted_at IS NULL AND e.id IS NULL`, model).Scan(&n)
+		 WHERE k.deleted_at IS NULL AND k.id IS NOT NULL AND e.id IS NULL`, model).Scan(&n)
 	return n, err
 }
 
