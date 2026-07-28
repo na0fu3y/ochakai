@@ -93,6 +93,13 @@ paths:
             matching a scalar or a member of a list. Repeat with
             different keys to AND them.
 
+            A value is text, and one that spells a number or a boolean
+            also matches the typed value a document wrote: YAML types
+            frontmatter, so `fm.required=true` finds `required: true` and
+            `fm.usage_count=5` finds `usage_count: 5`, as well as the
+            entries that quoted them. Text that only looks numeric stays
+            text — `fm.code=007` finds `code: "007"`.
+
             This is the filter that does not need a release. A key OKF
             adds in a later version, or one a producer invented, is
             askable the day somebody writes it — the whole frontmatter is
@@ -492,6 +499,13 @@ paths:
             finds the entries whose frontmatter says owner is finance,
             matching a scalar or a member of a list. Repeat with
             different keys to AND them.
+
+            A value is text, and one that spells a number or a boolean
+            also matches the typed value a document wrote: YAML types
+            frontmatter, so `fm.required=true` finds `required: true` and
+            `fm.usage_count=5` finds `usage_count: 5`, as well as the
+            entries that quoted them. Text that only looks numeric stays
+            text — `fm.code=007` finds `code: "007"`.
 
             This is the filter that does not need a release. A key OKF
             adds in a later version, or one a producer invented, is

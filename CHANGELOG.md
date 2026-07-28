@@ -38,6 +38,15 @@ last entry.
   Storage became additive when the document became the stored form;
   querying did not follow until now.
 
+  A value is text, and one that spells a number or a boolean matches the
+  typed value the document wrote as well: YAML types frontmatter, so
+  `required: true` is indexed as a boolean and `usage_count: 5` as a
+  number, and asking for them by their text alone found nothing —
+  silently, since a filter matching nothing is zero rows rather than an
+  error. `fm.required=true` now finds both the document that wrote
+  `true` and the one that wrote `"true"`, while text that only looks
+  numeric stays text (`fm.code=007` finds `code: "007"`).
+
   Exact match and list membership are the only two comparisons. Ranges,
   negation and boolean expressions are the doorway to a query language,
   and what ochakai returns is knowledge rather than rows.

@@ -182,6 +182,10 @@ type Filter struct {
 	// a producer invented — is askable the day somebody writes it, with
 	// no column and no release (design doc 0046 §3.11). Every pair must
 	// match (AND), matching a scalar exactly or a list by membership.
+	// Values are text, and a value that spells a number or a boolean
+	// matches the typed frontmatter as well as the text: YAML types what
+	// it parses, so `required: true` is indexed as a boolean and would
+	// otherwise be unaskable (frontmatterContainment).
 	//
 	// Exact and membership are the only two, deliberately: ranges,
 	// negation and boolean expressions are the doorway to a query
@@ -1747,23 +1751,21 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		args = append(args, f.Tags)
 		conds = append(conds, fmt.Sprintf("%stags && $%d", prefix, len(args)))
 	}
-	// Containment against the frontmatter index, twice per key: a value
-	// the document wrote as a scalar and one it wrote inside a list are
-	// both "the entry says k is v", and a caller asking `fm.tags=finance`
-	// should not have to know which shape the writer chose. Both forms
-	// are answered by the same GIN index.
+	// Containment against the frontmatter index, once per shape the value
+	// could have been written in (frontmatterContainment). Every shape is
+	// answered by the same GIN index, so the alternatives cost a wider
+	// index probe rather than a scan.
 	for _, key := range sortedKeys(f.Frontmatter) {
-		scalar, err := json.Marshal(map[string]any{key: f.Frontmatter[key]})
-		if err != nil {
+		forms := frontmatterContainment(key, f.Frontmatter[key])
+		if len(forms) == 0 {
 			continue
 		}
-		list, err := json.Marshal(map[string]any{key: []string{f.Frontmatter[key]}})
-		if err != nil {
-			continue
+		alts := make([]string, 0, len(forms))
+		for _, form := range forms {
+			args = append(args, form)
+			alts = append(alts, fmt.Sprintf("%sfrontmatter @> $%d", prefix, len(args)))
 		}
-		args = append(args, string(scalar), string(list))
-		conds = append(conds, fmt.Sprintf("(%[1]sfrontmatter @> $%[2]d OR %[1]sfrontmatter @> $%[3]d)",
-			prefix, len(args)-1, len(args)))
+		conds = append(conds, "("+strings.Join(alts, " OR ")+")")
 	}
 	if f.Source != "" {
 		// Containment, so the GIN index on sources answers it directly.
@@ -1789,6 +1791,74 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 			len(args), prefix, prefix))
 	}
 	return strings.Join(conds, " AND "), args
+}
+
+// frontmatterContainment builds the jsonb documents that answer one
+// `fm.<key>=<value>` pair; the entry matches when it contains any of
+// them.
+//
+// A value the document wrote as a scalar and one it wrote inside a list
+// are both "the entry says k is v", and a caller asking `fm.tags=finance`
+// should not have to know which shape the writer chose.
+//
+// Both shapes are tried a second time when the value spells a JSON number
+// or boolean, because YAML types what it parses: `required: true` reaches
+// the index as the boolean true and `usage_count: 5` as the number 5,
+// while a filter value is always text. Text alone made every key whose
+// value is not a string unaskable — and unaskable silently, since a
+// containment test that matches nothing is zero rows rather than an
+// error, which is the wrong answer that looks like a valid one. Trying
+// both keeps §3.11's claim true for those keys: the day the spec adds
+// one, it can be asked for.
+//
+// It is not new syntax. `fm.n=5` is still one key and one value, it still
+// finds a document that wrote 5 as the string "5", and the comparison is
+// still exact match or list membership — the operators 0046 §5 keeps out
+// stay out.
+func frontmatterContainment(key, value string) [][]byte {
+	forms := []any{value, []string{value}}
+	if typed, ok := jsonScalar(value); ok {
+		forms = append(forms, typed, []json.RawMessage{typed})
+	}
+	out := make([][]byte, 0, len(forms))
+	for _, form := range forms {
+		b, err := json.Marshal(map[string]any{key: form})
+		if err != nil { // a string, a number and a boolean all marshal
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+// jsonScalar returns value's typed JSON spelling and reports whether it
+// has one. A number and the two booleans do, and nothing else does:
+// those are the YAML scalars that reach the frontmatter index as
+// something other than text (okf.yamlScalar renders a date back as a
+// string, so a date needs no second form).
+//
+// An object and an array are deliberately not read. A filter value is a
+// value, and one that could carry a structure would be the query language
+// 0046 §5 closed the door on, arriving through the value instead of
+// through an operator.
+//
+// The text is passed through verbatim rather than decoded and re-encoded,
+// so an integer longer than a float64 can hold keeps its digits.
+func jsonScalar(value string) (json.RawMessage, bool) {
+	switch value {
+	case "true", "false":
+		return json.RawMessage(value), true
+	}
+	// A leading digit or minus is what separates a number from the rest of
+	// the grammar: json.Valid also accepts `"5"`, `[5]` and `null`, none of
+	// which is a scalar a producer wrote unquoted.
+	if value == "" || !json.Valid([]byte(value)) {
+		return nil, false
+	}
+	if c := value[0]; c != '-' && (c < '0' || c > '9') {
+		return nil, false
+	}
+	return json.RawMessage(value), true
 }
 
 // sourceContainment builds the jsonb value that matches an entry citing
