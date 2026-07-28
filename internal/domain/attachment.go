@@ -134,3 +134,36 @@ func ValidateAttachment(name string, size int) error {
 	}
 	return nil
 }
+
+// ValidBundlePath reports whether p can address an object in the bundle:
+// path segments separated by "/", each one a valid filename, and neither
+// of the two names OKF reserves per directory (index.md, log.md — they
+// are generated from the bundle rather than stored in it, design doc
+// 0046 §§3.7-3.8).
+//
+// It is ValidID's rule one level down: an id is a path with ".md"
+// removed, so what makes a path addressable is what makes an id
+// addressable, minus the assumption that every object is a concept.
+func ValidBundlePath(p string) bool {
+	if p == "" || len(p) > 512 {
+		return false
+	}
+	segs := strings.Split(p, "/")
+	for _, s := range segs {
+		if !validSegment(s) {
+			return false
+		}
+	}
+	return !ReservedBundleName(segs[len(segs)-1])
+}
+
+// ReservedBundleName reports whether a filename is one OKF reserves per
+// directory: index.md and log.md, which ochakai generates from the
+// bundle rather than storing (design doc 0046 §§3.7-3.8).
+func ReservedBundleName(name string) bool {
+	switch strings.ToLower(name) {
+	case "index.md", "log.md":
+		return true
+	}
+	return false
+}

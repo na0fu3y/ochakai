@@ -30,6 +30,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		// (design doc 0046 §§3.7-3.8).
 		"IndexDocument": true, "LogDocument": true,
 		"Export": true, "Attachment": true, "AttachmentMeta": true,
+		"GetFile":         true,
 		"FillAttachments": true, "RefuseIfCurated": true,
 		"RefuseIfRevivingCurated": true, "Close": true,
 	}

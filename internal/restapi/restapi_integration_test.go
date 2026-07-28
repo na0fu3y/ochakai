@@ -1194,3 +1194,129 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 		t.Errorf("the entry carries %d files, want 4 — nothing caps how many", len(view.Attachments))
 	}
 }
+
+// The bundle address serves and takes every object in it (design doc
+// 0046 §3.5): a concept at its own path, a file at its own path, and a
+// markdown document that carries no type — which is not a broken concept
+// but a file that happens to be markdown (SPEC §11 makes the key what a
+// concept has), and which a bundle that carried one gets back.
+func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := fmt.Sprintf("restbundle%d", time.Now().UnixNano())
+	id := typ + "/revenue"
+	bundle := srv.URL + "/api/v1/bundle/"
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	put := func(t *testing.T, path string, body []byte) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPut, bundle+path, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	// A concept, written at the path it lives at. It is the entry
+	// surface's write: same status, same ETag, same View.
+	doc := fmt.Sprintf("---\ntype: %s\ntitle: 売上\n---\n\n![chart](revenue/chart.png)\n", typ)
+	resp := put(t, id+".md", []byte(doc))
+	var view domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&view); err != nil {
+		t.Fatal(err)
+	}
+	etag := resp.Header.Get("ETag")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated || view.Document != doc {
+		t.Fatalf("writing a concept at its path = %d, document %q", resp.StatusCode, view.Document)
+	}
+	if etag == "" {
+		t.Error("no ETag on a concept written through the bundle address")
+	}
+	// The same bytes again write nothing, exactly as on the entry surface.
+	resp = put(t, id+".md", []byte(doc))
+	resp.Body.Close()
+	if resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("an identical write through the bundle address changed something")
+	}
+	// And it reads back at the same address.
+	var read domain.View
+	getJSON(t, bundle+id+".md", &read)
+	if read.Document != doc {
+		t.Errorf("reading the concept back gave %q", read.Document)
+	}
+
+	// A file, at a path of its own.
+	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("bundle chart")...)
+	resp = put(t, id+"/chart.png", png)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing a file = %d", resp.StatusCode)
+	}
+	resp, err := http.Get(bundle + id + "/chart.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(got) != string(png) {
+		t.Errorf("the file came back as %d bytes, want %d", len(got), len(png))
+	}
+	// It is attributed to the entry that shows it, without anybody
+	// having said so (design doc 0046 §3.3).
+	getJSON(t, srv.URL+"/api/v1/knowledge/"+id, &read)
+	if len(read.Attachments) != 1 || read.Attachments[0].Name != "chart.png" {
+		t.Errorf("the entry does not carry the file its body shows: %+v", read.Attachments)
+	}
+
+	// A markdown document with no type is a file, not a bad concept.
+	notes := []byte("# 会議メモ\n\ntype なし。\n")
+	resp = put(t, typ+"/notes.md", notes)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing a typeless markdown file = %d", resp.StatusCode)
+	}
+	resp, err = http.Get(bundle + typ + "/notes.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(got) != string(notes) {
+		t.Errorf("the typeless markdown file came back as %q", got)
+	}
+	// It is not an entry: nothing lists it, and the concept surface does
+	// not know it.
+	resp, err = http.Get(srv.URL + "/api/v1/knowledge/" + typ + "/notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("a typeless markdown file answers the entry surface: %d", resp.StatusCode)
+	}
+
+	// Delete reaches both kinds.
+	for _, path := range []string{typ + "/notes.md", id + "/chart.png"} {
+		req, _ := http.NewRequest(http.MethodDelete, bundle+path, nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Errorf("deleting %s = %d", path, resp.StatusCode)
+		}
+	}
+}

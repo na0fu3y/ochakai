@@ -86,14 +86,16 @@ func TestBadRequestValidation(t *testing.T) {
 	}
 }
 
-// TestBundleAddressesRefuseByPath pins what /api/v1/bundle answers for
-// the paths it does not serve yet. Three different refusals, and which
-// one a caller gets is the whole point: a reserved name is a generated
-// file and never writable (409), any other path is the write face design
-// doc 0046 §3.5 describes and simply has not landed (501), and reading
-// one of those is a 404 for as long as that is true. One reason for all
-// three — "index.md and log.md are generated" — would answer a request
-// about metrics/revenue.md by talking about two files it never named.
+// TestBundleAddressesRefuseByPath pins the one refusal that is a
+// property of the address rather than of what is stored at it: the two
+// names OKF reserves per directory are generated from the bundle, so a
+// write to one is a conflict with what the address *is* (409, design doc
+// 0046 §§3.5, 3.7-3.8) — never a 404, and never the write path taking
+// the bytes and storing a file that would then be shadowed by the
+// generated document forever.
+//
+// Every other path is an object of the bundle and is read and written
+// like one; that is the integration test's, since it needs a store.
 //
 // Through checkedServer, so each status is one the contract declares:
 // the spec only covers what a test exercises, and until this one there
@@ -110,10 +112,6 @@ func TestBundleAddressesRefuseByPath(t *testing.T) {
 		{"put index.md", http.MethodPut, "index.md", http.StatusConflict, "generated from the bundle"},
 		{"put nested log.md", http.MethodPut, "metrics/log.md", http.StatusConflict, "log.md is generated"},
 		{"delete index.md", http.MethodDelete, "index.md", http.StatusConflict, "index.md is generated"},
-		{"put a concept", http.MethodPut, "metrics/revenue.md", http.StatusNotImplemented, "later change"},
-		{"delete a concept", http.MethodDelete, "metrics/revenue.md", http.StatusNotImplemented, "later change"},
-		{"put a file", http.MethodPut, "metrics/revenue/chart.png", http.StatusNotImplemented, "later change"},
-		{"get a concept", http.MethodGet, "metrics/revenue.md", http.StatusNotFound, "no object at"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

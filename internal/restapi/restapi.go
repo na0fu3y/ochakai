@@ -136,13 +136,44 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			writeMarkdown(w, doc)
 		default:
-			// Not yet an address for everything in the bundle: the
-			// objects and concepts join it in a later change (design
-			// doc 0046 §3.5), and until then this path serves the two
-			// files the format reserves.
-			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error": fmt.Sprintf("no object at %q: the bundle surface serves index.md and log.md", path),
-			})
+			// Every other path is an object of the bundle: a concept at
+			// its own path, or a file (design doc 0046 §3.5). A concept
+			// is answered by the entry surface's own writer, so one
+			// address serves both kinds and neither has a shape of its
+			// own here.
+			if id, ok := strings.CutSuffix(path, ".md"); ok {
+				k, err := svc.Get(r.Context(), id)
+				if err == nil {
+					w.Header().Set("ETag", etagOf(k))
+					if wantsDocument(r) {
+						writeDocument(w, http.StatusOK, k)
+					} else {
+						writeView(w, http.StatusOK, k)
+					}
+					return
+				}
+				// A markdown path with no concept at it may still be a
+				// file: a document that carries no type is not a concept
+				// and is kept as a file (design doc 0046 §3.2).
+				if !errors.Is(err, store.ErrNotFound) {
+					writeError(w, err)
+					return
+				}
+			}
+			att, data, err := svc.GetFile(r.Context(), path)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			w.Header().Set("ETag", `"`+att.SHA256+`"`)
+			w.Header().Set("Cache-Control", "private, no-cache")
+			if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, att.SHA256) {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("Content-Type", mediaTypeHeader(att.MediaType))
+			serveDefensively(w, att.MediaType, att.Name)
+			_, _ = w.Write(data)
 		}
 	})
 
@@ -158,15 +189,52 @@ func Handler(svc *service.Service) http.Handler {
 	// named.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
-			if _, base := splitReserved(r.PathValue("path")); isReserved(base) {
+			path := r.PathValue("path")
+			if _, base := splitReserved(path); isReserved(base) {
 				writeJSON(w, http.StatusConflict, map[string]string{
 					"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)", base),
 				})
 				return
 			}
-			writeJSON(w, http.StatusNotImplemented, map[string]string{
-				"error": "the bundle write surface lands in a later change (design doc 0046 §3.5)",
-			})
+			actor := httpauth.Actor(r.Context())
+			// A markdown path is a concept's address, and a write there
+			// is a write to the entry — the same document, the same
+			// preconditions, the same answer. Anything else is a file.
+			//
+			// A .md that carries no type is not a concept (SPEC §11
+			// requires the key), and it is not an error either: it is a
+			// file that happens to be markdown, and a bundle that carried
+			// one gets it back (design doc 0046 §3.2).
+			id, isMarkdown := strings.CutSuffix(path, ".md")
+			if r.Method == http.MethodDelete {
+				err := store.ErrNotFound
+				if isMarkdown {
+					err = svc.Delete(r.Context(), id, actor)
+				}
+				if errors.Is(err, store.ErrNotFound) {
+					err = svc.DeleteFile(r.Context(), path, actor)
+				}
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			body, ok := readBody(w, r, maxDocument, fmt.Sprintf("object exceeds %d bytes", maxDocument))
+			if !ok {
+				return
+			}
+			if isMarkdown && okf.CarriesType(body) {
+				putEntry(w, r, svc, id, body, actor)
+				return
+			}
+			att, err := svc.PutFile(r.Context(), path, body, actor)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, att)
 		})
 	}
 
@@ -251,51 +319,18 @@ func Handler(svc *service.Service) http.Handler {
 	// means "only if the id is free", If-Match a version means "only if it
 	// still says this".
 	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		k, ok := readDocument(w, r)
+		if mt := r.Header.Get("Content-Type"); strings.HasPrefix(mt, "application/json") {
+			writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
+				"error": "knowledge is written as an OKF document (Content-Type: text/markdown), " +
+					"not as JSON: the frontmatter is the metadata and the markdown is the body",
+			})
+			return
+		}
+		body, ok := readBody(w, r, maxDocument, fmt.Sprintf("document exceeds %d bytes", maxDocument))
 		if !ok {
 			return
 		}
-		// The path is the address; the document carries the metadata —
-		// type included, always (no fill-in from the stored entry, design
-		// doc 0017 §4.5).
-		k.ID = r.PathValue("id")
-		actor := httpauth.Actor(r.Context())
-
-		// If-Match is an optional optimistic-concurrency precondition: its
-		// value is the ETag from a prior read. Absent means last-write-wins
-		// (design doc 0030).
-		ifMatch := parseIfMatch(r)
-		var (
-			out              *domain.Knowledge
-			created, changed bool
-			err              error
-		)
-		if onlyIfAbsent(r) {
-			out, err = svc.Create(r.Context(), k, actor)
-			created, changed = true, true
-		} else {
-			out, created, changed, err = svc.Put(r.Context(), k, actor, ifMatch)
-		}
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// A payload identical to the stored content wrote nothing (no
-		// revision, no version bump); the header lets clients report
-		// "unchanged" without an extra read.
-		if !changed {
-			w.Header().Set("Ochakai-Unchanged", "true")
-		}
-		w.Header().Set("ETag", etagOf(out))
-		status := http.StatusOK
-		if created {
-			status = http.StatusCreated
-		}
-		if wantsDocument(r) {
-			writeDocument(w, status, out)
-			return
-		}
-		writeView(w, status, out)
+		putEntry(w, r, svc, r.PathValue("id"), body, httpauth.Actor(r.Context()))
 	})
 
 	// POST /api/v1/verify/{id...} — record a verification against the
@@ -479,13 +514,7 @@ func Handler(svc *service.Service) http.Handler {
 		// Re-stamp from the row the bytes came from, in case the
 		// attachment was replaced between the two reads.
 		w.Header().Set("ETag", `"`+att.SHA256+`"`)
-		ct := att.MediaType
-		// Plain text without a charset invites browser guessing; the sniffer
-		// only passes UTF-8/UTF-16 text through, so declare it.
-		if ct == "text/plain" {
-			ct = "text/plain; charset=utf-8"
-		}
-		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Content-Type", mediaTypeHeader(att.MediaType))
 		serveDefensively(w, att.MediaType, att.Name)
 		_, _ = w.Write(data)
 	})
@@ -781,39 +810,6 @@ const documentMediaType = "text/markdown; charset=utf-8"
 // number with room for the envelope rather than a new policy.
 const maxDocument = 5 << 20
 
-// readDocument parses the request body as an OKF document. Notes — values
-// the parser accepted but read differently than written — travel back in
-// a header rather than being swallowed: a reinterpretation is never
-// silent (design doc 0036 §3.4), and there is no room for them in a
-// response whose body is the entry.
-//
-// A JSON body is refused with the reason rather than a parse error: a
-// client sending one is a client written against the typed write surface
-// that 0043 §3.5 removed, and it needs to be told that, not told its
-// document has no frontmatter.
-func readDocument(w http.ResponseWriter, r *http.Request) (*domain.Knowledge, bool) {
-	if mt := r.Header.Get("Content-Type"); strings.HasPrefix(mt, "application/json") {
-		writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
-			"error": "knowledge is written as an OKF document (Content-Type: text/markdown), " +
-				"not as JSON: the frontmatter is the metadata and the markdown is the body",
-		})
-		return nil, false
-	}
-	data, ok := readBody(w, r, maxDocument, fmt.Sprintf("document exceeds %d bytes", maxDocument))
-	if !ok {
-		return nil, false
-	}
-	d, notes, err := okf.Parse(data)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return nil, false
-	}
-	for _, n := range notes {
-		w.Header().Add("Ochakai-Note", n)
-	}
-	return &d.Knowledge, true
-}
-
 // frontmatterFilter reads the "fm." query parameters — `?fm.question=…`,
 // `?fm.owner=finance` — into the filter that asks the frontmatter index
 // (design doc 0046 §3.11). The prefix is what keeps the surface
@@ -879,6 +875,63 @@ func wantsDocument(r *http.Request) bool {
 // conditional read, and a caller that means "only if absent" says "*".
 func onlyIfAbsent(r *http.Request) bool {
 	return strings.TrimSpace(r.Header.Get("If-None-Match")) == "*"
+}
+
+// putEntry writes one document as the entry at id and answers with the
+// read of it. Two addresses lead here — the entry surface and the bundle
+// path the concept lives at (design doc 0046 §3.5) — and a concept
+// written through either is written the same way, with the same
+// preconditions and the same answer. An address is not a second surface.
+func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
+	id string, body []byte, actor domain.Actor,
+) {
+	d, notes, err := okf.Parse(body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	for _, n := range notes {
+		w.Header().Add("Ochakai-Note", n)
+	}
+	// The path is the address; the document carries the metadata — type
+	// included, always (no fill-in from the stored entry, design doc 0017
+	// §4.5).
+	k := &d.Knowledge
+	k.ID = id
+
+	// If-Match is an optional optimistic-concurrency precondition: its
+	// value is the ETag from a prior read. Absent means last-write-wins
+	// (design doc 0030).
+	var (
+		out              *domain.Knowledge
+		created, changed bool
+	)
+	if onlyIfAbsent(r) {
+		out, err = svc.Create(r.Context(), k, actor)
+		created, changed = true, true
+	} else {
+		out, created, changed, err = svc.Put(r.Context(), k, actor, parseIfMatch(r))
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// A payload identical to the stored content wrote nothing (no
+	// revision, no version bump); the header lets clients report
+	// "unchanged" without an extra read.
+	if !changed {
+		w.Header().Set("Ochakai-Unchanged", "true")
+	}
+	w.Header().Set("ETag", etagOf(out))
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	if wantsDocument(r) {
+		writeDocument(w, status, out)
+		return
+	}
+	writeView(w, status, out)
 }
 
 // writeView responds with a read of one entry: the canonical document,
@@ -1037,6 +1090,16 @@ func queryFloat(q url.Values, name string) (float64, error) {
 		return 0, service.Invalidf("invalid %s %q (want a number)", name, s)
 	}
 	return f, nil
+}
+
+// mediaTypeHeader is a stored media type as a Content-Type header. Plain
+// text without a charset invites browser guessing, and the sniffer only
+// passes UTF-8/UTF-16 text through, so it says which.
+func mediaTypeHeader(mediaType string) string {
+	if mediaType == "text/plain" {
+		return "text/plain; charset=utf-8"
+	}
+	return mediaType
 }
 
 // serveDefensively sets the headers that decide what a browser is

@@ -528,3 +528,17 @@ func extraKeys(m map[string]any, known map[string]bool) domain.Extra {
 	}
 	return extra
 }
+
+// CarriesType reports whether a document's frontmatter names a type,
+// which is what makes it a concept (SPEC §11 requires the key). A
+// markdown file without one is not a malformed concept — it is a file
+// that happens to be markdown, and a bundle that carried one gets it
+// back (design doc 0046 §3.2).
+//
+// It parses rather than greps: "type:" inside a fenced block in the body
+// is prose, and the answer decides whether the bytes are stored as an
+// entry or as a file.
+func CarriesType(doc []byte) bool {
+	d, _, err := Parse(doc)
+	return err == nil && strings.TrimSpace(string(d.Type)) != ""
+}

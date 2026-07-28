@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -346,4 +347,120 @@ func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.Atta
 		return nil, err
 	}
 	return pgx.CollectRows(rows, scanFile(id))
+}
+
+// PutFile writes a file object at a bundle path, replacing whatever file
+// is there (design doc 0046 §§3.2, 3.5). It is the write behind the
+// bundle address: an object that belongs to no entry — a producer's seed
+// data, a diagram in a shared directory, a markdown file that carries no
+// type and so is not a concept.
+//
+// A concept at that path is not overwritten. The two kinds share one
+// address space, so the path is taken, and a caller who meant to edit
+// the entry there means PUT on the entry.
+func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+	if s.blobs == nil {
+		return nil, errNoBlobStore
+	}
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	at := NowStored()
+	// Outside the transaction, and content-addressed, so a failure after
+	// it leaves only an unreferenced object the next write reuses.
+	if err := s.blobs.Put(ctx, hash, mediaType, data); err != nil {
+		return nil, err
+	}
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO blob (sha256, media_type, size)
+			VALUES ($1, $2, $3) ON CONFLICT (sha256) DO NOTHING`, hash, mediaType, int64(len(data))); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `INSERT INTO object
+			(path, type, title, body, blob_hash, size, media_type,
+			 created_by_kind, created_by_name, updated_by_kind, updated_by_name,
+			 created_at, updated_at, content_changed_at)
+			VALUES ($1,'','','',$2,$3,$4,$5,$6,$5,$6,$7,$7,$7)
+			ON CONFLICT (path) DO UPDATE SET
+				blob_hash=EXCLUDED.blob_hash, size=EXCLUDED.size, media_type=EXCLUDED.media_type,
+				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
+				updated_at=EXCLUDED.updated_at
+			WHERE object.id IS NULL`,
+			p, hash, int64(len(data)), mediaType, actor.Kind, actor.Name, at)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("%w: %s is a concept", ErrAlreadyExists, p)
+		}
+		return s.addFileRevision(ctx, tx, p, "create", actor)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &domain.Attachment{
+		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
+		Size: int64(len(data)), SHA256: hash, OKFPath: p,
+		CreatedBy: actor, CreatedAt: at,
+	}, nil
+}
+
+// GetFile returns the file object at a bundle path with its bytes.
+func (s *Store) GetFile(ctx context.Context, p string) (*domain.Attachment, []byte, error) {
+	att, err := s.GetFileMeta(ctx, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.blobs == nil {
+		return nil, nil, errNoBlobStore
+	}
+	data, err := s.blobs.Get(ctx, att.SHA256)
+	if err != nil {
+		return nil, nil, err
+	}
+	return att, data, nil
+}
+
+// GetFileMeta is GetFile without the bytes, for a conditional request.
+func (s *Store) GetFileMeta(ctx context.Context, p string) (*domain.Attachment, error) {
+	var a domain.Attachment
+	var at time.Time
+	err := s.pool.QueryRow(ctx, `SELECT media_type, size, blob_hash,
+		created_by_kind, created_by_name, created_at
+		FROM object WHERE path=$1 AND id IS NULL AND deleted_at IS NULL`, p).
+		Scan(&a.MediaType, &a.Size, &a.SHA256, &a.CreatedBy.Kind, &a.CreatedBy.Name, &at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	a.Name, a.OKFPath, a.CreatedAt = p[strings.LastIndex(p, "/")+1:], p, at
+	return &a, nil
+}
+
+// DeleteFile removes the file object at a bundle path. The blob stays:
+// revisions still name its hash, and content-addressed rows are cheap.
+func (s *Store) DeleteFile(ctx context.Context, p string, actor domain.Actor) error {
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `DELETE FROM object WHERE path=$1 AND id IS NULL`, p)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return s.addFileRevision(ctx, tx, p, "delete", actor)
+	})
+}
+
+// addFileRevision records a file's own history, in the ledger the
+// concepts use (design doc 0046 §3.1). A file has no document, so the
+// revision carries the change and who made it and nothing else — which
+// is the whole of what happened.
+func (s *Store) addFileRevision(ctx context.Context, tx pgx.Tx, p, change string, actor domain.Actor) error {
+	_, err := tx.Exec(ctx, `INSERT INTO knowledge_revision
+		(path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
+		VALUES ($1, NULL, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $2, $3, $4, $5, '')`,
+		p, change, actor.Kind, actor.Name, actor.Via)
+	return err
 }
