@@ -398,7 +398,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 func TestAttachSendsBytesToTheAddress(t *testing.T) {
 	body := []byte("attachment bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/attachments/insights/sales/reading/weekly.png" {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/bundle/insights/sales/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		if r.URL.RawQuery != "" {
@@ -421,13 +421,13 @@ func TestAttachSendsBytesToTheAddress(t *testing.T) {
 
 func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/attachments/insights/reading/weekly.png" {
+		if r.URL.Path != "/api/v1/bundle/insights/reading/weekly.png" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write([]byte("png bytes"))
 	})
-	data, mediaType, err := c.Attachment(context.Background(), "insights/reading", "weekly.png")
+	data, mediaType, err := c.Attachment(context.Background(), "insights/reading/weekly.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,12 +440,12 @@ func TestDetachHitsAttachmentPath(t *testing.T) {
 	called := false
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		called = true
-		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/attachments/insights/reading/weekly.png" {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/bundle/insights/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.Detach(context.Background(), "insights/reading", "weekly.png"); err != nil {
+	if err := c.Detach(context.Background(), "insights/reading/weekly.png"); err != nil {
 		t.Fatal(err)
 	}
 	if !called {

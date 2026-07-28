@@ -482,12 +482,12 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 	return &moved, nil
 }
 
-// Attach uploads data as an attachment of the entry (PUT
-// /api/v1/attachments/{id}/{name}), replacing any attachment of
-// the same name. The file lands at <id>/<name>; one that lives elsewhere
-// in the bundle is written with PutBundleFile, at the path it lives at.
+// Attach writes data as a file of the entry, at the canonical
+// <id>/<name> (PUT /api/v1/bundle/{path}). A file that lives elsewhere
+// in the bundle is written with PutBundleFile, at the path it lives at —
+// there is one address for a file, and it is where the file is.
 func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.Attachment, error) {
-	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), nil,
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(id+"/"+name), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -500,11 +500,11 @@ func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*dom
 	return &att, nil
 }
 
-// Attachment fetches one attachment's bytes and media type (GET
-// /api/v1/attachments/{id}/{name}). Full metadata travels with
-// the entry (Get → Knowledge.Attachments).
-func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, mediaType string, err error) {
-	resp, err := c.get(ctx, attachmentPath(id, name), nil)
+// Attachment fetches one file's bytes and media type by its bundle path
+// (GET /api/v1/bundle/{path}). Metadata travels with the entry that
+// shows it (Get → Knowledge.Attachments), each carrying its path.
+func (c *Client) Attachment(ctx context.Context, path string) (data []byte, mediaType string, err error) {
+	resp, err := c.get(ctx, bundlePath(path), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -516,13 +516,13 @@ func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, 
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
-// Detach removes an attachment (DELETE /api/v1/attachments/{id}/{name}).
-func (c *Client) Detach(ctx context.Context, id, name string) error {
-	return c.doJSON(ctx, http.MethodDelete, attachmentPath(id, name), nil, nil, nil)
+// Detach removes the file at a bundle path (DELETE /api/v1/bundle/{path}).
+func (c *Client) Detach(ctx context.Context, path string) error {
+	return c.doJSON(ctx, http.MethodDelete, bundlePath(path), nil, nil, nil)
 }
 
-func attachmentPath(id, name string) string {
-	return escapedPath("/api/v1/attachments/", id) + "/" + url.PathEscape(name)
+func bundlePath(p string) string {
+	return escapedPath("/api/v1/bundle/", p)
 }
 
 // Usage fetches usage totals for one entry (GET /api/v1/usage/{id}):
@@ -714,7 +714,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, query url.Valu
 // references, or a markdown file with no type, which the server stores
 // as a file rather than reading as a concept.
 func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) error {
-	resp, err := c.doRaw(ctx, http.MethodPut, "/api/v1/bundle/"+path, nil,
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(path), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return err

@@ -474,92 +474,13 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": rows})
 	})
-	// Attachments (design docs 0008, 0013): files attached to an entry
-	// (images, PDFs, plain text), bytes fetched on demand — entry reads
-	// carry metadata only. The path is
-	// /attachments/{id segments...}/{name}; the final segment is always
-	// the filename (attachment names are single segments), so the
-	// wildcard split is unambiguous. Lives outside /knowledge/ for the
-	// same reason /usage does: a suffix after a hierarchical {id...}
-	// would be unroutable.
-	attachmentRef := func(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-		id, name, ok := splitAttachmentPath(r.PathValue("path"))
-		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid attachment path (want /api/v1/attachments/{id}/{name})"})
-			return "", "", false
-		}
-		return id, name, true
-	}
-
-	mux.HandleFunc("PUT /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		data, ok := readBody(w, r, domain.MaxAttachmentSize,
-			fmt.Sprintf("attachment exceeds %d MiB", domain.MaxAttachmentSize>>20))
-		if !ok {
-			return
-		}
-		// This address writes at <id>/<name>, always. A file that lives
-		// somewhere else in the bundle is written at the path it lives
-		// at — PUT /api/v1/bundle/{path} — rather than here with a
-		// parameter saying where it really is (design doc 0046 §3.3).
-		att, err := svc.Attach(r.Context(), id, name, data, httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, att)
-	})
-
-	mux.HandleFunc("GET /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		// Conditional GET before touching the blob store: bytes are
-		// content-addressed, so the hash is a perfect ETag, and the web
-		// UI re-renders the same images on every search — a 304 answered
-		// from metadata alone keeps GCS reads and egress off the bill.
-		// no-cache means "revalidate every time", which is required
-		// because the name→content mapping is mutable (replace-by-name).
-		meta, err := svc.AttachmentMeta(r.Context(), id, name)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		etag := `"` + meta.SHA256 + `"`
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Cache-Control", "private, no-cache")
-		if r.Header.Get("If-None-Match") == etag {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-		att, data, err := svc.Attachment(r.Context(), id, name)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// Re-stamp from the row the bytes came from, in case the
-		// attachment was replaced between the two reads.
-		w.Header().Set("ETag", `"`+att.SHA256+`"`)
-		w.Header().Set("Content-Type", mediaTypeHeader(att.MediaType))
-		serveDefensively(w, att.MediaType, att.Name)
-		_, _ = w.Write(data)
-	})
-
-	mux.HandleFunc("DELETE /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		if err := svc.Detach(r.Context(), id, name, httpauth.Actor(r.Context())); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	// A file has one address, and it is the path it lives at:
+	// /api/v1/bundle/{path} reads, writes and deletes it (design doc 0046
+	// §§3.3, 3.5). /api/v1/attachments/{id}/{name} is gone with the
+	// concept it was named after — a file was something an entry *had*,
+	// and the address said so by putting the entry's id in front of a
+	// filename. Whether an entry shows a file is now a question its body
+	// answers, so the address that asserted it had nothing left to say.
 
 	// DELETE soft-deletes; ?purge=true hard-deletes an entry that is
 	// already soft-deleted, freeing its id (a tombstone still owns the

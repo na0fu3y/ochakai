@@ -361,15 +361,15 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_attachment",
 		Annotations: readOnly,
-		Description: "Fetch one file attached to a knowledge entry (get_knowledge lists attachment " +
-			"metadata under \"attachments\": images, PDFs, plain-text data files). Returns the " +
-			"file as content plus its metadata. Attachments are context-heavy — fetch them " +
+		Description: "Fetch one file of the bundle by its path (get_knowledge lists the files an " +
+			"entry shows under \"attachments\", each with its path: images, PDFs, plain-text data " +
+			"files, anything a producer put there). Returns the file as content plus its metadata. Attachments are context-heavy — fetch them " +
 			"deliberately, when the entry's body references one you need to see (a dashboard's " +
 			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
 			"if you learn something from one, write it back into the entry's body with " +
 			"put_knowledge so the knowledge becomes searchable text.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
-		att, data, err := svc.Attachment(ctx, in.ID, in.Name)
+		att, data, err := svc.GetFile(ctx, in.Path)
 		if err != nil {
 			return nil, attachmentOut{}, err
 		}
@@ -384,7 +384,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			content = &mcp.TextContent{Text: string(data)}
 		default:
 			content = &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
-				URI:      fmt.Sprintf("ochakai://%s/attachments/%s", in.ID, att.Name),
+				URI:      "ochakai://" + att.Path,
 				MIMEType: att.MediaType,
 				Blob:     data,
 			}}
@@ -565,8 +565,7 @@ type knowledgeOut struct {
 }
 
 type attachmentIn struct {
-	ID   string `json:"id" jsonschema:"the entry's id (its path, e.g. metrics/revenue)"`
-	Name string `json:"name" jsonschema:"attachment filename, from the entry's attachments metadata"`
+	Path string `json:"path" jsonschema:"the file's bundle path, from the path field of an entry's attachments metadata (e.g. metrics/revenue/chart.png)"`
 }
 
 type attachmentOut struct {

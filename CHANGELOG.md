@@ -20,6 +20,22 @@ last entry.
 
 ### Added
 
+- **BREAKING** — `GET|PUT|DELETE /api/v1/attachments/{id}/{name}` is
+  retired. A file is read, written and deleted at the path it lives at:
+  `/api/v1/bundle/{path}` (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§3.3, 3.5). MCP's
+  `get_attachment` takes a `path` for the same reason.
+
+  The old address was named after a concept that no longer exists. A
+  file used to be something an entry *had*, and the address said so by
+  putting the entry's id in front of a filename. Whether an entry shows
+  a file is now a question its body answers, so the address that
+  asserted it had nothing left to say — and an imported file that lives
+  elsewhere in the bundle had no honest spelling there at all.
+
+  Every file an entry shows carries its `path`, so a client that reads
+  an entry has the address of each of its files without composing one.
+
 - **Something to tell you the review queue is not empty** (design doc
   [0049](docs/design/0049-queue-counts.md)). `GET /api/v1/queues` and
   `ochakai queues` count the three feeds a curator empties — drafts
