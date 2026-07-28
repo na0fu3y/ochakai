@@ -452,7 +452,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"usage",
 		"Usage: ochakai usage [flags] <id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, reported worked or failed — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
-		"  ochakai usage queries/monthly-revenue\n  ochakai usage metrics/revenue --json\n")
+		"  ochakai usage queries/sales/monthly-revenue\n  ochakai usage metrics/revenue --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -482,7 +482,7 @@ func cmdReport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"report",
 		"Usage: ochakai report [flags] <id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running an attested computation or SQL you\nwrote from an entry, report worked or failed (say what went wrong with\n--note); failed counts against verified entries flag them for\nre-verification. Prints the entry's updated usage totals.",
-		"  ochakai report queries/monthly-revenue worked\n  ochakai report queries/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
+		"  ochakai report queries/sales/monthly-revenue worked\n  ochakai report queries/sales/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
 	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong (max 2000 bytes)")
 	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
 	id, rest, err := idArgs(fs, args, 2)
@@ -508,7 +508,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"revisions",
 		"Usage: ochakai revisions [flags] <id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. Full snapshots are in\nthe JSON output (--json).",
-		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
+		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/sales/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
 	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response (includes full snapshots)")
 	id, _, err := idArgs(fs, args, 1)
@@ -570,7 +570,7 @@ func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
 		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the\nattachment files themselves (an agent can then read them from disk).",
-		"  ochakai get metrics/revenue\n  ochakai get queries/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insights/revenue-reading --download ./img\n")
+		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insights/reading-revenue --download ./img\n")
 	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
 	download := fs.String("download", "", "save the entry's attachments into this directory")
 	id, _, err := idArgs(fs, args, 1)
@@ -624,7 +624,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"attach",
 		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
-		"  ochakai attach insights/revenue-reading weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
+		"  ochakai attach insights/reading-revenue weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
 	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
 	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
 	pos, err := parseArgs(fs, args)
@@ -679,7 +679,7 @@ func cmdDetach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"detach",
 		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
-		"  ochakai detach insights/revenue-reading weekly.png\n")
+		"  ochakai detach insights/reading-revenue weekly.png\n")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
 		return err

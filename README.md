@@ -127,9 +127,9 @@ ochakai search "revenue" --type Metric --status verified
 ochakai search --sort stale_after   # past the expiry their author declared
 ochakai search --source https://wiki.example/revenue-policy  # what derives from this
 ochakai search "revenue" --prefix queries/sales   # only what lives under one subtree
-ochakai get queries/monthly-revenue
+ochakai get queries/sales/monthly-revenue
 ochakai verify metrics/revenue      # promotes a draft — and re-affirms a verified entry, clearing the review feeds
-ochakai attach insights/revenue-reading weekly.png   # files travel with the entry
+ochakai attach insights/reading-revenue weekly.png   # files travel with the entry
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle (a client-side loop — see below)
 ochakai ui                   # web UI at http://127.0.0.1:8098, acting as you (no deploy)
