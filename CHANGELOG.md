@@ -16,6 +16,18 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- `api/openapi.yaml`'s examples stop teaching `type: Golden Query` with
+  the SQL in `attrs`. 0.15.0 retired that spelling and rewrote the shipped
+  example and the canary guide onto `Attested Computation`, but the spec's
+  own examples — including the first one a reader meets, the create
+  request — kept the retired shape, which is what a reader of the wire
+  surface copies. All five are now an Attested Computation with a
+  `runtime` and the SQL in the body's `# Computation` fence. No schema,
+  endpoint or status code changed; the guard that pins the vocabulary now
+  reads the whole document rather than only the `Type` schema.
+
 ## [0.15.0] - 2026-07-28
 
 ### Added

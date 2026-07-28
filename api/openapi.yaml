@@ -136,14 +136,16 @@ paths:
                 search:
                   summary: GET /api/v1/knowledge?q=monthly+revenue&limit=3
                   description: >
-                    A hit is the whole entry plus its score, so the golden
-                    query's SQL is already here — no second call to read it.
+                    A hit is the whole entry plus its score, so the
+                    computation's SQL is already here, in the body's fence —
+                    no second call to read it.
                     Attachment metadata rides along (filled in one batch),
                     which is what lets a UI render thumbnails from a search.
                   value:
                     hits:
-                      - type: Golden Query
+                      - type: Attested Computation
                         id: queries/monthly-revenue
+                        runtime: bigquery
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: verified
@@ -155,20 +157,24 @@ paths:
                           - { target: metrics/revenue, text: Revenue }
                         attrs:
                           question: How much revenue did we make each month last year?
-                          sql: |
-                            SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                                   SUM(net_amount) AS revenue
-                            FROM `example-analytics.shop.orders`
-                            WHERE status = 'completed'
-                              AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                              AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                            GROUP BY month
-                            ORDER BY month
                         body: |
-                          Answers "how much did we make each month last year?"
-                          against [Revenue](/metrics/revenue.md). Completed
-                          orders only; the month boundary is `order_date`, not
-                          the settlement date.
+                          Answers the question above against
+                          [Revenue](/metrics/revenue.md). Completed orders only;
+                          the month boundary is `order_date`, not the settlement
+                          date.
+                        
+                          # Computation
+                        
+                          ```sql
+                          SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                                 SUM(net_amount) AS revenue
+                          FROM `example-analytics.shop.orders`
+                          WHERE status = 'completed'
+                            AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                            AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                          GROUP BY month
+                          ORDER BY month
+                          ```
                         created_at: "2026-06-09T07:41:02.110945Z"
                         updated_at: "2026-07-10T01:52:16.774301Z"
                         score: 1.35
@@ -309,35 +315,46 @@ paths:
             schema: { $ref: "#/components/schemas/Knowledge" }
             examples:
               goldenQuery:
-                summary: A Golden Query — question and SQL in attrs
+                summary: A golden query — an Attested Computation with a runtime
                 description: >
-                  question and sql are producer keys, so they belong in
-                  attrs; the keys OKF v0.2 defines (sources, usage_window,
-                  the computation contract) are envelope fields instead.
-                  No title: the id's last segment names the entry (design
-                  doc 0022). Links are not sent — the body's markdown link
-                  to /metrics/revenue.md becomes one.
+                  This is the type a golden query has: SPEC §10.2 requires
+                  only runtime and leaves parameters, executor and attester
+                  optional, so the sanctioned query and the fully attested
+                  one are the same type at different levels of detail
+                  (design doc 0038). The SQL goes in the body's
+                  "# Computation" fence rather than in attrs, because a
+                  second copy leaves a consumer no way to tell which is
+                  authoritative. question is a producer key, so it stays in
+                  attrs. No title: the id's last segment names the entry
+                  (design doc 0022). Links are not sent — the body's
+                  markdown link to /metrics/revenue.md becomes one, while
+                  the one inside the fence is an example and is skipped.
                 value:
-                  type: Golden Query
+                  type: Attested Computation
                   id: queries/monthly-revenue
                   description: Monthly net revenue for the last 12 complete months.
                   tags: [finance]
+                  runtime: bigquery
                   attrs:
                     question: How much revenue did we make each month last year?
-                    sql: |
-                      SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                             SUM(net_amount) AS revenue
-                      FROM `example-analytics.shop.orders`
-                      WHERE status = 'completed'
-                        AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                        AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                      GROUP BY month
-                      ORDER BY month
                   body: |
-                    Answers "how much did we make each month last year?"
-                    against [Revenue](/metrics/revenue.md). Completed
-                    orders only; the month boundary is `order_date`, not
-                    the settlement date.
+                    Answers the question above against
+                    [Revenue](/metrics/revenue.md). Completed orders only;
+                    the month boundary is `order_date`, not the settlement
+                    date.
+
+                    # Computation
+
+                    ```sql
+                    SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                           SUM(net_amount) AS revenue
+                    FROM `example-analytics.shop.orders`
+                    WHERE status = 'completed'
+                      AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                      AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                    GROUP BY month
+                    ORDER BY month
+                    ```
               insightCaveat:
                 summary: An Insight — the caveat that keeps a metric from being misread
                 description: >
@@ -400,38 +417,45 @@ paths:
               schema: { $ref: "#/components/schemas/Knowledge" }
               examples:
                 goldenQuery:
-                  summary: The Golden Query above, as stored
+                  summary: The golden query above, as stored
                   description: >
                     Entries default to draft. created_by and updated_by come
                     from the caller's identity, never from the payload, and
-                    links were derived from the body. The ETag response
-                    header carries the same value as updated_at.
+                    links were derived from the body — one link, not two:
+                    the target inside the "# Computation" fence is an
+                    example rather than an edge (design doc 0024). The ETag
+                    response header carries the same value as updated_at.
                   value:
-                    type: Golden Query
+                    type: Attested Computation
                     id: queries/monthly-revenue
                     description: Monthly net revenue for the last 12 complete months.
                     tags: [finance]
                     status: draft
+                    runtime: bigquery
                     created_by: { kind: human, name: tanaka@example.co.jp }
                     updated_by: { kind: human, name: tanaka@example.co.jp }
                     links:
                       - { target: metrics/revenue, text: Revenue }
                     attrs:
                       question: How much revenue did we make each month last year?
-                      sql: |
-                        SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                               SUM(net_amount) AS revenue
-                        FROM `example-analytics.shop.orders`
-                        WHERE status = 'completed'
-                          AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                          AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                        GROUP BY month
-                        ORDER BY month
                     body: |
-                      Answers "how much did we make each month last year?"
-                      against [Revenue](/metrics/revenue.md). Completed
-                      orders only; the month boundary is `order_date`, not
-                      the settlement date.
+                      Answers the question above against
+                      [Revenue](/metrics/revenue.md). Completed orders only;
+                      the month boundary is `order_date`, not the settlement
+                      date.
+
+                      # Computation
+
+                      ```sql
+                      SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                             SUM(net_amount) AS revenue
+                      FROM `example-analytics.shop.orders`
+                      WHERE status = 'completed'
+                        AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                        AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                      GROUP BY month
+                      ORDER BY month
+                      ```
                     created_at: "2026-06-09T07:41:02.110945Z"
                     updated_at: "2026-06-09T07:41:02.110945Z"
           headers:
@@ -679,7 +703,7 @@ paths:
                   value:
                     hits:
                       - id: queries/monthly-revenue
-                        type: Golden Query
+                        type: Attested Computation
                         title: monthly-revenue
                         status: verified
                         score: 1.35
@@ -694,8 +718,9 @@ paths:
                         status: draft
                         score: 0.43
                     entries:
-                      - type: Golden Query
+                      - type: Attested Computation
                         id: queries/monthly-revenue
+                        runtime: bigquery
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: verified
@@ -707,20 +732,24 @@ paths:
                           - { target: metrics/revenue, text: Revenue }
                         attrs:
                           question: How much revenue did we make each month last year?
-                          sql: |
-                            SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                                   SUM(net_amount) AS revenue
-                            FROM `example-analytics.shop.orders`
-                            WHERE status = 'completed'
-                              AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                              AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                            GROUP BY month
-                            ORDER BY month
                         body: |
-                          Answers "how much did we make each month last year?"
-                          against [Revenue](/metrics/revenue.md). Completed
-                          orders only; the month boundary is `order_date`, not
-                          the settlement date.
+                          Answers the question above against
+                          [Revenue](/metrics/revenue.md). Completed orders only;
+                          the month boundary is `order_date`, not the settlement
+                          date.
+                        
+                          # Computation
+                        
+                          ```sql
+                          SELECT DATE_TRUNC(order_date, MONTH) AS month,
+                                 SUM(net_amount) AS revenue
+                          FROM `example-analytics.shop.orders`
+                          WHERE status = 'completed'
+                            AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
+                            AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
+                          GROUP BY month
+                          ORDER BY month
+                          ```
                         created_at: "2026-06-09T07:41:02.110945Z"
                         updated_at: "2026-07-10T01:52:16.774301Z"
                       - type: Metric
@@ -1495,8 +1524,9 @@ paths:
                           back below it.
                         created_at: "2026-07-21T06:14:55.402881Z"
                         updated_at: "2026-07-21T06:14:55.402881Z"
-                      - type: Golden Query
+                      - type: Attested Computation
                         id: queries/monthly-revenue
+                        runtime: bigquery
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: verified
@@ -1507,8 +1537,8 @@ paths:
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         body: |
-                          Answers "how much did we make each month last year?"
-                          against [Revenue](/metrics/revenue.md).
+                          Answers the question above against
+                          [Revenue](/metrics/revenue.md).
                         created_at: "2026-06-09T07:41:02.110945Z"
                         updated_at: "2026-07-10T01:52:16.774301Z"
         "400": { $ref: "#/components/responses/Error" }
