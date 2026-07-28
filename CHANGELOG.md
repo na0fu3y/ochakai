@@ -20,6 +20,28 @@ last entry.
 
 ### Added
 
+- `ochakai verify <id>...` takes as many entries as it is given. The
+  review loop this project is built on produces a *list*: a feed is
+  queried, a human reads it, and what survives is confirmed. One id per
+  invocation left `xargs -n1` as the only way to close that loop, which
+  quietly made "import everything as verified" the cheaper path —
+  pressure in exactly the wrong direction, since the whole point of the
+  draft tier is that somebody chose to leave it.
+
+  Ids are parsed before the first request, so a typo in the tenth fails
+  the command instead of being found after nine writes. One that the
+  server refuses is reported and the rest still run, and the command
+  exits non-zero: a half-reviewed queue should not read as a clean one.
+  A lone id keeps its bare error, unchanged. With `--json` each entry
+  prints as its own object, so a single id reads exactly as it did
+  before and a list is a stream `jq` already consumes.
+
+  The quick start now shows the loop it describes:
+  `ochakai search --sort usage --status draft --json | jq -r '.hits[].id' | xargs ochakai verify`.
+  Its `verify` line also said the command "promotes a draft", which
+  stopped being true when verification became a ledger that does not
+  touch the document.
+
 - `ochakai import --strict` — fail on a bundle that was not read exactly
   as written, instead of reporting it. A note is still the default and
   still not an error: OKF tells a consumer to take a document rather than

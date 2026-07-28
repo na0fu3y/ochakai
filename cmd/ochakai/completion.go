@@ -153,7 +153,7 @@ _ochakai() {
       _arguments '-f[input file]:file:_files' '--if-match[update only if the entry still has this version (updated_at)]:version:' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
     verify)
-      _arguments '--json[print the entry as JSON]' '--url[server URL]:url:'
+      _arguments '--json[print each entry as JSON]' '--url[server URL]:url:' '*:id:'
       ;;
     reject)
       _arguments '--note[why it was not accepted]:note:' '--lift[withdraw the rejection]' '--json[print the entry as JSON]' '--url[server URL]:url:'

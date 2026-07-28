@@ -667,9 +667,9 @@ Examples:
 ## ochakai verify
 
 ```
-Usage: ochakai verify [flags] <id>
+Usage: ochakai verify [flags] <id>...
 
-Append a verification against the entry as it stands: you and the time
+Append a verification against each entry as it stands: you and the time
 are added to its ledger. The first confirmation and the tenth re-check
 are the same command, and re-checking is what takes an entry out of
 both review feeds (--sort verified_at, --sort failed).
@@ -677,16 +677,22 @@ It does not edit the entry: the lifecycle status and the ETag stay put,
 because confirming knowledge and publishing it are different acts. Use
 `update` to move a draft to stable.
 Verifying a rejected entry lifts the rejection.
+Several ids are confirmed one call at a time, in the order given. One
+that fails is reported and the rest still run, and the command exits
+non-zero — a half-reviewed queue should not look like a clean one.
+With --json each entry prints as its own JSON object, so a single id
+reads exactly as it did before and a list is a stream jq consumes.
 
 Flags:
   -json
-    	print the verified entry as JSON
+    	print each verified entry as JSON
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai verify metrics/revenue
   ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'
+  ochakai search --sort usage --status draft --limit 50 --json | jq -r '.hits[].id' | xargs ochakai verify
 ```
 
 ## ochakai whoami

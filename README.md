@@ -133,7 +133,8 @@ ochakai search --sort stale_after   # past the expiry their author declared
 ochakai search --source https://wiki.example/revenue-policy  # what derives from this
 ochakai search "revenue" --prefix queries/sales   # only what lives under one subtree
 ochakai get queries/sales/monthly-revenue
-ochakai verify metrics/revenue      # promotes a draft — and re-affirms a verified entry, clearing the review feeds
+ochakai verify metrics/revenue      # append a confirmation — the first and the tenth are the same command, and both clear the review feeds
+ochakai search --sort usage --status draft --json | jq -r '.hits[].id' | xargs ochakai verify   # work a review queue in one pass
 ochakai attach insights/reading-revenue weekly.png   # files travel with the entry
 ochakai export ./knowledge   # or: ochakai export - > okf.tar.gz
 ochakai import ./knowledge   # the inverse; works with any OKF bundle (a client-side loop — see below)

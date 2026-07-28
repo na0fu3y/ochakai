@@ -154,6 +154,27 @@ func idArgs(fs *flag.FlagSet, args []string, n int) (id string, rest []string, e
 	return id, pos[1:], nil
 }
 
+// idsArgs is idArgs for a command that takes a list of entry ids: one or
+// more, all parsed before the first request goes out. A typo in the tenth
+// id fails the command rather than being discovered after nine writes.
+func idsArgs(fs *flag.FlagSet, args []string) ([]string, error) {
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return nil, err
+	}
+	if len(pos) == 0 {
+		fs.Usage()
+		return nil, errReported
+	}
+	ids := make([]string, len(pos))
+	for i, p := range pos {
+		if ids[i], err = parseRef(p); err != nil {
+			return nil, err
+		}
+	}
+	return ids, nil
+}
+
 func newClient(ctx context.Context, url string) (*apiclient.Client, error) {
 	if url == "" {
 		return nil, errors.New("server URL required: run `ochakai use <url>`, set OCHAKAI_URL, or pass --url")
@@ -837,13 +858,19 @@ func cmdUpdate(ctx context.Context, args []string) error {
 // verified is the point as much as promoting a draft: it is how a review
 // feed empties (design doc 0025 §6), and `update` cannot express it —
 // an unchanged payload writes nothing and verified_at is carried over.
+//
+// It takes as many ids as it is given, because the review loop the README
+// is built on produces a list: a feed is queried, a human reads it, and
+// what survives is confirmed. One id per invocation left `xargs -n1` as
+// the only way to close that loop, which made "import everything as
+// verified" the cheaper path — pressure in exactly the wrong direction.
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`update` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.",
-		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
-	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
-	id, _, err := idArgs(fs, args, 1)
+		"Usage: ochakai verify [flags] <id>...\n\nAppend a verification against each entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`update` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.\nSeveral ids are confirmed one call at a time, in the order given. One\nthat fails is reported and the rest still run, and the command exits\nnon-zero — a half-reviewed queue should not look like a clean one.\nWith --json each entry prints as its own JSON object, so a single id\nreads exactly as it did before and a list is a stream jq consumes.",
+		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n  ochakai search --sort usage --status draft --limit 50 --json | jq -r '.hits[].id' | xargs ochakai verify\n")
+	asJSON := fs.Bool("json", false, "print each verified entry as JSON")
+	ids, err := idsArgs(fs, args)
 	if err != nil {
 		return err
 	}
@@ -851,18 +878,35 @@ func cmdVerify(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	k, err := c.Verify(ctx, id)
-	if err != nil {
-		return err
+	var failed []string
+	for _, id := range ids {
+		k, err := c.Verify(ctx, id)
+		if err != nil {
+			// A lone id keeps the bare error: the caller named one entry,
+			// so the failure is the whole answer and needs no tally.
+			if len(ids) == 1 {
+				return err
+			}
+			failed = append(failed, id)
+			fmt.Fprintf(os.Stderr, "skip: %s: %v\n", id, err)
+			continue
+		}
+		if *asJSON {
+			if err := printJSON(k); err != nil {
+				return err
+			}
+			continue
+		}
+		by := "?"
+		if v := k.Observed.LastVerified(); v != nil {
+			by = v.By.String()
+		}
+		fmt.Printf("verified ochakai://%s by %s\n", k.ID, by)
 	}
-	if *asJSON {
-		return printJSON(k)
+	if len(failed) > 0 {
+		return fmt.Errorf("%d of %d entries were not verified: %s",
+			len(failed), len(ids), strings.Join(failed, " "))
 	}
-	by := "?"
-	if v := k.Observed.LastVerified(); v != nil {
-		by = v.By.String()
-	}
-	fmt.Printf("verified ochakai://%s by %s\n", k.ID, by)
 	return nil
 }
 

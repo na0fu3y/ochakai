@@ -421,3 +421,51 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
 	}
 }
+
+// TestVerifyTakesManyIDs pins the review loop the README describes: a
+// feed hands over a list of ids and one command confirms them, in order,
+// one call each. A failure partway does not swallow the rest and does not
+// leave a zero exit code — a half-reviewed queue must not read as clean.
+func TestVerifyTakesManyIDs(t *testing.T) {
+	var got []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		got = append(got, id)
+		if id == "metrics/gone" {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge not found"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(domain.View{
+			ID:       id,
+			Summary:  domain.Summary{ID: id, Type: domain.TypeMetrics, Verified: true},
+			Observed: domain.Observed{Verified: []domain.Verification{{By: domain.Actor{Kind: domain.ActorHuman, Name: "na0"}}}},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	err := cmdVerify(context.Background(), []string{
+		"metrics/a", "ochakai://metrics/gone", "metrics/b", "--url", srv.URL})
+	if err == nil {
+		t.Fatal("one id failed but the command succeeded, want a non-zero exit")
+	}
+	if !strings.Contains(err.Error(), "1 of 3") || !strings.Contains(err.Error(), "metrics/gone") {
+		t.Errorf("error = %v, want it to count the failures and name them", err)
+	}
+	want := []string{"metrics/a", "metrics/gone", "metrics/b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("verified %v, want %v — every id is attempted, in order", got, want)
+	}
+
+	// A bad id is caught before any request: nine writes followed by a
+	// typo is not a state worth reaching.
+	got = nil
+	if err := cmdVerify(context.Background(), []string{"metrics/a", "ochakai://", "--url", srv.URL}); err == nil {
+		t.Error("an unparseable id succeeded, want an error")
+	}
+	if len(got) != 0 {
+		t.Errorf("an unparseable id let %v through, want nothing sent", got)
+	}
+}
