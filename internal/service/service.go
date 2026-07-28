@@ -497,16 +497,22 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 // written. The type joined them in 0023: it is free text now, so a
 // foreign bundle can carry a non-ASCII type, and search filters compare
 // against it. Filters fold case themselves (domain.FoldType), but not
-// width or accent composition — so the type is stored NFC and trimmed,
-// leaving lower() enough to fold the column. A recommended type also
-// settles on its canonical spelling, so storage holds one casing.
+// width or accent composition — so the type is indexed NFC and trimmed,
+// leaving lower() enough to fold the column.
+//
+// The casing is not touched. A recommended type used to settle on its
+// canonical spelling here, which meant the stored entry no longer said
+// what its writer wrote — and once the document is what is stored
+// (design doc 0044 §2.2), it would also mean the index disagreeing with
+// the document it is derived from. The type is the writer's vocabulary
+// (design doc 0038); matching folds case, storage keeps it.
 //
 // Links are not normalized here because they are not read from the
 // payload at all — deriveLinks recomputes them from the body, normalizing
 // each target on the way (design doc 0024).
 func normalizeKeys(k *domain.Knowledge) {
 	k.ID = domain.Normalize(k.ID)
-	k.Type = domain.CanonicalType(domain.Type(strings.TrimSpace(domain.Normalize(string(k.Type)))))
+	k.Type = domain.Type(strings.TrimSpace(domain.Normalize(string(k.Type))))
 }
 
 // deriveLinks replaces whatever links the payload carried with the ones

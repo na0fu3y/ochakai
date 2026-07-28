@@ -260,12 +260,6 @@ func TestTypeMatchingIsCaseInsensitive(t *testing.T) {
 	if !BuiltinType("attested computation") {
 		t.Error(`BuiltinType("attested computation") = false, want true`)
 	}
-	if got := CanonicalType("bigquery dataset"); got != TypeDatasets {
-		t.Errorf("CanonicalType = %q, want %q", got, TypeDatasets)
-	}
-	if got := CanonicalType("Data Contract"); got != Type("Data Contract") {
-		t.Errorf("CanonicalType must leave a free type alone, got %q", got)
-	}
 }
 
 // FoldType is the same rule in the form the store needs: one comparison

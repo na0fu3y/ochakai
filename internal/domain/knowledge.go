@@ -102,19 +102,6 @@ func BuiltinType(t Type) bool {
 	return false
 }
 
-// CanonicalType returns the built-in spelling of t when t names one
-// (however it was cased), else t unchanged. Write paths use it so the
-// recommended types have one spelling in storage while callers may write
-// them in any case.
-func CanonicalType(t Type) Type {
-	for _, v := range Types {
-		if EqualType(t, v) {
-			return v
-		}
-	}
-	return t
-}
-
 // ValidType reports whether t can be a knowledge type: one non-empty line,
 // no "/" so a type never reads as an address, within 128 bytes. Types are
 // the OKF vocabulary verbatim (design doc 0023) — "BigQuery Table", not a
@@ -577,11 +564,22 @@ type Knowledge struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
-	// ContentHash is the entry's version: the SHA-256 of its canonical
-	// document (design doc 0043 §3.4), which is what the ETag carries and
-	// what If-Match is checked against. It is a hash of the content
-	// alone, so a verification, a rejection or an attachment leaves it
-	// where it was — only an edit moves it.
+	// Doc is the document as it was received: the writer's own bytes,
+	// normalized for line endings and stripped of the keys this instance
+	// owns, and nothing else (design doc 0044 §2.2). It is what the store
+	// holds and what ContentHash covers.
+	//
+	// Empty in two cases, both of which fall back to the canonical
+	// rendering: a row read for a listing, which does not select the
+	// column because the index columns beside it already answer the
+	// query, and an entry composed in memory rather than parsed from a
+	// document.
+	Doc string `json:"-"`
+	// ContentHash is the entry's version: the SHA-256 of the document as
+	// stored (design docs 0043 §3.4, 0044 §3.4), which is what the ETag
+	// carries and what If-Match is checked against. It covers the
+	// content alone, so a verification, a rejection or a file beside the
+	// entry leaves it where it was — only an edit moves it.
 	ContentHash string `json:"content_hash,omitempty"`
 }
 
