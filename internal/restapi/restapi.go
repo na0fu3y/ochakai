@@ -470,12 +470,7 @@ func Handler(svc *service.Service) http.Handler {
 			ct = "text/plain; charset=utf-8"
 		}
 		w.Header().Set("Content-Type", ct)
-		// The bytes are user-uploaded and served inline; the media type is
-		// sniffed and allowlisted (design doc 0013 — nothing executable, no
-		// text/html, no image/svg+xml), but nosniff keeps a browser from
-		// overriding that and interpreting them as anything else.
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
+		serveDefensively(w, att.MediaType, att.Name)
 		_, _ = w.Write(data)
 	})
 
@@ -1022,6 +1017,39 @@ func queryFloat(q url.Values, name string) (float64, error) {
 		return 0, service.Invalidf("invalid %s %q (want a number)", name, s)
 	}
 	return f, nil
+}
+
+// serveDefensively sets the headers that decide what a browser is
+// allowed to do with bytes somebody uploaded (design doc 0046 §3.2).
+//
+// nosniff on everything: the media type is decided here, by sniffing the
+// bytes, and a browser that overrides it would be deciding it again from
+// a filename or a guess.
+//
+// What may render in place is an image, a PDF or plain text
+// (domain.InlineServable). Anything else is handed over as a download,
+// under a sandbox with no origin, so that a document which happens to
+// carry script — an SVG, an HTML file — has nowhere to run even if it
+// arrives here. The web UI is served from this same origin, so "nowhere
+// to run" is the whole of the protection: an inline SVG would be script
+// in the origin holding the reader's IAP session.
+//
+// This is the delivery half of "receive it, do not render it". The write
+// half still refuses those media types (design doc 0013), and this does
+// not depend on it: a row written before that rule, or one whose bytes
+// sniff differently here than in a browser, is covered either way.
+func serveDefensively(w http.ResponseWriter, mediaType, name string) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	disposition := "inline"
+	if !domain.InlineServable(mediaType) {
+		disposition = "attachment"
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	}
+	// The name is one path segment with no control characters
+	// (domain.ValidAttachmentName), so the only character left that could
+	// end the quoted string early is the quote itself.
+	w.Header().Set("Content-Disposition",
+		disposition+`; filename="`+strings.ReplaceAll(name, `"`, `\"`)+`"`)
 }
 
 // splitAttachmentPath cuts "{id...}/{name}" at the final slash: attachment
