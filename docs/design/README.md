@@ -34,6 +34,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
+| 検索と埋め込み | [0049](0049-embeddings-by-default.md)(既定・次元変更)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
 | 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md) |
@@ -52,13 +53,24 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Accepted**(§3 の
   エンベロープ表現と §9.1 の rejected ステータスは 0043 が改訂、§9.1 の
-  一覧面と検索フィルタの語彙は 0046 が言い直した)。
+  一覧面と検索フィルタの語彙は 0046 が言い直した、§4 の埋め込みの
+  opt-in は 0049 が既定に改訂)。
   LLM を内蔵せず SQL を実行しないナレッジストアという中核。双方向ループ
   (エージェントが下書きし、人が検証する)、Postgres + pgvector 一本、
   利用テレメトリ。
-- [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
+- [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**(「任意で
+  Vertex AI」は 0049 が既定パスの依存に変えた)。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
+- [0049 埋め込みは既定であり、ベクトル空間は捨ててよい](0049-embeddings-by-default.md)
+  — **Accepted**。Google Cloud の上ではプロジェクトをメタデータサーバから
+  発見して意味的検索を既定で有効にし、使えるかどうかは設定ではなく IAM が
+  決める(起動時に 1 回だけ訊く)。発見された既定は Vertex AI や pgvector が
+  無ければ字句検索に落ち、名指しされた設定は従来どおり起動を拒否する。
+  off は `OCHAKAI_EMBEDDINGS=off` ただ一つ。次元を変えたときの手作業の
+  `DROP TABLE` を廃し、**ベクトルは導出物である**という理由で製品が作り直す
+  (詰め直しは `ochakai reembed` のまま — 支払いは頼まれてから)。添付の
+  昇格は 0046 で完了しており何も足さない。
 
 ## 実装の品質ゲート
 

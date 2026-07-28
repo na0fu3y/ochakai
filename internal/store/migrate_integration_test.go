@@ -640,40 +640,107 @@ func TestIntegrationVectorIndexes(t *testing.T) {
 	}
 }
 
-// Changing OCHAKAI_EMBEDDING_DIM on a base that already holds vectors is
-// not something the schema can absorb: CREATE TABLE IF NOT EXISTS keeps
-// the old column, every write then fails on the width, and every search
-// fails outright because the query vector cannot be compared against it.
-// Startup says so instead of booting into that.
-func TestIntegrationEmbeddingDimChangeIsRefused(t *testing.T) {
+// Changing the embedding dimension on a base that already holds vectors
+// is not something CREATE TABLE IF NOT EXISTS can absorb: it keeps the
+// old column, every write then fails on the width, and every search fails
+// outright because the query vector cannot be compared against it.
+// Startup used to refuse and hand the operator a DROP TABLE; it performs
+// the rebuild itself now, because a vector is derived and `reembed`
+// refills it (design doc 0049 §3).
+//
+// Scoped to its own schema: this one is destructive by design, and the
+// other store tests share the database.
+func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	s, err := New(ctx, dbURL, false)
-	if err != nil {
+	s := scopedStore(ctx, t, fmt.Sprintf("embed_dim_%d", time.Now().UnixNano()))
+	if err := s.Migrate(ctx, 4); err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 4); err != nil {
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO knowledge_embedding (id, model, embedding) VALUES ($1, $2, $3::vector)`,
+		"queries/x", "test-model", encodeVector([]float32{1, 0, 0, 0})); err != nil {
 		t.Fatal(err)
 	}
 
-	err = s.Migrate(ctx, 8)
-	if err == nil {
-		t.Fatal("a changed embedding dimension must refuse to start")
+	if err := s.Migrate(ctx, 8); err != nil {
+		t.Fatalf("a changed embedding dimension must rebuild rather than refuse: %v", err)
 	}
-	for _, want := range []string{"vector(4)", "8", "OCHAKAI_EMBEDDING_DIM", "reembed"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the error does not mention %q: %v", want, err)
+	// The space is the new one, and empty: the old vectors were in a
+	// space nothing would query, and nothing was carried into this one
+	// pretending otherwise.
+	var dim, rows int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT atttypmod FROM pg_attribute
+		 WHERE attrelid = to_regclass('knowledge_embedding') AND attname = 'embedding'`).Scan(&dim); err != nil {
+		t.Fatal(err)
+	}
+	if dim != 8 {
+		t.Errorf("knowledge_embedding.embedding is vector(%d), want vector(8)", dim)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM knowledge_embedding`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 0 {
+		t.Errorf("knowledge_embedding holds %d rows after the resize, want 0", rows)
+	}
+	// A write at the new width is what the old refusal was protecting
+	// against, and it now works without an operator touching the schema.
+	if err := s.UpsertEmbedding(ctx, "queries/x", "test-model",
+		[]float32{1, 0, 0, 0, 0, 0, 0, 0}); err != nil {
+		t.Errorf("writing a vector at the new dimension: %v", err)
+	}
+	if err := s.Migrate(ctx, 8); err != nil {
+		t.Errorf("re-running at the same dimension must change nothing: %v", err)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM knowledge_embedding`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Errorf("a restart at the same dimension dropped the vectors (%d rows, want 1)", rows)
+	}
+}
+
+// scopedStore opens a store whose search_path is a schema of its own, so
+// a test that changes the schema does not disturb the ones sharing this
+// database. The schema is dropped when the test ends.
+func scopedStore(ctx context.Context, t *testing.T, schema string) *Store {
+	t.Helper()
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	admin, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	// The extensions belong in public: a scoped CREATE EXTENSION would
+	// install into the scoped schema and vanish with it, breaking later
+	// runs (see TestMigrateConcurrent).
+	for _, ext := range []string{"pg_trgm", "vector"} {
+		if _, err := admin.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS `+ext); err != nil {
+			t.Fatal(err)
 		}
 	}
-	// The configured dimension still starts, so this is not a one-way door
-	// for an operator who puts the setting back.
-	if err := s.Migrate(ctx, 4); err != nil {
-		t.Errorf("re-running with the stored dimension: %v", err)
+	if _, err := admin.pool.Exec(ctx, `CREATE SCHEMA `+schema); err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if _, err := admin.pool.Exec(context.Background(), `DROP SCHEMA `+schema+` CASCADE`); err != nil {
+			t.Errorf("drop schema %s: %v", schema, err)
+		}
+	})
+	sep := "?"
+	if strings.Contains(dbURL, "?") {
+		sep = "&"
+	}
+	s, err := New(ctx, dbURL+sep+"options=-csearch_path%3D"+schema+",public", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	return s
 }
 
 // TestMigrationUpdatedByBackfill checks 0019's backfill: updated_by is the

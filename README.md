@@ -53,8 +53,10 @@ wrong tool; see the [refusals](#why-ochakai) for what that buys.
 **PostgreSQL, plus `pg_trgm`.** The first migration creates the
 extension, so a database whose user may not `CREATE EXTENSION` needs an
 admin to create it once — that is what the deploy guide's bootstrap SQL
-is for. Turning embeddings on adds `vector` (pgvector) the same way;
-without them, plain PostgreSQL is enough. CI and the deploy guide both
+is for. Semantic search adds `vector` (pgvector) the same way — it is on
+by default on Google Cloud, and a database that cannot hold vectors makes
+a discovered deployment fall back to lexical search rather than fail.
+Without it, plain PostgreSQL is enough. CI and the deploy guide both
 exercise Postgres 17.
 
 **The server needs Docker; the client commands need a binary.** The quick
@@ -370,7 +372,7 @@ And it stays small by refusing things:
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it, callers are identified by their Google identity, and Cloud SQL authenticates the service account — nothing to issue or rotate |
 | authorization | reachability is the whole access model: **whoever can reach the deployment can read and write everything**. ochakai identifies the caller and records it as provenance, and stops there. Deciding who may reach it is Cloud Run IAM's job, and running it publicly invokable is a misconfiguration, not a deployment mode (design doc [0002](docs/design/0002-authn-authz.md)). If you need per-entry permissions, this is the wrong tool |
-| telemetry | nothing is reported anywhere. The only hosts ochakai ever contacts are the Google Cloud APIs you configure — Cloud SQL, and GCS or Vertex AI if you turn them on. Usage counts are rows in your own database |
+| telemetry | nothing is reported anywhere. The only hosts ochakai ever contacts are Google Cloud APIs in your own project — Cloud SQL, GCS if you configure a bucket, and Vertex AI where semantic search is enabled (on Google Cloud that is the default, and `OCHAKAI_EMBEDDINGS=off` declines it). Usage counts are rows in your own database |
 
 ## MCP tools
 
@@ -478,7 +480,7 @@ insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
 behind a dataset. Accepted formats are the intersection of what Claude
 reads and what Gemini embeds (png/jpeg/webp, pdf, plain text —
 sniffed from the bytes). Attachments are searchable: filenames match in
-every search, and contents join hybrid search when embeddings are
+every search, and contents join hybrid search wherever embeddings are
 enabled — text with any embedding model, images and PDFs with
 `gemini-embedding-2` — and a hit is always the owning entry (design
 doc 0020).
@@ -535,7 +537,8 @@ at the top level, and inside a `sources` entry, a `parameter`, an
 from a bundle: it is what this instance observed, not what a document
 claims (design docs 0009, 0043).
 
-**Japanese knowledge bases should turn embeddings on.** PostgreSQL's
+**Japanese knowledge bases need embeddings, which is why they are the
+default.** PostgreSQL's
 full-text search does not tokenize Japanese, so the lexical half of search
 matches a query by its fragments against a stored haystack — id, title,
 description, tags, body, attachment filenames. Latin words stay whole;
@@ -552,9 +555,11 @@ two-character pattern — there is no whole trigram in one — so Japanese
 terms like 売上 or 原価 are answered by scanning the table: about 16 ms
 per search across 5000 entries, against 0.2 ms for a latin word. That
 is fine at the scale a curated knowledge base reaches and does not stay
-fine forever. `gemini-embedding-001` handles Japanese well, and with
-`OCHAKAI_VERTEX_PROJECT` set, ranking comes from rank fusion across both
-halves rather than from term overlap alone.
+fine forever. `gemini-embedding-001` handles Japanese well, and where
+embeddings are reachable — on Google Cloud, that is the default and takes
+no configuration (design doc
+[0049](docs/design/0049-embeddings-by-default.md)) — ranking comes from
+rank fusion across both halves rather than from term overlap alone.
 
 Scores are not comparable across the two modes and are not calibrated:
 matched-fragment weight plus boosts in the lexical-only mode, RRF rank
@@ -572,8 +577,9 @@ back fits what you asked for.
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
 | `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
-| `OCHAKAI_VERTEX_PROJECT` | Set to enable hybrid semantic search via Vertex AI embeddings (default: off, lexical-only — ochakai calls no external API unless you opt in). Auth is ADC — no API keys. **Recommended for Japanese knowledge bases** (see below) |
-| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`). Vectors are written when an entry is written, so enabling this on an existing base — or changing the model — leaves entries unembedded until you run `ochakai reembed` (design doc 0020). Dimensions above 2000 exceed pgvector's indexing limit, so those deployments fall back to an exact scan. Changing `OCHAKAI_EMBEDDING_DIM` on a base that already holds vectors is refused at startup, with the two ways out: put it back, or drop the vector tables and re-embed |
+| `OCHAKAI_EMBEDDINGS` | `off` runs lexical-only on a deployment that would otherwise get hybrid semantic search. Running on Google Cloud, ochakai reads its own project from the metadata server and turns embeddings on with it — there is nothing to set, and whether it can actually call Vertex AI is decided by IAM (`roles/aiplatform.user`) rather than by configuration, asked once at startup (design doc [0049](docs/design/0049-embeddings-by-default.md)). Off Google Cloud there is no metadata server and nothing is enabled. Takes `on` or `off`; any other spelling is a startup error rather than a guess. Default: on where it is discovered |
+| `OCHAKAI_VERTEX_PROJECT` | Names the Vertex AI project explicitly — for a project other than the one ochakai runs in, or for running it outside Google Cloud. A deployment that names one has asked for semantic search: if Vertex AI or pgvector is not there it refuses to start, where a discovered one falls back to lexical search. Auth is ADC — no API keys |
+| `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`). Vectors are written when an entry is written, so a base loaded before embeddings were reachable — or a changed model — leaves entries unembedded until you run `ochakai reembed` (design doc 0020). Dimensions above 2000 exceed pgvector's indexing limit, so those deployments fall back to an exact scan. Changing `OCHAKAI_EMBEDDING_DIM` on a base that already holds vectors rebuilds the vector tables at the new width on the next start: a vector is derived from the entry it describes, so nothing curated is lost, and `ochakai reembed` refills them |
 | `OCHAKAI_DELEGATING_CALLERS` | Comma-separated caller identities allowed to forward an end user's identity with `X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp` (`*` for any authenticated caller). For applications that embed ochakai and serve many people — without it, every one of their users collapses into the application's one service account. Both identities are recorded (`human:tanaka@… via process:app-sa@…`), never just the forwarded one. Default: empty, delegation off; a header from an unlisted caller is a 403, not a silent downgrade (design doc 0027) |
 | `OCHAKAI_IAP_AUDIENCE` | `ochakai serve-ui` only: the IAP JWT audience to verify, which turns browser edits from `process:<webui-sa>` into the person signed in (`human:tanaka@… via process:<webui-sa>`). Requires the webui's service account in the server's `OCHAKAI_DELEGATING_CALLERS`. Once set, a request IAP did not sign is refused rather than recorded as the service account. Default: empty, per-user provenance off (design doc 0032) |
 | `OCHAKAI_READ_ONLY` | `true` makes the deployment serve knowledge without changing it: every write is a 403, MCP does not offer the write tools at all, and the web UI stops drawing buttons that would only fail. For a reference-only instance or freezing a base during a migration; a *public* demo needs `OCHAKAI_PUBLIC_READ_ONLY` below, because read-only alone still refuses anonymous callers. It is not authorization — it does not look at the caller, and it refuses the operator too (design doc [0040](docs/design/0040-read-only-mode.md)). Usage telemetry still records, being the server's own observation. Default: off |

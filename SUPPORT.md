@@ -43,8 +43,8 @@ Most answers are already written down, and the docs are short enough to check:
 
 When you do ask, the useful details are the same ones the bug form asks for:
 version (`ochakai version`), deployment (docker compose or Cloud Run),
-PostgreSQL version, whether `OCHAKAI_VERTEX_PROJECT` is set, and which surface
-you were on.
+PostgreSQL version, what the startup log says about semantic search, and
+which surface you were on.
 
 ## What to expect
 

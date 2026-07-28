@@ -47,11 +47,12 @@ everything is deliberately not a mode.
   cuts Japanese into two-character windows and keeps only the ones
   carrying a kanji or katakana, because an all-hiragana window is grammar
   and would match nearly everything. Search for the noun, not the
-  particle — or turn embeddings on.
+  particle — or check that embeddings are on (see the startup lines under
+  [Startup](#startup): on Google Cloud they are the default, but only if
+  the service identity may call Vertex AI).
 - *An English question returns the wrong entries.* Lexical search is a bag
   of words: an entry sharing three function words can outrank the one that
-  names the subject. This is the case embeddings fix
-  (`OCHAKAI_VERTEX_PROJECT`).
+  names the subject. This is the case embeddings fix.
 - *Nothing matches a term you know is stored.* Rejected and soft-deleted
   entries are excluded from default search, and `--status` narrows
   further. Drop the filters before concluding the entry is missing.
@@ -146,17 +147,29 @@ what turns browser edits into `human:you via process:webui-sa` (design doc
 
 ## Startup
 
-**The server refuses to start after an embedding change.** Changing
-`OCHAKAI_EMBEDDING_DIM` on a database that already holds vectors is
-refused rather than silently corrupting them. Put it back, or drop the
-vector tables and re-embed.
+**Semantic search went quiet after an embedding change.** Changing
+`OCHAKAI_EMBEDDING_DIM` on a database that already holds vectors rebuilds
+the vector tables at the new width and says so in the log: the old
+vectors were in a space nothing would query, and a vector is derived from
+the entry it describes, so nothing curated is lost (design doc
+[0049](../design/0049-embeddings-by-default.md) §3). The tables come back
+empty on purpose — run `ochakai reembed` to refill them, which is the
+step that spends money. Ranking is lexical-only until it finishes.
 
-**`pgvector extension is required for semantic search`.** The database
-user may not `CREATE EXTENSION`. Create `vector` once as an admin — the
-deploy guide's §3 bootstrap SQL does exactly this — or unset
-`OCHAKAI_VERTEX_PROJECT` and run lexical-only.
+**`pgvector is required for semantic search, and this role may not create
+it`.** Create `vector` once as an admin — the deploy guide's §3 bootstrap
+SQL does exactly this. A deployment that named `OCHAKAI_VERTEX_PROJECT`
+refuses to start until you do, because it asked for semantic search; one
+that discovered its project logs this and runs lexical-only.
 
-**Logs say `attachments disabled` or `semantic search disabled`.** Those
-are the startup lines confirming which optional subsystems are off. They
-are informational, and they are the fastest way to check what a running
-instance actually has enabled.
+**Logs say `semantic search off: Vertex AI did not answer for this
+deployment`.** The startup probe was refused — almost always a service
+identity without `roles/aiplatform.user`, or `aiplatform.googleapis.com`
+not enabled. Grant it and restart (deploy guide §4); embeddings are the
+default on Google Cloud, but only IAM can actually turn them on.
+
+**Logs say `attachments disabled` or one of the `semantic search off…`
+lines.** Those are the startup lines confirming which subsystems this
+instance does not have. They are informational, and they are the fastest
+way to check what a running instance actually has enabled —
+[operating.md](operating.md) lists what each of them means.

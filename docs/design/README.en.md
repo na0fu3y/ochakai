@@ -37,10 +37,11 @@ For the shape of the system rather than the history of it, read
   lexical, with opt-in pgvector hybrid search through Vertex AI. Also the
   source of the usage telemetry and outcome reporting that later records
   build on.
-  *For a user:* semantic search is off until you configure embeddings, and
-  interpretation is your agent's job by design.
+  *For a user:* interpretation is your agent's job by design. (§4's
+  opt-in embeddings were made the default on Google Cloud by 0049.)
 
-- **[0003 Google Cloud only](0003-gcp-only.md)** — *Accepted.* Supports
+- **[0003 Google Cloud only](0003-gcp-only.md)** — *Accepted; "optionally
+  Vertex AI" became a default-path dependency in 0049.* Supports
   Cloud Run + Cloud SQL (optionally Vertex AI) and nothing else,
   overturning 0001's portability stance. Removed in 0.3.0: `OCHAKAI_AUTH`,
   the static-token client mode, CORS configuration, and the embedding
@@ -48,6 +49,31 @@ For the shape of the system rather than the history of it, read
   is refused rather than ignored.
   *For a user:* portability is promised for your data (OKF export), not
   for the runtime; there is no supported deployment elsewhere.
+
+- **[0049 Embeddings are the default, and a vector space is
+  disposable](0049-embeddings-by-default.md)** — *Accepted; revises 0001
+  §4's opt-in embeddings and adds Vertex AI to 0003's default path.*
+  Running on Google Cloud, ochakai asks the metadata server which project
+  it is in and turns semantic search on with it — no variable to set. What
+  it may do there is IAM's answer rather than a setting, asked once at
+  startup with a one-word embedding: a deployment whose service identity
+  cannot call Vertex AI, or whose database cannot hold vectors, runs
+  lexical-only instead of refusing to start, while a deployment that named
+  its project in `OCHAKAI_VERTEX_PROJECT` still fails loudly, because it
+  asked. `OCHAKAI_EMBEDDINGS=off` is the one way to refuse. Changing the
+  embedding dimension no longer refuses to start and hands you a
+  `DROP TABLE`: ochakai rebuilds the vector tables itself, because a
+  vector is derived from the object it describes and nothing that cannot
+  be recomputed is lost — refilling them stays `ochakai reembed`, since
+  that spends money. Attachments needed nothing further: 0046 already made
+  a file an object in the bundle, and this is what makes 0020's content
+  search reach it by default.
+  *For a user:* **a default flips.** A Cloud Run deployment whose service
+  account holds `roles/aiplatform.user` gets hybrid search — and a Vertex
+  AI call per write — without configuring anything; Japanese knowledge
+  bases, where the lexical index cannot serve two-character terms, are
+  the reason. Nothing changes off Google Cloud, or where the role was
+  never granted. Set `OCHAKAI_EMBEDDINGS=off` to keep it lexical.
 
 ## Quality gates
 

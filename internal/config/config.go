@@ -4,10 +4,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"cloud.google.com/go/compute/metadata"
 )
 
 type Config struct {
@@ -62,9 +65,19 @@ type Config struct {
 	// attachments are unsupported — markdown entries only.
 	GCSBucket string
 
-	// Embedding is nil when semantic search is disabled (the default).
-	// Set OCHAKAI_VERTEX_PROJECT to enable it.
+	// Embedding is nil when semantic search is off. It is filled from
+	// OCHAKAI_VERTEX_PROJECT here, and by EnableDiscoveredEmbedding when
+	// the deployment is running on Google Cloud and did not name a
+	// project — semantic search is the default there (design doc 0049).
 	Embedding *EmbeddingConfig
+
+	// EmbeddingsOff says the deployment refuses semantic search it would
+	// otherwise get (OCHAKAI_EMBEDDINGS=off, design doc 0049 §2.4). It
+	// is not the same as an absent OCHAKAI_VERTEX_PROJECT, which now
+	// means "discover it": this is the one way to run lexical-only on
+	// Google Cloud, and it is what a deployment sets when it wants no
+	// Vertex AI call made on its behalf at all.
+	EmbeddingsOff bool
 }
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
@@ -76,6 +89,13 @@ type EmbeddingConfig struct {
 	Location string // e.g. "us-central1"; "global" for gemini-embedding-2
 	Model    string // e.g. "gemini-embedding-001" or "gemini-embedding-2"
 	Dim      int    // output dimensionality stored in pgvector
+	// Discovered records that Project was read off the metadata server
+	// rather than configured. It decides what a failure means: a
+	// deployment that named the project asked for semantic search and is
+	// told when it is not there, while a discovered one is a default and
+	// falls back to lexical search rather than refusing to start
+	// (design doc 0049 §2.3).
+	Discovered bool
 }
 
 // splitList parses a comma-separated env var, dropping blanks.
@@ -120,20 +140,84 @@ func FromEnv() (*Config, error) {
 		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL is required")
 	}
 
-	if project := os.Getenv("OCHAKAI_VERTEX_PROJECT"); project != "" {
-		dim, err := strconv.Atoi(envOr("OCHAKAI_EMBEDDING_DIM", "768"))
-		if err != nil || dim <= 0 {
-			return nil, fmt.Errorf("OCHAKAI_EMBEDDING_DIM must be a positive integer")
-		}
-		cfg.Embedding = &EmbeddingConfig{
-			Project:  project,
-			Location: envOr("OCHAKAI_VERTEX_LOCATION", "us-central1"),
-			Model:    envOr("OCHAKAI_VERTEX_MODEL", "gemini-embedding-001"),
-			Dim:      dim,
+	switch v := os.Getenv("OCHAKAI_EMBEDDINGS"); v {
+	case "", "on":
+	case "off":
+		cfg.EmbeddingsOff = true
+	default:
+		// Not a boolean, and guessing at one is the wrong way to be
+		// wrong: a deployment that spelled the refusal "false" and got
+		// semantic search would be paying Vertex AI for every write it
+		// asked not to make (design doc 0049 §2.4).
+		return nil, fmt.Errorf("OCHAKAI_EMBEDDINGS is %q; it takes \"on\" or \"off\"", v)
+	}
+	if !cfg.EmbeddingsOff {
+		if project := os.Getenv("OCHAKAI_VERTEX_PROJECT"); project != "" {
+			e, err := embeddingFromEnv(project, false)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Embedding = e
 		}
 	}
 
 	return cfg, nil
+}
+
+// EnableDiscoveredEmbedding turns semantic search on for a project
+// nobody configured — the deployment is running on Google Cloud, and
+// that is where embeddings are the default (design doc 0049 §2.1). The
+// model, location and dimension come from the environment either way:
+// what discovery supplies is the project, not the choice of model.
+//
+// A deployment that set OCHAKAI_EMBEDDINGS=off never reaches here, and
+// one that named its own project keeps it.
+func (c *Config) EnableDiscoveredEmbedding(project string) error {
+	if c.EmbeddingsOff || c.Embedding != nil || project == "" {
+		return nil
+	}
+	e, err := embeddingFromEnv(project, true)
+	if err != nil {
+		return err
+	}
+	c.Embedding = e
+	return nil
+}
+
+// embeddingFromEnv reads the settings around a project: the same ones
+// whether the project was configured or discovered.
+func embeddingFromEnv(project string, discovered bool) (*EmbeddingConfig, error) {
+	dim, err := strconv.Atoi(envOr("OCHAKAI_EMBEDDING_DIM", "768"))
+	if err != nil || dim <= 0 {
+		return nil, fmt.Errorf("OCHAKAI_EMBEDDING_DIM must be a positive integer")
+	}
+	return &EmbeddingConfig{
+		Project:    project,
+		Location:   envOr("OCHAKAI_VERTEX_LOCATION", "us-central1"),
+		Model:      envOr("OCHAKAI_VERTEX_MODEL", "gemini-embedding-001"),
+		Dim:        dim,
+		Discovered: discovered,
+	}, nil
+}
+
+// DiscoverVertexProject names the Google Cloud project this process is
+// running in, or "" when it is not running on Google Cloud. The answer
+// comes from the metadata server, which is the same source Cloud SQL IAM
+// auth already takes its access token from — no configuration, and
+// nothing to hold (design doc 0003).
+//
+// It says where ochakai runs, not what it may do there: whether the
+// service identity can call Vertex AI is IAM's answer, given once the
+// first embedding is attempted (design doc 0049 §2.3).
+func DiscoverVertexProject(ctx context.Context) string {
+	if !metadata.OnGCE() {
+		return ""
+	}
+	project, err := metadata.ProjectIDWithContext(ctx)
+	if err != nil {
+		return ""
+	}
+	return project
 }
 
 func envOr(key, fallback string) string {

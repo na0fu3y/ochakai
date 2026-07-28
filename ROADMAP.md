@@ -63,9 +63,11 @@ if the proposal is concrete.
 - **Japanese lexical search does not stay fast forever.** A trigram index
   cannot serve a two-character pattern, so Japanese terms are answered by
   scanning: about 16 ms across 5000 entries, against 0.2 ms for a latin word.
-  That is fine at the scale a curated knowledge base reaches, and enabling
-  embeddings is the current answer. A better lexical index has not been
-  designed, and nothing here promises one.
+  That is fine at the scale a curated knowledge base reaches, and embeddings
+  are the answer — which is why they stopped being opt-in: running on Google
+  Cloud, ochakai turns them on by itself
+  ([0049](docs/design/0049-embeddings-by-default.md)). A better lexical index
+  has not been designed, and nothing here promises one.
 
 Beyond that this roadmap is thin, and honestly so. Work has been arriving from
 use and from release reviews rather than from a plan; the open issues are the

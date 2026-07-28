@@ -18,6 +18,50 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: semantic search is on by default on Google Cloud** (design
+  doc [0049](docs/design/0049-embeddings-by-default.md)). ochakai asks the
+  metadata server which project it is running in and turns hybrid search
+  on with it — `OCHAKAI_VERTEX_PROJECT` is no longer how you switch it on,
+  only how you name a different project or run outside Google Cloud.
+
+  **What actually decides it is IAM, not configuration.** Without
+  `roles/aiplatform.user` on the service identity, Vertex AI does not
+  answer: ochakai finds that out with one small embedding at startup, logs
+  one line, and serves lexical-only search. So a deployment that never
+  granted the role is unaffected by this release, and so is every
+  deployment outside Google Cloud. **A deployment whose service account
+  does hold the role — the broadly-scoped default compute identity, for
+  instance — starts embedding on the next deploy, which means one Vertex
+  AI call per write.** Set `OCHAKAI_EMBEDDINGS=off` to decline; it takes
+  `on` or `off`, and any other spelling is a startup error rather than a
+  guess at what you meant.
+
+  The reason is in the ROADMAP: a trigram index cannot serve a
+  two-character pattern, so a Japanese knowledge base — the case ochakai
+  is built for — is answered by scanning, and "enable embeddings" was the
+  standing answer sitting in §4 of a 948-line deploy guide, under the word
+  *Optional*.
+
+  A deployment that named its project keeps the old strictness: if Vertex
+  AI or pgvector is not there, it refuses to start, because it asked. A
+  discovered one falls back to the lexical search it would have had.
+
+- **A changed embedding dimension rebuilds the vector tables instead of
+  refusing to start** (design doc
+  [0049](docs/design/0049-embeddings-by-default.md) §3). Changing
+  `OCHAKAI_EMBEDDING_DIM` on a base that already holds vectors used to
+  stop the server and hand the operator a `DROP TABLE knowledge_embedding,
+  attachment_embedding` to run in `psql`. ochakai performs it now, and
+  logs that it did.
+
+  Nothing you curated is involved: a vector is derived from the object it
+  describes — which is why these tables live outside the versioned
+  migrations and why `reembed` exists — and the old ones were in a space
+  nothing would query. Refilling them stays `ochakai reembed`, because
+  that spends money; until it runs, search answers lexically.
+
 ### Added
 
 - **What enters the bundle leaves it** (design doc

@@ -32,8 +32,10 @@ It also has no connector ingestion, no user database, and no
 authorization system. The last of those is not an omission — see below.
 
 The supported runtime is Google Cloud: Cloud Run for the process, Cloud
-SQL for the database, optionally Vertex AI for embeddings (design doc
-[0003](design/0003-gcp-only.md)). That decision superseded an earlier
+SQL for the database, and Vertex AI for embeddings — which is on by
+default there rather than optional (design docs
+[0003](design/0003-gcp-only.md),
+[0049](design/0049-embeddings-by-default.md)). That decision superseded an earlier
 "runs anywhere" position, and it was made for a reason worth knowing
 before you adopt: the identity model — no tokens, no passwords, no
 secrets — is built entirely on Google Cloud's IAM, and keeping a non-GCP
@@ -62,7 +64,7 @@ flowchart LR
 
   PG[("Cloud SQL for PostgreSQL<br/>+ pgvector")]
   GCS[("Cloud Storage<br/>attachment bytes")]
-  VX["Vertex AI Embeddings<br/>opt-in"]
+  VX["Vertex AI Embeddings<br/>default on Google Cloud"]
 
   A -->|MCP over HTTP| M
   A --> CLI
@@ -320,13 +322,16 @@ terms the search exists to find, so the scan is the price. It is fine at
 the scale a curated knowledge base reaches, and it does not stay fine
 forever.
 
-Setting `OCHAKAI_VERTEX_PROJECT` turns on the vector half: Vertex AI
-embeddings, authenticated by ADC with no API key to hold, fused with the
-lexical ranking by reciprocal rank fusion. It is off by default, which is
-what makes "calls no external API unless you opt in" true. Vectors are
-written when an entry is written, so enabling embeddings on an existing
-base — or changing the model — leaves older entries unembedded until
-`ochakai reembed` runs (design doc
+The vector half — Vertex AI embeddings, authenticated by ADC with no API
+key to hold, fused with the lexical ranking by reciprocal rank fusion —
+is **on by default where ochakai runs on Google Cloud**: it reads its own
+project from the metadata server, and whether it may call Vertex AI there
+is IAM's answer rather than a setting, asked once at startup (design doc
+[0049](design/0049-embeddings-by-default.md)). A deployment that cannot
+call it, or that says `OCHAKAI_EMBEDDINGS=off`, runs lexical-only.
+Vectors are written when an entry is written, so a base loaded before
+embeddings were reachable — or a changed model — leaves older entries
+unembedded until `ochakai reembed` runs (design doc
 [0020](design/0020-attachment-search.md)). Attachments join the same
 search: filenames match lexically always, contents join the vector half
 when embeddings are on, and a hit is always the owning entry rather than

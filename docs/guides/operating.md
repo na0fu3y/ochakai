@@ -145,9 +145,21 @@ confirm what a running instance actually has enabled:
 
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
-"semantic search disabled; using lexical search only"
+"semantic search enabled" model=gemini-embedding-001 dim=768 project=… discovered=true
 "attachments disabled (no OCHAKAI_GCS_BUCKET); markdown entries only"
 ```
+
+`discovered=true` means the project came from the metadata server rather
+than `OCHAKAI_VERTEX_PROJECT` — semantic search is the default on Google
+Cloud (design doc [0049](../design/0049-embeddings-by-default.md)). The
+line that replaces it says which way it went instead:
+
+| Line | What it means |
+|---|---|
+| `semantic search off: Vertex AI did not answer for this deployment` | the startup probe was refused, almost always a missing `roles/aiplatform.user`. Search is lexical-only; grant the role and restart |
+| `semantic search is off: this database cannot hold vectors` | pgvector is not there and this role may not create it. Create the extension as the admin user (deploy guide §3) |
+| `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off)` | asked for, and the only one of the three that is not worth investigating |
+| `semantic search disabled; using lexical search only` | no project was configured and none was discovered — ochakai is not running on Google Cloud |
 
 If `insecure_dev=true` appears anywhere but a laptop, stop and fix that
 first: every caller is `human:anonymous` and nothing is authenticated.
@@ -223,8 +235,12 @@ Pin a version rather than `:latest`, so a redeploy is a decision.
 Two upgrade-adjacent traps worth knowing here:
 
 - **Changing `OCHAKAI_EMBEDDING_DIM` on a database that already holds
-  vectors is refused at startup.** Put it back, or drop the vector tables
-  and re-embed.
-- **Enabling embeddings, or changing the model, does not backfill.**
-  Existing entries stay unembedded until `ochakai reembed`, which costs
-  Vertex AI tokens proportional to the base.
+  vectors rebuilds the vector tables at the new width**, because a vector
+  is derived from the entry it describes and nothing curated is involved
+  (design doc [0049](../design/0049-embeddings-by-default.md) §3). The
+  startup log says it happened. Search is lexical-only until
+  `ochakai reembed` refills them — that part is deliberate, since
+  refilling spends money.
+- **Semantic search becoming reachable, or a changed model, does not
+  backfill.** Existing entries stay unembedded until `ochakai reembed`,
+  which costs Vertex AI tokens proportional to the base.

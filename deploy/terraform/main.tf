@@ -78,7 +78,13 @@ locals {
     local.read_only ? { OCHAKAI_READ_ONLY = "true" } : {},
     var.public_read_only ? { OCHAKAI_PUBLIC_READ_ONLY = "true" } : {},
     var.enable_gcs_attachments ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
-    var.enable_vertex_embeddings ? { OCHAKAI_VERTEX_PROJECT = var.project_id } : {},
+    # No OCHAKAI_VERTEX_PROJECT when embeddings are on: ochakai discovers
+    # the project it runs in, and a discovered project is the mode that
+    # falls back to lexical search instead of refusing to start (design
+    # doc 0049 §2.3). That matters here, because the pgvector extension
+    # is a documented manual bootstrap step below — an apply that lands
+    # before somebody ran it should degrade, not fail to serve.
+    var.enable_vertex_embeddings ? {} : { OCHAKAI_EMBEDDINGS = "off" },
     var.enable_vertex_embeddings && var.vertex_model != null ? { OCHAKAI_VERTEX_MODEL = var.vertex_model } : {},
     var.enable_vertex_embeddings && var.vertex_location != null ? { OCHAKAI_VERTEX_LOCATION = var.vertex_location } : {},
     var.enable_vertex_embeddings && var.embedding_dim != null ? { OCHAKAI_EMBEDDING_DIM = tostring(var.embedding_dim) } : {},
@@ -302,7 +308,10 @@ resource "google_sql_user" "ochakai_run" {
 # runtime deliberately gets neither cloudsqlsuperuser nor any role
 # membership: only explicit object grants.
 
-# --- 4. Optional: Vertex AI embeddings ------------------------------------
+# --- 4. Vertex AI embeddings (on by default) ------------------------------
+#
+# This grant is the switch. ochakai asks for embeddings by itself where it
+# runs on Google Cloud; whether it gets them is IAM's answer (0049 §2.2).
 
 resource "google_project_iam_member" "ochakai_vertex" {
   count = var.enable_vertex_embeddings ? 1 : 0

@@ -16,9 +16,11 @@ invoker_members = [
 # Everything below is optional and off by default. Uncommenting nothing gives
 # the ~$10/month baseline: Cloud Run scaled to zero and one db-f1-micro.
 
-# Hybrid search (trigram + Vertex AI embeddings). Recommended for Japanese
-# knowledge bases. Existing entries stay unembedded until `ochakai reembed`.
-# enable_vertex_embeddings = true
+# Hybrid search (trigram + Vertex AI embeddings) is ON by default — it is what
+# makes search work on a Japanese knowledge base. Entries loaded before the
+# first apply stay unembedded until `ochakai reembed`. Set this to false to run
+# lexical-only: nothing is granted and no external API is called.
+# enable_vertex_embeddings = false
 
 # Attachments. Without a bucket the service is markdown-only and attach
 # operations return 501.

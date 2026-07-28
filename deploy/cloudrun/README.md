@@ -12,7 +12,7 @@ one container image plus one database.
 |---|---|---|
 | Cloud SQL | `db-f1-micro` (shared core), 10 GB SSD, single zone, no backups | ~$9–10 |
 | Cloud Run | request-based billing, `min-instances=0` | ~$0 when idle |
-| Vertex AI embeddings (optional) | `gemini-embedding-001`, pay per token | cents at example scale |
+| Vertex AI embeddings (on by default, §4) | `gemini-embedding-001`, pay per token | cents at example scale |
 
 Cloud SQL dominates the bill. Regions in Asia (e.g. `asia-northeast1`) cost
 slightly more; pick what matches your latency needs. Teardown commands are
@@ -192,7 +192,8 @@ runtime identity:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS vector;   -- for §4; Cloud SQL's pgvector is not
+CREATE EXTENSION IF NOT EXISTS vector;   -- for §4's semantic search, which is on
+                                         -- by default; Cloud SQL's pgvector is not
                                          -- a trusted extension, hence admin-created
 GRANT USAGE, CREATE ON SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
 GRANT ALL ON ALL TABLES IN SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
@@ -270,29 +271,59 @@ Note: use `/health`, not `/healthz` — Google Frontends intercept
 `/healthz` on `run.app` URLs and return their own 404 without ever
 reaching the app.
 
-## 4. Optional: enable hybrid semantic search (Vertex AI)
+## 4. Hybrid semantic search (Vertex AI, on by default)
 
-Embeddings are off by default (trigram-only search, no external calls).
-Enabling them uses the Cloud Run service identity via ADC — no API keys.
+On Cloud Run, ochakai asks the metadata server which project it is
+running in and turns semantic search on with it (design doc 0049) —
+there is no variable to set, and authentication is the service identity
+via ADC, so there are still no API keys.
+
+**What decides whether you actually get it is IAM, not configuration.**
+Without `roles/aiplatform.user` the service identity cannot call Vertex
+AI: ochakai finds that out with one small embedding at startup, says so
+in one log line, and serves lexical-only search. So this section is two
+commands, and they are the difference between hybrid and lexical:
 
 ```sh
 gcloud services enable aiplatform.googleapis.com
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/aiplatform.user   # ochakai-run SA from §3
-
-gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_VERTEX_PROJECT=$PROJECT_ID
 ```
 
-Use `--update-env-vars`, not `--set-env-vars`: the latter **replaces** all
-environment variables and would wipe `OCHAKAI_DATABASE_URL`.
+Grant them unless you have a reason not to — above all for a knowledge
+base written in Japanese, where the trigram index cannot serve a
+two-character term and the lexical half is answering by scanning.
 
 On the next start, ochakai creates the pgvector tables and embeds new
 and updated knowledge — and newly attached plain-text files (design doc
 0020) — with `gemini-embedding-001`. Search becomes hybrid
 (trigram + vector, reciprocal rank fusion). If Vertex AI is ever
-unavailable, writes and searches degrade gracefully to trigram-only.
+unavailable afterwards, writes and searches degrade gracefully to
+trigram-only.
+
+**To refuse it**, either do not grant the role (nothing is called, and
+nothing is charged), or say so:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_EMBEDDINGS=off
+```
+
+Use `--update-env-vars`, not `--set-env-vars`: the latter **replaces** all
+environment variables and would wipe `OCHAKAI_DATABASE_URL`.
+
+Worth knowing before you grant the role: ochakai has no authorization
+(design doc 0002), so **anyone who can reach the service can cause a
+Vertex AI call by writing**. Each write embeds one document. That is
+cents at the scale a curated knowledge base reaches, and it is the same
+reasoning as `reembed` below, only spread across ordinary writes.
+
+Embedding a project other than the one ochakai runs in — or running it
+outside Google Cloud, where there is no metadata server — still takes
+`OCHAKAI_VERTEX_PROJECT`. A project named that way is a deployment
+asking for semantic search by name: if Vertex AI or pgvector is not
+there, it refuses to start rather than quietly serving lexical results.
 
 To also search image and PDF attachments by content, run the base on
 the multimodal model instead:
@@ -307,34 +338,37 @@ all vectors must share one model's space: on an existing base, entries
 and attachments keep their old-model vectors (and stay out of the new
 space) until they are written again (design doc 0020 §2.3).
 
-Turning this on for a knowledge base that already has entries needs one
-more step. Vectors are written when an entry is written, so everything
-loaded beforehand has none and hybrid search stays quietly lexical-only:
+A knowledge base that already has entries needs one more step. Vectors
+are written when an entry is written, so everything loaded before the
+role was granted has none and hybrid search stays quietly lexical-only:
 
 ```sh
 ochakai reembed            # bounded passes until nothing is left
 ```
 
-`reembed` is the only endpoint that spends money on your behalf — each
-entry it processes is a Vertex AI embedding call. ochakai has no
-authorization, so anyone who can reach the service can start one; the
-cost is bounded by how many entries are unembedded (a repeat run with
-nothing to do calls nothing), but it is worth knowing before granting
-`roles/run.invoker` widely.
+`reembed` is the endpoint that spends money deliberately — each entry it
+processes is a Vertex AI embedding call, in one go rather than spread
+across writes. ochakai has no authorization, so anyone who can reach the
+service can start one; the cost is bounded by how many entries are
+unembedded (a repeat run with nothing to do calls nothing), but it is
+worth knowing before granting `roles/run.invoker` widely.
 
 The same applies after changing `OCHAKAI_VERTEX_MODEL`: the old vectors
 are in a space nothing queries any more (design doc 0020).
 
-If the new model also changes `OCHAKAI_EMBEDDING_DIM`, the service refuses
-to start: the vector columns were created at the old width, so writes and
-searches would both fail against them and `reembed` could not repair
-anything. Put the setting back, or drop the old vectors and rebuild:
+If the new model also changes `OCHAKAI_EMBEDDING_DIM`, ochakai rebuilds
+the vector tables at the new width on the next start and logs that it
+did (design doc 0049 §3). Nothing you curated is involved: a vector is
+derived from the object it describes, and the old ones were in a space
+nothing would query. What it costs is the calls to refill them, so
+refilling stays yours to ask for:
 
 ```sh
-# psql: DROP TABLE knowledge_embedding, attachment_embedding;
-# then redeploy with the new dimension and:
-ochakai reembed
+ochakai reembed            # after the restart that resized the tables
 ```
+
+Until it runs, search answers lexically — hybrid ranking survives one
+half being empty.
 
 ## 4b. Attachments require GCS
 
@@ -667,9 +701,10 @@ both landed (before the flip this is Google's 401); 403 on the write proves
 the implied read-only. Sending a bogus `Authorization` header changes
 neither answer — that is the property, not a side effect.
 
-If you want the demo to show **hybrid search** (§4), turn embeddings on
-*before* the import: vectors are written when an entry is written, and
-`ochakai reembed` is itself a write, so it is refused once read-only is on.
+If you want the demo to show **hybrid search** (§4), grant the Vertex AI
+role *before* the import: vectors are written when an entry is written,
+and `ochakai reembed` is itself a write, so it is refused once read-only
+is on.
 The demo bundle has no attachments, so §4b's bucket is not needed for it.
 
 ### Cost

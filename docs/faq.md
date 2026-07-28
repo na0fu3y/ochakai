@@ -23,9 +23,12 @@ depend on the runtime you are leaving.
 
 No. ochakai reports nothing anywhere — there is no telemetry, and so
 nothing to opt out of. The only hosts it ever contacts are Google Cloud
-APIs you turn on yourself: Cloud SQL always, plus GCS if you set
-`OCHAKAI_GCS_BUCKET` and Vertex AI if you set `OCHAKAI_VERTEX_PROJECT`.
-With neither set, an instance talks to its database and nothing else.
+APIs in your own project: Cloud SQL always, GCS if you set
+`OCHAKAI_GCS_BUCKET`, and Vertex AI where semantic search is enabled —
+which, running on Google Cloud, is the default (design doc
+[0049](design/0049-embeddings-by-default.md)). `OCHAKAI_EMBEDDINGS=off`
+declines it, and so does simply not granting `roles/aiplatform.user`;
+either way an instance then talks to its database and nothing else.
 
 Usage counts are rows in your own database. They exist so a reviewer can
 see which knowledge is earning its place, and they never leave it.
@@ -54,10 +57,19 @@ knowledge here.
 
 ### Do I need embeddings?
 
-No. Search is lexical by default and calls no external API. Turn
-embeddings on (`OCHAKAI_VERTEX_PROJECT`) when your knowledge base is in
-Japanese, when questions arrive as sentences rather than keywords, or
-when you attach images and PDFs you want searchable by content.
+Usually yes, which is why you get them without asking: running on Google
+Cloud, ochakai finds its own project and turns hybrid search on, provided
+its service identity may call Vertex AI (design doc
+[0049](design/0049-embeddings-by-default.md)). They earn their keep when
+your knowledge base is in Japanese, when questions arrive as sentences
+rather than keywords, or when you attach images and PDFs you want
+searchable by content.
+
+Search still works without them — lexical-only, calling no external API.
+That is what you get outside Google Cloud, without the
+`roles/aiplatform.user` grant, or with `OCHAKAI_EMBEDDINGS=off`. Since
+every write becomes an embedding call, a deployment that wants no Vertex
+AI spend should say so with one of those three.
 
 The reason Japanese is called out: PostgreSQL's full-text search does not
 tokenize it, so a Japanese query is matched by two-character windows
