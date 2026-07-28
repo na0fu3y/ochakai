@@ -23,10 +23,11 @@ func hit(id string, status domain.Status) domain.SearchHit {
 }
 
 // verifiedHit is hit plus a confirmation. The rank boost keys off the
-// ledger rather than the status now (design doc 0043 §3.2).
+// trust tier the ledger yields rather than the status (design docs 0043
+// §3.2, 0046 §3.10).
 func verifiedHit(id string) domain.SearchHit {
 	h := hit(id, domain.StatusStable)
-	h.Verified = true
+	h.Trust = domain.TrustHuman
 	return h
 }
 

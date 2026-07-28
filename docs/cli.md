@@ -177,16 +177,16 @@ Flags:
     	filter by status: draft|stable|deprecated (repeatable)
   -tag value
     	filter by tag (repeatable)
+  -trust value
+    	filter by who confirmed the entry: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
     	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-  -verified true
-    	true for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value
 
 Examples:
   ochakai context "why did revenue drop in March?"
-  ochakai context "monthly revenue" --type 'Attested Computation' --verified true --json
+  ochakai context "monthly revenue" --type 'Attested Computation' --trust human-reviewed --json
   ochakai context "$PROMPT" --budget 4000   # hooks: cap the injected bytes
   ochakai context "activation rate" --prefix teams/growth --prefix company
 ```
@@ -552,19 +552,19 @@ Flags:
     	filter by status: draft|stable|deprecated (repeatable)
   -tag value
     	filter by tag (repeatable)
+  -trust value
+    	filter by who confirmed the entry: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
     	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-  -verified true
-    	true for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value
 
 Examples:
-  ochakai search "gross margin" --type Metric --type 'Glossary Term' --verified true
+  ochakai search "gross margin" --type Metric --type 'Glossary Term' --trust human-reviewed
   ochakai search churn --json | jq -r '.hits[] | .id'
-  ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100
+  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100
   ochakai search --sort usage --status draft --limit 50   # review queue
-  ochakai search --sort failed --verified true              # re-verification queue
+  ochakai search --sort failed --trust human-reviewed     # re-verification queue
   ochakai search --sort stale_after                         # past their declared expiry
   ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one

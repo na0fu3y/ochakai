@@ -74,14 +74,17 @@ paths:
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
           explode: true
-        - name: verified
+        - name: trust
           in: query
           description: >
-            true for entries somebody has confirmed, false for ones nobody
-            has; omit to leave the question unasked. Independent of
-            status: a draft may be verified and a stable entry unverified
-            (OKF SPEC §§5.3-5.4).
-          schema: { type: boolean }
+            Filter by who confirmed the entry — OKF's own trust tiers
+            (SPEC §5.3), derived from the verification ledger. Repeatable
+            and OR-ed, so "anything somebody confirmed" is two values.
+            Omit to leave the question unasked. Independent of status: a
+            draft may be human-reviewed and a stable entry unverified
+            (SPEC §§5.3-5.4).
+          schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
+          explode: true
         - name: rejected
           in: query
           description: >
@@ -172,7 +175,7 @@ paths:
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: stable
-                        verified: true
+                        trust: human-reviewed
                         verified_at: "2026-07-10T01:52:16.774301Z"
                         rejected: false
                         links:
@@ -189,7 +192,7 @@ paths:
                         tags: [finance, core]
                         status: stable
                         stale_after: "2026-12-31"
-                        verified: true
+                        trust: human-reviewed
                         verified_at: "2026-07-14T02:33:41.019778Z"
                         rejected: false
                         links:
@@ -213,7 +216,7 @@ paths:
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        verified: false
+                        trust: unverified
                         rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
@@ -236,7 +239,7 @@ paths:
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        verified: false
+                        trust: unverified
                         rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
@@ -255,7 +258,7 @@ paths:
                         title: completed-order
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
-                        verified: false
+                        trust: unverified
                         rejected: false
                         content_hash: c07b4e19a35d8f206b1c94e73da508f2b6c31d9047ea825bf1c6d03b95a7e412
                         created_at: "2026-06-02T04:09:12.774903Z"
@@ -397,14 +400,15 @@ paths:
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
           explode: true
-        - name: verified
+        - name: trust
           in: query
           description: >
-            true for entries somebody has confirmed, false for ones nobody
-            has; omit to leave the question unasked. There is no rejected
+            Filter by OKF's trust tier (SPEC §5.3), repeatable and OR-ed;
+            omit to leave the question unasked. There is no rejected
             parameter here: a context pack never carries knowledge
             somebody turned down.
-          schema: { type: boolean }
+          schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
+          explode: true
         - name: tag
           in: query
           schema: { type: array, items: { type: string } }
@@ -502,19 +506,19 @@ paths:
                         type: Attested Computation
                         title: monthly-revenue
                         status: stable
-                        verified: true
+                        trust: human-reviewed
                         score: 1.35
                       - id: metrics/revenue
                         type: Metric
                         title: Revenue
                         status: stable
-                        verified: true
+                        trust: human-reviewed
                         score: 0.48
                       - id: insights/revenue-seasonality
                         type: Insight
                         title: Reading revenue month over month
                         status: draft
-                        verified: false
+                        trust: unverified
                         score: 0.43
                     entries:
                       - id: queries/monthly-revenue
@@ -553,7 +557,7 @@ paths:
                           description: Monthly net revenue for the last 12 complete months.
                           tags: [finance]
                           status: stable
-                          verified: true
+                          trust: human-reviewed
                           verified_at: "2026-07-10T01:52:16.774301Z"
                           rejected: false
                           links:
@@ -613,7 +617,7 @@ paths:
                           tags: [finance, core]
                           status: stable
                           stale_after: "2026-12-31"
-                          verified: true
+                          trust: human-reviewed
                           verified_at: "2026-07-14T02:33:41.019778Z"
                           rejected: false
                           links:
@@ -740,7 +744,7 @@ paths:
                       tags: [finance, core]
                       status: stable
                       stale_after: "2026-12-31"
-                      verified: true
+                      trust: human-reviewed
                       verified_at: "2026-07-14T02:33:41.019778Z"
                       rejected: false
                       links:
@@ -797,7 +801,7 @@ paths:
                       tags: [finance]
                       status: draft
                       stale_after: "2027-01-31"
-                      verified: false
+                      trust: unverified
                       rejected: false
                       links:
                         - { target: metrics/revenue, text: Revenue }
@@ -1005,7 +1009,7 @@ paths:
                       tags: [finance, core]
                       status: stable
                       stale_after: "2027-12-31"
-                      verified: true
+                      trust: human-reviewed
                       verified_at: "2026-07-14T02:33:41.019778Z"
                       rejected: false
                       links:
@@ -1181,7 +1185,7 @@ paths:
                       tags: [finance, core]
                       status: stable
                       stale_after: "2026-12-31"
-                      verified: true
+                      trust: human-reviewed
                       verified_at: "2026-07-14T02:33:41.019778Z"
                       rejected: false
                       links:
@@ -1272,7 +1276,7 @@ paths:
                       tags: [finance]
                       status: draft
                       stale_after: "2027-01-31"
-                      verified: true
+                      trust: human-reviewed
                       verified_at: "2026-07-27T00:41:12.905337Z"
                       rejected: false
                       links:
@@ -1364,7 +1368,7 @@ paths:
                       title: Gross revenue
                       description: Order totals before refunds.
                       status: draft
-                      verified: false
+                      trust: unverified
                       rejected: true
                       links:
                         - { target: tables/shop-orders, text: shop.orders }
@@ -1661,7 +1665,7 @@ paths:
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        verified: false
+                        trust: unverified
                         rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
@@ -1674,7 +1678,7 @@ paths:
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: stable
-                        verified: true
+                        trust: human-reviewed
                         verified_at: "2026-07-10T01:52:16.774301Z"
                         rejected: false
                         links:
@@ -2082,7 +2086,22 @@ components:
         entry unverified (design doc 0043 §3.2). "Was never accepted" is
         likewise not a lifecycle value but a ruling, in `rejection`
         (§3.3).
+        A document that names no status is stable — SPEC §5.4's default.
+        ochakai does not write a key its writer left out, so what comes
+        back here is the value a reader reads, while the document keeps
+        its silence (design doc 0046 §3.9).
       enum: [draft, stable, deprecated]
+    Trust:
+      type: string
+      description: >
+        The tier a consumer derives from the verification ledger, in OKF's
+        own vocabulary (SPEC §5.3): unverified when nobody has confirmed
+        the entry, machine-confirmed when something other than a person
+        has, human-reviewed when a person vouched for it. Derived on read
+        and never accepted from a payload — and independent of status,
+        which says whether the entry may be consumed (design doc 0046
+        §3.10).
+      enum: [unverified, machine-confirmed, human-reviewed]
     Verification:
       type: object
       description: >
@@ -2163,7 +2182,7 @@ components:
         the entry says, and this is an index over it. A client that needs
         a key not listed here reads the document; the projection carries
         what listing surfaces sort and filter by, and stops there.
-      required: [id, type, title, status, verified, rejected, content_hash, created_at, updated_at]
+      required: [id, type, title, status, trust, rejected, content_hash, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2205,14 +2224,14 @@ components:
             due for a re-check, not wrong. The one surface that reads it
             is sort=stale_after, the feed of entries whose declared date
             has passed (design doc 0037 §2.1).
-        verified:
-          type: boolean
+        trust:
+          allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >
-            Whether anybody has confirmed the entry — the verifications
-            ledger read as the boolean SPEC §5.3 derives trust from.
-            Independent of status: a draft may be verified and a stable
-            entry unverified (design doc 0043 §3.2). Who confirmed it,
-            and how often, is in observed.verified.
+            Who has confirmed the entry, in OKF's own vocabulary (SPEC
+            §5.3), derived from the verifications ledger. Independent of
+            status: a draft may be human-reviewed and a stable entry
+            unverified (design docs 0043 §3.2, 0046 §3.10). Who confirmed
+            it, and how often, is in observed.verified.
         verified_at:
           type: string
           format: date-time
@@ -2324,6 +2343,13 @@ components:
             attachment endpoints. Absent when the entry has none.
         created_at: { type: string, format: date-time, readOnly: true }
         updated_at: { type: string, format: date-time, readOnly: true }
+        trust:
+          allOf: [{ $ref: "#/components/schemas/Trust" }]
+          readOnly: true
+          description: >
+            The trust tier derived from `verifications` (SPEC §5.3),
+            carried so a caller reading a listing gets the same answer as
+            one reading the ledger.
         content_changed_at:
           type: string
           format: date-time

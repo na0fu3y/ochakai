@@ -183,19 +183,6 @@ func typeList() string {
 	return strings.Join(ss, "|")
 }
 
-// triBool reads a flag that means "unasked" when empty, so a caller can
-// tell "not mentioned" from "explicitly false".
-func triBool(v, flag string) (*bool, error) {
-	if v == "" {
-		return nil, nil
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return nil, fmt.Errorf("%s wants true or false, got %q", flag, v)
-	}
-	return &b, nil
-}
-
 // optBool turns an opt-in boolean flag into the tri-state the filters
 // take: unset stays unasked rather than becoming an explicit false.
 func optBool(v bool) *bool {
@@ -213,6 +200,11 @@ func statusList() string {
 	return strings.Join(ss, "|")
 }
 
+// trustList renders SPEC §5.3's tiers for the flag's help, from the one
+// place the vocabulary is spelled (design doc 0038 §4.4's rule, applied
+// to the second vocabulary OKF gives ochakai).
+func trustList() string { return strings.ReplaceAll(domain.TrustsHint(), ", ", "|") }
+
 // parseRef parses an entry id (an "ochakai://" prefix is tolerated).
 func parseRef(s string) (string, error) {
 	id := strings.TrimPrefix(s, "ochakai://")
@@ -226,14 +218,15 @@ func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
 		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.",
-		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --verified true\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --verified true              # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
+		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
 	source := fs.String("source", "", "only entries citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
-	verified := fs.String("verified", "", "`true` for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value")
+	var trust repeated
+	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
@@ -252,14 +245,10 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	verifiedFlag, err := triBool(*verified, "--verified")
-	if err != nil {
-		return err
-	}
 	hits, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
 		Source: *source, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
-		Verified: verifiedFlag, Rejected: optBool(*rejected),
+		Trust: trust, Rejected: optBool(*rejected),
 	})
 	if err != nil {
 		return err
@@ -347,13 +336,14 @@ func cmdContext(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"context",
 		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
-		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --verified true --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
+		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --trust human-reviewed --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands")
-	verified := fs.String("verified", "", "`true` for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value")
+	var trust repeated
+	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
@@ -378,13 +368,9 @@ func cmdContext(ctx context.Context, args []string) error {
 	if *asJSON {
 		serverBudget = *budget
 	}
-	verifiedFlag, err := triBool(*verified, "--verified")
-	if err != nil {
-		return err
-	}
 	res, err := c.Context(ctx, apiclient.ContextParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
-		Prefixes: prefixes, Verified: verifiedFlag, Limit: *limit, MinScore: *minScore, Budget: serverBudget,
+		Prefixes: prefixes, Trust: trust, Limit: *limit, MinScore: *minScore, Budget: serverBudget,
 	})
 	if err != nil {
 		return err

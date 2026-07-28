@@ -105,7 +105,7 @@ last entry.
     "Document" tab.
 
 - **BREAKING**: the web UI edits documents, and the form sugar is gone
-  (design doc [0046](docs/design/0044-web-ui-edits-documents.md)). The
+  (design doc [0044](docs/design/0044-web-ui-edits-documents.md)). The
   editor is the canonical document in a textarea, checked for parse
   errors before it is sent; new entries start from a per-type template.
   The row editors for `sources` and `parameters`, and the contract
@@ -144,6 +144,26 @@ last entry.
   - The canonical rendering stays as the form ochakai writes when it
     composes a document itself, and as what a write path falls back to
     when a caller changes an entry's fields rather than its document.
+
+- **BREAKING**: status and trust are said the way OKF says them (design
+  doc [0046](docs/design/0046-bundle-address-space.md) §§3.9-3.10).
+
+  - **A document that names no status is stable**, which is SPEC §5.4's
+    default. ochakai no longer writes a `status` its writer left out —
+    a create used to land on `draft`, and an update used to keep
+    whatever was there. Both were the server authoring the writer's
+    vocabulary. An agent that means "draft" writes `status: draft`, and
+    the MCP tool descriptions say so.
+  - **`verified` as a boolean is gone.** Entries carry `trust`, SPEC
+    §5.3's tier derived from the verification ledger: `unverified`,
+    `machine-confirmed`, `human-reviewed`. It rides on every entry and
+    on every `/context` rank row beside `status`.
+  - The filter follows: `?verified=true` becomes `?trust=` (repeatable
+    and OR-ed) on REST and MCP, and `--verified true` becomes `--trust
+    human-reviewed` on the CLI. Asking for two tiers is two values
+    rather than a second kind of filter.
+  - Nothing about verifying changes: it is still a ledger append, still
+    absent from MCP, and still leaves the entry's version alone.
 
 - **BREAKING**: knowledge is written as an OKF document, and `PUT` is the
   whole write surface (design doc

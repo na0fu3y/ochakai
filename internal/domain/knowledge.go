@@ -170,6 +170,62 @@ func ValidStatus(s Status) bool {
 	return slices.Contains(Statuses, s)
 }
 
+// Trust is the tier a consumer derives from an entry's verification
+// ledger, in OKF's own vocabulary (SPEC §5.3). It is not a lifecycle
+// value and not a field a writer can set: status says whether the entry
+// may be consumed, trust says who has confirmed it, and the two are
+// independent — a draft can be human-reviewed and a stable entry
+// unverified (design docs 0043 §3.2, 0046 §3.10).
+type Trust string
+
+const (
+	TrustUnverified = Trust("unverified")        // nobody has confirmed it
+	TrustMachine    = Trust("machine-confirmed") // confirmed, but by no person
+	TrustHuman      = Trust("human-reviewed")    // a person vouched for it
+)
+
+// Trusts lists the tiers lowest to highest, which is the order SPEC §5.3
+// introduces them in and the order a filter's help text reads best in.
+var Trusts = []Trust{TrustUnverified, TrustMachine, TrustHuman}
+
+// ValidTrust reports whether t names a tier.
+func ValidTrust(t Trust) bool { return slices.Contains(Trusts, t) }
+
+// TrustsHint renders the vocabulary for help and error text, so no
+// surface keeps a copy of the list to fall behind.
+func TrustsHint() string {
+	names := make([]string, len(Trusts))
+	for i, t := range Trusts {
+		names[i] = string(t)
+	}
+	return strings.Join(names, ", ")
+}
+
+// TrustOf derives the tier from a verification ledger. SPEC §5.3 reads it
+// from the human: prefix alone: any person makes it human-reviewed, any
+// other confirmation machine-confirmed, none unverified.
+func TrustOf(vs []Verification) Trust {
+	tier := TrustUnverified
+	for i := range vs {
+		if vs[i].By.Kind == ActorHuman {
+			return TrustHuman
+		}
+		tier = TrustMachine
+	}
+	return tier
+}
+
+// Lifecycle is the entry's status as a reader sees it: what it says, or
+// OKF's default when it says nothing (SPEC §5.4). ochakai does not write
+// a status its writer left out (design doc 0046 §3.9) — absence is what
+// the document says, and applying the default is the projection's job.
+func (k *Knowledge) Lifecycle() Status {
+	if k.Status == "" {
+		return StatusStable
+	}
+	return k.Status
+}
+
 // StatusFromOKF maps a frontmatter status onto ochakai's vocabulary,
 // which since design doc 0043 §3.2 is OKF's vocabulary — so the mapping
 // is the identity on every value the spec defines, and the whole of what
@@ -581,6 +637,11 @@ type Knowledge struct {
 	// query, and an entry composed in memory rather than parsed from a
 	// document.
 	Doc string `json:"-"`
+	// Trust is the tier SPEC §5.3 derives from Verifications, carried on
+	// the wire so a caller that only reads a listing gets the same answer
+	// as one that reads the ledger (design doc 0046 §3.10). Derived on
+	// read; never accepted from a payload.
+	Trust Trust `json:"trust,omitempty"`
 	// ContentHash is the entry's version: the SHA-256 of the document as
 	// stored (design docs 0043 §3.4, 0046 §3.4), which is what the ETag
 	// carries and what If-Match is checked against. It covers the
@@ -690,6 +751,11 @@ func Normalize(s string) string { return norm.NFC.String(s) }
 // JSON, so the same value decoded from YAML (int) and from JSONB (float64)
 // compares equal; values JSON cannot encode compare as different.
 //
+// Status is compared as a reader reads it, so a document that names
+// stable and one that names nothing are the same claim (SPEC §5.4) —
+// which is what lets a silent document round-trip without the index
+// column it derives disagreeing with it.
+//
 // The list comparisons are order-sensitive on purpose: reordering an
 // entry's citations or an Attested Computation's parameters is a change to
 // what it says, and a write that reorders them must not be swallowed as a
@@ -698,7 +764,7 @@ func (k *Knowledge) SameContent(o *Knowledge) bool {
 	return k.Type == o.Type && k.ID == o.ID &&
 		k.Title == o.Title && k.Description == o.Description &&
 		k.Resource == o.Resource &&
-		k.Status == o.Status && k.StatusNote == o.StatusNote &&
+		k.Lifecycle() == o.Lifecycle() && k.StatusNote == o.StatusNote &&
 		k.StaleAfter == o.StaleAfter &&
 		k.Runtime == o.Runtime && k.Computation == o.Computation &&
 		k.Body == o.Body &&
@@ -820,6 +886,15 @@ func ToTypes(ss []string) []Type {
 }
 
 // ToStatuses is ToTypes for status filters.
+func ToTrusts(ts []string) []Trust {
+	out := make([]Trust, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, Trust(t))
+	}
+	return out
+}
+
+// ToStatuses converts wire strings to statuses.
 func ToStatuses(ss []string) []Status {
 	out := make([]Status, 0, len(ss))
 	for _, s := range ss {
@@ -851,7 +926,10 @@ type Summary struct {
 	Tags        []string `json:"tags,omitempty"`
 	Status      Status   `json:"status"`
 	StaleAfter  string   `json:"stale_after,omitempty"`
-	Verified    bool     `json:"verified"`
+	// Trust is OKF's tier (SPEC §5.3), derived from the verification
+	// ledger; a boolean is not a distinction the spec draws (design doc
+	// 0046 §3.10).
+	Trust Trust `json:"trust"`
 	// VerifiedAt is the newest verification's time, absent when there is
 	// none. A row carries it because it is what the verification-age feed
 	// ranks by — a reviewer reading that feed is reading these times.
@@ -868,8 +946,8 @@ type Summary struct {
 func SummaryOf(k *Knowledge) Summary {
 	s := Summary{
 		ID: k.ID, Type: k.Type, Title: k.DisplayTitle(), Description: k.Description,
-		Resource: k.Resource, Tags: k.Tags, Status: k.Status, StaleAfter: k.StaleAfter,
-		Verified: k.Verified(), Rejected: k.Rejection != nil, Links: k.Links,
+		Resource: k.Resource, Tags: k.Tags, Status: k.Lifecycle(), StaleAfter: k.StaleAfter,
+		Trust: TrustOf(k.Verifications), Rejected: k.Rejection != nil, Links: k.Links,
 		ContentHash: k.ContentHash, CreatedAt: k.CreatedAt, UpdatedAt: k.UpdatedAt,
 	}
 	if v := k.LastVerified(); v != nil {
@@ -971,11 +1049,12 @@ type ContextRank struct {
 	Type   Type   `json:"type"`
 	Title  string `json:"title"`
 	Status Status `json:"status"`
-	// Verified is the ledger's answer, which the lifecycle status no
-	// longer carries (design doc 0043 §3.2): a caller deciding whether to
-	// spend a round trip wants to know whether anyone confirmed the entry.
-	Verified bool    `json:"verified"`
-	Score    float64 `json:"score"`
+	// Trust is the ledger's answer in OKF's vocabulary (SPEC §5.3), which
+	// the lifecycle status does not carry (design docs 0043 §3.2, 0046
+	// §3.10): a caller deciding whether to spend a round trip wants to
+	// know who confirmed the entry, not merely whether somebody did.
+	Trust Trust   `json:"trust"`
+	Score float64 `json:"score"`
 }
 
 // URI is the entry's canonical address, as on Knowledge: a rank is a
@@ -988,7 +1067,7 @@ func ContextRanks(hits []SearchHit) []ContextRank {
 	for i := range hits {
 		out[i] = ContextRank{
 			ID: hits[i].ID, Type: hits[i].Type, Title: hits[i].Title,
-			Status: hits[i].Status, Verified: hits[i].Verified, Score: hits[i].Score,
+			Status: hits[i].Status, Trust: hits[i].Trust, Score: hits[i].Score,
 		}
 	}
 	return out

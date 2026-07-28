@@ -168,11 +168,12 @@ type Filter struct {
 	// Values arrive normalized by the service — NFC, no trailing slash.
 	Prefixes []string
 
-	// Verified and Rejected ask about the instance ledgers rather than the
-	// document (design doc 0043 §§3.2-3.3). Both are tri-state: nil leaves
-	// the question unasked. Nil Rejected still hides rejected entries —
-	// the default is not "no constraint" but "not the ones we said no to".
-	Verified *bool
+	// Trust and Rejected ask about the instance ledgers rather than the
+	// document (design docs 0043 §§3.2-3.3, 0046 §3.10). Trust is empty
+	// when the question is not asked, and OR-ed like Statuses when it is;
+	// Rejected is tri-state, and nil still hides rejected entries — the
+	// default is not "no constraint" but "not the ones we said no to".
+	Trust    []domain.Trust
 	Rejected *bool
 }
 
@@ -331,6 +332,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 	}
 	dests = append(dests, &k.ContentHash, &verifications, &rejection)
 	finish = func() error {
+		defer func() { k.Trust = domain.TrustOf(k.Verifications) }()
 		if staleAfter != nil {
 			k.StaleAfter = staleAfter.UTC().Format(domain.StaleAfterLayout)
 		}
@@ -407,12 +409,9 @@ func documentSays(doc []byte, k *domain.Knowledge) bool {
 	// (design doc 0017) — nor its links, which are derived from the body
 	// it does carry (design doc 0024).
 	d.ID, d.Links = k.ID, k.Links
-	// Nor is a document that names no status disagreeing about one: it is
-	// saying nothing, and the write path still fills a default in until
-	// the read projection applies OKF's (design doc 0046 §3.9).
-	if d.Status == "" {
-		d.Status = k.Status
-	}
+	// A document that names no status still agrees with the index column
+	// derived from it: SameContent compares what a reader reads, and a
+	// silent document reads as OKF's default (design doc 0046 §3.9).
 	return d.SameContent(k)
 }
 
@@ -1576,13 +1575,34 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 	} else {
 		conds = append(conds, "NOT "+rejectedExists)
 	}
-	if f.Verified != nil {
-		verifiedExists := fmt.Sprintf(
+	if len(f.Trust) > 0 {
+		// SPEC §5.3's tiers as predicates over the ledger: a person makes
+		// an entry human-reviewed, any other confirmation
+		// machine-confirmed, none unverified. Asking for several ORs them,
+		// so "anything somebody confirmed" is two values rather than a
+		// second kind of filter.
+		anyVerification := fmt.Sprintf(
 			"EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = %sid)", outer)
-		if *f.Verified {
-			conds = append(conds, verifiedExists)
-		} else {
-			conds = append(conds, "NOT "+verifiedExists)
+		byHuman := fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = %sid AND v.by_kind = 'human')", outer)
+		var tiers []string
+		for _, t := range f.Trust {
+			switch t {
+			case domain.TrustUnverified:
+				tiers = append(tiers, "NOT "+anyVerification)
+			case domain.TrustMachine:
+				tiers = append(tiers, anyVerification+" AND NOT "+byHuman)
+			case domain.TrustHuman:
+				tiers = append(tiers, byHuman)
+			default:
+				// A tier nobody defines matches nothing. Dropping it
+				// instead would answer a question the caller did not ask
+				// — and answer it with everything.
+				tiers = append(tiers, "false")
+			}
+		}
+		if len(tiers) > 0 {
+			conds = append(conds, "("+strings.Join(tiers, ") OR (")+")")
 		}
 	}
 	if len(f.Tags) > 0 {

@@ -128,7 +128,7 @@ go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
-ochakai search "revenue" --type Metric --verified true
+ochakai search "revenue" --type Metric --trust human-reviewed
 ochakai search --sort stale_after   # past the expiry their author declared
 ochakai search --source https://wiki.example/revenue-policy  # what derives from this
 ochakai search "revenue" --prefix queries/sales   # only what lives under one subtree

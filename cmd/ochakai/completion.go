@@ -26,6 +26,11 @@ const typesMark = "@TYPES@"
 // no status contains a space, so one spelling serves all three shells.
 const statusesMark = "@STATUSES@"
 
+// trustsMark is the same arrangement for OKF's trust tiers (SPEC §5.3,
+// design doc 0046 §3.10): one vocabulary, spelled in domain and
+// interpolated here. No tier contains a space either.
+const trustsMark = "@TRUSTS@"
+
 var (
 	zshCompletion  = expand(zshCompletionTmpl, `"`)
 	bashCompletion = expand(bashCompletionTmpl, `'`)
@@ -38,7 +43,8 @@ func expand(tmpl, quote string) string {
 		names[i] = string(st)
 	}
 	s := strings.ReplaceAll(tmpl, typesMark, domain.TypesQuoted(quote))
-	return strings.ReplaceAll(s, statusesMark, strings.Join(names, " "))
+	s = strings.ReplaceAll(s, statusesMark, strings.Join(names, " "))
+	return strings.ReplaceAll(s, trustsMark, strings.ReplaceAll(domain.TrustsHint(), ", ", " "))
 }
 
 func cmdCompletion(_ context.Context, args []string) error {
@@ -111,7 +117,7 @@ _ochakai() {
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
         '--source[only entries citing this resource]:source:' \
-        '--verified[true for confirmed entries, false for unconfirmed]:verified:(true false)' \
+        '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '--rejected[only entries a human turned down]' \
         '--sort[list instead of searching: by verification age, demand, failed reports, or declared expiry]:sort:(verified_at usage failed stale_after)' \
         '--limit[max results]:limit:' \
@@ -124,7 +130,7 @@ _ochakai() {
         '*--status[filter by status]:status:(@STATUSES@)' \
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
-        '--verified[true for confirmed entries, false for unconfirmed]:verified:(true false)' \
+        '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '--limit[max full entries]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
         '--min-score[drop hits below this score]:min-score:' \
@@ -216,15 +222,15 @@ _ochakai() {
   case $prev in
     --type|-type) COMPREPLY=($(compgen -W "@TYPES@" -- "$cur")); return ;;
     --status|-status) COMPREPLY=($(compgen -W "@STATUSES@" -- "$cur")); return ;;
-    --verified|-verified) COMPREPLY=($(compgen -W "true false" -- "$cur")); return ;;
+    --trust|-trust) COMPREPLY=($(compgen -W "@TRUSTS@" -- "$cur")); return ;;
     --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed stale_after" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --verified --rejected --sort --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --trust --rejected --sort --limit --json --url" ;;
     browse)        opts="--json --url" ;;
-    context)       opts="--type --status --tag --prefix --verified --limit --budget --min-score --json --url" ;;
+    context)       opts="--type --status --tag --prefix --trust --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
@@ -315,7 +321,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verif
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l verified -x -a 'true false' -d 'true for confirmed entries, false for unconfirmed'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the entry (OKF SPEC §5.3)'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l lift -d 'withdraw the rejection'

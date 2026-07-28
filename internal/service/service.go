@@ -171,9 +171,13 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 		return nil, err
 	}
 	deriveLinks(k)
-	if k.Status == "" {
-		k.Status = domain.StatusDraft
-	}
+	// A document that names no status is not a draft — it is silent, and
+	// OKF says a silent document is stable (SPEC §5.4). The index column
+	// holds what a reader would read, and the document keeps its silence:
+	// ochakai does not write a key its writer left out (design doc 0046
+	// §3.9). Whether anybody has confirmed the entry is a separate
+	// question, which the trust tier answers (§3.10).
+	k.Status = k.Lifecycle()
 	k.CreatedBy, k.UpdatedBy = actor, actor
 	if err := s.Store.Create(ctx, k, keepCuratedTombstones); err != nil {
 		return nil, err
@@ -212,9 +216,10 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if ifMatch != nil && old.ContentHash != *ifMatch {
 		return nil, false, store.ErrConflict
 	}
-	if k.Status == "" {
-		k.Status = old.Status
-	}
+	// A PUT is a full replacement, so an omitted status is not "keep the
+	// one you had": it is the document saying nothing, which reads as
+	// OKF's default (design doc 0046 §3.9).
+	k.Status = k.Lifecycle()
 	k.CreatedBy = old.CreatedBy
 	k.CreatedAt = old.CreatedAt
 	// The ledgers belong to the instance, not to the payload: an update
@@ -1164,7 +1169,11 @@ func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 	}
 	out := make([]domain.SearchHit, 0, len(byKey))
 	for _, e := range byKey {
-		if e.hit.Verified {
+		// Any confirmation earns the nudge, whichever tier it is: the
+		// boost is about "somebody checked this", and weighting the tiers
+		// against each other would be a ranking decision no record makes
+		// (design docs 0033, 0046 §3.10).
+		if e.hit.Trust == domain.TrustHuman || e.hit.Trust == domain.TrustMachine {
 			e.score += 0.002
 		}
 		e.hit.Score = e.score

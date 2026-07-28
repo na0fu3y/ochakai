@@ -200,7 +200,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
-			Verified: in.Verified, Rejected: in.Rejected,
+			Trust: domain.ToTrusts(in.Trust), Rejected: in.Rejected,
 		}
 		hits, err := svc.SearchOrList(ctx, in.Query, in.Sort, f, in.Limit)
 		if err != nil {
@@ -228,7 +228,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Query: in.Query,
 			Filter: store.Filter{
 				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
-				Prefixes: in.Prefixes, Verified: in.Verified,
+				Prefixes: in.Prefixes, Trust: domain.ToTrusts(in.Trust),
 			},
 			Limit: in.Limit, Budget: budget,
 		})
@@ -262,8 +262,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create_knowledge",
 		Annotations: nonDestructive,
-		Description: "Create a knowledge entry. Write back what you learned: metric caveats, verified answers, " +
-			"glossary terms. Entries default to draft; your identity is recorded as created_by. " +
+		Description: "Create a knowledge entry. Write back what you learned: metric caveats, confirmed answers, " +
+			"glossary terms. Write status: draft unless you are recording something already agreed — a " +
+			"document that names no status reads as stable (OKF SPEC §5.4). Your identity is recorded as " +
+			"created_by, and the entry stays unverified until a person confirms it. " +
 			"Before creating, search with rejected=true to avoid " +
 			"re-proposing knowledge that was already rejected (the ruling records why). " +
 			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
@@ -271,7 +273,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"An \"Attested Computation\" entry records a sanctioned computation others must run instead of " +
 			"improvising: put the computation in a # Computation fence in body and the contract in the " +
 			"runtime, parameters, executor and attester fields. ochakai stores it and never runs it. " +
-			"A verified question-and-SQL pair is one of these: runtime says where the SQL runs, and " +
+			"A confirmed question-and-SQL pair is one of these: runtime says where the SQL runs, and " +
 			"attrs.question carries the natural-language question it answers. " +
 			"Cite the material an entry derives from in sources — each needs a resource, and an id lets " +
 			"markdown footnotes in body attribute single claims to it. " +
@@ -311,9 +313,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be updated from " +
 			"this surface: if a verified entry is wrong, report_outcome failed; otherwise create_knowledge " +
 			"a better draft and let a human promote it. " +
-			"Setting status=verified records you as verified_by — " +
-			"do it only for knowledge you have actually validated. Setting status=rejected records you " +
-			"as rejected_by; put the reason in status_note (also useful when deprecating).",
+			"status is the lifecycle only — draft, stable, deprecated (OKF SPEC §5.4); a document that " +
+			"names none reads as stable, so write status: draft for a draft. Whether anyone has confirmed " +
+			"the entry is not yours to set: it comes from the verification ledger, and this surface does " +
+			"not verify or reject. Put the reason for deprecating in status_note.",
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		// MCP has no conditional-update channel, so it cannot opt into the
 		// If-Match precondition (nil) and writes are last-write-wins. That
@@ -488,7 +491,7 @@ type searchIn struct {
 	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
-	Verified *bool    `json:"verified,omitempty" jsonschema:"true for entries somebody has confirmed, false for ones nobody has; omit to not ask. Independent of status: a draft can be verified and a stable entry unverified"`
+	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
 	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only entries a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected entries stay out of results"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string   `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
@@ -511,7 +514,7 @@ type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
-	Verified *bool    `json:"verified,omitempty" jsonschema:"true for entries somebody has confirmed, false for ones nobody has; omit to not ask. Independent of status: a draft can be verified and a stable entry unverified"`
+	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
