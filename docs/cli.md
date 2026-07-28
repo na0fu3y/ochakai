@@ -275,21 +275,25 @@ Examples:
 Usage: ochakai get [flags] <id>
 
 Print one knowledge entry as an OKF document (YAML frontmatter +
-markdown body). The output round-trips through `ochakai update`.
-Attachment metadata is listed on stderr; --download saves the
-attachment files themselves (an agent can then read them from disk).
+markdown body), and nothing else, so the output round-trips through
+`ochakai update`. Who wrote and confirmed it is an observation rather
+than part of the document, so it goes to stderr, as attachment metadata
+does; --download saves the attachment files themselves (an agent can
+then read them from disk). --json prints the whole read instead: the
+document, the projection under .summary, and the provenance under
+.observed.
 
 Flags:
   -download string
     	save the entry's attachments into this directory
   -json
-    	print JSON instead of the OKF document
+    	print the whole read as JSON (document, summary, observed) instead of the document alone
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai get metrics/revenue
-  ochakai get queries/sales/monthly-revenue --json | jq -r '.attrs.sql'
+  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'
   ochakai get insights/reading-revenue --download ./img
 ```
 
@@ -303,8 +307,8 @@ a tar.gz of one; "-" reads the tar.gz from stdin). The inverse of
 `ochakai export`: each path names its entry (the path minus .md is
 the id), the frontmatter type key names the type (required — files
 without one are skipped and reported), reserved index.md / log.md
-files are skipped, unknown frontmatter keys are kept as attrs, and
-existing entries are replaced (kept as revisions; entries identical
+files are skipped, keys the format does not define are kept as
+written, and existing entries are replaced (kept as revisions; entries identical
 to what is stored are left untouched and reported as unchanged;
 entries the server rejects as invalid — e.g. one whose type is not a
 single line — are skipped and reported).
@@ -362,8 +366,9 @@ Examples:
 Usage: ochakai move [flags] <id> <new-id>
 
 Move (rename) a knowledge entry to a new id. Revisions, usage, and
-attachments follow, and inbound references (link targets, attrs.model)
-are rewritten so nothing breaks.
+attachments follow, and inbound references (link targets, and
+a `model` key where a document carries one) are rewritten so nothing
+breaks.
 
 Flags:
   -url ochakai use
@@ -547,7 +552,7 @@ Flags:
 
 Examples:
   ochakai search "gross margin" --type Metric --type 'Glossary Term' --verified true
-  ochakai search churn --json | jq '.hits[0].attrs'
+  ochakai search churn --json | jq -r '.hits[] | .id'
   ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100
   ochakai search --sort usage --status draft --limit 50   # review queue
   ochakai search --sort failed --verified true              # re-verification queue
@@ -595,7 +600,7 @@ Flags:
   -f string
     	input file (default: stdin)
   -if-match version
-    	update only if the entry still has this version — its content hash (`ochakai get <id> --json` prints it as .content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does
+    	update only if the entry still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does
   -json
     	print the updated entry as JSON
   -url ochakai use
@@ -604,7 +609,7 @@ Flags:
 Examples:
   ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue
   ochakai update metrics/revenue -f revenue.md
-  ochakai update metrics/revenue -f revenue.md --if-match "$(ochakai get metrics/revenue --json | jq -r .content_hash)"
+  ochakai update metrics/revenue -f revenue.md --if-match "$(ochakai get metrics/revenue --json | jq -r .summary.content_hash)"
 ```
 
 ## ochakai usage
@@ -672,7 +677,7 @@ Flags:
 
 Examples:
   ochakai verify metrics/revenue
-  ochakai verify metrics/revenue --json | jq -r '.verifications[-1].at'
+  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'
 ```
 
 ## ochakai whoami

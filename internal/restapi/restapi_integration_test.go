@@ -80,11 +80,16 @@ func TestRESTIntegration(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Read it back.
-	var got domain.Knowledge
+	// Read it back. A read is a view: the document it is, the projection
+	// to read it by, and what this instance observed (design doc 0043
+	// §3.5).
+	var got domain.View
 	getJSON(t, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", &got)
-	if got.Title != "REST round trip" || got.Status != domain.StatusDraft {
-		t.Errorf("entry = %+v", got)
+	if got.Summary.Title != "REST round trip" || got.Summary.Status != domain.StatusDraft {
+		t.Errorf("summary = %+v", got.Summary)
+	}
+	if !strings.Contains(got.Document, "title: REST round trip") {
+		t.Errorf("document = %q", got.Document)
 	}
 
 	// A content-identical PUT writes nothing and says so in the header.
@@ -485,7 +490,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 		resp.Body.Close()
 		t.Fatalf("create status = %d", resp.StatusCode)
 	}
-	var created domain.Knowledge
+	var created domain.View
 	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
 		t.Fatal(err)
 	}
@@ -493,11 +498,12 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	// A create returns the entry, so it returns the version with it: a
 	// client that creates and then updates conditionally should not have
 	// to GET the entry it just wrote to learn what to put in If-Match.
-	if got, want := resp.Header.Get("ETag"), `"`+created.ContentHash+`"`; got != want || created.ContentHash == "" {
+	hash := created.Summary.ContentHash
+	if got, want := resp.Header.Get("ETag"), `"`+hash+`"`; got != want || hash == "" {
 		t.Errorf("create ETag = %q, want %q", got, want)
 	}
 
-	verify := func() domain.Knowledge {
+	verify := func() domain.View {
 		t.Helper()
 		resp, err := http.Post(srv.URL+"/api/v1/verify/"+id, "", nil)
 		if err != nil {
@@ -511,26 +517,35 @@ func TestRESTIntegrationVerify(t *testing.T) {
 		if resp.Header.Get("ETag") == "" {
 			t.Error("verify response carries no ETag")
 		}
-		var k domain.Knowledge
-		if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
+		var v domain.View
+		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
 			t.Fatal(err)
 		}
-		return k
+		return v
 	}
 
 	first := verify()
-	if len(first.Verifications) != 1 {
-		t.Fatalf("verify appended nothing: %+v", first.Verifications)
+	if len(first.Observed.Verified) != 1 || !first.Summary.Verified {
+		t.Fatalf("verify appended nothing: %+v", first.Observed.Verified)
+	}
+	// The ledger is an observation, so it travels beside the document
+	// rather than inside it, and confirming an entry moves no version
+	// (design docs 0009, 0043 §§3.2, 3.4).
+	if strings.Contains(first.Document, "verified") {
+		t.Errorf("verification leaked into the document: %q", first.Document)
+	}
+	if first.Summary.ContentHash != hash {
+		t.Errorf("verify moved the version: %q -> %q", hash, first.Summary.ContentHash)
 	}
 	// Re-verifying appends rather than replacing, so the ledger answers
 	// "how often, and by whom" (design doc 0043 §3.2).
 	second := verify()
-	if len(second.Verifications) != 2 {
-		t.Fatalf("re-verify replaced the ledger: %+v", second.Verifications)
+	if len(second.Observed.Verified) != 2 {
+		t.Fatalf("re-verify replaced the ledger: %+v", second.Observed.Verified)
 	}
-	if !second.LastVerified().At.After(first.LastVerified().At) {
+	if !second.Observed.LastVerified().At.After(first.Observed.LastVerified().At) {
 		t.Errorf("re-verify did not move the newest verification: %v -> %v",
-			first.LastVerified().At, second.LastVerified().At)
+			first.Observed.LastVerified().At, second.Observed.LastVerified().At)
 	}
 
 	resp, err = http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)
@@ -618,7 +633,7 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 	}
 	var got struct {
 		Hits      []domain.ContextRank    `json:"hits"`
-		Entries   []domain.Knowledge      `json:"entries"`
+		Entries   []domain.View           `json:"entries"`
 		Outline   []domain.ContextOutline `json:"outline"`
 		Truncated int                     `json:"truncated"`
 	}
@@ -688,7 +703,7 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 
 	// Backlinks: the insight links to the metric, not the other way round.
 	var backlinks struct {
-		Entries []domain.Knowledge `json:"entries"`
+		Entries []domain.Summary `json:"entries"`
 	}
 	getJSON(t, srv.URL+"/api/v1/backlinks/"+metric, &backlinks)
 	if len(backlinks.Entries) != 1 || backlinks.Entries[0].ID != insight {
@@ -722,7 +737,7 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var after domain.Knowledge
+	var after domain.View
 	if err := json.NewDecoder(resp.Body).Decode(&after); err != nil {
 		t.Fatalf("move: decode: %v", err)
 	}
@@ -871,7 +886,7 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 	}
 	var pack struct {
 		Hits    []domain.ContextRank `json:"hits"`
-		Entries []domain.Knowledge   `json:"entries"`
+		Entries []domain.View        `json:"entries"`
 	}
 	if err := json.NewDecoder(cresp.Body).Decode(&pack); err != nil {
 		t.Fatal(err)
@@ -922,7 +937,7 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 
 	// A create-only write on a free id is a 201.
 	resp := putDoc(t, srv.URL, id, []byte(doc), true)
-	var created domain.Knowledge
+	var created domain.View
 	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
 		t.Fatal(err)
 	}
@@ -930,9 +945,10 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create = %d", resp.StatusCode)
 	}
-	// The producer key rode along in the document and is kept.
-	if created.Attrs["owner"] != "finance" {
-		t.Errorf("producer key lost: %v", created.Attrs)
+	// The producer key rode along in the document and is written back
+	// where its writer put it — inline, beside the keys the spec defines.
+	if !strings.Contains(created.Document, "owner: finance") {
+		t.Errorf("producer key lost:\n%s", created.Document)
 	}
 
 	// The same write again is a 409: create-only means create.
@@ -967,22 +983,28 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	}
 	edited := strings.Replace(string(served), "title: 売上", "title: 売上(改)", 1)
 	resp = putDoc(t, srv.URL, id, []byte(edited), false)
-	var back domain.Knowledge
+	var back domain.View
 	if err := json.NewDecoder(resp.Body).Decode(&back); err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || back.Title != "売上(改)" {
-		t.Errorf("round-tripped edit = %d, title %q", resp.StatusCode, back.Title)
+	if resp.StatusCode != http.StatusOK || back.Summary.Title != "売上(改)" {
+		t.Errorf("round-tripped edit = %d, title %q", resp.StatusCode, back.Summary.Title)
 	}
-	if back.CreatedBy.Name != created.CreatedBy.Name {
-		t.Errorf("a document's created_by was read back as provenance: %+v", back.CreatedBy)
+	if back.Observed.CreatedBy.Name != created.Observed.CreatedBy.Name {
+		t.Errorf("a document's created_by was read back as provenance: %+v", back.Observed.CreatedBy)
+	}
+	// The view's document is canonical: the server-owned keys the
+	// text/markdown read carries are not in it, so it needs no stripping
+	// before the next edit (design doc 0043 §3.5).
+	if strings.Contains(back.Document, "generated:") || strings.Contains(back.Document, "created_by:") {
+		t.Errorf("the view's document carries server-owned keys:\n%s", back.Document)
 	}
 
 	// A stale version is refused and writes nothing.
 	req, _ = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/knowledge/"+id, strings.NewReader(doc))
 	req.Header.Set("Content-Type", "text/markdown")
-	req.Header.Set("If-Match", `"`+created.ContentHash+`"`)
+	req.Header.Set("If-Match", `"`+created.Summary.ContentHash+`"`)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

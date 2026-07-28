@@ -226,7 +226,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
 		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.",
-		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --verified true\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --verified true              # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
+		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --verified true\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --verified true              # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
@@ -272,8 +272,8 @@ func cmdSearch(ctx context.Context, args []string) error {
 		switch *sortBy {
 		case "verified_at":
 			lead = "-" // never verified sorts last
-			if v := h.LastVerified(); v != nil {
-				lead = v.At.Format(time.RFC3339)
+			if h.VerifiedAt != nil {
+				lead = h.VerifiedAt.Format(time.RFC3339)
 			}
 		case "usage":
 			lead = "0" // never-used drafts sort last
@@ -288,7 +288,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 		case "stale_after":
 			lead = h.StaleAfter
 		}
-		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.DisplayTitle())
+		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.Title)
 		if h.Description != "" {
 			line += " — " + h.Description
 		}
@@ -397,8 +397,8 @@ func cmdContext(ctx context.Context, args []string) error {
 }
 
 // renderContext prints the pack as compact markdown: per entry a heading
-// with URI, status, and title, a provenance line, the entry's
-// question and SQL when present, then the body. Once the byte budget is
+// with URI, status, and title, a provenance line, then the entry's
+// document. Once the byte budget is
 // spent the remaining entries are dropped with a note (the first entry
 // always renders); hits without a rendered entry become one-line pointers.
 func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
@@ -430,63 +430,36 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 	}
 }
 
-func renderEntry(k *domain.Knowledge) string {
+// renderEntry writes one entry of a context pack: a heading, what this
+// instance observed about it, and then the entry itself — its document.
+//
+// It used to assemble a curated summary of selected fields, which was the
+// only way to show an entry when an entry was a bag of fields. Now that
+// an entry is a document, printing the document is both simpler and more
+// faithful: the agent reading this pack sees the same shape it will see
+// from `ochakai get`, from MCP, and in a git-tracked bundle, and nothing
+// the writer wrote is left out because this function did not know to look
+// for it.
+func renderEntry(v *domain.View) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%s) — %s\n", k.URI(), k.Status, k.DisplayTitle())
-	prov := "created by " + k.CreatedBy.String()
-	if v := k.LastVerified(); v != nil {
-		verified := fmt.Sprintf("verified by %s on %s", v.By.String(), v.At.Format("2006-01-02"))
-		if n := len(k.Verifications); n > 1 {
+	fmt.Fprintf(&b, "## %s (%s) — %s\n", v.URI(), v.Summary.Status, v.Summary.Title)
+	prov := "created by " + v.Observed.CreatedBy.String()
+	if lv := v.Observed.LastVerified(); lv != nil {
+		verified := fmt.Sprintf("verified by %s on %s", lv.By.String(), lv.At.Format("2006-01-02"))
+		if n := len(v.Observed.Verified); n > 1 {
 			verified += fmt.Sprintf(" (%d verifications)", n)
 		}
 		prov = verified + "; " + prov
 	}
 	fmt.Fprintln(&b, prov)
-	if r := k.Rejection; r != nil {
+	if r := v.Observed.Rejection; r != nil {
 		fmt.Fprintf(&b, "rejected by %s on %s\n", r.By.String(), r.At.Format("2006-01-02"))
 		if r.Note != "" {
 			fmt.Fprintf(&b, "rejection note: %s\n", r.Note)
 		}
 	}
-	if k.StatusNote != "" {
-		fmt.Fprintf(&b, "status note: %s\n", k.StatusNote)
-	}
-	// The compact "what is this and can I trust it" view: what the entry
-	// derives from, and — for a computation — how a consumer would run it.
-	// The full records (authors, usage counts, receipts) are in
-	// `ochakai get`, which prints the whole OKF document.
-	if len(k.Sources) > 0 {
-		fmt.Fprintln(&b, "sources:")
-		for _, s := range k.Sources {
-			name := s.Title
-			if name == "" {
-				name = s.ID
-			}
-			if name == "" {
-				fmt.Fprintf(&b, "- %s\n", s.Resource)
-				continue
-			}
-			fmt.Fprintf(&b, "- %s — %s\n", name, s.Resource)
-		}
-	}
-	if k.Runtime != "" {
-		line := "runtime: " + k.Runtime
-		if k.Executor != nil {
-			line += "; run with " + k.Executor.Resource
-		}
-		fmt.Fprintln(&b, line)
-	}
-	if k.Description != "" {
-		fmt.Fprintf(&b, "\n%s\n", k.Description)
-	}
-	if q, ok := k.Attrs["question"].(string); ok && q != "" {
-		fmt.Fprintf(&b, "\nQ: %s\n", q)
-	}
-	if sql, ok := k.Attrs["sql"].(string); ok && sql != "" {
-		fmt.Fprintf(&b, "\n```sql\n%s\n```\n", strings.TrimRight(sql, "\n"))
-	}
-	if body := strings.TrimSpace(k.Body); body != "" {
-		fmt.Fprintf(&b, "\n%s\n", body)
+	if doc := strings.TrimSpace(v.Document); doc != "" {
+		fmt.Fprintf(&b, "\n%s\n", doc)
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -613,9 +586,9 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
-		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body). The output round-trips through `ochakai update`.\nAttachment metadata is listed on stderr; --download saves the\nattachment files themselves (an agent can then read them from disk).",
-		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.attrs.sql'\n  ochakai get insights/reading-revenue --download ./img\n")
-	asJSON := fs.Bool("json", false, "print JSON instead of the OKF document")
+		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai update`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as attachment metadata\ndoes; --download saves the attachment files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
+		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n")
+	asJSON := fs.Bool("json", false, "print the whole read as JSON (document, summary, observed) instead of the document alone")
 	download := fs.String("download", "", "save the entry's attachments into this directory")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -648,13 +621,18 @@ func cmdGet(ctx context.Context, args []string) error {
 	if *asJSON {
 		return printJSON(k)
 	}
-	doc, err := okf.Document(k)
-	if err != nil {
+	if _, err := os.Stdout.WriteString(k.Document); err != nil {
 		return err
 	}
-	if _, err = os.Stdout.Write(doc); err != nil {
-		return err
+	// stdout stays the document and nothing else, so `ochakai get | …
+	// | ochakai update` is one pipe. What this instance observed is not
+	// part of the document (design docs 0009, 0043 §3.5), so it goes
+	// where the attachment hints already go.
+	prov := "created by " + k.Observed.CreatedBy.String()
+	if lv := k.Observed.LastVerified(); lv != nil {
+		prov = fmt.Sprintf("verified by %s on %s; ", lv.By.String(), lv.At.Format("2006-01-02")) + prov
 	}
+	fmt.Fprintln(os.Stderr, prov)
 	if *download == "" {
 		for _, att := range k.Attachments {
 			fmt.Fprintf(os.Stderr, "attachment: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
@@ -788,7 +766,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 	if *asJSON {
 		return printJSON(created)
 	}
-	fmt.Printf("created %s (%s)\n", created.URI(), created.Status)
+	fmt.Printf("created %s (%s)\n", created.URI(), created.Summary.Status)
 	return nil
 }
 
@@ -814,9 +792,9 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"update",
 		"Usage: ochakai update [flags] <id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\nthe id comes from the argument, the type from the input). Every\nchange is kept as a revision server-side. With --if-match the update\nis conditional: it lands only if the entry still has the version you\nread, and fails instead of overwriting someone else's edit.",
-		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n  ochakai update metrics/revenue -f revenue.md --if-match \"$(ochakai get metrics/revenue --json | jq -r .content_hash)\"\n")
+		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n  ochakai update metrics/revenue -f revenue.md --if-match \"$(ochakai get metrics/revenue --json | jq -r .summary.content_hash)\"\n")
 	file := fs.String("f", "", "input file (default: stdin)")
-	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its content hash (`ochakai get <id> --json` prints it as .content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does")
+	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does")
 	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -848,10 +826,10 @@ func cmdUpdate(ctx context.Context, args []string) error {
 		return printJSON(updated)
 	}
 	if !changed {
-		fmt.Printf("unchanged %s (%s)\n", updated.URI(), updated.Status)
+		fmt.Printf("unchanged %s (%s)\n", updated.URI(), updated.Summary.Status)
 		return nil
 	}
-	fmt.Printf("updated %s (%s)\n", updated.URI(), updated.Status)
+	fmt.Printf("updated %s (%s)\n", updated.URI(), updated.Summary.Status)
 	return nil
 }
 
@@ -863,7 +841,7 @@ func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
 		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`update` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.",
-		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.verifications[-1].at'\n")
+		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
 	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -881,7 +859,7 @@ func cmdVerify(ctx context.Context, args []string) error {
 		return printJSON(k)
 	}
 	by := "?"
-	if v := k.LastVerified(); v != nil {
+	if v := k.Observed.LastVerified(); v != nil {
 		by = v.By.String()
 	}
 	fmt.Printf("verified ochakai://%s by %s\n", k.ID, by)
@@ -911,7 +889,7 @@ func cmdReject(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	var k *domain.Knowledge
+	var k *domain.View
 	if *lift {
 		k, err = c.LiftRejection(ctx, id)
 	} else {
@@ -927,7 +905,7 @@ func cmdReject(ctx context.Context, args []string) error {
 		fmt.Printf("rejection lifted on ochakai://%s\n", k.ID)
 		return nil
 	}
-	fmt.Printf("rejected ochakai://%s by %s\n", k.ID, k.Rejection.By.String())
+	fmt.Printf("rejected ochakai://%s by %s\n", k.ID, k.Observed.Rejection.By.String())
 	return nil
 }
 
@@ -1043,7 +1021,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 func cmdMove(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"move",
-		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge entry to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, attrs.model)\nare rewritten so nothing breaks.",
+		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge entry to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.",
 		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
@@ -1099,7 +1077,7 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, unknown frontmatter keys are kept as attrs, and\nexisting entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	pos, err := exactArgs(fs, args, 1)

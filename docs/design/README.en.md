@@ -313,6 +313,26 @@ For the shape of the system rather than the history of it, read
   inbound references that point at it. An occupied destination is a 409
   even when soft-deleted. Not on MCP.
 
+- **[0044 The web UI edits documents](0044-web-ui-edits-documents.md)** —
+  *Accepted; revises 0043 §3.11.* Withdraws the form sugar: editing in the
+  web UI is editing the canonical OKF document as text, while the detail
+  view still renders from the projection. Filling a form needs the browser
+  to parse real YAML, and the two ways out — a hand-written YAML subset
+  parser in JS, or a thicker read shape carrying the envelope beside the
+  document — were both refused: the first plants a parser whose failure
+  mode is silently dropping a key, days after 0043 §3.6 decided that a key
+  dropped on the way in is unrecoverable; the second leaves the duplicate
+  representation that document-first exists to remove. The stated reason
+  to prefer the document is that the one surface humans touch should teach
+  the format the CLI, MCP, export and git bundles all use. The record is
+  candid that losing the row editors for `sources` and `parameters` is a
+  cost, not a saving, and names what comes back instead: a parse check
+  before save, and type templates for new entries. If the demand returns,
+  the answer is a server-side "parse this document" surface, not a second
+  default read shape.
+  *For a user:* the web UI's edit screen is a document; the detail screen
+  is unchanged.
+
 - **[0032 Recording web UI writes under the IAP
   identity](0032-webui-iap-identity.md)** — *Accepted.* Both proxies always
   strip a browser-supplied delegation header; with `OCHAKAI_IAP_AUDIENCE`

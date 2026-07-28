@@ -378,7 +378,7 @@ And it stays small by refusing things:
 |---|---|
 | `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
 | `search_knowledge` | Cross-type search; verified entries rank higher |
-| `get_knowledge` | Fetch one entry with body, attrs, links, and attachment metadata |
+| `get_knowledge` | Fetch one entry as an OKF document, with its links and attachment metadata |
 | `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
 | `create_knowledge` | Write learnings back (agents create drafts) |
 | `update_knowledge` | Update; every change is kept as a revision |
@@ -423,7 +423,7 @@ over time, run them as canaries from your CI:
 | Type | What it holds |
 |---|---|
 | `Metric` | Semantic metric definition, synonyms |
-| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it. A golden query is one of these: `runtime` says where the SQL runs, `attrs.question` carries the question it answers |
+| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it. A golden query is one of these: `runtime` says where the SQL runs, and a producer key such as `question` carries the question it answers |
 | `Skill` | A procedure an entry's `executor.resource` points at — how to actually run a computation on a given runtime |
 | `Playbook` | An operational procedure people and agents follow, bound to no resource: incident triage, an on-call runbook |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |

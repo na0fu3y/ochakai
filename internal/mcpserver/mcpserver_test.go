@@ -417,18 +417,19 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 	}
 }
 
-// The budget governs the whole response or it governs nothing.
-// domain.SearchHit embeds Knowledge, so returning hits verbatim would send
-// every top entry a second time, uncapped — and an entry pushed into
-// outline for being too large would arrive in full through hits anyway,
-// while the outline row told the agent to go fetch what it already had.
+// The budget governs the whole response or it governs nothing. A hit is
+// a ranking — an id, a title and a score — and never a second copy of the
+// entry: an entry pushed into outline for being too large would otherwise
+// arrive in full through hits anyway, while the outline row told the
+// agent to go fetch what it already had (design doc 0033).
 func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 	body := strings.Repeat("x", 4000)
 	hits := []domain.SearchHit{{
-		Knowledge: domain.Knowledge{
+		Summary: domain.Summary{
 			Type: domain.TypeComputations, ID: "queries/monthly-revenue",
-			Status: domain.StatusStable, Body: body,
-			Attrs: map[string]any{"sql": "SELECT 1"},
+			// A summary carries the display title already worked out
+			// (design doc 0022), so a rank can read it straight off.
+			Title: "monthly-revenue", Status: domain.StatusStable, Description: body,
 		},
 		Score: 0.9,
 	}}

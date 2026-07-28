@@ -1415,13 +1415,23 @@ func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) 
 	return pgx.CollectRows(rows, scanHit)
 }
 
+// scanHit reads a knowledge row and projects it: a search result carries
+// the summary, not the entry (design doc 0043 §3.5). The row is still
+// selected whole — the projection is derived from the same columns every
+// other read uses, and narrowing the SELECT per caller would put a second
+// column list in the file to fall behind.
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
-	dests, finish := knowledgeDest(&h.Knowledge)
+	var k domain.Knowledge
+	dests, finish := knowledgeDest(&k)
 	if err := row.Scan(append(dests, &h.Score)...); err != nil {
 		return h, err
 	}
-	return h, finish()
+	if err := finish(); err != nil {
+		return h, err
+	}
+	h.Summary = domain.SummaryOf(&k)
+	return h, nil
 }
 
 // buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
@@ -1642,8 +1652,9 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 // ListByUsage projection). Score stays 0 — this is a listing, not a search.
 func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
+	var k domain.Knowledge
 	var u domain.Usage
-	dests, finish := knowledgeDest(&h.Knowledge)
+	dests, finish := knowledgeDest(&k)
 	if err := row.Scan(append(dests,
 		&u.SearchHits, &u.Fetches, &u.Worked, &u.Failed, &u.LastUsedAt)...); err != nil {
 		return h, err
@@ -1651,6 +1662,7 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	if err := finish(); err != nil {
 		return h, err
 	}
+	h.Summary = domain.SummaryOf(&k)
 	h.Usage = &u
 	return h, nil
 }

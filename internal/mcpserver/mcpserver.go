@@ -252,7 +252,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: *k}, nil
+		v, err := okf.ViewOf(k)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
+		return nil, knowledgeOut{Knowledge: v}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -289,7 +293,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: *k, Notes: notes}, nil
+		v, err := okf.ViewOf(k)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
+		return nil, knowledgeOut{Knowledge: v, Notes: notes}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -327,7 +335,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: *k, Notes: notes}, nil
+		v, err := okf.ViewOf(k)
+		if err != nil {
+			return nil, knowledgeOut{}, err
+		}
+		return nil, knowledgeOut{Knowledge: v, Notes: notes}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -508,7 +520,7 @@ type contextIn struct {
 
 type contextOut struct {
 	Hits      []domain.ContextRank    `json:"hits"`
-	Entries   []domain.Knowledge      `json:"entries"`
+	Entries   []domain.View           `json:"entries"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 	Hint      string                  `json:"hint"`
@@ -542,7 +554,7 @@ type getIn struct {
 }
 
 type knowledgeOut struct {
-	Knowledge domain.Knowledge `json:"knowledge"`
+	Knowledge domain.View `json:"knowledge"`
 	// Notes carry what the server read differently than the document
 	// wrote it — a reinterpretation is never silent (design doc 0036
 	// §3.4), and an agent that gets one back can fix the document rather

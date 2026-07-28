@@ -487,6 +487,29 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
+// ViewOf assembles a read of one entry: the canonical document it is,
+// the projection to read it by, and what this instance observed about it
+// (design doc 0043 §3.5).
+//
+// The document is rendered rather than fetched. It is a pure function of
+// the columns a read already returns, and the store pins that rendering
+// against the stored bytes — so re-rendering here reproduces what is
+// stored, and no read has to carry the document twice over the wire from
+// the database.
+func ViewOf(k *domain.Knowledge) (domain.View, error) {
+	doc, err := Canonical(k)
+	if err != nil {
+		return domain.View{}, err
+	}
+	return domain.View{
+		ID:          k.ID,
+		Document:    string(doc),
+		Summary:     domain.SummaryOf(k),
+		Observed:    domain.ObservedOf(k),
+		Attachments: k.Attachments,
+	}, nil
+}
+
 // TarGzWriter writes a bundle one file at a time. A caller that can
 // produce its files lazily — the export endpoint, pulling attachment
 // bytes from the blob store as it goes — then never holds more than one

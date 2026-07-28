@@ -157,71 +157,47 @@ paths:
                 search:
                   summary: GET /api/v1/knowledge?q=monthly+revenue&limit=3
                   description: >
-                    A hit is the whole entry plus its score, so the
-                    computation's SQL is already here, in the body's fence —
-                    no second call to read it.
+                    A hit names an entry and says what ranked it; it does
+                    not hand the entry over. Read the ones worth reading
+                    with GET /api/v1/knowledge/{id}, or ask
+                    GET /api/v1/context for the documents behind the top
+                    hits in one call.
                     Attachment metadata rides along (filled in one batch),
                     which is what lets a UI render thumbnails from a search.
                   value:
                     hits:
-                      - type: Attested Computation
-                        id: queries/monthly-revenue
-                        runtime: bigquery
+                      - id: queries/monthly-revenue
+                        type: Attested Computation
+                        title: monthly-revenue
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: stable
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verifications:
-                          - by: { kind: human, name: sato@example.co.jp }
-                            at: "2026-07-10T01:52:16.774301Z"
+                        verified: true
+                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
-                        attrs:
-                          question: How much revenue did we make each month last year?
-                        body: |
-                          Answers the question above against
-                          [Revenue](/metrics/revenue.md). Completed orders only;
-                          the month boundary is `order_date`, not the settlement
-                          date.
-                        
-                          # Computation
-                        
-                          ```sql
-                          SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                                 SUM(net_amount) AS revenue
-                          FROM `example-analytics.shop.orders`
-                          WHERE status = 'completed'
-                            AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                            AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                          GROUP BY month
-                          ORDER BY month
-                          ```
+                        content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
                         created_at: "2026-06-09T07:41:02.110945Z"
                         updated_at: "2026-07-10T01:52:16.774301Z"
                         score: 1.35
-                      - type: Metric
-                        id: metrics/revenue
+                      - id: metrics/revenue
+                        type: Metric
                         title: Revenue
                         description: Net revenue from completed orders, excluding tax and shipping.
                         resource: bigquery://example-analytics.shop.orders
                         tags: [finance, core]
                         status: stable
                         stale_after: "2026-12-31"
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verifications:
-                          - by: { kind: human, name: sato@example.co.jp }
-                            at: "2026-07-14T02:33:41.019778Z"
+                        verified: true
+                        verified_at: "2026-07-14T02:33:41.019778Z"
+                        rejected: false
                         links:
                           - { target: glossary/completed-order, text: completed order }
                           - { target: tables/shop-orders, text: shop.orders }
-                        attrs: { unit: JPY, grain: order }
-                        body: |
-                          Revenue is the sum of `net_amount` over every
-                          [completed order](/glossary/completed-order.md) in
-                          [shop.orders](/tables/shop-orders.md). Tax and
-                          shipping are excluded.
+                        content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
+                        created_at: "2026-06-02T04:11:38.201044Z"
+                        updated_at: "2026-07-14T02:33:41.019778Z"
                         attachments:
                           - name: revenue-2026h1.png
                             media_type: image/png
@@ -229,26 +205,19 @@ paths:
                             sha256: 9f2c1d0a7b3e5648c1d9f0a2b7e4c8d63f5a1b2c9e0d7a4f6b3c8e1d5a0f7b29
                             created_by: { kind: human, name: tanaka@example.co.jp }
                             created_at: "2026-06-02T04:20:11.663210Z"
-                        created_at: "2026-06-02T04:11:38.201044Z"
-                        updated_at: "2026-07-14T02:33:41.019778Z"
                         score: 0.48
-                      - type: Insight
-                        id: insights/revenue-seasonality
+                      - id: insights/revenue-seasonality
+                        type: Insight
                         title: Reading revenue month over month
                         description: Why a December spike and a January drop are normal.
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                        updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        verified: false
+                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
-                        body: |
-                          [Revenue](/metrics/revenue.md) is seasonal: December
-                          runs well above the trailing median and January falls
-                          back below it. Comparing either month with the one
-                          before it says nothing about the business — compare
-                          year over year instead.
+                        content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
                         created_at: "2026-07-21T06:14:55.402881Z"
                         updated_at: "2026-07-21T06:14:55.402881Z"
                         score: 0.43
@@ -260,21 +229,18 @@ paths:
                     totals that make the promotion case.
                   value:
                     hits:
-                      - type: Insight
-                        id: insights/revenue-seasonality
+                      - id: insights/revenue-seasonality
+                        type: Insight
                         title: Reading revenue month over month
                         description: Why a December spike and a January drop are normal.
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                        updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        verified: false
+                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
-                        body: |
-                          [Revenue](/metrics/revenue.md) is seasonal: December
-                          runs well above the trailing median and January falls
-                          back below it.
+                        content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
                         created_at: "2026-07-21T06:14:55.402881Z"
                         updated_at: "2026-07-21T06:14:55.402881Z"
                         score: 0
@@ -284,16 +250,14 @@ paths:
                           worked: 6
                           failed: 0
                           last_used_at: "2026-07-26T23:58:07.336114Z"
-                      - type: Glossary Term
-                        id: glossary/completed-order
+                      - id: glossary/completed-order
+                        type: Glossary Term
+                        title: completed-order
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        body: |
-                          `status = 'completed'` in
-                          [shop.orders](/tables/shop-orders.md): shipped, paid,
-                          and past the 14-day return window.
+                        verified: false
+                        rejected: false
+                        content_hash: c07b4e19a35d8f206b1c94e73da508f2b6c31d9047ea825bf1c6d03b95a7e412
                         created_at: "2026-06-02T04:09:12.774903Z"
                         updated_at: "2026-06-02T04:09:12.774903Z"
                         score: 0
@@ -511,7 +475,7 @@ paths:
                     items: { $ref: "#/components/schemas/ContextRank" }
                   entries:
                     type: array
-                    items: { $ref: "#/components/schemas/Knowledge" }
+                    items: { $ref: "#/components/schemas/View" }
                   outline:
                     description: >
                       Entries the budget dropped: named and sized, not
@@ -526,11 +490,11 @@ paths:
                 pack:
                   summary: GET /api/v1/context?q=monthly+revenue&limit=2&budget=4000
                   description: >
-                    Two entries matched and two more arrived through their
-                    links — the metric the query rests on, and the glossary
-                    term the metric rests on. The budget could not afford the
-                    fourth, so it is named under outline with what it would
-                    have cost. `hits` is the ranking only: every body in this
+                    Two entries matched and one more arrived through their
+                    links — the metric the query rests on. The budget could
+                    not afford the glossary term the metric rests on, so it
+                    is named under outline with what it would have cost.
+                    `hits` is the ranking only: every document in this
                     response appears exactly once, under `entries`.
                   value:
                     hits:
@@ -538,41 +502,40 @@ paths:
                         type: Attested Computation
                         title: monthly-revenue
                         status: stable
+                        verified: true
                         score: 1.35
                       - id: metrics/revenue
                         type: Metric
                         title: Revenue
                         status: stable
+                        verified: true
                         score: 0.48
                       - id: insights/revenue-seasonality
                         type: Insight
                         title: Reading revenue month over month
                         status: draft
+                        verified: false
                         score: 0.43
                     entries:
-                      - type: Attested Computation
-                        id: queries/monthly-revenue
-                        runtime: bigquery
-                        description: Monthly net revenue for the last 12 complete months.
-                        tags: [finance]
-                        status: stable
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verifications:
-                          - by: { kind: human, name: sato@example.co.jp }
-                            at: "2026-07-10T01:52:16.774301Z"
-                        links:
-                          - { target: metrics/revenue, text: Revenue }
-                        attrs:
+                      - id: queries/monthly-revenue
+                        document: |
+                          ---
+                          type: Attested Computation
+                          description: Monthly net revenue for the last 12 complete months.
+                          tags:
+                              - finance
+                          status: stable
+                          runtime: bigquery
                           question: How much revenue did we make each month last year?
-                        body: |
+                          ---
+
                           Answers the question above against
                           [Revenue](/metrics/revenue.md). Completed orders only;
                           the month boundary is `order_date`, not the settlement
                           date.
-                        
+
                           # Computation
-                        
+
                           ```sql
                           SELECT DATE_TRUNC(order_date, MONTH) AS month,
                                  SUM(net_amount) AS revenue
@@ -583,34 +546,55 @@ paths:
                           GROUP BY month
                           ORDER BY month
                           ```
-                        created_at: "2026-06-09T07:41:02.110945Z"
-                        updated_at: "2026-07-10T01:52:16.774301Z"
-                      - type: Metric
-                        id: metrics/revenue
-                        title: Revenue
-                        description: Net revenue from completed orders, excluding tax and shipping.
-                        resource: bigquery://example-analytics.shop.orders
-                        tags: [finance, core]
-                        sources:
-                          - id: revenue-policy
-                            resource: https://wiki.example.co.jp/finance/revenue-recognition
-                            title: Revenue recognition policy (FY2026)
-                            author: human:finance@example.co.jp
-                            usage_count: 24
-                            last_modified: "2026-05-30"
-                        usage_window: { from: "2026-06-01", to: "2026-06-30" }
-                        status: stable
-                        stale_after: "2026-12-31"
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verifications:
-                          - by: { kind: human, name: sato@example.co.jp }
-                            at: "2026-07-14T02:33:41.019778Z"
-                        links:
-                          - { target: glossary/completed-order, text: completed order }
-                          - { target: tables/shop-orders, text: shop.orders }
-                        attrs: { unit: JPY, grain: order }
-                        body: |
+                        summary:
+                          id: queries/monthly-revenue
+                          type: Attested Computation
+                          title: monthly-revenue
+                          description: Monthly net revenue for the last 12 complete months.
+                          tags: [finance]
+                          status: stable
+                          verified: true
+                          verified_at: "2026-07-10T01:52:16.774301Z"
+                          rejected: false
+                          links:
+                            - { target: metrics/revenue, text: Revenue }
+                          content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
+                          created_at: "2026-06-09T07:41:02.110945Z"
+                          updated_at: "2026-07-10T01:52:16.774301Z"
+                        observed:
+                          created_by: { kind: human, name: tanaka@example.co.jp }
+                          generated:
+                            by: { kind: human, name: tanaka@example.co.jp }
+                            at: "2026-07-10T01:52:16.774301Z"
+                          verified:
+                            - by: { kind: human, name: sato@example.co.jp }
+                              at: "2026-07-10T01:52:16.774301Z"
+                      - id: metrics/revenue
+                        document: |
+                          ---
+                          type: Metric
+                          resource: bigquery://example-analytics.shop.orders
+                          title: Revenue
+                          description: Net revenue from completed orders, excluding tax and shipping.
+                          tags:
+                              - finance
+                              - core
+                          sources:
+                              - resource: https://wiki.example.co.jp/finance/revenue-recognition
+                                id: revenue-policy
+                                title: Revenue recognition policy (FY2026)
+                                author: human:finance@example.co.jp
+                                usage_count: 24
+                                last_modified: "2026-05-30"
+                          usage_window:
+                              from: "2026-06-01"
+                              to: "2026-06-30"
+                          status: stable
+                          stale_after: "2026-12-31"
+                          unit: JPY
+                          grain: order
+                          ---
+
                           Revenue is the sum of `net_amount` over every
                           [completed order](/glossary/completed-order.md) in
                           [shop.orders](/tables/shop-orders.md). Tax and
@@ -620,30 +604,39 @@ paths:
                           the month of the order it reverses[^revenue-policy].
 
                           [^revenue-policy]: Revenue recognition policy (FY2026).
-                        created_at: "2026-06-02T04:11:38.201044Z"
-                        updated_at: "2026-07-14T02:33:41.019778Z"
-                      - type: Glossary Term
-                        id: glossary/completed-order
+                        summary:
+                          id: metrics/revenue
+                          type: Metric
+                          title: Revenue
+                          description: Net revenue from completed orders, excluding tax and shipping.
+                          resource: bigquery://example-analytics.shop.orders
+                          tags: [finance, core]
+                          status: stable
+                          stale_after: "2026-12-31"
+                          verified: true
+                          verified_at: "2026-07-14T02:33:41.019778Z"
+                          rejected: false
+                          links:
+                            - { target: glossary/completed-order, text: completed order }
+                            - { target: tables/shop-orders, text: shop.orders }
+                          content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
+                          created_at: "2026-06-02T04:11:38.201044Z"
+                          updated_at: "2026-07-14T02:33:41.019778Z"
+                        observed:
+                          created_by: { kind: human, name: tanaka@example.co.jp }
+                          generated:
+                            by: { kind: human, name: tanaka@example.co.jp }
+                            at: "2026-07-14T02:33:41.019778Z"
+                          verified:
+                            - by: { kind: human, name: sato@example.co.jp }
+                              at: "2026-07-14T02:33:41.019778Z"
+                    outline:
+                      - id: glossary/completed-order
+                        type: Glossary Term
+                        title: completed-order
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        links:
-                          - { target: tables/shop-orders, text: shop.orders }
-                        body: |
-                          `status = 'completed'` in
-                          [shop.orders](/tables/shop-orders.md): shipped, paid,
-                          and past the 14-day return window. Cancellations
-                          never reach this state; refunds leave it.
-                        created_at: "2026-06-02T04:09:12.774903Z"
-                        updated_at: "2026-06-02T04:09:12.774903Z"
-                    outline:
-                      - id: tables/shop-orders
-                        type: BigQuery Table
-                        title: shop.orders
-                        description: One row per order, including cancelled and refunded ones.
-                        status: stable
-                        bytes: 2144
+                        bytes: 1104
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -660,10 +653,15 @@ paths:
       operationId: getKnowledge
       summary: Get one knowledge entry
       description: >
-        Answers JSON by default. With "Accept: text/markdown" it answers
-        the OKF document instead — the same text an export writes, keys
-        the server owns included, which is what `ochakai get` hands to an
-        editor and what a PUT takes straight back (design doc 0043 §3.5).
+        Answers a View by default: the entry's canonical document, the
+        projection to read it by, and what this instance observed about
+        it (design doc 0043 §3.5).
+
+        With "Accept: text/markdown" it answers a document instead — the
+        export form, keys the server owns included, which is what a
+        reader of a bundle sees. Either text can be edited and sent
+        straight back to PUT; the export form has server-owned keys to
+        ignore and the View's document does not.
       responses:
         "200":
           description: The entry.
@@ -674,50 +672,54 @@ paths:
             text/markdown:
               schema: { type: string }
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
               examples:
                 metric:
                   summary: GET /api/v1/knowledge/metrics/revenue
                   description: >
-                    A verified entry with everything the envelope holds:
-                    the citations under sources with the window their
-                    usage_count was counted over, the declared expiry, the
-                    producer keys left in attrs, the links derived from the
-                    body, and attachment metadata (the bytes are a separate
-                    fetch). The ETag header carries the same value as
-                    content_hash, quoted, for a later If-Match.
+                    A verified entry. `document` is the whole of what the
+                    entry says — the citations under sources with the
+                    window their usage_count was counted over, the
+                    declared expiry, the producer keys inline where their
+                    writer put them, the body. `summary` is the index over
+                    it that listing surfaces sort by, and `observed` is
+                    what this instance recorded happening to it. The ETag
+                    header carries summary.content_hash, quoted, for a
+                    later If-Match.
                   value:
-                    type: Metric
                     id: metrics/revenue
-                    title: Revenue
-                    description: Net revenue from completed orders, excluding tax and shipping.
-                    resource: bigquery://example-analytics.shop.orders
-                    tags: [finance, core]
-                    sources:
-                      - id: revenue-policy
-                        resource: https://wiki.example.co.jp/finance/revenue-recognition
-                        title: Revenue recognition policy (FY2026)
-                        author: human:finance@example.co.jp
-                        usage_count: 24
-                        last_modified: "2026-05-30"
-                      - id: orders-schema
-                        resource: bigquery://example-analytics.shop.orders
-                        title: shop.orders table schema
-                        last_modified: "2026-06-18"
-                        usage_window: { from: "2026-01-01", to: "2026-06-30" }
-                    usage_window: { from: "2026-06-01", to: "2026-06-30" }
-                    status: stable
-                    stale_after: "2026-12-31"
-                    created_by: { kind: human, name: tanaka@example.co.jp }
-                    updated_by: { kind: human, name: tanaka@example.co.jp }
-                    verifications:
-                      - by: { kind: human, name: sato@example.co.jp }
-                        at: "2026-07-14T02:33:41.019778Z"
-                    links:
-                      - { target: glossary/completed-order, text: completed order }
-                      - { target: tables/shop-orders, text: shop.orders }
-                    attrs: { unit: JPY, grain: order }
-                    body: |
+                    document: |
+                      ---
+                      type: Metric
+                      resource: bigquery://example-analytics.shop.orders
+                      title: Revenue
+                      description: Net revenue from completed orders, excluding tax and shipping.
+                      tags:
+                          - finance
+                          - core
+                      sources:
+                          - resource: https://wiki.example.co.jp/finance/revenue-recognition
+                            id: revenue-policy
+                            title: Revenue recognition policy (FY2026)
+                            author: human:finance@example.co.jp
+                            usage_count: 24
+                            last_modified: "2026-05-30"
+                          - resource: bigquery://example-analytics.shop.orders
+                            id: orders-schema
+                            title: shop.orders table schema
+                            last_modified: "2026-06-18"
+                            usage_window:
+                                from: "2026-01-01"
+                                to: "2026-06-30"
+                      usage_window:
+                          from: "2026-06-01"
+                          to: "2026-06-30"
+                      status: stable
+                      stale_after: "2026-12-31"
+                      unit: JPY
+                      grain: order
+                      ---
+
                       Revenue is the sum of `net_amount` over every
                       [completed order](/glossary/completed-order.md) in
                       [shop.orders](/tables/shop-orders.md). Tax and shipping
@@ -729,6 +731,32 @@ paths:
                       ![Revenue, 2026 H1](revenue/revenue-2026h1.png)
 
                       [^revenue-policy]: Revenue recognition policy (FY2026).
+                    summary:
+                      id: metrics/revenue
+                      type: Metric
+                      title: Revenue
+                      description: Net revenue from completed orders, excluding tax and shipping.
+                      resource: bigquery://example-analytics.shop.orders
+                      tags: [finance, core]
+                      status: stable
+                      stale_after: "2026-12-31"
+                      verified: true
+                      verified_at: "2026-07-14T02:33:41.019778Z"
+                      rejected: false
+                      links:
+                        - { target: glossary/completed-order, text: completed order }
+                        - { target: tables/shop-orders, text: shop.orders }
+                      content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
+                      created_at: "2026-06-02T04:11:38.201044Z"
+                      updated_at: "2026-07-14T02:33:41.019778Z"
+                    observed:
+                      created_by: { kind: human, name: tanaka@example.co.jp }
+                      generated:
+                        by: { kind: human, name: tanaka@example.co.jp }
+                        at: "2026-07-14T02:33:41.019778Z"
+                      verified:
+                        - by: { kind: human, name: sato@example.co.jp }
+                          at: "2026-07-14T02:33:41.019778Z"
                     attachments:
                       - name: revenue-2026h1.png
                         media_type: image/png
@@ -736,38 +764,57 @@ paths:
                         sha256: 9f2c1d0a7b3e5648c1d9f0a2b7e4c8d63f5a1b2c9e0d7a4f6b3c8e1d5a0f7b29
                         created_by: { kind: human, name: tanaka@example.co.jp }
                         created_at: "2026-06-02T04:20:11.663210Z"
-                    created_at: "2026-06-02T04:11:38.201044Z"
-                    updated_at: "2026-07-14T02:33:41.019778Z"
                 delegated:
                   summary: An entry written through an application acting for a person
                   description: >
                     The end user forwarded with X-Ochakai-On-Behalf-Of is the
                     actor; the application that forwarded them is kept as via
-                    (design doc 0027), never dropped.
+                    (design doc 0027), never dropped. It is an observation,
+                    so it is in `observed` and not in the document — a
+                    bundle carries knowledge, not who this instance saw
+                    write it (design doc 0009).
                   value:
-                    type: Insight
                     id: insights/revenue-seasonality
-                    title: Reading revenue month over month
-                    description: Why a December spike and a January drop are normal.
-                    tags: [finance]
-                    status: draft
-                    stale_after: "2027-01-31"
-                    created_by:
-                      kind: human
-                      name: tanaka@example.co.jp
-                      via: process:insightflow@example.iam.gserviceaccount.com
-                    updated_by:
-                      kind: human
-                      name: tanaka@example.co.jp
-                      via: process:insightflow@example.iam.gserviceaccount.com
-                    links:
-                      - { target: metrics/revenue, text: Revenue }
-                    body: |
+                    document: |
+                      ---
+                      type: Insight
+                      title: Reading revenue month over month
+                      description: Why a December spike and a January drop are normal.
+                      tags:
+                          - finance
+                      status: draft
+                      stale_after: "2027-01-31"
+                      ---
+
                       [Revenue](/metrics/revenue.md) is seasonal: December runs
                       well above the trailing median and January falls back
                       below it.
-                    created_at: "2026-07-21T06:14:55.402881Z"
-                    updated_at: "2026-07-21T06:14:55.402881Z"
+                    summary:
+                      id: insights/revenue-seasonality
+                      type: Insight
+                      title: Reading revenue month over month
+                      description: Why a December spike and a January drop are normal.
+                      tags: [finance]
+                      status: draft
+                      stale_after: "2027-01-31"
+                      verified: false
+                      rejected: false
+                      links:
+                        - { target: metrics/revenue, text: Revenue }
+                      content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
+                      created_at: "2026-07-21T06:14:55.402881Z"
+                      updated_at: "2026-07-21T06:14:55.402881Z"
+                    observed:
+                      created_by:
+                        kind: human
+                        name: tanaka@example.co.jp
+                        via: process:insightflow@example.iam.gserviceaccount.com
+                      generated:
+                        by:
+                          kind: human
+                          name: tanaka@example.co.jp
+                          via: process:insightflow@example.iam.gserviceaccount.com
+                        at: "2026-07-21T06:14:55.402881Z"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
           description: Error.
@@ -826,7 +873,34 @@ paths:
         required: true
         content:
           text/markdown:
-            schema: { type: string }
+            schema:
+              type: string
+              description: >
+                An OKF document: YAML frontmatter, `---`, then markdown.
+                The frontmatter keys ochakai reads are `type` (required,
+                one line — see the Type schema for the recommended
+                vocabulary), `title` (the id's last segment is the name
+                without one), `description`, `tags`, `resource` (the
+                underlying asset's URI), `status` (see the Status schema;
+                `draft` by default — whether anybody confirmed the entry
+                is a separate ruling and not the writer's to declare),
+                `status_note`, `stale_after` (YYYY-MM-DD), `sources` (a
+                list of `{resource, id, title, author, usage_count,
+                last_modified, usage_window}` — the material this entry
+                derives from, SPEC §5.1), `usage_window` (`{from, to}`),
+                and for an Attested Computation `runtime` (required
+                there), `parameters` (a list of `{name, type,
+                required}`), `computation`, `executor` (`{resource,
+                receipt}`) and `attester` (`{resource}`) — SPEC §10.2,
+                which ochakai records and never runs.
+
+                Producer-defined keys (SPEC §4.1) go at the top level
+                beside these, and inside a `sources` entry, a parameter,
+                the executor or the attester; all of them are kept
+                exactly as written (design doc 0043 §3.6). Link to
+                another entry with a markdown link to its path in the
+                body — [revenue](/metrics/revenue.md) — and the link
+                becomes an edge, and a backlink the other way.
             example: |
               ---
               type: Metric
@@ -851,7 +925,7 @@ paths:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
             text/markdown:
               schema: { type: string }
         # If-None-Match "*" was sent and the id is taken. Without that
@@ -873,44 +947,46 @@ paths:
             text/markdown:
               schema: { type: string }
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
               examples:
                 updated:
                   summary: The replacement above, as stored
                   description: >
-                    updated_by is now the caller who made this edit, while
-                    created_by still names whoever wrote the entry.
-                    The verifications ledger is untouched — a PUT edits the
-                    document and rules on nothing; POST /api/v1/verify/{id}
-                    is what confirms an entry. The new ETag is
-                    "2026-07-27T00:18:52.640117Z".
+                    observed.generated.by is now the caller who made this
+                    edit, while observed.created_by still names whoever
+                    wrote the entry. The verifications ledger is untouched
+                    — a PUT edits the document and rules on nothing;
+                    POST /api/v1/verify/{id} is what confirms an entry.
+                    `document` comes back canonical: key order normalized,
+                    and no server-owned keys to strip before the next
+                    edit.
                   value:
-                    type: Metric
                     id: metrics/revenue
-                    title: Revenue
-                    description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
-                    resource: bigquery://example-analytics.shop.orders
-                    tags: [finance, core]
-                    sources:
-                      - id: revenue-policy
-                        resource: https://wiki.example.co.jp/finance/revenue-recognition
-                        title: Revenue recognition policy (FY2027)
-                        author: human:finance@example.co.jp
-                        usage_count: 31
-                        last_modified: "2026-07-20"
-                    usage_window: { from: "2026-07-01", to: "2026-07-31" }
-                    status: stable
-                    stale_after: "2027-12-31"
-                    created_by: { kind: human, name: tanaka@example.co.jp }
-                    updated_by: { kind: human, name: sato@example.co.jp }
-                    verifications:
-                      - by: { kind: human, name: sato@example.co.jp }
-                        at: "2026-07-14T02:33:41.019778Z"
-                    links:
-                      - { target: glossary/completed-order, text: completed order }
-                      - { target: tables/shop-orders, text: shop.orders }
-                    attrs: { unit: JPY, grain: order }
-                    body: |
+                    document: |
+                      ---
+                      type: Metric
+                      resource: bigquery://example-analytics.shop.orders
+                      title: Revenue
+                      description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
+                      tags:
+                          - finance
+                          - core
+                      sources:
+                          - resource: https://wiki.example.co.jp/finance/revenue-recognition
+                            id: revenue-policy
+                            title: Revenue recognition policy (FY2027)
+                            author: human:finance@example.co.jp
+                            usage_count: 31
+                            last_modified: "2026-07-20"
+                      usage_window:
+                          from: "2026-07-01"
+                          to: "2026-07-31"
+                      status: stable
+                      stale_after: "2027-12-31"
+                      unit: JPY
+                      grain: order
+                      ---
+
                       Revenue is the sum of `net_amount` over every
                       [completed order](/glossary/completed-order.md) in
                       [shop.orders](/tables/shop-orders.md). Tax, shipping, and
@@ -920,12 +996,37 @@ paths:
                       month of the order it reverses[^revenue-policy].
 
                       [^revenue-policy]: Revenue recognition policy (FY2027).
-                    created_at: "2026-06-02T04:11:38.201044Z"
-                    updated_at: "2026-07-27T00:18:52.640117Z"
+                    summary:
+                      id: metrics/revenue
+                      type: Metric
+                      title: Revenue
+                      description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
+                      resource: bigquery://example-analytics.shop.orders
+                      tags: [finance, core]
+                      status: stable
+                      stale_after: "2027-12-31"
+                      verified: true
+                      verified_at: "2026-07-14T02:33:41.019778Z"
+                      rejected: false
+                      links:
+                        - { target: glossary/completed-order, text: completed order }
+                        - { target: tables/shop-orders, text: shop.orders }
+                      content_hash: e2740b18a95c6d3f0b47e18c25da936f4b0c8e71d5a29f63b0c847e1da395f26
+                      created_at: "2026-06-02T04:11:38.201044Z"
+                      updated_at: "2026-07-27T00:18:52.640117Z"
+                    observed:
+                      created_by: { kind: human, name: tanaka@example.co.jp }
+                      generated:
+                        by: { kind: human, name: sato@example.co.jp }
+                        at: "2026-07-27T00:18:52.640117Z"
+                      verified:
+                        - by: { kind: human, name: sato@example.co.jp }
+                          at: "2026-07-14T02:33:41.019778Z"
         "400":
           description: >
-            Invalid entry, or a malformed If-Match value (one that is
-            neither "*" nor an RFC3339Nano version, quoted or bare).
+            The document could not be parsed, or says something invalid.
+            A version is opaque, so an If-Match value has no format to be
+            malformed in: one that matches nothing is a 412.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -1003,7 +1104,8 @@ paths:
         The id is the address (design doc 0017), so a move carries
         everything keyed by it along in one transaction — revisions,
         usage, attachments, embeddings — and rewrites inbound references
-        (link targets in both bare and ochakai:// forms, and attrs.model)
+        (link targets in both bare and ochakai:// forms, and the producer
+        key `model` where a document carries one)
         so nothing breaks (design doc 0021). The destination must be a
         fresh id: a live or soft-deleted entry there already owns that
         address and its history — free an id held by a deleted entry with
@@ -1041,35 +1143,61 @@ paths:
           description: The moved entry, now at its new id.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
               examples:
                 moved:
                   summary: The entry at its new address
+                  description: >
+                    The id changed and nothing the document says did, so
+                    content_hash — and the ETag — are what they were
+                    before the move.
                   value:
-                    type: Metric
                     id: metrics/finance/revenue
-                    title: Revenue
-                    description: Net revenue from completed orders, excluding tax and shipping.
-                    resource: bigquery://example-analytics.shop.orders
-                    tags: [finance, core]
-                    status: stable
-                    stale_after: "2026-12-31"
-                    created_by: { kind: human, name: tanaka@example.co.jp }
-                    updated_by: { kind: human, name: tanaka@example.co.jp }
-                    verifications:
-                      - by: { kind: human, name: sato@example.co.jp }
-                        at: "2026-07-14T02:33:41.019778Z"
-                    links:
-                      - { target: glossary/completed-order, text: completed order }
-                      - { target: tables/shop-orders, text: shop.orders }
-                    attrs: { unit: JPY, grain: order }
-                    body: |
+                    document: |
+                      ---
+                      type: Metric
+                      resource: bigquery://example-analytics.shop.orders
+                      title: Revenue
+                      description: Net revenue from completed orders, excluding tax and shipping.
+                      tags:
+                          - finance
+                          - core
+                      status: stable
+                      stale_after: "2026-12-31"
+                      unit: JPY
+                      grain: order
+                      ---
+
                       Revenue is the sum of `net_amount` over every
                       [completed order](/glossary/completed-order.md) in
                       [shop.orders](/tables/shop-orders.md). Tax and shipping
                       are excluded.
-                    created_at: "2026-06-02T04:11:38.201044Z"
-                    updated_at: "2026-07-27T01:02:33.518604Z"
+                    summary:
+                      id: metrics/finance/revenue
+                      type: Metric
+                      title: Revenue
+                      description: Net revenue from completed orders, excluding tax and shipping.
+                      resource: bigquery://example-analytics.shop.orders
+                      tags: [finance, core]
+                      status: stable
+                      stale_after: "2026-12-31"
+                      verified: true
+                      verified_at: "2026-07-14T02:33:41.019778Z"
+                      rejected: false
+                      links:
+                        - { target: glossary/completed-order, text: completed order }
+                        - { target: tables/shop-orders, text: shop.orders }
+                      content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
+                      created_at: "2026-06-02T04:11:38.201044Z"
+                      updated_at: "2026-07-27T01:02:33.518604Z"
+                    observed:
+                      created_by: { kind: human, name: tanaka@example.co.jp }
+                      generated:
+                        by: { kind: human, name: tanaka@example.co.jp }
+                        at: "2026-07-27T01:02:33.518604Z"
+                      verified:
+                        - by: { kind: human, name: sato@example.co.jp }
+                          at: "2026-07-14T02:33:41.019778Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
@@ -1109,36 +1237,57 @@ paths:
           description: The verified entry.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
               examples:
-                promoted:
+                confirmed:
                   summary: POST /api/v1/verify/insights/revenue-seasonality
                   description: >
-                    A verification by the caller is appended. Nothing else
-                    moves: the status is whatever the writer set, and
-                    updated_at (the ETag, and OKF's generated.at) is
-                    untouched, because the document did not change.
+                    A verification by the caller is appended to
+                    observed.verified, and summary.verified flips. Nothing
+                    else moves: the entry is still the draft its writer
+                    published, the document is byte-for-byte what it was,
+                    and content_hash (the ETag, and the version an editor
+                    may be holding) is untouched.
                   value:
-                    type: Insight
                     id: insights/revenue-seasonality
-                    title: Reading revenue month over month
-                    description: Why a December spike and a January drop are normal.
-                    tags: [finance]
-                    status: stable
-                    stale_after: "2027-01-31"
-                    created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                    updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                    verifications:
-                      - by: { kind: human, name: tanaka@example.co.jp }
-                        at: "2026-07-27T00:41:12.905337Z"
-                    links:
-                      - { target: metrics/revenue, text: Revenue }
-                    body: |
+                    document: |
+                      ---
+                      type: Insight
+                      title: Reading revenue month over month
+                      description: Why a December spike and a January drop are normal.
+                      tags:
+                          - finance
+                      status: draft
+                      stale_after: "2027-01-31"
+                      ---
+
                       [Revenue](/metrics/revenue.md) is seasonal: December runs
                       well above the trailing median and January falls back
                       below it.
-                    created_at: "2026-07-21T06:14:55.402881Z"
-                    updated_at: "2026-07-27T00:41:12.905337Z"
+                    summary:
+                      id: insights/revenue-seasonality
+                      type: Insight
+                      title: Reading revenue month over month
+                      description: Why a December spike and a January drop are normal.
+                      tags: [finance]
+                      status: draft
+                      stale_after: "2027-01-31"
+                      verified: true
+                      verified_at: "2026-07-27T00:41:12.905337Z"
+                      rejected: false
+                      links:
+                        - { target: metrics/revenue, text: Revenue }
+                      content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
+                      created_at: "2026-07-21T06:14:55.402881Z"
+                      updated_at: "2026-07-21T06:14:55.402881Z"
+                    observed:
+                      created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                      generated:
+                        by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        at: "2026-07-21T06:14:55.402881Z"
+                      verified:
+                        - by: { kind: human, name: tanaka@example.co.jp }
+                          at: "2026-07-27T00:41:12.905337Z"
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
@@ -1185,7 +1334,52 @@ paths:
           description: The entry, carrying its new rejection.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
+              examples:
+                rejected:
+                  summary: POST /api/v1/reject/metrics/gross-revenue
+                  description: >
+                    The ruling is in observed.rejection, and summary.rejected
+                    is how a row says so. The document is untouched — a
+                    rejection is a judgment about the concept, not a stage
+                    of it, and it could not round-trip as a status because
+                    export would have to fold it onto deprecated, which
+                    asserts the opposite thing about the entry (design doc
+                    0043 §3.3).
+                  value:
+                    id: metrics/gross-revenue
+                    document: |
+                      ---
+                      type: Metric
+                      title: Gross revenue
+                      description: Order totals before refunds.
+                      status: draft
+                      ---
+
+                      The sum of `gross_amount` over every order in
+                      [shop.orders](/tables/shop-orders.md).
+                    summary:
+                      id: metrics/gross-revenue
+                      type: Metric
+                      title: Gross revenue
+                      description: Order totals before refunds.
+                      status: draft
+                      verified: false
+                      rejected: true
+                      links:
+                        - { target: tables/shop-orders, text: shop.orders }
+                      content_hash: 7be31c85d0a629f4b17c08e35da4962f0b8c71e34d0a95f627b1c8e034da95f7
+                      created_at: "2026-07-24T02:18:09.441027Z"
+                      updated_at: "2026-07-24T02:18:09.441027Z"
+                    observed:
+                      created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                      generated:
+                        by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        at: "2026-07-24T02:18:09.441027Z"
+                      rejection:
+                        by: { kind: human, name: sato@example.co.jp }
+                        at: "2026-07-27T02:05:44.812390Z"
+                        note: double-counts refunds; see policies/revenue-recognition
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
@@ -1206,7 +1400,7 @@ paths:
           description: The entry, with no rejection.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Knowledge" }
+              schema: { $ref: "#/components/schemas/View" }
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
@@ -1449,7 +1643,7 @@ paths:
                 properties:
                   entries:
                     type: array
-                    items: { $ref: "#/components/schemas/Knowledge" }
+                    items: { $ref: "#/components/schemas/Summary" }
               examples:
                 linkedFrom:
                   summary: GET /api/v1/backlinks/metrics/revenue
@@ -1460,39 +1654,32 @@ paths:
                     side separately.
                   value:
                     entries:
-                      - type: Insight
-                        id: insights/revenue-seasonality
+                      - id: insights/revenue-seasonality
+                        type: Insight
                         title: Reading revenue month over month
                         description: Why a December spike and a January drop are normal.
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                        updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        verified: false
+                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
-                        body: |
-                          [Revenue](/metrics/revenue.md) is seasonal: December
-                          runs well above the trailing median and January falls
-                          back below it.
+                        content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
                         created_at: "2026-07-21T06:14:55.402881Z"
                         updated_at: "2026-07-21T06:14:55.402881Z"
-                      - type: Attested Computation
-                        id: queries/monthly-revenue
-                        runtime: bigquery
+                      - id: queries/monthly-revenue
+                        type: Attested Computation
+                        title: monthly-revenue
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: stable
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verifications:
-                          - by: { kind: human, name: sato@example.co.jp }
-                            at: "2026-07-10T01:52:16.774301Z"
+                        verified: true
+                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
-                        body: |
-                          Answers the question above against
-                          [Revenue](/metrics/revenue.md).
+                        content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
                         created_at: "2026-06-09T07:41:02.110945Z"
                         updated_at: "2026-07-10T01:52:16.774301Z"
         "400": { $ref: "#/components/responses/Error" }
@@ -1762,8 +1949,8 @@ components:
     ETag:
       description: >
         The entry's version — the hash of its canonical OKF document,
-        quoted, and the same value as the body's content_hash (design
-        doc 0043 §3.4). A client echoes it in If-Match on a later update
+        quoted, and the same value as the body's summary.content_hash
+        (design doc 0043 §3.4). A client echoes it in If-Match on a later update
         to write only if nothing changed meanwhile (design doc 0030).
         It is a hash of the content alone, so it moves when the entry's
         content moves and at no other time: verifying, rejecting or
@@ -1800,8 +1987,8 @@ components:
       description: >
         Optimistic-concurrency precondition (design doc 0030): the
         entry's version, as a prior read or write returned it in the ETag
-        response header (quotes optional; the JSON body's content_hash
-        field is the same value). Every response carrying an entry
+        response header (quotes optional; the JSON body's
+        summary.content_hash field is the same value). Every response carrying an entry
         carries the header. The write happens only if the entry still has
         this version; an entry changed since it was read is a 412 and
         nothing is written. Absent or "*" means no precondition — last
@@ -1967,134 +2154,17 @@ components:
           description: >
             The anchor text the body used. Absent for a bare ochakai:// reference,
             in which case the target's last segment reads as the name.
-    UsageWindow:
+    Summary:
       type: object
       description: >
-        The date range a set of usage_count values was counted over (OKF
-        SPEC §5.1). "5000 uses" means nothing without it. ochakai records
-        the window and never computes or checks one.
+        The projection of one entry: enough to name it, order it, and
+        decide whether to read it (design doc 0043 §3.5). It is derived
+        from the document and never authoritative — the document is what
+        the entry says, and this is an index over it. A client that needs
+        a key not listed here reads the document; the projection carries
+        what listing surfaces sort and filter by, and stops there.
+      required: [id, type, title, status, verified, rejected, content_hash, created_at, updated_at]
       properties:
-        from: { type: string, format: date }
-        to: { type: string, format: date }
-    Source:
-      type: object
-      description: >
-        One piece of external material an entry derives from (OKF SPEC
-        §5.1, design doc 0036). ochakai records sources: it never fetches
-        resource, checks that it resolves, or turns the credibility signals
-        into a score — §5.1 leaves weighing raw signals to the consumer.
-        The spec's keys are modeled; anything else a producer wrote is kept
-        under extra (design doc 0043 §3.6).
-      required: [resource]
-      properties:
-        resource:
-          type: string
-          description: >
-            The artifact this cites — an external URL, a bundle-relative
-            path, or a scope descriptor. Required: a source that names no
-            artifact is not a citation.
-        id:
-          type: string
-          description: >
-            Stable key for per-claim attribution — markdown footnotes in
-            body cite it (e.g. "[^rev-policy]").
-        title: { type: string, description: Human-readable label. }
-        author:
-          type: string
-          description: Who produced the source, in the actor convention (SPEC §7). The source's author, not the entry's.
-        usage_count:
-          type: integer
-          minimum: 0
-          description: >
-            How often the source was exercised over the usage window — a
-            liveness signal. Absent and 0 differ on purpose: no count at
-            all versus a source exercised zero times. Unrelated to
-            ochakai's own usage totals, which count reads of the entry
-            rather than uses of the source; the two are never converted.
-        last_modified: { type: string, format: date, description: When the source itself last changed (YYYY-MM-DD). }
-        usage_window:
-          allOf: [{ $ref: "#/components/schemas/UsageWindow" }]
-          description: Overrides the entry's usage_window for this source.
-        extra:
-          type: object
-          additionalProperties: true
-          description: >
-            The producer-defined keys of this object (SPEC §4.1), kept as
-            written. In a document they ride inline beside the keys the
-            spec defines, exactly where their writer put them; here they
-            are nested, because this JSON is ochakai's shape rather than
-            OKF's, and nesting keeps a producer key from ever colliding
-            with one a later spec adds (design doc 0043 §3.6).
-    Parameter:
-      type: object
-      description: >
-        One declared input of an Attested Computation (OKF SPEC §10.2). An
-        agent supplies parameter values; authoring or editing the
-        computation itself is not its to do — a rule for the consumer
-        running it, which ochakai records rather than enforces.
-      required: [name, type]
-      properties:
-        name: { type: string }
-        type: { type: string, description: "The parameter's data type, e.g. integer or string." }
-        required: { type: boolean, description: Absent and false mean the same thing. }
-        extra:
-          type: object
-          additionalProperties: true
-          description: >
-            The producer-defined keys of this object (SPEC §4.1), kept as
-            written. In a document they ride inline beside the keys the
-            spec defines, exactly where their writer put them; here they
-            are nested, because this JSON is ochakai's shape rather than
-            OKF's, and nesting keeps a producer key from ever colliding
-            with one a later spec adds (design doc 0043 §3.6).
-    Executor:
-      type: object
-      description: >
-        How an Attested Computation is run, and what a run must hand back
-        as evidence (OKF SPEC §10.2). ochakai stores this and never runs
-        it: executing the computation and checking the receipt belong to
-        the consumer (SPEC §10.5, design docs 0001, 0036 §5).
-      required: [resource, receipt]
-      properties:
-        resource: { type: string, description: Path to the run instructions or code. }
-        receipt:
-          type: array
-          items: { type: string }
-          description: "The fields a run must return as evidence, e.g. [job_id, executed_sql, result]."
-        extra:
-          type: object
-          additionalProperties: true
-          description: >
-            The producer-defined keys of this object (SPEC §4.1), kept as
-            written. In a document they ride inline beside the keys the
-            spec defines, exactly where their writer put them; here they
-            are nested, because this JSON is ochakai's shape rather than
-            OKF's, and nesting keeps a producer key from ever colliding
-            with one a later spec adds (design doc 0043 §3.6).
-    Attester:
-      type: object
-      description: >
-        The deterministic, LLM-free checker that a run was performed
-        correctly (OKF SPEC §10.2). As with Executor, ochakai records the
-        path and never executes it.
-      required: [resource]
-      properties:
-        resource: { type: string, description: Path to the attester code. }
-        extra:
-          type: object
-          additionalProperties: true
-          description: >
-            The producer-defined keys of this object (SPEC §4.1), kept as
-            written. In a document they ride inline beside the keys the
-            spec defines, exactly where their writer put them; here they
-            are nested, because this JSON is ochakai's shape rather than
-            OKF's, and nesting keeps a producer key from ever colliding
-            with one a later spec adds (design doc 0043 §3.6).
-    Knowledge:
-      type: object
-      required: [type, id]
-      properties:
-        type: { $ref: "#/components/schemas/Type" }
         id:
           type: string
           description: >
@@ -2107,38 +2177,22 @@ components:
             (OKF-reserved filenames). Stored NFC-normalized, as are
             link targets and attachment names (design doc 0022).
           pattern: "^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
+        type: { $ref: "#/components/schemas/Type" }
         title:
           type: string
           description: >
-            Display-name override; optional (design doc 0022). When
-            empty or omitted, the id's last segment (the filename) is
-            the entry's name.
+            The display name, already resolved: the entry's own title, or
+            the id's last segment when it declared none (design doc
+            0022). A row never has to work that fallback out for itself.
         description: { type: string }
         resource:
           type: string
           description: >
             Canonical URI of the underlying asset (OKF recommended key): the
             table/dataset URI, or for references the external source URL.
-            Empty for abstract concepts.
+            Absent for abstract concepts.
         tags: { type: array, items: { type: string } }
-        sources:
-          type: array
-          items: { $ref: "#/components/schemas/Source" }
-          description: >
-            The external material this entry derives from (OKF SPEC §5.1).
-            Writable, unlike links: a PUT is a full replacement, so an
-            omitted sources clears them. Give each source an id and body
-            footnotes can attribute single claims to it.
-        usage_window:
-          allOf: [{ $ref: "#/components/schemas/UsageWindow" }]
-          description: The range the sources' usage_count values were counted over. Individual sources may override it.
         status: { $ref: "#/components/schemas/Status" }
-        status_note:
-          type: string
-          description: >
-            Free-form reason for the current lifecycle status — why an
-            entry is deprecated. The writer's words; a rejection's reason
-            belongs to the rejecter and lives in `rejection.note`.
         stale_after:
           type: string
           format: date
@@ -2151,55 +2205,37 @@ components:
             due for a re-check, not wrong. The one surface that reads it
             is sort=stale_after, the feed of entries whose declared date
             has passed (design doc 0037 §2.1).
-        runtime:
+        verified:
+          type: boolean
+          description: >
+            Whether anybody has confirmed the entry — the verifications
+            ledger read as the boolean SPEC §5.3 derives trust from.
+            Independent of status: a draft may be verified and a stable
+            entry unverified (design doc 0043 §3.2). Who confirmed it,
+            and how often, is in observed.verified.
+        verified_at:
           type: string
+          format: date-time
           description: >
-            The execution environment of an Attested Computation — e.g.
-            bigquery, postgres, dbt, python (OKF SPEC §10.2). It is what
-            gives the parameters their meaning, so it is required when the
-            type is "Attested Computation" and free to be empty otherwise:
-            the one place ochakai holds a type to a schema (design doc
-            0036 §3.4).
-        parameters:
+            When the newest confirmation was recorded, absent when there
+            is none. A row carries it because it is what sort=verified_at
+            ranks by — a reviewer reading that feed is reading these times.
+        rejected:
+          type: boolean
+          description: >
+            Whether a live rejection stands against the entry. The ruling
+            itself — by whom, when, and why — is in observed.rejection.
+        links:
           type: array
-          items: { $ref: "#/components/schemas/Parameter" }
-          description: The inputs an agent may fill in when running the computation.
-        computation:
-          type: string
+          items: { $ref: "#/components/schemas/Link" }
           description: >
-            Path to the file holding the computation. Empty means the
-            computation is inline, in body's "# Computation" fence
-            (SPEC §10.6).
-        executor: { $ref: "#/components/schemas/Executor" }
-        attester: { $ref: "#/components/schemas/Attester" }
-        created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
-        updated_by:
-          allOf: [{ $ref: "#/components/schemas/Actor" }]
-          readOnly: true
-          description: >
-            Who last changed the content — exported as OKF's
-            generated.by (design doc 0036 §3.3). Not created_by: after
-            somebody else edits an entry, the creator is no longer who
-            the content stands by. Verifying does not change it.
-        verifications:
-          type: array
-          items: { $ref: "#/components/schemas/Verification" }
-          readOnly: true
-          description: >
-            Every recorded confirmation, oldest first. Empty (and omitted)
-            means unverified, which is SPEC §5.3's own signal. Written by
-            POST /api/v1/verify/{id}: this is an instance ledger, never a
-            payload field, and import reads only whether a bundle's
-            `verified` key was present (design docs 0009, 0043 §3.2).
-        rejection:
-          allOf: [{ $ref: "#/components/schemas/Rejection" }]
-          readOnly: true
-          description: >
-            The live ruling, absent when there is none. Written by
-            POST /api/v1/reject/{id} and cleared by DELETE.
+            Derived from the markdown links in the document's body,
+            recomputed on every write. Bundle-absolute
+            (/metrics/revenue.md), relative (./revenue.md), and
+            ochakai:// targets are all read; http(s) URLs and non-.md
+            files are not (the latter are attachments).
         content_hash:
           type: string
-          readOnly: true
           description: >
             The entry's version: the hash of its canonical OKF document,
             and the same value the ETag header carries (design doc 0043
@@ -2207,40 +2243,84 @@ components:
             changed meanwhile. Opaque — it moves when the content moves
             and at no other time, so a verification or an attachment
             leaves a held precondition valid.
-        links:
+        created_at: { type: string, format: date-time }
+        updated_at:
+          type: string
+          format: date-time
+          description: >
+            When the content last changed — the same instant as
+            observed.generated.at, which is the OKF spelling of it.
+    Generated:
+      type: object
+      description: >
+        OKF's generated family (SPEC §5.2): who the content stands by, and
+        when it last changed. `by` is not the creator — once somebody else
+        edits an entry, the creator is no longer who the content stands by
+        — and verifying moves neither value (design doc 0036 §3.3).
+      properties:
+        by: { $ref: "#/components/schemas/Actor" }
+        at: { type: string, format: date-time }
+    Observed:
+      type: object
+      description: >
+        What this instance saw happen to an entry, as against what the
+        entry says. A bundle carries knowledge, and provenance is an
+        observation this instance made (design doc 0009) — so it travels
+        beside the document rather than inside it, and import never reads
+        it back. Every value here is resolved from the caller's Google
+        identity at the moment of the write, never from a payload: there
+        is no request shape that can set any of them.
+      properties:
+        created_by: { $ref: "#/components/schemas/Actor" }
+        generated: { $ref: "#/components/schemas/Generated" }
+        verified:
           type: array
-          items: { $ref: "#/components/schemas/Link" }
-          readOnly: true
+          items: { $ref: "#/components/schemas/Verification" }
           description: >
-            Derived from the markdown links in body, recomputed on every write —
-            sending links has no effect. Bundle-absolute (/metrics/revenue.md),
-            relative (./revenue.md), and ochakai:// targets are all read;
-            http(s) URLs and non-.md files are not (the latter are attachments).
-        attrs:
-          type: object
+            Every recorded confirmation, oldest first. Absent means
+            unverified, which is SPEC §5.3's own signal. Written by
+            POST /api/v1/verify/{id}: this is an instance ledger, and
+            import reads only whether a bundle's `verified` key was
+            present (design docs 0009, 0043 §3.2).
+        rejection:
+          allOf: [{ $ref: "#/components/schemas/Rejection" }]
           description: >
-            Producer-defined extension keys (OKF SPEC §4.1) — e.g.
-            question/sql for an Attested Computation holding a verified
-            query, spec for a semantic model.
-            Kept verbatim and written back at the top level of the exported
-            frontmatter. Every key OKF v0.2 itself defines is a field of
-            its own above; naming one here is rejected rather than stored
-            where nothing reads it (design doc 0036 §3.5).
-        body:
+            The live ruling, absent when there is none. Written by
+            POST /api/v1/reject/{id} and cleared by DELETE.
+    View:
+      type: object
+      description: >
+        A read of one entry: the document it is, the projection to read it
+        by, and what this instance observed about it (design doc 0043
+        §3.5). The document is the entry — the same shape an export
+        writes, a PUT takes, and `ochakai get` prints — and `summary` is
+        an index over it, so where the two could disagree the document is
+        right.
+      required: [id, document, summary, observed]
+      properties:
+        id:
+          type: string
+          description: The entry's bundle path — the address this document was read from.
+        document:
           type: string
           description: >
-            Markdown body. Links to other entries live here: write a markdown link
-            to the target's path and it becomes an edge, and a backlink the other way.
+            The canonical OKF document: YAML frontmatter, then markdown
+            body. Canonical means the keys this instance owns
+            (`generated`, `verified`) are left out — it is what a writer
+            authored, in one normal form, and what content_hash is taken
+            over (design doc 0043 §§3.4, 3.7). So it can be edited and
+            PUT back with nothing to strip, and the provenance those keys
+            would have carried is in `observed` instead. Fetch the export
+            form, server-owned keys included, with "Accept: text/markdown".
+        summary: { $ref: "#/components/schemas/Summary" }
+        observed: { $ref: "#/components/schemas/Observed" }
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }
-          readOnly: true
           description: >
             Attachment metadata (no bytes — fetch them via
             /api/v1/attachments/{id}/{name}). Managed through the
-            attachment endpoints, never through create/update payloads.
-        created_at: { type: string, format: date-time, readOnly: true }
-        updated_at: { type: string, format: date-time, readOnly: true }
+            attachment endpoints. Absent when the entry has none.
     Attachment:
       type: object
       description: >
@@ -2271,12 +2351,21 @@ components:
         last_used_at: { type: string, format: date-time }
     SearchHit:
       description: >
-        One search or listing result. REST hits carry attachment
-        metadata (filled in batch) so UIs can render image previews
-        without a fetch per entry; MCP search results omit it to keep
-        agent context lean (design doc 0015).
+        One search or listing result: the projection plus what ranked it.
+        A hit no longer carries the entry. Search used to return whole
+        entries on the reasoning that there they are the answer rather
+        than a duplicate of one (design doc 0033) — true while an entry
+        was a bag of fields, and false once it is a document: a page of
+        results that shipped ten documents to answer "which of these
+        should I read" spends the caller's context on the nine it will
+        not. The document is one fetch away by id, and GET
+        /api/v1/context is the call that returns entries.
+
+        REST hits carry attachment metadata (filled in batch) so UIs can
+        render image previews without a fetch per entry; MCP search
+        results omit it to keep agent context lean (design doc 0015).
       allOf:
-        - $ref: "#/components/schemas/Knowledge"
+        - $ref: "#/components/schemas/Summary"
         - type: object
           properties:
             score: { type: number }
@@ -2287,6 +2376,14 @@ components:
                 Usage totals, present in the sort=usage listing (the draft
                 review feed) and the sort=failed listing (the re-verification
                 feed); absent for search results and the verified_at feed.
+            attachments:
+              type: array
+              items: { $ref: "#/components/schemas/Attachment" }
+              readOnly: true
+              description: >
+                Attachment metadata for this row — a file beside the
+                entry rather than part of its projection, which is why it
+                is here and not in Summary. REST only.
     ContextRank:
       type: object
       description: >
@@ -2302,6 +2399,13 @@ components:
           description: The display title — the entry's own, or its filename.
           type: string
         status: { $ref: "#/components/schemas/Status" }
+        verified:
+          type: boolean
+          description: >
+            Whether anybody confirmed the entry — the ledger's answer,
+            which the lifecycle status no longer carries (design doc 0043
+            §3.2). A caller deciding whether to spend a round trip on an
+            id below the pack's cut-off wants it.
         score: { type: number }
     ContextOutline:
       type: object

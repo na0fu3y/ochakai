@@ -138,6 +138,17 @@ func TestClientCommandsCoverDesignDoc(t *testing.T) {
 	_ = domain.Types // keep the import honest
 }
 
+// viewOf renders an entry the way a read does, so a rendering test works
+// on the shape the CLI actually receives.
+func viewOf(t *testing.T, k domain.Knowledge) domain.View {
+	t.Helper()
+	v, err := okf.ViewOf(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
 func TestRenderContext(t *testing.T) {
 	now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
@@ -146,20 +157,20 @@ func TestRenderContext(t *testing.T) {
 			{Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusStable, Title: "Monthly revenue", Score: 0.9},
 			{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR", Score: 0.1},
 		},
-		Entries: []domain.Knowledge{
-			{
+		Entries: []domain.View{
+			viewOf(t, domain.Knowledge{
 				Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusStable,
 				Title:         "Monthly revenue",
 				CreatedBy:     domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
 				Verifications: []domain.Verification{{By: human, At: now}},
-				Attrs:         map[string]any{"question": "Revenue by month?", "sql": "SELECT 1\n"},
+				Attrs:         map[string]any{"question": "Revenue by month?"},
 				Body:          "Prefer this over writing new SQL.",
-			},
-			{
+			}),
+			viewOf(t, domain.Knowledge{
 				Type: domain.TypeInsights, ID: "insights/revenue-seasonality", Status: domain.StatusDraft,
 				Title: "Seasonality", CreatedBy: domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
 				Body: "Q4 peaks ~40% above baseline.",
-			},
+			}),
 		},
 	}
 
@@ -169,8 +180,9 @@ func TestRenderContext(t *testing.T) {
 	for _, want := range []string{
 		"## ochakai://queries/monthly-revenue (stable) — Monthly revenue",
 		"verified by human:na0 on 2026-06-01; created by process:claude",
-		"Q: Revenue by month?",
-		"```sql\nSELECT 1\n```",
+		// The entry is its document: the producer key and the body come
+		// out as written, without this renderer knowing about either.
+		"question: Revenue by month?",
 		"Prefer this over writing new SQL.",
 		"## ochakai://insights/revenue-seasonality (draft) — Seasonality",
 		"Also relevant",
@@ -312,10 +324,11 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(domain.Knowledge{
-			Type: domain.TypeComputations, ID: r.PathValue("id"), Status: domain.StatusStable,
-			Title:         "Monthly revenue",
-			Verifications: []domain.Verification{{By: human, At: verified}},
+		_ = json.NewEncoder(w).Encode(domain.View{
+			ID: r.PathValue("id"),
+			Summary: domain.Summary{Type: domain.TypeComputations, ID: r.PathValue("id"),
+				Status: domain.StatusStable, Title: "Monthly revenue", Verified: true},
+			Observed: domain.Observed{Verified: []domain.Verification{{By: human, At: verified}}},
 		})
 	})
 	srv := httptest.NewServer(mux)
@@ -337,11 +350,11 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	if verifyErr != nil {
 		t.Fatal(verifyErr)
 	}
-	var got domain.Knowledge
+	var got domain.View
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("--json did not print JSON (%v): %s", err, out)
 	}
-	last := got.LastVerified()
+	last := got.Observed.LastVerified()
 	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
 		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
 	}

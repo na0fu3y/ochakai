@@ -37,11 +37,11 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"}, Score: 0.9},
+			{Summary: domain.Summary{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"}, Score: 0.9},
 		}})
 	})
 	hits, err := c.Search(context.Background(), SearchParams{
-		Query: "revenue", Types: []string{"metrics", "terms"}, Statuses: []string{"verified"},
+		Query: "revenue", Types: []string{"metrics", "terms"}, Statuses: []string{"stable"},
 		Tags: []string{"core"}, Limit: 5,
 	})
 	if err != nil {
@@ -50,7 +50,7 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 	if len(hits) != 1 || hits[0].ID != "revenue" || hits[0].Score != 0.9 {
 		t.Errorf("hits = %+v", hits)
 	}
-	if got.Get("q") != "revenue" || len(got["type"]) != 2 || got.Get("status") != "verified" ||
+	if got.Get("q") != "revenue" || len(got["type"]) != 2 || got.Get("status") != "stable" ||
 		got.Get("tag") != "core" || got.Get("limit") != "5" || got.Has("sort") {
 		t.Errorf("query = %v", got)
 	}
@@ -84,7 +84,7 @@ func TestSearchUsageSortDecodesUsage(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Knowledge: domain.Knowledge{Type: domain.TypeInsights, ID: "draft-a", Title: "草案"},
+			{Summary: domain.Summary{Type: domain.TypeInsights, ID: "draft-a", Title: "草案"},
 				Usage: &domain.Usage{SearchHits: 7, Fetches: 2}},
 		}})
 	})
@@ -230,8 +230,9 @@ func TestPutSendsADocumentAndDelete204(t *testing.T) {
 			}
 			w.Header().Add("Ochakai-Note", "status \"retired\" is not an OKF lifecycle value")
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(domain.Knowledge{
-				Type: domain.TypeMetrics, ID: "metrics/revenue", Title: "売上", Status: domain.StatusDraft})
+			_ = json.NewEncoder(w).Encode(domain.View{ID: "metrics/revenue",
+				Summary: domain.Summary{Type: domain.TypeMetrics, ID: "metrics/revenue",
+					Title: "売上", Status: domain.StatusDraft}})
 		case http.MethodDelete:
 			if r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
 				t.Errorf("path = %s", r.URL.Path)
@@ -240,7 +241,7 @@ func TestPutSendsADocumentAndDelete204(t *testing.T) {
 		}
 	})
 	got, created, changed, notes, err := c.Put(context.Background(), "metrics/revenue", []byte(doc), "", true)
-	if err != nil || got.Status != domain.StatusDraft {
+	if err != nil || got.Summary.Status != domain.StatusDraft {
 		t.Fatalf("put: %v, %+v", err, got)
 	}
 	if !created || !changed {
@@ -266,7 +267,7 @@ func TestPutReportsAnUnchangedWrite(t *testing.T) {
 			t.Error("an update must not send If-None-Match")
 		}
 		w.Header().Set("Ochakai-Unchanged", "true")
-		_ = json.NewEncoder(w).Encode(domain.Knowledge{ID: "metrics/revenue"})
+		_ = json.NewEncoder(w).Encode(domain.View{ID: "metrics/revenue"})
 	})
 	_, created, changed, _, err := c.Put(context.Background(), "metrics/revenue",
 		[]byte("---\ntype: Metric\n---\n"), "abc123", false)
@@ -326,23 +327,24 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(ContextResult{
-			Hits:    []domain.ContextRank{{Type: "metrics", ID: "revenue", Score: 0.8}},
-			Entries: []domain.Knowledge{{Type: "metrics", ID: "revenue", Title: "売上"}},
+			Hits: []domain.ContextRank{{Type: "metrics", ID: "revenue", Score: 0.8}},
+			Entries: []domain.View{{ID: "revenue", Document: "---\ntype: metrics\n---\n",
+				Summary: domain.Summary{Type: "metrics", ID: "revenue", Title: "売上"}}},
 		})
 	})
 	res, err := c.Context(context.Background(), ContextParams{
 		Query: "why did revenue drop", Types: []string{"metrics"},
-		Statuses: []string{"verified"}, Tags: []string{"core"},
+		Statuses: []string{"stable"}, Tags: []string{"core"},
 		Prefixes: []string{"teams/growth", "company"}, Limit: 7, MinScore: 0.5,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Hits) != 1 || len(res.Entries) != 1 || res.Entries[0].Title != "売上" {
+	if len(res.Hits) != 1 || len(res.Entries) != 1 || res.Entries[0].Summary.Title != "売上" {
 		t.Errorf("result = %+v", res)
 	}
 	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metrics" ||
-		got.Get("status") != "verified" || got.Get("tag") != "core" ||
+		got.Get("status") != "stable" || got.Get("tag") != "core" ||
 		got.Get("limit") != "7" || got.Get("min_score") != "0.5" {
 		t.Errorf("query = %v", got)
 	}
@@ -455,7 +457,7 @@ func TestPutSendsIfMatchAndMapsConflict(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge changed since it was read"})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(domain.Knowledge{Type: domain.TypeMetrics, ID: "metrics/revenue"})
+		_ = json.NewEncoder(w).Encode(domain.View{ID: "metrics/revenue"})
 	})
 	doc := []byte("---\ntype: Metric\ntitle: 売上\n---\n")
 	for _, ifMatch := range []string{"", "abc123", `"abc123"`} {
