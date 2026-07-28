@@ -541,6 +541,12 @@ type Knowledge struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
+	// ContentHash is the entry's version: the SHA-256 of its canonical
+	// document (design doc 0043 §3.4), which is what the ETag carries and
+	// what If-Match is checked against. It is a hash of the content
+	// alone, so a verification, a rejection or an attachment leaves it
+	// where it was — only an edit moves it.
+	ContentHash string `json:"content_hash,omitempty"`
 }
 
 // EnvelopeKeys names every OKF frontmatter key the envelope owns, in the
@@ -694,10 +700,15 @@ func attrsEqual(a, b map[string]any) bool {
 // behind "every change kept as a revision".
 type Revision struct {
 	Rev       int       `json:"rev"`
-	Change    string    `json:"change"` // create | update | delete | attach | detach
+	Change    string    `json:"change"` // create | update | move | delete | verify | reject | unreject | attach | detach
 	ChangedBy Actor     `json:"changed_by"`
 	ChangedAt time.Time `json:"changed_at"`
-	Snapshot  Knowledge `json:"snapshot"`
+	// Document is the entry as it stood, as an OKF document (design doc
+	// 0043 §3.9). It replaced a JSON snapshot of the Go struct: a record
+	// whose shape depends on the reader knowing every past release is the
+	// distortion, not the fidelity, and OKF is an anchor that outlasts
+	// them. It also means a diff between two revisions reads.
+	Document string `json:"document"`
 }
 
 // validSegment reports whether s can be one ID path segment. OKF

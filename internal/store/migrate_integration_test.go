@@ -1061,3 +1061,109 @@ func TestMigrationActorProcess(t *testing.T) {
 		}
 	}
 }
+
+// The 0024 backfill composes the stored document for rows written before
+// the document was the stored form, and turns each revision snapshot into
+// the document that revision held (design doc 0043 §§3.1, 3.9). It runs
+// in Go rather than in SQL because composing a document means writing
+// YAML in the spelling the spec fixes.
+//
+// It runs against the real shared database rather than a scratch schema:
+// what is being tested is Migrate's own backfill pass, which reads
+// through the store's connection and cannot be pointed at a search_path
+// set for one transaction.
+func TestBackfillComposesStoredDocuments(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+	id := fmt.Sprintf("it-backfill-%d", time.Now().UnixNano())
+	k := &domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: "季節性",
+		Status: domain.StatusStable, Body: "12月は+40%。", CreatedBy: actor}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+	})
+
+	// Put the row back into the pre-0024 shape: no document, no hash, and
+	// a revision carrying a JSON snapshot instead of a document.
+	snapshot, err := json.Marshal(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`UPDATE knowledge SET doc = '', content_hash = '' WHERE id = $1`, []any{id}},
+		{`UPDATE knowledge_revision SET doc = '', snapshot = $2 WHERE id = $1`, []any{id, snapshot}},
+	} {
+		if _, err := s.pool.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := s.backfillDocuments(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var doc, hash string
+	var updatedAt time.Time
+	if err := s.pool.QueryRow(ctx,
+		`SELECT doc, content_hash, updated_at FROM knowledge WHERE id = $1`, id).
+		Scan(&doc, &hash, &updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doc, "title: 季節性") || !strings.Contains(doc, "12月は+40%。") {
+		t.Errorf("composed document does not carry the entry:\n%s", doc)
+	}
+	// The stored form carries no key this instance owns — that is what
+	// makes the hash a content hash (design doc 0043 §3.4).
+	for _, owned := range []string{"generated:", "created_by:"} {
+		if strings.Contains(doc, owned) {
+			t.Errorf("composed document carries the server-owned key %q:\n%s", owned, doc)
+		}
+	}
+	if hash == "" || !updatedAt.Equal(k.UpdatedAt) {
+		t.Errorf("hash = %q, updated_at = %v (want it unmoved from %v)", hash, updatedAt, k.UpdatedAt)
+	}
+
+	revs, err := s.ListRevisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) == 0 || !strings.Contains(revs[0].Document, "title: 季節性") {
+		t.Errorf("revision was not composed into a document: %+v", revs)
+	}
+	// A revision keeps the keys this instance owns: it records what the
+	// entry was, and who had confirmed it then is part of that.
+	if !strings.Contains(revs[0].Document, "created_by:") {
+		t.Errorf("revision document dropped the provenance it is there to record:\n%s", revs[0].Document)
+	}
+
+	// Idempotent: a second pass over an already-composed base changes
+	// nothing, so a restart is free and a half-finished run resumes.
+	if err := s.backfillDocuments(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var again string
+	if err := s.pool.QueryRow(ctx, `SELECT doc FROM knowledge WHERE id = $1`, id).Scan(&again); err != nil {
+		t.Fatal(err)
+	}
+	if again != doc {
+		t.Error("a second backfill pass rewrote an already-composed document")
+	}
+}

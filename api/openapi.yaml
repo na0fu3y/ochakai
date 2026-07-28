@@ -1127,16 +1127,6 @@ paths:
                 properties:
                   error: { type: string }
               examples:
-                malformedIfMatch:
-                  summary: 'If-Match: "2026-07-14 02:33:41" — not an RFC3339Nano version'
-                  description: >
-                    The precondition is the entry's updated_at in
-                    RFC3339Nano, exactly as the ETag returned it. A value
-                    that is neither that nor "*" is refused rather than
-                    ignored: ignoring it would silently make the write
-                    unconditional.
-                  value:
-                    error: 'malformed If-Match: parsing time "2026-07-14 02:33:41" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse " 02:33:41" as "T"'
                 invalidStaleAfter:
                   summary: A stale_after that is not an absolute date
                   value:
@@ -1531,7 +1521,8 @@ paths:
       description: >
         Every change — create, update, verify, delete, move, attach,
         detach — newest first, each with
-        who made it, when, and the full snapshot as of that change — the
+        who made it, when, and the whole entry as it stood, as an OKF
+        document — the
         read surface behind "every change kept as a revision". Works for
         soft-deleted entries too: the audit trail is most interesting
         exactly when the entry is gone.
@@ -1561,57 +1552,55 @@ paths:
                   description: >
                     Newest first, and never empty — the create is rev 1. Each
                     revision carries the whole entry as it stood after that
-                    change, so a diff is a comparison between two snapshots
-                    rather than a replay.
+                    change, as an OKF document, so a diff between two
+                    revisions is a text diff rather than a replay.
                   value:
                     revisions:
                       - rev: 2
                         change: verify
                         changed_by: { kind: human, name: tanaka@example.co.jp }
                         changed_at: "2026-07-27T00:41:12.905337Z"
-                        snapshot:
+                        document: |
+                          ---
                           type: Insight
-                          id: insights/revenue-seasonality
                           title: Reading revenue month over month
                           description: Why a December spike and a January drop are normal.
-                          tags: [finance]
+                          tags:
+                              - finance
+                          generated:
+                              by: process:analyst@example.iam.gserviceaccount.com
+                              at: "2026-07-27T00:41:12Z"
+                          verified:
+                              - by: human:tanaka@example.co.jp
+                                at: "2026-07-27T00:41:12Z"
                           status: stable
                           stale_after: "2027-01-31"
-                          created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                          updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                          verifications:
-                            - by: { kind: human, name: tanaka@example.co.jp }
-                              at: "2026-07-27T00:41:12.905337Z"
-                          links:
-                            - { target: metrics/revenue, text: Revenue }
-                          body: |
-                            [Revenue](/metrics/revenue.md) is seasonal: December
-                            runs well above the trailing median and January falls
-                            back below it.
-                          created_at: "2026-07-21T06:14:55.402881Z"
-                          updated_at: "2026-07-27T00:41:12.905337Z"
+                          created_by: process:analyst@example.iam.gserviceaccount.com
+                          ---
+
+                          [Revenue](/metrics/revenue.md) is seasonal: December
+                          runs well above the trailing median and January falls
+                          back below it.
                       - rev: 1
                         change: create
                         changed_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         changed_at: "2026-07-21T06:14:55.402881Z"
-                        snapshot:
+                        document: |
+                          ---
                           type: Insight
-                          id: insights/revenue-seasonality
                           title: Reading revenue month over month
                           description: Why a December spike and a January drop are normal.
-                          tags: [finance]
+                          tags:
+                              - finance
+                          generated:
+                              by: process:analyst@example.iam.gserviceaccount.com
+                              at: "2026-07-21T06:14:55Z"
                           status: draft
                           stale_after: "2027-01-31"
-                          created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                          updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                          links:
-                            - { target: metrics/revenue, text: Revenue }
-                          body: |
-                            [Revenue](/metrics/revenue.md) is seasonal: December
-                            runs well above the trailing median and January falls
-                            back below it.
-                          created_at: "2026-07-21T06:14:55.402881Z"
-                          updated_at: "2026-07-21T06:14:55.402881Z"
+                          created_by: process:analyst@example.iam.gserviceaccount.com
+                          ---
+
+                          [Revenue](/metrics/revenue.md) is seasonal.
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
@@ -1964,9 +1953,15 @@ components:
   headers:
     ETag:
       description: >
-        The entry's version — its updated_at in RFC3339Nano, quoted. A
-        client echoes it in If-Match on a later update to write only if
-        nothing changed meanwhile (design doc 0030).
+        The entry's version — the hash of its canonical OKF document,
+        quoted, and the same value as the body's content_hash (design
+        doc 0043 §3.4). A client echoes it in If-Match on a later update
+        to write only if nothing changed meanwhile (design doc 0030).
+        It is a hash of the content alone, so it moves when the entry's
+        content moves and at no other time: verifying, rejecting or
+        attaching a file all leave a held precondition valid. Treat it as
+        opaque — two entries that say the same thing carry the same
+        version.
       schema: { type: string }
     ReadOnly:
       description: >
@@ -1988,14 +1983,16 @@ components:
       required: false
       description: >
         Optimistic-concurrency precondition (design doc 0030): the
-        entry's version — its updated_at in RFC3339Nano, as a prior read
-        or write returned it in the ETag response header (quotes
-        optional; the JSON body's updated_at field is the same value).
-        Every response carrying an entry carries the header. The write
-        happens only if the entry still has this version; an entry
-        changed since it was read is a 412 and nothing is written.
-        Absent or "*" means no precondition — last write wins. A value
-        that is neither is a 400.
+        entry's version, as a prior read or write returned it in the ETag
+        response header (quotes optional; the JSON body's content_hash
+        field is the same value). Every response carrying an entry
+        carries the header. The write happens only if the entry still has
+        this version; an entry changed since it was read is a 412 and
+        nothing is written. Absent or "*" means no precondition — last
+        write wins.
+        The version is opaque, so there is no format to reject: a value
+        that never matched anything fails the precondition with a 412,
+        which is what a merely stale one does too.
       schema: { type: string }
     OnBehalfOf:
       name: X-Ochakai-On-Behalf-Of
@@ -2344,6 +2341,16 @@ components:
           description: >
             The live ruling, absent when there is none. Written by
             POST /api/v1/reject/{id} and cleared by DELETE.
+        content_hash:
+          type: string
+          readOnly: true
+          description: >
+            The entry's version: the hash of its canonical OKF document,
+            and the same value the ETag header carries (design doc 0043
+            §3.4). Send it back as If-Match to write only if nothing
+            changed meanwhile. Opaque — it moves when the content moves
+            and at no other time, so a verification or an attachment
+            leaves a held precondition valid.
         links:
           type: array
           items: { $ref: "#/components/schemas/Link" }
@@ -2461,10 +2468,20 @@ components:
       type: object
       description: >
         One entry in a knowledge entry's change history: who changed it,
-        how, when, and the full snapshot as of that change.
+        how, when, and the whole entry as it stood, as an OKF document.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per entry. }
-        change: { type: string, enum: [create, update, verify, delete, move, attach, detach] }
+        change: { type: string, enum: [create, update, verify, reject, unreject, delete, move, attach, detach] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
-        snapshot: { $ref: "#/components/schemas/Knowledge" }
+        document:
+          type: string
+          description: >
+            The entry as it stood after this change, as an OKF document
+            (design doc 0043 §3.9). It replaced a JSON snapshot of the
+            server's own struct: a record whose shape depends on the
+            reader knowing every past release is the distortion, not the
+            fidelity, and it also means a diff between two revisions
+            reads. The keys this instance owns are included — a revision
+            records what the entry was, and who had confirmed it then is
+            part of that.

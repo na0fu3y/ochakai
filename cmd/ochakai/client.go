@@ -551,10 +551,10 @@ func cmdReport(ctx context.Context, args []string) error {
 func cmdRevisions(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"revisions",
-		"Usage: ochakai revisions [flags] <id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. Full snapshots are in\nthe JSON output (--json).",
-		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/sales/monthly-revenue --json | jq '.revisions[0].snapshot'\n")
+		"Usage: ochakai revisions [flags] <id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. The whole entry as it\nstood, as an OKF document, is in the JSON output (--json), so a diff\nbetween two revisions is a text diff.",
+		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/sales/monthly-revenue --json | jq -r '.revisions[0].document'\n")
 	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
-	asJSON := fs.Bool("json", false, "print the raw JSON response (includes full snapshots)")
+	asJSON := fs.Bool("json", false, "print the raw JSON response (includes each revision's document)")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -788,9 +788,9 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"update",
 		"Usage: ochakai update [flags] <id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\nthe id comes from the argument, the type from the input). Every\nchange is kept as a revision server-side. With --if-match the update\nis conditional: it lands only if the entry still has the version you\nread, and fails instead of overwriting someone else's edit.",
-		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n  ochakai update metrics/revenue -f revenue.md --if-match \"$(ochakai get metrics/revenue --json | jq -r .updated_at)\"\n")
+		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n  ochakai update metrics/revenue -f revenue.md --if-match \"$(ochakai get metrics/revenue --json | jq -r .content_hash)\"\n")
 	file := fs.String("f", "", "input file (default: stdin)")
-	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its updated_at (`ochakai get <id> --json` prints it as .updated_at; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting")
+	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its content hash (`ochakai get <id> --json` prints it as .content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does")
 	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -809,7 +809,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		var apiErr *apiclient.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
-			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, redo the edit, and retry with the new updated_at", id, id)
+			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, redo the edit, and retry with the new content_hash", id, id)
 		}
 		return err
 	}

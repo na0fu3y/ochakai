@@ -413,3 +413,62 @@ func TestDocumentKeepsBlockScalarsForProse(t *testing.T) {
 		t.Errorf("ordinary multi-line prose should stay a block scalar:\n%s", doc)
 	}
 }
+
+// Canonical is the stored form: the text a writer authored, with none of
+// the keys this instance owns. The content hash is taken over it (design
+// doc 0043 §§3.4, 3.7), so anything that leaks in here would make a
+// verification — or a rejection, or another instance's created_by —
+// change the entry's version and invalidate an editor's precondition.
+func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
+	at := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	k := domain.Knowledge{
+		Type: domain.TypeInsights, ID: "insights/seasonality", Title: "季節性",
+		Status: domain.StatusStable, Body: "12月は+40%。",
+		CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
+		UpdatedBy: domain.Actor{Kind: "human", Name: "tanaka"},
+		Verifications: []domain.Verification{
+			{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
+		},
+		Rejection: &domain.Rejection{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
+		UpdatedAt: at,
+	}
+	canon, err := Canonical(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, owned := range []string{"generated:", "verified:", "created_by:", "rejected_by:", "rejected_at:"} {
+		if strings.Contains(string(canon), owned) {
+			t.Errorf("canonical form carries the server-owned key %q:\n%s", owned, canon)
+		}
+	}
+	// What the writer wrote is all there.
+	for _, want := range []string{"type: Insight", "title: 季節性", "status: stable", "12月は+40%。"} {
+		if !strings.Contains(string(canon), want) {
+			t.Errorf("canonical form is missing %q:\n%s", want, canon)
+		}
+	}
+	// And it parses back as itself: the stored text is a valid document.
+	back, notes, err := Parse(canon)
+	if err != nil {
+		t.Fatalf("the canonical form does not parse: %v\n%s", err, canon)
+	}
+	if len(notes) != 0 {
+		t.Errorf("the canonical form was reinterpreted on read: %v", notes)
+	}
+	back.ID = k.ID
+	if !back.SameContent(&k) {
+		t.Errorf("canonical round trip changed the entry:\n got %+v\nwant %+v", back.Knowledge, k)
+	}
+
+	// A ruling must not move the hash. This is the invariant that lets
+	// verify leave a held If-Match alone.
+	bare := k
+	bare.Verifications, bare.Rejection = nil, nil
+	bareCanon, err := Canonical(&bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bareCanon) != string(canon) {
+		t.Errorf("rulings changed the canonical form:\n%s\nvs\n%s", canon, bareCanon)
+	}
+}

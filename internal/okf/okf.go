@@ -54,9 +54,9 @@ type frontmatter struct {
 	Tags        []text       `yaml:"tags,omitempty"`
 	Sources     []source     `yaml:"sources,omitempty"`
 	UsageWindow *usageWindow `yaml:"usage_window,omitempty"`
-	Generated   event        `yaml:"generated"`
-	Verified    []event      `yaml:"verified,omitempty"` // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
-	Status      text         `yaml:"status"`             // OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4)
+	Generated   *event       `yaml:"generated,omitempty"` // omitted only by Canonical, which writes no server-owned key
+	Verified    []event      `yaml:"verified,omitempty"`  // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
+	Status      text         `yaml:"status"`              // OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4)
 	StatusNote  text         `yaml:"status_note,omitempty"`
 	StaleAfter  text         `yaml:"stale_after,omitempty"`
 	Runtime     text         `yaml:"runtime,omitempty"`
@@ -64,7 +64,7 @@ type frontmatter struct {
 	Computation text         `yaml:"computation,omitempty"`
 	Executor    *executor    `yaml:"executor,omitempty"`
 	Attester    *attester    `yaml:"attester,omitempty"`
-	CreatedBy   text         `yaml:"created_by"` // ochakai extension: OKF records only who produced the current content
+	CreatedBy   text         `yaml:"created_by,omitempty"` // ochakai extension: OKF records only who produced the current content
 	RejectedBy  text         `yaml:"rejected_by,omitempty"`
 	RejectedAt  text         `yaml:"rejected_at,omitempty"`
 }
@@ -354,15 +354,32 @@ func sourcesOut(in []domain.Source) []source {
 	return out
 }
 
-// Document renders one knowledge entry as an OKF concept document.
+// Document renders one knowledge entry as an OKF concept document: the
+// canonical text the entry is stored as, plus the keys this instance
+// owns and only ever writes — generated and verified (SPEC §5.2), and
+// ochakai's created_by / rejected_* extensions. This is what an export
+// and a read hand out.
 //
-// The trust family follows SPEC §5.2: generated is who the content stands
-// by and when it last changed, verified is the list of confirmations (one,
-// for now — ochakai keeps the latest). status carries OKF's three-value
-// lifecycle, so "verified" leaves the status key entirely and becomes
-// stable plus a verified entry, which is where a v0.2 consumer looks for
-// it (design doc 0036 §3.4).
-func Document(k *domain.Knowledge) ([]byte, error) {
+// The trust family follows SPEC §5.2: generated is who the content
+// stands by and when it last changed, verified is every confirmation the
+// instance recorded. status carries OKF's three-value lifecycle and
+// nothing else — whether anyone confirmed the entry is the verified
+// key's business (§5.3, design doc 0043 §3.2).
+func Document(k *domain.Knowledge) ([]byte, error) { return render(k, true) }
+
+// Canonical renders the document without the server-owned keys: exactly
+// the text a writer authored, in one normal form. It is what the store
+// keeps and what the content hash is taken over (design doc 0043 §§3.4,
+// 3.7), and it is a pure function of the fields SameContent compares —
+// so two entries hash alike if and only if they say the same thing.
+//
+// Excluding the server-owned keys is what makes the hash a content hash
+// rather than a row hash: verifying an entry must not change its
+// version, or every confirmation would invalidate an editor's held
+// precondition.
+func Canonical(k *domain.Knowledge) ([]byte, error) { return render(k, false) }
+
+func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 	fm := frontmatter{
 		Type:        text(k.Type),
 		Resource:    text(k.Resource),
@@ -376,8 +393,11 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		StaleAfter:  text(k.StaleAfter),
 		Runtime:     text(k.Runtime),
 		Computation: text(k.Computation),
-		Generated:   actorEvent(&k.UpdatedBy, &k.UpdatedAt),
-		CreatedBy:   text(k.CreatedBy.String()),
+	}
+	if serverKeys {
+		g := actorEvent(&k.UpdatedBy, &k.UpdatedAt)
+		fm.Generated = &g
+		fm.CreatedBy = text(k.CreatedBy.String())
 	}
 	for _, p := range k.Parameters {
 		fm.Parameters = append(fm.Parameters, parameter{Name: text(p.Name), Type: text(p.Type), Required: p.Required})
@@ -392,9 +412,11 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	// as many entries as the instance recorded. The key's presence is what
 	// a v0.2 consumer reads the trust tier from (§5.3); its absence means
 	// unverified, so an entry with no verifications writes no key at all.
-	for i := range k.Verifications {
-		v := &k.Verifications[i]
-		fm.Verified = append(fm.Verified, actorEvent(&v.By, &v.At))
+	if serverKeys {
+		for i := range k.Verifications {
+			v := &k.Verifications[i]
+			fm.Verified = append(fm.Verified, actorEvent(&v.By, &v.At))
+		}
 	}
 	// A rejection is this instance's ruling and not a portable claim, so
 	// it stays an ochakai extension key that import never reads back
@@ -402,7 +424,7 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	// entry's real lifecycle value rather than deprecated, which is what
 	// the ruling used to be folded onto — an assertion ("this was once
 	// current") that a rejection specifically denies.
-	if k.Rejection != nil {
+	if serverKeys && k.Rejection != nil {
 		fm.RejectedBy = text(k.Rejection.By.String())
 		fm.RejectedAt = text(k.Rejection.At.UTC().Format(time.RFC3339))
 	}

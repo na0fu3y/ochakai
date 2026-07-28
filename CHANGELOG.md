@@ -20,6 +20,32 @@ last entry.
 
 ### Changed
 
+- **BREAKING**: the canonical OKF document is the stored form, and its
+  hash is the entry's version (design doc
+  [0043](docs/design/0043-document-first.md) §§3.1, 3.4, 3.7, 3.9).
+
+  - **The ETag is now `content_hash`**, the SHA-256 of the entry's
+    canonical document, also returned in the body. It is a hash of the
+    content alone, so verifying an entry, rejecting it, or attaching a
+    file to it no longer moves it — a held `If-Match` survives all three,
+    which the `updated_at` version could not manage because it was also
+    the row's write timestamp. Treat it as opaque: `If-Match` no longer
+    validates a format, so an unrecognized value is a `412` rather than a
+    `400`, and two entries that say the same thing carry the same version.
+  - **A revision carries `document` instead of `snapshot`**: the entry as
+    it stood, as an OKF document, rather than a JSON copy of the server's
+    own struct. A diff between two revisions is now a text diff.
+
+  Migration `0024` adds the columns; the server composes the documents
+  once at startup, right after migrating, because rendering a document
+  means writing YAML in the spelling the spec fixes and that is not
+  SQL's job. The pass is idempotent and resumable, holds the same
+  advisory lock the migrations do, and moves no `updated_at`. A revision
+  snapshot the current shape cannot read is replaced by a placeholder
+  document saying so; `knowledge_revision.snapshot` is kept (nullable)
+  until a later release drops it, since it is the only source the
+  backfill has.
+
 - **BREAKING**: `status` is OKF's lifecycle vocabulary and nothing else —
   `draft`, `stable`, `deprecated` (SPEC §5.4). The two values ochakai
   added were never lifecycle values, and both become ledgers (design doc

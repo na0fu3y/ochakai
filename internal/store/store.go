@@ -4,6 +4,8 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/blob"
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 // isUniqueViolation reports whether err is PostgreSQL's unique_violation
@@ -177,7 +180,7 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
-	links, attrs, body, created_at, updated_at`
+	links, attrs, body, created_at, updated_at, doc, content_hash`
 
 // ledgerCols is the two instance ledgers — verifications and the
 // rejection — read as JSON beside the entry's own columns (design doc
@@ -208,11 +211,26 @@ func lastVerifiedAt(alias string) string {
 	return `(SELECT max(v.at) FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
 }
 
+// withoutDoc drops the stored document from a column list. A read does
+// not need it: the entry's own columns are the index derived from it
+// (design doc 0043 §3.1), and carrying the whole document beside the
+// body it contains would double every search result for nothing. Writes
+// keep it — they are what the index is derived from.
+func withoutDoc(cols string) string {
+	var kept []string
+	for _, c := range strings.Split(cols, ",") {
+		if t := strings.TrimSpace(c); t != "doc" && t != "k.doc" && t != "knowledge.doc" {
+			kept = append(kept, t)
+		}
+	}
+	return strings.Join(kept, ", ")
+}
+
 var (
 	// knowledgeSelect and knowledgeSelectK are what a read selects: the
-	// entry's columns plus its ledgers.
-	knowledgeSelect  = knowledgeCols + ", " + ledgerCols("knowledge")
-	knowledgeSelectK = knowledgeColsK + ", " + ledgerCols("k")
+	// entry's columns (minus the stored document) plus its ledgers.
+	knowledgeSelect  = withoutDoc(knowledgeCols) + ", " + ledgerCols("knowledge")
+	knowledgeSelectK = withoutDoc(knowledgeColsK) + ", " + ledgerCols("k")
 )
 
 // notCurated is Knowledge.Curated() as a SQL predicate, for the guards
@@ -289,7 +307,7 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
 		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
-		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt,
+		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentHash,
 		&verifications, &rejection}
 	finish = func() error {
 		if staleAfter != nil {
@@ -317,6 +335,23 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 		return nil
 	}
 	return dests, finish
+}
+
+// canonicalDoc renders the entry's stored form and its version: the
+// canonical OKF document with no server-owned key in it, and the SHA-256
+// of exactly those bytes (design doc 0043 §§3.4, 3.7).
+//
+// The hash is taken over the canonical text rather than over the struct
+// so that the version means "what this entry says", not "how this
+// release happened to serialize it" — and so that a ruling, which writes
+// no key into the canonical form, cannot move it.
+func canonicalDoc(k *domain.Knowledge) (doc, hash string, err error) {
+	b, err := okf.Canonical(k)
+	if err != nil {
+		return "", "", err
+	}
+	sum := sha256.Sum256(b)
+	return string(b), hex.EncodeToString(sum[:]), nil
 }
 
 // staleAfterArg turns the entry's stale_after into a date argument: NULL
@@ -461,12 +496,17 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		if err != nil {
 			return err
 		}
+		doc, hash, err := canonicalDoc(k)
+		if err != nil {
+			return err
+		}
+		k.ContentHash = hash
 		args := []any{
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt,
+			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, doc, hash,
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES (`+knowledgeParams+`)
@@ -508,7 +548,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 // changed since the caller read it and returns ErrConflict, closing the
 // read-modify-write race that silently lost updates. A nil ifMatch keeps
 // the prior last-write-wins behavior for callers that do not opt in.
-func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) error {
+func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) error {
 	k.UpdatedAt = NowStored()
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		j, err := marshalJSONFields(k)
@@ -519,20 +559,25 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
+		doc, hash, err := canonicalDoc(k)
+		if err != nil {
+			return err
+		}
+		k.ContentHash = hash
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.UpdatedAt}
+			j.links, j.attrs, k.Body, k.UpdatedAt, doc, hash}
 		if ifMatch != nil {
-			args = append(args, ifMatch.UTC())
-			cond = fmt.Sprintf(" AND updated_at=$%d", len(args))
+			args = append(args, *ifMatch)
+			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
 		}
 		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
-			links=$20, attrs=$21, body=$22, updated_at=$23
+			links=$20, attrs=$21, body=$22, updated_at=$23, doc=$24, content_hash=$25
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -981,11 +1026,20 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		// having filtered: rewriting a tombstone would plant a repaired
 		// body and a revision on an entry nobody can see, to resurface
 		// whenever someone revives it.
+		// The stored document and its hash are recomposed with the body:
+		// they are what the entry says, and the index columns beside them
+		// are derived from the same value (design doc 0043 §3.1).
+		doc, hash, err := canonicalDoc(r)
+		if err != nil {
+			return err
+		}
+		r.ContentHash = hash
 		tag, err := tx.Exec(ctx,
 			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
-			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8
+			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8,
+			 doc=$9, content_hash=$10
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via)
+			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash)
 		if err != nil {
 			return err
 		}
@@ -1012,7 +1066,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 // trail is most interesting exactly when the entry is gone.
 func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_at, snapshot
+		`SELECT rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_at, doc
 		 FROM knowledge_revision WHERE id=$1 ORDER BY rev DESC LIMIT $2`,
 		id, limit)
 	if err != nil {
@@ -1020,11 +1074,7 @@ func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]doma
 	}
 	revs, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Revision, error) {
 		var r domain.Revision
-		var snapshot []byte
-		if err := row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedBy.Via, &r.ChangedAt, &snapshot); err != nil {
-			return r, err
-		}
-		return r, json.Unmarshal(snapshot, &r.Snapshot)
+		return r, row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedBy.Via, &r.ChangedAt, &r.Document)
 	})
 	if err != nil {
 		return nil, err
@@ -1038,13 +1088,16 @@ func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]doma
 }
 
 func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
-	snapshot, err := json.Marshal(k)
+	// The full document, server-owned keys included: a revision records
+	// what the entry was, and who had confirmed it at the time is part of
+	// that (design doc 0043 §3.9).
+	doc, err := okf.Document(k)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, changed_by_via, snapshot)
+	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
 		VALUES ($1, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE id=$1), $2, $3, $4, $5, $6)`,
-		k.ID, change, actor.Kind, actor.Name, actor.Via, snapshot)
+		k.ID, change, actor.Kind, actor.Name, actor.Via, string(doc))
 	return err
 }
 
@@ -1305,7 +1358,7 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 	vecParam := len(args)
 	args = append(args, model) // this model's vectors only, as in SearchVector
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeCols+", "+ledgerCols("best")+`, score FROM (
+		SELECT `+withoutDoc(knowledgeCols)+", "+ledgerCols("best")+`, score FROM (
 			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
 			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
 			WHERE %s

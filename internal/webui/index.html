@@ -1723,8 +1723,8 @@ async function viewDetail(id) {
           <td class="k mono">#${r.rev}</td>
           <td>
             <div><strong>${esc(r.change)}</strong> · ${esc(actorStr(r.changed_by))} · ${esc(fmtDate(r.changed_at))}</div>
-            <details><summary style="cursor:pointer;color:var(--muted);font-size:.84rem">snapshot</summary>
-              <pre>${esc(JSON.stringify(r.snapshot, null, 2))}</pre></details>
+            <details><summary style="cursor:pointer;color:var(--muted);font-size:.84rem">document</summary>
+              <pre>${esc(r.document || '')}</pre></details>
           </td>
         </tr>`).join('');
       return () => `

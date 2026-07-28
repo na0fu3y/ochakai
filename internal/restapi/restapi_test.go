@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/service"
@@ -150,25 +149,23 @@ func TestReportOutcomeBadRequests(t *testing.T) {
 	}
 }
 
-// TestETagRoundTrip pins the ETag/If-Match wire format: etagOf quotes the
-// updated_at, and parseIfMatch reads it (and "*", and absence) back — so a
-// value from a response header is accepted verbatim on the next request.
+// TestETagRoundTrip pins the ETag/If-Match wire format: etagOf quotes
+// the entry's content hash, and parseIfMatch reads it (and "*", and
+// absence) back — so a value from a response header is accepted verbatim
+// on the next request.
 func TestETagRoundTrip(t *testing.T) {
-	updated := time.Date(2026, 7, 24, 1, 2, 3, 456789000, time.UTC)
-	k := &domain.Knowledge{ID: "metrics/x", UpdatedAt: updated}
+	const hash = "9f2c1b0d4e5a6789abcdef0123456789abcdef0123456789abcdef0123456789"
+	k := &domain.Knowledge{ID: "metrics/x", ContentHash: hash}
 	etag := etagOf(k)
-	if etag != `"2026-07-24T01:02:03.456789Z"` {
+	if etag != `"`+hash+`"` {
 		t.Fatalf("etagOf = %s", etag)
 	}
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x", nil)
 	req.Header.Set("If-Match", etag)
-	got, err := parseIfMatch(req)
-	if err != nil {
-		t.Fatalf("parseIfMatch: %v", err)
-	}
-	if got == nil || !got.Equal(updated) {
-		t.Errorf("parseIfMatch(%s) = %v, want %v", etag, got, updated)
+	got := parseIfMatch(req)
+	if got == nil || *got != hash {
+		t.Errorf("parseIfMatch(%s) = %v, want %q", etag, got, hash)
 	}
 
 	// Absent and "*" carry no version precondition.
@@ -177,16 +174,20 @@ func TestETagRoundTrip(t *testing.T) {
 		if v != "" {
 			r.Header.Set("If-Match", v)
 		}
-		if p, err := parseIfMatch(r); err != nil || p != nil {
-			t.Errorf("parseIfMatch(If-Match:%q) = %v, %v; want nil, nil", v, p, err)
+		if p := parseIfMatch(r); p != nil {
+			t.Errorf("parseIfMatch(If-Match:%q) = %v; want nil", v, p)
 		}
 	}
 
-	// A non-ETag value is a client error, not a silent no-precondition.
+	// The version is an opaque token now, so there is no format to
+	// reject: a value that never matched anything fails the precondition
+	// with a 412, which is what a merely stale one does too. Rejecting it
+	// at parse time would only tell a client that its own ETag looked
+	// wrong to us, which is not something we can know.
 	r := httptest.NewRequest(http.MethodPut, "/x", nil)
-	r.Header.Set("If-Match", `"not-a-timestamp"`)
-	if _, err := parseIfMatch(r); err == nil {
-		t.Error("malformed If-Match must be an error")
+	r.Header.Set("If-Match", `"not-a-hash"`)
+	if p := parseIfMatch(r); p == nil || *p != "not-a-hash" {
+		t.Errorf("parseIfMatch of an unknown token = %v, want it passed through", p)
 	}
 }
 

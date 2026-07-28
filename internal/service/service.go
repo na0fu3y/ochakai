@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/na0fu3y/ochakai/internal/config"
@@ -194,7 +193,7 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 // read, or in the read-modify-write window below — yields store.ErrConflict
 // rather than silently clobbering the other write. nil keeps the prior
 // last-write-wins behavior for callers that do not opt in.
-func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *time.Time) (updated *domain.Knowledge, changed bool, err error) {
+func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) (updated *domain.Knowledge, changed bool, err error) {
 	if err := s.readOnly(); err != nil {
 		return nil, false, err
 	}
@@ -209,7 +208,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	}
 	// The caller's version is already stale if the stored entry moved on
 	// between their read and ours — reject before doing any work.
-	if ifMatch != nil && !old.UpdatedAt.Equal(ifMatch.UTC()) {
+	if ifMatch != nil && old.ContentHash != *ifMatch {
 		return nil, false, store.ErrConflict
 	}
 	if k.Status == "" {
@@ -259,7 +258,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 // tell agents to consult before re-proposing. Nobody notices: unlike a
 // deleted verified entry, a deleted rejection leaves nothing anyone was
 // using.
-func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Time, error) {
+func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, error) {
 	k, err := s.Store.Get(ctx, domain.Normalize(id))
 	if err != nil {
 		return nil, err
@@ -278,7 +277,7 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Tim
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, create_knowledge a draft that says why."
 	default:
-		return &k.UpdatedAt, nil
+		return &k.ContentHash, nil
 	}
 	return nil, Invalidf("cannot %s %s from this surface: it is %s, and this surface has no "+
 		"If-Match precondition to replace curated knowledge safely. %s A human changes curated "+

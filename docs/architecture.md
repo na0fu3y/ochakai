@@ -273,8 +273,9 @@ memory and flushed periodically, statistics are documented as
 best-effort, an overrun is dropped rather than backing up the request,
 and shutdown drains before a final flush (design doc
 [0029](design/0029-usage-recording-off-the-read-path.md)). Concurrent
-edits are handled by optional optimistic locking — `updated_at` as the
-version, exposed as an ETag with `If-Match` (design doc
+edits are handled by optional optimistic locking — the canonical
+document's hash as the version, exposed as an ETag with `If-Match`
+(design doc
 [0030](design/0030-optimistic-locking.md)).
 
 ## Search
