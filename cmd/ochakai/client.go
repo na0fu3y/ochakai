@@ -43,6 +43,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"usage":     cmdUsage,
 	"report":    cmdReport,
 	"revisions": cmdRevisions,
+	"log":       cmdLog,
 	"backlinks": cmdBacklinks,
 	"export":    cmdExport,
 	"import":    cmdImport,
@@ -565,6 +566,39 @@ func cmdRevisions(ctx context.Context, args []string) error {
 			r.ChangedBy, r.ChangedAt.Format(time.RFC3339))
 	}
 	return nil
+}
+
+// cmdLog prints the generated log.md for a path: the update history in
+// the shape OKF SPEC §9 defines, which is a file somebody else can read
+// rather than a listing only ochakai knows how to print (design doc
+// 0046 §3.8).
+func cmdLog(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"log",
+		"Usage: ochakai log [flags] [path]\n\nPrint the update history under a path as OKF's log.md (SPEC §9):\ndate-grouped, newest first. With no path, the whole bundle.\n\nIt is generated from the revision ledger, so it says the same thing\n`ochakai revisions` does — in the format a bundle carries, which is\nwhat makes the history portable.",
+		"  ochakai log\n  ochakai log metrics\n  ochakai log metrics/revenue --limit 20\n")
+	limit := fs.Int("limit", 0, "max entries (default 1000)")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 1 {
+		return fmt.Errorf("log takes one path at most")
+	}
+	var prefix string
+	if len(pos) == 1 {
+		prefix = pos[0]
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	doc, err := c.Log(ctx, prefix, *limit)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.Write(doc)
+	return err
 }
 
 func cmdBacklinks(ctx context.Context, args []string) error {

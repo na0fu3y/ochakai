@@ -681,18 +681,22 @@ function setReadOnly(on) {
 }
 
 async function api(path, opts = {}) {
-  const init = { method: opts.method || 'GET' };
+  // Every call here wants the structured form. It matters at the paths
+  // that serve a file by default — index.md and log.md are documents,
+  // and this page asks for the listing behind them (design doc 0046
+  // §§3.7-3.8).
+  const init = { method: opts.method || 'GET', headers: { Accept: 'application/json' } };
   if (opts.raw !== undefined) {
     init.body = opts.raw; // raw bytes (attachment upload), no JSON envelope
   } else if (opts.doc !== undefined) {
-    init.headers = { 'Content-Type': 'text/markdown' };
+    init.headers['Content-Type'] = 'text/markdown';
     init.body = opts.doc; // an OKF document — the one way to write knowledge
   } else if (opts.body !== undefined) {
-    init.headers = { 'Content-Type': 'application/json' };
+    init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(opts.body);
   }
   if (opts.onlyIfAbsent) {
-    init.headers = Object.assign({}, init.headers, { 'If-None-Match': '*' });
+    init.headers['If-None-Match'] = '*';
   }
   const res = await fetch(BASE + path, init);
   // A read-only deployment says so on every response (design doc 0040).
@@ -1087,7 +1091,7 @@ function knownDirs() {
 async function refreshTree() {
   const tree = $('#tree');
   try {
-    const res = await api('/api/v1/browse');
+    const res = await api('/api/v1/bundle/index.md');
     tree.innerHTML = levelHTML(res, '') || '<div class="empty">No knowledge yet.</div>';
     wireNodes(tree);
     // A deep link may have rendered before the tree existed (boot) or
@@ -1162,7 +1166,7 @@ function loadNode(d) {
     const box = d.querySelector(':scope > .children');
     const prefix = d.dataset.prefix;
     try {
-      const res = await api(`/api/v1/browse?prefix=${encodeURIComponent(prefix)}`);
+      const res = await api(`/api/v1/bundle/${idPath(prefix)}/index.md`);
       const body = levelHTML(res, prefix);
       const note = res.truncated
         ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
@@ -1339,7 +1343,7 @@ function dirCard(prefix, d) {
 // they render as title, status, and description.
 async function loadDirIndex(container, prefix, emptyText) {
   try {
-    const res = await api('/api/v1/browse' + (prefix ? '?prefix=' + encodeURIComponent(prefix) : ''));
+    const res = await api(prefix ? `/api/v1/bundle/${idPath(prefix)}/index.md` : '/api/v1/bundle/index.md');
     if (!container.isConnected) return; // navigated away while loading
     const dirs = (res.dirs || []).map(d => dirCard(prefix, d)).join('');
     const entries = (res.entries || []).map(hitCard).join('');
@@ -1685,7 +1689,7 @@ async function viewDetail(id) {
         : '<div class="empty">Nothing links to this entry yet.</div>';
     },
     history: async () => {
-      const { revisions } = await api('/api/v1/revisions/' + idPath(entry.id) + '?limit=200');
+      const { revisions } = await api('/api/v1/bundle/' + idPath(entry.id) + '/log.md?limit=200');
       const rows = (revisions || []).map(r => `
         <tr>
           <td class="k mono">#${r.rev}</td>

@@ -77,7 +77,7 @@ func (c *Client) Identity() (actor, auth string, err error) {
 // proves the URL resolves, the server answers, and — behind Cloud Run —
 // IAM accepts the caller.
 func (c *Client) Health(ctx context.Context) error {
-	resp, err := c.do(ctx, http.MethodGet, "/health", nil, nil)
+	resp, err := c.get(ctx, "/health", nil)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (c *Client) Health(ctx context.Context) error {
 // outside that surface, so this is its own request. Servers predating
 // the header omit it and are reported writable, which is what they were.
 func (c *Client) ReadOnly(ctx context.Context) (bool, error) {
-	resp, err := c.do(ctx, http.MethodGet, "/api/v1/browse", nil, nil)
+	resp, err := c.get(ctx, "/api/v1/bundle/index.md", nil)
 	if err != nil {
 		return false, err
 	}
@@ -266,30 +266,48 @@ func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, 
 	return &out, nil
 }
 
-// Browse lists one level of the ID hierarchy (GET /api/v1/browse,
-// design docs 0014, 0016): the subdirectories and entries directly
-// under prefix ("" is the root — the top-level segments).
+// Browse lists one level of the ID hierarchy: the JSON representation of
+// that directory's index.md (design docs 0014, 0016, and 0046 §3.7 for
+// where it now lives). The subdirectories and entries directly under
+// prefix — "" is the root, the top-level segments.
 func (c *Client) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
-	q := url.Values{}
-	if prefix != "" {
-		q.Set("prefix", prefix)
-	}
 	var out BrowseResult
-	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/browse", q, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, reservedPath(prefix, "index.md"), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// Revisions fetches an entry's change history, newest first, with full
-// snapshots (GET /api/v1/revisions/{id}). Works for soft-deleted
-// entries too. limit 0 uses the server default.
+// Log fetches the generated log.md for a path: the changes under it,
+// newest first, as OKF SPEC §9 writes them (design doc 0046 §3.8).
+func (c *Client) Log(ctx context.Context, prefix string, limit int) ([]byte, error) {
+	resp, err := c.get(ctx, reservedPath(prefix, "log.md"), limitQuery(limit))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+// Revisions fetches an entry's change history, newest first — the JSON
+// representation of its directory's log.md, narrowed to the entry
+// (design doc 0046 §3.8). Works for soft-deleted entries too; limit 0
+// uses the server default.
 func (c *Client) Revisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	var out struct {
 		Revisions []domain.Revision `json:"revisions"`
 	}
-	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/revisions/", id), limitQuery(limit), nil, &out)
+	err := c.doJSON(ctx, http.MethodGet, reservedPath(id, "log.md"), limitQuery(limit), nil, &out)
 	return out.Revisions, err
+}
+
+// reservedPath addresses one of the two generated files under a bundle
+// path. The root's are at /api/v1/bundle/index.md and .../log.md.
+func reservedPath(prefix, name string) string {
+	if prefix == "" {
+		return "/api/v1/bundle/" + name
+	}
+	return escapedPath("/api/v1/bundle/", strings.TrimSuffix(prefix, "/")+"/"+name)
 }
 
 // Backlinks fetches live entries whose links point at the given entry,
@@ -460,7 +478,7 @@ func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []by
 // /api/v1/attachments/{id}/{name}). Full metadata travels with
 // the entry (Get → Knowledge.Attachments).
 func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, mediaType string, err error) {
-	resp, err := c.do(ctx, http.MethodGet, attachmentPath(id, name), nil, nil)
+	resp, err := c.get(ctx, attachmentPath(id, name), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -512,7 +530,7 @@ func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, e
 	if !attachments {
 		q = url.Values{"attachments": {"false"}}
 	}
-	resp, err := c.do(ctx, http.MethodGet, "/api/v1/export", q, nil)
+	resp, err := c.get(ctx, "/api/v1/export", q)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +584,16 @@ func escapedPath(base, id string) string {
 	return b.String()
 }
 
-func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*http.Response, error) {
+// get is a body-less read that takes whatever representation the path
+// serves by default. The reads that want JSON specifically go through
+// doJSON, which asks for it (design doc 0046 §§3.7-3.8).
+func (c *Client) get(ctx context.Context, path string, query url.Values) (*http.Response, error) {
+	return c.doRaw(ctx, http.MethodGet, path, query, "", nil, nil)
+}
+
+// doAccept is do with an Accept header, for the paths whose default
+// representation is a file rather than JSON (design doc 0046 §§3.7-3.8).
+func (c *Client) doAccept(ctx context.Context, method, path string, query url.Values, body any, accept string) (*http.Response, error) {
 	var rd io.Reader
 	contentType := ""
 	if body != nil {
@@ -577,7 +604,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		rd = bytes.NewReader(buf)
 		contentType = "application/json"
 	}
-	return c.doRaw(ctx, method, path, query, contentType, nil, rd)
+	return c.doRaw(ctx, method, path, query, contentType, http.Header{"Accept": []string{accept}}, rd)
 }
 
 // doRaw is do without the JSON encoding: the body is sent verbatim
@@ -625,7 +652,10 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, query url.Values, body, out any) error {
-	resp, err := c.do(ctx, method, path, query, body)
+	// Asked for as JSON, not merely decoded as JSON: the reserved paths
+	// serve a file unless a caller says otherwise (design doc 0046
+	// §§3.7-3.8), and every other endpoint ignores the header.
+	resp, err := c.doAccept(ctx, method, path, query, body, "application/json")
 	if err != nil {
 		return err
 	}

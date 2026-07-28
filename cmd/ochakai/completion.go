@@ -92,6 +92,7 @@ _ochakai() {
     'usage:show usage totals for an entry'
     'report:report an outcome (worked/failed) for an entry'
     'revisions:list the change history of an entry (newest first)'
+    'log:print the history under a path as OKF log.md'
     'backlinks:list entries whose links point at this one'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
@@ -150,6 +151,9 @@ _ochakai() {
       ;;
     revisions|backlinks)
       _arguments '--limit[max results]:limit:' '--json[print the raw JSON response]' '--url[server URL]:url:'
+      ;;
+    log)
+      _arguments '--limit[max entries]:limit:' '--url[server URL]:url:'
       ;;
     report)
       _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
@@ -236,6 +240,7 @@ _ochakai() {
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
+    log)           opts="--limit --url" ;;
     report)
       if [[ $prev != -* && $COMP_CWORD -eq 3 && $cur != -* ]]; then
         COMPREPLY=($(compgen -W "worked failed" -- "$cur"))
@@ -294,6 +299,7 @@ complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
+complete -c ochakai -n __fish_use_subcommand -a log -d 'print the history under a path as OKF log.md'
 complete -c ochakai -n __fish_use_subcommand -a backlinks -d 'list entries whose links point at this one'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
@@ -306,7 +312,7 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage report revisions backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
@@ -328,7 +334,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l lift -d 'withdraw the rejection'
-complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks' -l limit -x -d 'max results'
+complete -c ochakai -n '__fish_seen_subcommand_from search context revisions log backlinks' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'

@@ -57,11 +57,11 @@ func TestBadRequestValidation(t *testing.T) {
 		{"usage sort with query", "/api/v1/knowledge?sort=usage&q=revenue", "cannot be combined"},
 		{"failed sort with query", "/api/v1/knowledge?sort=failed&q=revenue", "cannot be combined"},
 		{"bad search limit", "/api/v1/knowledge?limit=abc", "invalid limit"},
-		{"bad revisions limit", "/api/v1/revisions/metrics/revenue?limit=abc", "invalid limit"},
+		{"bad log limit", "/api/v1/bundle/metrics/log.md?limit=abc", "invalid limit"},
 		{"bad backlinks limit", "/api/v1/backlinks/metrics/revenue?limit=1.5", "invalid limit"},
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
 		{"bad min_score", "/api/v1/context?q=x&min_score=high", "invalid min_score"},
-		{"browse bad prefix", "/api/v1/browse?prefix=..%2Fescape", "invalid prefix"},
+		{"bad index prefix", "/api/v1/bundle/..%2Fescape/index.md", "invalid prefix"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

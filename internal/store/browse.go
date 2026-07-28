@@ -47,15 +47,15 @@ type BrowseEntry struct {
 const browseNotRejected = `deleted_at IS NULL
 	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = knowledge.id)`
 
-// maxBrowseEntries bounds one directory listing. A directory this wide
+// MaxBrowseEntries bounds one directory listing. A directory this wide
 // is a modeling smell, not a paging problem — the caller renders a
 // truncation note instead of paginating.
-const maxBrowseEntries = 1000
+const MaxBrowseEntries = 1000
 
 // Browse returns what sits directly under prefix: the subdirectories
 // (with entry counts beneath them) and the entries at this level, both
 // in name order; truncated reports that the entry list hit
-// maxBrowseEntries. prefix is "" for the root, or segments with a
+// MaxBrowseEntries. prefix is "" for the root, or segments with a
 // trailing slash ("sales/"). Prefix matching is by string, not LIKE —
 // IDs may contain "_", which LIKE would treat as a wildcard.
 func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, entries []BrowseEntry, truncated bool, err error) {
@@ -83,7 +83,7 @@ func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, ent
 		WHERE `+browseNotRejected+`
 		  AND left(id, length($1::text)) = $1
 		  AND strpos(substr(id, length($1::text)+1), '/') = 0
-		ORDER BY id LIMIT %d`, maxBrowseEntries+1), prefix)
+		ORDER BY id LIMIT %d`, MaxBrowseEntries+1), prefix)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -95,8 +95,8 @@ func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, ent
 	if err != nil {
 		return nil, nil, false, err
 	}
-	if len(entries) > maxBrowseEntries {
-		entries = entries[:maxBrowseEntries]
+	if len(entries) > MaxBrowseEntries {
+		entries = entries[:MaxBrowseEntries]
 		truncated = true
 	}
 	return dirs, entries, truncated, nil

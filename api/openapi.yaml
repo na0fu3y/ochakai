@@ -307,30 +307,61 @@ paths:
                   value:
                     error: search needs a query; use sort=verified_at|usage|failed|stale_after to list entries without one, or source=URI to list what cites a resource
         "403": { $ref: "#/components/responses/Forbidden" }
-  /api/v1/browse:
+  /api/v1/bundle/{path}:
     get:
-      operationId: browseKnowledge
-      summary: Browse one level of the ID hierarchy
+      operationId: getBundleFile
+      summary: Read one of the files OKF reserves
       description: >
-        An entry's id is its bundle path; this returns one level of that
-        tree (design docs 0014, 0016): the subdirectories directly under
-        prefix ("" or omitted is the root — the top-level segments),
-        each with the count of entries beneath, plus the entries at that
-        level as a light projection (no body). Rejected and deleted
-        entries are excluded, as in search. Entries at one level cap at
-        1000 with truncated=true. Browsing records no usage.
+        The two filenames SPEC §3.1 reserves, generated from the bundle
+        rather than stored in it (design doc 0046 §§3.7-3.8).
+
+        `index.md` is one level of the tree — the subdirectories directly
+        under the path, each with the count of entries beneath, plus the
+        entries at that level (design docs 0014, 0016). Rejected and
+        deleted entries are excluded, as in search; a level caps at 1000
+        with truncated=true; listing records no usage.
+
+        `log.md` is the update history under the path, newest first and
+        grouped by date, as SPEC §9 writes one. It publishes an instance
+        ledger: an import never reads it back, the same way it never
+        reads back `generated` (design doc 0009). `limit` bounds it
+        (default and maximum 1000).
+
+        The representation follows Accept. `application/json` returns the
+        listing or the revisions; anything else returns the file the path
+        names. Two representations of one thing, at one address — the
+        JSON is what a web UI's tree needs, not a second surface.
+
+        PUT and DELETE are 405: a generated file is not one anybody
+        writes. Paths other than the two reserved names are 404 for now —
+        the rest of the bundle joins this address in a later change
+        (0046 §3.5).
       parameters:
-        - name: prefix
-          in: query
-          description: ID prefix ("a/b" or "a/b/"); omit for the root.
+        - name: path
+          in: path
+          required: true
+          description: >
+            The reserved file's bundle path — "index.md" or "log.md" at
+            the root, "metrics/index.md" below it. Slashes are real path
+            separators.
           schema: { type: string }
-          allowReserved: true
+        - name: limit
+          in: query
+          description: log.md only — maximum entries (default and max 1000).
+          schema: { type: integer }
       responses:
         "200":
-          description: One level of the tree.
+          description: The generated file, or its structured form.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
+            text/markdown:
+              schema: { type: string }
+              example: |
+                # metrics
+
+                * [Revenue](revenue.md) - Net revenue from completed orders.
+                * [Churn](churn.md) - Monthly logo churn.
             application/json:
               schema:
                 type: object
@@ -358,7 +389,7 @@ paths:
                     description: The entry list hit the 1000-per-level cap.
               examples:
                 root:
-                  summary: GET /api/v1/browse
+                  summary: "GET /api/v1/bundle/index.md (Accept: application/json)"
                   description: The top-level segments of the ID hierarchy, with the entry count beneath each.
                   value:
                     dirs:
@@ -368,7 +399,7 @@ paths:
                       - { name: queries, count: 57 }
                       - { name: tables, count: 96 }
                 level:
-                  summary: GET /api/v1/browse?prefix=metrics
+                  summary: "GET /api/v1/bundle/metrics/index.md (Accept: application/json)"
                   description: >
                     One level down. The projection carries no body — a
                     directory listing renders from the description.
@@ -387,6 +418,34 @@ paths:
                         updated_at: "2026-07-14T02:33:41.019778Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      operationId: putBundleFile
+      summary: Refused — the reserved files are generated
+      description: >
+        index.md and log.md are derived from the bundle (design doc 0046
+        §§3.7-3.8), so neither is written. The same goes for DELETE.
+      responses:
+        "405":
+          description: A generated file is not one anybody writes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+    delete:
+      operationId: deleteBundleFile
+      summary: Refused — the reserved files are generated
+      description: See PUT.
+      responses:
+        "405":
+          description: A generated file is not one anybody writes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
   /api/v1/context:
     get:
       operationId: getContext
@@ -869,7 +928,7 @@ paths:
                   summary: No live entry at that id
                   description: >
                     A soft-deleted entry reads as missing here; its history is
-                    still at /api/v1/revisions/{id}.
+                    still in the log.md of the directory it was in.
                   value:
                     error: knowledge not found
     put:
@@ -1545,102 +1604,6 @@ paths:
                     worked: 23
                     failed: 3
                     last_used_at: "2026-07-27T02:07:44.291508Z"
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/Error" }
-  /api/v1/revisions/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: The entry's id; slashes are real path separators.
-        schema: { type: string }
-    get:
-      operationId: listKnowledgeRevisions
-      summary: Change history for one knowledge entry
-      description: >
-        Every change — create, update, verify, delete, move, attach,
-        detach — newest first, each with
-        who made it, when, and the whole entry as it stood, as an OKF
-        document — the
-        read surface behind "every change kept as a revision". Works for
-        soft-deleted entries too: the audit trail is most interesting
-        exactly when the entry is gone.
-      parameters:
-        - name: limit
-          in: query
-          description: >
-            Default 50, max 200. Out-of-range values fall back to the
-            default; non-integer values are a 400.
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Revisions, newest first (never empty — create writes rev 1).
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  revisions:
-                    type: array
-                    items: { $ref: "#/components/schemas/Revision" }
-              examples:
-                history:
-                  summary: GET /api/v1/revisions/insights/revenue-seasonality
-                  description: >
-                    Newest first, and never empty — the create is rev 1. Each
-                    revision carries the whole entry as it stood after that
-                    change, as an OKF document, so a diff between two
-                    revisions is a text diff rather than a replay.
-                  value:
-                    revisions:
-                      - rev: 2
-                        change: verify
-                        changed_by: { kind: human, name: tanaka@example.co.jp }
-                        changed_at: "2026-07-27T00:41:12.905337Z"
-                        document: |
-                          ---
-                          type: Insight
-                          title: Reading revenue month over month
-                          description: Why a December spike and a January drop are normal.
-                          tags:
-                              - finance
-                          generated:
-                              by: process:analyst@example.iam.gserviceaccount.com
-                              at: "2026-07-27T00:41:12Z"
-                          verified:
-                              - by: human:tanaka@example.co.jp
-                                at: "2026-07-27T00:41:12Z"
-                          status: stable
-                          stale_after: "2027-01-31"
-                          created_by: process:analyst@example.iam.gserviceaccount.com
-                          ---
-
-                          [Revenue](/metrics/revenue.md) is seasonal: December
-                          runs well above the trailing median and January falls
-                          back below it.
-                      - rev: 1
-                        change: create
-                        changed_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                        changed_at: "2026-07-21T06:14:55.402881Z"
-                        document: |
-                          ---
-                          type: Insight
-                          title: Reading revenue month over month
-                          description: Why a December spike and a January drop are normal.
-                          tags:
-                              - finance
-                          generated:
-                              by: process:analyst@example.iam.gserviceaccount.com
-                              at: "2026-07-21T06:14:55Z"
-                          status: draft
-                          stale_after: "2027-01-31"
-                          created_by: process:analyst@example.iam.gserviceaccount.com
-                          ---
-
-                          [Revenue](/metrics/revenue.md) is seasonal.
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }

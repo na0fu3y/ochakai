@@ -20,6 +20,12 @@ last entry.
 
 ### Added
 
+- **`ochakai log [path]`** prints the update history as OKF's `log.md`
+  (SPEC §9): date-grouped, newest first, for a path or the whole bundle
+  (design doc [0046](docs/design/0046-bundle-address-space.md) §3.8).
+  It says what `ochakai revisions` says, in the format a bundle carries
+  — which is what makes a history portable.
+
 - **Any frontmatter key is a filter**: `?fm.owner=finance` on REST,
   `fm: {owner: finance}` on MCP, `--fm owner=finance` on the CLI (design
   doc [0046](docs/design/0046-bundle-address-space.md) §3.11). It matches
@@ -86,6 +92,33 @@ last entry.
   a write that only repeats it is still a no-op.
 
 ### Changed
+
+- **BREAKING**: the two files OKF reserves are served at the paths OKF
+  reserves them at (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§3.7-3.8).
+  `GET /api/v1/bundle/{path}` answers `index.md` (SPEC §8's directory
+  listing) and `log.md` (SPEC §9's update history); both are generated
+  from the bundle, so `PUT` and `DELETE` are `405`.
+
+  - **`GET /api/v1/browse` is gone.** A directory listing is what
+    `index.md` is, and ochakai was serving it at an address of its own
+    invention. `GET /api/v1/bundle/metrics/index.md` is the same
+    listing: with `Accept: application/json` it is the same JSON the
+    browse endpoint returned, and without it, it is the file. The
+    `prefix` parameter went with it — the directory is the path now.
+  - **`GET /api/v1/revisions/{id}` is gone**, for the same reason.
+    `GET /api/v1/bundle/{id}/log.md` returns the history, as JSON when
+    asked for it and as the file otherwise, and a *directory's* log.md
+    covers everything under it — which the revisions endpoint could not
+    answer at all.
+  - The history is published, never read back: an import skips both
+    files, the same way it skips `generated` and `verified` (design doc
+    0009). What happened in one instance is that instance's
+    observation.
+  - **CLI**: `ochakai browse` and `ochakai revisions` print what they
+    always did, and read the new paths. `ochakai log` is new.
+  - **Web UI**: unchanged on screen — the tree and the history tab read
+    the JSON representation of the same two files.
 
 - **BREAKING**: a read of one entry is a *view* — `{id, document,
   summary, observed}` — and a listing row is the `summary` alone (design

@@ -75,18 +75,84 @@ func Handler(svc *service.Service) http.Handler {
 		writeHits(w, r, svc, hits)
 	})
 
-	// GET /api/v1/browse?prefix=... — one level of the ID hierarchy
-	// (design docs 0014, 0017): the subdirectories and entries directly
-	// under prefix ("" is the root, i.e. the top-level segments). The
-	// tree view behind the web UI's Browse tab.
-	mux.HandleFunc("GET /api/v1/browse", func(w http.ResponseWriter, r *http.Request) {
-		res, err := svc.Browse(r.Context(), r.URL.Query().Get("prefix"))
-		if err != nil {
-			writeError(w, err)
-			return
+	// GET /api/v1/bundle/{path...} — the two files OKF reserves, at the
+	// paths it reserves them at (design doc 0046 §§3.7-3.8).
+	//
+	//	.../index.md   one level of the tree, as SPEC §8 lists a directory
+	//	.../log.md     the changes under that path, as SPEC §9 logs them
+	//
+	// Both are derived: ochakai already held a tree to walk and a
+	// revision ledger, and served them at addresses of its own invention
+	// (/api/v1/browse, /api/v1/revisions/{id}) in shapes of its own
+	// invention. The format had names for both all along.
+	//
+	// Accept decides the representation, not the address: markdown is the
+	// file, JSON is the same listing with the markdown left out — for the
+	// web UI's tree, which should not have to parse a document to draw a
+	// sidebar. A representation is not a second surface.
+	//
+	// PUT and DELETE are refused (405): a derived file is not one anybody
+	// writes. The rest of the bundle joins this address in a later change;
+	// today a path that is not one of the two reserved names is a 404.
+	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		dir, base := splitReserved(path)
+		switch base {
+		case "index.md":
+			if wantsJSON(r) {
+				res, err := svc.Browse(r.Context(), dir)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				writeJSON(w, http.StatusOK, res)
+				return
+			}
+			doc, err := svc.IndexDocument(r.Context(), dir)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeMarkdown(w, doc)
+		case "log.md":
+			limit, err := queryInt(r.URL.Query(), "limit")
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if wantsJSON(r) {
+				rows, err := svc.Revisions(r.Context(), dir, limit)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				writeJSON(w, http.StatusOK, map[string]any{"revisions": rows})
+				return
+			}
+			doc, err := svc.LogDocument(r.Context(), dir, limit)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeMarkdown(w, doc)
+		default:
+			// Not yet an address for everything in the bundle: the
+			// objects and concepts join it in a later change (design
+			// doc 0046 §3.5), and until then this path serves the two
+			// files the format reserves.
+			writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": fmt.Sprintf("no object at %q: the bundle surface serves index.md and log.md", path),
+			})
 		}
-		writeJSON(w, http.StatusOK, res)
 	})
+
+	for _, m := range []string{"PUT", "DELETE"} {
+		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
+				"error": "index.md and log.md are generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)",
+			})
+		})
+	}
 
 	// GET /api/v1/context?q=...&type=...&status=...&tag=...&prefix=...&limit=...&budget=...
 	// The one-call read before answering a data question: full entries
@@ -297,26 +363,6 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, u)
-	})
-
-	// GET /api/v1/revisions/{id...} — the entry's change history, newest
-	// first: who changed it, how, when, with full snapshots. The read
-	// surface behind "every change kept as a revision"; works for
-	// soft-deleted entries too. Lives outside /knowledge/ for the same
-	// reason /usage does: a suffix after a hierarchical {id...} would be
-	// unroutable.
-	mux.HandleFunc("GET /api/v1/revisions/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		limit, err := queryInt(r.URL.Query(), "limit")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		revs, err := svc.Revisions(r.Context(), r.PathValue("id"), limit)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
 	})
 
 	// GET /api/v1/backlinks/{id...} — live entries whose links point at
@@ -779,6 +825,29 @@ func frontmatterFilter(q url.Values) map[string]string {
 		out[name] = vals[len(vals)-1]
 	}
 	return out
+}
+
+// splitReserved cuts a bundle path into the directory it names and its
+// last segment. "index.md" is the root's listing, "a/b/log.md" is the
+// history under a/b.
+func splitReserved(path string) (dir, base string) {
+	path = strings.Trim(path, "/")
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[:i], path[i+1:]
+	}
+	return "", path
+}
+
+// wantsJSON reports whether the caller asked for the structured form of
+// a derived file. Only an explicit JSON Accept counts: a browser or a
+// curl sends */* and should get the file that lives at the path.
+func wantsJSON(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
+}
+
+func writeMarkdown(w http.ResponseWriter, doc []byte) {
+	w.Header().Set("Content-Type", documentMediaType)
+	_, _ = w.Write(doc)
 }
 
 // wantsDocument reports whether the caller asked for the entry as a
