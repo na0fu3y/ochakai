@@ -64,8 +64,15 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := got.Misses.Count - before.Misses.Count; d != 2 {
-		t.Errorf("misses.count moved by %d, want 2 (the search and the context call)", d)
+	if got.Misses.Count <= before.Misses.Count {
+		t.Errorf("misses.count did not move: %d, was %d", got.Misses.Count, before.Misses.Count)
+	}
+	// This query's own rows, counted directly: the instance-wide number
+	// moves under a test that shares the database with three other
+	// packages, and what is being asserted is that each way of asking
+	// recorded exactly one miss.
+	if n := countMisses(ctx, t, dbURL, nonsense); n != 2 {
+		t.Errorf("the question was recorded %d times, want 2 (the search and the context call)", n)
 	}
 	if on, err := svc.Stats(ctx, 1); err != nil {
 		t.Fatal(err)
@@ -86,8 +93,8 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.Misses.Count != got.Misses.Count {
-		t.Errorf("a miss was recorded with recording off: %d, was %d", after.Misses.Count, got.Misses.Count)
+	if n := countMisses(ctx, t, dbURL, nonsense); n != 2 {
+		t.Errorf("the question was recorded %d times after a search with recording off, want 2", n)
 	}
 	if after.Misses.Recording {
 		t.Error("misses.recording is true on a deployment that keeps none")
@@ -128,6 +135,23 @@ func TestStatsWindowIsBounded(t *testing.T) {
 	if st.WindowDays != defaultStatsWindow || st.At.IsZero() {
 		t.Errorf("Stats(0) = window %d at %v, want the default window and a time", st.WindowDays, st.At)
 	}
+}
+
+// countMisses is how many rows one query left, asked of the database
+// directly: an assertion about this test's own misses must not be an
+// assertion about the whole instance's.
+func countMisses(ctx context.Context, t *testing.T, dbURL, query string) int64 {
+	t.Helper()
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		t.Fatalf("counting misses: %v", err)
+	}
+	defer conn.Close(ctx)
+	var n int64
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM search_miss WHERE query = $1`, query).Scan(&n); err != nil {
+		t.Fatalf("counting misses: %v", err)
+	}
+	return n
 }
 
 // deleteMisses removes the rows a test's own query left behind: the test
