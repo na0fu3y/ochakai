@@ -325,8 +325,16 @@ reported and neither fails the command, because a consumer takes the
 document rather than rejecting it. --strict is the opposite posture,
 for a sync nobody watches: a bundle that is not read exactly as
 written fails, and the counts land in the summary line either way.
+--dry-run parses and lists, reaching no server and needing no
+credentials — the answer before a bundle has ever been imported.
+--diff is the answer on every import after that: it reads the stored
+entries and says, per entry, whether the bundle would create it,
+update it or leave it alone. It writes nothing either, but it does
+need to reach the server.
 
 Flags:
+  -diff
+    	say what would change — created, updated or unchanged, per entry — by reading the stored entries and comparing. Implies --dry-run and writes nothing, but unlike it needs to reach the server
   -dry-run
     	parse and list what would be written, write nothing
   -strict
@@ -337,6 +345,7 @@ Flags:
 Examples:
   ochakai import ./knowledge
   ochakai import ga4-bundle.tar.gz --dry-run
+  ochakai import ./knowledge --diff             # what would a re-sync change?
   ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
 ```

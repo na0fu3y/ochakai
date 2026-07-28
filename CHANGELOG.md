@@ -20,6 +20,26 @@ last entry.
 
 ### Added
 
+- `ochakai import --diff` — say what a re-sync would change, per entry,
+  and write nothing. `--dry-run` answers "would import" for everything,
+  which is the whole truth on an empty knowledge base and the least
+  useful true thing the command can say on every import after the first.
+  A re-sync is where a dry run is actually needed, and that is exactly
+  where it had no answer.
+
+  Each verdict comes from the stored document compared against the exact
+  bytes the import would `PUT` — the same comparison the server makes to
+  decide a write is a no-op (design doc
+  [0043](docs/design/0043-document-first.md) §3.4), so the preview and
+  the real run cannot drift apart. Attachments ride along: the same read
+  returns their digests, so a file already stored byte for byte reads as
+  unchanged instead of as an upload.
+
+  `--dry-run` is unchanged and still reaches no server, which is what
+  makes it usable before any credentials exist. `--diff` needs to reach
+  one, and a read that fails for its own reason (auth, network) aborts
+  rather than reporting everything as new.
+
 - `ochakai verify <id>...` takes as many entries as it is given. The
   review loop this project is built on produces a *list*: a feed is
   queried, a human reads it, and what survives is confirmed. One id per

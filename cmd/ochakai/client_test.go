@@ -343,6 +343,96 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 	}
 }
 
+// TestImportDiffTellsCreatedFromUpdated pins what a re-sync asks for: a
+// bundle re-run against a base that already holds part of it must say
+// which entries would change, and must still write nothing. The stored
+// document is compared against the exact bytes the import would PUT, so
+// an entry the server would treat as a no-op reads as unchanged here.
+func TestImportDiffTellsCreatedFromUpdated(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	docs := map[string]string{
+		"same":  "---\ntype: Metric\ntitle: Same\n---\n\nbody\n",
+		"drift": "---\ntype: Metric\ntitle: Drift\n---\n\nnew body\n",
+		"new":   "---\ntype: Metric\ntitle: New\n---\n\nbody\n",
+	}
+	for name, doc := range docs {
+		if err := os.WriteFile(filepath.Join(dir, "metrics", name+".md"), []byte(doc), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// What the server holds: metrics/same byte-identical to what the
+	// bundle renders, metrics/drift something else, metrics/new absent.
+	canonical := func(src string) string {
+		d, _, err := okf.Parse([]byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := okf.Canonical(&d.Knowledge)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	held := map[string]string{
+		"metrics/same":  canonical(docs["same"]),
+		"metrics/drift": canonical("---\ntype: Metric\ntitle: Drift\n---\n\nold body\n"),
+	}
+
+	writes := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(http.ResponseWriter, *http.Request) { writes++ })
+	mux.HandleFunc("POST /api/v1/knowledge", func(http.ResponseWriter, *http.Request) { writes++ })
+	mux.HandleFunc("GET /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		doc, ok := held[id]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge not found"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(domain.View{
+			ID: id, Document: doc,
+			Summary: domain.Summary{ID: id, Type: domain.TypeMetrics},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	orig := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	diffErr := cmdImport(context.Background(), []string{dir, "--diff", "--url", srv.URL})
+	pw.Close()
+	os.Stdout = orig
+	out, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diffErr != nil {
+		t.Fatalf("cmdImport --diff: %v\noutput:\n%s", diffErr, out)
+	}
+	for _, want := range []string{
+		"unchanged ochakai://metrics/same\n",
+		"would update ochakai://metrics/drift\n",
+		"would create ochakai://metrics/new\n",
+		"diff: 3 entries (1 would create, 1 would update, 1 unchanged), " +
+			"0 attachments (0 would attach, 0 unchanged), 0 skipped, 0 notes\n",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("--diff output misses %q:\n%s", want, out)
+		}
+	}
+	if writes != 0 {
+		t.Errorf("--diff made %d writes, want 0", writes)
+	}
+}
+
 // `ochakai update --if-match` sends the version as the If-Match header,
 // and a 412 comes back as an actionable conflict message (re-read, redo,
 // retry) rather than the raw server error.

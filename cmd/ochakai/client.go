@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -1121,9 +1123,10 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be read is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
-		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be read is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run parses and lists, reaching no server and needing no\ncredentials — the answer before a bundle has ever been imported.\n--diff is the answer on every import after that: it reads the stored\nentries and says, per entry, whether the bundle would create it,\nupdate it or leave it alone. It writes nothing either, but it does\nneed to reach the server.",
+		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --diff             # what would a re-sync change?\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
+	diff := fs.Bool("diff", false, "say what would change — created, updated or unchanged, per entry — by reading the stored entries and comparing. Implies --dry-run and writes nothing, but unlike it needs to reach the server")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
@@ -1152,7 +1155,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	if *strict && (noted > 0 || len(skipped) > 0) {
 		return strictErr(noted, len(skipped), "nothing was written")
 	}
-	if *dryRun {
+	if *dryRun && !*diff {
 		for i := range entries {
 			fmt.Printf("would import %s\n", entries[i].URI())
 		}
@@ -1166,6 +1169,9 @@ func cmdImport(ctx context.Context, args []string) error {
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
+	}
+	if *diff {
+		return importDiff(ctx, c, entries, atts, skipped, noted)
 	}
 	// A 400 is the server's judgment on one document (e.g. a models entry
 	// whose spec fails write-time validation) — skip and report it like a
@@ -1260,6 +1266,88 @@ func cmdImport(ctx context.Context, args []string) error {
 	return nil
 }
 
+// importDiff answers the question a re-sync actually asks — what would
+// change — and writes nothing. A plain --dry-run cannot: it needs no
+// credentials, which is worth keeping for the first import of a bundle,
+// but on the second one "would import" for every entry is the least
+// useful true thing the command could say.
+//
+// Every verdict comes from the stored document itself, compared against
+// the exact bytes the import would PUT. That is the same comparison the
+// server makes to decide whether a write is a no-op (design doc 0043
+// §3.4 — the version is the hash of the canonical document), so the
+// answer here and the answer the real run gives cannot drift apart.
+// Attachments ride along: one read returns their metadata, and a file
+// whose bytes already hash the same is not going to be re-uploaded.
+//
+// A read that fails for its own reason (auth, network) aborts, as it
+// does on the write path — a diff that silently reports "would create"
+// because it could not read is worse than no diff.
+func importDiff(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
+	atts []okf.BundleAttachment, skipped []string, noted int,
+) error {
+	var create, update, same int
+	stored := map[string]*domain.View{}
+	for i := range entries {
+		k := &entries[i].Knowledge
+		doc, err := documentOf(k)
+		if err != nil {
+			skipped = append(skipped, k.ID+".md: "+err.Error())
+			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+			continue
+		}
+		v, err := c.Get(ctx, k.ID)
+		switch {
+		case isNotFound(err):
+			create++
+			fmt.Printf("would create %s\n", k.URI())
+		case err != nil:
+			return fmt.Errorf("%s: %w", k.URI(), err)
+		case v.Document == string(doc):
+			same++
+			stored[k.ID] = v
+			fmt.Printf("unchanged %s\n", k.URI())
+		default:
+			update++
+			stored[k.ID] = v
+			fmt.Printf("would update %s\n", k.URI())
+		}
+	}
+	var attach, sameAtt int
+	for _, a := range atts {
+		if held(stored[a.ID], a) {
+			sameAtt++
+			fmt.Printf("unchanged %s/%s (from %s)\n", a.ID, a.Name, a.Path)
+			continue
+		}
+		attach++
+		fmt.Printf("would attach %s/%s (from %s)\n", a.ID, a.Name, a.Path)
+	}
+	fmt.Printf("diff: %d entries (%d would create, %d would update, %d unchanged), "+
+		"%d attachments (%d would attach, %d unchanged), %d skipped, %d notes\n",
+		create+update+same, create, update, same,
+		attach+sameAtt, attach, sameAtt, len(skipped), noted)
+	return nil
+}
+
+// held reports whether the stored entry already carries this bundle file
+// byte for byte. The name is the identity within an entry and the digest
+// is the content, so both have to agree; an entry that is not stored at
+// all (v == nil) holds nothing.
+func held(v *domain.View, a okf.BundleAttachment) bool {
+	if v == nil {
+		return false
+	}
+	sum := sha256.Sum256(a.Data)
+	digest := hex.EncodeToString(sum[:])
+	for i := range v.Attachments {
+		if v.Attachments[i].Name == a.Name && v.Attachments[i].SHA256 == digest {
+			return true
+		}
+	}
+	return false
+}
+
 // strictErr is what --strict fails with. It counts rather than repeats:
 // every note and skip has already been printed to stderr as it happened,
 // and the error's job is to name the exit code's reason and say what the
@@ -1281,6 +1369,12 @@ func plural(n int, word string) string {
 func isInvalid(err error) bool {
 	var apiErr *apiclient.APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest
+}
+
+// isNotFound reports a 404: the id is free, so an import would create it.
+func isNotFound(err error) bool {
+	var apiErr *apiclient.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
 func isConflict(err error) bool {
