@@ -65,16 +65,23 @@ func TestCmdSearchNeedsQueryOrSort(t *testing.T) {
 }
 
 func TestDecodeEntryDetectsFormat(t *testing.T) {
-	fromJSON, err := decodeEntry([]byte(`{"type":"metric","id":"revenue","title":"売上"}`))
+	fromJSON, _, err := decodeEntry([]byte(`{"type":"metric","id":"revenue","title":"売上"}`))
 	if err != nil || fromJSON.ID != "revenue" {
 		t.Fatalf("json: %v, %+v", err, fromJSON)
 	}
-	fromOKF, err := decodeEntry([]byte("\n---\ntype: metric\nid: revenue\ntitle: 売上\n---\n\nbody\n"))
+	fromOKF, _, err := decodeEntry([]byte("\n---\ntype: metric\nid: revenue\ntitle: 売上\n---\n\nbody\n"))
 	if err != nil || fromOKF.ID != "revenue" || fromOKF.Body != "body" {
 		t.Fatalf("okf: %v, %+v", err, fromOKF)
 	}
-	if _, err := decodeEntry([]byte("plain text")); err == nil {
+	if _, _, err := decodeEntry([]byte("plain text")); err == nil {
 		t.Error("garbage decoded without error")
+	}
+	// A document that says who generated and confirmed it is naming a
+	// claim, not this instance's provenance (design doc 0046 §2.2): the
+	// keys come back so the write can report what it kept.
+	_, claimed, err := decodeEntry([]byte("---\ntype: metric\ngenerated:\n  by: human:sato\n---\n"))
+	if err != nil || len(claimed) != 1 || claimed[0] != "generated" {
+		t.Fatalf("claimed = %v, err = %v", claimed, err)
 	}
 }
 
@@ -419,5 +426,79 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	last := got.Observed.LastVerified()
 	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
 		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
+	}
+}
+
+// A bundle from another instance arrives with a trust family. The import
+// parses it, so the move to a claim happens here rather than on the
+// server (design doc 0046 §2.2) — and the note has to follow the claim,
+// which means asking what was actually stored. A claim the server kept is
+// reported and counts against --strict; one it dropped as its own
+// observation coming home is neither.
+func TestImportReportsAKeptClaim(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const foreign = "---\ntype: metric\ntitle: Foreign\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n  - by: human:ceo@example.co.jp\n    at: 2026-07-02T00:00:00Z\n" +
+		"---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "foreign.md"), []byte(foreign), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// keep says whether this server stores the claim or recognizes it as
+	// what it already observed; both answers travel back the same way, in
+	// the stored document.
+	run := func(t *testing.T, keep bool) string {
+		t.Helper()
+		mux := http.NewServeMux()
+		mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			if !keep {
+				body = []byte(strings.Split(string(body), "received:")[0] + "---\n\nbody\n")
+			}
+			_ = json.NewEncoder(w).Encode(domain.View{Document: string(body)})
+		})
+		mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(domain.View{})
+		})
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+
+		orig, origErr := os.Stdout, os.Stderr
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stdout, os.Stderr = pw, pw
+		importErr := cmdImport(context.Background(), []string{dir, "--url", srv.URL})
+		pw.Close()
+		os.Stdout, os.Stderr = orig, origErr
+		out, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if importErr != nil {
+			t.Fatalf("cmdImport: %v\noutput:\n%s", importErr, out)
+		}
+		return string(out)
+	}
+
+	kept := run(t, true)
+	if !strings.Contains(kept, "note: generated, verified is not") &&
+		!strings.Contains(kept, "note: generated, verified are not") {
+		t.Errorf("a kept claim was not reported:\n%s", kept)
+	}
+	if !strings.Contains(kept, "1 notes)") {
+		t.Errorf("a kept claim did not reach the summary count:\n%s", kept)
+	}
+
+	// The same bundle against a server that recognizes the keys as its own
+	// is the Git review loop (design doc 0009 §3.2), which must stay quiet.
+	dropped := run(t, false)
+	if strings.Contains(dropped, "note:") || !strings.Contains(dropped, "0 notes)") {
+		t.Errorf("our own export form coming home was reported as a claim:\n%s", dropped)
 	}
 }

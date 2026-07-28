@@ -172,7 +172,14 @@ What this instance *observed* about an entry travels beside the document
 rather than inside it: who created it, who last changed it, every
 recorded confirmation, and a live rejection if there is one. A bundle
 carries knowledge; provenance is an observation, and import never reads
-it back (design doc [0009](design/0009-provenance-portability.md)).
+it into a ledger (design doc
+[0009](design/0009-provenance-portability.md)). What a document says
+about *itself* — the `generated` and `verified` a bundle from another
+instance arrives with — is a claim, and a claim is neither believed nor
+thrown away: it is kept under a `received` key in the stored document
+and reported on the way in, while the trust tier and the `trust=` filter
+go on answering from this instance's ledger alone (design doc
+[0046](design/0046-bundle-address-space.md) §2.2).
 
 **Identity is a path.** An entry's id is its address and its bundle
 location: `queries/sales/monthly-revenue` is one entry, and the

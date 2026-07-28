@@ -133,6 +133,13 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 		if err != nil {
 			t.Fatalf("Parse of our own Document output failed: %v\n%s", err, doc)
 		}
+		// A parse cannot tell this instance's keys from a producer's, so
+		// it keeps them as a claim (design doc 0046 §2.2); against the
+		// entry they were rendered from they are recognized for what
+		// they are.
+		if asStored(&got.Knowledge, k); got.Attrs[ClaimKey] != nil {
+			t.Fatalf("our own export form was read as a foreign claim: %#v\n%s", got.Attrs[ClaimKey], doc)
+		}
 
 		// Compare on the terms the round-trip is stated in: the fields a
 		// writer controls, minus the three the format carries elsewhere.

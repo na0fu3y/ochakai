@@ -1071,10 +1071,16 @@ paths:
         If-Match a version writes only if the entry still says that.
         A 201 means the entry was created, a 200 that it was replaced.
         Keys the server owns (generated, verified, created_by,
-        rejected_by, rejected_at) are ignored if present, so a document
-        read back from ochakai can be edited and sent as it came. Values
-        read differently than they were written come back as
-        Ochakai-Note headers rather than being applied in silence.
+        rejected_by, rejected_at) never reach a ledger, so a document
+        read back from ochakai can be edited and sent as it came. They
+        are not discarded either: unless they say exactly what this
+        instance already observed about the entry, they are kept under a
+        `received` key as the document's own claim (design doc 0046
+        §2.2) and reported as an Ochakai-Note. Nothing derives trust
+        from a claim — the trust tier and ?trust= answer from this
+        instance's ledger, as before. Values read differently than they
+        were written come back as Ochakai-Note headers rather than being
+        applied in silence.
       parameters:
         - $ref: "#/components/parameters/IfMatch"
         - name: If-None-Match
@@ -2107,8 +2113,9 @@ components:
     Note:
       description: >
         A value the server accepted but read differently than it was
-        written — an unrecognized status, a date it could not parse.
-        Repeatable, one per reinterpretation. A reinterpretation is never
+        written — an unrecognized status, a date it could not parse, a
+        trust family read as the document's own claim rather than as
+        this instance's observation. Repeatable, one per reinterpretation. A reinterpretation is never
         silent (design doc 0036 §3.4), and there is no room for it in a
         response whose body is the entry.
       schema: { type: string }
@@ -2468,7 +2475,8 @@ components:
             The stored OKF document: YAML frontmatter, then markdown
             body — the bytes as they were written, normalized only for
             line endings, with the keys this instance owns (`generated`,
-            `verified`) taken out. It is what content_hash is taken over
+            `verified`) taken out and, when the document asserted any of
+            them itself, kept under `received`. It is what content_hash is taken over
             (design docs 0043 §3.4, 0046 §§2.2, 3.4), so it can be
             edited and PUT back with nothing to strip, and the
             provenance those keys would have carried is in `observed`

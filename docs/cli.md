@@ -325,7 +325,12 @@ under that directory — the bundle keeps its own namespace. Works
 with any OKF bundle, not just ochakai's own.
 A file that cannot be stored at all — empty, oversized, or at a path
 ochakai cannot address — is skipped; a value read differently than
-it was written is a note and the entry still imports. Both are
+it was written is a note and the entry still imports. A document
+that says who generated or confirmed it is one of those: the keys
+are kept as the document's own claim, under `received`, and never
+become this instance's provenance — so a bundle from another
+instance imports with a note per entry, while one exported from
+here imports silently. Both are
 reported and neither fails the command, because a consumer takes the
 document rather than rejecting it. --strict is the opposite posture,
 for a sync nobody watches: a bundle that is not read exactly as

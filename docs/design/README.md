@@ -40,7 +40,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
-| バンドル往復と provenance の所有権 | [0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
+| バンドル往復と provenance の所有権 | [0046](0046-bundle-address-space.md) §2.2 が現行(主張と観測の分離)。[0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
 | やらないと決めたこと | [0028](0028-retire-compile-sql.md)(compile_sql)、[0018](0018-semantic-model-as-knowledge.md)(専用機構)、[0012](0012-retire-mcp-oauth-connector.md)(OAuth コネクタ) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -98,9 +98,12 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
   潰れる問題を解く。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
   — **Proposed**(§4 の「SPEC への先回りをしない」は 0036 が写像を決定。
-  §3.1 の世界観は 0043 が保存形とワイヤにまで貫徹)。
+  §3.1 の世界観は 0043 が保存形とワイヤにまで貫徹し、その「読み戻さない」の
+  射程は 0046 §2.2 が「信じない」に狭めた)。
   export → Git → import の往復で provenance が誰のものに
   なるかの整理(バンドルは知識のみを運び、provenance はインスタンス固有)。
+  文書の trust family は台帳にも trust tier にも入らないまま、
+  `received:` の下に主張として保存される(0046 §2.2)。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 

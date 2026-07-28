@@ -1103,6 +1103,95 @@ func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
+// A document written somewhere else says who generated and confirmed it.
+// That is a claim, not this instance's observation — so it reaches no
+// ledger and no trust tier, and it is not destroyed either: it is kept
+// under `received` and reported (design doc 0046 §2.2, issue #292).
+func TestRESTIntegrationForeignTrustFamilyIsKeptAsAClaim(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	id := fmt.Sprintf("restclaim%d/revenue", time.Now().UnixNano())
+	removeEntries(t, srv, id)
+
+	// The export form of another instance: a human wrote it there, and a
+	// different human confirmed it there.
+	const written = "---\ntype: Metric\ntitle: 売上\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n  - by: human:ceo@example.co.jp\n    at: 2026-07-02T00:00:00Z\n" +
+		"created_by: human:sato@example.co.jp\n---\n\n受注合計。\n"
+
+	resp := putDoc(t, srv.URL, id, []byte(written), true)
+	var created domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	// Nothing was applied in silence: SPEC §11 wants the reinterpretation
+	// said out loud, and this is the one that used to be mute.
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 1 ||
+		!strings.Contains(notes[0], "received") {
+		t.Errorf("Ochakai-Note = %q, want one note naming the claim", notes)
+	}
+	// The claim is in the stored bytes, where a later release can still
+	// find it, and out of the keys this instance owns.
+	if !strings.Contains(created.Document, "received:") ||
+		!strings.Contains(created.Document, "human:ceo@example.co.jp") {
+		t.Errorf("the claim was not kept:\n%s", created.Document)
+	}
+	if strings.Contains(created.Document, "\ncreated_by:") ||
+		strings.Contains(created.Document, "\nverified:") {
+		t.Errorf("a claim was left where this instance's own keys go:\n%s", created.Document)
+	}
+	// And nowhere else. The entry is unverified here, by the importer.
+	if created.Summary.Trust != domain.TrustUnverified {
+		t.Errorf("trust = %q, want unverified: a claim is not a confirmation", created.Summary.Trust)
+	}
+	if len(created.Observed.Verified) != 0 {
+		t.Errorf("a claim reached the ledger: %+v", created.Observed.Verified)
+	}
+	if created.Observed.CreatedBy.Name == "sato@example.co.jp" {
+		t.Errorf("a claim became this instance's created_by: %+v", created.Observed.CreatedBy)
+	}
+
+	// Importing the same foreign document again writes nothing: the claim
+	// it carries is the claim already recorded, so a recurring sync does
+	// not churn revisions.
+	resp = putDoc(t, srv.URL, id, []byte(written), false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("re-importing = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+
+	// The export form carries both — the claim and this instance's own
+	// observation — and sending it back is still not a change.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req.Header.Set("Accept", "text/markdown")
+	mdResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, _ := io.ReadAll(mdResp.Body)
+	mdResp.Body.Close()
+	for _, want := range []string{"received:", "generated:", "created_by:"} {
+		if !strings.Contains(string(served), want) {
+			t.Errorf("the export form is missing %q:\n%s", want, served)
+		}
+	}
+	resp = putDoc(t, srv.URL, id, served, false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("sending back the export form = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 0 {
+		t.Errorf("our own export form was reported as a claim: %q", notes)
+	}
+}
+
 // A bundle carries what it carries (design doc 0046 §3.2): the write
 // path refuses no media type, and the delivery rule is what keeps the
 // dangerous ones from running. This is the pair #280 could only test one

@@ -20,6 +20,39 @@ last entry.
 
 ### Added
 
+- **A document's own `generated` and `verified` are kept as a claim**
+  instead of being destroyed (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §2.2). A bundle from
+  another instance — or from any OKF producer — says who generated the
+  content and who confirmed it. Those keys reached no ledger, which is
+  right, and were also cut out of the stored bytes, which was not: the
+  fact that a named person confirmed something somewhere else was gone,
+  and no later release could get it back.
+
+  They now travel under a `received` key in the stored document:
+  `received.verified` is always somebody else's assertion, `verified` is
+  always this instance's ledger, and the export form carries both
+  without them colliding. The write reports what it did, so nothing is
+  reinterpreted in silence (SPEC §11) — an `Ochakai-Note` on REST, a
+  `notes` entry on MCP, a `note:` line and a bump in the summary count
+  on `ochakai import`, which also means `--strict` now fails a
+  cross-instance sync rather than passing it as clean.
+
+  **Nothing derives trust from a claim.** The trust tier, `?trust=` and
+  `observed` answer from this instance's ledger exactly as before, and
+  an imported entry is still unverified until somebody here verifies it
+  — design doc [0009](docs/design/0009-provenance-portability.md)'s
+  reason for refusing to *believe* a payload stands untouched; only the
+  part that discarded it is gone. A claim is indexed like any other
+  frontmatter key, so `fm.received=` can find one, and no listing or
+  ranking surface reads it.
+
+  Round trips are unchanged. The export form of an entry, sent back —
+  `get` → edit → `PUT`, or `export` → review → `import`, the Git review
+  loop — carries a trust family that says exactly what this instance
+  observed, which is recognized as its own and taken back off. The same
+  bytes are stored, no revision is written, and no note is printed.
+
 - **What enters the bundle leaves it** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.2). `ochakai
   import` now keeps every file the bundle carried, at the path it

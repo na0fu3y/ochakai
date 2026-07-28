@@ -890,9 +890,6 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	for _, n := range notes {
-		w.Header().Add("Ochakai-Note", n)
-	}
 	// The path is the address; the document carries the metadata — type
 	// included, always (no fill-in from the stored entry, design doc 0017
 	// §4.5).
@@ -915,6 +912,14 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	// Whether a trust family was a claim or this instance's own export
+	// form coming home is decided against the stored entry, so the note
+	// can only be written once the write has answered: a claim that
+	// survived it is one the document made and ochakai did not observe.
+	notes = okf.NoteClaim(notes, d.Claimed, out)
+	for _, n := range notes {
+		w.Header().Add("Ochakai-Note", n)
 	}
 	// A payload identical to the stored content wrote nothing (no
 	// revision, no version bump); the header lets clients report

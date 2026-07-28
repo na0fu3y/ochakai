@@ -219,6 +219,15 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if ifMatch != nil && old.ContentHash != *ifMatch {
 		return nil, false, store.ErrConflict
 	}
+	// A document's own trust family is a claim and is kept as one (design
+	// doc 0046 §2.2) — but the export form of this very entry is not a
+	// claim. It is what this instance observed, handed back by get → edit
+	// → PUT or by export → review → import, and only here is there an
+	// entry to compare it against. Recognizing it is what keeps a round
+	// trip storing the bytes it stored before.
+	if okf.IsObservation(k.Attrs[okf.ClaimKey], old) {
+		okf.DropClaim(k)
+	}
 	// A PUT is a full replacement, so an omitted status is not "keep the
 	// one you had": it is the document saying nothing, which reads as
 	// OKF's default (design doc 0046 §3.9).
