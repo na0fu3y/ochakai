@@ -19,7 +19,8 @@ PR の中に残る。
 
 ## アーキテクチャと基盤
 
-- [0001 全体アーキテクチャ](0001-architecture.md) — **Accepted**。
+- [0001 全体アーキテクチャ](0001-architecture.md) — **Accepted**(§3 の
+  エンベロープ表現と §9.1 の rejected ステータスは 0043 が改訂)。
   LLM を内蔵せず SQL を実行しないナレッジストアという中核。双方向ループ
   (エージェントが下書きし、人が検証する)、Postgres + pgvector 一本、
   利用テレメトリ。
@@ -54,12 +55,21 @@ PR の中に残る。
   エンドユーザーを名乗り、provenance がサービスアカウント 1 つに
   潰れる問題を解く。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
-  — **Proposed**(§4 の「SPEC への先回りをしない」は 0036 が写像を決定)。
+  — **Proposed**(§4 の「SPEC への先回りをしない」は 0036 が写像を決定。
+  §3.1 の世界観は 0043 が保存形とワイヤにまで貫徹)。
   export → Git → import の往復で provenance が誰のものに
   なるかの整理(バンドルは知識のみを運び、provenance はインスタンス固有)。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
+- [0043 文書を真とする](0043-document-first.md) — **Accepted**(実装は
+  後続 PR、0.15.0 の次のリリースで出る。それまでのコードは 0036 の姿)。
+  **OKF 互換領域の現行ドキュメント**。保存もワイヤも正準化した OKF 文書
+  そのものにし、DB は索引とインスタンス台帳(検証・却下・利用・履歴)に
+  徹する。status は OKF の 3 値、検証は台帳への追記(複数可)、却下は
+  rejection 台帳、ETag は内容ハッシュ、actor は `process:`。写像が恒等に
+  なり、attrs と封筒の二重底・rejected の非可逆往復・外来 `stable` の
+  draft 降格・`updated_at` の三役が対象消滅する。
 - [0041 住所で検索の範囲を絞る](0041-path-scoped-search.md) — **Accepted**。
   0017 の「パスが住所」を検索と context に届かせる `prefix` フィルタ
   (繰り返し可・セグメント境界で照合・サブツリー全体)。サブツリーを
@@ -70,9 +80,10 @@ PR の中に残る。
   `stale_after` / `sources` を引けるようにする: `sort=stale_after` の
   期限切れフィード(verify ではなく編集で空になる — 0025 の 2 フィードとの
   違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index)。
-- [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) — **Accepted**
-  (実装済み、次のリリース 0.14.0 で出る)。**OKF 互換領域の現行ドキュメント**
-  (§5 の 2 項目は 0037 が撤回して実装した。§3.6 の型の一覧は 0038 が
+- [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) —
+  **Superseded by 0043**(document-first への全面置き換え。0043 の実装が
+  ランドするまでコードとリリースは 0036 の姿。§5 の 2 項目は 0037 が撤回して
+  実装した。§3.6 の型の一覧は 0038 が
   11 型に組み替えた — 型の語彙は「ナレッジモデル」節の 0038 が現行)。
   SPEC が定義するキーは封筒に持つ、と基準を引き直し、§5.1(`sources` /
   `usage_window`)と §10.2(`runtime` / `parameters` / `computation` /
@@ -161,7 +172,8 @@ PR の中に残る。
 
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
   **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した。フィードは
-  0037 が 3 つめを足した)。
+  0037 が 3 つめを足した。§6 の verify の記録は 0043 が検証台帳への
+  追記に改め、再検証が履歴として残る)。
   検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。
   再検証を記録する `POST /api/v1/verify/{id}` はここが出所。
 - [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
@@ -172,7 +184,8 @@ PR の中に残る。
 ## 同時実行と削除
 
 - [0030 If-Match による楽観ロック](0030-optimistic-locking.md) —
-  **Accepted**。`updated_at` を版として ETag / If-Match で条件付き更新を
+  **Accepted**(§3.1 の「版は `updated_at`」は 0043 が内容ハッシュに改訂。
+  機構そのものは維持)。ETag / If-Match で条件付き更新を
   opt-in で提供する。MCP は通り道を持たず、キュレーション保護が内部で使う。
 - [0031 purge](0031-purge.md) — **Accepted**。ソフト削除済みエントリを
   完全に破棄して id を解放する二段階目の削除。REST / CLI のみ、監査行を
