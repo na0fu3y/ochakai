@@ -138,7 +138,8 @@ func TestRESTIntegration(t *testing.T) {
 		t.Errorf("generated log.md:\n%s", logDoc)
 	}
 
-	// Neither is writable: they are generated, not stored.
+	// Neither is writable: they are generated, not stored, so a write to
+	// one conflicts with what the address is (design doc 0046 §3.5).
 	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+typ+"/index.md", strings.NewReader("x"))
 	if err != nil {
 		t.Fatal(err)
@@ -148,8 +149,8 @@ func TestRESTIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Errorf("PUT index.md = %d, want 405", resp.StatusCode)
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("PUT index.md = %d, want 409", resp.StatusCode)
 	}
 
 	// Export: the bundle carries the entry at its canonical path.

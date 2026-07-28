@@ -91,9 +91,9 @@ func Handler(svc *service.Service) http.Handler {
 	// web UI's tree, which should not have to parse a document to draw a
 	// sidebar. A representation is not a second surface.
 	//
-	// PUT and DELETE are refused (405): a derived file is not one anybody
-	// writes. The rest of the bundle joins this address in a later change;
-	// today a path that is not one of the two reserved names is a 404.
+	// PUT and DELETE are refused, for two different reasons (below). The
+	// rest of the bundle joins this address in a later change; today a
+	// path that is not one of the two reserved names is a 404 on read.
 	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
 		dir, base := splitReserved(path)
@@ -146,10 +146,26 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
+	// PUT and DELETE /api/v1/bundle/{path...} — two refusals, and which
+	// one the caller gets depends on the path.
+	//
+	// The reserved names are generated from the bundle rather than stored
+	// in it, so a write is a conflict with what the address is: 409, as
+	// design doc 0046 §3.5 says. Every other path is the write face that
+	// same section describes, and it lands in a later change: 501, which
+	// is what "not built yet" means. Answering the reserved-file reason
+	// there would explain a refusal in terms of two files the caller never
+	// named.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
-				"error": "index.md and log.md are generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)",
+			if _, base := splitReserved(r.PathValue("path")); isReserved(base) {
+				writeJSON(w, http.StatusConflict, map[string]string{
+					"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)", base),
+				})
+				return
+			}
+			writeJSON(w, http.StatusNotImplemented, map[string]string{
+				"error": "the bundle write surface lands in a later change (design doc 0046 §3.5)",
 			})
 		})
 	}
@@ -836,6 +852,12 @@ func splitReserved(path string) (dir, base string) {
 		return path[:i], path[i+1:]
 	}
 	return "", path
+}
+
+// isReserved reports whether a bundle path's last segment is one of the
+// two filenames OKF reserves (SPEC §3.1) — the generated ones.
+func isReserved(base string) bool {
+	return base == "index.md" || base == "log.md"
 }
 
 // wantsJSON reports whether the caller asked for the structured form of
