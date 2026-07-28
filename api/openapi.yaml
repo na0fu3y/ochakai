@@ -101,6 +101,15 @@ paths:
             comparisons: ranges and boolean expressions are the doorway
             to a query language, and what ochakai returns is knowledge
             rather than rows.
+
+            The prefix carries the keys ochakai does not name, and only
+            those: `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+            `fm.stale_after` are refused with 400 (design doc 0047).
+            Those five are read through columns, which do not answer the
+            same question — `status=stable` matches a document that says
+            nothing, since OKF's default is stable, and `fm.status` never
+            would. Use `type`, `status`, `tag`, `source` and
+            `sort=stale_after` for them.
           schema: { type: string }
         - name: rejected
           in: query
@@ -501,6 +510,15 @@ paths:
             comparisons: ranges and boolean expressions are the doorway
             to a query language, and what ochakai returns is knowledge
             rather than rows.
+
+            The prefix carries the keys ochakai does not name, and only
+            those: `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+            `fm.stale_after` are refused with 400 (design doc 0047).
+            Those five are read through columns, which do not answer the
+            same question — `status=stable` matches a document that says
+            nothing, since OKF's default is stable, and `fm.status` never
+            would. Use `type`, `status`, `tag`, `source` and
+            `sort=stale_after` for them.
           schema: { type: string }
         - name: tag
           in: query

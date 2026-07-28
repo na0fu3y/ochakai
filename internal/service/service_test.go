@@ -574,7 +574,7 @@ func TestRecommendedTypesAreWritable(t *testing.T) {
 // 0041 §2.4): NFC, no trailing slash. The empty scope is the root, which
 // narrows nothing, so it drops out rather than becoming an error or —
 // worse — a condition matching nothing.
-func TestScopedFilterNormalizesPaths(t *testing.T) {
+func TestCheckedFilterNormalizesPaths(t *testing.T) {
 	nfd := "データ/売上" // デ decomposed, as macOS hands paths back
 	nfc := domain.Normalize(nfd)
 	if nfd == nfc {
@@ -592,12 +592,12 @@ func TestScopedFilterNormalizesPaths(t *testing.T) {
 		{"several scopes survive in order", []string{"teams/growth", "company"}, []string{"teams/growth", "company"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := scopedFilter(store.Filter{Prefixes: tc.in})
+			got, err := checkedFilter(store.Filter{Prefixes: tc.in})
 			if err != nil {
-				t.Fatalf("scopedFilter(%q): %v", tc.in, err)
+				t.Fatalf("checkedFilter(%q): %v", tc.in, err)
 			}
 			if !reflect.DeepEqual(got.Prefixes, tc.want) {
-				t.Errorf("scopedFilter(%q) = %q, want %q", tc.in, got.Prefixes, tc.want)
+				t.Errorf("checkedFilter(%q) = %q, want %q", tc.in, got.Prefixes, tc.want)
 			}
 		})
 	}
@@ -606,25 +606,58 @@ func TestScopedFilterNormalizesPaths(t *testing.T) {
 // A scope that could not lead an id is a client error, not something to
 // quietly ignore: a misspelling that returned the whole knowledge base
 // would read as "this scope holds everything".
-func TestScopedFilterRejectsImpossiblePaths(t *testing.T) {
+func TestCheckedFilterRejectsImpossiblePaths(t *testing.T) {
 	for _, bad := range []string{"teams//growth", "//", "teams/.hidden", "teams/g\x00rowth"} {
 		var invalid *InvalidInputError
-		if _, err := scopedFilter(store.Filter{Prefixes: []string{bad}}); !errors.As(err, &invalid) {
-			t.Errorf("scopedFilter(%q) error = %v, want an InvalidInputError", bad, err)
+		if _, err := checkedFilter(store.Filter{Prefixes: []string{bad}}); !errors.As(err, &invalid) {
+			t.Errorf("checkedFilter(%q) error = %v, want an InvalidInputError", bad, err)
 		}
 	}
 	// A space is not a mistake. Ids are file paths with no prescribed
 	// character set (design doc 0019), so a directory named "sales team"
 	// is addressable and must be scopeable.
-	if got, err := scopedFilter(store.Filter{Prefixes: []string{"teams/sales team"}}); err != nil {
-		t.Errorf("scopedFilter with a space in a segment: %v", err)
+	if got, err := checkedFilter(store.Filter{Prefixes: []string{"teams/sales team"}}); err != nil {
+		t.Errorf("checkedFilter with a space in a segment: %v", err)
 	} else if !reflect.DeepEqual(got.Prefixes, []string{"teams/sales team"}) {
 		t.Errorf("scope with a space = %q", got.Prefixes)
 	}
 	// A filter with no scopes at all is untouched — the ordinary case
 	// must not pay for the check.
-	f, err := scopedFilter(store.Filter{Tags: []string{"core"}})
+	f, err := checkedFilter(store.Filter{Tags: []string{"core"}})
 	if err != nil || f.Prefixes != nil {
 		t.Errorf("unscoped filter = %+v, %v; want it unchanged", f, err)
+	}
+}
+
+// The "fm." prefix carries the keys ochakai does not name, and only
+// those (design doc 0047). A key with a column behind it answers a
+// different question through the column than through the jsonb path —
+// `status=stable` matches a document that says nothing, `fm.status`
+// never does — and the caller cannot see which one they asked, so the
+// spelling that would be a coin toss is refused instead.
+func TestCheckedFilterRefusesFrontmatterKeysWithAFilter(t *testing.T) {
+	for _, key := range []string{"type", "status", "tags", "sources", "stale_after"} {
+		var invalid *InvalidInputError
+		_, err := checkedFilter(store.Filter{Frontmatter: map[string]string{key: "x"}})
+		if !errors.As(err, &invalid) {
+			t.Errorf("fm.%s error = %v, want an InvalidInputError", key, err)
+			continue
+		}
+		// The refusal is only useful if it names the filter to use, so
+		// the caller's next request is the right one.
+		if !strings.Contains(err.Error(), namedFilter[key]) {
+			t.Errorf("fm.%s error = %q, want it to name %q", key, err, namedFilter[key])
+		}
+	}
+	// A key nobody named is the whole point of the prefix, and passes
+	// through untouched — including one that merely resembles a named
+	// filter, since a producer may have written it.
+	for _, key := range []string{"owner", "question", "tag", "source", "status_note", "Status"} {
+		f, err := checkedFilter(store.Filter{Frontmatter: map[string]string{key: "x"}})
+		if err != nil {
+			t.Errorf("fm.%s: %v, want it answered", key, err)
+		} else if f.Frontmatter[key] != "x" {
+			t.Errorf("fm.%s was dropped from the filter", key)
+		}
 	}
 }

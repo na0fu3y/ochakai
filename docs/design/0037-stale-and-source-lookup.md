@@ -5,7 +5,10 @@ Status: Accepted(2026-07-27)。[0036](0036-okf-schema-first.md) §5 の 2 項目
 [0025](0025-closing-the-loop.md) にフィードを 1 つ足す(性質が異なるので §3.1 で
 区別を明示する)。実装は同 PR、0.14.0 で出る。
 [0046](0046-bundle-address-space.md) §3.11 が `source` フィルタを frontmatter の
-jsonb 上の containment に置き換える(引けるという決定は不変)
+jsonb 上の containment に置き換える(引けるという決定は不変)—
+その置き換えは [0047](0047-fm-carries-unnamed-keys.md) が取り消した。
+`source=` と `sort=stale_after` は列のまま残り、`fm.sources` /
+`fm.stale_after` は 400 で拒否される
 Date: 2026-07-27
 
 ## 1. 目的
