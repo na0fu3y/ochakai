@@ -160,7 +160,7 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 			"reviving, create_knowledge a draft at a different id that says why."
 	default:
 		return fmt.Errorf("%w: %s is a live %s entry. Nobody has ruled on it: "+
-			"update_knowledge replaces it in place.", err, id, k.Status)
+			"update_knowledge replaces it in place", err, id, k.Status)
 	}
 	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, ruling, instead)
 }
