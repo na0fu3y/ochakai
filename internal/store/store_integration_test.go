@@ -65,7 +65,7 @@ func TestIntegration(t *testing.T) {
 
 	k := &domain.Knowledge{
 		Type: domain.TypeMetrics, ID: "it-revenue", Title: "売上",
-		Description: "統合テスト用", Status: domain.StatusVerified,
+		Description: "統合テスト用", Status: domain.StatusStable,
 		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
 	if err := s.Create(ctx, k, false); err != nil {
@@ -86,7 +86,7 @@ func TestIntegration(t *testing.T) {
 	// The joined vector query must not have ambiguous column references
 	// (knowledge_embedding shares type/id/updated_at with knowledge).
 	vec, err := s.SearchVector(ctx, []float32{1, 0, 0, 0}, "test-model", Filter{
-		Types: []domain.Type{domain.TypeMetrics}, Statuses: []domain.Status{domain.StatusVerified},
+		Types: []domain.Type{domain.TypeMetrics}, Statuses: []domain.Status{domain.StatusStable},
 	}, 20)
 	if err != nil {
 		t.Fatalf("SearchVector: %v", err)
@@ -95,26 +95,29 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("vector search wrong result (score %v): %+v", score, vec)
 	}
 
-	// Rejected entries: provenance round-trips, and search excludes them
-	// unless the status filter asks for them.
-	rejectedAt := time.Now().UTC().Truncate(time.Second)
+	// Rejected entries: the ruling round-trips, and search excludes them
+	// unless asked for. Rejecting is its own call — it is a ruling, not a
+	// field of the document (design doc 0043 §3.3).
 	rej := &domain.Knowledge{
 		Type: domain.TypeMetrics, ID: "it-revenue-dup", Title: "売上(重複)",
-		Description: "統合テスト用", Status: domain.StatusRejected,
-		StatusNote: "it-revenue と重複",
-		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
-		RejectedBy: &domain.Actor{Kind: "human", Name: "test"}, RejectedAt: &rejectedAt,
+		Description: "統合テスト用", Status: domain.StatusDraft,
+		CreatedBy: domain.Actor{Kind: "process", Name: "claude-code"},
 	}
 	if err := s.Create(ctx, rej, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reject(ctx, rej.ID, domain.Actor{Kind: "human", Name: "test"}, "it-revenue と重複"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Get(ctx, rej.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != domain.StatusRejected || got.StatusNote != "it-revenue と重複" ||
-		got.RejectedBy == nil || got.RejectedBy.Name != "test" || got.RejectedAt == nil {
-		t.Errorf("rejection fields did not round-trip: %+v", got)
+	// The lifecycle value is untouched: a rejection is a judgment about
+	// the entry, not a stage of it.
+	if got.Status != domain.StatusDraft || got.Rejection == nil ||
+		got.Rejection.By.Name != "test" || got.Rejection.Note != "it-revenue と重複" {
+		t.Errorf("the ruling did not round-trip: %+v", got.Rejection)
 	}
 	def, err := s.SearchLexical(ctx, "売上", Filter{}, 10)
 	if err != nil {
@@ -125,7 +128,8 @@ func TestIntegration(t *testing.T) {
 			t.Error("default search must exclude rejected entries")
 		}
 	}
-	only, err := s.SearchLexical(ctx, "売上", Filter{Statuses: []domain.Status{domain.StatusRejected}}, 10)
+	onlyRejected := true
+	only, err := s.SearchLexical(ctx, "売上", Filter{Rejected: &onlyRejected}, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +144,7 @@ func TestIntegration(t *testing.T) {
 	// canonicalizes anyway.
 	free := &domain.Knowledge{
 		Type: "Data Contract", ID: "it-contract", Title: "売上契約",
-		Description: "統合テスト用", Status: domain.StatusVerified,
+		Description: "統合テスト用", Status: domain.StatusStable,
 		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
 	if err := s.Create(ctx, free, false); err != nil {
@@ -227,14 +231,14 @@ func TestIntegration(t *testing.T) {
 	oldAt := time.Now().UTC().Add(-365 * 24 * time.Hour)
 	older := &domain.Knowledge{
 		Type: domain.TypeComputations, ID: "it-old-query", Title: "古い検証済みクエリ",
-		Status:     domain.StatusVerified,
-		CreatedBy:  domain.Actor{Kind: "human", Name: "test"},
-		VerifiedBy: &domain.Actor{Kind: "human", Name: "test"}, VerifiedAt: &oldAt,
+		Status:    domain.StatusStable,
+		CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
 	if err := s.Create(ctx, older, false); err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.ListByVerifiedAt(ctx, Filter{Statuses: []domain.Status{domain.StatusVerified}}, 100)
+	backdateVerification(t, ctx, s, older.ID, oldAt)
+	list, err := s.ListByVerifiedAt(ctx, Filter{Statuses: []domain.Status{domain.StatusStable}}, 100)
 	if err != nil {
 		t.Fatalf("ListByVerifiedAt: %v", err)
 	}
@@ -317,19 +321,18 @@ func TestIntegration(t *testing.T) {
 			Type: domain.TypeComputations, ID: id, Title: title, Tags: []string{failTag},
 			Status: status, CreatedBy: domain.Actor{Kind: "agent", Name: "claude-code"},
 		}
-		if verified {
-			k.VerifiedBy = &domain.Actor{Kind: "human", Name: "test"}
-			k.VerifiedAt = &verifiedAt
-		}
 		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
+		if verified {
+			backdateVerification(t, ctx, s, k.ID, verifiedAt)
+		}
 		return k
 	}
-	loud := newFail("it-fail-loud", "3回失敗した検証済み", domain.StatusVerified, true)
-	quiet := newFail("it-fail-quiet", "1回失敗した検証済み", domain.StatusVerified, true)
+	loud := newFail("it-fail-loud", "3回失敗した検証済み", domain.StatusStable, true)
+	quiet := newFail("it-fail-quiet", "1回失敗した検証済み", domain.StatusStable, true)
 	draftFail := newFail("it-fail-draft", "1回失敗した草案", domain.StatusDraft, false)
-	clean := newFail("it-fail-clean", "失敗のない検証済み", domain.StatusVerified, true)
+	clean := newFail("it-fail-clean", "失敗のない検証済み", domain.StatusStable, true)
 	for i := 0; i < 3; i++ {
 		if err := s.RecordOutcome(ctx, domain.EventFailed, actor, loud.ID, ""); err != nil {
 			t.Fatalf("RecordOutcome: %v", err)
@@ -720,7 +723,7 @@ func TestIntegrationMove(t *testing.T) {
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	entries := []*domain.Knowledge{
-		{Type: domain.TypeMetrics, ID: "it-move-src/metric", Title: "target", Status: domain.StatusVerified, CreatedBy: actor},
+		{Type: domain.TypeMetrics, ID: "it-move-src/metric", Title: "target", Status: domain.StatusStable, CreatedBy: actor},
 		{Type: domain.TypeInsights, ID: "it-move-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
 			Body:  "Explains [the metric](/it-move-src/metric.md).",
 			Links: []domain.Link{{Target: "it-move-src/metric", Text: "the metric"}}},
@@ -948,10 +951,12 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	// Rejected entries are live: the memory of no is not overwritable.
 	rejected := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: "it-revive-no", Title: "rejected",
-		Status: domain.StatusRejected, StatusNote: "duplicate",
-		CreatedBy: actor, RejectedBy: &actor,
+		Status: domain.StatusDraft, CreatedBy: actor,
 	}
 	if err := s.Create(ctx, rejected, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reject(ctx, rejected.ID, actor, "duplicate"); err != nil {
 		t.Fatal(err)
 	}
 	again := &domain.Knowledge{
@@ -1557,11 +1562,13 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 		t.Errorf("rendered = %q, want %q", k.CreatedBy.String(), want)
 	}
 
-	// Verification carries its own delegation, independent of creation.
+	// A verification carries its own delegation, independent of creation.
 	verifier := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
-	k.Status = domain.StatusVerified
-	k.VerifiedBy = &verifier
+	k.Status = domain.StatusStable
 	if err := s.Update(ctx, k, verifier, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Verify(ctx, id, verifier); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Get(ctx, id)
@@ -1571,8 +1578,9 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 	if got.CreatedBy.Via != via {
 		t.Errorf("update dropped created_by_via: %+v", got.CreatedBy)
 	}
-	if got.VerifiedBy == nil || got.VerifiedBy.Via != "" {
-		t.Errorf("verified_by must carry its own (absent) delegation: %+v", got.VerifiedBy)
+	last := got.LastVerified()
+	if last == nil || last.By.Via != "" {
+		t.Errorf("a verification must carry its own (absent) delegation: %+v", last)
 	}
 
 	revs, err := s.ListRevisions(ctx, id, 10)
@@ -1741,7 +1749,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	const id = "it-verify-feed"
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"knowledge", "knowledge_revision", "knowledge_verification", "knowledge_rejection"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id); err != nil {
 			t.Fatal(err)
 		}
@@ -1763,10 +1771,15 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
-	if verified.Status != domain.StatusVerified || verified.VerifiedAt == nil {
-		t.Fatalf("Verify did not promote: status=%q verified_at=%v", verified.Status, verified.VerifiedAt)
+	// The ledger gained a row; the document did not move. Confirming an
+	// entry and publishing it are different acts (design doc 0043 §3.2).
+	if len(verified.Verifications) != 1 {
+		t.Fatalf("Verify did not append: %+v", verified.Verifications)
 	}
-	first := *verified.VerifiedAt
+	if verified.Status != domain.StatusDraft {
+		t.Errorf("Verify moved the lifecycle status to %q; it must leave the document alone", verified.Status)
+	}
+	first := verified.LastVerified().At
 
 	// An agent runs the query, gets a wrong number, and says so. The entry
 	// is now in the re-verification feed.
@@ -1799,8 +1812,13 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-Verify: %v", err)
 	}
-	if again.VerifiedAt == nil || !again.VerifiedAt.After(first) {
-		t.Fatalf("re-verification did not refresh verified_at: %v -> %v", first, again.VerifiedAt)
+	// Re-verifying appends rather than overwriting: the record answers
+	// "how often, and by whom", not just "when last".
+	if len(again.Verifications) != 2 {
+		t.Fatalf("re-verification replaced the ledger instead of appending: %+v", again.Verifications)
+	}
+	if !again.LastVerified().At.After(first) {
+		t.Fatalf("re-verification did not move the newest verification: %v -> %v", first, again.LastVerified().At)
 	}
 	if inFeed() {
 		t.Error("an entry verified after its last failure report must leave the feed")
@@ -2104,13 +2122,18 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
 
-	tombstone := func(t *testing.T, id string, status domain.Status) {
+	// Two of the three rulings are ledgers now, so the guard has to read
+	// them: a rejected-then-deleted entry is a draft tombstone as far as
+	// the status column knows (design doc 0043 §3.3), and a guard that
+	// only compared statuses would quietly stop protecting it.
+	tombstone := func(t *testing.T, id string, rule func(id string)) {
 		t.Helper()
 		k := &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: id,
-			Status: status, StatusNote: "why", CreatedBy: actor}
+			Status: domain.StatusDraft, CreatedBy: actor}
 		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
+		rule(id)
 		if err := s.SoftDelete(ctx, id, actor); err != nil {
 			t.Fatal(err)
 		}
@@ -2120,10 +2143,34 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 			Status: domain.StatusDraft, CreatedBy: actor}
 	}
 
-	for _, status := range domain.CuratedStatuses {
-		t.Run("guarded create refuses a "+string(status)+" tombstone", func(t *testing.T) {
-			id := fmt.Sprintf("it-tomb-%s-%d", status, time.Now().UnixNano())
-			tombstone(t, id, status)
+	for _, tc := range []struct {
+		ruling domain.Ruling
+		rule   func(id string)
+	}{
+		{domain.RulingVerified, func(id string) {
+			if _, err := s.Verify(ctx, id, actor); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{domain.RulingRejected, func(id string) {
+			if _, err := s.Reject(ctx, id, actor, "why"); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{domain.RulingDeprecated, func(id string) {
+			k, err := s.Get(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			k.Status, k.StatusNote = domain.StatusDeprecated, "why"
+			if err := s.Update(ctx, k, actor, nil); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run("guarded create refuses a "+string(tc.ruling)+" tombstone", func(t *testing.T) {
+			id := fmt.Sprintf("it-tomb-%s-%d", tc.ruling, time.Now().UnixNano())
+			tombstone(t, id, tc.rule)
 			if err := s.Create(ctx, revive(id), true); !errors.Is(err, ErrCuratedTombstone) {
 				t.Fatalf("create = %v, want ErrCuratedTombstone", err)
 			}
@@ -2132,19 +2179,28 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if old.Status != status || old.StatusNote != "why" {
-				t.Errorf("tombstone = %s/%q, want %s/\"why\"", old.Status, old.StatusNote, status)
+			if old.Ruling() != tc.ruling {
+				t.Errorf("tombstone ruling = %q, want %q", old.Ruling(), tc.ruling)
 			}
 			// The human surfaces still revive it.
 			if err := s.Create(ctx, revive(id), false); err != nil {
 				t.Errorf("unguarded create must still revive: %v", err)
+			}
+			// A create is a new entry, so the old rulings do not carry
+			// over onto content nobody judged.
+			back, err := s.Get(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if back.Curated() {
+				t.Errorf("a revived entry kept a ruling: %+v", back.Ruling())
 			}
 		})
 	}
 
 	t.Run("guarded create still revives a draft tombstone", func(t *testing.T) {
 		id := fmt.Sprintf("it-tomb-draft-%d", time.Now().UnixNano())
-		tombstone(t, id, domain.StatusDraft)
+		tombstone(t, id, func(string) {})
 		if err := s.Create(ctx, revive(id), true); err != nil {
 			t.Fatalf("draft tombstone must stay revivable: %v", err)
 		}
@@ -2377,5 +2433,77 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	}
 	if want := []string{quoted}; !slices.Equal(ids(hits), want) {
 		t.Errorf("quoted resource lookup = %v, want %v", ids(hits), want)
+	}
+}
+
+// backdateVerification writes a verification at an arbitrary time. Verify
+// stamps the database clock on purpose (the failure feed compares the two
+// and they must not disagree), so a feed test that needs an old or a
+// staggered verification reaches past it.
+func backdateVerification(t *testing.T, ctx context.Context, s *Store, id string, at time.Time) {
+	t.Helper()
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO knowledge_verification (id, seq, by_kind, by_name, at)
+		 VALUES ($1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
+		         'human', 'test', $2)`, id, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A move carries the rulings with the id (design doc 0021 moves an
+// entry's whole record), and a purge takes them with everything else —
+// otherwise a freed id would hand its next occupant a verification of
+// content nobody verified.
+func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+	from := fmt.Sprintf("it-ledger-move-%d", time.Now().UnixNano())
+	to := from + "-moved"
+
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: from, Title: from, Status: domain.StatusDraft, CreatedBy: actor,
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Verify(ctx, from, actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reject(ctx, from, actor, "on second thoughts"); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.Move(ctx, from, to, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moved.Verifications) != 1 || moved.Rejection == nil {
+		t.Errorf("move dropped the ledgers: %+v %+v", moved.Verifications, moved.Rejection)
+	}
+
+	if err := s.SoftDelete(ctx, to, actor); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Purge(ctx, to, actor); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"knowledge_verification", "knowledge_rejection"} {
+		var n int
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM `+table+` WHERE id = $1`, to).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("purge left %d row(s) in %s", n, table)
+		}
 	}
 }

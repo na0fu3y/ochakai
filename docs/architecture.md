@@ -140,7 +140,7 @@ own observation, not content a caller wrote.
 
 There is one narrow exception to "no authorization", and it is
 deliberately framed as not being one: MCP refuses to overwrite, delete,
-or change the status of an entry a human has curated — `verified`,
+or change an entry a human has ruled on — verified,
 `rejected`, or `deprecated` — and refuses to revive such an entry's
 soft-deleted tombstone with a create. The reasoning is visibility rather
 than permission: a silently replaced verified golden query is discovered

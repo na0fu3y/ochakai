@@ -24,15 +24,28 @@ import (
 // notes carries what the parse decided, for the caller to report: nothing
 // here rejects a document over a field value, per SPEC §11, but a
 // reinterpreted field should not be silent either.
-func Parse(doc []byte) (k *domain.Knowledge, notes []string, err error) {
-	k, rawType, notes, err := parseDoc(doc)
+func Parse(doc []byte) (d *Doc, notes []string, err error) {
+	d, rawType, notes, err := parseDoc(doc)
 	if err != nil {
 		return nil, nil, err
 	}
-	if k.Type == "" {
+	if d.Type == "" {
 		return nil, nil, fmt.Errorf(`unusable type %q (one line, no "/", up to 128 bytes; recommended: %s)`, rawType, domain.TypesHint())
 	}
-	return k, notes, nil
+	return d, notes, nil
+}
+
+// Doc is one parsed OKF document: the knowledge it carries, plus the one
+// thing about the trust family an importer acts on.
+type Doc struct {
+	domain.Knowledge
+	// Verified reports that the document carried a verified key — or, in a
+	// v0.1 document, verified_at. Under SPEC §5.3 the presence of that key
+	// is the entire trust signal, and it is all that is read: who verified
+	// and when are this instance's observations, never a document's claim
+	// (design docs 0009, 0036 §2.2). An importer turns a true here into a
+	// verification of its own, by whoever ran the import.
+	Verified bool
 }
 
 // yamlScalar renders decoded YAML timestamps back as text, recursing into
@@ -89,7 +102,7 @@ func yamlScalar(v any) any {
 // present at all: under SPEC §5.3 that, not the status, is what says a
 // concept was confirmed, so it decides how "stable" lands here (design doc
 // 0036 §3.4). Its actors and timestamps are still not read.
-func parseDoc(doc []byte) (*domain.Knowledge, string, []string, error) {
+func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	s := strings.TrimPrefix(string(doc), "\ufeff")
 	// OKF specifies UTF-8 markdown but not line endings; normalize CRLF so
 	// the delimiter scan below works on bundles authored on Windows.
@@ -204,22 +217,15 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, []string, error) {
 		// A v0.1 document says the same thing with the flat keys.
 		_, hasVerified = raw["verified_at"]
 	}
-	rawStatus := strings.TrimSpace(fm.status)
-	status, known := domain.StatusFromOKF(rawStatus, hasVerified)
-	switch {
-	case !known:
-		notes = append(notes, fmt.Sprintf("status %q is not an OKF lifecycle value (draft, stable, deprecated); read as %s", fm.status, status))
-	case rawStatus == domain.OKFStatusStable && !hasVerified:
-		// Refusing to read stable as verified is deliberate: SPEC §5.3
-		// puts the trust tier in `verified`, and stable only means
-		// consumable (design doc 0036 §3.4). But ochakai has no status
-		// for "stable and unverified", so the entry lands as a draft and
-		// exports as one — the producer's lifecycle value does not
-		// survive the round trip. That is a reinterpretation, and 0036
-		// §3.4's own rule is that a reinterpretation is never silent.
-		notes = append(notes, "status \"stable\" with no verified entry: read as draft, because "+
-			"OKF puts human review in `verified` (SPEC §5.3) and stable alone does not assert it. "+
-			"The entry keeps its content; if it was reviewed, add a verified entry naming who checked it")
+	// The lifecycle value arrives unaltered: ochakai's vocabulary is OKF's
+	// (design doc 0043 §3.2), so a producer's stable stays stable whether
+	// or not anyone confirmed it. The trust signal rides beside it in
+	// Doc.Verified rather than colliding with it, which is what forced the
+	// old reading of an unconfirmed stable as a draft.
+	status, known := domain.StatusFromOKF(strings.TrimSpace(fm.status))
+	if !known {
+		notes = append(notes, fmt.Sprintf("status %q is not an OKF lifecycle value (%s); read as %s",
+			fm.status, statusesHint(), status))
 	}
 	if !domain.ValidStaleAfter(fm.staleAfter) {
 		notes = append(notes, fmt.Sprintf("stale_after %q is not a YYYY-MM-DD date; dropped", fm.staleAfter))
@@ -244,7 +250,7 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, []string, error) {
 		notes = append(notes, "an Attested Computation without a runtime cannot be executed by a consumer (SPEC §10.2)")
 	}
 
-	return &domain.Knowledge{
+	return &Doc{Verified: hasVerified, Knowledge: domain.Knowledge{
 		Type:        typ,
 		ID:          fm.id,
 		Title:       fm.title,
@@ -263,7 +269,17 @@ func parseDoc(doc []byte) (*domain.Knowledge, string, []string, error) {
 		Attester:    att,
 		Attrs:       attrs,
 		Body:        strings.TrimSpace(body),
-	}, fm.typ, notes, nil
+	}}, fm.typ, notes, nil
+}
+
+// statusesHint renders the lifecycle vocabulary for a note, from the one
+// place it is spelled.
+func statusesHint() string {
+	names := make([]string, len(domain.Statuses))
+	for i, st := range domain.Statuses {
+		names[i] = string(st)
+	}
+	return strings.Join(names, ", ")
 }
 
 // The v0.2 family readers. All of them follow the same rule: never reject

@@ -136,6 +136,13 @@ type SearchParams struct {
 	// (design doc 0041). Repeatable and OR-ed, matched on segment
 	// boundaries. Composes with Query and with any Sort.
 	Prefixes []string
+	// Verified and Rejected ask about the instance ledgers rather than the
+	// document (design doc 0043 §§3.2-3.3), independently of Statuses.
+	// Both are tri-state: nil leaves the question unasked. Nil Rejected
+	// still hides rejected entries — asking for them is opt-in, which is
+	// how an agent checks whether a proposal was already turned down.
+	Verified *bool
+	Rejected *bool
 	Limit    int
 }
 
@@ -161,6 +168,12 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	}
 	for _, pre := range p.Prefixes {
 		q.Add("prefix", pre)
+	}
+	if p.Verified != nil {
+		q.Set("verified", strconv.FormatBool(*p.Verified))
+	}
+	if p.Rejected != nil {
+		q.Set("rejected", strconv.FormatBool(*p.Rejected))
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
@@ -195,6 +208,10 @@ type ContextParams struct {
 	Statuses []string
 	Tags     []string
 	Prefixes []string
+	// Verified narrows to confirmed (or unconfirmed) entries, as on
+	// SearchParams. Rejected has no counterpart here: a context pack never
+	// carries knowledge somebody turned down.
+	Verified *bool
 	Limit    int
 	MinScore float64
 	// Budget, when positive, caps the response bytes server-side: entries
@@ -222,6 +239,9 @@ func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, 
 	}
 	for _, pre := range p.Prefixes {
 		q.Add("prefix", pre)
+	}
+	if p.Verified != nil {
+		q.Set("verified", strconv.FormatBool(*p.Verified))
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
@@ -343,14 +363,39 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
-// Verify records a verification against the entry as it stands (POST
-// /api/v1/verify/{id}): the caller becomes verified_by and verified_at is
-// stamped now. It promotes a draft and re-affirms an already-verified
-// entry alike — the second is what takes an entry out of the review feeds
-// (design doc 0025 §6), and Update cannot do it.
+// Verify appends a verification against the entry as it stands (POST
+// /api/v1/verify/{id}). The first confirmation and the tenth re-check are
+// the same call — the re-check is what takes an entry out of the review
+// feeds (design doc 0025 §6), and Update cannot do it. It does not touch
+// the document, so the entry's status and ETag do not move.
 func (c *Client) Verify(ctx context.Context, id string) (*domain.Knowledge, error) {
 	var k domain.Knowledge
 	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, nil, &k); err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
+// Reject records that the entry was turned down, with an optional reason
+// (POST /api/v1/reject/{id}). Like Verify it is a ruling, not an edit:
+// the document keeps its lifecycle status, and the entry drops out of
+// searches that did not ask for rejected ones (design doc 0043 §3.3).
+func (c *Client) Reject(ctx context.Context, id, note string) (*domain.Knowledge, error) {
+	var k domain.Knowledge
+	body := struct {
+		Note string `json:"note"`
+	}{Note: note}
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/reject/", id), nil, body, &k); err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
+// LiftRejection withdraws a ruling (DELETE /api/v1/reject/{id}). A 404
+// when the entry carries no rejection.
+func (c *Client) LiftRejection(ctx context.Context, id string) (*domain.Knowledge, error) {
+	var k domain.Knowledge
+	if err := c.doJSON(ctx, http.MethodDelete, escapedPath("/api/v1/reject/", id), nil, nil, &k); err != nil {
 		return nil, err
 	}
 	return &k, nil

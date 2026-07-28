@@ -114,7 +114,7 @@ func TestParseFreeTypes(t *testing.T) {
 		t.Errorf("spelled type: got type=%q attrs=%v", k.Type, k.Attrs)
 	}
 
-	doc, err := Document(k)
+	doc, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ Body.
 		t.Errorf("created_by must come from authentication, not the payload: %v", k.CreatedBy)
 	}
 
-	doc, err := Document(k)
+	doc, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ Body.
 }
 
 func TestParseStatusNoteRoundTrip(t *testing.T) {
-	k, _, err := Parse([]byte("---\ntype: insight\nid: dup\ntitle: 重複\nstatus: rejected\nstatus_note: 既存と重複\n---\n"))
+	k, _, err := Parse([]byte("---\ntype: insight\nid: dup\ntitle: 重複\nstatus: deprecated\nstatus_note: 既存と重複\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,49 +237,54 @@ func TestParseStatusMapping(t *testing.T) {
 	for _, tc := range []struct {
 		name, frontmatter string
 		want              domain.Status
+		wantVerified      bool
 		wantNote          bool
 	}{
-		{"stable with a verification is verified", "status: stable\n" + verified, domain.StatusVerified, false},
-		// Reported, unlike the two rows around it: the value is understood,
-		// but its meaning is not preserved. ochakai has no status for
-		// "stable and unverified", so the entry lands as a draft and
-		// exports as one — a lifecycle demotion the producer never wrote.
-		// 0036 §3.4 says a reinterpretation is never silent.
-		{"stable alone is not a review, and says so", "status: stable\n", domain.StatusDraft, true},
-		{"a bare verified mapping counts too (SPEC §5.2)", "status: stable\nverified: { by: human:na0, at: 2026-07-01T00:00:00Z }\n", domain.StatusVerified, false},
-		{"draft stays draft", "status: draft\n", domain.StatusDraft, false},
-		{"deprecated stays deprecated", "status: deprecated\n", domain.StatusDeprecated, false},
-		{"an absent status stays unset for the write path to default", "", "", false},
-		{"an absent status with a verification is a confirmation", verified, domain.StatusVerified, false},
-		// The values ochakai wrote before v0.2 are unrecognized now: OKF's
-		// vocabulary is the three above (design doc 0036 §3.5). A 0.12
-		// bundle still imports its verified entries as verified, but
-		// through the verified key SPEC §5.3 makes authoritative, not
-		// through an ochakai-only status alias.
-		{"ochakai 0.12 wrote status: verified", "status: verified\n" + verified, domain.StatusVerified, true},
-		{"a legacy status with no verification is a draft", "status: verified\n", domain.StatusDraft, true},
-		{"ochakai 0.12 wrote status: rejected", "status: rejected\n", domain.StatusDraft, true},
-		{"an unknown value is a draft, not a rejected document", "status: retired\n", domain.StatusDraft, true},
+		{"stable with a verification", "status: stable\n" + verified, domain.StatusStable, true, false},
+		// The row that used to be reported. ochakai had no state for
+		// "ready for consumption, unconfirmed", so this landed as a draft
+		// — a lifecycle demotion the producer never wrote, which 0036
+		// §3.4 required a note about. The ledger holds the state now, so
+		// the value arrives unaltered and there is nothing to report
+		// (design doc 0043 §3.2).
+		{"stable alone keeps its lifecycle value", "status: stable\n", domain.StatusStable, false, false},
+		{"a bare verified mapping counts too (SPEC §5.2)", "status: stable\nverified: { by: human:na0, at: 2026-07-01T00:00:00Z }\n", domain.StatusStable, true, false},
+		{"draft stays draft", "status: draft\n", domain.StatusDraft, false, false},
+		{"a verified draft is both", "status: draft\n" + verified, domain.StatusDraft, true, false},
+		{"deprecated stays deprecated", "status: deprecated\n", domain.StatusDeprecated, false, false},
+		{"an absent status stays unset for the write path to default", "", "", false, false},
+		{"an absent status with a verification stays unset too", verified, "", true, false},
+		// The values ochakai wrote before 0.16 are unrecognized: OKF's
+		// vocabulary is the three above. A 0.12 bundle's verified entries
+		// still import as verified, but through the verified key SPEC
+		// §5.3 makes authoritative, not through an ochakai-only alias.
+		{"ochakai 0.12 wrote status: verified", "status: verified\n" + verified, domain.StatusDraft, true, true},
+		{"a legacy status with no verification is an unverified draft", "status: verified\n", domain.StatusDraft, false, true},
+		{"ochakai 0.12 wrote status: rejected", "status: rejected\n", domain.StatusDraft, false, true},
+		{"an unknown value is a draft, not a rejected document", "status: retired\n", domain.StatusDraft, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			k, notes, err := Parse([]byte("---\ntype: Insight\n" + tc.frontmatter + "---\n"))
+			d, notes, err := Parse([]byte("---\ntype: Insight\n" + tc.frontmatter + "---\n"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if k.Status != tc.want {
-				t.Errorf("status = %q, want %q", k.Status, tc.want)
+			if d.Status != tc.want {
+				t.Errorf("status = %q, want %q", d.Status, tc.want)
+			}
+			if d.Verified != tc.wantVerified {
+				t.Errorf("verified = %v, want %v", d.Verified, tc.wantVerified)
 			}
 			if got := len(notes) > 0; got != tc.wantNote {
 				t.Errorf("notes = %v, want a note: %v", notes, tc.wantNote)
 			}
 			// The trust family is read for its presence only; the actors
 			// and times stay outside the payload (design doc 0009).
-			if k.VerifiedBy != nil || k.VerifiedAt != nil {
-				t.Errorf("a bundle must not set verification provenance: %v %v", k.VerifiedBy, k.VerifiedAt)
+			if len(d.Verifications) != 0 || d.Rejection != nil {
+				t.Errorf("a bundle must not set rulings: %v %v", d.Verifications, d.Rejection)
 			}
 			for _, key := range []string{"verified", "generated", "status"} {
-				if _, ok := k.Attrs[key]; ok {
-					t.Errorf("%s leaked into attrs: %v", key, k.Attrs)
+				if _, ok := d.Attrs[key]; ok {
+					t.Errorf("%s leaked into attrs: %v", key, d.Attrs)
 				}
 			}
 		})
@@ -305,13 +310,17 @@ Body.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Status != domain.StatusVerified {
-		t.Errorf("status = %q, want verified", k.Status)
+	// "verified" was never an OKF lifecycle value, so it reads as a draft
+	// — but verified_at is v0.1's spelling of the trust key, and SPEC
+	// §5.3 keeps the two signals independent, so the document still
+	// arrives confirmed.
+	if k.Status != domain.StatusDraft || !k.Verified {
+		t.Errorf("status = %q verified = %v", k.Status, k.Verified)
 	}
 	if len(k.Attrs) != 0 {
 		t.Errorf("v0.1 trust keys must not become attrs: %v", k.Attrs)
 	}
-	doc, err := Document(k)
+	doc, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +342,7 @@ func TestParseStaleAfter(t *testing.T) {
 	if _, ok := k.Attrs["stale_after"]; ok {
 		t.Errorf("stale_after is an envelope key, not an attr: %v", k.Attrs)
 	}
-	doc, err := Document(k)
+	doc, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +443,7 @@ dialect: standard-sql
 		t.Errorf("attrs = %v, want only the producer extension key", k.Attrs)
 	}
 
-	out, err := Document(k)
+	out, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,41 +536,37 @@ func TestDocumentDoesNotReExportShadowedEnvelopeAttrs(t *testing.T) {
 }
 
 // A foreign bundle that declares OKF's stable lifecycle without a
-// verification does not survive a round trip through ochakai: there is no
-// ochakai status for "stable and unverified", so it lands as a draft and
-// exports as a draft. Refusing to read stable as verified is deliberate
-// (SPEC §5.3 puts human review in `verified`), but the demotion of the
-// lifecycle value is a real loss, and this test exists so that it is a
-// known and reported one rather than a surprise. If ochakai ever gains
-// somewhere to keep the producer's lifecycle, this is the test that
-// should start failing.
-func TestStableWithoutVerificationIsDemotedButReported(t *testing.T) {
+// verification now survives the round trip intact. It did not until 0.16:
+// with confirmation held as a status, ochakai had nowhere to put "stable
+// and unverified", so the entry was demoted to a draft and re-exported as
+// one — a lifecycle value the producer never wrote. The predecessor of
+// this test asserted that demotion and said it should start failing if
+// ochakai ever gained somewhere to keep the producer's lifecycle. Design
+// doc 0043 §3.2 is that somewhere.
+func TestStableWithoutVerificationRoundTrips(t *testing.T) {
 	const in = "---\ntype: Metric\ntitle: Average order value\nstatus: stable\n---\n\nThe average revenue per order.\n"
-	k, notes, err := Parse([]byte(in))
+	d, notes, err := Parse([]byte(in))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Status != domain.StatusDraft {
-		t.Fatalf("status = %q, want draft", k.Status)
+	if d.Status != domain.StatusStable {
+		t.Fatalf("status = %q, want stable — the producer's lifecycle value", d.Status)
 	}
-	var reported bool
-	for _, n := range notes {
-		if strings.Contains(n, "stable") && strings.Contains(n, "draft") {
-			reported = true
-		}
+	if d.Verified {
+		t.Error("stable alone is not a review: SPEC §5.3 puts human review in `verified`")
 	}
-	if !reported {
-		t.Errorf("the demotion was silent; notes = %v", notes)
+	if len(notes) != 0 {
+		t.Errorf("nothing was reinterpreted, so there is nothing to report; notes = %v", notes)
 	}
 
-	out, err := Document(k)
+	out, err := Document(&d.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(out), "status: draft") {
-		t.Errorf("re-export should show the demotion plainly; got:\n%s", out)
+	if !strings.Contains(string(out), "status: stable") {
+		t.Errorf("re-export lost the producer's lifecycle value:\n%s", out)
 	}
-	if strings.Contains(string(out), "status: stable") {
-		t.Errorf("stable came back without a verification, which would assert a review nobody made:\n%s", out)
+	if strings.Contains(string(out), "verified:") {
+		t.Errorf("re-export must not assert a review nobody made:\n%s", out)
 	}
 }

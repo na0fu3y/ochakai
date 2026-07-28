@@ -164,15 +164,67 @@ type Filter struct {
 	// two calls would leave the caller merging two incomparable rankings.
 	// Values arrive normalized by the service — NFC, no trailing slash.
 	Prefixes []string
+
+	// Verified and Rejected ask about the instance ledgers rather than the
+	// document (design doc 0043 §§3.2-3.3). Both are tri-state: nil leaves
+	// the question unasked. Nil Rejected still hides rejected entries —
+	// the default is not "no constraint" but "not the ones we said no to".
+	Verified *bool
+	Rejected *bool
 }
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
 	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
-	verified_by_kind, verified_by_name, verified_by_via, verified_at,
-	rejected_by_kind, rejected_by_name, rejected_by_via, rejected_at,
 	links, attrs, body, created_at, updated_at`
+
+// ledgerCols is the two instance ledgers — verifications and the
+// rejection — read as JSON beside the entry's own columns (design doc
+// 0043 §§3.2-3.3). alias names the knowledge table in the surrounding
+// query, since some read it as "knowledge" and the ones that join give
+// it "k".
+//
+// They are correlated subqueries rather than joins so that no caller has
+// to remember them: every read path selects knowledgeSelect or
+// knowledgeSelectK, and an entry that arrives without its ledgers would
+// silently read as unverified — which is the one wrong answer that looks
+// like a valid one.
+func ledgerCols(alias string) string {
+	return `(SELECT jsonb_agg(jsonb_build_object(
+			'by', jsonb_build_object('kind', v.by_kind, 'name', v.by_name, 'via', v.by_via),
+			'at', v.at) ORDER BY v.seq)
+		FROM knowledge_verification v WHERE v.id = ` + alias + `.id),
+		(SELECT jsonb_build_object(
+			'by', jsonb_build_object('kind', r.by_kind, 'name', r.by_name, 'via', r.by_via),
+			'at', r.at, 'note', r.note)
+		FROM knowledge_rejection r WHERE r.id = ` + alias + `.id)`
+}
+
+// lastVerifiedAt is the newest verification's timestamp for the entry
+// aliased by alias, or NULL when it has never been verified. The feeds
+// that used to read a verified_at column read this instead.
+func lastVerifiedAt(alias string) string {
+	return `(SELECT max(v.at) FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
+}
+
+var (
+	// knowledgeSelect and knowledgeSelectK are what a read selects: the
+	// entry's columns plus its ledgers.
+	knowledgeSelect  = knowledgeCols + ", " + ledgerCols("knowledge")
+	knowledgeSelectK = knowledgeColsK + ", " + ledgerCols("k")
+)
+
+// notCurated is Knowledge.Curated() as a SQL predicate, for the guards
+// that must agree with it inside a transaction. alias names the knowledge
+// table. Curation is no longer a property of the status alone, so a guard
+// that only compared statuses would stop protecting a verified or
+// rejected entry the moment those became ledgers.
+func notCurated(alias string) string {
+	return alias + `.status <> 'deprecated'
+		AND NOT EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = ` + alias + `.id)
+		AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = ` + alias + `.id)`
+}
 
 // The SQL fragments that restate knowledgeCols are derived from it once,
 // so an envelope column is added by editing the list and knowledgeDest —
@@ -229,21 +281,17 @@ var (
 // after the scan. Row shapes with trailing columns (score, usage totals)
 // append their own destinations — the column list lives here once.
 func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
-	var verifiedKind, verifiedName, rejectedKind, rejectedName *string
-	var verifiedVia, rejectedVia string
 	var staleAfter *time.Time
 	var links, attrs []byte
 	var sources, usageWindow, parameters, executor, attester []byte
+	var verifications, rejection []byte
 	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote, &staleAfter,
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
 		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
-		&verifiedKind, &verifiedName, &verifiedVia, &k.VerifiedAt,
-		&rejectedKind, &rejectedName, &rejectedVia, &k.RejectedAt,
-		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt}
+		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt,
+		&verifications, &rejection}
 	finish = func() error {
-		k.VerifiedBy = actorFrom(verifiedKind, verifiedName, verifiedVia)
-		k.RejectedBy = actorFrom(rejectedKind, rejectedName, rejectedVia)
 		if staleAfter != nil {
 			k.StaleAfter = staleAfter.UTC().Format(domain.StaleAfterLayout)
 		}
@@ -257,6 +305,7 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 			{sources, &k.Sources}, {parameters, &k.Parameters},
 			{usageWindow, &k.UsageWindow}, {executor, &k.Executor}, {attester, &k.Attester},
 			{links, &k.Links}, {attrs, &k.Attrs},
+			{verifications, &k.Verifications}, {rejection, &k.Rejection},
 		} {
 			if len(d.raw) == 0 {
 				continue
@@ -324,12 +373,27 @@ func (s *Store) queryKnowledge(ctx context.Context, sql string, args ...any) ([]
 // getOne returns the single entry holding id on the live or the deleted
 // side of the row's lifetime, or ErrNotFound when that side is empty.
 func (s *Store) getOne(ctx context.Context, id string, deleted bool) (*domain.Knowledge, error) {
+	return s.getOneFrom(ctx, s.pool, id, deleted)
+}
+
+// getOneTx is getOne inside a transaction, for the ledger writes that
+// must read back what they just wrote before the commit.
+func (s *Store) getOneTx(ctx context.Context, tx pgx.Tx, id string, deleted bool) (*domain.Knowledge, error) {
+	return s.getOneFrom(ctx, tx, id, deleted)
+}
+
+// querier is the part of pgxpool.Pool and pgx.Tx that reads.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+func (s *Store) getOneFrom(ctx context.Context, q querier, id string, deleted bool) (*domain.Knowledge, error) {
 	cond := "deleted_at IS NULL"
 	if deleted {
 		cond = "deleted_at IS NOT NULL"
 	}
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge WHERE id = $1 AND `+cond, id)
+	rows, err := q.Query(ctx,
+		`SELECT `+knowledgeSelect+` FROM knowledge WHERE id = $1 AND `+cond, id)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +426,7 @@ func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge,
 // round. Both bare and ochakai:// target forms match.
 func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
 	return s.queryKnowledge(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge
+		`SELECT `+knowledgeSelect+` FROM knowledge
 		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2)
 		 ORDER BY updated_at DESC LIMIT $3`,
 		fmt.Sprintf(`[{"target": %q}]`, id),
@@ -386,7 +450,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 	// instead of being erased by it.
 	revive := ""
 	if keepCuratedTombstones {
-		revive = fmt.Sprintf(` AND knowledge.status <> ALL($%d::text[])`, len(knowledgeColNames)+1)
+		revive = " AND " + notCurated("knowledge")
 	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		j, err := marshalJSONFields(k)
@@ -397,23 +461,12 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		if err != nil {
 			return err
 		}
-		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
-		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		args := []any{
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
-			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
 			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt,
-		}
-		if keepCuratedTombstones {
-			curated := make([]string, len(domain.CuratedStatuses))
-			for i, st := range domain.CuratedStatuses {
-				curated[i] = string(st)
-			}
-			args = append(args, curated)
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES (`+knowledgeParams+`)
@@ -428,7 +481,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 				// Either a live entry or a curated tombstone blocked the
 				// write; only the second is this guard's business, and the
 				// caller needs to tell them apart to explain itself.
-				if t, err := s.GetTombstone(ctx, k.ID); err == nil && t.Status.Curated() {
+				if t, err := s.GetTombstone(ctx, k.ID); err == nil && t.Curated() {
 					return ErrCuratedTombstone
 				} else if err != nil && !errors.Is(err, ErrNotFound) {
 					return err
@@ -436,6 +489,15 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			}
 			return ErrAlreadyExists
 		}
+		// A create is a new entry even when it lands on a tombstone's id,
+		// so it starts with no rulings. Carrying the old ones over would
+		// have a verification vouch for content nobody verified.
+		for _, ledger := range []string{"knowledge_verification", "knowledge_rejection"} {
+			if _, err := tx.Exec(ctx, `DELETE FROM `+ledger+` WHERE id = $1`, k.ID); err != nil {
+				return err
+			}
+		}
+		k.Verifications, k.Rejection = nil, nil
 		return s.addRevision(ctx, tx, k, "create", k.CreatedBy)
 	})
 }
@@ -457,14 +519,10 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
-		verifiedKind, verifiedName, verifiedVia := actorPtrs(k.VerifiedBy)
-		rejectedKind, rejectedName, rejectedVia := actorPtrs(k.RejectedBy)
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			verifiedKind, verifiedName, verifiedVia, k.VerifiedAt,
-			rejectedKind, rejectedName, rejectedVia, k.RejectedAt,
 			j.links, j.attrs, k.Body, k.UpdatedAt}
 		if ifMatch != nil {
 			args = append(args, ifMatch.UTC())
@@ -474,9 +532,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
-			verified_by_kind=$20, verified_by_name=$21, verified_by_via=$22, verified_at=$23,
-			rejected_by_kind=$24, rejected_by_name=$25, rejected_by_via=$26, rejected_at=$27,
-			links=$28, attrs=$29, body=$30, updated_at=$31
+			links=$20, attrs=$21, body=$22, updated_at=$23
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -501,58 +557,122 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 	})
 }
 
-// Verify records that a reviewer vouched for the entry as it stands:
-// status becomes verified and verified_by/verified_at are stamped now,
-// even when the entry was already verified.
+// Verify records that a reviewer vouched for the entry as it stands: one
+// row appended to the verification ledger, every time, even when the
+// entry was already verified.
 //
-// Update cannot express this. It carries verified_at over from the stored
-// entry whenever the status was already verified, and writes nothing at
-// all when the content is unchanged (SameContent) — so "I looked at this
-// again and it is still right" had nowhere to land, and both review feeds
-// had no exit: the verification-age feed reads verified_at, and the
+// Update cannot express this. It writes nothing at all when the content
+// is unchanged (SameContent), so "I looked at this again and it is still
+// right" had nowhere to land, and both review feeds had no exit: the
+// verification-age feed ranks by the newest verification, and the
 // re-verification feed lists entries whose last failure report is newer
 // than it (design doc 0025 §6).
 //
-// A rejection is cleared, mirroring the status transitions Update makes:
-// an entry cannot be both vouched for and turned down.
+// Verifying does not touch the entry's row. The document did not change,
+// so its lifecycle status, its updated_at and therefore its ETag all stay
+// where they were (design doc 0043 §3.2) — an editor holding a
+// precondition does not lose it because somebody else confirmed the
+// entry. Promoting a draft to stable is a separate act by a writer, on
+// the document.
+//
+// A rejection is cleared: an entry cannot be both vouched for and turned
+// down, and confirming one is the plainest possible statement that the
+// ruling no longer holds.
 //
 // The timestamp comes from the database, not from NowStored: the feed
 // compares it against the last failure report, which RecordOutcome stamps
 // with the database's now(). Two clocks a millisecond apart are enough to
 // hide a report that arrived after the verification, or to keep one that
 // arrived before it — so both sides read the same clock, and RETURNING
-// hands back exactly what was stored (the ETag invariant NowStored exists
-// for).
+// hands back exactly what was stored.
 func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
-		var err error
-		if k, err = s.Get(ctx, id); err != nil {
-			return err
-		}
-		var verifiedAt, updatedAt time.Time
-		// deleted_at IS NULL guards the race with a concurrent delete, as
-		// in SoftDelete: the Get above ran outside this transaction.
-		err = tx.QueryRow(ctx, `UPDATE knowledge SET
-			status='verified',
-			verified_by_kind=$2, verified_by_name=$3, verified_by_via=$4, verified_at=now(),
-			rejected_by_kind=NULL, rejected_by_name=NULL, rejected_by_via='', rejected_at=NULL,
-			updated_at=now()
-			WHERE id=$1 AND deleted_at IS NULL
-			RETURNING verified_at, updated_at`,
-			id, actor.Kind, actor.Name, actor.Via).Scan(&verifiedAt, &updatedAt)
+		var at time.Time
+		// The EXISTS guard makes the insert and the liveness check one
+		// statement, closing the race with a concurrent delete.
+		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, at)
+			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
+				$2, $3, $4, now()
+			WHERE EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)
+			RETURNING at`,
+			id, actor.Kind, actor.Name, actor.Via).Scan(&at)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
 		if err != nil {
 			return err
 		}
-		verifiedAt = verifiedAt.UTC()
-		k.Status = domain.StatusVerified
-		k.VerifiedBy, k.VerifiedAt = &actor, &verifiedAt
-		k.RejectedBy, k.RejectedAt = nil, nil
-		k.UpdatedAt = updatedAt.UTC()
+		if _, err := tx.Exec(ctx, `DELETE FROM knowledge_rejection WHERE id = $1`, id); err != nil {
+			return err
+		}
+		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
+			return err
+		}
 		return s.addRevision(ctx, tx, k, "verify", actor)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
+}
+
+// Reject records this instance's ruling that an entry was not accepted,
+// replacing any earlier ruling. Like Verify it is a ledger write and
+// leaves the document alone: rejecting is a judgment about the entry, not
+// an edit of it, so the status and the ETag do not move (design doc 0043
+// §3.3).
+//
+// Verifications are not cleared. A rejection that follows a confirmation
+// is exactly the history worth keeping — somebody vouched for this, and
+// somebody later ruled against it — and erasing the first half would make
+// the record agree with whoever wrote last.
+func (s *Store) Reject(ctx context.Context, id string, actor domain.Actor, note string) (*domain.Knowledge, error) {
+	var k *domain.Knowledge
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `INSERT INTO knowledge_rejection (id, by_kind, by_name, by_via, at, note)
+			SELECT $1, $2, $3, $4, now(), $5
+			WHERE EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)
+			ON CONFLICT (id) DO UPDATE SET
+				by_kind=EXCLUDED.by_kind, by_name=EXCLUDED.by_name, by_via=EXCLUDED.by_via,
+				at=EXCLUDED.at, note=EXCLUDED.note`,
+			id, actor.Kind, actor.Name, actor.Via, note)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
+			return err
+		}
+		return s.addRevision(ctx, tx, k, "reject", actor)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
+}
+
+// LiftRejection withdraws a ruling. ErrNotFound when the entry is gone or
+// was never rejected — lifting nothing is a mistake worth reporting, not
+// a no-op to swallow.
+func (s *Store) LiftRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+	var k *domain.Knowledge
+	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `DELETE FROM knowledge_rejection r
+			WHERE r.id = $1
+			  AND EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)`, id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
+			return err
+		}
+		return s.addRevision(ctx, tx, k, "unreject", actor)
 	})
 	if err != nil {
 		return nil, err
@@ -641,6 +761,8 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			`DELETE FROM knowledge_usage WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_event WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_revision WHERE id=$1`,
+			`DELETE FROM knowledge_verification WHERE id=$1`,
+			`DELETE FROM knowledge_rejection WHERE id=$1`,
 		} {
 			if _, err := tx.Exec(ctx, q, id); err != nil {
 				return err
@@ -732,6 +854,8 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		}
 		for _, q := range []string{
 			`UPDATE knowledge_revision SET id=$2 WHERE id=$1`,
+			`UPDATE knowledge_verification SET id=$2 WHERE id=$1`,
+			`UPDATE knowledge_rejection SET id=$2 WHERE id=$1`,
 			`UPDATE attachment SET knowledge_id=$2 WHERE knowledge_id=$1`,
 			`UPDATE knowledge_usage SET knowledge_id=$2 WHERE knowledge_id=$1`,
 			`UPDATE knowledge_event SET knowledge_id=$2 WHERE knowledge_id=$1`,
@@ -789,7 +913,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	// was lost. ORDER BY id gives concurrent moves one lock order, so they
 	// queue instead of deadlocking.
 	rows, err := tx.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge
+		`SELECT `+knowledgeSelect+` FROM knowledge
 		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)
 		 ORDER BY id FOR UPDATE`,
 		fmt.Sprintf(`[{"target": %q}]`, oldID),
@@ -1130,14 +1254,15 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 				SELECT c.*, %[3]s FROM (
 					SELECT k.id, %[4]s, count(*) OVER () AS total,
 						CASE WHEN k.search_text ILIKE $%[5]d THEN 0.3 ELSE 0 END AS whole,
-						CASE WHEN k.status = 'verified' THEN 0.05 ELSE 0 END AS verified
+						CASE WHEN EXISTS (SELECT 1 FROM knowledge_verification v
+							WHERE v.id = k.id) THEN 0.05 ELSE 0 END AS verified
 					FROM knowledge k
 					WHERE (%[6]s) AND %[7]s
 				) c
 			) w
 			ORDER BY score DESC LIMIT %[8]d
 		)
-		SELECT `+knowledgeColsK+`, scored.score
+		SELECT `+knowledgeSelectK+`, scored.score
 		FROM knowledge k JOIN scored ON scored.id = k.id
 		ORDER BY scored.score DESC`,
 		strings.Join(weighted, " + "), strings.Join(weights, " + "),
@@ -1163,7 +1288,7 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 	// absence rather than a plausible wrong ranking.
 	args = append(args, model)
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeColsK+`, 1 - (e.embedding <=> $%d::vector) AS score
+		SELECT `+knowledgeSelectK+`, 1 - (e.embedding <=> $%d::vector) AS score
 		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id AND e.model = $%d
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, vecParam, len(args), where, vecParam, limit)
@@ -1180,7 +1305,7 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 	vecParam := len(args)
 	args = append(args, model) // this model's vectors only, as in SearchVector
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeCols+`, score FROM (
+		SELECT `+knowledgeCols+", "+ledgerCols("best")+`, score FROM (
 			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
 			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
 			WHERE %s
@@ -1247,10 +1372,10 @@ func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 }
 
 // buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
-// for joined queries and may be empty. Without an explicit status filter,
-// rejected entries are excluded: knowledge that was never accepted must not
-// resurface in answers, but remains queryable on request so agents can check
-// whether a proposal was already rejected.
+// for joined queries and may be empty. Rejected entries are excluded unless
+// asked for: knowledge that was never accepted must not resurface in
+// answers, but remains queryable on request so agents can check whether a
+// proposal was already rejected.
 func (f Filter) buildWhere(prefix string) (string, []any) {
 	conds := []string{prefix + "deleted_at IS NULL"}
 	var args []any
@@ -1268,8 +1393,38 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 	if len(f.Statuses) > 0 {
 		args = append(args, f.Statuses)
 		conds = append(conds, fmt.Sprintf("%sstatus = ANY($%d)", prefix, len(args)))
+	}
+	// Rejection and verification are ledgers now, so both are asked about
+	// independently of the lifecycle value (design doc 0043 §§3.2-3.3).
+	// The rejected default is "hide", which is where it has always been —
+	// but it used to fall out of the status filter, and a filter that
+	// named any status turned the exclusion off with it. It no longer
+	// does: "show me the drafts" never meant "including the ones we
+	// turned down".
+	//
+	// The outer id must be qualified even when nothing else here is: the
+	// ledger tables have an id column of their own, so a bare "id" inside
+	// the subquery binds to the ledger's, making the condition r.id = r.id
+	// — true for every row, which silently empties every unaliased query.
+	outer := prefix
+	if outer == "" {
+		outer = "knowledge."
+	}
+	rejectedExists := fmt.Sprintf(
+		"EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = %sid)", outer)
+	if f.Rejected != nil && *f.Rejected {
+		conds = append(conds, rejectedExists)
 	} else {
-		conds = append(conds, fmt.Sprintf("%sstatus <> 'rejected'", prefix))
+		conds = append(conds, "NOT "+rejectedExists)
+	}
+	if f.Verified != nil {
+		verifiedExists := fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = %sid)", outer)
+		if *f.Verified {
+			conds = append(conds, verifiedExists)
+		} else {
+			conds = append(conds, "NOT "+verifiedExists)
+		}
 	}
 	if len(f.Tags) > 0 {
 		args = append(args, f.Tags)
@@ -1319,7 +1474,7 @@ func sourceContainment(resource string) []byte {
 // order beats a relevance score nothing computed.
 func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM knowledge WHERE %s
 		ORDER BY id LIMIT %d`, where, limit), args...)
 }
 
@@ -1342,7 +1497,7 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]do
 	// doc 0036 §3.9), and current_date would hand that decision to
 	// whatever TimeZone the database session happens to carry — the same
 	// entry would be stale on one deployment and not on another.
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM knowledge WHERE %s
 		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date
 		ORDER BY stale_after ASC, id LIMIT %d`, where, limit), args...)
 }
@@ -1352,8 +1507,8 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]do
 // query canary runs: "which verified queries have gone longest unchecked".
 func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeCols+` FROM knowledge WHERE %s
-		ORDER BY verified_at ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM knowledge WHERE %s
+		ORDER BY `+lastVerifiedAt("knowledge")+` ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
 }
 
 // usageLateral aggregates a knowledge entry's per-event running totals
@@ -1382,7 +1537,7 @@ const usageLateral = `
 func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeColsK+`,
+		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s
@@ -1416,12 +1571,13 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	q := fmt.Sprintf(`
-		SELECT `+knowledgeColsK+`,
+		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM knowledge k`+usageLateral+`
 		WHERE %s AND u.failed > 0
-			AND (k.verified_at IS NULL OR u.last_failed_at > k.verified_at)
-		ORDER BY u.failed DESC, u.worked ASC, k.verified_at ASC NULLS LAST, k.id LIMIT %d`, where, limit)
+			AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)
+		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
+		where, lastVerifiedAt("k"), limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

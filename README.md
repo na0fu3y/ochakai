@@ -123,7 +123,7 @@ go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use http://localhost:8080  # Cloud Run: ochakai use https://your-service.run.app (auth = gcloud login / ADC, no tokens to configure)
 ochakai whoami                     # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question: full entries, links expanded
-ochakai search "revenue" --type Metric --status verified
+ochakai search "revenue" --type Metric --verified true
 ochakai search --sort stale_after   # past the expiry their author declared
 ochakai search --source https://wiki.example/revenue-policy  # what derives from this
 ochakai search "revenue" --prefix queries/sales   # only what lives under one subtree
@@ -506,19 +506,18 @@ stale_after: "2026-12-31"      # advisory: re-check on and after this day
 markdown footnote in the body can attribute a single claim to it.
 `generated` is who the content stands by and when it last changed;
 `verified` is who confirmed it — absent means unverified, and a `human:`
-entry is what makes it human-reviewed (SPEC §5.3). ochakai's `verified`
-status is exactly that: `stable` plus a verification, which is where a
-v0.2 consumer looks, and reading it back the same way makes ochakai's own
-export round-trip exactly.
+entry is what makes it human-reviewed (SPEC §5.3). ochakai holds these
+the way the spec defines them: `status` is the lifecycle value alone
+(`draft`, `stable`, `deprecated`) and `verified` is a ledger of every
+confirmation, so the two signals stay independent. A draft somebody
+checked and a stable entry nobody has are both states the model can hold,
+and a foreign bundle's lifecycle value survives the trip unaltered.
 
-A foreign bundle is where that mapping costs something. `stable` with no
-`verified` entry is not read as reviewed — OKF puts human review in
-`verified`, and `stable` alone only says the entry is fit to consume — but
-ochakai has no status meaning *stable and unverified*, so such an entry
-lands as a draft and exports as one. The lifecycle value its producer
-wrote does not survive the trip. Import says so rather than doing it
-quietly, and the content itself is untouched; adding a `verified` entry
-naming who checked it is what makes it verified here.
+A rejection — reviewed and *not* accepted — is this instance's ruling
+rather than a stage of the concept, so it is not a status either. It
+exports as `rejected_by` / `rejected_at` beside the entry's real status,
+and import never reads it back: a bundle carries knowledge, not one
+instance's judgments.
 
 ochakai **records** these; it never acts on them. It does not fetch a
 source's `resource`, score its credibility signals, or run an Attested

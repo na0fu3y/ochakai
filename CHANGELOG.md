@@ -20,6 +20,46 @@ last entry.
 
 ### Changed
 
+- **BREAKING**: `status` is OKF's lifecycle vocabulary and nothing else —
+  `draft`, `stable`, `deprecated` (SPEC §5.4). The two values ochakai
+  added were never lifecycle values, and both become ledgers (design doc
+  [0043](docs/design/0043-document-first.md) §§3.2-3.3):
+
+  - **Verification** is an append-only list on the entry, which is what
+    SPEC §5.3 means by `verified`. `verified_by` / `verified_at` are
+    replaced by `verifications: [{by, at}]`, plural: re-checking an entry
+    appends rather than overwriting, so the record answers "how often,
+    and by whom" and not just "when last". `POST /api/v1/verify/{id}` no
+    longer touches the document — the status, `updated_at` and the ETag
+    all stay put, so confirming an entry cannot invalidate an editor's
+    `If-Match`, and promoting a draft to `stable` is a separate PUT.
+  - **Rejection** is a ruling, not a stage: `rejected_by` / `rejected_at`
+    are replaced by `rejection: {by, at, note}`, written by the new
+    `POST /api/v1/reject/{id}` and cleared by `DELETE` on the same path
+    (`ochakai reject <id> --note …` / `--lift`). The reason moves from
+    `status_note` to the ruling's own `note`. Export stops folding a
+    rejection onto `deprecated`, which asserted the opposite thing about
+    the entry; a bundle now carries the entry's real status.
+
+  Filtering follows: `?verified=` and `?rejected=` on
+  `GET /api/v1/knowledge` (and `?verified=` on `/context`), `--verified`
+  / `--rejected` on the CLI, the same two on `search_knowledge`. Rejected
+  entries stay hidden unless asked for, but a `status` filter no longer
+  turns that exclusion off — "show me the drafts" never meant "including
+  the ones we turned down". `search_knowledge` and `get_context` take
+  `verified`, and `statuses` now means the lifecycle value alone.
+
+  A foreign bundle's `stable` entry keeps its lifecycle value on import
+  instead of being demoted to a draft: with confirmation held as a status
+  there was nowhere to put "ready for consumption, unconfirmed", and that
+  demotion is gone with the reinterpretation note that reported it.
+
+  Migration `0023` moves every verified entry to `stable` plus one
+  verification, every rejected entry to `draft` plus a rejection carrying
+  its `status_note`, drops the four provenance columns, and rewrites the
+  revision snapshots into the current shape. No `updated_at` moves — no
+  held ETag is invalidated and nothing needs re-embedding.
+
 - **BREAKING**: the actor kind for anything that is not a person is
   `process`, not `agent` — the spelling OKF SPEC §7 defines (design doc
   [0043](docs/design/0043-document-first.md) §3.8). `agent` was never a

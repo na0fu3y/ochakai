@@ -62,8 +62,7 @@ func FuzzParse(f *testing.F) {
 		// doc 0009): whatever the document claimed, Parse must not have
 		// filled any of it in.
 		if k.CreatedBy != (domain.Actor{}) || k.UpdatedBy != (domain.Actor{}) ||
-			k.VerifiedBy != nil || k.VerifiedAt != nil ||
-			k.RejectedBy != nil || k.RejectedAt != nil {
+			len(k.Verifications) != 0 || k.Rejection != nil {
 			t.Errorf("Parse filled in provenance from the payload: %+v", k)
 		}
 		if len(k.Links) != 0 {
@@ -142,17 +141,20 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 		// nowhere else — frontmatter values go through YAML, which escapes
 		// the carriage return in a quoted scalar, so they arrive verbatim.
 		want.Body = strings.TrimSpace(strings.ReplaceAll(k.Body, "\r\n", "\n"))
-		// The one documented lossy step: OKF has no lifecycle value for
-		// "was never accepted", so a rejection exports as deprecated and
-		// comes back as one (design doc 0036 §3.4). The ruling stays in
-		// this instance's record, which is where 0009 puts it.
-		if want.Status == domain.StatusRejected {
-			want.Status = domain.StatusDeprecated
-		}
+		// Status has no lossy step left. It is OKF's own vocabulary now,
+		// so export and import are the identity on it — the fold that
+		// turned a rejection into a deprecation went with the status
+		// (design doc 0043 §§3.2-3.3).
 		got.ID, want.ID = "", ""
 		got.Links, want.Links = nil, nil
 		if !got.SameContent(&want) {
-			t.Errorf("round trip changed the entry:\n got %+v\nwant %+v\ndocument:\n%s", *got, want, doc)
+			t.Errorf("round trip changed the entry:\n got %+v\nwant %+v\ndocument:\n%s", got.Knowledge, want, doc)
+		}
+		// A document ochakai wrote for an unverified entry carries no
+		// verified key, so nothing claims a confirmation on the way back
+		// in (SPEC §5.3, design doc 0043 §3.2).
+		if got.Verified {
+			t.Errorf("an export with no verifications read back as verified:\n%s", doc)
 		}
 	})
 }

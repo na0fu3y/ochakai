@@ -20,6 +20,16 @@ import (
 // Document per entry, into a TarGzWriter) and never materializes one, so
 // this lives here: the round-trip tests want the whole map at once, and
 // nothing in the server does.
+// knowledgeOf projects parsed documents back to the knowledge they carry,
+// so a round-trip test can hand FromBundle's output straight to bundle.
+func knowledgeOf(docs []Doc) []domain.Knowledge {
+	out := make([]domain.Knowledge, len(docs))
+	for i := range docs {
+		out[i] = docs[i].Knowledge
+	}
+	return out
+}
+
 func bundle(t *testing.T, entries []domain.Knowledge) map[string][]byte {
 	t.Helper()
 	files := Indexes(entries)
@@ -95,7 +105,7 @@ func TestBundleRoundTrip(t *testing.T) {
 		{Type: "Data Contract", ID: "contracts/orders", Title: "注文契約", Status: domain.StatusDraft,
 			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
 			Attrs:     map[string]any{"owner": "sales"}, UpdatedAt: now},
-		{Type: domain.TypeComputations, ID: "queries/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusVerified,
+		{Type: domain.TypeComputations, ID: "queries/sales/monthly-revenue", Title: "月次売上", Status: domain.StatusStable,
 			Description: "月ごとの売上",
 			CreatedBy:   domain.Actor{Kind: "human", Name: "na0"},
 			Tags:        []string{"sales"},
@@ -142,7 +152,7 @@ func TestBundleTitleOptional(t *testing.T) {
 	if len(entries) != 1 || entries[0].ID != "insights/サンプル" || entries[0].Title != "" {
 		t.Fatalf("entries = %+v, want one titleless insights/サンプル", entries)
 	}
-	out := bundle(t, entries)
+	out := bundle(t, knowledgeOf(entries))
 	doc := string(out["insights/サンプル.md"])
 	if strings.Contains(doc, "title:") {
 		t.Errorf("re-export must omit the empty title:\n%s", doc)
@@ -196,7 +206,7 @@ func TestFromBundleForeign(t *testing.T) {
 	}
 	byURI := map[string]domain.Knowledge{}
 	for _, e := range entries {
-		byURI[e.URI()] = e
+		byURI[e.URI()] = e.Knowledge
 	}
 	if len(entries) != 2 {
 		t.Fatalf("entries = %v", byURI)
@@ -216,7 +226,7 @@ func TestFromBundleForeign(t *testing.T) {
 	// Import and export are identity on the type key: what came in as
 	// "Table" goes back out as "Table", at the original path, with no
 	// preservation attr in between.
-	out := bundle(t, entries)
+	out := bundle(t, knowledgeOf(entries))
 	if doc := string(out["tables/users.md"]); !strings.Contains(doc, "type: Table\n") {
 		t.Errorf("re-export did not reproduce the authored type:\n%s", doc)
 	}
@@ -255,7 +265,7 @@ func TestFromBundleFixture(t *testing.T) {
 	}
 	byURI := map[string]domain.Knowledge{}
 	for _, e := range entries {
-		byURI[e.URI()] = e
+		byURI[e.URI()] = e.Knowledge
 	}
 	aov := byURI["ochakai://references/metrics/avg_order_value"]
 	if aov.Resource != "https://example.com/metrics/aov" {
@@ -271,7 +281,7 @@ func TestFromBundleFixture(t *testing.T) {
 		t.Errorf("body mangled:\n%s", aov.Body)
 	}
 
-	out := bundle(t, entries)
+	out := bundle(t, knowledgeOf(entries))
 	doc := string(out["references/metrics/avg_order_value.md"])
 	for _, want := range []string{
 		"type: Reference",

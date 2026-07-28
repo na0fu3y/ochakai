@@ -115,15 +115,16 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"It executes no SQL and uses no LLM. " +
 			"Before answering a data question, call get_context once — it returns the relevant " +
 			"entries in full, links expanded. " +
-			"Prefer verified knowledge and judge trust from provenance (created_by / updated_by / verified_by), " +
+			"Prefer verified knowledge and judge trust from provenance (created_by / updated_by / verifications), " +
 			"and treat an entry whose stale_after has passed as due for re-checking, not as wrong. " +
 			"After acting on knowledge (running an attested computation, writing SQL from a metric definition), report " +
 			"whether it actually worked with report_outcome — failed reports are how stale " +
 			"verified knowledge gets caught. " +
-			"Write learnings back with create_knowledge; set status=verified only for knowledge " +
-			"you have actually validated — who verified is always recorded. Knowledge that was " +
-			"reviewed and not accepted is status=rejected (with status_note explaining why); " +
-			"rejected entries are hidden from search unless you filter for them — check before " +
+			"Write learnings back with create_knowledge; leave new entries as drafts for a human to " +
+			"confirm — status is how ready an entry is (draft, stable, deprecated), and whether " +
+			"anyone checked it is recorded separately, by whoever checked it. Knowledge that was " +
+			"reviewed and not accepted is marked rejected by a human, with the reason; " +
+			"rejected entries are hidden from search unless you ask for them (rejected=true) — check before " +
 			"re-proposing similar knowledge. Knowledge is co-owned by humans and agents.",
 	})
 
@@ -179,7 +180,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Description: "Search the knowledge base across all types (recommended: " + domain.TypesHint() + "; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
 			"Attachments count too — filenames and file contents — and a hit is always the owning entry. " +
-			"Rejected entries are excluded unless statuses includes \"rejected\" — filter for them " +
+			"Rejected entries are excluded unless you pass rejected=true — ask for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists entries by verification age instead of searching " +
 			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
@@ -199,6 +200,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
+			Verified: in.Verified, Rejected: in.Rejected,
 		}
 		hits, err := svc.SearchOrList(ctx, in.Query, in.Sort, f, in.Limit)
 		if err != nil {
@@ -226,7 +228,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Query: in.Query,
 			Filter: store.Filter{
 				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
-				Prefixes: in.Prefixes,
+				Prefixes: in.Prefixes, Verified: in.Verified,
 			},
 			Limit: in.Limit, Budget: budget,
 		})
@@ -258,8 +260,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Annotations: nonDestructive,
 		Description: "Create a knowledge entry. Write back what you learned: metric caveats, verified answers, " +
 			"glossary terms. Entries default to draft; your identity is recorded as created_by. " +
-			"Before creating, search existing entries including statuses=[\"rejected\"] to avoid " +
-			"re-proposing knowledge that was already rejected (status_note records why). " +
+			"Before creating, search with rejected=true to avoid " +
+			"re-proposing knowledge that was already rejected (the ruling records why). " +
 			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
 			"the conventional body sections: # Schema, # Common query patterns. " +
 			"An \"Attested Computation\" entry records a sanctioned computation others must run instead of " +
@@ -465,7 +467,9 @@ type searchIn struct {
 	// rejects an empty search, the handler rejects the combination).
 	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
+	Verified *bool    `json:"verified,omitempty" jsonschema:"true for entries somebody has confirmed, false for ones nobody has; omit to not ask. Independent of status: a draft can be verified and a stable entry unverified"`
+	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only entries a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected entries stay out of results"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string   `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
@@ -486,7 +490,8 @@ type searchOut struct {
 type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by status: draft, verified, deprecated, rejected"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
+	Verified *bool    `json:"verified,omitempty" jsonschema:"true for entries somebody has confirmed, false for ones nobody has; omit to not ask. Independent of status: a draft can be verified and a stable entry unverified"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`

@@ -20,11 +20,26 @@ import (
 // contain a space take the other one.
 const typesMark = "@TYPES@"
 
+// statusesMark is the same idea for the lifecycle vocabulary. It was
+// written out three times until the vocabulary shrank to OKF's three
+// values (design doc 0043 §3.2) and every copy had to be found by hand;
+// no status contains a space, so one spelling serves all three shells.
+const statusesMark = "@STATUSES@"
+
 var (
-	zshCompletion  = strings.ReplaceAll(zshCompletionTmpl, typesMark, domain.TypesQuoted(`"`))
-	bashCompletion = strings.ReplaceAll(bashCompletionTmpl, typesMark, domain.TypesQuoted(`'`))
-	fishCompletion = strings.ReplaceAll(fishCompletionTmpl, typesMark, domain.TypesQuoted(`"`))
+	zshCompletion  = expand(zshCompletionTmpl, `"`)
+	bashCompletion = expand(bashCompletionTmpl, `'`)
+	fishCompletion = expand(fishCompletionTmpl, `"`)
 )
+
+func expand(tmpl, quote string) string {
+	names := make([]string, len(domain.Statuses))
+	for i, st := range domain.Statuses {
+		names[i] = string(st)
+	}
+	s := strings.ReplaceAll(tmpl, typesMark, domain.TypesQuoted(quote))
+	return strings.ReplaceAll(s, statusesMark, strings.Join(names, " "))
+}
 
 func cmdCompletion(_ context.Context, args []string) error {
 	fs := newBareFlagSet(
@@ -60,7 +75,8 @@ _ochakai() {
     'get:print one entry as an OKF document'
     'create:create an entry from OKF markdown or JSON'
     'update:replace an entry (kept as a revision)'
-    'verify:record a verification (also re-affirms a verified entry)'
+    'verify:append a verification (also re-affirms a verified entry)'
+    'reject:record that an entry was reviewed and not accepted'
     'delete:soft-delete an entry'
     'purge:hard-delete a soft-deleted entry, freeing its id'
     'reembed:embed entries that have no vector for the configured model'
@@ -91,10 +107,12 @@ _ochakai() {
     search)
       _arguments \
         '*--type[filter by type]:type:(@TYPES@)' \
-        '*--status[filter by status]:status:(draft verified deprecated rejected)' \
+        '*--status[filter by status]:status:(@STATUSES@)' \
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
         '--source[only entries citing this resource]:source:' \
+        '--verified[true for confirmed entries, false for unconfirmed]:verified:(true false)' \
+        '--rejected[only entries a human turned down]' \
         '--sort[list instead of searching: by verification age, demand, failed reports, or declared expiry]:sort:(verified_at usage failed stale_after)' \
         '--limit[max results]:limit:' \
         '--json[print the raw JSON response]' \
@@ -103,9 +121,10 @@ _ochakai() {
     context)
       _arguments \
         '*--type[filter by type]:type:(@TYPES@)' \
-        '*--status[filter by status]:status:(draft verified deprecated rejected)' \
+        '*--status[filter by status]:status:(@STATUSES@)' \
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
+        '--verified[true for confirmed entries, false for unconfirmed]:verified:(true false)' \
         '--limit[max full entries]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
         '--min-score[drop hits below this score]:min-score:' \
@@ -135,6 +154,9 @@ _ochakai() {
       ;;
     verify)
       _arguments '--json[print the entry as JSON]' '--url[server URL]:url:'
+      ;;
+    reject)
+      _arguments '--note[why it was not accepted]:note:' '--lift[withdraw the rejection]' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
     delete|purge|detach|move)
       _arguments '--url[server URL]:url:'
@@ -187,21 +209,22 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update verify delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update verify reject delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
   case $prev in
     --type|-type) COMPREPLY=($(compgen -W "@TYPES@" -- "$cur")); return ;;
-    --status|-status) COMPREPLY=($(compgen -W "draft verified deprecated rejected" -- "$cur")); return ;;
+    --status|-status) COMPREPLY=($(compgen -W "@STATUSES@" -- "$cur")); return ;;
+    --verified|-verified) COMPREPLY=($(compgen -W "true false" -- "$cur")); return ;;
     --sort|-sort) COMPREPLY=($(compgen -W "verified_at usage failed stale_after" -- "$cur")); return ;;
     -f) compopt -o default 2>/dev/null; COMPREPLY=(); return ;;
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --sort --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --verified --rejected --sort --limit --json --url" ;;
     browse)        opts="--json --url" ;;
-    context)       opts="--type --status --tag --prefix --limit --budget --min-score --json --url" ;;
+    context)       opts="--type --status --tag --prefix --verified --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
@@ -214,6 +237,7 @@ _ochakai() {
     create)        opts="-f --json --url" ;;
     update)        opts="-f --if-match --json --url" ;;
     verify)        opts="--json --url" ;;
+    reject)        opts="--note --lift --json --url" ;;
     delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     reembed)       opts="--limit --once --json --url" ;;
@@ -251,7 +275,8 @@ complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read be
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
 complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
 complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
-complete -c ochakai -n __fish_use_subcommand -a verify -d 'record a verification (also re-affirms a verified entry)'
+complete -c ochakai -n __fish_use_subcommand -a verify -d 'append a verification (also re-affirms a verified entry)'
+complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that an entry was reviewed and not accepted'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
 complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted entry, freeing its id'
 complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed entries that have no vector for the configured model'
@@ -273,22 +298,26 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify delete purge reembed move attach detach usage report revisions backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage report revisions backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -a '@TYPES@' -d 'filter by type'
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a 'draft verified deprecated rejected' -d 'filter by status'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a '@STATUSES@' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed stale_after' -d 'list instead of searching: by verification age, demand, failed reports, or declared expiry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l verified -x -a 'true false' -d 'true for confirmed entries, false for unconfirmed'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
+complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
+complete -c ochakai -n '__fish_seen_subcommand_from reject' -l lift -d 'withdraw the rejection'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions backlinks' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'

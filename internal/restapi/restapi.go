@@ -52,12 +52,24 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		verified, err := queryTriBool(q, "verified")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		rejected, err := queryTriBool(q, "rejected")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		f := store.Filter{
 			Types:    domain.ToTypes(q["type"]),
 			Statuses: domain.ToStatuses(q["status"]),
 			Tags:     q["tag"],
 			Source:   q.Get("source"),
 			Prefixes: q["prefix"],
+			Verified: verified,
+			Rejected: rejected,
 		}
 		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
 		if err != nil {
@@ -110,6 +122,11 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		verified, err := queryTriBool(q, "verified")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 		res, err := svc.Context(r.Context(), service.ContextRequest{
 			Query: q.Get("q"),
 			Filter: store.Filter{
@@ -117,6 +134,7 @@ func Handler(svc *service.Service) http.Handler {
 				Statuses: domain.ToStatuses(q["status"]),
 				Tags:     q["tag"],
 				Prefixes: q["prefix"],
+				Verified: verified,
 			},
 			Limit: limit, MinScore: minScore, Budget: budget,
 		})
@@ -200,6 +218,39 @@ func Handler(svc *service.Service) http.Handler {
 	// would be indistinguishable from an ID segment.
 	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		k, err := svc.Verify(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("ETag", etagOf(k))
+		writeJSON(w, http.StatusOK, k)
+	})
+
+	// POST /api/v1/reject/{id...} — record that a reviewer turned the
+	// entry down, with the reason in the body. A ruling rather than an
+	// edit: the document keeps its lifecycle status, so this is not a PUT
+	// (design doc 0043 §3.3). DELETE lifts it. Lives outside /knowledge/
+	// for the same reason /verify and /usage do — a "/reject" suffix would
+	// be indistinguishable from an ID segment.
+	mux.HandleFunc("POST /api/v1/reject/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Note string `json:"note"`
+		}
+		// A bare POST with no body is a rejection with no reason given.
+		if r.ContentLength != 0 && !readJSON(w, r, &body) {
+			return
+		}
+		k, err := svc.Reject(r.Context(), r.PathValue("id"), body.Note, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("ETag", etagOf(k))
+		writeJSON(w, http.StatusOK, k)
+	})
+
+	mux.HandleFunc("DELETE /api/v1/reject/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		k, err := svc.LiftRejection(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -746,6 +797,21 @@ func queryBool(q url.Values, name string, def bool) (bool, error) {
 	default:
 		return false, service.Invalidf("invalid %s %q (want true or false)", name, q.Get(name))
 	}
+}
+
+// queryBool reads a tri-state flag: absent leaves the question unasked,
+// so the caller can tell "not mentioned" from "explicitly false" — which
+// is the difference between the rejected filter's default (hide them) and
+// an explicit rejected=false (also hide them, but said out loud).
+func queryTriBool(q url.Values, name string) (*bool, error) {
+	if q.Get(name) == "" {
+		return nil, nil
+	}
+	b, err := queryBool(q, name, false)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
 }
 
 func queryFloat(q url.Values, name string) (float64, error) {

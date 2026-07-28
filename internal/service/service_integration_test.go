@@ -191,6 +191,40 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		}
 		*k = *updated
 	}
+	// Each ruling and how a human records it. Two are ledger writes now
+	// and one is still a lifecycle value (design doc 0043 §§3.2-3.3), so
+	// the guards are exercised through the three real paths rather than
+	// through a status enum they no longer share.
+	rulings := []struct {
+		ruling domain.Ruling
+		rule   func(t *testing.T, k *domain.Knowledge)
+		undo   func(t *testing.T, k *domain.Knowledge)
+	}{
+		{domain.RulingVerified, func(t *testing.T, k *domain.Knowledge) {
+			t.Helper()
+			if _, err := svc.Verify(ctx, k.ID, human); err != nil {
+				t.Fatal(err)
+			}
+		}, nil},
+		{domain.RulingRejected, func(t *testing.T, k *domain.Knowledge) {
+			t.Helper()
+			if _, err := svc.Reject(ctx, k.ID, "because the numbers were wrong", human); err != nil {
+				t.Fatal(err)
+			}
+		}, func(t *testing.T, k *domain.Knowledge) {
+			t.Helper()
+			if _, err := svc.LiftRejection(ctx, k.ID, human); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{domain.RulingDeprecated, func(t *testing.T, k *domain.Knowledge) {
+			t.Helper()
+			setStatus(t, k, domain.StatusDeprecated, human)
+		}, func(t *testing.T, k *domain.Knowledge) {
+			t.Helper()
+			setStatus(t, k, domain.StatusDraft, human)
+		}},
+	}
 
 	t.Run("drafts stay writable", func(t *testing.T) {
 		id := "queries/" + uid("guard-draft")
@@ -207,42 +241,51 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if version == nil || !version.Equal(k.UpdatedAt) {
 			t.Errorf("version = %v, want the entry's updated_at %v", version, k.UpdatedAt)
 		}
-		// Promotion to verified is not restricted — 0002 stands.
-		setStatus(t, k, domain.StatusVerified, actor)
+		// Promotion to stable is not restricted — 0002 stands.
+		setStatus(t, k, domain.StatusStable, actor)
 	})
 
 	// Each curated state is refused, and each refusal names a way forward:
 	// an agent that meets a wall with no door stalls or works around it.
-	for status, wantAdvice := range map[domain.Status]string{
-		domain.StatusVerified:   "report_outcome failed",
-		domain.StatusRejected:   "status_note",
-		domain.StatusDeprecated: "create_knowledge",
-	} {
-		t.Run(string(status)+" is refused", func(t *testing.T) {
-			id := "queries/" + uid("guard-"+string(status))
+	advice := map[domain.Ruling]string{
+		domain.RulingVerified:   "report_outcome failed",
+		domain.RulingRejected:   "the reason",
+		domain.RulingDeprecated: "create_knowledge",
+	}
+	for _, tc := range rulings {
+		t.Run(string(tc.ruling)+" is refused", func(t *testing.T) {
+			id := "queries/" + uid("guard-"+string(tc.ruling))
 			k, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeMetrics, ID: id, Title: string(status),
-				StatusNote: "because the numbers were wrong",
+				Type: domain.TypeMetrics, ID: id, Title: string(tc.ruling),
 			}, actor)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
-			setStatus(t, k, status, human)
+			tc.rule(t, k)
 
 			for _, op := range []string{"update", "delete"} {
 				_, err := svc.RefuseIfCurated(ctx, id, op)
 				var invalid *InvalidInputError
 				if !errors.As(err, &invalid) {
-					t.Fatalf("%s %s: got %v, want a refusal", op, status, err)
+					t.Fatalf("%s %s: got %v, want a refusal", op, tc.ruling, err)
 				}
-				if !strings.Contains(err.Error(), wantAdvice) {
-					t.Errorf("%s refusal does not offer %q: %v", status, wantAdvice, err)
+				if !strings.Contains(err.Error(), advice[tc.ruling]) {
+					t.Errorf("%s refusal does not offer %q: %v", tc.ruling, advice[tc.ruling], err)
 				}
 			}
 
-			// A human reopening it makes it writable again.
-			setStatus(t, k, domain.StatusDraft, human)
+			// A human reopening it makes it writable again. A verification
+			// has no undo: confirming an entry is not a state somebody
+			// takes back, and re-drafting means editing the entry.
+			if tc.undo == nil {
+				return
+			}
+			latest, err := svc.Get(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.undo(t, latest)
 			if _, err := svc.RefuseIfCurated(ctx, id, "update"); err != nil {
 				t.Errorf("reopened entry must be writable: %v", err)
 			}
@@ -262,7 +305,10 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
-		setStatus(t, k, domain.StatusRejected, human)
+		if _, err := svc.Reject(ctx, id, "duplicate of an existing golden query", human); err != nil {
+			t.Fatal(err)
+		}
+		_ = k
 
 		if _, err := svc.RefuseIfCurated(ctx, id, "delete"); err == nil {
 			t.Fatal("deleting a rejected entry was allowed; the memory of no is erasable")
@@ -271,8 +317,8 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if stored.Status != domain.StatusRejected || stored.StatusNote == "" {
-			t.Errorf("the rejection and its reason must survive: %+v", stored)
+		if stored.Rejection == nil || stored.Rejection.Note == "" {
+			t.Errorf("the rejection and its reason must survive: %+v", stored.Rejection)
 		}
 	})
 
@@ -280,20 +326,21 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// exists — deleted before the rule, or deleted from a human surface as
 	// housekeeping — is revived in place by Create, status_note included.
 	t.Run("a curated tombstone cannot be revived", func(t *testing.T) {
-		for status, wantAdvice := range map[domain.Status]string{
-			domain.StatusRejected:   "status_note",
-			domain.StatusVerified:   "different id",
-			domain.StatusDeprecated: "no longer recommended",
-		} {
+		tombAdvice := map[domain.Ruling]string{
+			domain.RulingRejected:   "the reason",
+			domain.RulingVerified:   "different id",
+			domain.RulingDeprecated: "no longer recommended",
+		}
+		for _, tc := range rulings {
+			status, wantAdvice := tc.ruling, tombAdvice[tc.ruling]
 			id := "queries/" + uid("guard-tomb-"+string(status))
 			k, err := svc.Create(ctx, &domain.Knowledge{
 				Type: domain.TypeMetrics, ID: id, Title: "ruled on then deleted",
-				StatusNote: "duplicate of an existing golden query",
 			}, actor)
 			if err != nil {
 				t.Fatal(err)
 			}
-			setStatus(t, k, status, human)
+			tc.rule(t, k)
 			// A human deletes it: legitimate on the REST/CLI surfaces.
 			if err := svc.Delete(ctx, id, human); err != nil {
 				t.Fatal(err)
@@ -350,7 +397,9 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
-		setStatus(t, k, domain.StatusRejected, human)
+		if _, err := svc.Reject(ctx, k.ID, "duplicate", human); err != nil {
+			t.Fatal(err)
+		}
 		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
 			t.Errorf("live entry: %v", err)
 		}
@@ -362,22 +411,28 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// exists" leaves it guessing while every neighbouring refusal names
 	// the next move.
 	t.Run("a live entry says what holds the id", func(t *testing.T) {
-		for status, wantAdvice := range map[domain.Status]string{
-			domain.StatusRejected:   "status_note",
-			domain.StatusVerified:   "report_outcome failed",
-			domain.StatusDeprecated: "no longer recommended",
-			domain.StatusDraft:      "update_knowledge",
-		} {
-			id := "queries/" + uid("guard-live-"+string(status))
+		liveAdvice := map[domain.Ruling]string{
+			domain.RulingRejected:   "the reason",
+			domain.RulingVerified:   "report_outcome failed",
+			domain.RulingDeprecated: "no longer recommended",
+			"":                      "update_knowledge",
+		}
+		cases := append([]struct {
+			ruling domain.Ruling
+			rule   func(t *testing.T, k *domain.Knowledge)
+			undo   func(t *testing.T, k *domain.Knowledge)
+		}{{"", func(*testing.T, *domain.Knowledge) {}, nil}}, rulings...)
+		for _, tc := range cases {
+			status, wantAdvice := tc.ruling, liveAdvice[tc.ruling]
+			id := "queries/" + uid("guard-live-"+string(status)+"x")
 			k, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeMetrics, ID: id, Title: "ruled on",
-				StatusNote: "duplicate of an existing golden query"}, actor)
+				Type: domain.TypeMetrics, ID: id, Title: "ruled on"}, actor)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = svc.Delete(ctx, id, human) })
-			if status != domain.StatusDraft {
-				setStatus(t, k, status, human)
+			{
+				tc.rule(t, k)
 			}
 
 			_, err = svc.CreateKeepingCurated(ctx, &domain.Knowledge{
@@ -604,51 +659,68 @@ func (e *fixedEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) (
 	return out, nil
 }
 
-// Every entity timestamp has to survive the round trip through
-// timestamptz, or a write's response describes an entry the database
-// never held (design doc 0030 §3.2). updated_at has been stored-precision
-// since #108; verified_at and rejected_at were still stamped from
-// time.Now(), so a client that read them back saw a different instant --
-// the same nanosecond mismatch that breaks conditional updates, on the
-// two fields the review feeds sort by.
+// Every timestamp a client reads back has to be the one the database
+// holds, or a write's response describes an entry that never existed
+// (design doc 0030 §3.2). The ruling ledgers stamp the database clock
+// directly — the failure feed compares a verification against the last
+// failure report, and two clocks a millisecond apart hide or keep the
+// wrong reports (Store.Verify) — so what this checks is that what comes
+// back out is exactly what went in, at a precision timestamptz can hold.
 func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
 	ctx := context.Background()
 	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
 	for _, tc := range []struct {
-		status domain.Status
-		field  string
-		at     func(*domain.Knowledge) *time.Time
+		what string
+		rule func(id string) (*domain.Knowledge, error)
+		at   func(*domain.Knowledge) *time.Time
 	}{
-		{domain.StatusVerified, "verified_at", func(k *domain.Knowledge) *time.Time { return k.VerifiedAt }},
-		{domain.StatusRejected, "rejected_at", func(k *domain.Knowledge) *time.Time { return k.RejectedAt }},
+		{"verification",
+			func(id string) (*domain.Knowledge, error) { return svc.Verify(ctx, id, actor) },
+			func(k *domain.Knowledge) *time.Time {
+				if v := k.LastVerified(); v != nil {
+					return &v.At
+				}
+				return nil
+			}},
+		{"rejection",
+			func(id string) (*domain.Knowledge, error) { return svc.Reject(ctx, id, "no", actor) },
+			func(k *domain.Knowledge) *time.Time {
+				if k.Rejection != nil {
+					return &k.Rejection.At
+				}
+				return nil
+			}},
 	} {
-		t.Run(string(tc.status), func(t *testing.T) {
+		t.Run(tc.what, func(t *testing.T) {
 			id := uid("stampit")
-			written, err := svc.Create(ctx, &domain.Knowledge{
-				Type: domain.TypeTerms, ID: id, Title: id, Status: tc.status,
-			}, actor)
+			if _, err := svc.Create(ctx, &domain.Knowledge{
+				Type: domain.TypeTerms, ID: id, Title: id,
+			}, actor); err != nil {
+				t.Fatal(err)
+			}
+			written, err := tc.rule(id)
 			if err != nil {
 				t.Fatal(err)
 			}
 			stamped := tc.at(written)
 			if stamped == nil {
-				t.Fatalf("create with status=%s stamped no %s", tc.status, tc.field)
+				t.Fatalf("%s recorded no timestamp", tc.what)
 			}
 			// Asserted directly, because a clock without nanosecond
 			// resolution (macOS) would let the round-trip check below
 			// pass on a value that loses precision on Linux.
 			if truncated := stamped.Truncate(time.Microsecond); !truncated.Equal(*stamped) {
 				t.Errorf("%s carries sub-microsecond precision timestamptz cannot store: %s",
-					tc.field, stamped.Format(time.RFC3339Nano))
+					tc.what, stamped.Format(time.RFC3339Nano))
 			}
 			read, err := svc.Get(ctx, id)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got, want := *tc.at(read), *tc.at(written); !got.Equal(want) {
-				t.Errorf("%s: write returned %s, database holds %s", tc.field,
+				t.Errorf("%s: write returned %s, database holds %s", tc.what,
 					want.Format(time.RFC3339Nano), got.Format(time.RFC3339Nano))
 			}
 		})
@@ -726,8 +798,8 @@ func TestUpdatedByFollowsContentIntegration(t *testing.T) {
 	if read.UpdatedBy != editor {
 		t.Errorf("a verification changed updated_by to %v; confirming is not producing", read.UpdatedBy)
 	}
-	if read.VerifiedBy == nil || *read.VerifiedBy != reviewer {
-		t.Errorf("verified_by = %v, want %v", read.VerifiedBy, reviewer)
+	if v := read.LastVerified(); v == nil || v.By != reviewer {
+		t.Errorf("verification = %v, want one by %v", v, reviewer)
 	}
 }
 

@@ -33,6 +33,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"create":    cmdCreate,
 	"update":    cmdUpdate,
 	"verify":    cmdVerify,
+	"reject":    cmdReject,
 	"delete":    cmdDelete,
 	"purge":     cmdPurge,
 	"reembed":   cmdReembed,
@@ -182,6 +183,28 @@ func typeList() string {
 	return strings.Join(ss, "|")
 }
 
+// triBool reads a flag that means "unasked" when empty, so a caller can
+// tell "not mentioned" from "explicitly false".
+func triBool(v, flag string) (*bool, error) {
+	if v == "" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return nil, fmt.Errorf("%s wants true or false, got %q", flag, v)
+	}
+	return &b, nil
+}
+
+// optBool turns an opt-in boolean flag into the tri-state the filters
+// take: unset stays unasked rather than becoming an explicit false.
+func optBool(v bool) *bool {
+	if !v {
+		return nil
+	}
+	return &v
+}
+
 func statusList() string {
 	ss := make([]string, len(domain.Statuses))
 	for i, s := range domain.Statuses {
@@ -203,13 +226,15 @@ func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
 		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.",
-		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --status verified\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Attested Computation' --status verified --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --status verified            # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
+		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --verified true\n  ochakai search churn --json | jq '.hits[0].attrs'\n  ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --verified true              # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
 	source := fs.String("source", "", "only entries citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
+	verified := fs.String("verified", "", "`true` for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value")
+	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
@@ -227,9 +252,14 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	verifiedFlag, err := triBool(*verified, "--verified")
+	if err != nil {
+		return err
+	}
 	hits, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
 		Source: *source, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
+		Verified: verifiedFlag, Rejected: optBool(*rejected),
 	})
 	if err != nil {
 		return err
@@ -242,8 +272,8 @@ func cmdSearch(ctx context.Context, args []string) error {
 		switch *sortBy {
 		case "verified_at":
 			lead = "-" // never verified sorts last
-			if h.VerifiedAt != nil {
-				lead = h.VerifiedAt.Format(time.RFC3339)
+			if v := h.LastVerified(); v != nil {
+				lead = v.At.Format(time.RFC3339)
 			}
 		case "usage":
 			lead = "0" // never-used drafts sort last
@@ -317,12 +347,13 @@ func cmdContext(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"context",
 		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
-		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --status verified --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
+		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --verified true --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands")
+	verified := fs.String("verified", "", "`true` for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
@@ -347,9 +378,13 @@ func cmdContext(ctx context.Context, args []string) error {
 	if *asJSON {
 		serverBudget = *budget
 	}
+	verifiedFlag, err := triBool(*verified, "--verified")
+	if err != nil {
+		return err
+	}
 	res, err := c.Context(ctx, apiclient.ContextParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
-		Prefixes: prefixes, Limit: *limit, MinScore: *minScore, Budget: serverBudget,
+		Prefixes: prefixes, Verified: verifiedFlag, Limit: *limit, MinScore: *minScore, Budget: serverBudget,
 	})
 	if err != nil {
 		return err
@@ -399,11 +434,20 @@ func renderEntry(k *domain.Knowledge) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s (%s) — %s\n", k.URI(), k.Status, k.DisplayTitle())
 	prov := "created by " + k.CreatedBy.String()
-	if k.VerifiedBy != nil && k.VerifiedAt != nil {
-		prov = fmt.Sprintf("verified by %s on %s; %s",
-			k.VerifiedBy, k.VerifiedAt.Format("2006-01-02"), prov)
+	if v := k.LastVerified(); v != nil {
+		verified := fmt.Sprintf("verified by %s on %s", v.By.String(), v.At.Format("2006-01-02"))
+		if n := len(k.Verifications); n > 1 {
+			verified += fmt.Sprintf(" (%d verifications)", n)
+		}
+		prov = verified + "; " + prov
 	}
 	fmt.Fprintln(&b, prov)
+	if r := k.Rejection; r != nil {
+		fmt.Fprintf(&b, "rejected by %s on %s\n", r.By.String(), r.At.Format("2006-01-02"))
+		if r.Note != "" {
+			fmt.Fprintf(&b, "rejection note: %s\n", r.Note)
+		}
+	}
 	if k.StatusNote != "" {
 		fmt.Fprintf(&b, "status note: %s\n", k.StatusNote)
 	}
@@ -787,8 +831,8 @@ func cmdUpdate(ctx context.Context, args []string) error {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nRecord a verification against the entry as it stands: you become\nverified_by and verified_at is stamped now. Promotes a draft, and\nre-affirms an entry that is already verified — which is what takes it\nout of both review feeds (--sort verified_at, --sort failed). Verifying\na rejected entry clears the rejection: the status becomes verified and\nrejected_by/rejected_at are dropped (the revision history keeps both).",
-		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r .verified_at\n")
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`update` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.",
+		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.verifications[-1].at'\n")
 	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -805,7 +849,54 @@ func cmdVerify(ctx context.Context, args []string) error {
 	if *asJSON {
 		return printJSON(k)
 	}
-	fmt.Printf("verified ochakai://%s by %s\n", k.ID, k.VerifiedBy)
+	by := "?"
+	if v := k.LastVerified(); v != nil {
+		by = v.By.String()
+	}
+	fmt.Printf("verified ochakai://%s by %s\n", k.ID, by)
+	return nil
+}
+
+// cmdReject records the ruling that stops an agent re-proposing knowledge
+// a human already turned down (design doc 0001 §9.1). Like verify it is a
+// ruling and not an edit, so it does not touch the document (design doc
+// 0043 §3.3) — which is why it is its own command rather than a status.
+func cmdReject(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"reject",
+		"Usage: ochakai reject [flags] <id>\n\nRecord that an entry was reviewed and not accepted, with the reason.\nRejected entries are hidden from search unless asked for\n(`search --rejected`), which is how an agent checks whether a proposal\nwas already turned down before making it again.\nIt does not edit the entry: the lifecycle status and the ETag stay put.\nA rejection is this instance's ruling, so an exported bundle carries the\nentry's real status rather than folding the ruling onto deprecated.\nUse --lift to withdraw one.",
+		"  ochakai reject metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai reject metrics/bad-revenue --lift\n")
+	note := fs.String("note", "", "why it was not accepted — the next agent reads this before proposing again")
+	lift := fs.Bool("lift", false, "withdraw the rejection instead of recording one")
+	asJSON := fs.Bool("json", false, "print the entry as JSON")
+	id, _, err := idArgs(fs, args, 1)
+	if err != nil {
+		return err
+	}
+	if *lift && *note != "" {
+		return fmt.Errorf("--lift withdraws a rejection; it takes no --note")
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	var k *domain.Knowledge
+	if *lift {
+		k, err = c.LiftRejection(ctx, id)
+	} else {
+		k, err = c.Reject(ctx, id, *note)
+	}
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(k)
+	}
+	if *lift {
+		fmt.Printf("rejection lifted on ochakai://%s\n", k.ID)
+		return nil
+	}
+	fmt.Printf("rejected ochakai://%s by %s\n", k.ID, k.Rejection.By.String())
 	return nil
 }
 
@@ -1024,10 +1115,25 @@ func cmdImport(ctx context.Context, args []string) error {
 		skipped = append(skipped, k.ID+".md: rejected by the server: "+err.Error())
 		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 	}
+	// A document that carried a verified key is confirmed by whoever ran
+	// the import — the actor who put it through the review gate (design
+	// docs 0009 §3.2, 0043 §3.2). The values inside the key are never
+	// read: they are the exporting instance's observations, not claims
+	// this one can adopt.
+	confirm := func(d *okf.Doc) {
+		if !d.Verified {
+			return
+		}
+		if _, err := c.Verify(ctx, d.ID); err != nil {
+			fmt.Fprintf(os.Stderr, "note: %s imported, but recording its verification failed: %v\n", d.ID, err)
+		}
+	}
 	for i := range entries {
-		k := &entries[i]
+		d := &entries[i]
+		k := &d.Knowledge
 		if _, err := c.Create(ctx, k); err == nil {
 			created++
+			confirm(d)
 			fmt.Printf("created %s\n", k.URI())
 			continue
 		} else if isInvalid(err) {
@@ -1052,6 +1158,7 @@ func cmdImport(ctx context.Context, args []string) error {
 			continue
 		}
 		updated++
+		confirm(d)
 		fmt.Printf("updated %s\n", k.URI())
 	}
 	attached := 0
@@ -1194,11 +1301,19 @@ func readEntry(path string) (*domain.Knowledge, error) {
 func decodeEntry(data []byte) (*domain.Knowledge, error) {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if bytes.HasPrefix(trimmed, []byte("---")) {
-		k, notes, err := okf.Parse(trimmed)
+		d, notes, err := okf.Parse(trimmed)
 		for _, n := range notes {
 			fmt.Fprintln(os.Stderr, "note:", n)
 		}
-		return k, err
+		if err != nil {
+			return nil, err
+		}
+		// A verified key on a single-document write is not acted on: this
+		// is an edit, and confirming an entry is a separate call
+		// (ochakai verify). Only bundle import turns the key into a
+		// verification, because that is the review gate (design doc 0043
+		// §3.2).
+		return &d.Knowledge, nil
 	}
 	var k domain.Knowledge
 	if err := json.Unmarshal(data, &k); err != nil {

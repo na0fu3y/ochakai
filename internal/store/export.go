@@ -81,7 +81,7 @@ func (e *ExportSnapshot) IndexRows(ctx context.Context) ([]domain.Knowledge, err
 // memory at once.
 func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.Knowledge, error) {
 	rows, err := e.tx.Query(ctx,
-		`SELECT `+knowledgeCols+` FROM knowledge
+		`SELECT `+knowledgeSelect+` FROM knowledge
 		 WHERE deleted_at IS NULL AND id = ANY($1) ORDER BY id`, ids)
 	if err != nil {
 		return nil, err

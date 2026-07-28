@@ -29,8 +29,11 @@ paths:
       operationId: searchKnowledge
       summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
-        Rejected entries are excluded unless the status filter explicitly
-        includes rejected (so agents can check for already-rejected proposals).
+        Rejected entries are excluded unless rejected=true is passed (so
+        agents can check for already-rejected proposals). Whether an entry
+        was confirmed is asked with verified, independently of the status
+        filter — status is the lifecycle value alone (design doc 0043
+        §§3.2-3.3).
         With sort=verified_at the endpoint lists entries by verification age
         (oldest first, never-verified last) instead of searching — the feed
         for golden query canary runs (docs/guides/golden-query-canary.md).
@@ -71,6 +74,22 @@ paths:
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
           explode: true
+        - name: verified
+          in: query
+          description: >
+            true for entries somebody has confirmed, false for ones nobody
+            has; omit to leave the question unasked. Independent of
+            status: a draft may be verified and a stable entry unverified
+            (OKF SPEC §§5.3-5.4).
+          schema: { type: boolean }
+        - name: rejected
+          in: query
+          description: >
+            true to list only entries a human turned down. Omitted, or
+            false, keeps them out of results — asking for them is opt-in,
+            which is how an agent checks whether a proposal was already
+            rejected.
+          schema: { type: boolean }
         - name: tag
           in: query
           schema: { type: array, items: { type: string } }
@@ -150,11 +169,12 @@ paths:
                         runtime: bigquery
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
-                        status: verified
+                        status: stable
                         created_by: { kind: human, name: tanaka@example.co.jp }
                         updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verified_by: { kind: human, name: sato@example.co.jp }
-                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        verifications:
+                          - by: { kind: human, name: sato@example.co.jp }
+                            at: "2026-07-10T01:52:16.774301Z"
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         attrs:
@@ -186,12 +206,13 @@ paths:
                         description: Net revenue from completed orders, excluding tax and shipping.
                         resource: bigquery://example-analytics.shop.orders
                         tags: [finance, core]
-                        status: verified
+                        status: stable
                         stale_after: "2026-12-31"
                         created_by: { kind: human, name: tanaka@example.co.jp }
                         updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verified_by: { kind: human, name: sato@example.co.jp }
-                        verified_at: "2026-07-14T02:33:41.019778Z"
+                        verifications:
+                          - by: { kind: human, name: sato@example.co.jp }
+                            at: "2026-07-14T02:33:41.019778Z"
                         links:
                           - { target: glossary/completed-order, text: completed order }
                           - { target: tables/shop-orders, text: shop.orders }
@@ -306,11 +327,14 @@ paths:
       operationId: createKnowledge
       summary: Create a knowledge entry
       description: >
-        Entries default to draft. Anyone who can reach ochakai may set
-        status=verified; verified_by records who did (provenance over
-        authorization). A live entry with the same id is a 409 —
-        including rejected ones — but creating over a soft-deleted entry
-        revives it (its prior history stays in the revisions).
+        Entries default to draft. status is the lifecycle value alone
+        (draft, stable, deprecated); confirming an entry is a separate
+        act with its own endpoint, POST /api/v1/verify/{id}, and anyone
+        who can reach ochakai may perform it — the ledger records who did
+        (provenance over authorization). A live entry with the same id is
+        a 409 — including rejected ones — but creating over a soft-deleted
+        entry revives it (its prior history stays in the revisions, and
+        its rulings do not carry over: a create is a new entry).
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
       requestBody:
@@ -585,13 +609,13 @@ paths:
                       - type: Metric
                         id: metrics/average-order-value
                         description: Revenue divided by completed orders, over the same window.
-                        status: verified
+                        status: stable
                         updated_at: "2026-07-02T05:26:44.712009Z"
                       - type: Metric
                         id: metrics/revenue
                         title: Revenue
                         description: Net revenue from completed orders, excluding tax and shipping.
-                        status: verified
+                        status: stable
                         updated_at: "2026-07-14T02:33:41.019778Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -625,6 +649,14 @@ paths:
           in: query
           schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
           explode: true
+        - name: verified
+          in: query
+          description: >
+            true for entries somebody has confirmed, false for ones nobody
+            has; omit to leave the question unasked. There is no rejected
+            parameter here: a context pack never carries knowledge
+            somebody turned down.
+          schema: { type: boolean }
         - name: tag
           in: query
           schema: { type: array, items: { type: string } }
@@ -721,12 +753,12 @@ paths:
                       - id: queries/monthly-revenue
                         type: Attested Computation
                         title: monthly-revenue
-                        status: verified
+                        status: stable
                         score: 1.35
                       - id: metrics/revenue
                         type: Metric
                         title: Revenue
-                        status: verified
+                        status: stable
                         score: 0.48
                       - id: insights/revenue-seasonality
                         type: Insight
@@ -739,11 +771,12 @@ paths:
                         runtime: bigquery
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
-                        status: verified
+                        status: stable
                         created_by: { kind: human, name: tanaka@example.co.jp }
                         updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verified_by: { kind: human, name: sato@example.co.jp }
-                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        verifications:
+                          - by: { kind: human, name: sato@example.co.jp }
+                            at: "2026-07-10T01:52:16.774301Z"
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         attrs:
@@ -782,12 +815,13 @@ paths:
                             usage_count: 24
                             last_modified: "2026-05-30"
                         usage_window: { from: "2026-06-01", to: "2026-06-30" }
-                        status: verified
+                        status: stable
                         stale_after: "2026-12-31"
                         created_by: { kind: human, name: tanaka@example.co.jp }
                         updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verified_by: { kind: human, name: sato@example.co.jp }
-                        verified_at: "2026-07-14T02:33:41.019778Z"
+                        verifications:
+                          - by: { kind: human, name: sato@example.co.jp }
+                            at: "2026-07-14T02:33:41.019778Z"
                         links:
                           - { target: glossary/completed-order, text: completed order }
                           - { target: tables/shop-orders, text: shop.orders }
@@ -824,7 +858,7 @@ paths:
                         type: BigQuery Table
                         title: shop.orders
                         description: One row per order, including cancelled and refunded ones.
-                        status: verified
+                        status: stable
                         bytes: 2144
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
@@ -881,12 +915,13 @@ paths:
                         last_modified: "2026-06-18"
                         usage_window: { from: "2026-01-01", to: "2026-06-30" }
                     usage_window: { from: "2026-06-01", to: "2026-06-30" }
-                    status: verified
+                    status: stable
                     stale_after: "2026-12-31"
                     created_by: { kind: human, name: tanaka@example.co.jp }
                     updated_by: { kind: human, name: tanaka@example.co.jp }
-                    verified_by: { kind: human, name: sato@example.co.jp }
-                    verified_at: "2026-07-14T02:33:41.019778Z"
+                    verifications:
+                      - by: { kind: human, name: sato@example.co.jp }
+                        at: "2026-07-14T02:33:41.019778Z"
                     links:
                       - { target: glossary/completed-order, text: completed order }
                       - { target: tables/shop-orders, text: shop.orders }
@@ -1003,7 +1038,7 @@ paths:
                       usage_count: 31
                       last_modified: "2026-07-20"
                   usage_window: { from: "2026-07-01", to: "2026-07-31" }
-                  status: verified
+                  status: stable
                   stale_after: "2027-12-31"
                   attrs: { unit: JPY, grain: order }
                   body: |
@@ -1037,9 +1072,10 @@ paths:
                   description: >
                     updated_by is now the caller who made this edit, while
                     created_by still names whoever wrote the entry.
-                    verified_by and verified_at are carried over unchanged —
-                    a PUT does not re-affirm an entry; POST /api/v1/verify/{id}
-                    does. The new ETag is "2026-07-27T00:18:52.640117Z".
+                    The verifications ledger is untouched — a PUT edits the
+                    document and rules on nothing; POST /api/v1/verify/{id}
+                    is what confirms an entry. The new ETag is
+                    "2026-07-27T00:18:52.640117Z".
                   value:
                     type: Metric
                     id: metrics/revenue
@@ -1055,12 +1091,13 @@ paths:
                         usage_count: 31
                         last_modified: "2026-07-20"
                     usage_window: { from: "2026-07-01", to: "2026-07-31" }
-                    status: verified
+                    status: stable
                     stale_after: "2027-12-31"
                     created_by: { kind: human, name: tanaka@example.co.jp }
                     updated_by: { kind: human, name: sato@example.co.jp }
-                    verified_by: { kind: human, name: sato@example.co.jp }
-                    verified_at: "2026-07-14T02:33:41.019778Z"
+                    verifications:
+                      - by: { kind: human, name: sato@example.co.jp }
+                        at: "2026-07-14T02:33:41.019778Z"
                     links:
                       - { target: glossary/completed-order, text: completed order }
                       - { target: tables/shop-orders, text: shop.orders }
@@ -1217,12 +1254,13 @@ paths:
                     description: Net revenue from completed orders, excluding tax and shipping.
                     resource: bigquery://example-analytics.shop.orders
                     tags: [finance, core]
-                    status: verified
+                    status: stable
                     stale_after: "2026-12-31"
                     created_by: { kind: human, name: tanaka@example.co.jp }
                     updated_by: { kind: human, name: tanaka@example.co.jp }
-                    verified_by: { kind: human, name: sato@example.co.jp }
-                    verified_at: "2026-07-14T02:33:41.019778Z"
+                    verifications:
+                      - by: { kind: human, name: sato@example.co.jp }
+                        at: "2026-07-14T02:33:41.019778Z"
                     links:
                       - { target: glossary/completed-order, text: completed order }
                       - { target: tables/shop-orders, text: shop.orders }
@@ -1252,13 +1290,16 @@ paths:
       operationId: verifyKnowledge
       summary: Record a verification against the entry as it stands
       description: >
-        The caller becomes verified_by and verified_at is stamped now,
-        whether the entry was a draft being promoted or an entry that was
-        already verified being re-affirmed. The second case is why this
-        endpoint exists: PUT carries the stored verified_at over and writes
-        nothing at all when the content is unchanged, so "checked again,
-        still right" could not be recorded — and both review feeds
+        Appends the caller and the current time to the entry's
+        verifications ledger, whether this is the first confirmation or
+        the tenth re-check. Re-checking is why the endpoint exists: PUT
+        writes nothing at all when the content is unchanged, so "checked
+        again, still right" could not be recorded — and both review feeds
         (sort=verified_at, sort=failed) had no exit (design doc 0025 §6).
+        It does not touch the document: the entry's status, updated_at and
+        ETag all stay put, because confirming knowledge and publishing it
+        are different acts (design doc 0043 §3.2). Promoting a draft to
+        stable is a PUT.
         A rejection is cleared. Not an MCP tool: verification is the human
         ruling the write-back loop turns on. Lives at its own top-level
         path for the same reason /usage does — a suffix after the
@@ -1275,23 +1316,23 @@ paths:
                 promoted:
                   summary: POST /api/v1/verify/insights/revenue-seasonality
                   description: >
-                    The draft became verified, verified_by is the caller, and
-                    verified_at is now — as is updated_at, since a
-                    verification is a change to the entry. updated_by is
-                    untouched: it names who last changed the content, and a
-                    verification changes none.
+                    A verification by the caller is appended. Nothing else
+                    moves: the status is whatever the writer set, and
+                    updated_at (the ETag, and OKF's generated.at) is
+                    untouched, because the document did not change.
                   value:
                     type: Insight
                     id: insights/revenue-seasonality
                     title: Reading revenue month over month
                     description: Why a December spike and a January drop are normal.
                     tags: [finance]
-                    status: verified
+                    status: stable
                     stale_after: "2027-01-31"
                     created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                     updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                    verified_by: { kind: human, name: tanaka@example.co.jp }
-                    verified_at: "2026-07-27T00:41:12.905337Z"
+                    verifications:
+                      - by: { kind: human, name: tanaka@example.co.jp }
+                        at: "2026-07-27T00:41:12.905337Z"
                     links:
                       - { target: metrics/revenue, text: Revenue }
                     body: |
@@ -1300,6 +1341,74 @@ paths:
                       below it.
                     created_at: "2026-07-21T06:14:55.402881Z"
                     updated_at: "2026-07-27T00:41:12.905337Z"
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/reject/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The entry's id; slashes are real path separators.
+        schema: { type: string }
+    post:
+      operationId: rejectKnowledge
+      summary: Record that an entry was reviewed and not accepted
+      description: >
+        Writes the caller, the time and the reason as the entry's live
+        ruling, replacing any earlier one. Rejected entries drop out of
+        searches that did not ask for them (rejected=true), which is how
+        an agent checks whether a proposal was already turned down before
+        making it again — the memory of no the write-back loop is built on
+        (design doc 0001 §9.1).
+        Like verify it is a ruling and not an edit: the document keeps its
+        lifecycle status, its updated_at and its ETag (design doc 0043
+        §3.3). Verifications are not cleared — somebody vouched for this
+        and somebody later ruled against it is exactly the history worth
+        keeping. Not an MCP tool.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
+      requestBody:
+        required: false
+        description: Omit the body entirely to reject without a stated reason.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Why it was not accepted, up to 2000 bytes.
+            example: { note: "double-counts refunds; see policies/revenue-recognition" }
+      responses:
+        "200":
+          description: The entry, carrying its new rejection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: liftKnowledgeRejection
+      summary: Withdraw a rejection
+      description: >
+        Deletes the live ruling, returning the entry to the ordinary pool.
+        A 404 when the entry carries no rejection: lifting nothing is a
+        mistake worth reporting rather than a silent success.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
+      responses:
+        "200":
+          description: The entry, with no rejection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Knowledge" }
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
@@ -1466,12 +1575,13 @@ paths:
                           title: Reading revenue month over month
                           description: Why a December spike and a January drop are normal.
                           tags: [finance]
-                          status: verified
+                          status: stable
                           stale_after: "2027-01-31"
                           created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                           updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                          verified_by: { kind: human, name: tanaka@example.co.jp }
-                          verified_at: "2026-07-27T00:41:12.905337Z"
+                          verifications:
+                            - by: { kind: human, name: tanaka@example.co.jp }
+                              at: "2026-07-27T00:41:12.905337Z"
                           links:
                             - { target: metrics/revenue, text: Revenue }
                           body: |
@@ -1575,11 +1685,12 @@ paths:
                         runtime: bigquery
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
-                        status: verified
+                        status: stable
                         created_by: { kind: human, name: tanaka@example.co.jp }
                         updated_by: { kind: human, name: tanaka@example.co.jp }
-                        verified_by: { kind: human, name: sato@example.co.jp }
-                        verified_at: "2026-07-10T01:52:16.774301Z"
+                        verifications:
+                          - by: { kind: human, name: sato@example.co.jp }
+                            at: "2026-07-10T01:52:16.774301Z"
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         body: |
@@ -1961,10 +2072,50 @@ components:
     Status:
       type: string
       description: >
-        deprecated means "was correct, no longer recommended"; rejected
-        means "was never accepted" — the record keeps agents from
-        re-proposing the same knowledge.
-      enum: [draft, verified, deprecated, rejected]
+        The lifecycle value, spelled as OKF SPEC §5.4 spells it: draft is
+        "not yet reviewed, possibly incomplete", stable is "ready for
+        consumption", deprecated is "kept for links and history, no longer
+        current".
+        It says nothing about whether anyone confirmed the entry — SPEC
+        §5.3 puts that in `verified`, and ochakai keeps it in the
+        verifications ledger, so a draft may be verified and a stable
+        entry unverified (design doc 0043 §3.2). "Was never accepted" is
+        likewise not a lifecycle value but a ruling, in `rejection`
+        (§3.3).
+      enum: [draft, stable, deprecated]
+    Verification:
+      type: object
+      description: >
+        One recorded confirmation — an element of OKF's `verified` list
+        (SPEC §5.2), and under §5.3 the only thing that makes an entry
+        anything but unverified. Append-only and plural: re-checking an
+        entry adds a row rather than replacing one, so the record answers
+        "how often, and by whom" and not just "when last".
+        Written by POST /api/v1/verify/{id}, never from a payload.
+      properties:
+        by: { $ref: "#/components/schemas/Actor" }
+        at: { type: string, format: date-time }
+    Rejection:
+      type: object
+      description: >
+        This instance's ruling that an entry was not accepted — the memory
+        that stops an agent re-proposing knowledge a human already turned
+        down. One live ruling per entry; POST /api/v1/reject/{id} records
+        it and DELETE lifts it.
+        It is not a lifecycle value: a rejection is a judgment about the
+        concept rather than a stage of it, and it could not round-trip as
+        a status because export had to fold it onto deprecated, which
+        asserts the opposite thing about the entry (design doc 0043 §3.3).
+        A bundle does not carry it (design doc 0009).
+      properties:
+        by: { $ref: "#/components/schemas/Actor" }
+        at: { type: string, format: date-time }
+        note:
+          description: >
+            Why it was not accepted. The rejecter's words, distinct from
+            the entry's own status_note, which belongs to whoever wrote
+            the entry.
+          type: string
     Actor:
       type: object
       description: >
@@ -2131,7 +2282,10 @@ components:
         status: { $ref: "#/components/schemas/Status" }
         status_note:
           type: string
-          description: Free-form reason for the current status (why rejected/deprecated).
+          description: >
+            Free-form reason for the current lifecycle status — why an
+            entry is deprecated. The writer's words; a rejection's reason
+            belongs to the rejecter and lives in `rejection.note`.
         stale_after:
           type: string
           format: date
@@ -2174,10 +2328,22 @@ components:
             generated.by (design doc 0036 §3.3). Not created_by: after
             somebody else edits an entry, the creator is no longer who
             the content stands by. Verifying does not change it.
-        verified_by: { $ref: "#/components/schemas/Actor", readOnly: true }
-        verified_at: { type: string, format: date-time, readOnly: true }
-        rejected_by: { $ref: "#/components/schemas/Actor", readOnly: true }
-        rejected_at: { type: string, format: date-time, readOnly: true }
+        verifications:
+          type: array
+          items: { $ref: "#/components/schemas/Verification" }
+          readOnly: true
+          description: >
+            Every recorded confirmation, oldest first. Empty (and omitted)
+            means unverified, which is SPEC §5.3's own signal. Written by
+            POST /api/v1/verify/{id}: this is an instance ledger, never a
+            payload field, and import reads only whether a bundle's
+            `verified` key was present (design docs 0009, 0043 §3.2).
+        rejection:
+          allOf: [{ $ref: "#/components/schemas/Rejection" }]
+          readOnly: true
+          description: >
+            The live ruling, absent when there is none. Written by
+            POST /api/v1/reject/{id} and cleared by DELETE.
         links:
           type: array
           items: { $ref: "#/components/schemas/Link" }
