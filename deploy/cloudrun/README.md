@@ -577,12 +577,13 @@ implies the first:
   private, for a reference-only copy or for freezing a base during a
   migration.
 - **`OCHAKAI_PUBLIC_READ_ONLY=true`** — the deployment reads no identity
-  (design doc 0041). The `Authorization` header is ignored: without Cloud Run
+  (design doc 0042). The `Authorization` header is ignored: without Cloud Run
   IAM in front its signature is unverifiable, and a forged unsigned token
   would otherwise be believed. `X-Ochakai-On-Behalf-Of` is ignored. Every
   caller is `human:anonymous`, and nothing returns 401. It **implies
-  read-only** — the server refuses to start if it would be publicly readable
-  and writable, so the dangerous half of "public" has no configuration.
+  read-only** and cannot be separated from it — a publicly readable *and*
+  writable ochakai is not a configuration this program accepts, so the
+  dangerous half of "public" has no configuration.
 
 That is the whole trade: a service that believes nobody is safe to open,
 because it records nobody and writes nothing.
