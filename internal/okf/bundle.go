@@ -26,15 +26,22 @@ import (
 // producer's layout works (design doc 0008); the original path is
 // preserved for re-export. Unreferenced non-markdown files sitting in an
 // entry's canonical namespace ("<id>/<name>") attach to that entry
-// (design doc 0013). Anything else that cannot become an entry or an
-// attachment — orphaned non-markdown files, unparsable documents, invalid
-// ids — is reported in skipped as "path: reason" lines rather than
+// (design doc 0013).
+//
+// Everything else the bundle carried comes back in loose, at the path it
+// arrived at: a file no entry references, and a markdown document with
+// no type — which SPEC §11 makes not-a-concept, and which is therefore a
+// markdown file rather than a broken entry. What enters the bundle
+// leaves it (design doc 0046 §3.2), so the skip report is down to the
+// paths that cannot be stored at all: a segment that starts with a dot,
+// a name OKF reserves for a generated file, an empty file, one past the
+// size limit. Those are reported as "path: reason" lines rather than
 // failing the whole bundle.
 //
 // There is no archive unwrapping: `tar czf ga4.tgz ga4/` imports under
 // "ga4/" — the packed shape is the structure, and a wrapper directory is
 // how a bundle keeps its own namespace (design doc 0017 §4.3).
-func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment, skipped, notes []string) {
+func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment, loose []BundleFile, skipped, notes []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
 		paths = append(paths, p)
@@ -56,7 +63,13 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment
 		}
 		d, docNotes, err := fromBundleFile(clean, files[p])
 		if err != nil {
-			skipped = append(skipped, p+": "+err.Error())
+			// A markdown file that is not a concept is still a file the
+			// bundle carried (design doc 0046 §3.2). SPEC §11 makes the
+			// type key what a concept has, so a document without one is
+			// not a broken concept — and one that does not parse as
+			// frontmatter at all is a markdown file, which is a thing a
+			// producer's bundle is full of.
+			nonMarkdown = append(nonMarkdown, p)
 			continue
 		}
 		for _, n := range docNotes {
@@ -71,13 +84,49 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment
 	}
 	atts, used := resolveAttachments(files, concepts)
 	for _, p := range nonMarkdown {
-		if !used[cleanPath(p)] {
-			skipped = append(skipped, p+": not a markdown concept (referenced by no entry body, and not in an entry's directory)")
+		clean := cleanPath(p)
+		if used[clean] {
+			continue
 		}
+		// Nobody's file is still the bundle's file. What enters leaves
+		// (design doc 0046 §3.2): the only thing that cannot be kept is
+		// a path ochakai cannot address — a segment starting with a dot,
+		// a name OKF reserves for a generated file, an empty file, or
+		// one past the size limit.
+		if err := loadable(clean, files[p]); err != nil {
+			skipped = append(skipped, p+": "+err.Error())
+			continue
+		}
+		loose = append(loose, BundleFile{Path: clean, Data: files[p]})
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
-	return entries, atts, skipped, notes
+	sort.Slice(loose, func(i, j int) bool { return loose[i].Path < loose[j].Path })
+	return entries, atts, loose, skipped, notes
+}
+
+// BundleFile is one object of the bundle that belongs to no entry: a
+// producer's seed data in a shared directory, a diagram nothing links
+// yet, a markdown file that carries no type. It is written at the path
+// it arrived at (design doc 0046 §§3.2, 3.5), and whether an entry ever
+// claims it is a question that entry's body answers (§3.3).
+type BundleFile struct {
+	Path string
+	Data []byte
+}
+
+// loadable reports why a bundle path cannot be stored, or nil.
+func loadable(clean string, data []byte) error {
+	if !domain.ValidBundlePath(clean) {
+		return fmt.Errorf("not an addressable bundle path")
+	}
+	if len(data) == 0 {
+		return fmt.Errorf("empty file")
+	}
+	if len(data) > domain.MaxAttachmentSize {
+		return fmt.Errorf("exceeds %d MiB", domain.MaxAttachmentSize>>20)
+	}
+	return nil
 }
 
 // cleanPath canonicalizes one bundle path: relative prefix stripped,

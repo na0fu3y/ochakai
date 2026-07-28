@@ -273,7 +273,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	for _, want := range []string{
 		"unchanged ochakai://metrics/same\n",
 		"updated ochakai://metrics/diff\n",
-		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 skipped, 0 notes)\n",
+		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 files, 0 skipped, 0 notes)\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)

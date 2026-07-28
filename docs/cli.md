@@ -307,21 +307,24 @@ Usage: ochakai import [flags] <dir | file.tar.gz | ->
 Import an OKF bundle (a directory of markdown + YAML frontmatter, or
 a tar.gz of one; "-" reads the tar.gz from stdin). The inverse of
 `ochakai export`: each path names its entry (the path minus .md is
-the id), the frontmatter type key names the type (required — files
-without one are skipped and reported), reserved index.md / log.md
-files are skipped, keys the format does not define are kept as
-written, and existing entries are replaced (kept as revisions; entries identical
+the id), the frontmatter type key names the type (required — a
+markdown file without one is not a concept, and is kept as a file),
+reserved index.md / log.md files are skipped, keys the format does
+not define are kept as written, and existing entries are replaced (kept as revisions; entries identical
 to what is stored are left untouched and reported as unchanged;
 entries the server rejects as invalid — e.g. one whose type is not a
 single line — are skipped and reported).
 Files referenced by an entry's body markdown links become its
 attachments, wherever they sit in the bundle (their location is
 preserved for re-export); unreferenced data files inside an entry's
-directory (<id>/<name>) attach to that entry. The packed shape is
+directory (<id>/<name>) attach to that entry. Everything else the
+bundle carried is written at the path it arrived at — what enters
+leaves, so nothing is dropped for belonging to no entry. The packed shape is
 the structure: an archive wrapped in a single directory imports
 under that directory — the bundle keeps its own namespace. Works
 with any OKF bundle, not just ochakai's own.
-A file that cannot be read is skipped; a value read differently than
+A file that cannot be stored at all — empty, oversized, or at a path
+ochakai cannot address — is skipped; a value read differently than
 it was written is a note and the entry still imports. Both are
 reported and neither fails the command, because a consumer takes the
 document rather than rejecting it. --strict is the opposite posture,

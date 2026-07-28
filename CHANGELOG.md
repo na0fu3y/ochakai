@@ -20,6 +20,24 @@ last entry.
 
 ### Added
 
+- **What enters the bundle leaves it** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2). `ochakai
+  import` now keeps every file the bundle carried, at the path it
+  arrived at — a file no entry references, a markdown document with no
+  `type`, an archive, an SVG. They are written through the bundle
+  address, so nothing is attributed to an entry that did not ask for it:
+  whether an entry shows a file is a question its body answers (§3.3).
+
+  A bundle used to come back smaller than it went in. Anything that was
+  not a concept and not an attachment was reported and dropped, which is
+  the one thing a store of bundles must not do — and the report made it
+  look deliberate. The skip list is now down to what cannot be stored at
+  all: an empty file, one past 5 MiB, or a path ochakai cannot address.
+
+  The summary line and `--dry-run` count them (`… 0 attachments, 3
+  files, 0 skipped`), and `--strict` is unaffected: a file that is kept
+  is not a reinterpretation of anything.
+
 - **The bundle address reads and writes every object in it** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.5).
   `GET|PUT|DELETE /api/v1/bundle/{path}` now serves a concept at

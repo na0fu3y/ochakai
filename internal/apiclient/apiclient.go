@@ -665,3 +665,19 @@ func (c *Client) doJSON(ctx context.Context, method, path string, query url.Valu
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
+
+// PutBundleFile writes one object of the bundle at its path
+// (PUT /api/v1/bundle/{path}, design doc 0046 §3.5). It is how an import
+// keeps what a bundle carried besides its concepts: a file no entry
+// references, or a markdown file with no type, which the server stores
+// as a file rather than reading as a concept.
+func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) error {
+	resp, err := c.doRaw(ctx, http.MethodPut, "/api/v1/bundle/"+path, nil,
+		"application/octet-stream", nil, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
+}
