@@ -479,7 +479,7 @@ func TestRequestActorUsesCallHeaders(t *testing.T) {
 // all there is — and correct, since such callers cannot share a session
 // across identities.
 func TestRequestActorFallsBackToContext(t *testing.T) {
-	want := domain.Actor{Kind: domain.ActorAgent, Name: "sa@example.gserviceaccount.com"}
+	want := domain.Actor{Kind: domain.ActorProcess, Name: "sa@example.gserviceaccount.com"}
 	ctx := httpauth.WithActor(context.Background(), want)
 	for _, req := range []*mcp.CallToolRequest{
 		{},

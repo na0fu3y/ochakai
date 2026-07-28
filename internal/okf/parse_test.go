@@ -295,7 +295,7 @@ type: Insight
 title: 売上の季節性
 status: verified
 timestamp: '2026-05-28T22:51:43+00:00'
-created_by: 'agent:claude-code'
+created_by: 'process:claude-code'
 verified_by: 'human:na0'
 verified_at: '2026-06-01T00:00:00Z'
 ---

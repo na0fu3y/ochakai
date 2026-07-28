@@ -7,7 +7,7 @@
 //   - `ochakai ui` serves it on loopback and proxies with the caller's
 //     own Google identity (human:<email>);
 //   - `ochakai serve-ui` serves it as a deployed service (Cloud Run)
-//     and proxies with its service identity (agent:<sa-email>).
+//     and proxies with its service identity (process:<sa-email>).
 package webui
 
 import _ "embed"

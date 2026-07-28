@@ -37,7 +37,7 @@ func TestActorFromIDToken(t *testing.T) {
 		{
 			name:  "service account is an agent",
 			token: fakeIDToken(`{"email":"bot@myproj.iam.gserviceaccount.com"}`),
-			want:  domain.Actor{Kind: domain.ActorAgent, Name: "bot@myproj.iam.gserviceaccount.com"},
+			want:  domain.Actor{Kind: domain.ActorProcess, Name: "bot@myproj.iam.gserviceaccount.com"},
 		},
 		{name: "empty", token: "", wantErr: true},
 		{name: "not a jwt", token: "abc", wantErr: true},
@@ -115,7 +115,7 @@ func TestInsecureDevActsAsAnonymous(t *testing.T) {
 // application never reads like one tanaka wrote directly (design doc
 // 0027).
 func TestDelegate(t *testing.T) {
-	sa := domain.Actor{Kind: domain.ActorAgent, Name: "insightflow@example.iam.gserviceaccount.com"}
+	sa := domain.Actor{Kind: domain.ActorProcess, Name: "insightflow@example.iam.gserviceaccount.com"}
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
 	allowed := []string{sa.Name}
 
@@ -148,7 +148,7 @@ func TestDelegate(t *testing.T) {
 		if got != want {
 			t.Errorf("actor = %+v, want %+v", got, want)
 		}
-		if !strings.Contains(got.String(), "via agent:insightflow@") {
+		if !strings.Contains(got.String(), "via process:insightflow@") {
 			t.Errorf("rendered provenance hides the delegation: %s", got)
 		}
 	})

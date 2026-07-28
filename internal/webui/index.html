@@ -524,7 +524,7 @@ function fmtDate(s) {
 // surface, so it is where the distinction has to be visible.
 function actorStr(a) {
   if (!a || !a.name) return '';
-  return (a.kind === 'agent' ? '🤖 ' : '👤 ') + a.name + (a.via ? ' via ' + a.via : '');
+  return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name + (a.via ? ' via ' + a.via : '');
 }
 // Whole days since an ISO timestamp (null for unparseable input).
 function daysSince(s) {

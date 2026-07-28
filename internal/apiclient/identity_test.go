@@ -39,8 +39,8 @@ func TestIdentityPlainHTTPIsAnonymous(t *testing.T) {
 func TestIdentityPrefixesActors(t *testing.T) {
 	for email, want := range map[string]string{
 		"someone@example.com":                 "human:someone@example.com",
-		"robot@proj.iam.gserviceaccount.com":  "agent:robot@proj.iam.gserviceaccount.com",
-		"ochakai@appspot.gserviceaccount.com": "agent:ochakai@appspot.gserviceaccount.com",
+		"robot@proj.iam.gserviceaccount.com":  "process:robot@proj.iam.gserviceaccount.com",
+		"ochakai@appspot.gserviceaccount.com": "process:ochakai@appspot.gserviceaccount.com",
 	} {
 		c := &Client{
 			tokens: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: fakeJWT(`{"email":"` + email + `"}`)}),

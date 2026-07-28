@@ -51,7 +51,7 @@ func (c *Client) TokenSource() oauth2.TokenSource { return c.tokens }
 
 // Identity resolves, locally, the identity this client would present:
 // the ID token's email, prefixed the way the server maps actors (design
-// doc 0002) — service accounts to agent:, everyone else to human:.
+// doc 0002) — service accounts to process:, everyone else to human:.
 // Plain-http development servers see human:anonymous. The server's actor
 // resolution is authoritative; this is the client's best-effort view.
 func (c *Client) Identity() (actor, auth string, err error) {
@@ -66,9 +66,9 @@ func (c *Client) Identity() (actor, auth string, err error) {
 	if email == "" {
 		return "", c.auth, fmt.Errorf("ID token carries no email claim")
 	}
-	prefix := "human:"
+	prefix := domain.ActorHuman + ":"
 	if strings.HasSuffix(email, ".gserviceaccount.com") {
-		prefix = "agent:"
+		prefix = domain.ActorProcess + ":"
 	}
 	return prefix + email, c.auth, nil
 }

@@ -218,8 +218,8 @@ paths:
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
-                        updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         body: |
@@ -246,8 +246,8 @@ paths:
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
-                        updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         body: |
@@ -929,11 +929,11 @@ paths:
                     created_by:
                       kind: human
                       name: tanaka@example.co.jp
-                      via: agent:insightflow@example.iam.gserviceaccount.com
+                      via: process:insightflow@example.iam.gserviceaccount.com
                     updated_by:
                       kind: human
                       name: tanaka@example.co.jp
-                      via: agent:insightflow@example.iam.gserviceaccount.com
+                      via: process:insightflow@example.iam.gserviceaccount.com
                     links:
                       - { target: metrics/revenue, text: Revenue }
                     body: |
@@ -1288,8 +1288,8 @@ paths:
                     tags: [finance]
                     status: verified
                     stale_after: "2027-01-31"
-                    created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
-                    updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                    created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                    updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                     verified_by: { kind: human, name: tanaka@example.co.jp }
                     verified_at: "2026-07-27T00:41:12.905337Z"
                     links:
@@ -1468,8 +1468,8 @@ paths:
                           tags: [finance]
                           status: verified
                           stale_after: "2027-01-31"
-                          created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
-                          updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                          created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                          updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                           verified_by: { kind: human, name: tanaka@example.co.jp }
                           verified_at: "2026-07-27T00:41:12.905337Z"
                           links:
@@ -1482,7 +1482,7 @@ paths:
                           updated_at: "2026-07-27T00:41:12.905337Z"
                       - rev: 1
                         change: create
-                        changed_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        changed_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         changed_at: "2026-07-21T06:14:55.402881Z"
                         snapshot:
                           type: Insight
@@ -1492,8 +1492,8 @@ paths:
                           tags: [finance]
                           status: draft
                           stale_after: "2027-01-31"
-                          created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
-                          updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                          created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                          updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                           links:
                             - { target: metrics/revenue, text: Revenue }
                           body: |
@@ -1560,8 +1560,8 @@ paths:
                         tags: [finance]
                         status: draft
                         stale_after: "2027-01-31"
-                        created_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
-                        updated_by: { kind: agent, name: analyst@example.iam.gserviceaccount.com }
+                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
+                        updated_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         body: |
@@ -1892,7 +1892,7 @@ components:
       required: false
       description: >
         Delegated end-user identity (design doc 0027): "kind:identity",
-        kind human or agent, no whitespace in the identity, at most 320
+        kind human or process, no whitespace in the identity, at most 320
         bytes — e.g. "human:tanaka@example.co.jp". An application on the
         delegator allowlist (OCHAKAI_DELEGATING_CALLERS) forwards who it
         is acting for; the forwarded identity is recorded as the actor
@@ -1971,13 +1971,20 @@ components:
         Who acted. Resolved from the caller's Google identity, never from
         the request payload (design doc 0009).
       properties:
-        kind: { type: string, enum: [human, agent] }
+        kind:
+          description: >
+            The spellings OKF SPEC §7 defines (design doc 0043 §3.8).
+            Anything that is not a person is a process — §5.3 derives
+            trust from the human: prefix alone, so no finer distinction
+            is load-bearing. Service accounts are processes.
+          type: string
+          enum: [human, process]
         name: { type: string }
         via:
           description: >
             The delegating caller, when an application forwarded an end
             user's identity with X-Ochakai-On-Behalf-Of (design doc
-            0027) — e.g. "agent:app@project.iam.gserviceaccount.com" on
+            0027) — e.g. "process:app@project.iam.gserviceaccount.com" on
             an entry whose actor is the person who used that application.
             Absent when the caller acted as itself. Recorded rather than
             replaced: a write made through an application must stay

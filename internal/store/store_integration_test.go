@@ -1536,7 +1536,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 	const id = "it-delegated"
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
-	via := "agent:insightflow@example.iam.gserviceaccount.com"
+	via := "process:insightflow@example.iam.gserviceaccount.com"
 	delegated := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp", Via: via}
 
 	if err := s.Create(ctx, &domain.Knowledge{
@@ -1752,7 +1752,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		}
 	}
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.com"}
-	agent := domain.Actor{Kind: domain.ActorAgent, Name: "claude-code"}
+	agent := domain.Actor{Kind: domain.ActorProcess, Name: "claude-code"}
 	k := &domain.Knowledge{Type: domain.TypeComputations, ID: id, Title: "月次売上",
 		Status: domain.StatusDraft, CreatedBy: agent}
 	if err := s.Create(ctx, k, false); err != nil {

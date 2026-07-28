@@ -917,3 +917,147 @@ func TestMigrationOKFFamiliesOutOfAttrs(t *testing.T) {
 		t.Errorf("attrs = %v, want the producer key untouched", attrs)
 	}
 }
+
+// TestMigrationActorProcess covers 0022: every stored actor kind of
+// "agent" becomes "process", the spelling OKF SPEC §7 defines (design doc
+// 0043 §3.8). The scratch schema carries one row per table that stores an
+// actor, including a delegation — a "via" holds the caller's whole
+// kind:name string, so a half-migration would leave "process:tanaka via
+// agent:app" on exactly the rows delegation exists to describe.
+func TestMigrationActorProcess(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA actor_scratch`,
+		`SET LOCAL search_path TO actor_scratch`,
+		`CREATE TABLE knowledge (
+			id text PRIMARY KEY,
+			created_by_kind text NOT NULL, created_by_name text NOT NULL, created_by_via text NOT NULL DEFAULT '',
+			updated_by_kind text NOT NULL, updated_by_name text NOT NULL, updated_by_via text NOT NULL DEFAULT '',
+			verified_by_kind text, verified_by_name text, verified_by_via text NOT NULL DEFAULT '',
+			rejected_by_kind text, rejected_by_name text, rejected_by_via text NOT NULL DEFAULT '',
+			updated_at timestamptz NOT NULL)`,
+		`CREATE TABLE knowledge_revision (
+			id text NOT NULL, rev int NOT NULL, change text NOT NULL,
+			changed_by_kind text NOT NULL, changed_by_name text NOT NULL,
+			changed_by_via text NOT NULL DEFAULT '', snapshot jsonb NOT NULL)`,
+		`CREATE TABLE knowledge_event (id text NOT NULL, actor_kind text NOT NULL, actor_name text NOT NULL)`,
+		`CREATE TABLE attachment (knowledge_id text NOT NULL, name text NOT NULL,
+			created_by_kind text NOT NULL, created_by_name text NOT NULL)`,
+		`CREATE TABLE knowledge_purge (id text NOT NULL,
+			purged_by_kind text NOT NULL, purged_by_name text NOT NULL, purged_by_via text NOT NULL DEFAULT '')`,
+		`INSERT INTO knowledge (id,
+			created_by_kind, created_by_name, created_by_via,
+			updated_by_kind, updated_by_name, updated_by_via,
+			verified_by_kind, verified_by_name, rejected_by_kind, rejected_by_name, updated_at) VALUES
+			('metrics/revenue', 'agent', 'claude-code', '',
+			 'human', 'tanaka', 'agent:app@x.iam.gserviceaccount.com',
+			 'human', 'na0', NULL, NULL, '2026-07-01T00:00:00Z'),
+			('metrics/human-only', 'human', 'na0', '', 'human', 'na0', '',
+			 NULL, NULL, 'agent', 'bot', '2026-07-01T00:00:00Z')`,
+		`INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, changed_by_via, snapshot) VALUES
+			('metrics/revenue', 1, 'create', 'agent', 'claude-code', '', '{
+				"created_by": {"kind": "agent", "name": "claude-code"},
+				"updated_by": {"kind": "human", "name": "tanaka", "via": "agent:app@x.iam.gserviceaccount.com"},
+				"body": "the literal {\"kind\": \"agent\"} in prose stays"
+			}'::jsonb)`,
+		`INSERT INTO knowledge_event (id, actor_kind, actor_name) VALUES ('metrics/revenue', 'agent', 'claude-code')`,
+		`INSERT INTO attachment (knowledge_id, name, created_by_kind, created_by_name)
+			VALUES ('metrics/revenue', 'chart.png', 'agent', 'claude-code')`,
+		`INSERT INTO knowledge_purge (id, purged_by_kind, purged_by_name, purged_by_via)
+			VALUES ('metrics/gone', 'agent', 'cleanup', 'agent:ops@x.iam.gserviceaccount.com')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0022_actor_process.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0022: %v", err)
+	}
+
+	var created, updated, verified domain.Actor
+	var updatedAt time.Time
+	if err := tx.QueryRow(ctx, `SELECT created_by_kind, created_by_name, created_by_via,
+		updated_by_kind, updated_by_name, updated_by_via,
+		verified_by_kind, verified_by_name, updated_at
+		FROM knowledge WHERE id = 'metrics/revenue'`).
+		Scan(&created.Kind, &created.Name, &created.Via,
+			&updated.Kind, &updated.Name, &updated.Via,
+			&verified.Kind, &verified.Name, &updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if created.String() != "process:claude-code" {
+		t.Errorf("created_by = %q, want process:claude-code", created)
+	}
+	if updated.String() != "human:tanaka via process:app@x.iam.gserviceaccount.com" {
+		t.Errorf("updated_by = %q: the via half must migrate too", updated)
+	}
+	if verified.String() != "human:na0" {
+		t.Errorf("verified_by = %q: a human actor must be left alone", verified)
+	}
+	if !updatedAt.Equal(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("updated_at moved to %v: it is the ETag version and generated.at", updatedAt)
+	}
+
+	var rejectedKind string
+	if err := tx.QueryRow(ctx,
+		`SELECT rejected_by_kind FROM knowledge WHERE id = 'metrics/human-only'`).Scan(&rejectedKind); err != nil {
+		t.Fatal(err)
+	}
+	if rejectedKind != "process" {
+		t.Errorf("rejected_by_kind = %q, want process", rejectedKind)
+	}
+
+	var revKind, revBody, snapCreated, snapVia string
+	if err := tx.QueryRow(ctx, `SELECT changed_by_kind,
+		snapshot ->> 'body', snapshot -> 'created_by' ->> 'kind', snapshot -> 'updated_by' ->> 'via'
+		FROM knowledge_revision WHERE id = 'metrics/revenue' AND rev = 1`).
+		Scan(&revKind, &revBody, &snapCreated, &snapVia); err != nil {
+		t.Fatal(err)
+	}
+	if revKind != "process" || snapCreated != "process" {
+		t.Errorf("revision actor = %q, snapshot created_by.kind = %q", revKind, snapCreated)
+	}
+	if snapVia != "process:app@x.iam.gserviceaccount.com" {
+		t.Errorf("snapshot updated_by.via = %q", snapVia)
+	}
+	// The rewrite is keyed, not textual: prose that happens to quote the
+	// old spelling is content and must survive untouched.
+	if !strings.Contains(revBody, `{"kind": "agent"}`) {
+		t.Errorf("snapshot body was rewritten: %q", revBody)
+	}
+
+	for _, tc := range []struct{ query, want, what string }{
+		{`SELECT actor_kind FROM knowledge_event`, "process", "knowledge_event"},
+		{`SELECT created_by_kind FROM attachment`, "process", "attachment"},
+		{`SELECT purged_by_kind FROM knowledge_purge`, "process", "knowledge_purge"},
+		{`SELECT purged_by_via FROM knowledge_purge`, "process:ops@x.iam.gserviceaccount.com", "purge via"},
+	} {
+		var got string
+		if err := tx.QueryRow(ctx, tc.query).Scan(&got); err != nil {
+			t.Fatalf("%s: %v", tc.what, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.what, got, tc.want)
+		}
+	}
+}
