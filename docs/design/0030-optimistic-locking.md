@@ -1,6 +1,8 @@
 # ochakai 設計ドキュメント 0030: If-Match による楽観ロック(opt-in)
 
-Status: Accepted(2026-07-26)
+Status: Accepted(2026-07-26)。§3.1 の「版は `updated_at`」と §3.2 の
+精度不変条件は [0043](0043-document-first.md) §3.4 が内容ハッシュの ETag に
+改訂した(opt-in・条件付き UPDATE 内判定・412 という機構そのものは維持)
 Date: 2026-07-26
 
 ## 1. 背景: 決定はランドしていたが、記録されていなかった

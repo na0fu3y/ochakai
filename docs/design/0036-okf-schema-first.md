@@ -1,11 +1,14 @@
 # ochakai 設計ドキュメント 0036: OKF のスキーマを真とする — 互換規則の全面置き換え
 
-Status: Accepted(2026-07-27)。[0005](0005-okf-compatibility.md) と
+Status: **Superseded by [0043](0043-document-first.md)**(document-first への
+全面置き換え。0043 の実装がランドするまで、コードとリリースは本ドキュメントの
+姿のまま)。当初 Accepted(2026-07-27):
+[0005](0005-okf-compatibility.md) と
 [0016](0016-knowledge-catalog-alignment.md) を Superseded にし、
 [0009](0009-provenance-portability.md) §4 と
-[0023](0023-okf-type-vocabulary.md) §3.1 を改訂する。
-**OKF 互換領域の現行ドキュメント**。実装は同 PR、次のリリース(0.14.0)で出る。
-§3.6 の 9 型は [0038](0038-type-vocabulary-realignment.md) が 11 型に組み替えた
+[0023](0023-okf-type-vocabulary.md) §3.1 を改訂した。実装は同 PR、0.14.0 で出た。
+改訂の履歴: §3.6 の 9 型は
+[0038](0038-type-vocabulary-realignment.md) が 11 型に組み替えた
 (`Attested Computation` を語彙に足した決定そのものは有効)
 Date: 2026-07-27
 

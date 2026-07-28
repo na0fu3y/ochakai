@@ -20,8 +20,10 @@ For the shape of the system rather than the history of it, read
 ## Architecture and foundations
 
 - **[0001 Overall architecture](0001-architecture.md)** — *Accepted; §6's
-  distribution and auth are superseded by 0002 and 0003, and its
-  restriction on promoting entries to verified was withdrawn by 0002.*
+  distribution and auth are superseded by 0002 and 0003, its
+  restriction on promoting entries to verified was withdrawn by 0002, and
+  §3's envelope representation and §9.1's rejected status are revised by
+  0043.*
   ochakai is a context provider for data agents: one Go binary plus
   PostgreSQL, holding knowledge entries under a common envelope with
   status, provenance, links and revisions. It runs no LLM and executes no
@@ -104,7 +106,8 @@ For the shape of the system rather than the history of it, read
 
 - **[0009 OKF/Git round-trips and who owns
   provenance](0009-provenance-portability.md)** — *Proposed; its
-  world-view was settled by 0036 §2.2.* Provenance is what an instance
+  world-view was settled by 0036 §2.2 and carried into the stored shape
+  by 0043.* Provenance is what an instance
   observed, not a portable attribute, so bundles carry knowledge only and
   exported `created_by` / `verified_by` are historical reference that
   import never reads back. A `--preserve-provenance` flag is refused:
@@ -114,6 +117,26 @@ For the shape of the system rather than the history of it, read
   migrations under a dedicated identity.
 
 ## The knowledge model — structure, ids, types, names, links
+
+- **[0043 The document is the truth](0043-document-first.md)** —
+  *Accepted; the current record for OKF compatibility, superseding 0036.
+  Implementation follows in later pull requests; until it lands, the code
+  and releases keep 0036's shape.* Both storage and the wire become the
+  canonical OKF document itself (frontmatter + markdown); the database is
+  reduced to derived index columns and instance-local ledgers. Status
+  becomes OKF's three values verbatim; "a human confirmed this" is a row
+  in an append-only verification ledger (so verifications are plural and
+  re-verification is history, not an overwrite); rejection moves to its
+  own ledger and stops being a status; the ETag becomes a hash of the
+  canonical document; actors are spelled `human:` / `process:` per SPEC
+  §7. The mapping tables, the envelope-versus-`attrs` double floor, the
+  lossy `rejected` round trip, the demotion of foreign `stable` entries,
+  and `updated_at`'s triple duty all lose their subject.
+  *For a user:* a breaking release — knowledge is written as a document
+  (PUT), read as document + read-only projection + observed ledgers, the
+  status vocabulary changes, and one migration rewrites the stored shape
+  one way. Bundles gain multi-entry `verified` lists and `process:`
+  actors; nothing needs re-embedding.
 
 - **[0041 Narrowing a search by address](0041-path-scoped-search.md)** —
   *Accepted.* Carries 0017's "the path is the address" through to search
@@ -148,9 +171,10 @@ For the shape of the system rather than the history of it, read
   stale feed — only editing the entry to re-declare a date does.
 
 - **[0036 OKF's schema is ochakai's schema](0036-okf-schema-first.md)** —
-  *Accepted, shipped in 0.14.0. The current record for OKF compatibility;
-  supersedes 0005 and 0016. Two items in §5 were withdrawn and implemented
-  by 0037, and §3.6's type list was reworked by 0038.* One rule replaces
+  *Superseded by 0043, which the code keeps shipping until its
+  implementation lands. Shipped in 0.14.0; supersedes 0005 and 0016. Two
+  items in §5 were withdrawn and implemented by 0037, and §3.6's type list
+  was reworked by 0038.* One rule replaces
   the whole area: keys the OKF v0.2 spec defines are first-class envelope
   fields, and `attrs` keeps only producer extension keys. Seven fields move
   up (`sources`, `usage_window`, `runtime`, `parameters`, `computation`,
@@ -334,7 +358,9 @@ For the shape of the system rather than the history of it, read
 ## The verification loop and usage measurement
 
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
-  *Accepted; 0037 later added a third feed.* Adds the `sort=failed`
+  *Accepted; 0037 later added a third feed, and 0043 turns verify's record
+  into an append to a verification ledger, so re-verification accumulates
+  as history.* Adds the `sort=failed`
   re-verification feed of entries agents reported wrong, worst first, and
   `POST /api/v1/verify/{id}` so that re-checking can be recorded — an
   unchanged PUT writes nothing and therefore cannot express "I looked
@@ -354,8 +380,9 @@ For the shape of the system rather than the history of it, read
 ## Concurrency and deletion
 
 - **[0030 Optimistic locking with If-Match](0030-optimistic-locking.md)** —
-  *Accepted.* Conditional updates are opt-in, versioned by `updated_at`
-  itself — no new column — exposed as an ETag and accepted as `If-Match`.
+  *Accepted; 0043 moves the version from `updated_at` to a content hash,
+  keeping the mechanism.* Conditional updates are opt-in,
+  exposed as an ETag and accepted as `If-Match`.
   A mismatch is a 412 with nothing written, and the check lives inside the
   conditional UPDATE, so there is no window between reading and writing.
   *For a user:* send `If-Match` and handle 412; omit it and the behavior is
