@@ -145,7 +145,7 @@ paths:
           explode: true
           # A path is segments joined by "/", so the separator travels
           # literally rather than percent-encoded — as it does for the
-          # prefix of GET /api/v1/browse.
+          # path of GET /api/v1/bundle/{path}.
           allowReserved: true
         - name: limit
           in: query

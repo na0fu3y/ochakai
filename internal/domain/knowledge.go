@@ -424,7 +424,7 @@ func ValidActorKind(kind string) bool {
 // what it was called.
 type Link struct {
 	Target string `json:"target"`         // the target entry's id (its bundle path)
-	Text   string `json:"text,omitempty"` // the anchor text; empty for a bare ochakai:// reference
+	Text   string `json:"text,omitempty"` // the anchor text; empty when the link gave none
 }
 
 // DisplayText returns how the link should read: its anchor text when the
@@ -1042,14 +1042,16 @@ type SearchHit struct {
 
 // ContextRank is what a hit is worth once the entries travel in the same
 // response: an ordering, not a second copy of the knowledge (design doc
-// 0033). SearchHit embeds the whole Knowledge — body, attrs and all — so
-// a context pack that returned hits verbatim sent every top entry twice
-// and left the byte budget governing one of the copies.
+// 0033). A SearchHit embedded the whole Knowledge — body, attrs and all
+// — when this split was made, so a context pack that returned hits
+// verbatim sent every top entry twice and left the byte budget governing
+// one of the copies. A hit is a projection now (see SearchHit above), but
+// a rank stays narrower still: a pack that already ships the entries
+// needs no second description of them.
 //
 // The fields are the ones a caller needs to decide whether to spend a
 // round trip on an id it was not handed: search results below the pack's
-// own cut-off arrive only this way. Search itself keeps returning full
-// hits — there the entries are the answer, not a duplicate of one.
+// own cut-off arrive only this way.
 type ContextRank struct {
 	ID     string `json:"id"`
 	Type   Type   `json:"type"`
