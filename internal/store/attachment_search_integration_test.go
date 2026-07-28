@@ -52,7 +52,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 	for _, del := range []string{
 		`DELETE FROM attachment_embedding WHERE knowledge_id LIKE 'it-attsearch%'`,
 		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-attsearch%'`,
-		`DELETE FROM knowledge WHERE id LIKE 'it-attsearch%'`,
+		`DELETE FROM object WHERE id LIKE 'it-attsearch%'`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-attsearch%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {

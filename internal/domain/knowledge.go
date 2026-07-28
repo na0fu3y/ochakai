@@ -1107,3 +1107,16 @@ type ContextOutline struct {
 	Status      Status `json:"status"`
 	Bytes       int    `json:"bytes"`
 }
+
+// ConceptPath is the bundle path a concept lives at: its id with ".md"
+// on the end (OKF SPEC §2, design doc 0017). The path is what an object
+// is keyed by (design doc 0046 §3.1) and the id is the address a concept
+// is called by, so every place that has one and needs the other goes
+// through here rather than concatenating a suffix of its own.
+func ConceptPath(id string) string { return id + ".md" }
+
+// ConceptID is the inverse: the id addressed by a bundle path, and ""
+// when the path is not a markdown file and so names no concept.
+func ConceptID(path string) (string, bool) {
+	return strings.CutSuffix(path, ".md")
+}

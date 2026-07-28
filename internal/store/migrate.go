@@ -134,7 +134,7 @@ func (s *Store) backfillDocuments(ctx context.Context) error {
 func (s *Store) backfillEntryDocuments(ctx context.Context) error {
 	for {
 		rows, err := s.pool.Query(ctx,
-			`SELECT `+knowledgeSelect+` FROM knowledge WHERE doc = '' ORDER BY id LIMIT $1`,
+			`SELECT `+knowledgeSelect+` FROM object WHERE doc = '' ORDER BY id LIMIT $1`,
 			backfillBatch)
 		if err != nil {
 			return err
@@ -159,7 +159,7 @@ func (s *Store) backfillEntryDocuments(ctx context.Context) error {
 				continue
 			}
 			if _, err := s.pool.Exec(ctx,
-				`UPDATE knowledge SET doc = $2, content_hash = $3 WHERE id = $1`,
+				`UPDATE object SET doc = $2, content_hash = $3 WHERE id = $1`,
 				batch[i].ID, doc, hash); err != nil {
 				return err
 			}
@@ -189,7 +189,7 @@ func (s *Store) backfillEntryDocuments(ctx context.Context) error {
 func (s *Store) backfillLinkForms(ctx context.Context) error {
 	for {
 		rows, err := s.pool.Query(ctx,
-			`SELECT `+knowledgeSelectDoc+` FROM knowledge
+			`SELECT `+knowledgeSelectDoc+` FROM object
 			 WHERE id IN (SELECT id FROM link_form_backfill) ORDER BY id LIMIT $1`,
 			backfillBatch)
 		if err != nil {
@@ -221,7 +221,7 @@ func (s *Store) backfillLinkForms(ctx context.Context) error {
 				return err
 			}
 			if _, err := s.pool.Exec(ctx,
-				`UPDATE knowledge SET body=$2, links=$3, doc=$4, content_hash=$5 WHERE id=$1`,
+				`UPDATE object SET body=$2, links=$3, doc=$4, content_hash=$5 WHERE id=$1`,
 				k.ID, k.Body, j.links, doc, hash); err != nil {
 				return err
 			}
@@ -250,7 +250,7 @@ func (s *Store) backfillLinkForms(ctx context.Context) error {
 func (s *Store) backfillFrontmatter(ctx context.Context) error {
 	for {
 		rows, err := s.pool.Query(ctx,
-			`SELECT id, doc FROM knowledge
+			`SELECT id, doc FROM object
 			 WHERE id IN (SELECT id FROM frontmatter_backfill) ORDER BY id LIMIT $1`,
 			backfillBatch)
 		if err != nil {
@@ -283,7 +283,7 @@ func (s *Store) backfillFrontmatter(ctx context.Context) error {
 				continue
 			}
 			if _, err := s.pool.Exec(ctx,
-				`UPDATE knowledge SET frontmatter = $2 WHERE id = $1`, b.id, fm); err != nil {
+				`UPDATE object SET frontmatter = $2 WHERE id = $1`, b.id, fm); err != nil {
 				return err
 			}
 		}
@@ -327,7 +327,7 @@ func anyConverted(ctx context.Context, s *Store, batch []domain.Knowledge) bool 
 	}
 	var n int
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM knowledge WHERE id = ANY($1) AND doc <> ''`, ids).Scan(&n); err != nil {
+		`SELECT count(*) FROM object WHERE id = ANY($1) AND doc <> ''`, ids).Scan(&n); err != nil {
 		return false
 	}
 	return n > 0

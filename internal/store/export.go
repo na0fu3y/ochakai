@@ -65,7 +65,7 @@ func (e *ExportSnapshot) Close(ctx context.Context) {
 // does not carry them.
 func (e *ExportSnapshot) IndexRows(ctx context.Context) ([]domain.Knowledge, error) {
 	rows, err := e.tx.Query(ctx,
-		`SELECT type, id, title, description FROM knowledge WHERE deleted_at IS NULL ORDER BY id`)
+		`SELECT type, id, title, description FROM object WHERE deleted_at IS NULL ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (e *ExportSnapshot) IndexRows(ctx context.Context) ([]domain.Knowledge, err
 // memory at once.
 func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.Knowledge, error) {
 	rows, err := e.tx.Query(ctx,
-		`SELECT `+knowledgeSelectDoc+` FROM knowledge
+		`SELECT `+knowledgeSelectDoc+` FROM object
 		 WHERE deleted_at IS NULL AND id = ANY($1) ORDER BY id`, ids)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func (e *ExportSnapshot) AttachmentMeta(ctx context.Context) ([]ExportAttachment
 	rows, err := e.tx.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
 		FROM attachment a
 		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
 		ORDER BY a.knowledge_id, a.name`)
 	if err != nil {
 		return nil, err

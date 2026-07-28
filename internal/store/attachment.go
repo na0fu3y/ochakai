@@ -135,7 +135,7 @@ func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.Attach
 	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
 		FROM attachment a
 		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
 		WHERE a.knowledge_id=$1 ORDER BY a.name`, id)
 	if err != nil {
 		return nil, err
@@ -175,7 +175,7 @@ func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain
 	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
 		FROM attachment a
 		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
 		WHERE a.knowledge_id=$1 AND a.name=$2`, id, name)
 	if err != nil {
 		return nil, err
@@ -248,7 +248,7 @@ func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowled
 	// an attachment plus its revision planted on a tombstone would
 	// resurface whenever someone revived the entry.
 	tag, err := tx.Exec(ctx,
-		`UPDATE knowledge SET updated_at=$2 WHERE id=$1 AND deleted_at IS NULL`, k.ID, k.UpdatedAt)
+		`UPDATE object SET updated_at=$2 WHERE id=$1 AND deleted_at IS NULL`, k.ID, k.UpdatedAt)
 	if err != nil {
 		return err
 	}

@@ -438,11 +438,11 @@ func TestMigrateConcurrent(t *testing.T) {
 	var n int
 	if err := scoped.pool.QueryRow(ctx,
 		`SELECT count(*) FROM information_schema.tables
-		  WHERE table_schema = $1 AND table_name = 'knowledge'`, schema).Scan(&n); err != nil {
+		  WHERE table_schema = $1 AND table_name = 'object'`, schema).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
-		t.Errorf("knowledge table in %s: got %d, want 1", schema, n)
+		t.Errorf("object table in %s: got %d, want 1", schema, n)
 	}
 }
 
@@ -1094,7 +1094,7 @@ func TestBackfillComposesStoredDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 	})
 
@@ -1108,7 +1108,7 @@ func TestBackfillComposesStoredDocuments(t *testing.T) {
 		sql  string
 		args []any
 	}{
-		{`UPDATE knowledge SET doc = '', content_hash = '' WHERE id = $1`, []any{id}},
+		{`UPDATE object SET doc = '', content_hash = '' WHERE id = $1`, []any{id}},
 		{`UPDATE knowledge_revision SET doc = '', snapshot = $2 WHERE id = $1`, []any{id, snapshot}},
 	} {
 		if _, err := s.pool.Exec(ctx, q.sql, q.args...); err != nil {
@@ -1123,7 +1123,7 @@ func TestBackfillComposesStoredDocuments(t *testing.T) {
 	var doc, hash string
 	var updatedAt time.Time
 	if err := s.pool.QueryRow(ctx,
-		`SELECT doc, content_hash, updated_at FROM knowledge WHERE id = $1`, id).
+		`SELECT doc, content_hash, updated_at FROM object WHERE id = $1`, id).
 		Scan(&doc, &hash, &updatedAt); err != nil {
 		t.Fatal(err)
 	}
@@ -1160,10 +1160,109 @@ func TestBackfillComposesStoredDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	var again string
-	if err := s.pool.QueryRow(ctx, `SELECT doc FROM knowledge WHERE id = $1`, id).Scan(&again); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT doc FROM object WHERE id = $1`, id).Scan(&again); err != nil {
 		t.Fatal(err)
 	}
 	if again != doc {
 		t.Error("a second backfill pass rewrote an already-composed document")
+	}
+}
+
+// Migration 0028 (design doc 0046 §§2.1, 3.1): the table of knowledge
+// entries becomes the table of bundle objects, keyed by the path each
+// one lives at. The concept id survives as the address a concept is
+// called by — every ledger joins on it — and the revision log starts
+// counting by path, so that a file's history will land beside the
+// concept's rather than in a second place.
+func TestMigrationObjectPathKey(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA path_scratch`,
+		`SET LOCAL search_path TO path_scratch`,
+		`CREATE TABLE knowledge (
+			id text NOT NULL, title text NOT NULL DEFAULT '',
+			CONSTRAINT knowledge_pkey PRIMARY KEY (id))`,
+		`CREATE TABLE knowledge_revision (
+			id text NOT NULL, rev int NOT NULL, change text NOT NULL,
+			CONSTRAINT knowledge_revision_pkey PRIMARY KEY (id, rev))`,
+		`INSERT INTO knowledge (id, title) VALUES
+			('metrics/revenue', '売上'), ('glossary/mau', 'MAU')`,
+		`INSERT INTO knowledge_revision (id, rev, change) VALUES
+			('metrics/revenue', 1, 'create'), ('metrics/revenue', 2, 'update'),
+			('glossary/mau', 1, 'create')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0028_object_path_key.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0028: %v", err)
+	}
+
+	// Every concept is at its id plus ".md" (SPEC §2), and the path is
+	// what the row is keyed by.
+	var mismatched int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM object WHERE path <> id || '.md'`).Scan(&mismatched); err != nil {
+		t.Fatal(err)
+	}
+	if mismatched != 0 {
+		t.Errorf("%d rows are not at their concept's path", mismatched)
+	}
+	for _, table := range []string{"object", "knowledge_revision"} {
+		var keyed bool
+		if err := tx.QueryRow(ctx,
+			`SELECT bool_or(a.attname = 'path') FROM pg_index i
+			   JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+			  WHERE i.indrelid = ('path_scratch.' || $1)::regclass AND i.indisprimary`,
+			table).Scan(&keyed); err != nil {
+			t.Fatalf("primary key of %s: %v", table, err)
+		}
+		if !keyed {
+			t.Errorf("%s is not keyed by its path", table)
+		}
+	}
+	// The id is still a key of its own: it is what verify, reject, usage
+	// and move are called with (design doc 0046 §3.1).
+	var unique bool
+	if err := tx.QueryRow(ctx,
+		`SELECT bool_or(i.indisunique) FROM pg_index i
+		  WHERE i.indrelid = 'path_scratch.object'::regclass
+		    AND NOT i.indisprimary`).Scan(&unique); err != nil {
+		t.Fatal(err)
+	}
+	if !unique {
+		t.Error("the concept id lost its unique index; every ledger joins on it")
+	}
+	// History is not rewritten, only re-keyed: both revisions of the
+	// entry are still there, under its path.
+	var revs int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_revision WHERE path = 'metrics/revenue.md'`).Scan(&revs); err != nil {
+		t.Fatal(err)
+	}
+	if revs != 2 {
+		t.Errorf("revisions under the path: got %d, want 2", revs)
 	}
 }
