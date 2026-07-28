@@ -13,7 +13,8 @@ has no type of its own for them (design doc
 [0038](../design/0038-type-vocabulary-realignment.md)): OKF SPEC §10 already
 defines the concept, so a golden query is an Attested Computation whose
 `runtime` says where the SQL runs, whose `# Computation` body fence holds
-the SQL, and whose `attrs.question` carries the question it answers. If
+the SQL, and whose producer key `question` carries the question it
+answers. If
 your base predates this, entries typed `Golden Query` keep working as free
 types — substitute that spelling in the `--type` filters below.
 
@@ -27,8 +28,14 @@ supplies the material and records what you found.
 
 ```sh
 ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100 --json \
-  | jq -r '.hits[] | [.id, .verified_at, .attrs.question] | @tsv'
+  | jq -r '.hits[] | [.id, .verified_at, .title] | @tsv'
 ```
+
+A hit names an entry rather than handing it over: the ranking is what a
+feed is for, and shipping a hundred documents to answer "which of these
+is due" would spend the caller's context on the ones it will not run.
+Fetch the ones you are about to run with `ochakai get <id>`, which prints
+the document — question, `runtime` and `# Computation` fence included.
 
 Straight REST is
 `GET /api/v1/knowledge?type=Attested%20Computation&verified=true&sort=verified_at&limit=100`;
@@ -42,9 +49,9 @@ where a canary run starts. Checking out an OKF export
 
 Execute each entry's `# Computation` fence against the warehouse
 (`bq query` for BigQuery), reading `runtime` to know which warehouse that
-is. The fence is the computation — SPEC §10.2 puts it there rather than in
-`attrs`, so there is exactly one copy for an attester to canonicalize a
-run against. ochakai takes no part in this step.
+is. The fence is the computation — SPEC §10.2 puts it there rather than in a
+frontmatter key, so there is exactly one copy for an attester to
+canonicalize a run against. ochakai takes no part in this step.
 
 ### 3. Judge
 
@@ -58,12 +65,12 @@ run against. ochakai takes no part in this step.
 
 - **It ran clean**: record the re-verification —
   `ochakai verify queries/<id>` (REST:
-  `POST /api/v1/verify/queries/<id>`). The caller becomes `verified_by`
-  and the current time `verified_at`, so the entry moves to the back of
-  the next `sort=verified_at` feed. An `update` cannot say this: an
-  update that changes nothing writes nothing, and `verified_at` carries
-  over from the stored value, so "I checked it again and it is still
-  right" lands nowhere. That is what verify exists for (design doc
+  `POST /api/v1/verify/queries/<id>`). The caller and the current time
+  are appended to the entry's verification ledger, so the entry moves to
+  the back of the next `sort=verified_at` feed — and the ledger says how
+  often it has been checked, not only when last. An `update` cannot say
+  this: an update that changes nothing writes nothing, so "I checked it
+  again and it is still right" lands nowhere. That is what verify exists for (design doc
   0025 §6). MCP has no such tool — verification is a human judgment, and
   a canary running in CI is recorded under CI's own identity.
 - **Failure or warning**: create a draft `Insight` (`kind: caveat`)
@@ -108,9 +115,10 @@ jobs:
           TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
           curl -s -H "Authorization: Bearer $TOKEN" \
             "$OCHAKAI_URL/api/v1/knowledge?type=Attested%20Computation&verified=true&sort=verified_at&limit=50" \
-          | jq -c '.hits[]' | while read -r hit; do
-              id=$(jq -r .id <<<"$hit")
-              sql=$(jq -r '.body | split("```sql\n")[1] | split("\n```")[0]' <<<"$hit")
+          | jq -r '.hits[].id' | while read -r id; do
+              doc=$(curl -s -H "Authorization: Bearer $TOKEN" \
+                -H 'Accept: text/markdown' "$OCHAKAI_URL/api/v1/knowledge/$id")
+              sql=$(printf '%s' "$doc" | sed -n '/^```sql$/,/^```$/p' | sed '1d;$d')
               if ! bq query --nouse_legacy_sql --dry_run "$sql" >/dev/null 2>&1; then
                 echo "::error::computation $id no longer compiles against the warehouse"
                 curl -s -X POST -H "Authorization: Bearer $TOKEN" \
@@ -118,7 +126,7 @@ jobs:
                   -d '{"outcome":"failed","note":"canary: dry-run failed"}' \
                   "$OCHAKAI_URL/api/v1/usage/$id" >/dev/null
               else
-                # record the re-verification, moving verified_at to now
+                # record the re-verification, appending to the ledger
                 # (which takes the entry out of both feeds)
                 curl -s -X POST -H "Authorization: Bearer $TOKEN" \
                   "$OCHAKAI_URL/api/v1/verify/$id" >/dev/null

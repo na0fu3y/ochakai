@@ -96,7 +96,7 @@ IAM check and forwards the verified caller identity in a header; ochakai
 reads that header for one purpose — deciding whose name goes on the
 entry. An email ending in `.gserviceaccount.com` becomes
 `process:<sa-email>`, anything else `human:<email>`. Nothing else consults
-it. Promotion to `verified` is not restricted either: who verified an
+it. Verifying an entry is not restricted either: who verified an
 entry is always recorded, so the decision about whether to trust it is
 made by whoever reads the provenance, not by a gate at the write. The
 phrase the record uses is that trust is secured *by recording, not by
@@ -140,8 +140,8 @@ own observation, not content a caller wrote.
 
 There is one narrow exception to "no authorization", and it is
 deliberately framed as not being one: MCP refuses to overwrite, delete,
-or change an entry a human has ruled on — verified,
-`rejected`, or `deprecated` — and refuses to revive such an entry's
+or change an entry a human has ruled on — verified, rejected, or
+deprecated — and refuses to revive such an entry's
 soft-deleted tombstone with a create. The reasoning is visibility rather
 than permission: a silently replaced verified golden query is discovered
 only when somebody runs it and gets a wrong number, and MCP has no
@@ -151,14 +151,27 @@ it believed it was replacing. The human surfaces are unrestricted
 
 ## The data model
 
-An entry is a common envelope, a markdown body, and whatever
-producer-defined keys came with it. The envelope is OKF v0.2's schema
-taken literally: every key the spec defines is a first-class field rather
-than a bag entry, so an exported entry carries its trust and lifecycle
-where a consumer that has never heard of ochakai will look for them
-(design doc [0036](design/0036-okf-schema-first.md)). Keys OKF does not
-define pass through into `attrs` and come back out at their original
-top-level position.
+**An entry is an OKF document** — YAML frontmatter, then a markdown
+body — and that is the stored form, the wire form, and the export form
+alike (design doc [0043](design/0043-document-first.md)). The database
+columns beside it are an index derived from the document, used to sort
+and filter; where the two could disagree the document is right. Keys OKF
+does not define are kept exactly where their writer put them, at the top
+level and inside a `sources` entry, a parameter, the executor or the
+attester, because a key discarded on the way in is a key no later
+release can recover.
+
+An entry's version is the hash of its canonical document, which a read
+returns as an `ETag` and a write takes back as `If-Match`. Being a hash
+of the content alone, it moves when the entry's content moves and at no
+other time — confirming an entry, rejecting it or attaching a file to it
+all leave a held precondition valid.
+
+What this instance *observed* about an entry travels beside the document
+rather than inside it: who created it, who last changed it, every
+recorded confirmation, and a live rejection if there is one. A bundle
+carries knowledge; provenance is an observation, and import never reads
+it back (design doc [0009](design/0009-provenance-portability.md)).
 
 **Identity is a path.** An entry's id is its address and its bundle
 location: `queries/sales/monthly-revenue` is one entry, and the
@@ -195,10 +208,14 @@ OKF itself supplies, in the spec's own examples and in its reference
 bundles (design doc
 [0038](design/0038-type-vocabulary-realignment.md)). Any
 single-line string works as a type. `status`, by contrast, is a closed
-set: `draft`, `verified`, `deprecated`, `rejected`. `rejected` is the
-one that most stores lack — it records that a proposal was considered and
-turned down, with the reason in `status_note`, so an agent can check
-before re-proposing the same thing.
+set, and it is OKF's lifecycle vocabulary and nothing else: `draft`,
+`stable`, `deprecated` (SPEC §5.4). Whether anybody confirmed an entry is
+a separate question — an append-only ledger of verifications, so a draft
+may be verified and a `stable` entry unverified. "Considered and turned
+down" is a third thing again, a ruling rather than a stage: a rejection
+carries who ruled, when, and why, and it is the record most stores lack —
+an agent can check it before re-proposing the same thing (design doc
+[0043](design/0043-document-first.md) §§3.2-3.3).
 
 **Relationships come from the prose.** There is no links field. A
 markdown link in the body — `[revenue](/metrics/revenue.md)`, a relative
@@ -317,17 +334,20 @@ Scores are not calibrated and are not comparable between the two modes.
 Treat them as an ordering. To bound what comes back, use the byte
 budget rather than a score threshold: `get_context` returns full entries
 up to the budget and names the rest as outline rows, and `hits` carry a
-ranking only — id, type, title, status, score — never a second copy of
-the knowledge (design doc
-[0033](design/0033-context-hits-are-a-ranking.md)).
+ranking only — id, type, title, status, whether it is verified, score —
+never a second copy of the knowledge (design doc
+[0033](design/0033-context-hits-are-a-ranking.md)). Search hits are the
+same kind of thing: a row names an entry and says what ranked it, and the
+document is one fetch away by id (design doc
+[0043](design/0043-document-first.md) §3.5).
 
 ## The write-back and verification loop
 
 The bet in design doc [0001](design/0001-architecture.md) is that agents
 supply the breadth and humans supply the judgment. An agent writes what
-it learned as a `draft`; a human promotes it to `verified`, deprecates
-it, or rejects it with a reason. Provenance and revisions make that
-reviewable after the fact.
+it learned as a `draft`; a human confirms it, promotes it to `stable`,
+deprecates it, or rejects it with a reason. Provenance and revisions make
+that reviewable after the fact.
 
 What closes the loop is the machinery for noticing that verified
 knowledge has stopped being true (design doc
@@ -336,7 +356,7 @@ knowledge has stopped being true (design doc
 
 | Feed | What it lists | What empties it |
 |---|---|---|
-| `sort=verified_at` | Verified entries by verification age, oldest first | Re-verifying — `POST /api/v1/verify/{id}` stamps a fresh `verified_at` |
+| `sort=verified_at` | Verified entries by verification age, oldest first | Re-verifying — `POST /api/v1/verify/{id}` appends to the entry's ledger |
 | `sort=failed` | Entries with unanswered `failed` outcome reports, worst first | Re-verifying, same call |
 | `sort=stale_after` | Entries past the expiry their own author declared | Editing the entry to re-declare the date |
 

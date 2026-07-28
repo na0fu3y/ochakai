@@ -3,6 +3,7 @@ package apiclient
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,8 +54,9 @@ func TestContextResultMatchesServerWire(t *testing.T) {
 		Hits: []domain.ContextRank{
 			{Type: domain.TypeMetrics, ID: "revenue", Title: "Revenue", Score: 0.9},
 		},
-		Entries: []domain.Knowledge{
-			{Type: domain.TypeInsights, ID: "revenue-seasonality", Title: "Seasonality", Body: "Q4 peaks."},
+		Entries: []domain.View{
+			{ID: "revenue-seasonality", Document: "---\ntype: Insight\ntitle: Seasonality\n---\n\nQ4 peaks.\n",
+				Summary: domain.Summary{Type: domain.TypeInsights, ID: "revenue-seasonality", Title: "Seasonality"}},
 		},
 	}
 	data, err := json.Marshal(server)
@@ -65,8 +67,9 @@ func TestContextResultMatchesServerWire(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("client cannot decode the server response: %v", err)
 	}
-	if len(got.Hits) != 1 || got.Hits[0].ID != "revenue" ||
-		len(got.Entries) != 1 || got.Entries[0].Body != "Q4 peaks." {
+	if len(got.Hits) != 1 || got.Hits[0].ID != "revenue" || len(got.Entries) != 1 ||
+		!strings.Contains(got.Entries[0].Document, "Q4 peaks.") ||
+		got.Entries[0].Summary.Title != "Seasonality" {
 		t.Errorf("client decoded: %+v", got)
 	}
 }

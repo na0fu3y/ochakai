@@ -54,127 +54,31 @@ func TestFeedsAreLinkableFromTheReviewLoop(t *testing.T) {
 	}
 }
 
-// A PUT is a full replacement, so a writable field missing from a payload
-// is a field erased. That failure is silent — the save succeeds and the
-// value is simply gone — and it shipped twice: design doc 0036 §4 records
-// resource vanishing when a status was changed from the detail view, and
-// again when an entry was saved from the editor, which had no resource
-// field at all.
+// A status change must not rebuild the entry from what the page holds.
+// It did once, and it erased resource because the payload builder had not
+// been taught about it — twice, in fact: design doc 0036 §4 records it
+// vanishing from the detail view's status change, and again from the
+// editor, which had no resource field at all.
 //
-// One list, WRITABLE, is the fix; this guard is what keeps a new envelope
-// field from being added to the server and forgotten here.
-func TestEveryWritableFieldReachesBothSavePaths(t *testing.T) {
+// The page now holds strictly less than it did — the projection, not the
+// entry (design doc 0043 §3.5) — so rebuilding would erase the citations,
+// the contract and the body as well. The fix is that it rebuilds nothing:
+// it reads the document, changes the status line, and writes it back.
+func TestAStatusChangeEditsTheDocumentRatherThanRebuildingIt(t *testing.T) {
 	page := string(Index)
-	i := strings.Index(page, "const WRITABLE = [")
-	if i < 0 {
-		t.Fatal("WRITABLE is gone; the writable-field list moved without updating this guard")
+	if !strings.Contains(page, "function withStatus(doc, status)") {
+		t.Fatal("the status change no longer goes through a document edit")
 	}
-	list := page[i:]
-	if end := strings.Index(list, "];"); end >= 0 {
-		list = list[:end]
+	body := section(t, page, "async function applyStatus(", "\n}")
+	if !strings.Contains(body, "api('/api/v1/knowledge/' + idPath(id))") {
+		t.Error("applyStatus does not read the document first, so it cannot be editing one")
 	}
-	for _, want := range []string{
-		"'resource'", "'sources'", "'usage_window'", "'stale_after'",
-		"'runtime'", "'parameters'", "'computation'", "'executor'", "'attester'",
-	} {
-		if !strings.Contains(list, want) {
-			t.Errorf("WRITABLE is missing %s, so a status change erases it:\n%s", want, list)
-		}
+	if !strings.Contains(body, "withStatus(") {
+		t.Error("applyStatus does not use withStatus")
 	}
-	// The editor builds its own payload rather than reading WRITABLE (it
-	// reads form controls), so each field has to appear there too.
-	j := strings.Index(page, "const payload = {")
-	if j < 0 {
-		t.Fatal("the editor's payload builder moved without updating this guard")
-	}
-	payload := page[j:]
-	if end := strings.Index(payload, "\n    };"); end >= 0 {
-		payload = payload[:end]
-	}
-	for _, want := range []string{
-		"resource:", "sources:", "usage_window:", "stale_after:",
-		"runtime:", "parameters:", "computation:", "executor:", "attester:",
-	} {
-		if !strings.Contains(payload, want) {
-			t.Errorf("the editor payload is missing %s, so saving from the form erases it:\n%s", want, payload)
-		}
-	}
-}
-
-// A stored source carries only the keys it has (JSON omitempty), so a
-// loaded row can lack id, title and author entirely. The save path trims
-// every one of those to tell an abandoned blank row from a half-filled
-// one — and on a source stored with only a resource, clearing that
-// resource in the editor made the walk reach the missing keys: the click
-// handler threw, no banner appeared, and the save died silently instead
-// of saying "Source N needs a resource". The editor therefore fills in
-// string defaults when it copies entry.sources into the form's backing
-// array (usage_count stays absent — absent and 0 are different claims).
-func TestLoadedSourcesGetStringDefaults(t *testing.T) {
-	page := string(Index)
-	i := strings.Index(page, "const sources = (entry.sources || [])")
-	if i < 0 {
-		t.Fatal("the editor's sources initializer moved without updating this guard")
-	}
-	init := page[i:]
-	if end := strings.Index(init, "));"); end >= 0 {
-		init = init[:end]
-	}
-	for _, want := range []string{"resource: ''", "id: ''", "title: ''", "author: ''", "last_modified: ''"} {
-		if !strings.Contains(init, want) {
-			t.Errorf("loaded sources get no default for %s, so the save path can trim undefined:\n%s", want, init)
-		}
-	}
-	if !strings.Contains(init, "...s") {
-		t.Errorf("the defaults no longer merge under the stored source, so stored values would be lost:\n%s", init)
-	}
-	if strings.Contains(init, "usage_count: ") {
-		t.Errorf("usage_count has a default; absent and 0 are different claims (OKF SPEC §5.1):\n%s", init)
-	}
-}
-
-// Date inputs were left out of the input rule, so stale_after arrived with
-// the UA's own font, padding and intrinsic width — and, with no
-// color-scheme declared, a white calendar popup on a dark page. Both are
-// easy to reintroduce by editing the selector list, and both look like a
-// bug in the form rather than in the stylesheet.
-func TestDateInputsAreStyledLikeEveryOtherField(t *testing.T) {
-	page := string(Index)
-	if strings.Count(page, "input[type=date]") < 2 {
-		t.Error("input[type=date] is not in both the base and the touch-size input rules")
-	}
-	if !strings.Contains(page, "color-scheme:") {
-		t.Error("no color-scheme is declared, so UA-drawn controls ignore the dark theme")
-	}
-}
-
-// ochakai records the Attested Computation contract and never acts on it:
-// no running the executor, no checking a receipt, no fetching the attester
-// (design docs 0001, 0036 §3.6, §5). The curation surface is where a
-// human reads what the product promises, so the promise has to be the
-// narrow one.
-func TestContractIsPresentedAsRecordedNotExecuted(t *testing.T) {
-	page := string(Index)
-	if !strings.Contains(page, "never runs, checks, or fetches") {
-		t.Error("the contract sections no longer say ochakai does not run them")
-	}
-	if !strings.Contains(page, "never fetches or checks them") {
-		t.Error("the sources hint no longer says ochakai does not fetch a source's resource")
-	}
-}
-
-// Every key OKF v0.2 defines is an envelope field (design doc 0036 §2).
-// The page must read them from the entry, not from attrs, or it renders
-// nothing for entries written after the promotion.
-func TestOKFFamiliesAreReadFromTheEnvelope(t *testing.T) {
-	page := string(Index)
-	for _, want := range []string{"entry.sources", "entry.usage_window", "entry.runtime", "entry.executor", "entry.attester"} {
-		if !strings.Contains(page, want) {
-			t.Errorf("the detail view does not read %s", want)
-		}
-	}
-	if strings.Contains(page, "attrs.sources") || strings.Contains(page, `attrs['sources']`) {
-		t.Error("the page still reads sources out of attrs; it is an envelope field now")
+	// The old failure mode, in the form it would come back.
+	if strings.Contains(page, "function toDocument(") || strings.Contains(page, "const WRITABLE") {
+		t.Error("the page rebuilds a document from fields again; a projection cannot be rebuilt into an entry")
 	}
 }
 
@@ -213,28 +117,29 @@ func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
 	}
 }
 
-// The page carries its own copy of the type vocabulary — an icon per type
-// and the hint under the new-entry form — because it is a static asset
-// with no build step to interpolate domain.Types into. That copy has
-// drifted before: when Attested Computation joined the vocabulary the
-// icons gained it and the form hint did not, and neither noticed. A
-// retired type is the worse direction, since free types mean the UI would
-// go on recommending a spelling nothing else does, forever, without
-// failing anything (design doc 0038 §4.4).
+// The page carries its own copy of the type vocabulary, because it is a
+// static asset with no build step to interpolate domain.Types into. There
+// is exactly one copy — TYPE_ICONS, which KNOWN_TYPES and every list in
+// the page derive from. It used to be two, and they drifted: when
+// Attested Computation joined the vocabulary the icons gained it and the
+// new-entry form's hint did not, and neither noticed. The second copy
+// went with the form itself (design doc 0044); this guards the one that
+// is left, in the direction that fails silently — a retired type would
+// otherwise go on being recommended by the UI forever (design doc 0038
+// §4.4).
 func TestTypeVocabularyMatchesDomain(t *testing.T) {
 	page := string(Index)
 	icons := section(t, page, "const TYPE_ICONS = {", "};")
-	hint := section(t, page, "What the entry is:", "</div>")
+	if !strings.Contains(page, "const KNOWN_TYPES = Object.keys(TYPE_ICONS);") {
+		t.Error("KNOWN_TYPES no longer derives from TYPE_ICONS; the page has a second copy of the vocabulary again")
+	}
 	for _, ty := range domain.Types {
 		if !strings.Contains(icons, "'"+string(ty)+"'") {
 			t.Errorf("TYPE_ICONS has no icon for %q", ty)
 		}
-		if !strings.Contains(hint, string(ty)) {
-			t.Errorf("the new-entry hint omits the recommended type %q", ty)
-		}
 	}
 	for _, retired := range []string{"Semantic Model", "Golden Query"} {
-		if strings.Contains(icons, retired) || strings.Contains(hint, retired) {
+		if strings.Contains(icons, retired) {
 			t.Errorf("the page still offers %q, retired by design doc 0038", retired)
 		}
 	}
