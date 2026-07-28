@@ -79,6 +79,83 @@ func TestBuildWhereOmitsAbsentPrefixes(t *testing.T) {
 	}
 }
 
+// A frontmatter value arrives as text, but YAML types what it parses: a
+// document saying `required: true` is indexed as a boolean and one saying
+// `usage_count: 5` as a number. Matching text alone left every such key
+// unaskable, and unaskable silently — zero rows rather than an error. The
+// filter therefore asks for the typed spelling too, both bare and inside
+// a list. TestIntegrationFrontmatterFilter proves the effect on real rows;
+// this pins the arguments.
+func TestBuildWhereFrontmatterTriesTypedValues(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		key   string
+		value string
+		want  []string
+	}{
+		{"a boolean", "required", "true", []string{
+			`{"required":"true"}`, `{"required":["true"]}`,
+			`{"required":true}`, `{"required":[true]}`,
+		}},
+		{"a number", "usage_count", "5", []string{
+			`{"usage_count":"5"}`, `{"usage_count":["5"]}`,
+			`{"usage_count":5}`, `{"usage_count":[5]}`,
+		}},
+		{"a negative number", "delta", "-1.5", []string{
+			`{"delta":"-1.5"}`, `{"delta":["-1.5"]}`,
+			`{"delta":-1.5}`, `{"delta":[-1.5]}`,
+		}},
+		// Text keeps the two forms it always had. A value that is not a
+		// number or a boolean has no second reading to try, and a code
+		// with a leading zero is text however much it looks like a number.
+		{"a string", "owner", "finance", []string{
+			`{"owner":"finance"}`, `{"owner":["finance"]}`,
+		}},
+		{"a leading zero is not a number", "code", "007", []string{
+			`{"code":"007"}`, `{"code":["007"]}`,
+		}},
+		{"a date stays text", "stale_after", "2026-12-31", []string{
+			`{"stale_after":"2026-12-31"}`, `{"stale_after":["2026-12-31"]}`,
+		}},
+		// A value may not smuggle a structure past the "no operators"
+		// rule (design doc 0046 §5): what a caller types is a value.
+		{"an array is not read as JSON", "systems", `["dbt"]`, []string{
+			`{"systems":"[\"dbt\"]"}`, `{"systems":["[\"dbt\"]"]}`,
+		}},
+		{"an object is not read as JSON", "owner", `{"team":"finance"}`, []string{
+			`{"owner":"{\"team\":\"finance\"}"}`, `{"owner":["{\"team\":\"finance\"}"]}`,
+		}},
+		{"null is not read as JSON", "owner", "null", []string{
+			`{"owner":"null"}`, `{"owner":["null"]}`,
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			where, args := Filter{Frontmatter: map[string]string{tc.key: tc.value}}.buildWhere("k.")
+
+			got := make([]string, 0, len(args))
+			for _, a := range args {
+				b, ok := a.([]byte)
+				if !ok {
+					t.Fatalf("frontmatter arg %#v is not jsonb bytes", a)
+				}
+				got = append(got, string(b))
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("fm.%s=%s asked for %q, want %q", tc.key, tc.value, got, tc.want)
+			}
+			// One condition, OR-ing the forms: every form is a containment
+			// test the same GIN index answers, and an AND would mean the
+			// document had to have written the value every way at once.
+			if strings.Count(where, "k.frontmatter @> $") != len(tc.want) {
+				t.Errorf("condition %q does not test all %d forms", where, len(tc.want))
+			}
+			if strings.Contains(where, "@> $1 AND") {
+				t.Errorf("the forms of one value must be OR-ed, got %q", where)
+			}
+		})
+	}
+}
+
 // SearchLexical's substring floor feeds the query into an ILIKE pattern.
 // '%' and '_' are ILIKE wildcards; unescaped, they would turn a literal
 // search into a match-anything and flatten the ranking. TestIntegration
