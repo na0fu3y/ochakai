@@ -88,10 +88,10 @@ paths:
         - name: fm.{key}
           in: query
           description: >
-            Filter by any frontmatter key, exactly: `fm.owner=finance`
-            finds the entries whose frontmatter says owner is finance,
-            matching a scalar or a member of a list. Repeat with
-            different keys to AND them.
+            Filter by an OKF frontmatter key, exactly:
+            `fm.resource=bigquery://p.d.t` finds the entries whose
+            frontmatter names that resource, matching a scalar or a
+            member of a list. Repeat with different keys to AND them.
 
             A value is text, and one that spells a number or a boolean
             also matches the typed value a document wrote: YAML types
@@ -100,23 +100,28 @@ paths:
             entries that quoted them. Text that only looks numeric stays
             text — `fm.code=007` finds `code: "007"`.
 
-            This is the filter that does not need a release. A key OKF
-            adds in a later version, or one a producer invented, is
-            askable the day somebody writes it — the whole frontmatter is
-            indexed, not the subset ochakai happens to name (design doc
-            0046 §3.11). Exact match and list membership are the only two
+            This is the filter that does not need a migration. A key OKF
+            adds in a later version is askable as soon as ochakai knows
+            the spelling: the whole frontmatter is indexed, so there is
+            no column to add and no data to move (design doc 0046
+            §3.11). Exact match and list membership are the only two
             comparisons: ranges and boolean expressions are the doorway
             to a query language, and what ochakai returns is knowledge
             rather than rows.
 
-            The prefix carries the keys ochakai does not name, and only
-            those: `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
-            `fm.stale_after` are refused with 400 (design doc 0047).
-            Those five are read through columns, which do not answer the
-            same question — `status=stable` matches a document that says
-            nothing, since OKF's default is stable, and `fm.status` never
-            would. Use `type`, `status`, `tag`, `source` and
-            `sort=stale_after` for them.
+            The filter vocabulary is OKF's, and `fm.` carries the OKF
+            keys nothing else asks about: `attester`, `computation`,
+            `description`, `executor`, `id`, `parameters`, `resource`,
+            `runtime`, `status_note`, `title`, `usage_window`. A key a
+            producer invented is stored and handed back exactly as
+            written (SPEC §4.1) but is not part of the query vocabulary,
+            and `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+            `fm.stale_after` are read through columns that answer a
+            different question — `status=stable` matches a document that
+            says nothing, since OKF's default is stable, and `fm.status`
+            never would. Use `type`, `status`, `tag`, `source` and
+            `sort=stale_after` for those. Everything else is a 400
+            (design doc 0047).
           schema: { type: string }
         - name: rejected
           in: query
@@ -591,10 +596,10 @@ paths:
         - name: fm.{key}
           in: query
           description: >
-            Filter by any frontmatter key, exactly: `fm.owner=finance`
-            finds the entries whose frontmatter says owner is finance,
-            matching a scalar or a member of a list. Repeat with
-            different keys to AND them.
+            Filter by an OKF frontmatter key, exactly:
+            `fm.resource=bigquery://p.d.t` finds the entries whose
+            frontmatter names that resource, matching a scalar or a
+            member of a list. Repeat with different keys to AND them.
 
             A value is text, and one that spells a number or a boolean
             also matches the typed value a document wrote: YAML types
@@ -603,23 +608,28 @@ paths:
             entries that quoted them. Text that only looks numeric stays
             text — `fm.code=007` finds `code: "007"`.
 
-            This is the filter that does not need a release. A key OKF
-            adds in a later version, or one a producer invented, is
-            askable the day somebody writes it — the whole frontmatter is
-            indexed, not the subset ochakai happens to name (design doc
-            0046 §3.11). Exact match and list membership are the only two
+            This is the filter that does not need a migration. A key OKF
+            adds in a later version is askable as soon as ochakai knows
+            the spelling: the whole frontmatter is indexed, so there is
+            no column to add and no data to move (design doc 0046
+            §3.11). Exact match and list membership are the only two
             comparisons: ranges and boolean expressions are the doorway
             to a query language, and what ochakai returns is knowledge
             rather than rows.
 
-            The prefix carries the keys ochakai does not name, and only
-            those: `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
-            `fm.stale_after` are refused with 400 (design doc 0047).
-            Those five are read through columns, which do not answer the
-            same question — `status=stable` matches a document that says
-            nothing, since OKF's default is stable, and `fm.status` never
-            would. Use `type`, `status`, `tag`, `source` and
-            `sort=stale_after` for them.
+            The filter vocabulary is OKF's, and `fm.` carries the OKF
+            keys nothing else asks about: `attester`, `computation`,
+            `description`, `executor`, `id`, `parameters`, `resource`,
+            `runtime`, `status_note`, `title`, `usage_window`. A key a
+            producer invented is stored and handed back exactly as
+            written (SPEC §4.1) but is not part of the query vocabulary,
+            and `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+            `fm.stale_after` are read through columns that answer a
+            different question — `status=stable` matches a document that
+            says nothing, since OKF's default is stable, and `fm.status`
+            never would. Use `type`, `status`, `tag`, `source` and
+            `sort=stale_after` for those. Everything else is a 400
+            (design doc 0047).
           schema: { type: string }
         - name: tag
           in: query

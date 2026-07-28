@@ -106,6 +106,47 @@ func TestLimitContractsInSchema(t *testing.T) {
 	}
 }
 
+// TestFMSchemaListsTheAskableKeys holds the "fm" description to the
+// vocabulary the server enforces (design doc 0047 §2). An agent sees only
+// the schema, so a key promised here and refused by checkedFilter costs a
+// tool call to find out — and a key OKF adds later is only askable once
+// this text says so.
+func TestFMSchemaListsTheAskableKeys(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	tools := map[string]bool{"search_knowledge": true, "get_context": true}
+	for _, tool := range res.Tools {
+		if !tools[tool.Name] {
+			continue
+		}
+		delete(tools, tool.Name)
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s schema: %v", tool.Name, err)
+		}
+		var schema struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal %s schema: %v", tool.Name, err)
+		}
+		desc := schema.Properties["fm"].Description
+		for _, key := range domain.AskableFrontmatterKeys() {
+			if !strings.Contains(desc, key) {
+				t.Errorf("%s fm description does not name the askable key %q", tool.Name, key)
+			}
+		}
+	}
+	for name := range tools {
+		t.Errorf("tool %s not found", name)
+	}
+}
+
 // TestSearchSortValidation mirrors the CLI and REST rules: a search query
 // combined with a sort mode is an error (not silently ignored), an
 // unknown sort is rejected — for verified_at, usage, and failed — and

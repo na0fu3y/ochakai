@@ -30,7 +30,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 全体アーキテクチャ | [0001](0001-architecture.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用) |
-| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-unnamed-keys.md)(`fm.`)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
+| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
@@ -104,17 +104,24 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
-- [0047 `fm.` は名前を付けていないキーだけを運ぶ](0047-fm-carries-unnamed-keys.md)
-  — **Accepted**。0046 §3.11 の「named フィルタは式への糖衣」を改訂し、
-  typed column を残したまま `fm.type` / `fm.status` / `fm.tags` /
-  `fm.sources` / `fm.stale_after` を 400 で拒否する。同じキーが綴りに
-  よって別の問いになる状態(沈黙した `status` は `status=stable` に
-  当たり `fm.status=stable` に当たらない)を、解決ではなく除去する。
-  拒否はサービス層 1 か所で、REST / MCP / CLI が共有する。
-  0015 §3 に「`fm.` は Web UI に載せない」という省略を 1 件足す(§4)。
+- [0047 問いの語彙は OKF が定義するキーである](0047-fm-carries-okf-keys.md)
+  — **Accepted**。0046 §3.11 を 2 点改訂する。「named フィルタは式への
+  糖衣」は採らず typed column を残し、`fm.type` / `fm.status` /
+  `fm.tags` / `fm.sources` / `fm.stale_after` は 400 で拒否する
+  — 同じキーが綴りによって別の問いになる状態(沈黙した `status` は
+  `status=stable` に当たり `fm.status=stable` に当たらない)を、解決では
+  なく除去するため。あわせて `fm.` を **OKF が定義するキー**に閉じる
+  — producer が発明したキーは保存され往復するが引けない。開いた語彙は
+  0 件が答えなのか綴り間違いなのかを利用者に判定させず、引けるキーの
+  一覧をどの面にも書けなくするからである。引けるキーは
+  `domain.EnvelopeKeys` から導出するので、OKF が足したキーは列も
+  マイグレーションも無しで引ける(0046 §3.11 の目的)。拒否はサービス層
+  1 か所で、REST / MCP / CLI が共有する。0015 §3 に「`fm.` は Web UI に
+  載せない」という省略を 1 件足す(§4)。**未リリースにつき、同番号の
+  初版を 0048 §2.3 に従って差し替えた**(その規則の最初の適用)。
 - [0046 バンドルがアドレス空間](0046-bundle-address-space.md) —
   **Accepted**(実装は後続 PR、0.15.0 の次のリリースで 0043 の実装と
-  束ねて出る。§3.11 の「named フィルタは式への糖衣」は 0047 が改訂)。**OKF 互換領域の現行ドキュメント**。バンドルを
+  束ねて出る。§3.11 は 0047 が改訂)。**OKF 互換領域の現行ドキュメント**。バンドルを
   「パス → オブジェクト」の写像そのものとし、概念でないファイルも
   往復させる(取り込みで消えるものが無くなる)。保存は**受け取った
   バイト列**で正準形は導出値、`index.md` / `log.md` は SPEC §8 / §9 の

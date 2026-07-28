@@ -677,6 +677,43 @@ var EnvelopeKeys = []string{
 	"runtime", "parameters", "computation", "executor", "attester",
 }
 
+// FilterOwnedKeys names, for each OKF key ochakai reads through a column
+// of its own, the filter that owns the question — the one a frontmatter
+// filter must not answer a second time (design doc 0047 §2.1). The column
+// and the jsonb path do not say the same thing (a document that writes no
+// status reads as stable to `status=`, since that is OKF's default, and as
+// nothing to `fm.status`), and a caller cannot see which one it got.
+var FilterOwnedKeys = map[string]string{
+	"type":        "type=",
+	"status":      "status=",
+	"tags":        "tag=",
+	"sources":     "source=URI",
+	"stale_after": "sort=stale_after",
+}
+
+// AskableFrontmatterKeys returns the frontmatter keys a filter may name,
+// sorted: every key OKF defines, less the ones a filter of their own
+// already asks (design doc 0047 §2). A producer's extension key is not
+// here — it is stored and handed back exactly as written (SPEC §4.1), but
+// the query vocabulary is OKF's.
+//
+// It is derived from EnvelopeKeys rather than written out, which is what
+// makes the query surface additive: the day OKF adds a key and that list
+// learns its spelling, the key is askable — no column and no migration,
+// because the whole frontmatter is already indexed (design doc 0046
+// §3.11). Every surface describes itself from this, so no help text can
+// promise a key the server refuses.
+func AskableFrontmatterKeys() []string {
+	out := make([]string, 0, len(EnvelopeKeys))
+	for _, k := range EnvelopeKeys {
+		if FilterOwnedKeys[k] == "" {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // Verified reports whether anyone has confirmed this entry — SPEC §5.3's
 // signal, which is the presence of a verification and not a status.
 func (k *Knowledge) Verified() bool { return len(k.Verifications) > 0 }

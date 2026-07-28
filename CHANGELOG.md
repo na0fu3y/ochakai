@@ -68,17 +68,17 @@ last entry.
   It says what `ochakai revisions` says, in the format a bundle carries
   — which is what makes a history portable.
 
-- **Any frontmatter key is a filter**: `?fm.owner=finance` on REST,
-  `fm: {owner: finance}` on MCP, `--fm owner=finance` on the CLI (design
-  doc [0046](docs/design/0046-bundle-address-space.md) §3.11). It matches
-  a scalar exactly or a member of a list, and repeating it with different
+- **An OKF frontmatter key is a filter**: `?fm.resource=bq://p.d.t` on
+  REST, `fm: {resource: "bq://p.d.t"}` on MCP, `--fm resource=bq://p.d.t`
+  on the CLI (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.11). It matches a
+  scalar exactly or a member of a list, and repeating it with different
   keys ANDs them.
 
   The whole frontmatter is now indexed as `jsonb`, so a key OKF adds in a
-  later version — or one a producer invented — is askable the day
-  somebody writes it, with no column, no migration and no release.
-  Storage became additive when the document became the stored form;
-  querying did not follow until now.
+  later version is askable as soon as ochakai knows the spelling — no
+  column, no migration, and no data to move. Storage became additive when
+  the document became the stored form; querying did not follow until now.
 
   A value is text, and one that spells a number or a boolean matches the
   typed value the document wrote as well: YAML types frontmatter, so
@@ -93,18 +93,32 @@ last entry.
   negation and boolean expressions are the doorway to a query language,
   and what ochakai returns is knowledge rather than rows.
 
+  **The filter vocabulary is OKF's** (design doc
+  [0047](docs/design/0047-fm-carries-okf-keys.md)). `fm.` asks the OKF
+  keys nothing else asks about — `attester`, `computation`,
+  `description`, `executor`, `id`, `parameters`, `resource`, `runtime`,
+  `status_note`, `title`, `usage_window` — and every surface lists them,
+  so the OpenAPI text, the MCP tool schemas and `--help` say exactly what
+  the server accepts.
+
+  A key a producer invented is **stored and handed back exactly as
+  written** and always will be (OKF SPEC §4.1 requires it, §11 forbids
+  rejecting a document for carrying one), but naming it in a filter is a
+  400 listing what can be asked. An open vocabulary cannot tell you
+  whether zero results means "no entry says that" or "the producer
+  spelled it `team`, not `owner`" — and there is no way to write down
+  what is askable, so an agent that sees only a tool schema guesses.
+
   The typed columns stay where they are — they are the same values with
   better indexes (trigram over the text, a date for `stale_after`, an
   array for tags) — so `type`, `status`, `tag`, `source` and
-  `stale_after` keep answering from them. Because they do, `fm.type`,
-  `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after` are refused
-  with a 400 naming the filter to use instead (design doc
-  [0047](docs/design/0047-fm-carries-unnamed-keys.md)). A column and a
-  jsonb path do not answer the same question — `status=stable` matches a
-  document that says nothing, since OKF's default is stable, while
-  `fm.status=stable` never would — and which of the two you got would
-  have depended on how you spelled the key. The prefix carries the keys
-  ochakai does not name, and only those.
+  `stale_after` keep answering from them, and `fm.type`, `fm.status`,
+  `fm.tags`, `fm.sources` and `fm.stale_after` are refused with a 400
+  naming the filter to use instead. A column and a jsonb path do not
+  answer the same question — `status=stable` matches a document that says
+  nothing, since OKF's default is stable, while `fm.status=stable` never
+  would — and which of the two you got would have depended on how you
+  spelled the key.
 
   Migration 0027 adds the column and a GIN index and backfills from each
   stored document; no timestamp moves and no hash changes, since indexing

@@ -2730,9 +2730,11 @@ func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
 }
 
 // The frontmatter index is what makes the query surface additive: a key
-// no release of ochakai has ever heard of is askable the day a writer
-// writes it (design doc 0046 §3.11). The test therefore asks for one
-// deliberately outside every vocabulary the program knows.
+// needs no column of its own to be askable, so the day OKF adds one it
+// is queryable with no migration (design doc 0046 §3.11). Which keys a
+// caller may name is the service's question, not the store's (design doc
+// 0047 §2.3) — the index answers any of them, and the test asks with keys
+// deliberately outside every vocabulary the program knows, to pin that.
 func TestIntegrationFrontmatterFilter(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {

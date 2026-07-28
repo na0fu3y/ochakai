@@ -21,9 +21,10 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 [0044](0044-web-ui-edits-documents.md) の「Web UI の編集は文書エディタ一本」は
 前提として引き継ぐ。**OKF 互換領域の現行ドキュメント**。
 実装は後続 PR(§1.1)で、破壊的変更は 0.15.0 の次のリリースに束ねて出す。
-§3.11 の「named フィルタは式への糖衣になる」は
-[0047](0047-fm-carries-unnamed-keys.md) が改訂した — named フィルタは
-typed column のまま残り、`fm.` が列を持つ 5 キーを拒否する
+§3.11 は [0047](0047-fm-carries-okf-keys.md) が 2 点改訂した —
+「named フィルタは式への糖衣になる」は採らず typed column のまま残し、
+`fm.` が引くのは **OKF が定義するキーのうち列を持たないもの**だけに
+なる(producer が発明したキーは保存され往復するが、引けない)
 Date: 2026-07-28
 
 ## 1. 目的

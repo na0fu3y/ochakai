@@ -984,26 +984,18 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort string, f store.
 // the filter already says what is wanted.
 const sortBySource = "source"
 
-// namedFilter maps the frontmatter keys ochakai reads through a column
-// of its own onto the filter that asks about them. A "fm." parameter
-// naming one of these is refused rather than answered (design doc 0047):
-// the column and the jsonb path do not answer the same question, and the
-// caller cannot see which one they got.
-//
-// Only keys with a filter beside them are listed. The boundary is "the
-// key already has a way to ask", not "ochakai knows the key" — refusing
-// one with nothing to point at would take away the only way to ask it.
-var namedFilter = map[string]string{
-	"type":        "type=",
-	"status":      "status=",
-	"tags":        "tag=",
-	"sources":     "source=URI",
-	"stale_after": "sort=stale_after",
-}
+// askableKeys are the frontmatter keys "fm." answers, and askableHint is
+// the list a refusal shows. Both come from the domain vocabulary, so the
+// server, the OpenAPI text, the MCP schemas and the CLI help cannot
+// disagree about what is askable.
+var (
+	askableKeys = domain.AskableFrontmatterKeys()
+	askableHint = strings.Join(askableKeys, ", ")
+)
 
 // checkedFilter returns f with its path scopes normalized, rejecting one
-// that could not lead an id, and refuses a frontmatter filter that
-// shadows a named one. Every surface hands its filter through here — the
+// that could not lead an id, and refuses a frontmatter filter naming a key
+// "fm." does not answer. Every surface hands its filter through here — the
 // contract lives on the server (design doc 0015 §2), so REST, MCP and the
 // CLI cannot disagree about whether "teams/growth/" is the same scope as
 // "teams/growth", nor about which spellings of a question exist.
@@ -1016,12 +1008,17 @@ var namedFilter = map[string]string{
 // none returns the whole base — reading is bounded by who can reach the
 // service, not by what they ask for (design doc 0002, and 0041 §4).
 func checkedFilter(f store.Filter) (store.Filter, error) {
-	// Sorted, so a request naming two of them reports the same one every
+	// Sorted, so a request naming two bad keys reports the same one every
 	// time rather than whichever the map handed over first.
 	for _, key := range slices.Sorted(maps.Keys(f.Frontmatter)) {
-		if use, ok := namedFilter[key]; ok {
+		if use, ok := domain.FilterOwnedKeys[key]; ok {
 			return f, Invalidf("fm.%s is not a filter: ochakai reads %s through a column of its own, "+
 				"which does not answer what the frontmatter says — use %s", key, key, use)
+		}
+		if !slices.Contains(askableKeys, key) {
+			return f, Invalidf("fm.%s is not a filter: OKF does not define %q, and the filter "+
+				"vocabulary is OKF's — a producer's own key is stored and handed back exactly as "+
+				"written, not asked for. Askable: %s", key, key, askableHint)
 		}
 	}
 	if len(f.Prefixes) == 0 {

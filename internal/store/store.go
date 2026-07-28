@@ -178,11 +178,13 @@ type Filter struct {
 	Trust    []domain.Trust
 	Rejected *bool
 
-	// Frontmatter narrows by any frontmatter key, which is what makes the
-	// query surface additive: a key OKF adds in a later version — or one
-	// a producer invented — is askable the day somebody writes it, with
-	// no column and no release (design doc 0046 §3.11). Every pair must
-	// match (AND), matching a scalar exactly or a list by membership.
+	// Frontmatter narrows by a frontmatter key read out of the jsonb
+	// index, which is what keeps the query surface additive: a key OKF
+	// adds in a later version is askable with no column and no migration
+	// (design doc 0046 §3.11). Which keys those are is the service's
+	// question, not the store's — OKF's own, less the ones a named filter
+	// answers (design doc 0047). Every pair must match (AND), matching a
+	// scalar exactly or a list by membership.
 	// Values are text, and a value that spells a number or a boolean
 	// matches the typed frontmatter as well as the text: YAML types what
 	// it parses, so `required: true` is indexed as a boolean and would
