@@ -3020,3 +3020,97 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 		t.Errorf("the file object outlived the detach")
 	}
 }
+
+// TestIntegrationQueueCounts pins the property that makes the counts
+// worth having: each one is the size of the feed it names, measured
+// under the same filter (design doc 0049). A count that drifted from its
+// feed would be worse than no count — it would send a reviewer to an
+// empty page, or leave work invisible.
+func TestIntegrationQueueCounts(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+
+	// Scoped by prefix, both because the test database is shared and
+	// because scoping is the only filter the counts take.
+	run := fmt.Sprintf("it49-%d", time.Now().UnixNano())
+	mine := Filter{Prefixes: []string{run}}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	mk := func(name string, status domain.Status, staleAfter string) string {
+		id := run + "/" + name
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: name, Body: "b",
+			Status: status, StaleAfter: staleAfter, CreatedBy: actor, UpdatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+		return id
+	}
+	fail := func(id string) {
+		if err := s.RecordOutcome(ctx, domain.EventFailed, actor, id, ""); err != nil {
+			t.Fatalf("RecordOutcome %s: %v", id, err)
+		}
+	}
+	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format(domain.DateLayout)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1).Format(domain.DateLayout)
+
+	mk("draft-idle", domain.StatusDraft, "")
+	fail(mk("draft-failed", domain.StatusDraft, ""))
+	broken := mk("verified-broken", domain.StatusStable, "")
+	backdateVerification(t, ctx, s, broken, time.Now().UTC().Add(-30*24*time.Hour))
+	fail(broken)
+	answered := mk("verified-answered", domain.StatusStable, "")
+	fail(answered)
+	mk("expired", domain.StatusStable, yesterday)
+	mk("not-yet", domain.StatusStable, tomorrow)
+	rejected := mk("rejected-draft", domain.StatusDraft, "")
+	if _, err := s.Reject(ctx, rejected, actor, "no"); err != nil {
+		t.Fatal(err)
+	}
+	// The answer to a failure report is a verification, and it must land
+	// after the report to count as one: this is the entry that proves the
+	// reported_wrong count is a queue and not a ledger.
+	if _, err := s.Verify(ctx, answered, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.QueueCounts(ctx, mine)
+	if err != nil {
+		t.Fatalf("QueueCounts: %v", err)
+	}
+	want := domain.QueueCounts{Drafts: 2, ReportedWrong: 2, PastExpiry: 1}
+	if got != want {
+		t.Errorf("QueueCounts = %+v, want %+v", got, want)
+	}
+
+	// Same filter, same numbers as the feeds themselves.
+	drafts, err := s.ListByUsage(ctx, Filter{Prefixes: []string{run},
+		Statuses: []domain.Status{domain.StatusDraft}}, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reported, err := s.ListByFailed(ctx, mine, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, err := s.ListByStaleAfter(ctx, mine, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int64(len(drafts)) != got.Drafts || int64(len(reported)) != got.ReportedWrong ||
+		int64(len(expired)) != got.PastExpiry {
+		t.Errorf("counts %+v disagree with the feeds (%d drafts, %d reported wrong, %d past expiry)",
+			got, len(drafts), len(reported), len(expired))
+	}
+}

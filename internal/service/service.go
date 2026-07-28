@@ -1099,6 +1099,27 @@ func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit i
 	return hits, nil
 }
 
+// Queues counts the review queues rather than listing them (design doc
+// 0049): how many drafts are waiting, how many failure reports are still
+// unanswered, how many entries are past the expiry their author
+// declared. It is the three feeds of list, measured — the answer to "is
+// there anything to do", which nothing until now could give without
+// paging through the work itself.
+//
+// Only the path scopes are honored from the filter, so a team can ask
+// about its own subtree (design doc 0041). Nothing else narrows it: a
+// count that took every filter would be a query language over a number,
+// and the feed itself is where a reviewer goes once the answer is "yes".
+// No usage is recorded, for the reason list gives — asking how long the
+// queue is must not inflate the signal the queue ranks by.
+func (s *Service) Queues(ctx context.Context, f store.Filter) (domain.QueueCounts, error) {
+	f, err := checkedFilter(store.Filter{Prefixes: f.Prefixes})
+	if err != nil {
+		return domain.QueueCounts{}, err
+	}
+	return s.Store.QueueCounts(ctx, f)
+}
+
 // Revisions returns an entry's change history, newest first — the
 // audit surface behind "every change kept as a revision". Not a search:
 // no usage is recorded (auditing an entry is not using it).

@@ -287,6 +287,20 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
+	// GET /api/v1/queues?prefix=... — the three review queues as counts
+	// (design doc 0049). The feeds under /api/v1/knowledge answer "what
+	// is waiting"; this answers "is anything", which is the question a
+	// scheduled job can ask cheaply and a human can be told the answer
+	// to. prefix scopes it to a subtree, as it scopes the feeds.
+	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
+		counts, err := svc.Queues(r.Context(), store.Filter{Prefixes: r.URL.Query()["prefix"]})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"queues": counts})
+	})
+
 	// {id...} because the id is the entry's full bundle path (design doc
 	// 0016) — the wildcard captures every segment.
 	mux.HandleFunc("GET /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {

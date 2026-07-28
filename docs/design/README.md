@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md) |
+| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -253,9 +253,15 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
   **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した。フィードは
   0037 が 3 つめを足した。§6 の verify の記録は 0043 が検証台帳への
-  追記に改め、再検証が履歴として残る)。
+  追記に改め、再検証が履歴として残る。3 本のキューを数える面は 0049)。
   検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。
   再検証を記録する `POST /api/v1/verify/{id}` はここが出所。
+- [0049 キューの長さを数える](0049-queue-counts.md) — **Accepted**。
+  0025 と 0037 の 3 本のフィードを一覧せずに数える
+  `GET /api/v1/queues` と CLI `ochakai queues`(`--exit-code` は空でない
+  間 2 で終了する)。空にできないカナリアのフィードは数えない(§3.2)。
+  配送・スケジューラ・閾値は持たず、押すのは運用者の cron / CI である
+  (§4)という refusal を含む。
 - [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
   — **Accepted**。利用イベントをメモリにバッファして定期フラッシュし、
   利用統計は best-effort と明示する(上限超過は破棄、シャットダウンは
