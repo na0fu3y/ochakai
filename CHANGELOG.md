@@ -20,6 +20,26 @@ last entry.
 
 ### Added
 
+- **BREAKING** — the MCP write face is one tool. `create_knowledge` and
+  `update_knowledge` are `put_knowledge`: it creates when the id is free
+  and replaces when it is taken (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.14).
+
+  The two tools asked the agent a question the document does not answer.
+  A write states what the entry should say, and whether the id was
+  already taken is not part of that statement — the same reasoning that
+  gave REST one `PUT` instead of a POST beside it. The guards are
+  unchanged and still apply to the half they belong to: reviving a
+  curated tombstone is refused on the create side, replacing an entry a
+  human ruled on is refused on the other, and both refusals still name
+  the way forward.
+
+  It is also where the tool budget actually is. The whole surface is
+  33.5 KB of JSON schema; this merge saves about 6 KB of it, which is
+  nearly twice what dropping `delete_knowledge`, `get_knowledge_usage`
+  and `get_attachment` would have bought — so those three stay
+  (issue #272), and the surface is eight tools.
+
 - **What enters the bundle leaves it** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.2). `ochakai
   import` now keeps every file the bundle carried, at the path it
