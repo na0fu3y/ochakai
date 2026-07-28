@@ -78,6 +78,34 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # goreleaser's own changelog generation is disabled (the notes are
+      # written by hand), so a release it creates has an empty body and
+      # the Releases page shows a bare tag until someone edits it. The
+      # notes already exist by then: this repo's habit is that the
+      # annotated tag's message *is* the release notes. Copy it over.
+      # A release drafted with its body before the tag was pushed keeps
+      # that body — `keep-existing` leaves it alone, and so does this.
+      - name: Fill an empty release body from the tag message
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "$(gh release view "$TAG" --json body --jq .body)" ]; then
+            echo "$TAG already has a release body; leaving it alone"
+            exit 0
+          fi
+          if [ "$(git tag -l --format='%(objecttype)' "$TAG")" != tag ]; then
+            echo "::warning::$TAG is not annotated, so it carries no message to copy"
+            exit 0
+          fi
+          # Line 1 is the title ("ochakai X.Y.Z") and line 2 is blank.
+          git tag -l --format='%(contents)' "$TAG" | tail -n +3 > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::warning::$TAG's message is a title with nothing under it"
+            exit 0
+          fi
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
       # The image carries provenance; the archives people actually
       # download should too.
       - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1

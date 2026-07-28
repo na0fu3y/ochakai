@@ -6,10 +6,10 @@ description: Cut an ochakai release — the version-bump PR, the annotated tag, 
 # Cutting an ochakai release
 
 A release is a tag. Everything else is automation — but three files carry
-a version number the tag does not update, the release body comes out
-empty unless someone writes it, and a pushed tag is permanent because the
-Go module proxy caches it forever. So the work is: a reviewed PR, then a
-tag, then verification.
+a version number the tag does not update, the release body is only as
+good as the tag message it is copied from, and a pushed tag is permanent
+because the Go module proxy caches it forever. So the work is: a reviewed
+PR, then a tag, then verification.
 
 [CONTRIBUTING.md](../../../CONTRIBUTING.md) is the reference; this skill
 is the running order and the traps.
@@ -66,22 +66,32 @@ Pushing runs [release.yaml](../../../.github/workflows/release.yaml): one
 job publishes the multi-arch image to GHCR with SBOM and provenance, the
 other runs goreleaser for the archives, `checksums.txt`, and provenance.
 
-## 3. Write the release body
+## 3. The release body
 
 **goreleaser's own changelog generation is disabled** (`.goreleaser.yaml`
-— notes are written by hand), so if goreleaser creates the release, the
-body comes out **empty**. Either create the release with its notes before
-pushing the tag, or fill it in after:
+— notes are written by hand), so the release it creates would come out
+with an **empty** body. The workflow fills it from the annotated tag's
+message, so the tag you wrote in step 2 is already on the Releases page —
+which is the real reason to write that message properly rather than
+leaving it for later.
+
+This is why the trap is upstream: a thin tag message is now a thin
+release page, immediately and publicly. Write for an operator upgrading —
+which migrations run, whether `updated_at` moves (held ETags,
+`generated.at`), whether re-embedding is needed, and what a client
+reading the old shape must change.
+
+To add upgrade and install sections on top of it, edit the release; the
+body is replaced wholesale, so start from what is already there:
 
 ```bash
 git tag -l --format='%(contents)' vX.Y.Z | tail -n +3 > notes.md
+# add the upgrade + install sections to notes.md
 gh release edit vX.Y.Z --notes-file notes.md
 ```
 
-Write for an operator upgrading: which migrations run, whether
-`updated_at` moves (held ETags, `generated.at`), whether re-embedding is
-needed, and what a client reading the old shape must change. Add upgrade
-and install notes.
+A release drafted with its body *before* the tag was pushed keeps that
+body — the workflow only writes into an empty one.
 
 ## 4. Verify what shipped
 
@@ -89,9 +99,13 @@ Do this rather than trusting the green check.
 
 ```bash
 gh release view vX.Y.Z --json assets -q '.assets[].name'
+gh release view vX.Y.Z --json body -q '.body' | head -5
 ```
 
-Expect **6 archives plus `checksums.txt`**. Then, in a scratch directory:
+Expect **6 archives plus `checksums.txt`**, and a body that is the tag
+message — an empty one means the copy step warned and skipped (a
+lightweight tag, or a message with nothing under its title line). Then,
+in a scratch directory:
 
 ```bash
 shasum -a 256 -c checksums.txt --ignore-missing
