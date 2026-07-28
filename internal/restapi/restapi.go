@@ -2,9 +2,9 @@
 // (the bundled one lives in internal/webui). It is a superset of the MCP tools:
 // the same knowledge/search/usage operations plus the bulk export
 // endpoint that makes no sense as an agent tool call, and human-facing
-// endpoints (browse, revisions, backlinks) that stay off MCP by design
-// (agents get search/get_context instead; design doc 0015 records the
-// per-surface policy). The CLI covers this whole surface; the spec is
+// endpoints (the reserved bundle files, backlinks) that stay off MCP by
+// design (agents get search/get_context instead; design doc 0015 records
+// the per-surface policy). The CLI covers this whole surface; the spec is
 // committed at api/openapi.yaml.
 package restapi
 
@@ -954,14 +954,12 @@ func writeError(w http.ResponseWriter, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 
-// etagOf renders an entry's version as an ETag: its updated_at in
-// RFC3339Nano, quoted. A client echoes it in If-Match to update
-// conditionally (design doc 0030).
-// etagOf renders the entry's version: the hash of its canonical document
-// (design doc 0043 §3.4). It moves when the entry's content moves and at
-// no other time — verifying, rejecting, or attaching a file all leave a
-// held precondition valid, which the updated_at version could not do
-// because it was also the row's write timestamp.
+// etagOf renders the entry's version as an ETag: the hash of its
+// canonical document, quoted. A client echoes it in If-Match to update
+// conditionally (design docs 0030, 0043 §3.4). It moves when the entry's
+// content moves and at no other time — verifying, rejecting, or attaching
+// a file all leave a held precondition valid, which the updated_at
+// version could not do because it was also the row's write timestamp.
 func etagOf(k *domain.Knowledge) string {
 	return `"` + k.ContentHash + `"`
 }

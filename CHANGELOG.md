@@ -114,6 +114,12 @@ last entry.
   enumeration, and a test reads the whole tree for a lifecycle list
   spelled by hand, so this copy cannot come back.
 
+- The shipped Claude Code write-back hook told the agent to search with
+  `--status rejected`, which is not an invocation `ochakai search`
+  accepts — `--status` takes a lifecycle value and a rejection is not
+  one. It now says `--rejected`, the flag that actually shows entries a
+  human turned down.
+
 - Producer-defined keys **inside** a `sources` entry, a `parameter`, an
   `executor` or an `attester` are kept rather than dropped (SPEC §4.1,
   design doc [0043](docs/design/0043-document-first.md) §3.6). They ride

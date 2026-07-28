@@ -353,11 +353,13 @@ func windowFrom(v any, where string) (*domain.UsageWindow, []string) {
 	return w, notes
 }
 
-// sourceKeys is the closed set SPEC §5.1 defines. A producer key inside a
-// source mapping is dropped with a note rather than kept: the point of
-// modeling sources is that four surfaces can describe one shape, and an
-// open map defeats the form editor and the tool schema alike (design doc
-// 0036 §3.5).
+// sourceKeys is the closed set SPEC §5.1 defines: the keys ochakai reads
+// into fields of its own, which is what lets four surfaces describe one
+// shape — the form editor and the tool schema are built from them
+// (design doc 0036 §3.5). A producer key inside a source mapping is not
+// one of them and is not dropped either: extraKeys carries it through
+// untouched, because the document is the stored form and a key discarded
+// here is a key no later release can recover (design doc 0043 §3.6).
 var sourceKeys = map[string]bool{
 	"resource": true, "id": true, "title": true, "author": true,
 	"usage_count": true, "last_modified": true, "usage_window": true,
