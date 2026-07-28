@@ -84,6 +84,17 @@ linter_version() {
 	     f && $1 == "version:" {print $2; exit}' .github/workflows/ci.yaml
 }
 
+# The toolchain to build the tools below with: the version go.mod
+# targets, or newer if a tool asks for it. `go run tool@version` picks
+# its toolchain from that tool's own go.mod, so on a machine whose Go is
+# older than ours golangci-lint gets built with the Go 1.25 it asks for
+# — and then refuses to run, because a linter cannot check a module that
+# targets a Go newer than the one that built it. CI installs a released
+# binary, which is built with a current Go, and never sees this.
+tool_toolchain() {
+	awk '$1 == "go" {print "go" $2 "+auto"; exit}' go.mod
+}
+
 run_core() {
 	step "gofmt"
 	test -z "$(gofmt -l .)" || {
@@ -113,14 +124,16 @@ run_lint() {
 		;;
 	esac
 	step "golangci-lint $v"
-	go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" run ./...
+	GOTOOLCHAIN=$(tool_toolchain) \
+		go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" run ./...
 }
 
 run_vuln() {
 	step "govulncheck"
 	# Unpinned, like CI: a new govulncheck release failing means a new
 	# vulnerability, not a new check.
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	GOTOOLCHAIN=$(tool_toolchain) \
+		go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 }
 
 if [ "$want_db" = yes ]; then start_db; fi
