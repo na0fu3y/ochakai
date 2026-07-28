@@ -16,9 +16,8 @@ Locally that requirement disappears and the URL works directly.
 over stdio. For those, the bridge is the answer whatever the server is.
 
 So: **local server, capable client → the URL. Anything else → the
-bridge.** The bridge needs `ochakai` on `PATH`; see
-[when it does not connect](#when-it-does-not-connect) for the one way
-that reliably goes wrong.
+bridge** — which has prerequisites of its own, listed
+[below](#what-the-bridge-needs) before any of the configs.
 
 | Client | Local `docker compose` | Cloud Run | Config lives in |
 |---|---|---|---|
@@ -39,6 +38,33 @@ Claude Code and the bridge are what this project exercises. The rest is
 transcribed from each client's own documentation as of July 2026 and
 marked where nobody here has run it — a config that turns out to be wrong
 is worth an issue.
+
+## What the bridge needs
+
+Every config below that launches a command needs `ochakai` on the
+client's `PATH`. Against Cloud Run it needs two more things, and neither
+is present on a machine by default:
+
+- **The `gcloud` CLI**, which is where the ID token comes from. The
+  bridge tries service-account ADC first and otherwise shells out to
+  `gcloud auth print-identity-token` — a user's application-default
+  credentials cannot mint the audience-bound token Cloud Run wants, so
+  on a personal machine it is the `gcloud` path that runs.
+- **`gcloud auth login` having happened**, as a principal holding
+  `roles/run.invoker` on the service.
+
+"The client is configured with no credentials" is a claim about the
+config file, not about the machine. The credential exists; it lives in
+your gcloud session instead of in JSON, which is what keeps it out of
+the client's config and off disk in any form ochakai has to rotate.
+
+`ochakai whoami` is the check. It prints which server the CLI targets,
+as whom, and whether it answers — so run it in a terminal before editing
+any config below, because a client that launches a bridge with no
+identity usually reports it as "the server has no tools".
+
+None of this applies to a local `docker compose` server, which takes no
+token at all.
 
 ## Claude Code
 
@@ -85,6 +111,11 @@ editing.
 Use an absolute path for `command` (`which ochakai`). A desktop app does
 not inherit the `PATH` your shell has, which is the usual reason a config
 that looks right produces no tools.
+
+Against Cloud Run this config does nothing until the machine has gcloud
+and a login — [what the bridge needs](#what-the-bridge-needs). There is
+no way to supply that from inside the app, and no bundle or installer
+that removes it.
 
 Add `--url` when the server is not the one `ochakai use` selected:
 
