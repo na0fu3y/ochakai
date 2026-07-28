@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 
 	"github.com/jackc/pgx/v5"
@@ -95,6 +96,9 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 	if err := s.backfillDocuments(ctx); err != nil {
 		return fmt.Errorf("backfill documents: %w", err)
 	}
+	if err := s.backfillLinkForms(ctx); err != nil {
+		return fmt.Errorf("backfill link forms: %w", err)
+	}
 
 	if embedDim > 0 {
 		if err := s.migrateEmbedding(ctx, embedDim); err != nil {
@@ -163,6 +167,95 @@ func (s *Store) backfillEntryDocuments(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// backfillLinkForms rewrites the ochakai:// links migration 0026 marked,
+// into the bundle-absolute form SPEC §6 defines (design doc 0046 §3.6).
+//
+// It is Go rather than SQL because three things have to move together
+// and only one of them is a column: the body inside the stored document
+// (swapped in place, so the frontmatter the writer wrote is not
+// reformatted), the links index derived from that body, and the content
+// hash over the result. A regexp_replace on the body alone would leave
+// the document contradicting its own index.
+//
+// The work list is a table, so a run that dies half-way resumes and one
+// that finishes leaves nothing to do. content_changed_at is not touched:
+// spelling a link the way the spec spells it is not a change to what the
+// entry says, any more than composing the stored document was.
+func (s *Store) backfillLinkForms(ctx context.Context) error {
+	for {
+		rows, err := s.pool.Query(ctx,
+			`SELECT `+knowledgeSelectDoc+` FROM knowledge
+			 WHERE id IN (SELECT id FROM link_form_backfill) ORDER BY id LIMIT $1`,
+			backfillBatch)
+		if err != nil {
+			if isUndefinedTable(err) {
+				return nil // migration 0026 has not run yet on this database
+			}
+			return err
+		}
+		batch, err := pgx.CollectRows(rows, scanKnowledgeDoc)
+		if err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			return nil
+		}
+		for i := range batch {
+			k := &batch[i]
+			body := rewriteOchakaiURIs(k.Body)
+			k.Doc = string(okf.ReplaceBody([]byte(k.Doc), body))
+			k.Body = body
+			k.Links = domain.LinksFromBody(k.ID, body)
+			doc, hash, err := storedDoc(k)
+			if err != nil {
+				s.log.Warn("cannot rewrite an entry's link forms", "id", k.ID, "err", err)
+				continue
+			}
+			j, err := marshalJSONFields(k)
+			if err != nil {
+				return err
+			}
+			if _, err := s.pool.Exec(ctx,
+				`UPDATE knowledge SET body=$2, links=$3, doc=$4, content_hash=$5 WHERE id=$1`,
+				k.ID, k.Body, j.links, doc, hash); err != nil {
+				return err
+			}
+		}
+		ids := make([]string, len(batch))
+		for i := range batch {
+			ids[i] = batch[i].ID
+		}
+		if _, err := s.pool.Exec(ctx, `DELETE FROM link_form_backfill WHERE id = ANY($1)`, ids); err != nil {
+			return err
+		}
+	}
+}
+
+var (
+	// ochakaiTargetRe matches the retired scheme where it was a markdown
+	// link's target; only the target is rewritten, and the anchor text
+	// the writer chose stays theirs.
+	ochakaiTargetRe = regexp.MustCompile(`\]\(ochakai://([^)\s]+)\)`)
+	// ochakaiBareRe matches what is left: an autolink, or a URI written
+	// as bare prose. The trailing sentence punctuation English and
+	// Japanese put after one is excluded, exactly as the parser excluded
+	// it while the form still existed — it was never part of the id.
+	ochakaiBareRe = regexp.MustCompile(`<?ochakai://([^\s<>()\[\]"'。、，．！？]*[^\s<>()\[\]"'。、，．！？.,;:!?])>?`)
+)
+
+// rewriteOchakaiURIs turns every ochakai://<id> in a body into the form
+// SPEC §6 recommends.
+//
+// A bare or autolinked URI becomes a whole markdown link rather than a
+// bare path: "/metrics/revenue.md" sitting in prose is a path, not a
+// link, and would leave the entry with one fewer edge than its writer
+// wrote. The anchor text is the id, which is what the bare form
+// displayed anyway.
+func rewriteOchakaiURIs(body string) string {
+	body = ochakaiTargetRe.ReplaceAllString(body, "](/$1.md)")
+	return ochakaiBareRe.ReplaceAllString(body, "[$1](/$1.md)")
 }
 
 // anyConverted reports whether any of the batch now has a document, so a

@@ -12,13 +12,17 @@ import (
 // says the kind of relationship is carried by the surrounding prose, not
 // by the link — so ochakai stores what the body says and nothing more.
 //
-// Five forms are recognized:
+// Two forms are recognized, and they are the two SPEC §6 defines:
 //
-//	[text](/metrics/revenue.md)     bundle-absolute, the SPEC's primary form
+//	[text](/metrics/revenue.md)     bundle-absolute, the spec's recommended form
 //	[text](./revenue.md)            relative to the entry's own directory
-//	[text](ochakai://metrics/revenue)
-//	<ochakai://metrics/revenue>     autolink, no anchor text
-//	ochakai://metrics/revenue       bare, no anchor text
+//
+// ochakai:// used to be a third, taught as first-class. It went with
+// design doc 0046 §3.6: a body travels in the bundle, and no other
+// consumer can resolve a scheme ochakai invented — an exported bundle
+// full of them is a bundle whose links only work here. (The scheme
+// survives where it is not a portability question: MCP requires a URI
+// for a resource, and that URI never leaves this server.)
 //
 // http(s) URLs are not links between entries (design doc 0024 §4), and
 // non-.md file references are attachments (design doc 0008), so both are
@@ -29,9 +33,6 @@ var (
 	// A leading "!" (image) is excluded by the caller — images are
 	// attachment references, never entry links.
 	mdLinkRe = regexp.MustCompile(`(!?)\[([^\]]*)\]\(([^)\s]+)\)`)
-	// bareURIRe matches ochakai:// references written without markdown
-	// link syntax, with or without autolink angle brackets.
-	bareURIRe = regexp.MustCompile(`<?(ochakai://[^\s<>()\[\]"']+)>?`)
 	// fenceRe matches the opening or closing line of a fenced code block.
 	fenceRe = regexp.MustCompile("^\\s{0,3}(```|~~~)")
 	// inlineCodeRe matches a backtick code span, which is stripped before
@@ -60,57 +61,14 @@ func LinksFromBody(id, body string) []Link {
 		links = append(links, l)
 	}
 	for _, line := range proseLines(body) {
-		consumed := map[string]bool{}
 		for _, m := range mdLinkRe.FindAllStringSubmatch(line, -1) {
 			if m[1] == "!" { // image: an attachment reference
 				continue
 			}
-			consumed[m[3]] = true
 			add(m[3], m[2])
-		}
-		for _, m := range bareURIRe.FindAllStringSubmatch(line, -1) {
-			uri := trimSentencePunctuation(m[1])
-			if consumed[uri] || consumed[m[1]] { // already taken as a markdown link target
-				continue
-			}
-			add(uri, "")
 		}
 	}
 	return links
-}
-
-// asciiEnders end an English sentence; cjkEnders end a Japanese one.
-// They are treated differently because English prose puts a space after
-// the stop and Japanese does not, so only the trailing run can be trimmed
-// in one and the match has to be cut at the first occurrence in the
-// other. Both apply to bare URIs alone: a markdown link's target has
-// explicit delimiters, so whatever the parentheses hold is meant.
-const (
-	asciiEnders = ".,;:!?"
-	cjkEnders   = "。、，．！？"
-)
-
-// trimSentencePunctuation ends a bare URI where the sentence around it
-// ends. "See ochakai://metrics/revenue." names metrics/revenue, not
-// "metrics/revenue." — which resolves to no entry, so the target gains no
-// backlink, a context pack never expands through it, and a move never
-// repairs it. Nothing reports the miss: a link to an id nobody wrote
-// looks exactly like a link to an entry not written yet.
-//
-// The trailing trim cannot serve Japanese, where "ochakai://tables/orders
-// を参照" has no space to stop at — so the match is also cut at the first
-// full-width stop, which no id in practice contains. Latin ids that
-// contain a dot ("ga4/events/purchase.v2") keep it: only a trailing run
-// is trimmed.
-//
-// An id may technically end in "." (only a leading dot is refused) and is
-// unreachable this way. It stays addressable in the form that says where
-// it ends: a markdown link.
-func trimSentencePunctuation(uri string) string {
-	if i := strings.IndexAny(uri, cjkEnders); i >= 0 {
-		uri = uri[:i]
-	}
-	return strings.TrimRight(uri, asciiEnders)
 }
 
 // resolveTarget turns one link target into an entry id, or "" when the
@@ -124,11 +82,9 @@ func resolveTarget(id, target string) string {
 	if target == "" {
 		return ""
 	}
-	if rest, ok := strings.CutPrefix(target, "ochakai://"); ok {
-		return strings.Trim(rest, "/")
-	}
-	// Any other scheme (http, https, mailto, gs) addresses something
-	// outside the bundle.
+	// A scheme (http, https, mailto, gs) addresses something outside the
+	// bundle — including ochakai://, which is no longer a link form a
+	// body may use (design doc 0046 §3.6).
 	if schemeRe.MatchString(target) {
 		return ""
 	}
@@ -188,9 +144,8 @@ func proseLines(body string) []string {
 // newID, and returns the body unchanged when nothing referred to oldID.
 // id is the entry whose body this is, needed to resolve relative targets.
 //
-// An ochakai:// target keeps that form; every other rewritten target
-// becomes bundle-absolute ("/newID.md"). A relative target cannot simply
-// have its id swapped — where it resolves to depends on the referring
+// A rewritten target becomes bundle-absolute ("/newID.md"). A relative
+// target cannot simply have its id swapped — where it resolves to depends on the referring
 // entry's own location, which a move may have just changed — so
 // normalizing to absolute is the one predictable outcome (design doc
 // 0024 §3.5).
@@ -199,9 +154,6 @@ func RewriteBodyLinks(id, body, oldID, newID string) string {
 		target, frag := splitFragment(target)
 		if resolveTarget(id, target) != oldID {
 			return target + frag
-		}
-		if strings.HasPrefix(target, "ochakai://") {
-			return "ochakai://" + newID + frag
 		}
 		return "/" + newID + ".md" + frag
 	})
@@ -301,35 +253,10 @@ func rewriteLine(line string, rewriteTarget func(string) string) string {
 			edits = append(edits, edit{lo, hi, t})
 		}
 	}
-	for _, m := range bareURIRe.FindAllStringSubmatchIndex(line, -1) {
-		lo, hi := m[2], m[3]
-		if inCode(m[0], m[1]) || overlapsLink(line, lo) {
-			continue
-		}
-		// The URI ends where the sentence around it does, as it does when
-		// the same line is read for links: rewriting the punctuation along
-		// with it would compare "metrics/revenue." against the moved id
-		// and leave the reference pointing at an entry that is gone.
-		hi = lo + len(trimSentencePunctuation(line[lo:hi]))
-		if t := rewriteTarget(line[lo:hi]); t != line[lo:hi] {
-			edits = append(edits, edit{lo, hi, t})
-		}
-	}
 	slices.SortFunc(edits, func(a, b edit) int { return a.lo - b.lo })
 	for i := len(edits) - 1; i >= 0; i-- {
 		e := edits[i]
 		line = line[:e.lo] + e.text + line[e.hi:]
 	}
 	return line
-}
-
-// overlapsLink reports whether offset lo sits inside a markdown link's
-// target, where the markdown pass has already handled it.
-func overlapsLink(line string, lo int) bool {
-	for _, m := range mdLinkRe.FindAllStringIndex(line, -1) {
-		if lo >= m[0] && lo < m[1] {
-			return true
-		}
-	}
-	return false
 }

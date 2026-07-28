@@ -462,8 +462,9 @@ Entries relate to each other through **the markdown links in their body**
 — there is no links field to fill in. Write `[revenue](/metrics/revenue.md)`
 in the prose and the entry links to `metrics/revenue`; the target gains a
 backlink, and `get_context` expands the edge in both directions. Relative
-paths (`./gross.md`) and canonical URIs (`ochakai://metrics/revenue`, bare
-or in a link) work too. This is OKF SPEC §5 taken at its word: a link
+paths (`./gross.md`) work too — those two are the forms SPEC §6 defines,
+and they are the only ones, so an exported bundle's links resolve for
+whoever reads it. This is OKF SPEC §5 taken at its word: a link
 asserts a relationship, and what kind of relationship it is comes from the
 surrounding prose, so ochakai stores no relationship type of its own
 (design doc 0024). Links inside fenced code blocks (``` or ~~~) and

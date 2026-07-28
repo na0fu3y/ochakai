@@ -530,14 +530,14 @@ func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge,
 // ListLinkingTo returns live entries whose links point at id, most
 // recently updated first. This is the reverse edge Context needs: the
 // insight that explains a metric links to the metric, not the other way
-// round. Both bare and ochakai:// target forms match.
+// round. A stored target is always the resolved id, whichever of SPEC
+// §6's two forms the body wrote it in.
 func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
 	return s.queryKnowledge(ctx,
 		`SELECT `+knowledgeSelect+` FROM knowledge
-		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2)
-		 ORDER BY updated_at DESC LIMIT $3`,
+		 WHERE deleted_at IS NULL AND links @> $1
+		 ORDER BY updated_at DESC LIMIT $2`,
 		fmt.Sprintf(`[{"target": %q}]`, id),
-		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+id),
 		limit)
 }
 
@@ -920,7 +920,7 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 // 0017), so everything keyed by it follows in one transaction — the row,
 // its revisions, attachments, usage, events, and embeddings — and live
 // entries that reference the old id (link targets in both bare and
-// ochakai:// forms, and attrs.model) are rewritten so no reference
+// both of SPEC §6's forms, and attrs.model) are rewritten so no reference
 // breaks. Attachment bytes never move: blobs are content-addressed
 // (design doc 0011). The destination must be a fresh id — a row there,
 // even soft-deleted, already owns that address and its revision history.
@@ -1039,10 +1039,9 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	// queue instead of deadlocking.
 	rows, err := tx.Query(ctx,
 		`SELECT `+knowledgeSelectDoc+` FROM knowledge
-		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)
+		 WHERE deleted_at IS NULL AND (links @> $1 OR attrs->>'model' = $2 OR id = $3)
 		 ORDER BY id FOR UPDATE`,
 		fmt.Sprintf(`[{"target": %q}]`, oldID),
-		fmt.Sprintf(`[{"target": %q}]`, "ochakai://"+oldID),
 		oldID, newID)
 	if err != nil {
 		return err

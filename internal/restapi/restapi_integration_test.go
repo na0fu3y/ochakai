@@ -705,7 +705,7 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 		}
 	}
 	create(metric, "Revenue", "The headline number.")
-	create(insight, "Reading revenue", "Seasonality caveats for [Revenue](ochakai://"+metric+").")
+	create(insight, "Reading revenue", "Seasonality caveats for [Revenue](/"+metric+".md).")
 
 	// Backlinks: the insight links to the metric, not the other way round.
 	var backlinks struct {
