@@ -1766,11 +1766,34 @@ paths:
         no-cache: names are mutable (replace-by-name), so clients
         revalidate every time. Fetching the bytes records a usage event
         against the owning entry; a 304 revalidation does not.
+
+        The bytes were uploaded by somebody, so what a browser may do
+        with them is decided here (design doc 0046 §3.2). An image, a
+        PDF or plain text is served `inline`; anything else — an SVG and
+        an HTML file above all, which are documents that carry script —
+        is served as an `attachment` under
+        `Content-Security-Policy: sandbox`, so it has no origin to run
+        in. `X-Content-Type-Options: nosniff` is set either way, because
+        the media type was decided by sniffing the bytes and a browser
+        must not decide it again.
       responses:
         "200":
           description: The attachment bytes.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+            Content-Disposition:
+              description: >
+                `inline` for an image, a PDF or plain text; `attachment`
+                for everything else (design doc 0046 §3.2).
+              schema: { type: string }
+            Content-Security-Policy:
+              description: >
+                `sandbox`, on the responses that are not served inline —
+                bytes that could carry script get no origin to run in.
+              schema: { type: string }
+            X-Content-Type-Options:
+              description: "`nosniff`, always."
+              schema: { type: string }
           content:
             "*/*":
               schema: { type: string, format: binary }

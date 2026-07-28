@@ -50,6 +50,33 @@ var attachmentMediaTypes = map[string]bool{
 	"text/plain":      true,
 }
 
+// InlineServable reports whether bytes of this media type may be handed
+// to a browser to render in place. Images (bar SVG), PDFs and plain text
+// may; everything else is served as a download instead (design doc 0046
+// §3.2).
+//
+// The rule is on the delivery side because that is where it belongs. A
+// write-time allowlist decides what a knowledge base may hold, and the
+// two questions are not the same one: 0046 §3.2 stops refusing media
+// types, on the grounds that a bundle whose files come back missing is
+// not a bundle that round-trips — "receive it, do not render it". Even
+// while the write side still refuses (design doc 0013), this is the
+// check that has to be true: a row written before that allowlist, or a
+// sniffer that reads one byte differently than a browser does, is a
+// script in the web UI's origin if the only guard is upstream.
+//
+// SVG is the case worth naming. It is an image by every convention and
+// an executable document by specification, so it is served the way an
+// executable document has to be: never inline.
+func InlineServable(mediaType string) bool {
+	mt, _, _ := strings.Cut(mediaType, ";")
+	mt = strings.ToLower(strings.TrimSpace(mt))
+	if mt == "image/svg+xml" || mt == "text/html" {
+		return false
+	}
+	return strings.HasPrefix(mt, "image/") || mt == "application/pdf" || mt == "text/plain"
+}
+
 // ValidAttachmentName reports whether name can be an attachment filename:
 // one path segment (so it embeds in bundle paths and URLs unchanged, with
 // the same path-safety-only character rule as ID segments, design doc

@@ -352,6 +352,19 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	if resp.Header.Get("ETag") != `"`+sum+`"` || resp.Header.Get("Cache-Control") != "private, no-cache" {
 		t.Errorf("caching headers = %q / %q", resp.Header.Get("ETag"), resp.Header.Get("Cache-Control"))
 	}
+	// A PNG renders in place, and says so with no sandbox on it; the
+	// sniffed type is never re-decided by the browser (design doc 0046
+	// §3.2, and serveDefensively for the half this entry cannot exercise —
+	// the write path still refuses the media types that would).
+	if d := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(d, "inline;") {
+		t.Errorf("Content-Disposition = %q, want inline for an image", d)
+	}
+	if resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q", resp.Header.Get("X-Content-Type-Options"))
+	}
+	if csp := resp.Header.Get("Content-Security-Policy"); csp != "" {
+		t.Errorf("Content-Security-Policy = %q on an image served inline", csp)
+	}
 
 	// Conditional GET with the current hash: 304, no body.
 	req, _ = http.NewRequest(http.MethodGet, attURL, nil)

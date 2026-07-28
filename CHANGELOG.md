@@ -69,6 +69,29 @@ last entry.
   (`… 0 skipped, 0 notes`), because a count that only appears in the
   scrollback is a count nobody reads.
 
+### Security
+
+- **A file is served the way its media type deserves** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2). An image, a PDF
+  or plain text is served `inline` as before; anything else now goes out
+  as a download, under `Content-Security-Policy: sandbox`, and
+  `X-Content-Type-Options: nosniff` is set on both.
+
+  Nothing stored today takes the second branch — the write path still
+  refuses every media type but those (design doc
+  [0013](docs/design/0013-attachment-files-gcs-only.md)), and it refuses
+  `text/html` and `image/svg+xml` by name. That is exactly why the rule
+  belongs on the way out as well: an SVG is an image by every convention
+  and a document that carries script by specification, and the only thing
+  standing between one and the web UI's own origin was a sniffer check at
+  write time. A row written before that check, or bytes a browser reads
+  differently than `http.DetectContentType` did, had nothing behind it.
+
+  It is also the half that has to exist first. 0046 §3.2 stops refusing
+  media types on the way in — a bundle whose files come back missing does
+  not round-trip — and "receive it, do not render it" is only a policy
+  once the second half is true.
+
 ### Fixed
 
 - Producer-defined keys **inside** a `sources` entry, a `parameter`, an
