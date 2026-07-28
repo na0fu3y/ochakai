@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0001](0001-architecture.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
-| 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用) |
+| 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0049](0049-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用) |
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-unnamed-keys.md)(`fm.`)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
@@ -93,9 +93,15 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
   (トークンも委譲ヘッダも見ない、全員 anonymous、401 を返さない)。
   read-only を含意するので「公開かつ書き込み可能」は設定として存在しない。
 - [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
-  — **Accepted**。信頼済みの呼び出し元が `X-Ochakai-On-Behalf-Of` で
-  エンドユーザーを名乗り、provenance がサービスアカウント 1 つに
-  潰れる問題を解く。
+  — **Accepted**(§3 の合成規則を 0049 が producer に適用)。信頼済みの
+  呼び出し元が `X-Ochakai-On-Behalf-Of` でエンドユーザーを名乗り、
+  provenance がサービスアカウント 1 つに潰れる問題を解く。
+- [0049 名乗りは actor の隣に置く](0049-producer-beside-the-actor.md)
+  — **Accepted**。0043 §3.8(0046 §2.4 が継承)の「SPEC §7 の
+  `<producer>/<version>` は使わない」を改訂し、`X-Ochakai-Producer` /
+  MCP の `clientInfo` / `OCHAKAI_PRODUCER` から来る自称を `Actor.producer`
+  として**認証済みの actor の隣に**記録する。actor の綴りは `human:` /
+  `process:` のまま、trust tier も不変。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
   — **Proposed**(§4 の「SPEC への先回りをしない」は 0036 が写像を決定。
   §3.1 の世界観は 0043 が保存形とワイヤにまで貫徹)。

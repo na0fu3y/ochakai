@@ -23,7 +23,11 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 実装は後続 PR(§1.1)で、破壊的変更は 0.15.0 の次のリリースに束ねて出す。
 §3.11 の「named フィルタは式への糖衣になる」は
 [0047](0047-fm-carries-unnamed-keys.md) が改訂した — named フィルタは
-typed column のまま残り、`fm.` が列を持つ 5 キーを拒否する
+typed column のまま残り、`fm.` が列を持つ 5 キーを拒否する。
+§2.4 が継承する 0043 §3.8 のうち「`<producer>/<version>` 形式は使わない」は
+[0049](0049-producer-beside-the-actor.md) が改訂した — actor の綴りが
+`human:` / `process:` の 2 つであることは変わらず、producer は actor の
+隣の `Actor.producer` に記録される
 Date: 2026-07-28
 
 ## 1. 目的

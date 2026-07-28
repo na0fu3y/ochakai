@@ -18,13 +18,15 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/httpauth"
 )
 
 type Client struct {
-	base   string // scheme://host, no trailing slash
-	http   *http.Client
-	tokens oauth2.TokenSource // nil for plain-http development servers
-	auth   string             // human-readable auth path, for Identity
+	base     string // scheme://host, no trailing slash
+	http     *http.Client
+	tokens   oauth2.TokenSource // nil for plain-http development servers
+	auth     string             // human-readable auth path, for Identity
+	producer string             // "<producer>/<version>", sent on every request when set
 }
 
 // New builds a client for the ochakai server at baseURL. For https URLs a
@@ -43,6 +45,14 @@ func New(ctx context.Context, baseURL string) (*Client, error) {
 	}
 	return c, nil
 }
+
+// SetProducer declares the software this client runs as, in SPEC §7's
+// "<producer>/<version>" form. It rides on every request and the server
+// records it beside the authenticated actor (design doc 0049) — it names
+// what wrote, never who, so it neither replaces nor weakens the identity
+// the ID token carries. Unset by default: a client that has nothing to
+// declare declares nothing.
+func (c *Client) SetProducer(p string) { c.producer = p }
 
 // TokenSource exposes the resolved Google ID token source so callers can
 // build request paths of their own (e.g. `ochakai ui`'s reverse proxy).
@@ -624,6 +634,9 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	}
 	for name, values := range extra {
 		req.Header[name] = values
+	}
+	if c.producer != "" {
+		req.Header.Set(httpauth.ProducerHeader, c.producer)
 	}
 	if c.tokens != nil {
 		tok, err := c.tokens.Token()

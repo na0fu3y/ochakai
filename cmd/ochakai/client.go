@@ -159,7 +159,24 @@ func newClient(ctx context.Context, url string) (*apiclient.Client, error) {
 	if url == "" {
 		return nil, errors.New("server URL required: run `ochakai use <url>`, set OCHAKAI_URL, or pass --url")
 	}
-	return apiclient.New(ctx, url)
+	c, err := apiclient.New(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+	// An environment variable rather than a flag: the caller that has
+	// something to declare here is an agent shelling out to the CLI, and
+	// it sets the variable once for the process instead of remembering a
+	// flag on every subcommand (design doc 0049 §3.3). A person running
+	// `ochakai` by hand is running no producer and sets nothing.
+	if p := os.Getenv("OCHAKAI_PRODUCER"); p != "" {
+		if !domain.ValidProducer(p) {
+			return nil, fmt.Errorf(
+				`OCHAKAI_PRODUCER: want "<producer>/<version>" — one slash, no whitespace, no colon, at most %d bytes (OKF SPEC §7), got %q`,
+				domain.MaxProducer, p)
+		}
+		c.SetProducer(p)
+	}
+	return c, nil
 }
 
 // repeated collects a repeatable string flag.

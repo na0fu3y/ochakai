@@ -38,8 +38,43 @@ func Handler(svc *service.Service, version string) http.Handler {
 // extraProvider is the part of an MCP request the actor comes from. Tool
 // calls and resource reads carry it alike, and both record provenance, so
 // neither is a special case.
+//
+// The session comes along for the producer: MCP already asks every client
+// to name itself and its version at initialize, which is SPEC §7's
+// "<producer>/<version>" arriving without anyone having to add a header
+// (design doc 0049 §3.3).
 type extraProvider interface {
 	GetExtra() *mcp.RequestExtra
+	GetSession() mcp.Session
+}
+
+// sessionProducer is the initialize-time clientInfo as a producer string,
+// or "" when the client named nothing usable.
+//
+// It is a fallback, not an override: a caller that sent X-Ochakai-Producer
+// said what it is on this call, while clientInfo says what opened the
+// session — and a host that proxies several agents through one session
+// distinguishes them only by the header. Silently preferring the session's
+// name would be the misattribution 0027 §5.2 refuses, one level down.
+//
+// A clientInfo that does not fit SPEC §7's form is dropped rather than
+// refused. The client did not claim to be sending provenance — the
+// protocol asked it for a name — so failing its tool call over a version
+// string ochakai cannot spell would turn a courtesy into an outage.
+func sessionProducer(req extraProvider) string {
+	ss, ok := req.GetSession().(*mcp.ServerSession)
+	if !ok || ss == nil {
+		return ""
+	}
+	params := ss.InitializeParams()
+	if params == nil || params.ClientInfo == nil {
+		return ""
+	}
+	p := params.ClientInfo.Name + "/" + params.ClientInfo.Version
+	if !domain.ValidProducer(p) {
+		return ""
+	}
+	return p
 }
 
 // requestActor resolves the actor to record for a tool call from the
@@ -56,14 +91,18 @@ type extraProvider interface {
 // it. In-process transports (tests, embedding without HTTP) carry no
 // request headers and fall back to the context actor.
 func requestActor(ctx context.Context, cfg *config.Config, req extraProvider) (domain.Actor, error) {
+	actor := httpauth.Actor(ctx)
 	if extra := req.GetExtra(); cfg != nil && extra != nil && extra.Header != nil {
-		actor, _, err := httpauth.ActorFromHeader(cfg, extra.Header)
+		resolved, _, err := httpauth.ActorFromHeader(cfg, extra.Header)
 		if err != nil {
 			return domain.Actor{}, fmt.Errorf("resolving actor: %w", err)
 		}
-		return actor, nil
+		actor = resolved
 	}
-	return httpauth.Actor(ctx), nil
+	if actor.Producer == "" {
+		actor.Producer = sessionProducer(req)
+	}
+	return actor, nil
 }
 
 // requestCtx resolves the per-call actor and puts it on the context the

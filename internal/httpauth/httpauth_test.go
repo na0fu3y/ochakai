@@ -269,3 +269,98 @@ func TestMiddlewareRejectsInTheAPIErrorEnvelope(t *testing.T) {
 		t.Errorf("error drops the actionable part: %q", body.Error)
 	}
 }
+
+// The producer rides on the actor the write is finally recorded as, and
+// never in place of it. Everything the record already said stays said:
+// the authenticated caller, and — under delegation — the person it acted
+// for (design doc 0049 §3.1).
+func TestProducerIsRecordedBesideTheActor(t *testing.T) {
+	const sa = "insightflow@example.iam.gserviceaccount.com"
+	cfg := &config.Config{Delegators: []string{sa}}
+
+	req := func(producer ...string) http.Header {
+		h := http.Header{}
+		h.Set("X-Serverless-Authorization", "Bearer "+fakeIDToken(`{"email":"`+sa+`"}`))
+		for _, p := range producer {
+			h.Add(ProducerHeader, p)
+		}
+		return h
+	}
+
+	t.Run("no header leaves it empty", func(t *testing.T) {
+		got, _, err := ActorFromHeader(cfg, req())
+		if err != nil || got.Producer != "" {
+			t.Errorf("got (%+v, %v), want no producer", got, err)
+		}
+	})
+
+	t.Run("recorded without an allowlist", func(t *testing.T) {
+		// Unlike delegation there is nothing to permit: the name is the
+		// caller's own, and the caller is authenticated and still in the
+		// record beside it.
+		got, _, err := ActorFromHeader(cfg, req("insightflow/1.4.0"))
+		if err != nil {
+			t.Fatalf("ActorFromHeader: %v", err)
+		}
+		want := domain.Actor{Kind: domain.ActorProcess, Name: sa, Producer: "insightflow/1.4.0"}
+		if got != want {
+			t.Errorf("actor = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("lands on the delegated actor, keeping the caller", func(t *testing.T) {
+		h := req("insightflow/1.4.0")
+		h.Set(OnBehalfOfHeader, "human:tanaka@example.co.jp")
+		got, _, err := ActorFromHeader(cfg, h)
+		if err != nil {
+			t.Fatalf("ActorFromHeader: %v", err)
+		}
+		want := "human:tanaka@example.co.jp via process:" + sa + " using insightflow/1.4.0"
+		if got.String() != want {
+			t.Errorf("actor = %q, want %q", got, want)
+		}
+	})
+
+	// A malformed value is refused rather than dropped: an integration
+	// that believes it is stamping its version must not find out at the
+	// first export that nothing was recorded (0027 §5.2, 0049 §3.2).
+	for _, bad := range []string{
+		"insightflow",                     // no version
+		"insightflow/",                    // empty version
+		"/1.4.0",                          // empty producer
+		"insight flow/1.4.0",              // whitespace
+		"a/b/c",                           // two slashes
+		"process:insightflow/1.4.0",       // reads as SPEC §7's identity form
+		strings.Repeat("x", 130) + "/1.0", // past the bound
+	} {
+		t.Run("refuses "+bad, func(t *testing.T) {
+			_, status, err := ActorFromHeader(cfg, req(bad))
+			if err == nil || status != http.StatusBadRequest {
+				t.Errorf("got (%d, %v), want a 400", status, err)
+			}
+		})
+	}
+
+	t.Run("a repeated header is refused, not resolved", func(t *testing.T) {
+		_, status, err := ActorFromHeader(cfg, req("a/1", "b/2"))
+		if err == nil || status != http.StatusBadRequest {
+			t.Errorf("got (%d, %v), want a 400", status, err)
+		}
+	})
+}
+
+// A public deployment authenticates nobody, so there is no name for a
+// self-declaration to hang off — the header is not read there at all
+// (design docs 0042, 0049 §3.3).
+func TestPublicReadOnlyIgnoresTheProducerHeader(t *testing.T) {
+	cfg := &config.Config{PublicReadOnly: true, ReadOnly: true}
+	h := http.Header{}
+	h.Set(ProducerHeader, "not even a valid one")
+	got, _, err := ActorFromHeader(cfg, h)
+	if err != nil {
+		t.Fatalf("ActorFromHeader: %v", err)
+	}
+	if got.Producer != "" {
+		t.Errorf("producer = %q, want it unread", got.Producer)
+	}
+}

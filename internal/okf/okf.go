@@ -116,16 +116,23 @@ type attester struct {
 	Extra    map[string]any `yaml:",inline"`
 }
 
-// event is one entry of the trust family: who, when, and — as a producer
-// extension — on whose behalf. OKF's actor convention (SPEC §7) has no
-// room for delegation, and folding "A via B" into by would leave a string
-// that is not an actor; a sibling key keeps by parseable and the human:
-// prefix intact, so trust tiers still read correctly (design docs 0027,
-// 0036 §3.2).
+// event is one entry of the trust family: who, when, and — as producer
+// extensions — on whose behalf and with what software. OKF's actor
+// convention (SPEC §7) has room for exactly one of those three at a time,
+// and folding "A via B" into by would leave a string that is not an
+// actor; sibling keys keep by parseable and the human: prefix intact, so
+// trust tiers still read correctly (design docs 0027, 0036 §3.2, 0049).
+//
+// producer holds SPEC §7's "<producer>/<version>" form. It is a sibling
+// rather than the value of by for the same reason via is: by is the
+// authenticated identity, and moving a self-declared name into it would
+// put the one unverified thing here in the one place readers trust
+// (design doc 0049 §3.1).
 type event struct {
-	By  text `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
-	Via text `yaml:"via,omitempty"`
-	At  text `yaml:"at,omitempty"`
+	By       text `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
+	Via      text `yaml:"via,omitempty"`
+	Producer text `yaml:"producer,omitempty"`
+	At       text `yaml:"at,omitempty"`
 }
 
 // text is a frontmatter string that never goes out as a block scalar the
@@ -341,12 +348,17 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 // actorEvent renders one trust event. The actor's kind:name form is SPEC
 // §7 verbatim on both kinds — "human:tanaka@example.co.jp" and
 // "process:sync@example.iam.gserviceaccount.com" (design doc 0043 §3.8).
-// The convention's third form, "<producer>/<version>", stays unused: a
-// service account has no version to name.
+// The convention's third form, "<producer>/<version>", goes out beside it
+// on the producer key when the caller named one (design doc 0049 §3.5) —
+// never in by, which is the authenticated identity.
+//
+// Like the rest of the trust family, none of this is read back on import:
+// a bundle carries knowledge, and provenance is the receiving instance's
+// own observation (design doc 0009).
 func actorEvent(a *domain.Actor, at *time.Time) event {
 	var e event
 	if a != nil && (a.Kind != "" || a.Name != "") {
-		e.By, e.Via = text(a.Kind+":"+a.Name), text(a.Via)
+		e.By, e.Via, e.Producer = text(a.Kind+":"+a.Name), text(a.Via), text(a.Producer)
 	}
 	if at != nil {
 		e.At = text(at.UTC().Format(time.RFC3339))

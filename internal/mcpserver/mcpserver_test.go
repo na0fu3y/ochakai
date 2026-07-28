@@ -598,3 +598,80 @@ func TestToolSchemasCarryTheTypeVocabulary(t *testing.T) {
 		t.Errorf("checked %d type-taking tools, want %d", seen, len(want))
 	}
 }
+
+// serverSession returns the server's view of one connected client, so the
+// initialize-time clientInfo can be read the way requestActor reads it.
+func serverSession(t *testing.T, client *mcp.Implementation) *mcp.ServerSession {
+	t.Helper()
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	srv := newServer(&service.Service{}, "test")
+	if _, err := srv.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	cs, err := mcp.NewClient(client, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { cs.Close() })
+	for ss := range srv.Sessions() {
+		return ss
+	}
+	t.Fatal("server has no session")
+	return nil
+}
+
+// MCP asks every client to name itself and its version at initialize,
+// which is SPEC §7's "<producer>/<version>" arriving for free — so an
+// agent's writes say which agent made them without anyone adding a header
+// (design doc 0049 §3.3).
+func TestRequestActorTakesTheProducerFromClientInfo(t *testing.T) {
+	ss := serverSession(t, &mcp.Implementation{Name: "claude-code", Version: "2026.07"})
+	ctx := httpauth.WithActor(context.Background(),
+		domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp"})
+
+	actor, err := requestActor(ctx, &config.Config{InsecureDev: true}, &mcp.CallToolRequest{Session: ss})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actor.Producer != "claude-code/2026.07" {
+		t.Errorf("producer = %q, want it taken from clientInfo", actor.Producer)
+	}
+	// The identity is untouched: the producer says what wrote, never who.
+	if actor.Kind != domain.ActorHuman || actor.Name != "tanaka@example.co.jp" {
+		t.Errorf("actor = %+v, want the authenticated identity unchanged", actor)
+	}
+}
+
+// The header is what this call declares; clientInfo is what opened the
+// session. A host proxying several agents through one session tells them
+// apart only by the header, so the session must not win.
+func TestRequestActorPrefersTheProducerHeaderOverClientInfo(t *testing.T) {
+	ss := serverSession(t, &mcp.Implementation{Name: "some-host", Version: "1.0"})
+	h := http.Header{}
+	h.Set(httpauth.ProducerHeader, "insightflow/1.4.0")
+
+	actor, err := requestActor(context.Background(), &config.Config{InsecureDev: true},
+		&mcp.CallToolRequest{Session: ss, Extra: &mcp.RequestExtra{Header: h}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actor.Producer != "insightflow/1.4.0" {
+		t.Errorf("producer = %q, want the call's own header", actor.Producer)
+	}
+}
+
+// A clientInfo that does not fit SPEC §7's form is dropped, not refused:
+// the client was asked for a name, not for provenance, so an unspellable
+// version must not fail its tool call.
+func TestUnspellableClientInfoIsDroppedNotRefused(t *testing.T) {
+	ss := serverSession(t, &mcp.Implementation{Name: "some host", Version: ""})
+	actor, err := requestActor(context.Background(), &config.Config{InsecureDev: true},
+		&mcp.CallToolRequest{Session: ss})
+	if err != nil {
+		t.Fatalf("requestActor: %v", err)
+	}
+	if actor.Producer != "" {
+		t.Errorf("producer = %q, want it dropped", actor.Producer)
+	}
+}

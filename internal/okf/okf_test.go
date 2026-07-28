@@ -611,3 +611,47 @@ func TestViewOfHandsBackTheStoredDocument(t *testing.T) {
 		t.Errorf("an entry with no document did not fall back to the canonical form:\n%s", v.Document)
 	}
 }
+
+// The producer goes out beside by, not in it: by stays SPEC §7's actor so
+// a consumer keying trust off the human: prefix still reads it, and the
+// self-declared name is legible as its own key (design doc 0049 §3.5).
+func TestDocumentProducerIsASiblingOfBy(t *testing.T) {
+	entries := sample()
+	k := &entries[1]
+	k.UpdatedBy.Producer = "insightflow/1.4.0"
+	k.Verifications = []domain.Verification{{
+		By: domain.Actor{Kind: "human", Name: "na0", Producer: "ochakai-cli/0.15.0"},
+		At: k.UpdatedAt,
+	}}
+	doc, err := Document(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm := frontmatterOf(t, doc)
+	generated, _ := fm["generated"].(map[string]any)
+	if generated["by"] != "human:na0" || generated["via"] != "process:insightflow" ||
+		generated["producer"] != "insightflow/1.4.0" {
+		t.Errorf("generated = %v, want by, via and producer kept apart", fm["generated"])
+	}
+	verified, _ := fm["verified"].([]any)
+	if len(verified) != 1 {
+		t.Fatalf("verified = %v, want one entry", fm["verified"])
+	}
+	if v, _ := verified[0].(map[string]any); v["producer"] != "ochakai-cli/0.15.0" {
+		t.Errorf("verified[0] = %v, want the producer carried", verified[0])
+	}
+}
+
+// An actor that named no producer writes no key. The frontmatter is
+// hashed, so a key that is always present would move every entry's
+// version for a value nobody set (design doc 0046 §3.4).
+func TestDocumentOmitsAnUnnamedProducer(t *testing.T) {
+	entries := sample()
+	doc, err := Document(&entries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(doc), "producer:") {
+		t.Errorf("document carries an empty producer key:\n%s", doc)
+	}
+}

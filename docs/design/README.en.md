@@ -128,6 +128,25 @@ For the shape of the system rather than the history of it, read
   *For a user:* an application embedding ochakai can attribute writes to
   its real users instead of collapsing them into one service account.
 
+- **[0049 The self-declaration goes beside the
+  actor](0049-producer-beside-the-actor.md)** — *Accepted; revises 0043
+  §3.8's "the `<producer>/<version>` form stays unused", which 0046 §2.4
+  had carried forward unchanged.* SPEC §7's third actor form names
+  software where the other two name an identity, and a ochakai write
+  always has an authenticated identity behind it — so the producer is
+  recorded in a fourth actor field rather than in the actor's place, the
+  same composition 0027 chose for delegation. It arrives on
+  `X-Ochakai-Producer`, or from MCP's initialize `clientInfo`, or from
+  `OCHAKAI_PRODUCER` for the CLI; a malformed value is a 400, not a
+  silent drop. The actor kinds stay `human:` / `process:` and the trust
+  tier is untouched — SPEC §5.3 reads the `human:` prefix alone. The web
+  UI sends none: a person editing by hand runs no producer.
+  *For a user:* "which agent, at which build, drafted this" is finally in
+  the record — visible on every provenance line, in `log.md`, and on the
+  `producer` key of an exported document — so a model upgrade can be
+  judged against the drafts that followed it. Import still reads none of
+  it back: a bundle's producer has nothing vouching for it.
+
 - **[0009 OKF/Git round-trips and who owns
   provenance](0009-provenance-portability.md)** — *Proposed; its
   world-view was settled by 0036 §2.2 and carried into the stored shape
@@ -432,8 +451,9 @@ For the shape of the system rather than the history of it, read
 
 - **[0015 Surface consistency](0015-surface-consistency.md)** —
   *Accepted; §4's verify-as-sugar judgment was overturned by 0025 §6, its
-  surface table restated by 0046 §3.14, and one omission — `fm.` is not on
-  the web UI — added to §3 by 0047 §4.*
+  surface table restated by 0046 §3.14, and two omissions added to §3 —
+  `fm.` is not on the web UI (0047 §4), and neither is the producer
+  declaration (0049 §3.3).*
   Fixes what each surface is for and, more usefully, what each deliberately
   omits. REST is the contract; MCP's tool count is a context budget, so
   browse, revisions, backlinks, attachment writes, bulk export/import,

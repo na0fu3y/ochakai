@@ -69,8 +69,33 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 		// public surface for no reason. No header is read, no caller is
 		// refused, and the answer does not depend on the request — which
 		// is what makes it safe to write nothing down about who asked.
+		// The producer header is not read either: it is admissible only
+		// because the record names the authenticated caller beside it
+		// (design doc 0049 §3.1), and here there is no such caller.
 		return domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"}, http.StatusOK, nil
 	}
+	actor, status, err := authenticated(cfg, h)
+	if err != nil {
+		return domain.Actor{}, status, err
+	}
+	// The producer is resolved last, so it lands on whoever the write is
+	// finally recorded as. Under delegation that is the end user, and
+	// "human:tanaka via process:app@… using insightflow/1.4.0" says the
+	// true thing: the person acted, the application called, and this
+	// build of the application is what wrote the words (design doc 0049
+	// §3.3).
+	producer, err := producerFrom(h)
+	if err != nil {
+		return domain.Actor{}, http.StatusBadRequest, err
+	}
+	actor.Producer = producer
+	return actor, status, nil
+}
+
+// authenticated resolves who the write is recorded as: the caller Google
+// verified, or the end user it forwarded. Everything here comes from
+// authentication — the self-declared half is its caller's business.
+func authenticated(cfg *config.Config, h http.Header) (domain.Actor, int, error) {
 	if cfg.InsecureDev {
 		// Delegation is processed here too, and every caller may
 		// delegate: someone building an embedding host develops
@@ -99,6 +124,43 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 // OnBehalfOfHeader carries the end-user identity a trusted caller is
 // acting for: "human:tanaka@example.co.jp" (design doc 0027).
 const OnBehalfOfHeader = "X-Ochakai-On-Behalf-Of"
+
+// ProducerHeader carries the software the caller is running, in SPEC §7's
+// "<producer>/<version>" form: "insightflow/1.4.0" (design doc 0049).
+const ProducerHeader = "X-Ochakai-Producer"
+
+// producerFrom reads the caller's self-declaration of what software it is.
+//
+// No allowlist gates it, unlike delegation. OCHAKAI_DELEGATING_CALLERS
+// exists because a forwarded identity names *somebody else*, and a name
+// nobody vouched for is a name anybody can take. A producer names the
+// caller's own build, and the caller it names is authenticated and
+// recorded in the same actor — there is no third party to impersonate.
+// Two deployments of the same application under different service
+// accounts stay apart because the service account is still there.
+//
+// A malformed value is a 400, not a silent drop: an integration that
+// believes it is stamping its version must not find out at the first
+// export that nothing was ever recorded (design doc 0027 §5.2).
+func producerFrom(h http.Header) (string, error) {
+	values := h.Values(ProducerHeader)
+	if len(values) > 1 {
+		return "", fmt.Errorf("%s: sent %d times; send it once", ProducerHeader, len(values))
+	}
+	if len(values) == 0 {
+		return "", nil
+	}
+	v := strings.TrimSpace(values[0])
+	if v == "" {
+		return "", nil
+	}
+	if !domain.ValidProducer(v) {
+		return "", fmt.Errorf(
+			`%s: want "<producer>/<version>" — one slash, no whitespace, no colon, at most %d bytes (SPEC §7), got %q`,
+			ProducerHeader, domain.MaxProducer, v)
+	}
+	return v, nil
+}
 
 // maxOnBehalfOf bounds the header so a provenance column cannot be filled
 // with arbitrary bulk.
