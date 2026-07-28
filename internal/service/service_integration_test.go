@@ -14,8 +14,104 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
+
+// A document that is reformatted but says the same thing is a change to
+// the file and not to the entry, and design doc 0044 §3.4 splits the two:
+// the bytes are stored and the version moves, while generated — the actor
+// and the timestamp — stays with whoever the content already stood by.
+// Byte-identical bytes are still nothing happening at all.
+func TestReformattingIsAChangeToTheFileOnlyIntegration(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler)}
+	author := domain.Actor{Kind: domain.ActorHuman, Name: "author"}
+	editor := domain.Actor{Kind: domain.ActorHuman, Name: "editor"}
+	id := fmt.Sprintf("svcit-reformat-%d", time.Now().UnixNano())
+
+	put := func(doc string, actor domain.Actor) (*domain.Knowledge, bool) {
+		t.Helper()
+		d, _, err := okf.Parse([]byte(doc))
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.ID = id
+		out, _, changed, err := svc.Put(ctx, &d.Knowledge, actor, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out, changed
+	}
+
+	const written = "---\ntype: Metric\ntitle: 売上\nstatus: draft\n---\n\n受注合計。\n"
+	// The same entry, laid out differently: a comment, and the title after
+	// the status. Nothing it says has changed.
+	const reformatted = "---\ntype: Metric\n# 定義は財務の合意による\nstatus: draft\ntitle: 売上\n---\n\n受注合計。\n"
+
+	put(written, author)
+	created, err := svc.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, changed := put(reformatted, editor)
+	if !changed {
+		t.Error("a reformatted document reported changed=false; the file did change")
+	}
+	if got.ContentHash == created.ContentHash {
+		t.Error("a reformatted document left the version where it was")
+	}
+	if got.Doc != reformatted {
+		t.Errorf("the reformatted bytes were not what got stored:\n%q", got.Doc)
+	}
+	if !got.ContentChangedAt.Equal(created.ContentChangedAt) {
+		t.Errorf("reformatting moved generated.at: %v -> %v", created.ContentChangedAt, got.ContentChangedAt)
+	}
+	if got.UpdatedBy != created.UpdatedBy {
+		t.Errorf("reformatting reassigned generated.by: %v -> %v", created.UpdatedBy, got.UpdatedBy)
+	}
+
+	// The same bytes again: nothing happened.
+	before, err := svc.Revisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, changed := put(reformatted, editor); changed {
+		t.Error("an identical document reported changed=true")
+	}
+	after, err := svc.Revisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(before) {
+		t.Errorf("an identical document wrote a revision: %d -> %d", len(before), len(after))
+	}
+
+	// And a real edit moves both.
+	edited, changed := put("---\ntype: Metric\ntitle: 売上\nstatus: draft\n---\n\n受注合計。返品は含まない。\n", editor)
+	if !changed {
+		t.Fatal("an edit reported changed=false")
+	}
+	if edited.ContentChangedAt.Equal(created.ContentChangedAt) {
+		t.Error("an edit left generated.at where it was")
+	}
+	if edited.UpdatedBy != editor {
+		t.Errorf("generated.by = %v, want the editor", edited.UpdatedBy)
+	}
+}
 
 // TestUpdateNoOpIntegration exercises the no-op update path against a real
 // PostgreSQL: a content-identical update must write nothing — no revision,

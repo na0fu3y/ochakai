@@ -268,6 +268,10 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		Attester:    att,
 		Attrs:       attrs,
 		Body:        strings.TrimSpace(body),
+		// What was received, minus the keys this instance owns: the
+		// document is stored as its writer wrote it (design doc 0044
+		// §2.2), and the fields above are the index derived from it.
+		Doc: string(StripServerKeys(NormalizeText([]byte(s)))),
 	}}, fm.typ, notes, nil
 }
 

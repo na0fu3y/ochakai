@@ -2637,7 +2637,13 @@ func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rendered, hash, err := canonicalDoc(read)
+	// From the index columns alone: the entry was written as a struct, so
+	// what is stored is the canonical rendering, and dropping the doc the
+	// read carried is what keeps this a check on the index rather than a
+	// comparison of the column with itself.
+	fromIndex := *read
+	fromIndex.Doc = ""
+	rendered, hash, err := storedDoc(&fromIndex)
 	if err != nil {
 		t.Fatal(err)
 	}

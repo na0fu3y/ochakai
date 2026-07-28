@@ -377,29 +377,40 @@ func sourcesOut(in []domain.Source) []source {
 	return out
 }
 
-// Document renders one knowledge entry as an OKF concept document: the
-// canonical text the entry is stored as, plus the keys this instance
-// owns and only ever writes — generated and verified (SPEC §5.2), and
-// ochakai's created_by / rejected_* extensions. This is what an export
-// and a read hand out.
+// Document is the export form of one entry: the document as stored, plus
+// the keys this instance owns and only ever writes — generated and
+// verified (SPEC §5.2), and ochakai's created_by / rejected_* extensions.
+// This is what an export writes, what a read with Accept: text/markdown
+// returns, and what `ochakai get` hands to an editor.
+//
+// The stored document is the writer's own bytes (design doc 0044 §2.2),
+// so the keys are appended to its frontmatter rather than merged into a
+// re-serialization of it. An entry that was composed in memory instead of
+// parsed from a document has no such bytes; its canonical form is its
+// document, which is also what the fallback below writes for a row read
+// without the doc column.
 //
 // The trust family follows SPEC §5.2: generated is who the content
 // stands by and when it last changed, verified is every confirmation the
 // instance recorded. status carries OKF's three-value lifecycle and
 // nothing else — whether anyone confirmed the entry is the verified
 // key's business (§5.3, design doc 0043 §3.2).
-func Document(k *domain.Knowledge) ([]byte, error) { return render(k, true) }
+func Document(k *domain.Knowledge) ([]byte, error) {
+	if k.Doc != "" {
+		return WithServerKeys([]byte(k.Doc), k)
+	}
+	return render(k, true)
+}
 
-// Canonical renders the document without the server-owned keys: exactly
-// the text a writer authored, in one normal form. It is what the store
-// keeps and what the content hash is taken over (design doc 0043 §§3.4,
-// 3.7), and it is a pure function of the fields SameContent compares —
-// so two entries hash alike if and only if they say the same thing.
+// Canonical renders an entry in one normal form, with no server-owned key
+// in it. It is no longer the stored shape (design doc 0044 §2.2 stores
+// the bytes as received); it is the derived value the store compares to
+// decide whether a write changed what the entry says, and the form
+// ochakai writes when it composes a document itself rather than being
+// handed one.
 //
-// Excluding the server-owned keys is what makes the hash a content hash
-// rather than a row hash: verifying an entry must not change its
-// version, or every confirmation would invalidate an editor's held
-// precondition.
+// It is a pure function of the fields SameContent compares, so two
+// entries render alike if and only if they say the same thing.
 func Canonical(k *domain.Knowledge) ([]byte, error) { return render(k, false) }
 
 func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
@@ -418,7 +429,7 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 		Computation: text(k.Computation),
 	}
 	if serverKeys {
-		g := actorEvent(&k.UpdatedBy, &k.UpdatedAt)
+		g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
 		fm.Generated = &g
 		fm.CreatedBy = text(k.CreatedBy.String())
 	}
