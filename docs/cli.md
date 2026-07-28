@@ -36,6 +36,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
+  stats                   show the loop for the whole base (review queues, gaps)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
@@ -599,6 +600,35 @@ Examples:
   ochakai search --sort stale_after                         # past their declared expiry
   ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
+```
+
+## ochakai stats
+
+```
+Usage: ochakai stats [flags]
+
+Show the improvement loop as the instance sees it: what the knowledge
+base is made of now, what review did lately, what callers reported, and
+what they searched for and did not find. `usage` measures one entry;
+this measures the base.
+
+One line per number, so it composes: cron it and diff the output, or
+grep one line out of it for a prompt or a dashboard. The gap lines are
+the questions that came back empty, most-asked first — the list of what
+to write next.
+
+Flags:
+  -days int
+    	how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)
+  -json
+    	print JSON
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai stats
+  ochakai stats --days 7
+  ochakai stats --json | jq .misses.queries
 ```
 
 ## ochakai ui

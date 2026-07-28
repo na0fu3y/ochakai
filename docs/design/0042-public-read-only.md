@@ -3,7 +3,9 @@
 Status: Accepted(2026-07-27)。[0040](0040-read-only-mode.md) の read-only を
 前提に、**identity を一切読まない**姿勢を足す。[0002](0002-authn-authz.md) の
 「到達制御は Cloud Run IAM の仕事」は変えない — §2.1 で、この姿勢が
-その外側にあることを述べる
+その外側にあることを述べる。[0049](0049-instance-metrics-and-search-misses.md)
+§3.4 が、この姿勢の帰結を 1 つ足した — identity を読まないデプロイは、
+呼び出し元が打ったクエリ文字列も残さない
 Date: 2026-07-27
 
 ## 1. 目的

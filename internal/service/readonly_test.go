@@ -26,6 +26,10 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	reads := map[string]bool{
 		"Get": true, "Search": true, "SearchOrList": true, "Context": true,
 		"Revisions": true, "Backlinks": true, "Usage": true, "Browse": true,
+		// Stats reads the same ledgers Usage does, one instance wide
+		// (design doc 0049): a read-only deployment still measures, and
+		// still says what it was asked for and could not answer.
+		"Stats": true,
 		// The two derived files are reads of the same tree and ledger
 		// (design doc 0046 §§3.7-3.8).
 		"IndexDocument": true, "LogDocument": true,

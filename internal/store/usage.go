@@ -30,6 +30,18 @@ type usageEvent struct {
 	at        time.Time
 }
 
+// missEvent is one buffered search that found nothing: what was asked, by
+// whom, when (design doc 0049 §3.1). It rides the same buffer and the
+// same flush as the usage events because it is the same kind of fact —
+// the server's own observation of a read, worth losing before a read is
+// (0029 §3.1).
+type missEvent struct {
+	query     string
+	actorKind string
+	actorName string
+	at        time.Time
+}
+
 // RecordEvents buffers usage events in memory and returns immediately,
 // keeping recording off the read path (design doc 0029): the events
 // are written by the background flush loop, not by the caller. ids name
@@ -49,6 +61,24 @@ func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Act
 	for _, id := range ids {
 		s.usageBuf = append(s.usageBuf, usageEvent{id, event, actor.Kind, actor.Name, now})
 	}
+	return nil
+}
+
+// RecordMiss buffers one search that returned nothing, and returns
+// immediately (design doc 0049 §3.2). Same contract as RecordEvents: the
+// row is written by the background flush loop, and the error says only
+// that the buffer was full, never that the search failed.
+func (s *Store) RecordMiss(ctx context.Context, query string, actor domain.Actor) error {
+	if query == "" {
+		return nil
+	}
+	now := time.Now()
+	s.usageMu.Lock()
+	defer s.usageMu.Unlock()
+	if len(s.missBuf) >= usageBufferMax {
+		return errUsageBufferFull
+	}
+	s.missBuf = append(s.missBuf, missEvent{query, actor.Kind, actor.Name, now})
 	return nil
 }
 
@@ -99,13 +129,17 @@ func (s *Store) usageFlushLoop() {
 // how many events went with it, and the flush loop logs it.
 func (s *Store) FlushUsage(ctx context.Context) error {
 	s.usageMu.Lock()
-	if len(s.usageBuf) == 0 {
-		s.usageMu.Unlock()
-		return nil
-	}
-	batch := s.usageBuf
-	s.usageBuf = nil
+	batch, misses := s.usageBuf, s.missBuf
+	s.usageBuf, s.missBuf = nil, nil
 	s.usageMu.Unlock()
+
+	// The misses go first and independently: they are a different table
+	// with no aggregate to maintain, and a batch of events failing is no
+	// reason to drop the questions that came with it.
+	missErr := s.flushMisses(ctx, misses)
+	if len(batch) == 0 {
+		return missErr
+	}
 
 	ids := make([]string, len(batch))
 	events := make([]string, len(batch))
@@ -133,6 +167,30 @@ func (s *Store) FlushUsage(ctx context.Context) error {
 		return fmt.Errorf("writing %d buffered usage events: %w", len(batch), err)
 	}
 	s.maybePruneEvents(ctx)
+	return missErr
+}
+
+// flushMisses writes one search_miss row per buffered miss. Same bargain
+// as the events above: the batch is lost on error, and the error says how
+// much went with it.
+func (s *Store) flushMisses(ctx context.Context, batch []missEvent) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	queries := make([]string, len(batch))
+	kinds := make([]string, len(batch))
+	names := make([]string, len(batch))
+	ats := make([]time.Time, len(batch))
+	for i, m := range batch {
+		queries[i], kinds[i], names[i], ats[i] = m.query, m.actorKind, m.actorName, m.at
+	}
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO search_miss (query, actor_kind, actor_name, at)
+		SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::timestamptz[])`,
+		queries, kinds, names, ats)
+	if err != nil {
+		return fmt.Errorf("writing %d buffered search misses: %w", len(batch), err)
+	}
 	return nil
 }
 
@@ -161,6 +219,11 @@ func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Ac
 
 // maybePruneEvents drops raw events older than the retention window, at
 // most once per day per process (totals live on in knowledge_usage).
+//
+// Search misses are pruned on the same schedule and to the same day, and
+// nothing survives them — unlike a usage event, a miss has no running
+// total, so the window is the whole memory (design doc 0049 §3.3). That
+// is what /api/v1/stats caps its own window at.
 func (s *Store) maybePruneEvents(ctx context.Context) {
 	now := time.Now().Unix()
 	last := s.lastEventPrune.Load()
@@ -171,6 +234,8 @@ func (s *Store) maybePruneEvents(ctx context.Context) {
 		return
 	}
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE at < now() - $1::interval`,
+		eventRetention.String())
+	_, _ = s.pool.Exec(ctx, `DELETE FROM search_miss WHERE at < now() - $1::interval`,
 		eventRetention.String())
 }
 

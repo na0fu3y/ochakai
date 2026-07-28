@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md) |
+| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -257,9 +257,22 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
   検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。
   再検証を記録する `POST /api/v1/verify/{id}` はここが出所。
 - [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
-  — **Accepted**。利用イベントをメモリにバッファして定期フラッシュし、
+  — **Accepted**(0049 が同じバッファと 180 日の刈り取りを、エントリに
+  紐づかない検索ミスにも広げた)。利用イベントをメモリにバッファして定期フラッシュし、
   利用統計は best-effort と明示する(上限超過は破棄、シャットダウンは
   ドレイン後に最終フラッシュ)。
+- [0049 答えられなかった問いを記録し、ループをインスタンスで測る](0049-instance-metrics-and-search-misses.md)
+  — **Accepted**。測定が per-entry しか無く、しかもヒット 0 の検索は
+  捨てられていた(紐づけるエントリが無かった)状態を、2 つの器で埋める:
+  **ミスという行**(0029 と同じバッファ・同じ刈り取り、クエリ文字列は
+  500 バイトまで)と、**インスタンスを 1 回で答える `GET /api/v1/stats`**
+  (status / trust 別の内訳、窓の中の検証・報告・ミス、キューの深さ、
+  答えの無かった問い上位 10 件)。ロールアップを持たずオンデマンドで
+  計算し、保持期間を超える窓は黙って短く答えず 400 で拒否する。ミスは
+  「0 件」と定義し、スコア閾値は採らない(スコアは検索モード間で未較正)。
+  CLI は `ochakai stats`、Web UI は Review 画面の帯、**MCP には載せない**。
+  クエリ文字列の保存は初めてなので `OCHAKAI_RECORD_MISSES` で止められ、
+  公開デプロイ(0042)では記録しない。
 
 ## 同時実行と削除
 

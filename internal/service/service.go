@@ -13,6 +13,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/na0fu3y/ochakai/internal/config"
@@ -653,6 +654,14 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 		ids[i] = h.ID
 	}
 	s.recordUsage(ctx, domain.EventSearchHit, ids)
+	// A search that found nothing is recorded as itself: it is the one
+	// observation that says what this knowledge base is missing, and
+	// until design doc 0049 it was the only one being discarded. Here
+	// rather than in each surface, so every way of asking is counted —
+	// get_context searches through this function too.
+	if len(hits) == 0 {
+		s.recordMiss(ctx, query)
+	}
 	return hits, nil
 }
 
@@ -1174,6 +1183,75 @@ func (s *Service) recordUsage(ctx context.Context, event string, ids []string) {
 	if err := s.Store.RecordEvents(ctx, event, httpauth.Actor(ctx), ids); err != nil {
 		s.Log.Warn("usage recording failed", "event", event, "error", err)
 	}
+}
+
+// maxMissQuery bounds the query text kept for a search that found
+// nothing. A question a person would answer fits easily; past this the
+// string is a payload rather than a question, and the miss is worth
+// counting without keeping all of it (design doc 0049 §3.3).
+const maxMissQuery = 500
+
+// recordMiss keeps one unanswered question, with the acting caller as
+// provenance — same treatment as a usage event, and the same silence on
+// failure: nothing about measuring may fail a read.
+//
+// Deployments that keep no questions at all (public, or
+// OCHAKAI_RECORD_MISSES=false) stop here, not in the store: the decision
+// is about what this ochakai keeps, and the store is where things are
+// kept.
+func (s *Service) recordMiss(ctx context.Context, query string) {
+	if s.Config != nil && !s.Config.RecordMisses {
+		return
+	}
+	query = strings.TrimSpace(query)
+	if len(query) > maxMissQuery {
+		// On a rune boundary: a query is text somebody will read, and
+		// half a character is not.
+		query = strings.ToValidUTF8(query[:maxMissQuery], "")
+	}
+	if query == "" {
+		return
+	}
+	if err := s.Store.RecordMiss(ctx, query, httpauth.Actor(ctx)); err != nil {
+		s.Log.Warn("search miss recording failed", "error", err)
+	}
+}
+
+// maxStatsWindow is the longest window the stats will answer for, and it
+// is the raw-event retention (design doc 0029 §3.4): past it the events
+// and misses have been pruned, so a longer window would quietly answer
+// with less than it was asked for. defaultStatsWindow is a month —
+// long enough for a trend, short enough that a change shows in it.
+const (
+	maxStatsWindow     = 180
+	defaultStatsWindow = 30
+)
+
+// Stats returns the instance-level view of the improvement loop over the
+// last days days (design doc 0049 §3.5): what the base is made of, what
+// review did, what callers reported, and what they asked for and did not
+// find.
+//
+// days <= 0 means the default. A window past the retention is refused
+// rather than clamped: a caller asking for a year and receiving six
+// months' worth, silently, would read the answer as a year.
+func (s *Service) Stats(ctx context.Context, days int) (*domain.Stats, error) {
+	if days == 0 {
+		days = defaultStatsWindow
+	}
+	if days < 0 || days > maxStatsWindow {
+		return nil, Invalidf("days must be between 1 and %d: raw events and misses are pruned after %d days, "+
+			"so nothing answers for the time before that", maxStatsWindow, maxStatsWindow)
+	}
+	now := time.Now().UTC()
+	st, err := s.Store.Stats(ctx, now.AddDate(0, 0, -days))
+	if err != nil {
+		return nil, err
+	}
+	st.At = now
+	st.WindowDays = days
+	st.Misses.Recording = s.Config == nil || s.Config.RecordMisses
+	return st, nil
 }
 
 // rrfFuse merges ranked lists with reciprocal rank fusion (k=60), adding a

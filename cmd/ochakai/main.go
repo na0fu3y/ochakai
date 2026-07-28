@@ -101,6 +101,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
+  stats                   show the loop for the whole base (review queues, gaps)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   log [path]              print the history under a path as OKF's log.md

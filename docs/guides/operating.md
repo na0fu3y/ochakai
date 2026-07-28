@@ -133,6 +133,7 @@ them warnings that describe **degraded but running**:
 |---|---|
 | `usage flush failed` | a batch of usage events was lost. Best-effort by design (0029); a *stream* of these means the database is unhappy |
 | `usage recording failed` | the in-memory buffer was full — 20,000 events — and events were dropped |
+| `search miss recording failed` | same buffer, same bargain (0049): a question that found no answer was not kept. The knowledge is unaffected; `ochakai stats` undercounts |
 | `query embedding failed; falling back to lexical-only` | Vertex AI did not answer a search; results are still returned, ranked by the lexical half alone |
 | `document embedding failed` / `storing embedding failed` | an entry was written but is not in the vector index. It stays findable lexically; `ochakai reembed` repairs it |
 | `attachment embedding failed` | same, for an attachment: still findable by filename |

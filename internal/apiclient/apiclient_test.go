@@ -204,6 +204,38 @@ func TestUsageHitsCanonicalPathWithHierarchicalID(t *testing.T) {
 	}
 }
 
+// The window travels only when the caller asked for one, so the server
+// stays the one place the default lives (design doc 0049 §3.5).
+func TestStatsSendsTheWindowOnlyWhenSet(t *testing.T) {
+	for _, tc := range []struct {
+		days int
+		want string
+	}{{0, ""}, {7, "7"}} {
+		c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/v1/stats" {
+				t.Errorf("path = %s", r.URL.Path)
+			}
+			if got := r.URL.Query().Get("days"); got != tc.want {
+				t.Errorf("days = %q, want %q", got, tc.want)
+			}
+			_ = json.NewEncoder(w).Encode(domain.Stats{
+				WindowDays: 30,
+				Entries:    domain.StatsEntries{Total: 3, Status: map[string]int64{"draft": 1}},
+				Misses: domain.StatsMisses{Recording: true, Count: 2,
+					Queries: []domain.MissedQuery{{Query: "解約率の定義", Count: 2}}},
+			})
+		})
+		st, err := c.Stats(context.Background(), tc.days)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Entries.Total != 3 || st.Entries.Status["draft"] != 1 ||
+			!st.Misses.Recording || len(st.Misses.Queries) != 1 {
+			t.Errorf("stats = %+v", st)
+		}
+	}
+}
+
 func TestErrorResponsesBecomeAPIErrors(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

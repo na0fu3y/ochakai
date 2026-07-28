@@ -20,6 +20,42 @@ last entry.
 
 ### Added
 
+- **A search that finds nothing is recorded, and the loop is measured at
+  the instance** (design doc
+  [0049](docs/design/0049-instance-metrics-and-search-misses.md)).
+
+  Everything ochakai measured was per entry — how often this one was
+  searched, fetched, reported worked — and a search that returned no
+  hits was discarded entirely, because every measurement was keyed by a
+  knowledge id and a miss has none. What somebody asked for and did not
+  find is the one list that says what to write next, and it was the only
+  one being thrown away.
+
+  It is now a row of its own: the query as it was typed (up to 500
+  bytes), the caller, and when. Recording stays off the read path and is
+  best-effort, exactly like usage events — buffered, flushed every five
+  seconds, pruned after 180 days.
+
+  `GET /api/v1/stats?days=30` answers the question nothing answered
+  before: entries by lifecycle and by trust tier, how many were created
+  and verified in the window, what callers reported, how deep the two
+  review queues are, and the most-asked questions that came back empty.
+  It is computed on demand — no rollup table, no scheduler — and a
+  window longer than the 180-day retention is a 400 rather than a
+  quietly short answer.
+
+  `ochakai stats` prints it one number per line, so cron and `diff` can
+  do the rest; the web UI's review page carries four tiles and the list
+  of unanswered questions. MCP does not get a tool: an agent that
+  searched and found nothing already knows, and its search is what the
+  miss was recorded from.
+
+  Storing what a caller typed is new here, so it has an off switch —
+  `OCHAKAI_RECORD_MISSES=false` — and a public deployment
+  (`OCHAKAI_PUBLIC_READ_ONLY`) keeps none at all, for the same reason it
+  reads no identity. Migration `0031_search_miss.sql` adds the one
+  table and touches nothing else.
+
 - **What enters the bundle leaves it** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.2). `ochakai
   import` now keeps every file the bundle carried, at the path it

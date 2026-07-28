@@ -473,6 +473,28 @@ For the shape of the system rather than the history of it, read
   *For a user:* usage counts lag reads by seconds and can be lost in a
   crash; the knowledge itself never is.
 
+- **[0049 Recording the questions nothing answered, and measuring the loop
+  at the instance](0049-instance-metrics-and-search-misses.md)** —
+  *Accepted; extends 0029's buffering and 180-day pruning to a fact that
+  hangs off no entry, and makes 0042's public posture keep no query text.*
+  Two gaps, one record. A search that returned nothing was discarded
+  entirely, because every measurement here is keyed by a knowledge id and
+  a miss has none — yet what somebody asked for and did not find is the
+  one list that says what to write next. It is now a row of its own,
+  buffered off the read path like a usage event and pruned on the same
+  schedule. And nothing answered a question about the base as a whole, so
+  `GET /api/v1/stats` does: entries by lifecycle and trust tier, what
+  review did in a window, what callers reported, and the most-asked
+  unanswered questions. Computed on demand with no rollup, and refusing a
+  window longer than the retention rather than quietly answering with
+  less. A miss is defined as zero hits and never as a low score, because
+  ochakai's scores are uncalibrated across search modes.
+  *For a user:* `ochakai stats` (one number per line, made for cron), a
+  loop strip on the web UI's review page, and no MCP tool — an agent that
+  searched and found nothing already knows. Storing query text is new, so
+  it has an off switch (`OCHAKAI_RECORD_MISSES=false`) and is off entirely
+  on a public deployment, which reads no identity either.
+
 ## Concurrency and deletion
 
 - **[0030 Optimistic locking with If-Match](0030-optimistic-locking.md)** —

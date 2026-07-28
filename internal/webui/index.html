@@ -1879,6 +1879,7 @@ function viewReview() {
     <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying an entry empties it from both.
     A third, <a href="#/search/stale">stale</a>, lists entries past the expiry their author declared — that one is cleared by
     editing the entry, not by verifying.</p>
+    <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
         stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
@@ -1886,6 +1887,48 @@ function viewReview() {
     <div id="review-results"><div class="empty">…</div></div>`;
   $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
   runReview();
+  loadLoopStats();
+}
+
+// The loop as the instance sees it (design doc 0049), on the page where
+// the person who runs it already is. Four numbers and the questions that
+// came back empty — not a dashboard: what a curator can act on this
+// morning, which is what the queues below are for.
+//
+// Failure to load is silent. Stats are a help, and a review queue that
+// refuses to draw because a tally is unavailable would be worse than one
+// with no tally.
+async function loadLoopStats() {
+  const out = $('#loop-stats');
+  if (!out) return;
+  let s;
+  try { s = await api('/api/v1/stats'); } catch (e) { return; }
+  if (out !== $('#loop-stats')) return;
+  const trust = s.entries?.trust || {};
+  const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
+  const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
+  out.innerHTML = `
+    <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
+      <div class="tile"><div class="num">${s.entries?.total ?? 0}</div><div class="lbl">entries</div></div>
+      <div class="tile"><div class="num">${confirmed}</div><div class="lbl">confirmed by somebody</div></div>
+      <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
+      <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
+        <div class="lbl">searches that found nothing</div></div>
+    </div>` + (gaps.length ? `
+    <details style="max-width:48rem;margin:0 0 1.2rem">
+      <summary style="cursor:pointer;color:var(--muted)">Asked for, not found — what to write next</summary>
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">Searches from the last ${s.window_days} days
+      that returned nothing, most-asked first. Not a queue anything empties: it stops appearing when the answer exists.</p>
+      ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
+        <span class="badge">${g.count}×</span>
+        <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}
+    </details>` : '');
+  // A gap is a question; clicking it asks it again, which is how a
+  // curator sees what is there before writing what is not.
+  out.querySelectorAll('[data-gap]').forEach(a => a.addEventListener('click', () => {
+    explore.q = a.dataset.gap;
+    explore.failedFeed = explore.ageFeed = explore.expiredFeed = false;
+  }));
 }
 
 function isStaleDraft(h) {

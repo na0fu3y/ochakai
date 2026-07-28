@@ -90,6 +90,7 @@ _ochakai() {
     'attach:attach files to an entry'
     'detach:remove an attachment'
     'usage:show usage totals for an entry'
+    'stats:show the loop for the whole base (review queues, gaps)'
     'report:report an outcome (worked/failed) for an entry'
     'revisions:list the change history of an entry (newest first)'
     'log:print the history under a path as OKF log.md'
@@ -145,6 +146,9 @@ _ochakai() {
       ;;
     usage)
       _arguments '--json[print JSON]' '--url[server URL]:url:'
+      ;;
+    stats)
+      _arguments '--days[flow window in days, 1-180]:days:' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     browse)
       _arguments '--json[print the raw JSON response]' '--url[server URL]:url:'
@@ -221,7 +225,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update verify reject delete purge reembed move attach detach usage report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -239,6 +243,7 @@ _ochakai() {
     context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
+    stats)         opts="--days --json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
     log)           opts="--limit --url" ;;
     report)
@@ -297,6 +302,7 @@ complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) an entry;
 complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to an entry'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
+complete -c ochakai -n __fish_use_subcommand -a stats -d 'show the loop for the whole base (review queues, gaps)'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a log -d 'print the history under a path as OKF log.md'
@@ -312,12 +318,13 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject reembed attach usage report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'

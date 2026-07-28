@@ -232,11 +232,18 @@ func TrustOf(vs []Verification) Trust {
 // OKF's default when it says nothing (SPEC §5.4). ochakai does not write
 // a status its writer left out (design doc 0046 §3.9) — absence is what
 // the document says, and applying the default is the projection's job.
-func (k *Knowledge) Lifecycle() Status {
-	if k.Status == "" {
+func (k *Knowledge) Lifecycle() Status { return LifecycleOf(k.Status) }
+
+// LifecycleOf is the same projection over a bare status value, for the
+// readers that count statuses without materializing the entries behind
+// them (the instance stats, design doc 0049 §3.5). The default lives
+// here once: a second copy is how a tally starts disagreeing with the
+// entries it is a tally of.
+func LifecycleOf(s Status) Status {
+	if s == "" {
 		return StatusStable
 	}
-	return k.Status
+	return s
 }
 
 // StatusFromOKF maps a frontmatter status onto ochakai's vocabulary,

@@ -85,6 +85,7 @@ type Store struct {
 	// once more before flushWG releases (see New/Close, usage.go).
 	usageMu   sync.Mutex
 	usageBuf  []usageEvent
+	missBuf   []missEvent
 	flushStop chan struct{}
 	flushWG   sync.WaitGroup
 }
@@ -228,6 +229,28 @@ func ledgerCols(alias string) string {
 // that used to read a verified_at column read this instead.
 func lastVerifiedAt(alias string) string {
 	return `(SELECT max(v.at) FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
+}
+
+// unansweredFailure is what puts an entry in the re-verification feed: it
+// has failure reports, and none of them has been answered by a
+// verification since (design doc 0025 §6.2). Needs usageLateral joined as
+// u. Written once because the instance stats count the same feed, and a
+// queue whose depth disagrees with the queue is worse than no depth at
+// all (design doc 0049 §3.5).
+func unansweredFailure(alias string) string {
+	v := lastVerifiedAt(alias)
+	return `u.failed > 0 AND (` + v + ` IS NULL OR u.last_failed_at > ` + v + `)`
+}
+
+// pastExpiry is what puts an entry in the stale_after feed: the writer
+// declared an expiry and it has passed (design doc 0037 §2.1). "Today" is
+// UTC, spelled out rather than left to current_date — the column is a
+// bare date so staleness needs no timezone (design doc 0036 §3.9), and
+// current_date would hand that decision to whatever TimeZone the database
+// session happens to carry, making the same entry stale on one deployment
+// and not on another.
+func pastExpiry(prefix string) string {
+	return prefix + `stale_after IS NOT NULL AND ` + prefix + `stale_after <= (now() AT TIME ZONE 'UTC')::date`
 }
 
 // withoutDoc drops the stored document from a column list. A read does
@@ -1946,13 +1969,8 @@ func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain
 // (design doc 0037 §2.2).
 func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	// "Today" is UTC, spelled out rather than left to current_date. The
-	// column is a bare date so that staleness needs no timezone (design
-	// doc 0036 §3.9), and current_date would hand that decision to
-	// whatever TimeZone the database session happens to carry — the same
-	// entry would be stale on one deployment and not on another.
 	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date
+		AND `+pastExpiry("")+`
 		ORDER BY stale_after ASC, id LIMIT %d`, where, limit), args...)
 }
 
@@ -2028,8 +2046,7 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
-		WHERE %s AND u.failed > 0
-			AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)
+		WHERE %s AND `+unansweredFailure("k")+`
 		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
 		where, lastVerifiedAt("k"), limit)
 	rows, err := s.pool.Query(ctx, q, args...)

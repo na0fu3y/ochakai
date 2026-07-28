@@ -350,3 +350,22 @@ func TestBodyLinksToAttachmentsResolve(t *testing.T) {
 		t.Error("the image renderer no longer shares the attachment resolver")
 	}
 }
+
+// The loop strip is the human side of design doc 0049: the review page
+// is where the person who runs the loop already is, so the instance's
+// numbers are drawn there rather than on a page of their own.
+//
+// The one thing it must not do is draw a deployment that keeps no
+// questions as one that was asked none — "0 searches found nothing" is
+// the opposite of the truth, and it is the reading a reader would take
+// from a zero.
+func TestLoopStatsDistinguishNotRecordedFromZero(t *testing.T) {
+	page := string(Index)
+	if !strings.Contains(page, "/api/v1/stats") {
+		t.Fatal("the review page no longer reads the instance stats")
+	}
+	body := section(t, page, "async function loadLoopStats(", "\n}")
+	if !strings.Contains(body, "misses?.recording") {
+		t.Errorf("the loop strip draws misses without asking whether they are recorded:\n%s", body)
+	}
+}

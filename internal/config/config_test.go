@@ -78,3 +78,40 @@ func TestPublicReadOnlyDefaultsOff(t *testing.T) {
 		t.Errorf("public=%v read_only=%v, want both off", cfg.PublicReadOnly, cfg.ReadOnly)
 	}
 }
+
+// Misses are recorded unless the operator says otherwise: a measurement
+// nobody switches on is a measurement nobody has (design doc 0049 §3.4).
+// It is the only default-on boolean here, so it is the only one that
+// reads anything but "true" as on.
+func TestRecordMissesDefaultsOn(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.RecordMisses {
+		t.Error("misses are not recorded by default")
+	}
+	t.Setenv("OCHAKAI_RECORD_MISSES", "false")
+	if cfg, err = FromEnv(); err != nil {
+		t.Fatal(err)
+	} else if cfg.RecordMisses {
+		t.Error("OCHAKAI_RECORD_MISSES=false did not turn recording off")
+	}
+}
+
+// A public deployment reads no identity, so it keeps no query text
+// either — and asking for it back is not a way out, exactly as with
+// read-only (design doc 0049 §3.4).
+func TestPublicReadOnlyKeepsNoQueries(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")
+	t.Setenv("OCHAKAI_RECORD_MISSES", "true")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RecordMisses {
+		t.Error("a public deployment is keeping what its callers typed")
+	}
+}

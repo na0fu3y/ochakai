@@ -1,0 +1,252 @@
+package store
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
+)
+
+// A miss buffers off the read path like a usage event, and lands as its
+// own row (design doc 0049 §3.2); the stats then read it back as a
+// count and as the list of what to write next.
+//
+// The rest of the tally is asserted as a delta rather than as an
+// absolute: every package shares one test database (see CONTRIBUTING), so
+// this test owns the entries it creates and nothing else.
+func TestIntegrationStatsAndMisses(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Registered rather than deferred, so it runs after the cleanups
+	// below: a deferred Close takes the pool out from under them.
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	// A query nobody else asks, so the list assertion below is about this
+	// run's misses and not a neighbour's.
+	query := fmt.Sprintf("it-stats-%d の定義", time.Now().UnixNano())
+	for _, table := range []string{"object", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-stats-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM search_miss WHERE query = $1`, query); err != nil {
+			t.Errorf("cleaning up misses: %v", err)
+		}
+	})
+
+	since := time.Now().Add(-time.Hour)
+
+	// Every assertion below is about rows this test owns, or is a bound
+	// rather than an equality: the test database is shared and the other
+	// packages run against it at the same time (see CONTRIBUTING), so a
+	// tally of the whole instance moves under this test's feet.
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka"}
+	unconfirmed := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-stats-draft", Title: "下書き",
+		Status: domain.StatusDraft, CreatedBy: actor}
+	confirmed := &domain.Knowledge{Type: domain.TypeMetrics, ID: "it-stats-stable", Title: "確定",
+		Status: domain.StatusStable, CreatedBy: actor}
+	for _, k := range []*domain.Knowledge{unconfirmed, confirmed} {
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Verify(ctx, confirmed.ID, actor); err != nil {
+		t.Fatal(err)
+	}
+
+	// Three misses of one question, buffered: nothing is written until
+	// the flush (design doc 0029's bargain, extended to misses).
+	for range 3 {
+		if err := s.RecordMiss(ctx, query, actor); err != nil {
+			t.Fatalf("RecordMiss: %v", err)
+		}
+	}
+	mid, err := s.Stats(ctx, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := missedQuery(mid, query); q != nil {
+		t.Errorf("a miss was counted before the flush: %+v", *q)
+	}
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Stats(ctx, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This test's two entries are in the tally, one per tier: the
+	// verified one is human-reviewed (SPEC §5.3), the other is confirmed
+	// by nobody.
+	if got.Entries.Total < 2 || got.Entries.Created < 2 {
+		t.Errorf("entries = %+v, want at least the two this test created", got.Entries)
+	}
+	if got.Entries.Status[string(domain.StatusDraft)] < 1 ||
+		got.Entries.Trust[string(domain.TrustHuman)] < 1 ||
+		got.Entries.Trust[string(domain.TrustUnverified)] < 1 {
+		t.Errorf("status = %v, trust = %v, want this test's two entries in them",
+			got.Entries.Status, got.Entries.Trust)
+	}
+	if got.Review.Verifications < 1 {
+		t.Errorf("review.verifications = %d, want at least the one this test recorded", got.Review.Verifications)
+	}
+	if got.Misses.Count < 3 {
+		t.Errorf("misses.count = %d, want at least the three this test recorded", got.Misses.Count)
+	}
+	// Every value of both vocabularies is present, so a reader tells
+	// "none" from "not reported" without knowing the vocabulary.
+	for _, st := range domain.Statuses {
+		if _, ok := got.Entries.Status[string(st)]; !ok {
+			t.Errorf("status tally has no %q", st)
+		}
+	}
+	for _, tr := range domain.Trusts {
+		if _, ok := got.Entries.Trust[string(tr)]; !ok {
+			t.Errorf("trust tally has no %q", tr)
+		}
+	}
+	// Three of one query outrank the neighbours' singletons, and ties
+	// break towards the most recent — so this run's question is on the
+	// list even on a database full of older ones.
+	found := missedQuery(got, query)
+	if found == nil {
+		t.Fatalf("the unanswered question is not in the list: %+v", got.Misses.Queries)
+	}
+	if found.Count != 3 || found.LastAt.IsZero() {
+		t.Errorf("missed query = %+v, want count 3 and a time", *found)
+	}
+
+	// A window that starts after everything does not see any of it: the
+	// flow numbers answer for the window they were asked about, and
+	// nothing can be recorded in the future.
+	empty, err := s.Stats(ctx, time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty.Misses.Count != 0 || empty.Entries.Created != 0 || empty.Review.Verifications != 0 {
+		t.Errorf("a future window is not empty: %+v", empty)
+	}
+	// The state numbers are not windowed, and say so by staying put.
+	if empty.Entries.Total < 2 {
+		t.Errorf("entries.total = %d in a future window, want the state numbers unwindowed", empty.Entries.Total)
+	}
+
+	for _, table := range []string{"object", "knowledge_revision"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-stats-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM knowledge_verification WHERE id LIKE 'it-stats-%'`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The two review queues are counted with the feeds' own predicates, so a
+// depth reported by the stats cannot mean something different from the
+// feed a reviewer then opens (design doc 0049 §3.5).
+func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Registered rather than deferred, so it runs after the cleanups
+	// below: a deferred Close takes the pool out from under them.
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka"}
+	failing := &domain.Knowledge{Type: domain.TypeComputations, ID: "it-stats-q-failed", Title: "壊れている",
+		Status: domain.StatusStable, CreatedBy: actor}
+	expired := &domain.Knowledge{Type: domain.TypeComputations, ID: "it-stats-q-expired", Title: "期限切れ",
+		Status: domain.StatusStable, CreatedBy: actor, StaleAfter: "2020-01-01"}
+	for _, table := range []string{"object", "knowledge_revision"} { // leftovers from an interrupted run
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-stats-q-%'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, k := range []*domain.Knowledge{failing, expired} {
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"object", "knowledge_revision"} {
+			if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-stats-q-%'`); err != nil {
+				t.Errorf("cleaning up: %v", err)
+			}
+		}
+		if _, err := s.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id LIKE 'it-stats-q-%'`); err != nil {
+			t.Errorf("cleaning up: %v", err)
+		}
+	})
+	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, failing.ID, "wrong number"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The feeds are measured on both sides of the stats call, and the
+	// depth has to land between them: the test database is shared, so a
+	// neighbour may join or leave a queue in the meantime, and only a
+	// predicate that disagrees with the feed's can fall outside.
+	failedBefore, err := s.ListByFailed(ctx, Filter{}, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleBefore, err := s.ListByStaleAfter(ctx, Filter{}, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Stats(ctx, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedAfter, err := s.ListByFailed(ctx, Filter{}, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleAfter, err := s.ListByStaleAfter(ctx, Filter{}, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	between := func(t *testing.T, name string, got int64, a, b int) {
+		t.Helper()
+		lo, hi := min(a, b), max(a, b)
+		if got < int64(lo) || got > int64(hi) {
+			t.Errorf("%s = %d, the feed held %d then %d", name, got, a, b)
+		}
+	}
+	between(t, "needs_review", st.Review.NeedsReview, len(failedBefore), len(failedAfter))
+	between(t, "past_expiry", st.Review.PastExpiry, len(staleBefore), len(staleAfter))
+	if st.Review.NeedsReview == 0 || st.Review.PastExpiry == 0 {
+		t.Errorf("the entries this test just made are in neither queue: %+v", st.Review)
+	}
+}
+
+// missedQuery finds one question in a stats blob, or nil.
+func missedQuery(st *domain.Stats, query string) *domain.MissedQuery {
+	for i := range st.Misses.Queries {
+		if st.Misses.Queries[i].Query == query {
+			return &st.Misses.Queries[i]
+		}
+	}
+	return nil
+}
