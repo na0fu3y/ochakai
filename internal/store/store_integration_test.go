@@ -2907,3 +2907,116 @@ func TestIntegrationObjectIsKeyedByBundlePath(t *testing.T) {
 		t.Errorf("%d revisions were left at the old path", stale)
 	}
 }
+
+// A file is an object in the bundle, and which entry it belongs to is
+// derived (design doc 0046 §§3.3, 3.13): from the path when it sits
+// under the entry's own namespace, and from the body when the entry
+// points at it. Both halves, and the two things that must not happen —
+// a file showing up where entries are listed, and a file outliving the
+// entry whose namespace it was in.
+func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.UseBlobStore(newFakeBlobStore())
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "t"}
+	base := fmt.Sprintf("it-files-%d", time.Now().UnixNano())
+	id := base + "/revenue"
+	defer func() {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE path LIKE $1 || '%'`, base)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE path LIKE $1 || '%'`, base)
+	}()
+
+	// The body shows one file from the entry's own namespace and links
+	// one that lives elsewhere in the bundle.
+	body := fmt.Sprintf("![chart](revenue/chart.png)\n\n元データは [CSV](/%s/seeds/orders.csv)。\n", base)
+	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: id, Title: "売上",
+		Status: domain.StatusDraft, Body: body, CreatedBy: actor, UpdatedBy: actor}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutAttachment(ctx, id, "chart.png", "image/png", "", []byte("png"), actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutAttachment(ctx, id, "orders.csv", "text/plain",
+		base+"/seeds/orders.csv", []byte("a,b\n"), actor); err != nil {
+		t.Fatal(err)
+	}
+
+	atts, err := s.ListAttachments(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(atts) != 2 {
+		t.Fatalf("attributed files = %+v, want the one under the namespace and the one the body links", atts)
+	}
+	// The one under the namespace needs no naming; the one elsewhere
+	// reports where it lives, which is what an export puts it back as.
+	byName := map[string]domain.Attachment{}
+	for _, a := range atts {
+		byName[a.Name] = a
+	}
+	if got := byName["chart.png"].OKFPath; got != "" {
+		t.Errorf("a file at the canonical path reports okf_path %q", got)
+	}
+	if got, want := byName["orders.csv"].OKFPath, base+"/seeds/orders.csv"; got != want {
+		t.Errorf("okf_path = %q, want %q", got, want)
+	}
+	// It is stored where the body says, not where the entry is.
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM object WHERE path = $1 AND id IS NULL`, base+"/seeds/orders.csv").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("the linked file is not at the path the body names")
+	}
+
+	// A file is not an entry. Nothing that lists or searches entries may
+	// return one — the failure this guards against is silent.
+	hits, err := s.SearchLexical(ctx, "chart", Filter{Prefixes: []string{base}}, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range hits {
+		if h.ID != id {
+			t.Errorf("search returned a non-entry: %q", h.ID)
+		}
+	}
+	dirs, entries, _, err := s.Browse(ctx, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.ID != id {
+			t.Errorf("browse listed a non-entry: %q", e.ID)
+		}
+	}
+	for _, d := range dirs {
+		if d.Name == "seeds" && d.Count != 0 {
+			t.Errorf("a directory of files counts as %d entries", d.Count)
+		}
+	}
+
+	// Detaching takes the object with it, and the entry stops naming it.
+	if err := s.DeleteAttachment(ctx, id, "orders.csv", actor); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM object WHERE path = $1`, base+"/seeds/orders.csv").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("the file object outlived the detach")
+	}
+}

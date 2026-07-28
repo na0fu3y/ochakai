@@ -151,6 +151,33 @@ last entry.
 
 ### Changed
 
+- **A file is an object in the bundle** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§3.3, 3.13). Migration
+  0029 moves every `attachment` row into `object`, at the path the file
+  lives at, and attribution stops being stored: a file belongs to the
+  entry whose `<id>/` namespace it sits directly under, or to the entry
+  whose body points at it.
+
+  A bundle has nowhere to write ownership down, and it needs nowhere —
+  what makes a diagram the metric's diagram is that the metric's document
+  shows it. So the entry's file references are derived from its body on
+  every write, the way its links have been since 0024, and the two halves
+  of the derivation are one predicate every read goes through.
+
+  Nothing on the wire moves: a file is still fetched, attached and
+  detached by `(entry, filename)`, and `okf_path` still reports a file
+  that lives somewhere other than the canonical `<id>/<name>` — derived
+  now from the path rather than stored beside it. Two behaviours follow
+  from the derivation rather than from a column, and both are what the
+  design asks for: moving an entry carries the files under its namespace
+  with it, and attaching a file at a path the entry's body says nothing
+  about stores it at `<id>/<name>` instead of orphaning it.
+
+  Operators: `attachment` and `attachment_embedding` keep their rows —
+  the read paths move in this release and the tables go in a later one,
+  the way 0024 kept `knowledge_revision.snapshot`. A file's bytes do not
+  move; only the row that names them does.
+
 - **The store is keyed by the bundle path** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§2.1, 3.1). Migration
   0028 renames `knowledge` to `object` and moves its primary key to

@@ -260,3 +260,60 @@ func rewriteLine(line string, rewriteTarget func(string) string) string {
 	}
 	return line
 }
+
+// FilesFromBody extracts the bundle paths of the non-concept objects an
+// entry's body points at: the images it embeds and the links it makes to
+// files rather than to other concepts. id is the entry's own id, which
+// relative targets resolve against.
+//
+// This is one half of how a file is attributed to an entry (design doc
+// 0046 §3.3) — the other half is living under the entry's own `<id>/`
+// namespace, which is a question about the path and needs no parsing.
+// Attribution is derived rather than recorded because a bundle carries
+// no place to record it: what says a diagram belongs to a metric is that
+// the metric's document shows it.
+//
+// LinksFromBody is the same walk over the same prose, keeping what this
+// one drops. The two are separate functions rather than one returning
+// both because their results mean different things — an edge between
+// concepts is knowledge, and a file reference is an ingredient — and
+// they are indexed and asked about separately.
+func FilesFromBody(id, body string) []string {
+	var files []string
+	seen := map[string]bool{}
+	for _, line := range proseLines(body) {
+		for _, m := range mdLinkRe.FindAllStringSubmatch(line, -1) {
+			p := resolveFileTarget(id, m[3])
+			if p == "" || seen[p] {
+				continue
+			}
+			seen[p] = true
+			files = append(files, p)
+		}
+	}
+	return files
+}
+
+// resolveFileTarget turns one link target into the bundle path of a file,
+// or "" when the target is not one: an external URL, an anchor, or a
+// markdown document (which addresses a concept, and is LinksFromBody's).
+func resolveFileTarget(id, target string) string {
+	if i := strings.IndexAny(target, "#?"); i >= 0 {
+		target = target[:i]
+	}
+	if target == "" || schemeRe.MatchString(target) || strings.HasSuffix(target, ".md") {
+		return ""
+	}
+	if strings.HasPrefix(target, "/") {
+		return Normalize(strings.Trim(target, "/"))
+	}
+	dir := path.Dir(id)
+	if dir == "." {
+		dir = ""
+	}
+	joined := path.Join(dir, target)
+	if joined == "." || strings.HasPrefix(joined, "..") {
+		return ""
+	}
+	return Normalize(joined)
+}

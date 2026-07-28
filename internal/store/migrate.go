@@ -134,7 +134,10 @@ func (s *Store) backfillDocuments(ctx context.Context) error {
 func (s *Store) backfillEntryDocuments(ctx context.Context) error {
 	for {
 		rows, err := s.pool.Query(ctx,
-			`SELECT `+knowledgeSelect+` FROM object WHERE doc = '' ORDER BY id LIMIT $1`,
+			// id IS NOT NULL: a file object has no document to compose
+			// and no id to scan into (design doc 0046 §3.13).
+			`SELECT `+knowledgeSelect+` FROM object
+			 WHERE doc = '' AND id IS NOT NULL ORDER BY id LIMIT $1`,
 			backfillBatch)
 		if err != nil {
 			return err

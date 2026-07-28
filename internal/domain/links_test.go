@@ -223,3 +223,36 @@ func TestLinkDisplayText(t *testing.T) {
 		t.Errorf("DisplayText = %q, want the target's last segment", got)
 	}
 }
+
+// The non-concept half of what a body points at (design doc 0046 §3.3):
+// the images it shows and the files it links, resolved to bundle paths.
+// A markdown target is a concept and belongs to LinksFromBody, and a
+// target outside the bundle belongs to neither.
+func TestFilesFromBody(t *testing.T) {
+	const id = "metrics/revenue"
+	body := "見た目は ![chart](revenue/chart.png)。\n" +
+		"定義は [方針](/policies/revenue.md) に従う。\n" +
+		"元データは [CSV](/seeds/orders.csv)、控えは [同じ](revenue/chart.png)。\n" +
+		"外部は [外](https://example.com/a.png) と [印](mailto:a@example.com)。\n" +
+		"上には [出ない](../../etc/passwd)。\n" +
+		"`![例](code/only.png)` は例示。\n"
+	got := FilesFromBody(id, body)
+	want := []string{"metrics/revenue/chart.png", "seeds/orders.csv"}
+	if len(got) != len(want) {
+		t.Fatalf("files = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("files[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	// The two halves partition what the body points at: nothing is in
+	// both, and the concept link is only in the other one.
+	for _, l := range LinksFromBody(id, body) {
+		for _, f := range got {
+			if l.Target == f {
+				t.Errorf("%q is both a concept link and a file", f)
+			}
+		}
+	}
+}

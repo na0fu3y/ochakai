@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,30 +15,94 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// Attachment persistence (design docs 0008, 0013). Bytes are content-
-// addressed and immutable — attaching the same file twice stores it once,
-// and revisions can name any historical content by hash. The blob row
-// keeps the metadata (media_type, size) and the attachment row maps
-// entry + filename to a blob; the bytes themselves live only in the
-// external blob store (GCS, design doc 0013 — the bytea column of design
-// doc 0008 is gone). Blobs are never deleted: like knowledge revisions,
-// history is retained. Without a configured blob store, attachments are
-// unsupported — writes fail with errNoBlobStore.
+// Files (design docs 0008, 0013, 0046 §§3.3, 3.13). A file is an object
+// in the bundle, at a path, beside the concepts — not a property of an
+// entry. Bytes stay content-addressed and immutable in the external blob
+// store (GCS): attaching the same file twice stores it once, and a
+// revision can name any historical content by hash. Blobs are never
+// deleted, so the bucket only grows. Without a configured blob store,
+// files are unsupported — writes fail with errNoBlobStore.
+//
+// Which entry a file belongs to is derived rather than recorded (0046
+// §3.3): it is the entry whose <id>/ namespace the file sits directly
+// under, or the entry whose body points at it. A bundle has nowhere to
+// write ownership down, and it does not need one — what makes a diagram
+// the metric's diagram is that the metric's document shows it.
+//
+// The two halves are one SQL predicate, attributedTo, which every read
+// here goes through. The name a surface calls a file by is the last
+// segment of its path, and okf_path is that path when it is not the
+// canonical <id>/<name> — both derived on the way out, so the wire is
+// unchanged while the storage underneath it is a bundle.
 
-const attachmentCols = `a.name, b.media_type, b.size, a.sha256, a.okf_path,
-	a.created_by_kind, a.created_by_name, a.created_at`
+// attributedTo is the predicate joining file objects f to the entry row
+// k: living directly under the entry's namespace (no further slash), or
+// named by the entry's own body. Both halves are indexed —
+// object_concept keeps concepts out of the path scan, object_files is
+// the GIN index behind the containment test.
+const attributedTo = `f.id IS NULL AND f.deleted_at IS NULL
+	AND (f.path LIKE k.id || '/%' AND strpos(substr(f.path, length(k.id) + 2), '/') = 0
+	     OR k.files ? f.path)`
 
-// attachmentDests returns the scan destinations matching attachmentCols,
-// in column order — the one place the two lists are paired.
-func attachmentDests(a *domain.Attachment) []any {
-	return []any{&a.Name, &a.MediaType, &a.Size, &a.SHA256, &a.OKFPath,
-		&a.CreatedBy.Kind, &a.CreatedBy.Name, &a.CreatedAt}
+// fileCols is one file object as an attachment is read: the path is what
+// the name and okf_path are derived from, so it is selected rather than
+// either of them.
+const fileCols = `f.path, f.media_type, f.size, f.blob_hash,
+	f.created_by_kind, f.created_by_name, f.created_at`
+
+// asAttachment renders one file object the way the surfaces name it.
+// ownerID decides whether the path is the canonical <id>/<name>, in
+// which case there is no okf_path to report: okf_path means "this file
+// is not where ochakai would have put it" (design doc 0013), and after
+// 0046 §3.3 that is a fact about the path rather than a stored column.
+func asAttachment(ownerID, path, mediaType string, size int64, hash string,
+	by domain.Actor, at time.Time,
+) domain.Attachment {
+	name := path[strings.LastIndex(path, "/")+1:]
+	okfPath := path
+	if path == ownerID+"/"+name {
+		okfPath = ""
+	}
+	return domain.Attachment{
+		Name: name, MediaType: mediaType, Size: size, SHA256: hash,
+		OKFPath: okfPath, CreatedBy: by, CreatedAt: at,
+	}
 }
 
-func scanAttachment(row pgx.CollectableRow) (domain.Attachment, error) {
-	var a domain.Attachment
-	err := row.Scan(attachmentDests(&a)...)
-	return a, err
+// scanFile pairs fileCols with asAttachment, for the reads that know
+// whose file it is.
+func scanFile(ownerID string) func(pgx.CollectableRow) (domain.Attachment, error) {
+	return func(row pgx.CollectableRow) (domain.Attachment, error) {
+		var path, mediaType, hash string
+		var size int64
+		var by domain.Actor
+		var at time.Time
+		if err := row.Scan(&path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
+			return domain.Attachment{}, err
+		}
+		return asAttachment(ownerID, path, mediaType, size, hash, by, at), nil
+	}
+}
+
+// filePath is where a file with this name, written against this entry,
+// lives: the path it arrived at when the entry's own body points there,
+// and the canonical <id>/<name> otherwise.
+//
+// The body is what decides, because the body is what attributes the file
+// (design doc 0046 §3.3). A caller naming a path the entry says nothing
+// about would otherwise write a file nothing points at — an orphan the
+// moment it lands, and one no export would put back where it was asked
+// for. Under the entry's own namespace it needs no mention: the path
+// says whose it is.
+func filePath(k *domain.Knowledge, name, okfPath string) string {
+	canonical := k.ID + "/" + name
+	if okfPath == "" || okfPath == canonical {
+		return canonical
+	}
+	if slices.Contains(domain.FilesFromBody(k.ID, k.Body), okfPath) {
+		return okfPath
+	}
+	return canonical
 }
 
 // PutAttachment stores data as an attachment of a live entry, replacing
@@ -69,32 +135,40 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, okfPath 
 		if err != nil {
 			return err
 		}
+		path := filePath(k, name, okfPath)
 		var count int
-		if err := tx.QueryRow(ctx,
-			`SELECT count(*) FROM attachment WHERE knowledge_id=$1 AND name<>$2`,
-			id, name).Scan(&count); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT count(*)
+			FROM object k JOIN object f ON `+attributedTo+`
+			WHERE k.id=$1 AND f.path<>$2`, id, path).Scan(&count); err != nil {
 			return err
 		}
 		if count >= domain.MaxAttachmentsPerEntry {
 			return fmt.Errorf("invalid attachment: entry already has %d attachments (max %d)", count, domain.MaxAttachmentsPerEntry)
 		}
+		// The blob row is metadata only now — the object row carries the
+		// media type and size a read answers with — but it stays the
+		// registry of which content exists, and a revision names bytes by
+		// hash alone.
 		if _, err := tx.Exec(ctx, `INSERT INTO blob (sha256, media_type, size)
 			VALUES ($1, $2, $3) ON CONFLICT (sha256) DO NOTHING`,
 			att.SHA256, att.MediaType, att.Size); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO attachment
-			(knowledge_id, name, sha256, okf_path, created_by_kind, created_by_name, created_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7)
-			ON CONFLICT (knowledge_id, name) DO UPDATE SET
-				sha256=EXCLUDED.sha256, okf_path=EXCLUDED.okf_path,
-				created_by_kind=EXCLUDED.created_by_kind, created_by_name=EXCLUDED.created_by_name,
-				created_at=EXCLUDED.created_at`,
-			id, att.Name, att.SHA256, att.OKFPath, actor.Kind, actor.Name, att.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO object
+			(path, type, title, body, blob_hash, size, media_type,
+			 created_by_kind, created_by_name, updated_by_kind, updated_by_name,
+			 created_at, updated_at, content_changed_at)
+			VALUES ($1,'','','',$2,$3,$4,$5,$6,$5,$6,$7,$7,$7)
+			ON CONFLICT (path) DO UPDATE SET
+				blob_hash=EXCLUDED.blob_hash, size=EXCLUDED.size, media_type=EXCLUDED.media_type,
+				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
+				updated_at=EXCLUDED.updated_at
+			WHERE object.id IS NULL`,
+			path, att.SHA256, att.Size, att.MediaType, actor.Kind, actor.Name, att.CreatedAt); err != nil {
 			return err
 		}
-		// A replaced attachment's vector describes the old bytes; drop it
-		// here and let the service re-embed after commit (design doc 0020).
+		// A replaced file's vector describes the old bytes; drop it here
+		// and let the service re-embed after commit (design doc 0020).
 		if err := execTolerateMissingTable(ctx, tx,
 			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
 			return err
@@ -129,58 +203,63 @@ func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.Att
 	return att, data, nil
 }
 
-// ListAttachments returns the metadata (no bytes) of a live entry's
-// attachments, in name order.
+// ListAttachments returns the metadata (no bytes) of the files a live
+// entry is shown by, in name order.
 func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.Attachment, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		WHERE a.knowledge_id=$1 ORDER BY a.name`, id)
+	rows, err := s.pool.Query(ctx, `SELECT `+fileCols+`
+		FROM object k JOIN object f ON `+attributedTo+`
+		WHERE k.id=$1 AND k.deleted_at IS NULL ORDER BY f.path`, id)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanAttachment)
+	return pgx.CollectRows(rows, scanFile(id))
 }
 
-// ListAttachmentsBatch returns attachment metadata for a set of entries
-// in one query, keyed by entry id. Entries without attachments have no
-// key. The callers pass entries they already know are live (search
-// hits, backlinks), so no liveness join is needed.
+// ListAttachmentsBatch returns file metadata for a set of entries in one
+// query, keyed by entry id. Entries with no files have no key. The
+// callers pass entries they already know are live (search hits,
+// backlinks), so no liveness join is needed.
 func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[string][]domain.Attachment, error) {
-	rows, err := s.pool.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN unnest($1::text[]) AS want(id) ON a.knowledge_id = want.id
-		ORDER BY a.knowledge_id, a.name`, ids)
+	rows, err := s.pool.Query(ctx, `SELECT k.id, `+fileCols+`
+		FROM object k
+		JOIN unnest($1::text[]) AS want(id) ON k.id = want.id
+		JOIN object f ON `+attributedTo+`
+		ORDER BY k.id, f.path`, ids)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	out := map[string][]domain.Attachment{}
 	for rows.Next() {
-		var id string
-		var a domain.Attachment
-		if err := rows.Scan(append([]any{&id}, attachmentDests(&a)...)...); err != nil {
+		var owner, path, mediaType, hash string
+		var size int64
+		var by domain.Actor
+		var at time.Time
+		if err := rows.Scan(&owner, &path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
 			return nil, err
 		}
-		out[id] = append(out[id], a)
+		out[owner] = append(out[owner], asAttachment(owner, path, mediaType, size, hash, by, at))
 	}
 	return out, rows.Err()
 }
 
-// GetAttachmentMeta returns one attachment's metadata without touching
-// the blob store — enough to answer a conditional GET (the ETag is the
+// GetAttachmentMeta returns one file's metadata without touching the
+// blob store — enough to answer a conditional GET (the ETag is the
 // content hash) before deciding whether the bytes are needed.
+//
+// The name is the last segment of a path, so a file the entry shows from
+// elsewhere in the bundle answers to its filename here, which is the
+// name every surface has always called it by.
 func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain.Attachment, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		WHERE a.knowledge_id=$1 AND a.name=$2`, id, name)
+	rows, err := s.pool.Query(ctx, `SELECT `+fileCols+`
+		FROM object k JOIN object f ON `+attributedTo+`
+		WHERE k.id=$1 AND k.deleted_at IS NULL
+		  AND substr(f.path, length(f.path) - length($2)) = '/' || $2
+		ORDER BY f.path LIMIT 1`, id, name)
 	if err != nil {
 		return nil, err
 	}
-	att, err := pgx.CollectExactlyOneRow(rows, scanAttachment)
+	att, err := pgx.CollectExactlyOneRow(rows, scanFile(id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -200,8 +279,12 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 		if err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx,
-			`DELETE FROM attachment WHERE knowledge_id=$1 AND name=$2`, id, name)
+		att, err := s.GetAttachmentMeta(ctx, id, name)
+		if err != nil {
+			return err
+		}
+		path := filePath(k, att.Name, att.OKFPath)
+		tag, err := tx.Exec(ctx, `DELETE FROM object WHERE path=$1 AND id IS NULL`, path)
 		if err != nil {
 			return err
 		}
@@ -209,7 +292,7 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 			return ErrNotFound
 		}
 		if err := execTolerateMissingTable(ctx, tx,
-			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, name); err != nil {
+			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
 			return err
 		}
 		return s.touchAndRevise(ctx, tx, k, "detach", actor)
@@ -263,14 +346,14 @@ func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowled
 	return s.addRevision(ctx, tx, k, change, actor)
 }
 
-// listAttachmentsTx reads the attachment list inside the writing
-// transaction, so the revision snapshot sees the change it records.
+// listAttachmentsTx reads the file list inside the writing transaction,
+// so the revision snapshot sees the change it records.
 func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.Attachment, error) {
-	rows, err := tx.Query(ctx, `SELECT `+attachmentCols+`
-		FROM attachment a JOIN blob b ON b.sha256 = a.sha256
-		WHERE a.knowledge_id=$1 ORDER BY a.name`, id)
+	rows, err := tx.Query(ctx, `SELECT `+fileCols+`
+		FROM object k JOIN object f ON `+attributedTo+`
+		WHERE k.id=$1 ORDER BY f.path`, id)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanAttachment)
+	return pgx.CollectRows(rows, scanFile(id))
 }
