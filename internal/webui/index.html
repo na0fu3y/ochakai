@@ -631,12 +631,7 @@ function md(src, resolveFile, resolveEntry) {
     .replace(/(^|\W)\*([^*\n]+)\*(?=\W|$)/g, '$1<em>$2</em>')
     .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, img)
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, link)
-    // Bare and autolinked ochakai:// references, which carry no anchor
-    // text and read as the target's last segment.
-    .replace(/(?:&lt;)?(ochakai:\/\/[^\s&<>()[\]"']+)(?:&gt;)?/g, (m, uri) => {
-      const route = resolveEntry && resolveEntry(uri);
-      return route ? `<a href="${route}">${uri.split('/').pop()}</a>` : m;
-    }));
+    );
   const flushPara = () => { if (para.length) { out += '<p>' + inline(para.join(' ')) + '</p>'; para = []; } };
   const flushList = () => { if (inList) { out += `</${inList}>`; inList = null; } };
   for (const line of lines) {
@@ -1558,16 +1553,15 @@ async function viewDetail(id) {
     return hit ? attURL(hit.name) : null;
   };
   // Links to other entries, resolved the way the server derives them from
-  // this same body (design doc 0024): bundle-absolute "/x/y.md", relative
-  // "./y.md" against the document's directory, or the canonical URI. A
+  // this same body (design doc 0024): SPEC §6's two forms, bundle-absolute
+  // "/x/y.md" and relative "./y.md" against the document's directory. A
   // reference to anything else — an attachment, an external URL, an
-  // anchor — is not an entry link and stays literal text.
+  // anchor, a URI scheme — is not an entry link and stays literal text.
   const resolveEntry = ref => {
     const target = String(ref).split(/[#?]/)[0];
     if (!target) return null;
     let id;
-    if (target.startsWith('ochakai://')) id = normalize(target.slice('ochakai://'.length));
-    else if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) return null; // some other scheme
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) return null; // a scheme: outside the bundle
     else if (!target.endsWith('.md')) return null; // an attachment, not an entry
     else {
       const rel = target.slice(0, -'.md'.length);

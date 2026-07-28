@@ -145,6 +145,27 @@ last entry.
     composes a document itself, and as what a write path falls back to
     when a caller changes an entry's fields rather than its document.
 
+- **BREAKING**: body links keep only the two forms OKF defines (design
+  doc [0046](docs/design/0046-bundle-address-space.md) §3.6).
+  `[revenue](/metrics/revenue.md)` and `[gross](./gross.md)` are edges;
+  `ochakai://metrics/revenue` is not one any more, in a link, an
+  autolink, or bare prose.
+
+  A body travels inside the bundle, so a scheme ochakai invented meant
+  every export carried links no other consumer could resolve. Migration
+  0026 rewrites the bodies that used it — a link target becomes the
+  bundle-absolute path and keeps its anchor text, a bare or autolinked
+  URI becomes a whole markdown link named by the id, since a bare path
+  in prose is not a link and would have cost the entry an edge. The
+  ETags of rewritten entries move; `generated` does not, because
+  spelling a link the way the spec spells it is not a change to what the
+  entry says. Revision snapshots keep the spelling they were written
+  with.
+
+  The scheme stays where portability is not the question: MCP still
+  addresses an entry as `ochakai://{id}`, and `report_outcome` and the
+  CLI still tolerate the prefix on an id argument.
+
 - **BREAKING**: status and trust are said the way OKF says them (design
   doc [0046](docs/design/0046-bundle-address-space.md) §§3.9-3.10).
 

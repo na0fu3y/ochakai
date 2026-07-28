@@ -178,8 +178,9 @@ location: `queries/sales/monthly-revenue` is one entry, and the
 directories are how you organize a knowledge base. A type is an attribute
 of an entry, not part of its address, so the layout of an exported bundle
 comes from ids alone (design doc
-[0017](design/0017-path-addressing.md)). The canonical URI is that path
-under the `ochakai://` scheme. `title` is optional — an entry without one
+[0017](design/0017-path-addressing.md)). MCP addresses an entry as a
+resource by that path under the `ochakai://` scheme — a URI for MCP's
+sake, which never travels in a bundle. `title` is optional — an entry without one
 is displayed by the last segment of its id, the way a file is named by
 its filename — and ids are NFC-normalized and searchable in their own
 right (design doc [0022](design/0022-filename-as-name.md)).
@@ -218,8 +219,8 @@ an agent can check it before re-proposing the same thing (design doc
 [0043](design/0043-document-first.md) §§3.2-3.3).
 
 **Relationships come from the prose.** There is no links field. A
-markdown link in the body — `[revenue](/metrics/revenue.md)`, a relative
-path, or an `ochakai://` URI — is the edge; the target gains a backlink,
+markdown link in the body — `[revenue](/metrics/revenue.md)` or a
+relative path, the two forms OKF SPEC §6 defines — is the edge; the target gains a backlink,
 and rename rewrites the references pointing at it. What *kind* of
 relationship it is comes from the sentence around it, so ochakai stores
 no relationship vocabulary of its own (design doc

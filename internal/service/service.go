@@ -789,7 +789,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	primaries := len(entries)
 	for i := range primaries {
 		for _, l := range entries[i].Links {
-			add(strings.TrimPrefix(l.Target, "ochakai://"))
+			add(l.Target)
 		}
 		linking, err := s.Store.ListLinkingTo(ctx, entries[i].ID, 2*limit)
 		if err != nil {

@@ -5,8 +5,9 @@ import (
 	"testing"
 )
 
-// The five forms design doc 0024 §3.3 recognizes, and the things that
-// look like links but are not: external URLs, attachments, anchors.
+// The two forms SPEC §6 defines (design docs 0024 §3.3, 0046 §3.6), and
+// the things that look like links but are not: external URLs,
+// attachments, anchors.
 func TestLinksFromBody(t *testing.T) {
 	for _, tc := range []struct {
 		name, id, body string
@@ -23,30 +24,13 @@ func TestLinksFromBody(t *testing.T) {
 			body: "Compare [gross](./gross.md) and [orders](../tables/orders.md).",
 			want: []Link{{Target: "metrics/gross", Text: "gross"}, {Target: "tables/orders", Text: "orders"}},
 		}, {
-			name: "canonical URI in a markdown link",
+			// The retired scheme is a URI like any other now: it addresses
+			// something outside the bundle, which is exactly what it did
+			// for every consumer that was not ochakai (design doc 0046
+			// §3.6). A migration rewrote the bodies that used it.
+			name: "the ochakai:// scheme is not a link between entries",
 			id:   "insights/a",
-			body: "See [revenue](ochakai://metrics/revenue).",
-			want: []Link{{Target: "metrics/revenue", Text: "revenue"}},
-		}, {
-			name: "autolink and bare URI carry no anchor text",
-			id:   "insights/a",
-			body: "Autolink <ochakai://metrics/revenue> and bare ochakai://tables/orders here.",
-			want: []Link{{Target: "metrics/revenue"}, {Target: "tables/orders"}},
-		}, {
-			// A bare URI ends where the sentence does. Left in, the
-			// trailing stop became part of the id: no backlink, no
-			// expansion through the link, and a move that never repairs
-			// it — all silent, because a link to an id nobody wrote looks
-			// the same as one to an entry not written yet.
-			name: "a bare URI ends before the sentence's punctuation",
-			id:   "insights/a",
-			body: "See ochakai://metrics/revenue. Also ochakai://tables/orders、and ochakai://terms/arr?",
-			want: []Link{{Target: "metrics/revenue"}, {Target: "tables/orders"}, {Target: "terms/arr"}},
-		}, {
-			name: "a markdown link's target keeps what the parentheses hold",
-			id:   "insights/a",
-			body: "See [revenue](ochakai://metrics/revenue.) for the definition.",
-			want: []Link{{Target: "metrics/revenue.", Text: "revenue"}},
+			body: "See [revenue](ochakai://metrics/revenue), <ochakai://metrics/revenue>, and bare ochakai://tables/orders.",
 		}, {
 			name: "external URLs are not entry links",
 			id:   "insights/a",
@@ -72,11 +56,6 @@ func TestLinksFromBody(t *testing.T) {
 				{Target: "metrics/revenue", Text: "revenue"},
 				{Target: "metrics/revenue", Text: "売上"},
 			},
-		}, {
-			name: "a link inside a markdown link is not counted twice",
-			id:   "insights/a",
-			body: "See [revenue](ochakai://metrics/revenue) only once.",
-			want: []Link{{Target: "metrics/revenue", Text: "revenue"}},
 		}, {
 			name: "a target climbing above the bundle root is not an entry",
 			id:   "a",
@@ -134,10 +113,12 @@ func TestRewriteBodyLinks(t *testing.T) {
 			body: "See [revenue](/metrics/revenue.md).",
 			want: "See [revenue](/finance/revenue.md).",
 		}, {
-			name: "canonical URI keeps its form",
+			// Not an edge any more, so a move leaves it exactly where it
+			// is — like any other URI in the prose (design doc 0046 §3.6).
+			name: "the retired scheme is left alone",
 			id:   "insights/a",
 			body: "See ochakai://metrics/revenue and <ochakai://metrics/revenue>.",
-			want: "See ochakai://finance/revenue and <ochakai://finance/revenue>.",
+			want: "See ochakai://metrics/revenue and <ochakai://metrics/revenue>.",
 		}, {
 			name: "a relative target normalizes to bundle-absolute",
 			id:   "metrics/gross",
@@ -164,11 +145,11 @@ func TestRewriteBodyLinks(t *testing.T) {
 	}
 }
 
-// Several rewrites on one line must all land, whichever pass found them.
+// Several rewrites on one line must all land.
 func TestRewriteBodyLinksMultiplePerLine(t *testing.T) {
-	body := "ochakai://metrics/revenue then [r](/metrics/revenue.md) then ochakai://metrics/revenue"
-	want := "ochakai://m/r then [r](/m/r.md) then ochakai://m/r"
-	if got := RewriteBodyLinks("insights/a", body, "metrics/revenue", "m/r"); got != want {
+	body := "[a](/metrics/revenue.md) then [r](/metrics/revenue.md) then [c](./revenue.md)"
+	want := "[a](/m/r.md) then [r](/m/r.md) then [c](/m/r.md)"
+	if got := RewriteBodyLinks("metrics/x", body, "metrics/revenue", "m/r"); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -191,10 +172,10 @@ func TestAbsolutizeBodyLinks(t *testing.T) {
 			body: "See [orders](../orders.md).",
 			want: "See [orders](/metrics/orders.md).",
 		}, {
-			name: "absolute and canonical forms are already stable",
+			name: "an absolute target is already stable",
 			id:   "metrics/revenue",
-			body: "See [g](/metrics/gross.md), ochakai://metrics/net, <ochakai://metrics/net>.",
-			want: "See [g](/metrics/gross.md), ochakai://metrics/net, <ochakai://metrics/net>.",
+			body: "See [g](/metrics/gross.md).",
+			want: "See [g](/metrics/gross.md).",
 		}, {
 			name: "non-entry targets are left alone",
 			id:   "metrics/revenue",
@@ -240,36 +221,5 @@ func TestLinkDisplayText(t *testing.T) {
 	// No anchor text: the target's last segment is the name (design doc 0022).
 	if got := (Link{Target: "metrics/revenue"}).DisplayText(); got != "revenue" {
 		t.Errorf("DisplayText = %q, want the target's last segment", got)
-	}
-}
-
-// Rewriting a body on move goes through the same reading of where a bare
-// URI ends, so a sentence-final URI has to be rewritten without eating
-// the stop -- and an id that legitimately carries a dot has to keep it.
-func TestBareURIPunctuationRoundTrip(t *testing.T) {
-	for _, tc := range []struct{ name, id, body, want string }{
-		{
-			name: "sentence-final URI keeps its full stop",
-			id:   "insights/a",
-			body: "See ochakai://metrics/revenue. Nothing else.",
-			want: "See ochakai://metrics/gross. Nothing else.",
-		}, {
-			name: "Japanese prose keeps the particle that follows",
-			id:   "insights/a",
-			body: "ochakai://metrics/revenue、を参照。",
-			want: "ochakai://metrics/gross、を参照。",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := RewriteBodyLinks(tc.id, tc.body, "metrics/revenue", "metrics/gross"); got != tc.want {
-				t.Errorf("RewriteBodyLinks(%q) = %q, want %q", tc.body, got, tc.want)
-			}
-		})
-	}
-
-	// A dot inside a latin id is part of the id: only a trailing run goes.
-	dotted := LinksFromBody("insights/a", "See ochakai://ga4/events/purchase.v2 for the shape.")
-	if len(dotted) != 1 || dotted[0].Target != "ga4/events/purchase.v2" {
-		t.Errorf("links = %+v, want ga4/events/purchase.v2 intact", dotted)
 	}
 }

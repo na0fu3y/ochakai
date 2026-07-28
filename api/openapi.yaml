@@ -1108,7 +1108,7 @@ paths:
         The id is the address (design doc 0017), so a move carries
         everything keyed by it along in one transaction — revisions,
         usage, attachments, embeddings — and rewrites inbound references
-        (link targets in both bare and ochakai:// forms, and the producer
+        (link targets in both of SPEC §6's forms, and the producer
         key `model` where a document carries one)
         so nothing breaks (design doc 0021). The destination must be a
         fresh id: a live or soft-deleted entry there already owns that
@@ -2171,7 +2171,7 @@ components:
         text:
           type: string
           description: >
-            The anchor text the body used. Absent for a bare ochakai:// reference,
+            The anchor text the body used. Absent when the link carried none,
             in which case the target's last segment reads as the name.
     Summary:
       type: object
@@ -2249,10 +2249,10 @@ components:
           items: { $ref: "#/components/schemas/Link" }
           description: >
             Derived from the markdown links in the document's body,
-            recomputed on every write. Bundle-absolute
-            (/metrics/revenue.md), relative (./revenue.md), and
-            ochakai:// targets are all read; http(s) URLs and non-.md
-            files are not (the latter are attachments).
+            recomputed on every write. OKF SPEC §6's two forms are read:
+            bundle-absolute (/metrics/revenue.md) and relative
+            (./revenue.md). http(s) URLs and non-.md files are not (the
+            latter are attachments).
         content_hash:
           type: string
           description: >

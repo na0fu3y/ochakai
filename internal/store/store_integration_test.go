@@ -425,8 +425,9 @@ func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 }
 
 // ListLinkingTo powers get_context's reverse-link expansion: entries
-// whose links point at the target must surface — in both the bare and
-// the ochakai:// target forms — and soft-deleted entries must not.
+// whose links point at the target must surface — a stored target is
+// always the resolved id, whichever of SPEC §6's forms the body wrote —
+// and soft-deleted entries must not.
 func TestIntegrationListLinkingTo(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
@@ -452,8 +453,8 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 		{Type: domain.TypeMetrics, ID: "it-link-metric", Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
 		{Type: domain.TypeInsights, ID: "it-link-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
 			Links: []domain.Link{{Target: "it-link-metric", Text: "explains"}}},
-		{Type: domain.TypeInsights, ID: "it-link-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
-			Links: []domain.Link{{Target: "ochakai://it-link-metric", Text: "explains"}}},
+		{Type: domain.TypeInsights, ID: "it-link-rel", Title: "relative link", Status: domain.StatusDraft, CreatedBy: actor,
+			Links: []domain.Link{{Target: "it-link-metric", Text: "explains"}}},
 		{Type: domain.TypeInsights, ID: "it-link-gone", Title: "deleted link", Status: domain.StatusDraft, CreatedBy: actor,
 			Links: []domain.Link{{Target: "it-link-metric", Text: "explains"}}},
 	}
@@ -474,8 +475,8 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	for _, k := range got {
 		ids[k.ID] = true
 	}
-	if len(got) != 2 || !ids["it-link-bare"] || !ids["it-link-uri"] {
-		t.Errorf("ListLinkingTo = %v, want it-link-bare and it-link-uri", ids)
+	if len(got) != 2 || !ids["it-link-bare"] || !ids["it-link-rel"] {
+		t.Errorf("ListLinkingTo = %v, want it-link-bare and it-link-rel", ids)
 	}
 }
 
@@ -727,9 +728,9 @@ func TestIntegrationMove(t *testing.T) {
 		{Type: domain.TypeInsights, ID: "it-move-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
 			Body:  "Explains [the metric](/it-move-src/metric.md).",
 			Links: []domain.Link{{Target: "it-move-src/metric", Text: "the metric"}}},
-		{Type: domain.TypeInsights, ID: "it-move-uri", Title: "uri link", Status: domain.StatusDraft, CreatedBy: actor,
-			Body:  "Explains ochakai://it-move-src/metric further.",
-			Links: []domain.Link{{Target: "it-move-src/metric", Text: ""}}},
+		{Type: domain.TypeInsights, ID: "it-move-src/sibling", Title: "relative link", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "Explains [the metric](./metric.md) further.",
+			Links: []domain.Link{{Target: "it-move-src/metric", Text: "the metric"}}},
 		{Type: domain.TypeMetrics, ID: "it-move-attrs", Title: "attrs.model ref", Status: domain.StatusDraft, CreatedBy: actor,
 			Attrs: map[string]any{"model": "it-move-src/metric"}},
 		{Type: domain.TypeInsights, ID: "it-move-taken", Title: "occupies destination", Status: domain.StatusDraft, CreatedBy: actor},
@@ -821,11 +822,12 @@ func TestIntegrationMove(t *testing.T) {
 
 	// Inbound references rewritten in the body — the links column follows
 	// because it is derived from it (design doc 0024) — each as a
-	// revision. Targets are stored bare; the body keeps the notation its
-	// author used.
+	// revision. Targets are stored as ids; a rewritten link comes out
+	// bundle-absolute whichever form it went in as, since that is the one
+	// form a later move cannot reinterpret (0024 §3.5).
 	for id, wantBody := range map[string]string{
-		"it-move-bare": "Explains [the metric](/it-move-dst/metric.md).",
-		"it-move-uri":  "Explains ochakai://it-move-dst/metric further.",
+		"it-move-bare":        "Explains [the metric](/it-move-dst/metric.md).",
+		"it-move-src/sibling": "Explains [the metric](/it-move-dst/metric.md) further.",
 	} {
 		k, err := s.Get(ctx, id)
 		if err != nil {

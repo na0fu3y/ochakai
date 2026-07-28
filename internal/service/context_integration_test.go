@@ -64,7 +64,7 @@ func TestContextIntegration(t *testing.T) {
 		// enforces (design doc 0036 §3.10).
 		{Type: domain.TypeComputations, ID: queryID, Title: "monthly numbers", Runtime: "bigquery"},
 		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
-			Body: "Explains ochakai://" + metricID + "."},
+			Body: "Explains [the metric](/" + metricID + ".md)."},
 		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
 			Status: domain.StatusDraft,
 			Body:   "Explains [the metric](/" + metricID + ".md)."},
