@@ -23,7 +23,10 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 実装は後続 PR(§1.1)で、破壊的変更は 0.15.0 の次のリリースに束ねて出す。
 §3.11 の「named フィルタは式への糖衣になる」は
 [0047](0047-fm-carries-unnamed-keys.md) が改訂した — named フィルタは
-typed column のまま残り、`fm.` が列を持つ 5 キーを拒否する
+typed column のまま残り、`fm.` が列を持つ 5 キーを拒否する。
+実装が誤りを明らかにした §2.4 / §3.3 / §3.5 / §3.14 / §4 は、
+[0048](0048-decision-records-for-wire-contracts.md) §2.3 に従い
+番号を足さずに本ドキュメントを直接直した(未リリースの決定)
 Date: 2026-07-28
 
 ## 1. 目的
@@ -125,14 +128,19 @@ OKF 互換だけを制約に置いて残りを数えると、写像は 5 か所�
 ### 2.4 継承する決定
 
 本ドキュメントは 0043 の以下を一字も変えずに引き継ぐ: §2.1(文書が唯一の正)、
-§2.2(知識文書とインスタンス台帳の分離)、§3.2(status は OKF の 3 値、検証は
-追記台帳)、§3.3(却下は台帳、rejected という status は無い)、§3.6(構造化
+§2.2(知識文書とインスタンス台帳の分離)、§3.3(却下は台帳、rejected という
+status は無い)、§3.6(構造化
 オブジェクト内側の未知キーも保存する)、§3.8(actor は `human:` / `process:`)、
 §2.4 が挙げる継承(0017 / 0019 §2 / 0022 / 0038 / 0024 / 0027)、そして §5 の
 うち「Git / GCS を保存にしない」「型付き JSON の書き込み面を残さない」
 「部分更新を作らない」「退役綴りのデータ移行をしない」「provenance の
 読み戻し・実行・dereference・採点をしない」。0001 の中核制約(LLM ゼロ・
 SQL 非実行)と 0002 / 0003 にも触れない。
+
+0043 §3.2 は**一字違わずではない**。「status は OKF の 3 値、検証は追記
+台帳」はそのまま引き継ぐが、同§末尾の「status 省略は create なら draft、
+update なら現状維持」は §3.9 が置き換える — 省略は省略のまま保存され、
+既定値は投影が SPEC §5.4 に従って読む。
 
 ## 3. 決定
 
@@ -192,14 +200,31 @@ SQL 非実行)と 0002 / 0003 にも触れない。
 「このエントリのファイル」は、リンク(0024)と同じ導出関係である:
 
 1. その概念の本文 markdown が指す、バンドル内の非概念パス、
-2. 加えて `<id>/` 名前空間の直下にあるオブジェクト(0013 の慣習)。
+2. 加えて `<id>/` 名前空間の直下にあるオブジェクトのうち**概念でないもの**
+   (0013 の慣習)。
+
+2 の「概念でないもの」は実装で必要になった限定である。SPEC §2 は
+`metrics/revenue/breakdown.md` に `metrics/revenue/breakdown` という
+concept id を与え、SPEC §11 は非予約 `.md` が type を持つことを要求する。
+つまりディレクトリ下の `.md` は誰かの根拠ではなく、住所と履歴を自分で
+持つ知識である。0008 の「`<id>/<name>` はそのエントリの**根拠**が住む場所」
+という枠組みは変わらない — 根拠は知識ではない。
+
+概念とディレクトリが同じ名前を持つこと(`metrics/revenue.md` と
+`metrics/revenue/`)は許す。ファイルシステム上も別のエントリであり、
+SPEC §3 は配置を producer のものとし、§11 の「拒否してはならない」一覧に
+名前の話は無い。`index.md` は §3.7 の節見出し(サブディレクトリ / 概念 /
+ファイル)で両者を区別するので、記法は増えない。
 
 - 保存された関係が無くなるので、`attach` / `detach` という操作も
   `okf_path` 列も消える。ファイルを置くことは `PUT` であり、外すことは
   `DELETE` である。
 - move(0021)は概念の id を書き換え、参照元の本文を書き換え、
-  **`<id>/` 名前空間のオブジェクトも一緒に動かす**。名前空間が住所の一部で
-  ある以上、置いていくほうが驚きが大きい。
+  **`<id>/` 名前空間のファイルも一緒に動かす**。名前空間が住所の一部で
+  ある以上、置いていくほうが驚きが大きい。名前空間下の**概念は動かない** —
+  それは自分の住所・履歴・台帳・move を持つ別のエントリであり、0021 の
+  move は 1 エントリの改名だからである。一括改名が要るならそれは
+  `move --recursive` という別の判断になる。
 - 0020 の添付ベクトル検索は残る。鍵が `(entry, name)` から**パス**になり、
   ランク融合の第 3 リストは「ファイル」のリストになる。ochakai が中身を
   解釈しない(OCR しない・PDF からテキストを抜かない)姿勢は変わらない。
@@ -228,7 +253,7 @@ GET|PUT|DELETE  /api/v1/bundle/{path...}
 GET             /api/v1/search
 GET             /api/v1/context
 POST            /api/v1/move
-POST|DELETE     /api/v1/verify/{id...}
+POST            /api/v1/verify/{id...}
 POST|DELETE     /api/v1/reject/{id...}
 GET|POST        /api/v1/usage/{id...}
 POST            /api/v1/reembed
@@ -251,9 +276,14 @@ POST            /api/v1/reembed
   あり、`prefix` は URL そのものになる。
 - `?rev=N` はそのリビジョンのスナップショット、`?history` は
   そのオブジェクトの `log.md`(JSON なら台帳の行)。
-- **書き込み**は `PUT /api/v1/bundle/{path}`。本文はバイト列そのもの
-  (`text/markdown` なら概念、それ以外はファイル)。`If-None-Match: *` /
-  `If-Match` は 0030 のまま。予約ファイルへの PUT は **409**(導出面)。
+- **書き込み**は `PUT /api/v1/bundle/{path}`。本文はバイト列そのもの。
+  概念かファイルかを決めるのは **frontmatter の `type` キー**であって
+  `Content-Type` ではない: SPEC §11 が type を「概念が持つもの」と定めて
+  いるので、`.md` でも type が無ければそれは壊れた概念ではなく
+  **たまたま markdown なファイル**であり、§3.2 のとおり来た場所に戻る。
+  `If-None-Match: *` / `If-Match` は 0030 のまま。概念への書き込みは
+  `/api/v1/knowledge/{id}` と同一の実装を通る — 住所は第二のサーフェス
+  ではない。予約ファイルへの PUT は **409**(導出面)。
 - **削除**は `DELETE`(ソフト削除)、`?purge=true` で 0031 の purge。
 
 **`GET /api/v1/search`** は旧 `GET /api/v1/knowledge` の一覧である。名前を
@@ -383,11 +413,23 @@ human-reviewed`** を出す。検証台帳(0043 §3.2)から導く: `human:` の
   `ochakai ls`(旧 `browse`)は生成された `index.md`、`ochakai log` は
   `log.md` を出す。`attach` / `detach` は `put` / `rm` に吸収される。
   `export` / `import` はほぼ恒等の tar 転送になる。
-- **MCP = yes。** ツールは 5 本: `search_knowledge` / `get_context` /
-  `get_knowledge` / `put_knowledge`(`{path, document}`)/ `report_outcome`。
-  ファイルの読み書きは**出さない** — エージェントが増やすべきものではなく、
-  0015 §2 のツール数予算に照らして人の面(CLI / Web UI)で足りる。
-  verify / reject も従来どおり出さない。
+- **MCP = yes。** ツールは 8 本: `search_knowledge` / `get_context` /
+  `get_knowledge` / `put_knowledge`(`{path, document}`)/ `report_outcome` /
+  `delete_knowledge` / `get_knowledge_usage` / `get_attachment`。
+  verify / reject は従来どおり出さない。ファイルの**書き込み**も出さない —
+  エージェントが増やすべきものではない。
+
+  当初は 5 本とし、後ろの 3 本を落とすとしていた。実測が反対した:
+  `tools/list` の JSON は全体 33.5 KB で、落とす 3 本は合計 3.3 KB
+  (9.8%)にすぎず、一方 `create_knowledge` + `update_knowledge` →
+  `put_knowledge` の統合だけで約 6 KB が浮く。つまり**節約は統合で取れて
+  おり**、残り 3 本は能力を失うだけだった — 0015 §3.1 のキュレーション
+  保護規則(`delete_knowledge` が対象)、0025 の書き戻しループ
+  (`get_knowledge_usage`)、0008 / 0013 の添付読み取り(`get_attachment`)を
+  同時に撤回することになる。統合の側には数以外の理由がある: 0043 §3.5 に
+  より書き込みは「エントリが何を言うべきか」の表明であって存在の有無の
+  表明ではないので、書き込み面は 1 つが正しい姿である。
+  `get_attachment` は §3.3 の後、引数が `(entry, name)` からパスになる。
 - **Web UI = yes。** サイドバーは `index.md` の JSON 表現、詳細は投影、
   編集は文書エディタ([0044](0044-web-ui-edits-documents.md) がフォーム
   糖衣を撤去したので、経路は 1 本しかない)。0044 の判断は本ドキュメントを
@@ -407,7 +449,10 @@ human-reviewed`** を出す。検証台帳(0043 §3.2)から導く: `human:` の
   `/api/v1/search` になる。
 - 一覧・検索の応答が `verified: bool` ではなく `trust` を持つ。
   `?verified=` フィルタは `?trust=` になる。
-- MCP のツールが 5 本になり、`attach` 系は無くなる。
+- MCP の `create_knowledge` と `update_knowledge` が `put_knowledge` に
+  なる(§3.14)。`delete_knowledge` / `get_knowledge_usage` /
+  `get_attachment` は残る。`attach` 系はもともと MCP に無い
+  (0015 §3.1 が添付の**書き込み**を最初から出していない)。
 - ETag が「正準文書のハッシュ」から「保存バイト列のハッシュ」になる。
   整形だけの編集で ETag が動くようになる(`generated.at` は動かない)。
 
