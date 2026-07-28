@@ -91,7 +91,7 @@ func TestSameContent(t *testing.T) {
 		return &Knowledge{
 			Type: TypeMetrics, ID: "revenue", Title: "Revenue",
 			Description: "monthly revenue", Tags: []string{"sales"},
-			Status: StatusVerified, StatusNote: "checked",
+			Status: StatusStable, StatusNote: "checked",
 			Sources: []Source{
 				{Resource: "policies/revenue.md", ID: "rev", UsageCount: intp(0)},
 				{Resource: "https://example.test/ga4", LastModified: "2026-05-30"},
@@ -114,7 +114,7 @@ func TestSameContent(t *testing.T) {
 	actor := Actor{Kind: ActorHuman, Name: "na0"}
 	same.CreatedBy = actor
 	same.CreatedAt, same.UpdatedAt = now, now
-	same.VerifiedBy, same.VerifiedAt = &actor, &now
+	same.Verifications = []Verification{{By: actor, At: now}}
 	same.Attachments = []Attachment{{Name: "chart.png"}}
 	// The same number decoded from JSONB arrives as float64, from YAML as
 	// int — both are the value 5.
@@ -293,8 +293,8 @@ func TestToTypesAndToStatuses(t *testing.T) {
 	if len(types) != 2 || types[0] != TypeMetrics || types[1] != Type("custom-type") {
 		t.Errorf("ToTypes = %v", types)
 	}
-	statuses := ToStatuses([]string{"verified", "draft"})
-	if len(statuses) != 2 || statuses[0] != StatusVerified || statuses[1] != StatusDraft {
+	statuses := ToStatuses([]string{"stable", "draft"})
+	if len(statuses) != 2 || statuses[0] != StatusStable || statuses[1] != StatusDraft {
 		t.Errorf("ToStatuses = %v", statuses)
 	}
 	if got := ToTypes(nil); len(got) != 0 {
@@ -302,72 +302,76 @@ func TestToTypesAndToStatuses(t *testing.T) {
 	}
 }
 
-// The OKF lifecycle vocabulary is three values to ochakai's four, and the
-// verified key — not the status — is what says a concept was confirmed
-// (SPEC §5.3-5.4, design doc 0036 §3.4).
+// The status vocabulary is OKF's own (design doc 0043 §3.2), so the
+// mapping is the identity on every value the spec defines and the whole
+// of what remains is what to do with the two cases it leaves open.
 func TestOKFStatusMapping(t *testing.T) {
 	for _, tc := range []struct {
-		in   Status
-		want string
+		raw       string
+		want      Status
+		wantKnown bool
 	}{
-		{StatusDraft, "draft"},
-		{StatusVerified, "stable"},
-		{StatusDeprecated, "deprecated"},
-		{StatusRejected, "deprecated"}, // OKF has no "never accepted"
+		{"draft", StatusDraft, true},
+		{"stable", StatusStable, true},
+		{"deprecated", StatusDeprecated, true},
+		{"", "", true}, // unset: the write path applies its own default
+		// The values ochakai wrote before 0.16 are not read back as
+		// themselves. "verified" was never an OKF lifecycle value, and
+		// "rejected" is a ruling rather than a stage — both arrive as
+		// unrecognized, which SPEC §11 says to accept as a draft rather
+		// than reject the document over.
+		{"verified", StatusDraft, false},
+		{"rejected", StatusDraft, false},
+		{"retired", StatusDraft, false},
 	} {
-		if got := OKFStatus(tc.in); got != tc.want {
-			t.Errorf("OKFStatus(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-
-	for _, tc := range []struct {
-		raw         string
-		hasVerified bool
-		want        Status
-		wantKnown   bool
-	}{
-		{"stable", true, StatusVerified, true},
-		{"stable", false, StatusDraft, true},
-		{"draft", false, StatusDraft, true},
-		{"draft", true, StatusDraft, true}, // an explicit draft stays one
-		{"deprecated", false, StatusDeprecated, true},
-		{"", false, "", true}, // unset: the write path applies its own default
-		{"", true, StatusVerified, true},
-		// The values ochakai wrote before v0.2 are no longer read back as
-		// themselves: OKF's vocabulary is the three above, and everything
-		// else is an unrecognized value (design doc 0036 §3.5).
-		{"verified", false, StatusDraft, false},
-		{"rejected", false, StatusDraft, false},
-		{"retired", false, StatusDraft, false},
-		// An unrecognized lifecycle value does not discard the trust
-		// signal: SPEC §5.3 keeps the two independent, which is also what
-		// lets a 0.12 bundle's verified entries import as verified — those
-		// documents carry verified_at.
-		{"retired", true, StatusVerified, false},
-		{"verified", true, StatusVerified, false},
-	} {
-		got, known := StatusFromOKF(tc.raw, tc.hasVerified)
+		got, known := StatusFromOKF(tc.raw)
 		if got != tc.want || known != tc.wantKnown {
-			t.Errorf("StatusFromOKF(%q, %v) = (%q, %v), want (%q, %v)",
-				tc.raw, tc.hasVerified, got, known, tc.want, tc.wantKnown)
+			t.Errorf("StatusFromOKF(%q) = (%q, %v), want (%q, %v)",
+				tc.raw, got, known, tc.want, tc.wantKnown)
 		}
 	}
 
-	// Every status ochakai can store survives a round-trip through the OKF
-	// vocabulary, except the one the mapping folds on purpose.
+	// A stable entry nobody confirmed keeps its lifecycle value. Until
+	// 0.16 it was demoted to a draft, because with confirmation held as a
+	// status there was no way to say "ready for consumption, unverified"
+	// (design doc 0043 §3.2).
+	if got, known := StatusFromOKF("stable"); got != StatusStable || !known {
+		t.Errorf("an unconfirmed stable entry read as (%q, %v)", got, known)
+	}
+
 	for _, s := range Statuses {
-		got, known := StatusFromOKF(OKFStatus(s), s == StatusVerified)
-		if !known {
-			t.Errorf("OKFStatus(%q) produced a value StatusFromOKF does not know", s)
+		if got, known := StatusFromOKF(string(s)); got != s || !known {
+			t.Errorf("round-trip of %q gave (%q, %v)", s, got, known)
 		}
-		if s == StatusRejected {
-			if got != StatusDeprecated {
-				t.Errorf("rejected should land as deprecated, got %q", got)
-			}
-			continue
+	}
+}
+
+// Ruling is what the curation guards ask, and it is no longer a property
+// of the status alone: two of the three rulings are ledgers now (design
+// doc 0043 §§3.2-3.3).
+func TestRuling(t *testing.T) {
+	at := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	v := []Verification{{By: Actor{Kind: ActorHuman, Name: "na0"}, At: at}}
+	r := &Rejection{By: Actor{Kind: ActorHuman, Name: "na0"}, At: at, Note: "double-counts"}
+	for _, tc := range []struct {
+		what string
+		k    Knowledge
+		want Ruling
+	}{
+		{"a plain draft", Knowledge{Status: StatusDraft}, ""},
+		{"a stable entry nobody checked", Knowledge{Status: StatusStable}, ""},
+		{"a verified draft", Knowledge{Status: StatusDraft, Verifications: v}, RulingVerified},
+		{"a deprecated entry", Knowledge{Status: StatusDeprecated}, RulingDeprecated},
+		{"a rejected entry", Knowledge{Status: StatusDraft, Rejection: r}, RulingRejected},
+		// Reject keeps the verifications, so both can be present; the
+		// later ruling is the one in force.
+		{"verified then rejected", Knowledge{Status: StatusStable, Verifications: v, Rejection: r}, RulingRejected},
+	} {
+		if got := tc.k.Ruling(); got != tc.want {
+			t.Errorf("%s: Ruling() = %q, want %q", tc.what, got, tc.want)
 		}
-		if got != s {
-			t.Errorf("round-trip of %q gave %q", s, got)
+		if got := tc.k.Curated(); got != (tc.want != "") {
+			t.Errorf("%s: Curated() = %v", tc.what, got)
 		}
 	}
 }

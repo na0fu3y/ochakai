@@ -57,7 +57,7 @@ func TestContextIntegration(t *testing.T) {
 	metricID, queryID, insightID, rejectedID := "metrics/"+id+"-revenue", "queries/"+id+"-monthly", "insights/"+id+"-reading", "insights/"+id+"-rejected"
 	entries := []*domain.Knowledge{
 		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
-			Status: domain.StatusVerified,
+			Status: domain.StatusStable,
 			Body:   "Answered by [the monthly query](/" + queryID + ".md)."},
 		// A verified query is an Attested Computation, and SPEC §10.2 makes
 		// runtime required on that type — the one schema the write path
@@ -66,13 +66,18 @@ func TestContextIntegration(t *testing.T) {
 		{Type: domain.TypeInsights, ID: insightID, Title: "how to read it",
 			Body: "Explains ochakai://" + metricID + "."},
 		{Type: domain.TypeInsights, ID: rejectedID, Title: "bad take",
-			Status: domain.StatusRejected,
+			Status: domain.StatusDraft,
 			Body:   "Explains [the metric](/" + metricID + ".md)."},
 	}
 	for _, k := range entries {
 		if _, err := svc.Create(ctx, k, actor); err != nil {
 			t.Fatalf("create %s: %v", k.ID, err)
 		}
+	}
+	// Rejecting is a ruling rather than a status (design doc 0043 §3.3),
+	// so the pack has to consult the ledger to keep the entry out.
+	if _, err := svc.Reject(ctx, rejectedID, "bad take", actor); err != nil {
+		t.Fatal(err)
 	}
 
 	res, err := svc.Context(ctx, ContextRequest{Query: id + "-revenue", Limit: 5})

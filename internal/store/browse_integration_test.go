@@ -29,6 +29,8 @@ func TestIntegrationBrowse(t *testing.T) {
 	for _, del := range []string{
 		`DELETE FROM knowledge WHERE id LIKE 'it-br-%'`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-br-%'`,
+		`DELETE FROM knowledge_rejection WHERE id LIKE 'it-br-%'`,
+		`DELETE FROM knowledge_verification WHERE id LIKE 'it-br-%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
 			t.Fatal(err)
@@ -42,10 +44,15 @@ func TestIntegrationBrowse(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	mk(domain.TypeComputations, "it-br-sales/monthly", domain.StatusVerified)
+	mk(domain.TypeComputations, "it-br-sales/monthly", domain.StatusStable)
 	mk(domain.TypeComputations, "it-br-sales/regions/apac", domain.StatusDraft)
 	mk(domain.TypeComputations, "it-br-top", domain.StatusDraft)
-	mk(domain.TypeComputations, "it-br-rejected", domain.StatusRejected)
+	mk(domain.TypeComputations, "it-br-rejected", domain.StatusDraft)
+	// A rejection is a ledger row, not a status (design doc 0043 §3.3),
+	// so browse has to consult the ledger to keep hiding it.
+	if _, err := s.Reject(ctx, "it-br-rejected", actor, "duplicate"); err != nil {
+		t.Fatal(err)
+	}
 	// "_" in the prefix must match literally, not as a LIKE wildcard:
 	// "it-br_x/deep" would match a LIKE pattern built from "it-br-…".
 	mk(domain.TypeComputations, "it-br_x/deep", domain.StatusDraft)
@@ -77,7 +84,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" || entries[0].Type != domain.TypeComputations ||
 		entries[0].Title != "t:it-br-sales/monthly" || entries[0].Description != "d:it-br-sales/monthly" ||
-		entries[0].Status != domain.StatusVerified {
+		entries[0].Status != domain.StatusStable {
 		t.Errorf("entries = %+v", entries)
 	}
 

@@ -144,23 +144,25 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 	if getErr != nil {
 		return err
 	}
+	ruling := k.Ruling()
 	var instead string
-	switch k.Status {
-	case domain.StatusRejected:
-		instead = "The rejection is the record of a decision and status_note says why; read it " +
+	switch ruling {
+	case domain.RulingRejected:
+		instead = "The rejection is the record of a decision and carries the reason; read it " +
 			"(get_knowledge) before proposing this again. If you disagree, create_knowledge a new " +
 			"entry at a different id and let a human judge it."
-	case domain.StatusVerified:
+	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
 			"re-verification feed. If you have something better, create_knowledge it at a " +
 			"different id and let a human judge it."
-	case domain.StatusDeprecated:
+	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, create_knowledge a draft at a different id that says why."
 	default:
-		instead = "Nobody has ruled on it: update_knowledge replaces it in place."
+		return fmt.Errorf("%w: %s is a live %s entry. Nobody has ruled on it: "+
+			"update_knowledge replaces it in place.", err, id, k.Status)
 	}
-	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, k.Status, instead)
+	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, ruling, instead)
 }
 
 func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.Actor, keepCuratedTombstones bool) (*domain.Knowledge, error) {
@@ -172,7 +174,6 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 	if k.Status == "" {
 		k.Status = domain.StatusDraft
 	}
-	s.applyVerification(k, nil, actor)
 	k.CreatedBy, k.UpdatedBy = actor, actor
 	if err := s.Store.Create(ctx, k, keepCuratedTombstones); err != nil {
 		return nil, err
@@ -216,8 +217,10 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	}
 	k.CreatedBy = old.CreatedBy
 	k.CreatedAt = old.CreatedAt
-	k.VerifiedBy, k.VerifiedAt = old.VerifiedBy, old.VerifiedAt
-	k.RejectedBy, k.RejectedAt = old.RejectedBy, old.RejectedAt
+	// The ledgers belong to the instance, not to the payload: an update
+	// replaces the document and rules on nothing (design doc 0043
+	// §§3.2-3.3). Carrying them over keeps the returned entry honest.
+	k.Verifications, k.Rejection = old.Verifications, old.Rejection
 	if k.SameContent(old) {
 		return old, false, nil
 	}
@@ -225,7 +228,6 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	// entry now stands by — OKF's generated.by (design doc 0036 §3.3).
 	// Unchanged writes return above and leave the old one in place.
 	k.UpdatedBy = actor
-	s.applyVerification(k, old, actor)
 	// Pass the precondition through so the write is also guarded against a
 	// concurrent update landing between the Get above and the write.
 	if err := s.Store.Update(ctx, k, actor, ifMatch); err != nil {
@@ -262,16 +264,17 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Tim
 	if err != nil {
 		return nil, err
 	}
+	ruling := k.Ruling()
 	var instead string
-	switch k.Status {
-	case domain.StatusVerified:
+	switch ruling {
+	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
 			"re-verification feed. If you have something better, create_knowledge a new draft."
-	case domain.StatusRejected:
-		instead = "The rejection is the record of a decision, and status_note says why; read it " +
+	case domain.RulingRejected:
+		instead = "The rejection is the record of a decision and carries the reason; read it " +
 			"before proposing this again. If you disagree, create_knowledge a new entry at a " +
 			"different id and let a human judge it."
-	case domain.StatusDeprecated:
+	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, create_knowledge a draft that says why."
 	default:
@@ -279,7 +282,7 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*time.Tim
 	}
 	return nil, Invalidf("cannot %s %s from this surface: it is %s, and this surface has no "+
 		"If-Match precondition to replace curated knowledge safely. %s A human changes curated "+
-		"entries from the web UI or CLI.", op, id, k.Status, instead)
+		"entries from the web UI or CLI.", op, id, ruling, instead)
 }
 
 // RefuseIfRevivingCurated reports an error when id names a soft-deleted
@@ -308,16 +311,17 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	if err != nil {
 		return err
 	}
+	ruling := k.Ruling()
 	var instead string
-	switch k.Status {
-	case domain.StatusRejected:
-		instead = "The rejection is the record of a decision and status_note says why; read it " +
-			"(search_knowledge with status=rejected) before proposing this again. If you disagree, " +
+	switch ruling {
+	case domain.RulingRejected:
+		instead = "The rejection is the record of a decision and carries the reason; read it " +
+			"(search_knowledge with rejected=true) before proposing this again. If you disagree, " +
 			"create_knowledge a new entry at a different id and let a human judge it."
-	case domain.StatusVerified:
+	case domain.RulingVerified:
 		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
 			"different id and let a human judge it against the history this id still holds."
-	case domain.StatusDeprecated:
+	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, create_knowledge a draft at a different id that says why."
 	default:
@@ -325,7 +329,7 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	}
 	return Invalidf("cannot create %s from this surface: the id holds a deleted %s entry, and "+
 		"creating here would revive it as a fresh draft, replacing that ruling. %s A human reuses "+
-		"the id from the web UI or CLI.", id, k.Status, instead)
+		"the id from the web UI or CLI.", id, ruling, instead)
 }
 
 func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
@@ -335,21 +339,28 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }
 
-// Verify records a verification against the entry as it stands: the
-// reviewer becomes verified_by and verified_at is now, whether the entry
-// was a draft being promoted or a verified entry being re-checked.
+// Verify appends a verification against the entry as it stands, whether
+// this is the first confirmation or the tenth re-check.
 //
-// The second case is the one Update could not express, and without it
+// Re-checking is the case Update could not express, and without it
 // neither review feed had an exit (design doc 0025 §6): a reviewer who
 // re-read a verified entry and found it still correct had no way to say
 // so, so it stayed at the top of the verification-age feed, and an entry
 // that was reported wrong and then fixed stayed in the re-verification
 // feed for good. A queue nobody can empty stops being read.
 //
+// It does not touch the document, so the entry's status and its ETag stay
+// put (design doc 0043 §3.2). Promoting a draft to stable is a separate
+// edit by a writer; confirming and publishing are different acts, and a
+// draft somebody checked is a state OKF can express (SPEC §§5.3-5.4).
+//
+// There is no promotion restriction (design doc 0002): anyone who can
+// reach ochakai may verify, and the ledger records who did — trust is
+// judged from provenance.
+//
 // Not an MCP tool. Verification is the human ruling the write-back loop
-// turns on; an agent's route to the same effect is create_knowledge with
-// status verified, which records the agent as verified_by (design docs
-// 0002, 0015 §3.1).
+// turns on; an agent that finds an entry wrong reports the outcome or
+// drafts a replacement (design docs 0015 §3.1, 0025).
 func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err
@@ -360,6 +371,47 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 		return nil, err
 	}
 	s.Log.Info("knowledge verified", "id", id, "actor", actor.String())
+	return k, nil
+}
+
+// Reject records that a reviewer turned the entry down, with the reason.
+// Like Verify it is a ruling and not an edit: the document keeps its
+// lifecycle status and its ETag, and the entry drops out of searches that
+// did not ask for rejected ones (design doc 0043 §3.3).
+//
+// This is the memory of no that the write-back loop is built on (design
+// doc 0001 §9.1) — it is what stops an agent re-proposing knowledge a
+// human already declined. Not an MCP tool, for the same reason Verify is
+// not: it is the human's side of the loop.
+func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	if len(note) > maxRejectionNote {
+		return nil, Invalidf("rejection note exceeds %d bytes", maxRejectionNote)
+	}
+	id = domain.Normalize(id)
+	k, err := s.Store.Reject(ctx, id, actor, note)
+	if err != nil {
+		return nil, err
+	}
+	s.Log.Info("knowledge rejected", "id", id, "actor", actor.String())
+	return k, nil
+}
+
+// LiftRejection withdraws a ruling, returning the entry to the ordinary
+// pool. ErrNotFound when the entry carries no rejection: lifting nothing
+// is a mistake worth reporting rather than a silent success.
+func (s *Service) LiftRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	id = domain.Normalize(id)
+	k, err := s.Store.LiftRejection(ctx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	s.Log.Info("knowledge rejection lifted", "id", id, "actor", actor.String())
 	return k, nil
 }
 
@@ -401,33 +453,6 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 		return s.Store.Get(ctx, id)
 	}
 	return s.Store.Move(ctx, id, newID, actor)
-}
-
-// applyVerification stamps verification and rejection provenance. There is
-// no promotion restriction (design doc 0002): anyone who can reach ochakai
-// may verify or reject, and verified_by / rejected_by record who did —
-// trust is judged from provenance.
-//
-// The timestamp comes from store.NowStored, like every other entity
-// timestamp (design doc 0030 §3.2): time.Now()'s nanoseconds do not
-// survive timestamptz, so a write's response carried a verified_at that
-// no later read of the same entry would ever return.
-func (s *Service) applyVerification(k *domain.Knowledge, old *domain.Knowledge, actor domain.Actor) {
-	now := store.NowStored()
-	wasVerified := old != nil && old.Status == domain.StatusVerified
-	if k.Status == domain.StatusVerified && !wasVerified {
-		k.VerifiedBy, k.VerifiedAt = &actor, &now
-	}
-	if k.Status != domain.StatusVerified {
-		k.VerifiedBy, k.VerifiedAt = nil, nil
-	}
-	wasRejected := old != nil && old.Status == domain.StatusRejected
-	if k.Status == domain.StatusRejected && !wasRejected {
-		k.RejectedBy, k.RejectedAt = &actor, &now
-	}
-	if k.Status != domain.StatusRejected {
-		k.RejectedBy, k.RejectedAt = nil, nil
-	}
 }
 
 // normalizeKeys rewrites a write payload's byte-compared keys — the id
@@ -670,7 +695,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	seen := map[string]bool{}
 	var entries []domain.Knowledge
 	addFetched := func(k *domain.Knowledge) {
-		if len(entries) >= 2*limit || seen[k.ID] || k.Status == domain.StatusRejected {
+		if len(entries) >= 2*limit || seen[k.ID] || k.Rejection != nil {
 			return // rejected companions stay out of the pack
 		}
 		seen[k.ID] = true
@@ -999,6 +1024,11 @@ func (s *Service) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 // report; notes live in raw knowledge_event rows (pruned after 180 days).
 const maxOutcomeNote = 2000
 
+// maxRejectionNote bounds a rejection's reason, matching the outcome
+// note: both are a human sentence or two explaining a judgment, and
+// neither is a place to paste a transcript.
+const maxRejectionNote = 2000
+
 // ReportOutcome records a worked/failed report against one entry and
 // returns the updated usage totals. The last edge of the write-back
 // loop: an agent that ran a golden query and got a wrong number can say
@@ -1059,7 +1089,7 @@ func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 	}
 	out := make([]domain.SearchHit, 0, len(byKey))
 	for _, e := range byKey {
-		if e.hit.Status == domain.StatusVerified {
+		if e.hit.Verified() {
 			e.score += 0.002
 		}
 		e.hit.Score = e.score

@@ -174,17 +174,19 @@ Flags:
   -prefix path
     	only entries under this path, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands
   -status value
-    	filter by status: draft|verified|deprecated|rejected (repeatable)
+    	filter by status: draft|stable|deprecated (repeatable)
   -tag value
     	filter by tag (repeatable)
   -type value
     	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -verified true
+    	true for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value
 
 Examples:
   ochakai context "why did revenue drop in March?"
-  ochakai context "monthly revenue" --type 'Attested Computation' --status verified --json
+  ochakai context "monthly revenue" --type 'Attested Computation' --verified true --json
   ochakai context "$PROMPT" --budget 4000   # hooks: cap the injected bytes
   ochakai context "activation rate" --prefix teams/growth --prefix company
 ```
@@ -416,6 +418,35 @@ Examples:
   ochakai reembed --once       # one pass, then report what is left
 ```
 
+## ochakai reject
+
+```
+Usage: ochakai reject [flags] <id>
+
+Record that an entry was reviewed and not accepted, with the reason.
+Rejected entries are hidden from search unless asked for
+(`search --rejected`), which is how an agent checks whether a proposal
+was already turned down before making it again.
+It does not edit the entry: the lifecycle status and the ETag stay put.
+A rejection is this instance's ruling, so an exported bundle carries the
+entry's real status rather than folding the ruling onto deprecated.
+Use --lift to withdraw one.
+
+Flags:
+  -json
+    	print the entry as JSON
+  -lift
+    	withdraw the rejection instead of recording one
+  -note string
+    	why it was not accepted — the next agent reads this before proposing again
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai reject metrics/bad-revenue --note "double-counts refunds; see policies/revenue-recognition"
+  ochakai reject metrics/bad-revenue --lift
+```
+
 ## ochakai report
 
 ```
@@ -496,25 +527,29 @@ Flags:
     	max results (server default 10, max 50; with --sort: 100, max 1000)
   -prefix path
     	only entries under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
+  -rejected
+    	only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results
   -sort string
     	list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first
   -source resource
     	only entries citing this resource (exact match against sources[].resource) — what derives from one piece of material
   -status value
-    	filter by status: draft|verified|deprecated|rejected (repeatable)
+    	filter by status: draft|stable|deprecated (repeatable)
   -tag value
     	filter by tag (repeatable)
   -type value
     	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -verified true
+    	true for entries somebody confirmed, false for ones nobody has — independent of --status, which is the lifecycle value
 
 Examples:
-  ochakai search "gross margin" --type Metric --type 'Glossary Term' --status verified
+  ochakai search "gross margin" --type Metric --type 'Glossary Term' --verified true
   ochakai search churn --json | jq '.hits[0].attrs'
-  ochakai search --sort verified_at --type 'Attested Computation' --status verified --limit 100
+  ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100
   ochakai search --sort usage --status draft --limit 50   # review queue
-  ochakai search --sort failed --status verified            # re-verification queue
+  ochakai search --sort failed --verified true              # re-verification queue
   ochakai search --sort stale_after                         # past their declared expiry
   ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
@@ -619,12 +654,14 @@ Examples:
 ```
 Usage: ochakai verify [flags] <id>
 
-Record a verification against the entry as it stands: you become
-verified_by and verified_at is stamped now. Promotes a draft, and
-re-affirms an entry that is already verified — which is what takes it
-out of both review feeds (--sort verified_at, --sort failed). Verifying
-a rejected entry clears the rejection: the status becomes verified and
-rejected_by/rejected_at are dropped (the revision history keeps both).
+Append a verification against the entry as it stands: you and the time
+are added to its ledger. The first confirmation and the tenth re-check
+are the same command, and re-checking is what takes an entry out of
+both review feeds (--sort verified_at, --sort failed).
+It does not edit the entry: the lifecycle status and the ETag stay put,
+because confirming knowledge and publishing it are different acts. Use
+`update` to move a draft to stable.
+Verifying a rejected entry lifts the rejection.
 
 Flags:
   -json
@@ -634,7 +671,7 @@ Flags:
 
 Examples:
   ochakai verify metrics/revenue
-  ochakai verify metrics/revenue --json | jq -r .verified_at
+  ochakai verify metrics/revenue --json | jq -r '.verifications[-1].at'
 ```
 
 ## ochakai whoami

@@ -21,8 +21,8 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
   entries rank higher), expanded one hop through links so the insight
   explaining a metric arrives with it. Start here; use search/get below
   for precise lookups.
-- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Playbook|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|'API Endpoint'|Reference] [--status verified]`
-  — one hit per line: score, uri, status, title. Trust `verified` entries;
+- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Playbook|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|'API Endpoint'|Reference] [--verified true]`
+  — one hit per line: score, uri, status, title. Trust verified entries;
   judge `draft` entries by their provenance (`--json` shows `created_by`).
 - `ochakai get <id>` — full entry as markdown (YAML frontmatter +
   body). Follow the body's markdown links to related entries — a link to

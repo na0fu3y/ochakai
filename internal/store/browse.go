@@ -40,8 +40,12 @@ type BrowseEntry struct {
 
 // browseNotRejected mirrors Filter's default: rejected entries are
 // knowledge that was never accepted and must not resurface while
-// browsing, exactly as in search.
-const browseNotRejected = `deleted_at IS NULL AND status <> 'rejected'`
+// browsing, exactly as in search. A rejection is a ledger row rather than
+// a status (design doc 0043 §3.3), so the id is qualified — the ledger
+// has an id column of its own, and a bare one inside the subquery would
+// bind to it and match everything.
+const browseNotRejected = `deleted_at IS NULL
+	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = knowledge.id)`
 
 // maxBrowseEntries bounds one directory listing. A directory this wide
 // is a modeling smell, not a paging problem — the caller renders a

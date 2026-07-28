@@ -371,7 +371,7 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 		Tags:        texts(k.Tags),
 		Sources:     sourcesOut(k.Sources),
 		UsageWindow: windowOut(k.UsageWindow),
-		Status:      text(domain.OKFStatus(k.Status)),
+		Status:      text(string(k.Status)),
 		StatusNote:  text(k.StatusNote),
 		StaleAfter:  text(k.StaleAfter),
 		Runtime:     text(k.Runtime),
@@ -388,20 +388,23 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 	if k.Attester != nil {
 		fm.Attester = &attester{Resource: text(k.Attester.Resource)}
 	}
-	// Status verified always writes a verified entry, even for an entry
-	// carrying no verification actor. The key's presence is what a v0.2
-	// consumer reads the trust tier from (SPEC §5.3), and what carries
-	// "verified" back through an import (design doc 0036 §3.4) — an
-	// exported status of stable with no verified key means unverified, and
-	// would come back as a draft.
-	if k.Status == domain.StatusVerified || k.VerifiedAt != nil || k.VerifiedBy != nil {
-		fm.Verified = []event{actorEvent(k.VerifiedBy, k.VerifiedAt)}
+	// The whole verification ledger, oldest first — SPEC §5.2's list, with
+	// as many entries as the instance recorded. The key's presence is what
+	// a v0.2 consumer reads the trust tier from (§5.3); its absence means
+	// unverified, so an entry with no verifications writes no key at all.
+	for i := range k.Verifications {
+		v := &k.Verifications[i]
+		fm.Verified = append(fm.Verified, actorEvent(&v.By, &v.At))
 	}
-	if k.RejectedBy != nil {
-		fm.RejectedBy = text(k.RejectedBy.String())
-	}
-	if k.RejectedAt != nil {
-		fm.RejectedAt = text(k.RejectedAt.UTC().Format(time.RFC3339))
+	// A rejection is this instance's ruling and not a portable claim, so
+	// it stays an ochakai extension key that import never reads back
+	// (design docs 0009, 0043 §3.3). The status beside it is now the
+	// entry's real lifecycle value rather than deprecated, which is what
+	// the ruling used to be folded onto — an assertion ("this was once
+	// current") that a rejection specifically denies.
+	if k.Rejection != nil {
+		fm.RejectedBy = text(k.Rejection.By.String())
+		fm.RejectedAt = text(k.Rejection.At.UTC().Format(time.RFC3339))
 	}
 
 	fmYAML, err := yaml.Marshal(&fm)

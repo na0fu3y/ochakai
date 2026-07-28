@@ -495,12 +495,18 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	}
 
 	first := verify()
-	if first.Status != domain.StatusVerified || first.VerifiedAt == nil {
-		t.Fatalf("verify: %+v", first)
+	if len(first.Verifications) != 1 {
+		t.Fatalf("verify appended nothing: %+v", first.Verifications)
 	}
+	// Re-verifying appends rather than replacing, so the ledger answers
+	// "how often, and by whom" (design doc 0043 §3.2).
 	second := verify()
-	if second.VerifiedAt == nil || !second.VerifiedAt.After(*first.VerifiedAt) {
-		t.Errorf("re-verify did not refresh verified_at: %v -> %v", first.VerifiedAt, second.VerifiedAt)
+	if len(second.Verifications) != 2 {
+		t.Fatalf("re-verify replaced the ledger: %+v", second.Verifications)
+	}
+	if !second.LastVerified().At.After(first.LastVerified().At) {
+		t.Errorf("re-verify did not move the newest verification: %v -> %v",
+			first.LastVerified().At, second.LastVerified().At)
 	}
 
 	resp, err = http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)

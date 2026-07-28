@@ -94,7 +94,7 @@ instance:
   instance observed, never what a document asserts (design doc 0009).
 - **Usage counts and outcome reports do not travel** at all.
 
-What *does* survive is the knowledge and its trust: `status: verified`
+What *does* survive is the knowledge and its trust: the verifications
 came back verified, through the OKF `verified` key rather than an ochakai
 alias, along with every envelope field.
 

@@ -68,8 +68,8 @@ index — about 16 ms across 5000 entries.
 ### Can an agent overwrite or delete knowledge a human verified?
 
 Not over MCP. `create_knowledge`, `update_knowledge` and
-`delete_knowledge` all refuse an entry whose status is `verified`,
-`rejected` or `deprecated`, and the refusal says what to do instead:
+`delete_knowledge` all refuse an entry a human has ruled on — verified,
+rejected or deprecated — and the refusal says what to do instead:
 
 > cannot update metrics/revenue from this surface: it is verified, and
 > this surface has no If-Match precondition to replace curated knowledge

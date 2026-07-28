@@ -108,7 +108,7 @@ func TestBrowseBuildsQueryAndDecodesLevels(t *testing.T) {
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(BrowseResult{
 			Dirs:    []BrowseDir{{Name: "sales", Count: 4}},
-			Entries: []BrowseEntry{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusVerified}},
+			Entries: []BrowseEntry{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusStable}},
 		})
 	})
 	res, err := c.Browse(context.Background(), "queries/")

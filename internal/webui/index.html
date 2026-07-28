@@ -238,7 +238,11 @@
     border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
   }
   .badge.draft { color: var(--draft-fg); background: var(--draft-bg); border-color: var(--draft-bd); }
-  .badge.verified { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
+  .badge.stable { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
+  /* Confirmation is not a status, so it gets its own chip beside the
+     lifecycle badge rather than replacing it (design doc 0043 §3.2). */
+  .badge.verified-mark { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
+  .badge.rejected-mark { color: var(--rejected-fg); background: var(--rejected-bg); border-color: var(--rejected-bd); }
   .badge.deprecated { color: var(--deprecated-fg); background: var(--deprecated-bg); border-color: var(--deprecated-bd); }
   .badge.rejected { color: var(--rejected-fg); background: var(--rejected-bg); border-color: var(--rejected-bd); }
   /* The status badge doubles as its own picker: one control shows the
@@ -358,8 +362,8 @@
   }
   .browse .tree-entry:hover { background: var(--code-bg); text-decoration: none; }
   /* Title + a short status hint: the title is the row (the id is in the
-     tooltip and the URL), and only non-verified states get a colored dot
-     — verified is the norm and needs no flag. */
+     tooltip and the URL), and only non-stable states get a colored dot
+     — stable is the norm and needs no flag. */
   .browse .tree-entry .entry-title {
     color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
@@ -483,7 +487,10 @@ const TYPE_ICONS = { 'Metric': '📊', 'Attested Computation': '🧮', 'Skill': 
 const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
-const STATUSES = ['draft', 'verified', 'deprecated', 'rejected'];
+// OKF's lifecycle vocabulary (SPEC §5.4). Whether anyone confirmed an
+// entry, and whether anyone turned it down, are ledgers rather than
+// statuses and have their own actions (design doc 0043 §§3.2-3.3).
+const STATUSES = ['draft', 'stable', 'deprecated'];
 
 // Types match case-insensitively everywhere the server compares them
 // (design doc 0023 §3.3), so the type-conditional parts of this page do
@@ -526,6 +533,15 @@ function actorStr(a) {
   if (!a || !a.name) return '';
   return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name + (a.via ? ' via ' + a.via : '');
 }
+// The ledgers a read carries beside the document (design doc 0043
+// §§3.2-3.3). Verification is plural and stored oldest-first, so the
+// newest is the last one.
+function lastVerification(entry) {
+  const vs = entry.verifications || [];
+  return vs.length ? vs[vs.length - 1] : null;
+}
+function isVerified(entry) { return (entry.verifications || []).length > 0; }
+
 // Whole days since an ISO timestamp (null for unparseable input).
 function daysSince(s) {
   if (!s) return null;
@@ -790,7 +806,7 @@ view.addEventListener('click', e => {
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false };
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false, verified: false, rejected: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -807,7 +823,17 @@ function viewExplore() {
     <label class="chip"><input type="checkbox" data-type="${esc(t)}" aria-label="type ${esc(t)}" checked>
       <span class="type-ico">${icon(t)}</span>${esc(t)}</label>`).join('');
   const statusChips = STATUSES.map(s => `
-    <label class="chip"><input type="checkbox" data-status="${s}" aria-label="status ${s}" ${explore.statuses.has(s) ? 'checked' : ''}>${s}</label>`).join('');
+    <label class="chip"><input type="checkbox" data-status="${s}" aria-label="status ${s}" ${explore.statuses.has(s) ? 'checked' : ''}>${s}</label>`).join('')
+    // Two rulings, asked independently of the lifecycle value (design doc
+    // 0043 §§3.2-3.3). Rejected is the only way to see entries a human
+    // turned down: they are hidden from every other listing, which is the
+    // point — and being able to read them is how somebody checks what was
+    // already declined.
+    + `
+    <label class="chip" title="Only entries somebody has confirmed"><input type="checkbox" id="f-verified"
+      aria-label="verified only" ${explore.verified ? 'checked' : ''}>✓ verified</label>
+    <label class="chip" title="Only entries a human reviewed and turned down — hidden everywhere else"><input type="checkbox" id="f-rejected"
+      aria-label="rejected only" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
   // Filters collapse into a disclosure on narrow screens; keep it open on
   // wide ones (the summary is hidden there, so it could never be reopened).
   const wide = matchMedia('(min-width: 761px)').matches;
@@ -868,6 +894,9 @@ function viewExplore() {
     cb.addEventListener('change', () => { cb.checked ? explore.types.add(cb.dataset.type) : explore.types.delete(cb.dataset.type); rerun(); }));
   document.querySelectorAll('.fb-row input[data-status]').forEach(cb =>
     cb.addEventListener('change', () => { cb.checked ? explore.statuses.add(cb.dataset.status) : explore.statuses.delete(cb.dataset.status); rerun(); }));
+  for (const [sel, key] of [['#f-verified', 'verified'], ['#f-rejected', 'rejected']]) {
+    $(sel).addEventListener('change', () => { explore[key] = $(sel).checked; rerun(); });
+  }
   $('#f-type-extra').addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.value.trim()) { explore.types.add(e.target.value.trim()); viewExplore(); }
   });
@@ -924,6 +953,8 @@ async function runSearch() {
   else if (!explore.source) p.set('sort', 'usage');
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
+  if (explore.verified) p.set('verified', 'true');
+  if (explore.rejected) p.set('rejected', 'true');
   if (explore.tag) p.append('tag', explore.tag);
   // A path scope is a filter like tag, so it rides along with whatever
   // mode the chain above picked (design doc 0041 §2.1). The UI takes one
@@ -1096,7 +1127,7 @@ function levelHTML(res, prefix) {
        title="${esc(e.id)} · ${esc(e.status)}">
       <span class="type-ico" title="${esc(e.type)}">${icon(e.type)}</span>
       <span class="entry-title">${esc(displayTitle(e))}</span>
-      ${e.status === 'verified' ? '' : `<span class="status-dot ${esc(e.status)}" title="${esc(e.status)}"></span>`}
+      ${e.status === 'stable' ? '' : `<span class="status-dot ${esc(e.status)}" title="${esc(e.status)}"></span>`}
     </a>`).join('');
   return dirs + entries;
 }
@@ -1438,8 +1469,11 @@ async function viewDetail(id) {
 
   const prov = [
     entry.created_by && entry.created_by.name ? `created by ${actorStr(entry.created_by)} ${fmtDate(entry.created_at)}` : `created ${fmtDate(entry.created_at)}`,
-    entry.verified_by && entry.verified_by.name ? `verified by ${actorStr(entry.verified_by)} ${fmtDate(entry.verified_at)}` : '',
-    entry.rejected_by && entry.rejected_by.name ? `rejected by ${actorStr(entry.rejected_by)} ${fmtDate(entry.rejected_at)}` : '',
+    lastVerification(entry)
+      ? `verified by ${actorStr(lastVerification(entry).by)} ${fmtDate(lastVerification(entry).at)}`
+        + ((entry.verifications || []).length > 1 ? ` (${entry.verifications.length} verifications)` : '')
+      : '',
+    entry.rejection ? `rejected by ${actorStr(entry.rejection.by)} ${fmtDate(entry.rejection.at)}` : '',
     // updated_by is OKF's generated.by: who the content stands by now,
     // which is not always who created it (design doc 0036 §3.3).
     entry.updated_at && entry.updated_at !== entry.created_at
@@ -1471,15 +1505,20 @@ async function viewDetail(id) {
           ${STATUSES.map(s => `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </span>
+      ${isVerified(entry) ? '<span class="badge verified-mark" title="Somebody confirmed this entry">✓ verified</span>' : ''}
+      ${entry.rejection ? '<span class="badge rejected-mark" title="Reviewed and not accepted">rejected</span>' : ''}
       ${tags}
       <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">Edit</a>
         <details class="menu" id="more-menu">
           <summary class="btn small" title="More actions" aria-label="More actions">⋯</summary>
           <div class="menu-body">
-            ${entry.status === 'verified'
-              ? `<button id="act-reverify" title="Checked again and still right — stamps verified_at now, which is what clears the review feeds">Re-verify</button>`
-              : ''}
+            <button id="act-verify" title="${isVerified(entry)
+              ? 'Checked again and still right — appends a verification, which is what clears the review feeds'
+              : 'Confirm this entry — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
+            ${entry.rejection
+              ? `<button id="act-unreject" title="Withdraw the ruling and return the entry to the ordinary pool">Lift rejection</button>`
+              : `<button class="danger" id="act-reject" title="Reviewed and not accepted — hidden from search, with the reason kept for the next agent">Reject…</button>`}
             <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
             <button class="danger" id="act-delete">Delete…</button>
           </div>
@@ -1487,6 +1526,8 @@ async function viewDetail(id) {
       </span>
     </div>
     <div class="provenance">${esc(prov)}</div>
+    ${entry.rejection && entry.rejection.note
+      ? `<div class="status-note">Rejected: ${esc(entry.rejection.note)}</div>` : ''}
     <div id="move-panel" style="display:none;margin-top:.7rem">
       <div class="toolbar" style="margin-bottom:0">
         <input type="text" id="move-to" class="mono" list="move-dirs" value="${esc(entry.id)}"
@@ -1712,13 +1753,14 @@ async function viewDetail(id) {
 
   // Status is a picker, not a row of transition buttons: any transition
   // the API allows is offered (provenance over authorization, design doc
-  // 0002), and picking "draft" again undoes a stray verify. Deprecate and
-  // reject ask for a reason; a cancelled prompt puts the picker back.
+  // 0002). It is the lifecycle value alone — confirming and rejecting are
+  // rulings with their own actions in the ⋯ menu. Deprecating asks for a
+  // reason; a cancelled prompt puts the picker back.
   const statusPick = $('#act-status');
   statusPick.addEventListener('change', async () => {
     const status = statusPick.value;
     try {
-      if (await applyStatus(entry, status, status === 'deprecated' || status === 'rejected')) {
+      if (await applyStatus(entry, status, status === 'deprecated')) {
         toast(`Marked ${status}.`);
         refreshTree(); // the tree shows status badges
         viewDetail(entry.id);
@@ -1731,11 +1773,31 @@ async function viewDetail(id) {
   // with every directory the tree has loaded (plus the root) offered as
   // a completion — pick one or edit the path directly.
   const closeMenu = () => { $('#more-menu').open = false; };
-  $('#act-reverify')?.addEventListener('click', async () => {
+  $('#act-verify')?.addEventListener('click', async () => {
     closeMenu();
     try {
       await verifyEntry(entry.id);
-      toast('Re-verified.');
+      toast(isVerified(entry) ? 'Re-verified.' : 'Verified.');
+      viewDetail(entry.id);
+    } catch (e) { toast('Failed: ' + e.message); }
+  });
+  $('#act-reject')?.addEventListener('click', async () => {
+    closeMenu();
+    const note = prompt('Why is this not accepted? (kept as the ruling, so agents stop re-proposing it)', '');
+    if (note === null) return;
+    try {
+      await rejectEntry(entry.id, note);
+      toast('Rejected.');
+      refreshTree(); // the tree hides rejected entries
+      viewDetail(entry.id);
+    } catch (e) { toast('Failed: ' + e.message); }
+  });
+  $('#act-unreject')?.addEventListener('click', async () => {
+    closeMenu();
+    try {
+      await liftRejection(entry.id);
+      toast('Rejection lifted.');
+      refreshTree();
       viewDetail(entry.id);
     } catch (e) { toast('Failed: ' + e.message); }
   });
@@ -1790,11 +1852,6 @@ function editablePayload(e) {
 // review queue; the entry may be a full Knowledge or a SearchHit (which
 // embeds one), since both carry the writable fields.
 async function applyStatus(entry, status, askNote) {
-  // Verification has its own endpoint. A full-replacement PUT carries the
-  // stored verified_at over and writes nothing when the content matches,
-  // so it cannot record "checked again, still right" — the act that
-  // empties both review feeds (design doc 0025 §6).
-  if (status === 'verified') return verifyEntry(entry.id);
   let note;
   if (askNote) {
     note = prompt(`Why ${status}? (recorded as status_note so agents stop re-proposing it)`, entry.status_note || '');
@@ -1807,11 +1864,21 @@ async function applyStatus(entry, status, askNote) {
   return true;
 }
 
-// verifyEntry stamps a fresh verification: the reviewer as verified_by,
-// verified_at now. Promoting a draft and re-affirming a verified entry are
-// the same call.
+// The two rulings. Neither edits the document: confirming an entry and
+// turning it down are judgments about it, so they have their own
+// endpoints and leave the lifecycle status alone (design doc 0043
+// §§3.2-3.3). Verifying is an append, so the first confirmation and the
+// tenth re-check are the same call.
 async function verifyEntry(id) {
   await api('/api/v1/verify/' + idPath(id), { method: 'POST' });
+  return true;
+}
+async function rejectEntry(id, note) {
+  await api('/api/v1/reject/' + idPath(id), { method: 'POST', body: { note } });
+  return true;
+}
+async function liftRejection(id) {
+  await api('/api/v1/reject/' + idPath(id), { method: 'DELETE' });
   return true;
 }
 
@@ -1918,20 +1985,22 @@ function reviewCard(h) {
 function wireReviewActions(container) {
   container.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
     const card = btn.closest('[data-id]');
-    const status = btn.dataset.act === 'verify' ? 'verified' : 'rejected';
-    // Re-fetch the current entry before a full-replacement PUT: the list
-    // row may be stale, and status_note aside, we must not clobber a body
-    // edited since the queue loaded.
-    let entry;
+    const id = card.dataset.id;
+    // Both are rulings against the entry as it stands, so neither needs
+    // the entry's current content — there is no full-replacement PUT here
+    // to clobber a body edited since the queue loaded.
     try {
-      entry = await api('/api/v1/knowledge/' + idPath(card.dataset.id));
-    } catch (e) { toast('Load failed: ' + e.message); return; }
-    try {
-      if (await applyStatus(entry, status, status === 'rejected')) {
-        toast(`Marked ${status}.`);
-        refreshTree(); // the tree shows status badges (and hides rejected)
-        runReview();
+      if (btn.dataset.act === 'verify') {
+        await verifyEntry(id);
+        toast('Verified.');
+      } else {
+        const note = prompt('Why is this not accepted? (kept as the ruling, so agents stop re-proposing it)', '');
+        if (note === null) return;
+        await rejectEntry(id, note);
+        toast('Rejected.');
       }
+      refreshTree(); // the tree shows status badges (and hides rejected)
+      runReview();
     } catch (e) { toast('Failed: ' + e.message); }
   }));
 }

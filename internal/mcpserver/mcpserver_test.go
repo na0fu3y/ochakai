@@ -427,7 +427,7 @@ func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 	hits := []domain.SearchHit{{
 		Knowledge: domain.Knowledge{
 			Type: domain.TypeComputations, ID: "queries/monthly-revenue",
-			Status: domain.StatusVerified, Body: body,
+			Status: domain.StatusStable, Body: body,
 			Attrs: map[string]any{"sql": "SELECT 1"},
 		},
 		Score: 0.9,
@@ -444,7 +444,7 @@ func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 		t.Error("hits carried attrs; the budget covers only entries")
 	}
 	got := out.Hits[0]
-	if got.ID != "queries/monthly-revenue" || got.Score != 0.9 || got.Status != domain.StatusVerified {
+	if got.ID != "queries/monthly-revenue" || got.Score != 0.9 || got.Status != domain.StatusStable {
 		t.Errorf("a hit must still rank and address the entry: %+v", got)
 	}
 	// Title falls back to the filename when the entry has none (design doc

@@ -294,11 +294,13 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 	for _, aff := range []struct{ what, marker, open, close string }{
 		{"attaching a file", `id="att-upload"`, `<div class="toolbar write-only"`, "</div>"},
 		{"Edit", `href="#/edit/`, `<span class="actions write-only">`, "</span>"},
-		{"Re-verify", `id="act-reverify"`, `<span class="actions write-only">`, "</span>"},
+		{"Verify", `id="act-verify"`, `<span class="actions write-only">`, "</span>"},
+		{"Reject…", `id="act-reject"`, `<span class="actions write-only">`, "</span>"},
+		{"Lift rejection", `id="act-unreject"`, `<span class="actions write-only">`, "</span>"},
 		{"Move…", `id="act-move"`, `<span class="actions write-only">`, "</span>"},
 		{"Delete…", `id="act-delete"`, `<span class="actions write-only">`, "</span>"},
-		{"Verify", `data-act="verify"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},
-		{"Reject", `data-act="reject"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},
+		{"queue Verify", `data-act="verify"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},
+		{"queue Reject", `data-act="reject"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},
 	} {
 		if n := strings.Count(page, aff.marker); n != 1 {
 			t.Errorf("%s appears %d times; every copy needs gating, so this guard needs updating", aff.what, n)

@@ -155,124 +155,62 @@ func FoldType(t Type) string {
 	return strings.ToLower(strings.TrimSpace(Normalize(string(t))))
 }
 
-// Status is the verification status of a knowledge entry. deprecated means
-// "was correct, no longer recommended"; rejected means "was never accepted"
-// — the record keeps agents from re-proposing the same knowledge.
+// Status is an entry's lifecycle value, spelled as OKF SPEC §5.4 spells
+// it: draft is "not yet reviewed, possibly incomplete", stable is "ready
+// for consumption", deprecated is "kept for links and history, no longer
+// current".
+//
+// It says nothing about whether anyone confirmed the entry. Under SPEC
+// §5.3 that is what the verified key says, and ochakai keeps it in the
+// verification ledger — the lifecycle value and the trust signal are
+// independent, and a stable entry may be unverified just as a draft may
+// be verified (design doc 0043 §3.2). "Was never accepted" is likewise
+// not a lifecycle value but this instance's ruling, in the rejection
+// ledger (§3.3).
 type Status string
 
 const (
 	StatusDraft      Status = "draft"
-	StatusVerified   Status = "verified"
+	StatusStable     Status = "stable"
 	StatusDeprecated Status = "deprecated"
-	StatusRejected   Status = "rejected"
 )
 
 // Statuses lists all statuses in lifecycle order — the single source for
 // every user-facing enumeration (CLI help, completions, docs guards).
-var Statuses = []Status{StatusDraft, StatusVerified, StatusDeprecated, StatusRejected}
-
-// CuratedStatuses are the states a human has ruled on. Surfaces with no
-// If-Match channel must not replace one in place (design doc 0015 §3.1),
-// and the rule is enforced both in the service guards and in the store's
-// create transaction — so this list is the one place it is spelled.
-var CuratedStatuses = []Status{StatusVerified, StatusDeprecated, StatusRejected}
-
-// Curated reports whether a human has ruled on this status.
-func (s Status) Curated() bool {
-	for _, v := range CuratedStatuses {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}
+var Statuses = []Status{StatusDraft, StatusStable, StatusDeprecated}
 
 func ValidStatus(s Status) bool {
-	for _, v := range Statuses {
-		if s == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(Statuses, s)
 }
 
-// OKF lifecycle values (SPEC §5.4). Three where ochakai has four: OKF
-// spells "a human confirmed this" with the verified key, not with a
-// status, so verified maps onto stable plus a verified entry.
-const (
-	OKFStatusDraft      = "draft"
-	OKFStatusStable     = "stable"
-	OKFStatusDeprecated = "deprecated"
-)
-
-// OKFStatus returns the OKF v0.2 lifecycle value for s (design doc 0036
-// §3.4). Rejected exports as deprecated: OKF has no state for "was never
-// accepted", and the reason survives in status_note while rejected_by /
-// rejected_at stay as ochakai extension keys. The mapping is deliberately
-// lossy in that one direction — a rejection is this instance's curation
-// record, and a bundle carries knowledge, not instance-local rulings
-// (design doc 0009).
-func OKFStatus(s Status) string {
-	switch s {
-	case StatusDraft:
-		return OKFStatusDraft
-	case StatusVerified:
-		return OKFStatusStable
-	case StatusDeprecated, StatusRejected:
-		return OKFStatusDeprecated
-	}
-	// A status ochakai does not know cannot have landed in the store, but
-	// export must still write something OKF-shaped.
-	return OKFStatusDraft
-}
-
-// StatusFromOKF maps a frontmatter status onto ochakai's vocabulary.
-// hasVerified reports whether the document carried a verified key at all
-// — under SPEC §5.3 that key, not the status, is what says a concept was
-// confirmed, so a foreign bundle's stable entries land as drafts unless
-// they carry one. ochakai's own exports always write verified alongside
-// stable, so an ochakai → ochakai round-trip is exact.
+// StatusFromOKF maps a frontmatter status onto ochakai's vocabulary,
+// which since design doc 0043 §3.2 is OKF's vocabulary — so the mapping
+// is the identity on every value the spec defines, and the whole of what
+// remains here is what to do with the two cases the spec leaves open.
 //
-// The values ochakai wrote before v0.2 (verified, rejected) are no longer
-// read back as themselves: OKF's vocabulary is three values, and anything
-// else is an unrecognized one (design doc 0036 §3.5). A 0.12 bundle's
-// "status: verified" still lands as verified, but through the spec's own
-// mechanism rather than an ochakai alias — those documents also carry
-// verified_at, and §5.3 makes that key, not the status, the thing that
-// says a concept was confirmed. The lifecycle value and the trust signal
-// are independent, so an unrecognized status does not discard the latter.
+// An unrecognized value is a draft, never a rejection of the document
+// (SPEC §11 forbids rejecting a concept over an unknown field value). ok
+// reports whether the value was recognized, so an importer can mention
+// what it did rather than silently reinterpreting.
 //
-// An unrecognized value is otherwise a draft, never a rejection of the
-// document (SPEC §11 forbids rejecting a concept over an unknown field
-// value). ok reports whether the value was recognized, so an importer can
-// mention what it did rather than silently reinterpreting.
-//
-// An absent status stays unset ("") rather than becoming a value: OKF
+// An absent status stays unset ("") rather than becoming a value. OKF
 // reads absence as stable (§5.4), but ochakai already has a rule for a
 // write that names no status — draft on create, unchanged on update — and
 // that rule is what keeps a re-imported document from silently demoting
-// the entry it lands on. The one exception is a document that carries a
-// verified key with no status: that is a confirmation, and saying so is
-// the whole point of §5.3.
-func StatusFromOKF(raw string, hasVerified bool) (s Status, ok bool) {
-	switch raw {
-	case "":
-		if hasVerified {
-			return StatusVerified, true
-		}
+// the entry it lands on.
+//
+// Whether the document carried a verified key is deliberately not an
+// input. Until 0043 it was: with no way to say "stable but unconfirmed",
+// a foreign bundle's stable entry had to be demoted to draft or it would
+// have claimed a confirmation nobody made. The verification ledger can
+// hold that state, so the lifecycle value now arrives unaltered and the
+// trust signal is recorded beside it (§3.2).
+func StatusFromOKF(raw string) (s Status, ok bool) {
+	if raw == "" {
 		return "", true
-	case OKFStatusDraft:
-		return StatusDraft, true
-	case OKFStatusStable:
-		if hasVerified {
-			return StatusVerified, true
-		}
-		return StatusDraft, true
-	case OKFStatusDeprecated:
-		return StatusDeprecated, true
 	}
-	if hasVerified {
-		return StatusVerified, false
+	if st := Status(raw); ValidStatus(st) {
+		return st, true
 	}
 	return StatusDraft, false
 }
@@ -392,6 +330,44 @@ const (
 	ActorHuman   = "human"
 	ActorProcess = "process"
 )
+
+// Verification is one recorded confirmation that an entry was checked —
+// one element of OKF's verified list (SPEC §5.2), and under §5.3 the only
+// thing that makes an entry anything but unverified.
+//
+// The ledger is append-only and plural. ochakai held a single verifier
+// until 0.15, which made re-verification an overwrite: checking an entry
+// again replaced the record of the last check, so "when was this last
+// looked at" was answerable and "how often has this been confirmed, and
+// by whom" was not (design doc 0043 §3.2). Verifying is now an append,
+// and the feed that ranks by verification age reads the newest row.
+//
+// A verification is this instance's observation, never something a
+// document asserts: import reads only whether a verified key was present,
+// not who or when (design docs 0009, 0036 §2.2).
+type Verification struct {
+	By Actor     `json:"by"`
+	At time.Time `json:"at"`
+}
+
+// Rejection is this instance's ruling that an entry was not accepted —
+// the memory that stops an agent re-proposing knowledge a human already
+// turned down (design doc 0001 §9.1).
+//
+// It is a ledger rather than a status because it is not a lifecycle
+// value: OKF's three statuses say how ready a concept is, and "we said
+// no" is a judgment about the concept, not a stage of it. As a status it
+// also could not round-trip — export had to fold it onto deprecated,
+// which claims the opposite thing ("was correct, no longer current")
+// about the entry (design doc 0043 §3.3).
+//
+// Note is the reason, and belongs to the rejecter. It is distinct from
+// the entry's own status_note, which belongs to whoever wrote the entry.
+type Rejection struct {
+	By   Actor     `json:"by"`
+	At   time.Time `json:"at"`
+	Note string    `json:"note,omitempty"`
+}
 
 // ValidActorKind reports whether kind is one ochakai records.
 func ValidActorKind(kind string) bool {
@@ -543,20 +519,22 @@ type Knowledge struct {
 	// ochakai records this contract and never acts on it: it does not run
 	// Executor, check a receipt, run Attester, or fetch Computation. That
 	// is the consumer's procedure (SPEC §10.5, design docs 0001, 0036 §5).
-	Runtime     string         `json:"runtime,omitempty"`     // required by SPEC when the type is Attested Computation
-	Parameters  []Parameter    `json:"parameters,omitempty"`  // inputs an agent may fill in
-	Computation string         `json:"computation,omitempty"` // path to the computation; empty means the body's "# Computation" fence
-	Executor    *Executor      `json:"executor,omitempty"`
-	Attester    *Attester      `json:"attester,omitempty"`
-	CreatedBy   Actor          `json:"created_by"`
-	UpdatedBy   Actor          `json:"updated_by"` // who last changed the content — OKF's generated.by (design doc 0036 §3.3)
-	VerifiedBy  *Actor         `json:"verified_by,omitempty"`
-	VerifiedAt  *time.Time     `json:"verified_at,omitempty"`
-	RejectedBy  *Actor         `json:"rejected_by,omitempty"`
-	RejectedAt  *time.Time     `json:"rejected_at,omitempty"`
-	Links       []Link         `json:"links,omitempty"`
-	Attrs       map[string]any `json:"attrs,omitempty"`
-	Body        string         `json:"body,omitempty"`
+	Runtime     string      `json:"runtime,omitempty"`     // required by SPEC when the type is Attested Computation
+	Parameters  []Parameter `json:"parameters,omitempty"`  // inputs an agent may fill in
+	Computation string      `json:"computation,omitempty"` // path to the computation; empty means the body's "# Computation" fence
+	Executor    *Executor   `json:"executor,omitempty"`
+	Attester    *Attester   `json:"attester,omitempty"`
+	CreatedBy   Actor       `json:"created_by"`
+	UpdatedBy   Actor       `json:"updated_by"` // who last changed the content — OKF's generated.by (design doc 0036 §3.3)
+	// Verifications and Rejection are this instance's ledgers, not fields
+	// of the document: read-only on every surface, never accepted from a
+	// payload, and written only by verify and reject (design doc 0043
+	// §§3.2-3.3). Oldest verification first.
+	Verifications []Verification `json:"verifications,omitempty"`
+	Rejection     *Rejection     `json:"rejection,omitempty"`
+	Links         []Link         `json:"links,omitempty"`
+	Attrs         map[string]any `json:"attrs,omitempty"`
+	Body          string         `json:"body,omitempty"`
 	// Attachments is read-only metadata (no bytes), populated on single-
 	// entry reads. Attachments are managed through their own endpoints,
 	// never through create/update payloads.
@@ -578,6 +556,55 @@ var EnvelopeKeys = []string{
 	"status", "status_note", "stale_after",
 	"runtime", "parameters", "computation", "executor", "attester",
 }
+
+// Verified reports whether anyone has confirmed this entry — SPEC §5.3's
+// signal, which is the presence of a verification and not a status.
+func (k *Knowledge) Verified() bool { return len(k.Verifications) > 0 }
+
+// LastVerified returns the newest verification, or nil when there is
+// none. The ledger is stored oldest-first.
+func (k *Knowledge) LastVerified() *Verification {
+	if len(k.Verifications) == 0 {
+		return nil
+	}
+	return &k.Verifications[len(k.Verifications)-1]
+}
+
+// Ruling names the decision a human recorded about an entry, or "" when
+// nobody has ruled on it. Two of the three now live in ledgers and one is
+// still a lifecycle value (design doc 0043 §§3.2-3.3), so the guards ask
+// the entry rather than its status — which is where the question always
+// belonged, since what it means is "did somebody decide something about
+// this", not "what stage is it at".
+//
+// A rejection outranks a verification when an entry carries both: Verify
+// clears a rejection but Reject keeps the verifications, so the pair
+// means somebody vouched for this and somebody later ruled against it,
+// and the later ruling is the one in force.
+type Ruling string
+
+const (
+	RulingRejected   Ruling = "rejected"
+	RulingVerified   Ruling = "verified"
+	RulingDeprecated Ruling = "deprecated"
+)
+
+func (k *Knowledge) Ruling() Ruling {
+	switch {
+	case k.Rejection != nil:
+		return RulingRejected
+	case k.Verified():
+		return RulingVerified
+	case k.Status == StatusDeprecated:
+		return RulingDeprecated
+	}
+	return ""
+}
+
+// Curated reports whether a human has ruled on this entry. Surfaces with
+// no If-Match channel must not replace one in place (design doc 0015
+// §3.1).
+func (k *Knowledge) Curated() bool { return k.Ruling() != "" }
 
 // URI returns the canonical reference, e.g. "ochakai://metrics/revenue" —
 // the scheme plus the entry's id (its bundle path, design doc 0017).

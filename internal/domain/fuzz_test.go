@@ -125,31 +125,17 @@ func FuzzLinksFromBody(f *testing.F) {
 	})
 }
 
-// TestOKFStatusRoundTrip states design doc 0036 §3.4's mapping over the
-// whole status vocabulary rather than the examples: exporting and
-// re-importing returns the status, except for the one direction the
-// design calls lossy on purpose. A status added to Statuses without a
-// place in the OKF lifecycle fails here.
+// TestOKFStatusRoundTrip states that the status vocabulary is OKF's own,
+// so export and import are the identity on it (design doc 0043 §3.2). A
+// status added to Statuses that OKF does not define fails here.
 func TestOKFStatusRoundTrip(t *testing.T) {
 	for _, s := range Statuses {
-		okf := OKFStatus(s)
-		switch okf {
-		case OKFStatusDraft, OKFStatusStable, OKFStatusDeprecated:
-		default:
-			t.Errorf("OKFStatus(%q) = %q, which is not an OKF lifecycle value", s, okf)
-		}
-		// ochakai's own exports write a verified key alongside stable, and
-		// only alongside stable.
-		got, known := StatusFromOKF(okf, s == StatusVerified)
+		got, known := StatusFromOKF(string(s))
 		if !known {
 			t.Errorf("our own export of %q reads back as unknown", s)
 		}
-		want := s
-		if s == StatusRejected {
-			want = StatusDeprecated // OKF has no "was never accepted" (0036 §3.4)
-		}
-		if got != want {
-			t.Errorf("%q exported as %q read back as %q, want %q", s, okf, got, want)
+		if got != s {
+			t.Errorf("%q read back as %q", s, got)
 		}
 	}
 }

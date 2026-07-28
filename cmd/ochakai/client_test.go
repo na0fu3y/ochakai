@@ -126,12 +126,12 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "verify", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "report", "revisions", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
+	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "report", "revisions", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 24 {
+	if len(clientCommands) != 25 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest
@@ -142,17 +142,17 @@ func TestRenderContext(t *testing.T) {
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	res := &apiclient.ContextResult{
 		Hits: []domain.ContextRank{
-			{Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusVerified, Title: "Monthly revenue", Score: 0.9},
+			{Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusStable, Title: "Monthly revenue", Score: 0.9},
 			{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR", Score: 0.1},
 		},
 		Entries: []domain.Knowledge{
 			{
-				Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusVerified,
-				Title:      "Monthly revenue",
-				CreatedBy:  domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
-				VerifiedBy: &human, VerifiedAt: &now,
-				Attrs: map[string]any{"question": "Revenue by month?", "sql": "SELECT 1\n"},
-				Body:  "Prefer this over writing new SQL.",
+				Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusStable,
+				Title:         "Monthly revenue",
+				CreatedBy:     domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
+				Verifications: []domain.Verification{{By: human, At: now}},
+				Attrs:         map[string]any{"question": "Revenue by month?", "sql": "SELECT 1\n"},
+				Body:          "Prefer this over writing new SQL.",
 			},
 			{
 				Type: domain.TypeInsights, ID: "insights/revenue-seasonality", Status: domain.StatusDraft,
@@ -166,7 +166,7 @@ func TestRenderContext(t *testing.T) {
 	renderContext(&out, res, 0)
 	s := out.String()
 	for _, want := range []string{
-		"## ochakai://queries/monthly-revenue (verified) — Monthly revenue",
+		"## ochakai://queries/monthly-revenue (stable) — Monthly revenue",
 		"verified by human:na0 on 2026-06-01; created by process:claude",
 		"Q: Revenue by month?",
 		"```sql\nSELECT 1\n```",
@@ -305,8 +305,9 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(domain.Knowledge{
-			Type: domain.TypeComputations, ID: r.PathValue("id"), Status: domain.StatusVerified,
-			Title: "Monthly revenue", VerifiedBy: &human, VerifiedAt: &verified,
+			Type: domain.TypeComputations, ID: r.PathValue("id"), Status: domain.StatusStable,
+			Title:         "Monthly revenue",
+			Verifications: []domain.Verification{{By: human, At: verified}},
 		})
 	})
 	srv := httptest.NewServer(mux)
@@ -332,7 +333,8 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("--json did not print JSON (%v): %s", err, out)
 	}
-	if got.ID != "queries/monthly-revenue" || got.VerifiedAt == nil || !got.VerifiedAt.Equal(verified) {
-		t.Errorf("verified entry = %+v, want the server's response with verified_at", got)
+	last := got.LastVerified()
+	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
+		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
 	}
 }

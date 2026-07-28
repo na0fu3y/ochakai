@@ -20,14 +20,14 @@ func sample() []domain.Knowledge {
 		{
 			Type: domain.TypeInsights, ID: "insights/revenue-seasonality",
 			Title: "売上の季節性", Description: "12月は繁忙期",
-			Tags: []string{"sales"}, Status: domain.StatusVerified,
-			StaleAfter: "2026-12-31",
-			CreatedBy:  domain.Actor{Kind: "process", Name: "claude-code"},
-			UpdatedBy:  domain.Actor{Kind: "process", Name: "claude-code"},
-			VerifiedBy: &domain.Actor{Kind: "human", Name: "na0"}, VerifiedAt: &verifiedAt,
-			Attrs:     map[string]any{"kind": "seasonality"},
-			Body:      "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
-			UpdatedAt: verifiedAt,
+			Tags: []string{"sales"}, Status: domain.StatusStable,
+			StaleAfter:    "2026-12-31",
+			CreatedBy:     domain.Actor{Kind: "process", Name: "claude-code"},
+			UpdatedBy:     domain.Actor{Kind: "process", Name: "claude-code"},
+			Verifications: []domain.Verification{{By: domain.Actor{Kind: "human", Name: "na0"}, At: verifiedAt}},
+			Attrs:         map[string]any{"kind": "seasonality"},
+			Body:          "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
+			UpdatedAt:     verifiedAt,
 		},
 		{
 			Type: domain.TypeTables, ID: "tables/orders",
@@ -39,6 +39,20 @@ func sample() []domain.Knowledge {
 			UpdatedAt: verifiedAt,
 		},
 	}
+}
+
+// frontmatterOf decodes a rendered document's frontmatter.
+func frontmatterOf(t *testing.T, doc []byte) map[string]any {
+	t.Helper()
+	parts := strings.SplitN(string(doc), "---\n", 3)
+	if len(parts) != 3 {
+		t.Fatalf("bad document structure:\n%s", doc)
+	}
+	var fm map[string]any
+	if err := yaml.Unmarshal([]byte(parts[1]), &fm); err != nil {
+		t.Fatalf("frontmatter is not valid YAML: %v", err)
+	}
+	return fm
 }
 
 func TestDocumentFrontmatterAndBody(t *testing.T) {
@@ -111,10 +125,12 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 	rejectedAt := time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC)
 	k := domain.Knowledge{
 		Type: domain.TypeInsights, ID: "insights/dup-insight",
-		Title: "重複した知見", Status: domain.StatusRejected,
+		Title: "重複した知見", Status: domain.StatusDraft,
 		StatusNote: "revenue-seasonality と重複",
-		CreatedBy:  domain.Actor{Kind: "agent", Name: "claude-code"},
-		RejectedBy: &domain.Actor{Kind: "human", Name: "na0"}, RejectedAt: &rejectedAt,
+		CreatedBy:  domain.Actor{Kind: "process", Name: "claude-code"},
+		Rejection: &domain.Rejection{
+			By: domain.Actor{Kind: "human", Name: "na0"}, At: rejectedAt, Note: "重複",
+		},
 		UpdatedAt: rejectedAt,
 	}
 	doc, err := Document(&k)
@@ -122,11 +138,13 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(doc)
-	// OKF has no state for "was never accepted", so a rejection exports as
-	// deprecated; the reason and the actor survive as status_note and the
-	// ochakai extension keys (design doc 0036 §3.4).
+	// The entry's real lifecycle value goes out. A rejection used to be
+	// folded onto deprecated, which asserts the opposite thing about the
+	// entry ("was correct, no longer current"); it is this instance's
+	// ruling now, so it travels as an extension key beside the true
+	// status and import never reads it back (design doc 0043 §3.3).
 	for _, want := range []string{
-		"status: deprecated",
+		"status: draft",
 		"status_note: revenue-seasonality と重複",
 		"rejected_by: human:na0",
 		`rejected_at: "2026-07-16T00:00:00Z"`,
@@ -135,8 +153,42 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 			t.Errorf("document missing %q:\n%s", want, s)
 		}
 	}
+	if strings.Contains(s, "status: deprecated") {
+		t.Errorf("a rejection must not be folded onto deprecated:\n%s", s)
+	}
 	if strings.Contains(s, "verified:") {
 		t.Errorf("an unverified entry must carry no verified key — its absence is the trust tier (SPEC §5.3):\n%s", s)
+	}
+}
+
+// The ledger is plural, so a re-checked entry exports every confirmation
+// rather than only the last (SPEC §5.2, design doc 0043 §3.2).
+func TestDocumentWritesEveryVerification(t *testing.T) {
+	first := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	second := time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC)
+	k := domain.Knowledge{
+		Type: domain.TypeInsights, ID: "insights/seasonality", Status: domain.StatusStable,
+		CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
+		Verifications: []domain.Verification{
+			{By: domain.Actor{Kind: "human", Name: "na0"}, At: first},
+			{By: domain.Actor{Kind: "human", Name: "tanaka"}, At: second},
+		},
+		UpdatedAt: second,
+	}
+	doc, err := Document(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm := frontmatterOf(t, doc)
+	verified, _ := fm["verified"].([]any)
+	if len(verified) != 2 {
+		t.Fatalf("verified = %v, want both confirmations", fm["verified"])
+	}
+	for i, want := range []string{"human:na0", "human:tanaka"} {
+		v, _ := verified[i].(map[string]any)
+		if v["by"] != want {
+			t.Errorf("verified[%d].by = %v, want %q (oldest first)", i, v["by"], want)
+		}
 	}
 }
 
@@ -339,7 +391,7 @@ func TestDocumentSurvivesIndentedFirstLines(t *testing.T) {
 				t.Errorf("%s=%q: our own document does not parse: %v\n%s", c.where, v, err, doc)
 				continue
 			}
-			if got := c.got(back); got != v {
+			if got := c.got(&back.Knowledge); got != v {
 				t.Errorf("%s=%q came back as %q\n%s", c.where, v, got, doc)
 			}
 		}
