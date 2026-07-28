@@ -65,11 +65,16 @@ toolchain-free, take a
 or talk to the API directly, since that is all the CLI does:
 
 ```sh
-curl -X POST http://localhost:8080/api/v1/knowledge \
-  -H 'content-type: application/json' \
-  -d '{"id": "metrics/revenue", "type": "Metric",
-       "body": "Completed orders only, net of refunds."}'
+curl -X PUT http://localhost:8080/api/v1/knowledge/metrics/revenue \
+  -H 'content-type: text/markdown' \
+  --data-binary $'---\ntype: Metric\n---\n\nCompleted orders only, net of refunds.\n'
 ```
+
+Knowledge is written as an OKF document — the frontmatter is the
+metadata, the markdown is the body, and the path is the address. It is
+the same text `ochakai get` prints and an export writes, so reading an
+entry, editing it and sending it back is one loop with no translation in
+it.
 
 ## Quick start
 

@@ -685,9 +685,15 @@ async function api(path, opts = {}) {
   const init = { method: opts.method || 'GET' };
   if (opts.raw !== undefined) {
     init.body = opts.raw; // raw bytes (attachment upload), no JSON envelope
+  } else if (opts.doc !== undefined) {
+    init.headers = { 'Content-Type': 'text/markdown' };
+    init.body = opts.doc; // an OKF document — the one way to write knowledge
   } else if (opts.body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(opts.body);
+  }
+  if (opts.onlyIfAbsent) {
+    init.headers = Object.assign({}, init.headers, { 'If-None-Match': '*' });
   }
   const res = await fetch(BASE + path, init);
   // A read-only deployment says so on every response (design doc 0040).
@@ -1825,24 +1831,49 @@ async function viewDetail(id) {
   });
 }
 
-// Every writable envelope field is named here, and nowhere else: a PUT is
-// a full replacement, so a field left out of a payload is a field erased.
-// The editor form builds its payload from the same list (design docs 0035
-// §4, where resource was erased by a status change, and 0035, which added
-// the OKF v0.2 families).
-const WRITABLE = ['description', 'resource', 'tags', 'sources', 'usage_window',
-  'status', 'status_note', 'stale_after',
-  'runtime', 'parameters', 'computation', 'executor', 'attester', 'attrs', 'body'];
+// The frontmatter keys a writer owns, in the spec's family order. A PUT
+// is a full replacement, so a key left out is a key erased — which is why
+// the form and the status picker both render from this one list rather
+// than each assembling their own (design doc 0035 §4, where a status
+// change erased resource because one path had forgotten it).
+//
+// links is not here: the server derives links from the body (design doc
+// 0024). Neither are the keys the server owns — generated, verified,
+// created_by, rejected_* — which it ignores on the way in.
+const WRITABLE = ['type', 'resource', 'title', 'description', 'tags',
+  'sources', 'usage_window', 'status', 'status_note', 'stale_after',
+  'runtime', 'parameters', 'computation', 'executor', 'attester'];
 
-// The writable subset of a Knowledge entry (PUT is a full replacement).
-// links is not in it — the server derives links from body (design doc
-// 0024) and ignores whatever a payload carries.
-function editablePayload(e) {
-  const p = { type: e.type, id: e.id, title: e.title };
-  for (const k of WRITABLE) {
-    if (e[k] !== undefined && e[k] !== null) p[k] = e[k];
+// Render an entry as the OKF document the server takes (design doc 0043
+// §3.5). Every value goes out as JSON, which is a subset of YAML: it
+// needs no quoting rules of its own, cannot be misread as a date or a
+// number, and survives a body full of colons and newlines. The server
+// canonicalizes what it stores, so this has to be correct, not pretty.
+//
+// Producer extension keys ride along from attrs, so editing an entry
+// through the form keeps the keys the form knows nothing about.
+function toDocument(e) {
+  const lines = [];
+  const put = (k, v) => {
+    if (v === undefined || v === null) return;
+    if (typeof v === 'string' && v === '') return;
+    if (Array.isArray(v) && v.length === 0) return;
+    lines.push(k + ': ' + JSON.stringify(v));
+  };
+  for (const k of WRITABLE) put(k, e[k]);
+  for (const [k, v] of Object.entries(e.attrs || {})) {
+    if (!WRITABLE.includes(k)) put(k, v);
   }
-  return p;
+  const body = (e.body || '').trim();
+  return '---\n' + lines.join('\n') + '\n---\n' + (body ? '\n' + body + '\n' : '');
+}
+
+// writeEntry PUTs the entry as a document. onlyIfAbsent asks for a
+// create: an occupied id is a 409 rather than a replacement.
+function writeEntry(e, onlyIfAbsent) {
+  return api('/api/v1/knowledge/' + idPath(e.id), {
+    method: 'PUT', doc: toDocument(e), onlyIfAbsent,
+  });
 }
 
 // Apply a status transition (full-replacement PUT), prompting for a
@@ -1857,10 +1888,9 @@ async function applyStatus(entry, status, askNote) {
     note = prompt(`Why ${status}? (recorded as status_note so agents stop re-proposing it)`, entry.status_note || '');
     if (note === null) return false;
   }
-  const payload = editablePayload(entry);
-  payload.status = status;
-  if (note !== undefined) payload.status_note = note;
-  await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'PUT', body: payload });
+  const next = Object.assign({}, entry, { status });
+  if (note !== undefined) next.status_note = note;
+  await writeEntry(next, false);
   return true;
 }
 
@@ -2403,9 +2433,7 @@ async function viewEditor(id, prefix = '') {
     // No links in the payload: the server derives them from the body
     // (design doc 0024).
     try {
-      const saved = editing
-        ? await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'PUT', body: payload })
-        : await api('/api/v1/knowledge', { method: 'POST', body: payload });
+      const saved = await writeEntry(payload, !editing);
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
       refreshTree();

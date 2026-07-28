@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -212,20 +213,25 @@ func TestErrorResponsesBecomeAPIErrors(t *testing.T) {
 	}
 }
 
-func TestCreateSendsJSONBodyAndDelete204(t *testing.T) {
+func TestPutSendsADocumentAndDelete204(t *testing.T) {
+	const doc = "---\ntype: Metric\ntitle: 売上\n---\n\n本文。\n"
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodPost:
-			if ct := r.Header.Get("Content-Type"); ct != "application/json" {
-				t.Errorf("Content-Type = %q", ct)
+		case http.MethodPut:
+			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/markdown") {
+				t.Errorf("Content-Type = %q, want text/markdown", ct)
 			}
-			var k domain.Knowledge
-			if err := json.NewDecoder(r.Body).Decode(&k); err != nil || k.ID != "revenue" {
-				t.Errorf("body decode: %v, k=%+v", err, k)
+			if got := r.Header.Get("If-None-Match"); got != "*" {
+				t.Errorf("If-None-Match = %q, want * for a create-only write", got)
 			}
-			k.Status = domain.StatusDraft
+			body, _ := io.ReadAll(r.Body)
+			if string(body) != doc {
+				t.Errorf("body = %q, want the document verbatim", body)
+			}
+			w.Header().Add("Ochakai-Note", "status \"retired\" is not an OKF lifecycle value")
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(k)
+			_ = json.NewEncoder(w).Encode(domain.Knowledge{
+				Type: domain.TypeMetrics, ID: "metrics/revenue", Title: "売上", Status: domain.StatusDraft})
 		case http.MethodDelete:
 			if r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
 				t.Errorf("path = %s", r.URL.Path)
@@ -233,12 +239,42 @@ func TestCreateSendsJSONBodyAndDelete204(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		}
 	})
-	created, err := c.Create(context.Background(), &domain.Knowledge{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"})
-	if err != nil || created.Status != domain.StatusDraft {
-		t.Fatalf("create: %v, %+v", err, created)
+	got, created, changed, notes, err := c.Put(context.Background(), "metrics/revenue", []byte(doc), "", true)
+	if err != nil || got.Status != domain.StatusDraft {
+		t.Fatalf("put: %v, %+v", err, got)
+	}
+	if !created || !changed {
+		t.Errorf("created = %v, changed = %v; a 201 is both", created, changed)
+	}
+	// A reinterpretation comes back rather than being swallowed.
+	if len(notes) != 1 {
+		t.Errorf("notes = %v, want the one the server reported", notes)
 	}
 	if err := c.Delete(context.Background(), "metrics/revenue"); err != nil {
 		t.Fatalf("delete: %v", err)
+	}
+}
+
+// An update is the same call without the create-only precondition, and a
+// server that wrote nothing says so in a header rather than in the body.
+func TestPutReportsAnUnchangedWrite(t *testing.T) {
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("If-Match"); got != `"abc123"` {
+			t.Errorf("If-Match = %q, want the quoted version", got)
+		}
+		if r.Header.Get("If-None-Match") != "" {
+			t.Error("an update must not send If-None-Match")
+		}
+		w.Header().Set("Ochakai-Unchanged", "true")
+		_ = json.NewEncoder(w).Encode(domain.Knowledge{ID: "metrics/revenue"})
+	})
+	_, created, changed, _, err := c.Put(context.Background(), "metrics/revenue",
+		[]byte("---\ntype: Metric\n---\n"), "abc123", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created || changed {
+		t.Errorf("created = %v, changed = %v; a 200 with Ochakai-Unchanged is neither", created, changed)
 	}
 }
 
@@ -398,11 +434,12 @@ func TestReportOutcomePostsAndDecodesTotals(t *testing.T) {
 	}
 }
 
-// Update's ifMatch becomes the If-Match precondition on the wire: absent
+// Put's ifMatch becomes the If-Match precondition on the wire: absent
 // when "", quoted into a valid ETag when the caller passes the bare
-// version (the updated_at a read returned), verbatim when already an
+// version (the content_hash a read returned), verbatim when already an
 // ETag. A stale version surfaces as a 412 APIError.
-func TestUpdateSendsIfMatchAndMapsConflict(t *testing.T) {
+func TestPutSendsIfMatchAndMapsConflict(t *testing.T) {
+	const stale = "0000000000000000000000000000000000000000000000000000000000000000"
 	var got []string
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
@@ -413,25 +450,25 @@ func TestUpdateSendsIfMatchAndMapsConflict(t *testing.T) {
 			v = []string{"(absent)"}
 		}
 		got = append(got, v[0])
-		if v[0] == `"2026-07-01T00:00:00.000000001Z"` {
+		if v[0] == `"`+stale+`"` {
 			w.WriteHeader(http.StatusPreconditionFailed)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge changed since it was read"})
 			return
 		}
 		_ = json.NewEncoder(w).Encode(domain.Knowledge{Type: domain.TypeMetrics, ID: "metrics/revenue"})
 	})
-	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: "metrics/revenue", Title: "売上"}
-	for _, ifMatch := range []string{"", "2026-06-30T00:00:00Z", `"2026-06-30T00:00:00Z"`} {
-		if _, _, err := c.Update(context.Background(), k, ifMatch); err != nil {
-			t.Fatalf("Update(ifMatch=%q): %v", ifMatch, err)
+	doc := []byte("---\ntype: Metric\ntitle: 売上\n---\n")
+	for _, ifMatch := range []string{"", "abc123", `"abc123"`} {
+		if _, _, _, _, err := c.Put(context.Background(), "metrics/revenue", doc, ifMatch, false); err != nil {
+			t.Fatalf("Put(ifMatch=%q): %v", ifMatch, err)
 		}
 	}
-	want := []string{"(absent)", `"2026-06-30T00:00:00Z"`, `"2026-06-30T00:00:00Z"`}
+	want := []string{"(absent)", `"abc123"`, `"abc123"`}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("If-Match on the wire = %q, want %q", got, want)
 	}
 
-	_, _, err := c.Update(context.Background(), k, "2026-07-01T00:00:00.000000001Z")
+	_, _, _, _, err := c.Put(context.Background(), "metrics/revenue", doc, stale, false)
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusPreconditionFailed {
 		t.Fatalf("stale version: err = %v, want a 412 *APIError", err)

@@ -31,23 +31,25 @@ func readOnlyServer(t *testing.T) *httptest.Server {
 // (design doc 0040 §4).
 func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 	srv := readOnlyServer(t)
-	for _, w := range []struct{ method, path, body string }{
-		{http.MethodPost, "/api/v1/knowledge", `{"type":"Metric","id":"m","title":"m"}`},
-		{http.MethodPut, "/api/v1/knowledge/m", `{"type":"Metric","id":"m","title":"m"}`},
-		{http.MethodDelete, "/api/v1/knowledge/m", ""},
-		{http.MethodPost, "/api/v1/verify/m", ""},
-		{http.MethodPost, "/api/v1/usage/m", `{"outcome":"worked"}`},
-		{http.MethodPost, "/api/v1/move", `{"from":"m","to":"n"}`},
-		{http.MethodPost, "/api/v1/reembed", ""},
-		{http.MethodPut, "/api/v1/attachments/m/f.txt", "x"},
-		{http.MethodDelete, "/api/v1/attachments/m/f.txt", ""},
+	const doc = "---\ntype: Metric\ntitle: m\n---\n"
+	for _, w := range []struct{ method, path, body, mediaType string }{
+		{http.MethodPut, "/api/v1/knowledge/m", doc, "text/markdown"},
+		{http.MethodDelete, "/api/v1/knowledge/m", "", ""},
+		{http.MethodPost, "/api/v1/verify/m", "", ""},
+		{http.MethodPost, "/api/v1/reject/m", `{"note":"no"}`, "application/json"},
+		{http.MethodDelete, "/api/v1/reject/m", "", ""},
+		{http.MethodPost, "/api/v1/usage/m", `{"outcome":"worked"}`, "application/json"},
+		{http.MethodPost, "/api/v1/move", `{"from":"m","to":"n"}`, "application/json"},
+		{http.MethodPost, "/api/v1/reembed", "", ""},
+		{http.MethodPut, "/api/v1/attachments/m/f.txt", "x", "application/json"},
+		{http.MethodDelete, "/api/v1/attachments/m/f.txt", "", ""},
 	} {
 		req, err := http.NewRequest(w.method, srv.URL+w.path, strings.NewReader(w.body))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if w.body != "" {
-			req.Header.Set("Content-Type", "application/json")
+		if w.mediaType != "" {
+			req.Header.Set("Content-Type", w.mediaType)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -71,14 +73,19 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 // (design doc 0040 §2.3).
 func TestReadOnlyAnnouncesItselfOnEveryResponse(t *testing.T) {
 	srv := readOnlyServer(t)
-	resp, err := http.Post(srv.URL+"/api/v1/knowledge", "application/json",
-		strings.NewReader(`{"type":"Metric","id":"m","title":"m"}`))
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/knowledge/m",
+		strings.NewReader("---\ntype: Metric\ntitle: m\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "text/markdown")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
 	if got := resp.Header.Get("Ochakai-Read-Only"); got != "true" {
-		t.Errorf("POST /api/v1/knowledge: Ochakai-Read-Only = %q, want \"true\"", got)
+		t.Errorf("PUT /api/v1/knowledge/m: Ochakai-Read-Only = %q, want \"true\"", got)
 	}
 
 	// A route that does not exist carries it too: the header describes the

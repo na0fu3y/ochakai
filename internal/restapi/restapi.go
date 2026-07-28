@@ -145,23 +145,6 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	mux.HandleFunc("POST /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
-		var k domain.Knowledge
-		if !readJSON(w, r, &k) {
-			return
-		}
-		created, err := svc.Create(r.Context(), &k, httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// The version of what was just written, like every other response
-		// that carries an entry: a client that creates and then updates
-		// conditionally should not need a GET in between.
-		w.Header().Set("ETag", etagOf(created))
-		writeJSON(w, http.StatusCreated, created)
-	})
-
 	// {id...} because the id is the entry's full bundle path (design doc
 	// 0016) — the wildcard captures every segment.
 	mux.HandleFunc("GET /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
@@ -173,35 +156,72 @@ func Handler(svc *service.Service) http.Handler {
 		// The ETag is the entry's version: a client can echo it in If-Match
 		// on a later PUT to update only if nothing changed meanwhile.
 		w.Header().Set("ETag", etagOf(k))
+		if wantsDocument(r) {
+			writeDocument(w, http.StatusOK, k)
+			return
+		}
 		writeJSON(w, http.StatusOK, k)
 	})
 
+	// PUT /api/v1/knowledge/{id...} — the one way to write knowledge. The
+	// body is an OKF document, which is what an entry is (design doc 0043
+	// §3.5): the path is the address, the frontmatter and body are what it
+	// says, and there is no typed JSON write surface beside it to drift
+	// from the format.
+	//
+	// It is create-or-replace. A PUT states what the entry should say, and
+	// whether an entry already held the id is not something the writer of
+	// a document is saying anything about — so a separate POST would only
+	// make the caller answer a question it does not have to ask. The
+	// preconditions are where existence is expressed: If-None-Match "*"
+	// means "only if the id is free", If-Match a version means "only if it
+	// still says this".
 	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		var k domain.Knowledge
-		if !readJSON(w, r, &k) {
+		k, ok := readDocument(w, r)
+		if !ok {
 			return
 		}
+		// The path is the address; the document carries the metadata —
+		// type included, always (no fill-in from the stored entry, design
+		// doc 0017 §4.5).
+		k.ID = r.PathValue("id")
+		actor := httpauth.Actor(r.Context())
+
 		// If-Match is an optional optimistic-concurrency precondition: its
 		// value is the ETag from a prior read. Absent means last-write-wins
-		// (design doc 0030); malformed is a client error.
+		// (design doc 0030).
 		ifMatch := parseIfMatch(r)
-		// The path is the address; the body carries the metadata — type
-		// included, always (no fill-in from the stored entry, design doc
-		// 0017 §4.5).
-		k.ID = r.PathValue("id")
-		updated, changed, err := svc.Update(r.Context(), &k, httpauth.Actor(r.Context()), ifMatch)
+		var (
+			out              *domain.Knowledge
+			created, changed bool
+			err              error
+		)
+		if onlyIfAbsent(r) {
+			out, err = svc.Create(r.Context(), k, actor)
+			created, changed = true, true
+		} else {
+			out, created, changed, err = svc.Put(r.Context(), k, actor, ifMatch)
+		}
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 		// A payload identical to the stored content wrote nothing (no
-		// revision, no updated_at bump); the header lets clients report
+		// revision, no version bump); the header lets clients report
 		// "unchanged" without an extra read.
 		if !changed {
 			w.Header().Set("Ochakai-Unchanged", "true")
 		}
-		w.Header().Set("ETag", etagOf(updated))
-		writeJSON(w, http.StatusOK, updated)
+		w.Header().Set("ETag", etagOf(out))
+		status := http.StatusOK
+		if created {
+			status = http.StatusCreated
+		}
+		if wantsDocument(r) {
+			writeDocument(w, status, out)
+			return
+		}
+		writeJSON(w, status, out)
 	})
 
 	// POST /api/v1/verify/{id...} — record a verification against the
@@ -695,6 +715,82 @@ func readBody(w http.ResponseWriter, r *http.Request, limit int64, tooLarge stri
 		return nil, false
 	}
 	return data, true
+}
+
+// documentMediaType is what an OKF concept document is served and
+// accepted as. It is markdown with YAML frontmatter, which is markdown as
+// far as any consumer is concerned.
+const documentMediaType = "text/markdown; charset=utf-8"
+
+// maxDocument bounds a written document. The body limit (design doc 0001)
+// is 4 MiB and the frontmatter is small beside it, so this is the same
+// number with room for the envelope rather than a new policy.
+const maxDocument = 5 << 20
+
+// readDocument parses the request body as an OKF document. Notes — values
+// the parser accepted but read differently than written — travel back in
+// a header rather than being swallowed: a reinterpretation is never
+// silent (design doc 0036 §3.4), and there is no room for them in a
+// response whose body is the entry.
+//
+// A JSON body is refused with the reason rather than a parse error: a
+// client sending one is a client written against the typed write surface
+// that 0043 §3.5 removed, and it needs to be told that, not told its
+// document has no frontmatter.
+func readDocument(w http.ResponseWriter, r *http.Request) (*domain.Knowledge, bool) {
+	if mt := r.Header.Get("Content-Type"); strings.HasPrefix(mt, "application/json") {
+		writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
+			"error": "knowledge is written as an OKF document (Content-Type: text/markdown), " +
+				"not as JSON: the frontmatter is the metadata and the markdown is the body",
+		})
+		return nil, false
+	}
+	data, ok := readBody(w, r, maxDocument, fmt.Sprintf("document exceeds %d bytes", maxDocument))
+	if !ok {
+		return nil, false
+	}
+	d, notes, err := okf.Parse(data)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return nil, false
+	}
+	for _, n := range notes {
+		w.Header().Add("Ochakai-Note", n)
+	}
+	return &d.Knowledge, true
+}
+
+// wantsDocument reports whether the caller asked for the entry as a
+// document rather than as JSON. Only an explicit markdown Accept counts:
+// a browser sends */* and wants the JSON every existing client reads.
+func wantsDocument(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/markdown")
+}
+
+// onlyIfAbsent reports an If-None-Match "*" precondition: write only if
+// the id is free. Any other value is ignored — ochakai has no use for a
+// conditional read, and a caller that means "only if absent" says "*".
+func onlyIfAbsent(r *http.Request) bool {
+	return strings.TrimSpace(r.Header.Get("If-None-Match")) == "*"
+}
+
+// writeDocument renders the entry as the document an export would write
+// — server-owned keys included, since that is what a reader of a bundle
+// sees and what `ochakai get` hands to an editor.
+//
+// A render failure after the status is out cannot be reported, so it is
+// decided first: the entry came from the store, so failing here means the
+// renderer cannot express something the store holds, which is a 500.
+func writeDocument(w http.ResponseWriter, status int, k *domain.Knowledge) {
+	doc, err := okf.Document(k)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError,
+			map[string]string{"error": "render document: " + err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", documentMediaType)
+	w.WriteHeader(status)
+	_, _ = w.Write(doc)
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {

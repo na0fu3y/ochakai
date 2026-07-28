@@ -310,45 +310,47 @@ func (c *Client) Get(ctx context.Context, id string) (*domain.Knowledge, error) 
 	return &k, nil
 }
 
-func (c *Client) Create(ctx context.Context, k *domain.Knowledge) (*domain.Knowledge, error) {
-	var created domain.Knowledge
-	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/knowledge", nil, k, &created); err != nil {
-		return nil, err
-	}
-	return &created, nil
-}
-
-// Update replaces the entry at k.ID (full replacement; the server
-// keeps every change as a revision). changed=false reports the server
-// wrote nothing because the payload matched the stored content (the
-// Ochakai-Unchanged response header); servers predating the header
-// always report changed=true.
+// Put writes doc — an OKF document — to the entry at id, creating it
+// when the id is free (PUT /api/v1/knowledge/{id}). One call, because a
+// document says what the entry should say and nothing about whether it
+// already existed (design doc 0043 §3.5).
 //
 // A non-empty ifMatch is sent as the If-Match precondition: the entry's
-// version — its updated_at in RFC3339Nano, as a prior read returned it
-// (the ETag header, or the JSON body's updated_at field). The update
-// then lands only if the entry still has that version; a stale one is a
-// 412 APIError and nothing is written. "" means last write wins.
-func (c *Client) Update(ctx context.Context, k *domain.Knowledge, ifMatch string) (updated *domain.Knowledge, changed bool, err error) {
-	buf, err := json.Marshal(k)
-	if err != nil {
-		return nil, false, err
-	}
-	var hdr http.Header
+// version, as a prior read returned it (the ETag header, or the JSON
+// body's content_hash). The write then lands only if the entry still has
+// that version; a stale one is a 412 APIError and nothing is written. ""
+// means last write wins. onlyIfAbsent sends If-None-Match "*", which
+// makes an occupied id a 409 instead of a replacement.
+//
+// created reports which way it went; changed=false reports the server
+// wrote nothing because the document matched the stored content (the
+// Ochakai-Unchanged response header). notes carry values the server
+// accepted but read differently than they were written — a
+// reinterpretation is never silent (design doc 0036 §3.4).
+func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string, onlyIfAbsent bool) (
+	out *domain.Knowledge, created, changed bool, notes []string, err error) {
+	hdr := http.Header{}
 	if ifMatch != "" {
-		hdr = http.Header{"If-Match": {etagValue(ifMatch)}}
+		hdr.Set("If-Match", etagValue(ifMatch))
 	}
-	resp, err := c.doRaw(ctx, http.MethodPut, entryPath(k.ID), nil, "application/json", hdr, bytes.NewReader(buf))
+	if onlyIfAbsent {
+		hdr.Set("If-None-Match", "*")
+	}
+	resp, err := c.doRaw(ctx, http.MethodPut, entryPath(id), nil, documentMediaType, hdr, bytes.NewReader(doc))
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, nil, err
 	}
 	defer resp.Body.Close()
-	var out domain.Knowledge
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, false, err
+	var k domain.Knowledge
+	if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
+		return nil, false, false, nil, err
 	}
-	return &out, resp.Header.Get("Ochakai-Unchanged") != "true", nil
+	return &k, resp.StatusCode == http.StatusCreated,
+		resp.Header.Get("Ochakai-Unchanged") != "true", resp.Header.Values("Ochakai-Note"), nil
 }
+
+// documentMediaType is what an OKF concept document travels as.
+const documentMediaType = "text/markdown; charset=utf-8"
 
 // etagValue renders a version as an If-Match value: quoted, the way HTTP
 // spells an ETag, unless the caller already passed one (or "*").

@@ -773,15 +773,41 @@ func cmdCreate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	created, err := c.Create(ctx, k)
+	doc, err := documentOf(k)
 	if err != nil {
 		return err
 	}
+	// If-None-Match "*": create means create. A PUT with no precondition
+	// would replace an entry that is already there, which is what
+	// `ochakai update` is for.
+	created, _, _, notes, err := c.Put(ctx, k.ID, doc, "", true)
+	if err != nil {
+		return err
+	}
+	reportNotes(notes)
 	if *asJSON {
 		return printJSON(created)
 	}
 	fmt.Printf("created %s (%s)\n", created.URI(), created.Status)
 	return nil
+}
+
+// documentOf renders what the caller supplied as the OKF document the
+// server takes. Input that was already a document round-trips through
+// the same renderer the server stores, so what is sent is what will be
+// kept; JSON input is a local convenience that ends here (design doc
+// 0043 §5 — the server has one write format).
+func documentOf(k *domain.Knowledge) ([]byte, error) {
+	return okf.Canonical(k)
+}
+
+// reportNotes prints what the server read differently than it was
+// written. A reinterpretation is never silent (design doc 0036 §3.4),
+// and stderr keeps it out of a piped --json body.
+func reportNotes(notes []string) {
+	for _, n := range notes {
+		fmt.Fprintln(os.Stderr, "note:", n)
+	}
 }
 
 func cmdUpdate(ctx context.Context, args []string) error {
@@ -805,7 +831,11 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	updated, changed, err := c.Update(ctx, k, *ifMatch)
+	doc, err := documentOf(k)
+	if err != nil {
+		return err
+	}
+	updated, _, changed, notes, err := c.Put(ctx, id, doc, *ifMatch, false)
 	if err != nil {
 		var apiErr *apiclient.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
@@ -813,6 +843,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 		}
 		return err
 	}
+	reportNotes(notes)
 	if *asJSON {
 		return printJSON(updated)
 	}
@@ -1131,26 +1162,29 @@ func cmdImport(ctx context.Context, args []string) error {
 	for i := range entries {
 		d := &entries[i]
 		k := &d.Knowledge
-		if _, err := c.Create(ctx, k); err == nil {
-			created++
-			confirm(d)
-			fmt.Printf("created %s\n", k.URI())
-			continue
-		} else if isInvalid(err) {
+		doc, err := documentOf(k)
+		if err != nil {
 			skipEntry(k, err)
 			continue
-		} else if !isConflict(err) {
-			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
-		// No If-Match: import deliberately replaces whatever is stored
-		// (the bundle is the source of truth for this loop).
-		_, changed, err := c.Update(ctx, k, "")
+		// One call per document, with no precondition: import deliberately
+		// replaces whatever is stored (the bundle is the source of truth
+		// for this loop), and whether the id was free is not something the
+		// bundle says anything about.
+		_, wasCreated, changed, notes, err := c.Put(ctx, k.ID, doc, "", false)
 		if err != nil {
 			if isInvalid(err) {
 				skipEntry(k, err)
 				continue
 			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		reportNotes(notes)
+		if wasCreated {
+			created++
+			confirm(d)
+			fmt.Printf("created %s\n", k.URI())
+			continue
 		}
 		if !changed {
 			unchanged++

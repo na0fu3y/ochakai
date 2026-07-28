@@ -191,14 +191,14 @@ func TestETagRoundTrip(t *testing.T) {
 	}
 }
 
-// An oversized JSON body is a 413, matching what the attachment path
-// (readBody) already answers. Calling it "invalid JSON" sent the caller
+// An oversized document is a 413, matching what the attachment path
+// (readBody) already answers. Calling it a parse failure sent the caller
 // hunting for a syntax error in a payload that merely did not fit.
-func TestOversizedJSONBodyIsTooLarge(t *testing.T) {
+func TestOversizedDocumentIsTooLarge(t *testing.T) {
 	h := Handler(&service.Service{})
-	body := `{"type":"metrics","id":"metrics/x","body":"` + strings.Repeat("a", 5<<20) + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/knowledge", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	body := "---\ntype: Metric\n---\n\n" + strings.Repeat("a", 6<<20)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x", strings.NewReader(body))
+	req.Header.Set("Content-Type", "text/markdown")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -206,6 +206,26 @@ func TestOversizedJSONBodyIsTooLarge(t *testing.T) {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
 	}
 	if got := w.Body.String(); !strings.Contains(got, "exceeds") {
+		t.Errorf("body = %s", got)
+	}
+}
+
+// A JSON body is refused with the reason rather than a parse error: the
+// caller is written against the typed write surface design doc 0043 §3.5
+// removed, and needs to be told that — not told its document has no
+// frontmatter.
+func TestJSONWriteSaysToSendADocument(t *testing.T) {
+	h := Handler(&service.Service{})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x",
+		strings.NewReader(`{"type":"Metric","id":"metrics/x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusUnsupportedMediaType)
+	}
+	if got := w.Body.String(); !strings.Contains(got, "OKF document") {
 		t.Errorf("body = %s", got)
 	}
 }

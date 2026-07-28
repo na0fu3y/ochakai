@@ -236,6 +236,44 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	return k, true, nil
 }
 
+// Put writes k over whatever holds its id, creating the entry when the id
+// is free: one operation, because a document PUT is a statement about
+// what the entry should say and not about whether it already existed
+// (design doc 0043 §3.5).
+//
+// ifMatch makes it conditional, which also makes it an update: a
+// precondition names a version, and a version the caller read cannot
+// belong to an entry that does not exist. A missing entry is then a 404
+// rather than a silent create.
+//
+// created reports which way it went, so a surface can answer 201 or 200;
+// changed is Update's no-op signal, always true for a create.
+func (s *Service) Put(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) (out *domain.Knowledge, created, changed bool, err error) {
+	updated, changed, err := s.Update(ctx, k, actor, ifMatch)
+	if err == nil {
+		return updated, false, changed, nil
+	}
+	if ifMatch != nil || !errors.Is(err, store.ErrNotFound) {
+		return nil, false, false, err
+	}
+	// The id was free at the read above. If another writer took it in the
+	// window, this is an update after all — retry once rather than
+	// handing back an ErrAlreadyExists the caller cannot act on, since
+	// what it asked for ("make the entry say this") is still achievable.
+	made, err := s.Create(ctx, k, actor)
+	if err == nil {
+		return made, true, true, nil
+	}
+	if !errors.Is(err, store.ErrAlreadyExists) {
+		return nil, false, false, err
+	}
+	updated, changed, err = s.Update(ctx, k, actor, nil)
+	if err != nil {
+		return nil, false, false, err
+	}
+	return updated, false, changed, nil
+}
+
 // RefuseIfCurated reports an error when id names an entry a human has
 // already ruled on — verified, rejected, or deprecated — for surfaces that
 // must not overwrite that ruling in place. It returns the entry's version
