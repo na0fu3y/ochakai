@@ -2,7 +2,9 @@
 
 Status: Accepted(2026-07-28)。[0017](0017-path-addressing.md) の「パスが住所」を
 検索と context に届かせる。[0014](0014-folder-browse.md) の prefix ブラウズと同じ
-概念を、人がツリーを辿る面だけでなくフィルタとしても持つ。実装は同 PR
+概念を、人がツリーを辿る面だけでなくフィルタとしても持つ。実装は同 PR。
+0014 の browse 面は [0044](0044-bundle-address-space.md) §3.7 が `index.md` の
+導出に置き換えたが、prefix フィルタそのものは不変
 Date: 2026-07-28
 
 ## 1. 目的

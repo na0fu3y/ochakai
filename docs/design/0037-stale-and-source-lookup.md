@@ -3,7 +3,9 @@
 Status: Accepted(2026-07-27)。[0036](0036-okf-schema-first.md) §5 の 2 項目
 (`stale_after` のフィード、`sources` の逆引きと GIN index)を撤回して実装する。
 [0025](0025-closing-the-loop.md) にフィードを 1 つ足す(性質が異なるので §3.1 で
-区別を明示する)。実装は同 PR、0.14.0 で出る
+区別を明示する)。実装は同 PR、0.14.0 で出る。
+[0044](0044-bundle-address-space.md) §3.11 が `source` フィルタを frontmatter の
+jsonb 上の containment に置き換える(引けるという決定は不変)
 Date: 2026-07-27
 
 ## 1. 目的
