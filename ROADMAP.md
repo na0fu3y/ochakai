@@ -19,36 +19,38 @@ if the proposal is concrete.
 
 ## Now
 
-- **Get 0.15.0 out.** The latest release is
-  [0.14.0](https://github.com/na0fu3y/ochakai/releases/tag/v0.14.0)
-  (2026-07-27), which shipped 0035, 0036 and 0037. What is implemented on
-  `main` and unreleased is listed in the changelog's
-  [Unreleased](CHANGELOG.md) section; the breaking one is
-  [0038](docs/design/0038-type-vocabulary-realignment.md), which realigns
-  the recommended type vocabulary to what OKF itself spells out — nine
-  spellings become eleven, with `Semantic Model` and `Golden Query`
-  retired to free types. No migration runs and no stored entry changes.
-  Beside it, [0039](docs/design/0039-mcp-stdio-bridge.md) gives
-  stdio-only MCP clients a way in (`ochakai mcp-stdio`) and
-  [0040](docs/design/0040-read-only-mode.md) adds `OCHAKAI_READ_ONLY`,
-  for a deployment that serves knowledge without changing it. The release
-  baseline for breaking changes is 0.14.0.
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response
   past `api/openapi.yaml`, and fuzzing on the OKF parser. This is maintenance,
   not a feature — but it is where new endpoints acquire an obligation, since an
   endpoint only comes under the contract check once it has an integration test.
+  0.15.0 extended the same habit to the documentation: the CLI reference is
+  generated from the commands' own help and the shell completions are read
+  from their FlagSets, so both fail CI rather than drifting quietly. Prose the
+  checks do not reach is where the drift now shows up — the OpenAPI examples
+  still teach the vocabulary 0038 retired, because the guard reads the `Type:`
+  schema block and never the examples (issue #222).
 - **Make the project legible to somebody who has not read it.** An audit of
   what a newcomer can learn from this repository found the writing good and
-  the way in poor: the runtime requirement is stated only in
-  `docs/architecture.md`, MCP setup exists for one client out of the several
-  the README names, the CLI's help is the best documentation here and is
-  invisible until you have a binary, and the design records that the English
-  prose calls authoritative are Japanese-only. That is now
-  [a set of issues](https://github.com/na0fu3y/ochakai/issues) rather than a
-  paragraph here. None of it is a feature, and it is the work most likely to
-  decide whether anyone else can use this.
+  the way in poor. Most of what it raised has landed: the quick start loads a
+  ten-entry knowledge base and says what ochakai requires before you need it,
+  every MCP client the README names has setup instructions
+  ([docs/guides/mcp-clients.md](docs/guides/mcp-clients.md)), the CLI's help —
+  still the best documentation here — is rendered into
+  [docs/cli.md](docs/cli.md) before you have a binary, every design record
+  carries an English abstract, and the half of the product that is not Cloud
+  Run has a [FAQ](docs/faq.md),
+  [troubleshooting](docs/guides/troubleshooting.md) and an
+  [operating guide](docs/guides/operating.md). What is left is
+  [open as issues](https://github.com/na0fu3y/ochakai/issues) rather than a
+  paragraph here: the compatibility policy the wire surfaces actually follow
+  is still unwritten (issue #215), and the two ways in that are missing for
+  somebody with no shell or no map — an installable bundle for desktop MCP
+  clients (issue #213) and a guided `ochakai tutorial` (issue #212, which
+  needs a design doc before code, and may be the first command whose purpose
+  is teaching) — are proposals, not plans. None of it is a feature, and it is
+  the work most likely to decide whether anyone else can use this.
 
 ## Next
 
