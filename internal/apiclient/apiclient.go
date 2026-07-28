@@ -141,7 +141,9 @@ type SearchParams struct {
 	// Both are tri-state: nil leaves the question unasked. Nil Rejected
 	// still hides rejected entries — asking for them is opt-in, which is
 	// how an agent checks whether a proposal was already turned down.
-	Trust    []string
+	Trust []string
+	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	FM       map[string]string
 	Rejected *bool
 	Limit    int
 }
@@ -171,6 +173,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	}
 	for _, t := range p.Trust {
 		q.Add("trust", t)
+	}
+	for k, v := range p.FM {
+		q.Set("fm."+k, v)
 	}
 	if p.Rejected != nil {
 		q.Set("rejected", strconv.FormatBool(*p.Rejected))
@@ -211,7 +216,9 @@ type ContextParams struct {
 	// Trust narrows by who confirmed the entry, as on
 	// SearchParams. Rejected has no counterpart here: a context pack never
 	// carries knowledge somebody turned down.
-	Trust    []string
+	Trust []string
+	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	FM       map[string]string
 	Limit    int
 	MinScore float64
 	// Budget, when positive, caps the response bytes server-side: entries
@@ -242,6 +249,9 @@ func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, 
 	}
 	for _, t := range p.Trust {
 		q.Add("trust", t)
+	}
+	for k, v := range p.FM {
+		q.Set("fm."+k, v)
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))

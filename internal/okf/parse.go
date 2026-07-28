@@ -78,6 +78,39 @@ func yamlScalar(v any) any {
 	return v
 }
 
+// Frontmatter returns a document's frontmatter as a plain map, which is
+// what the store indexes (design doc 0046 §3.11). Values come back the
+// way the rest of this package reads them — a date with no clock stays a
+// date rather than becoming an instant (yamlScalar) — so the index says
+// what the document says.
+//
+// Server-owned keys are dropped: they are not in a stored document
+// (design doc 0043 §2.2), and a filter that could match on one would be
+// asking the index about provenance, which is the ledgers' answer.
+//
+// A document whose frontmatter will not parse yields an empty map rather
+// than an error. Storing an entry never depends on being able to index
+// it: the document is the truth, and an index that cannot be built from
+// it is a gap in querying, not a reason to refuse a write.
+func Frontmatter(doc []byte) map[string]any {
+	fm, _, ok := splitFrontmatter(string(NormalizeText(doc)))
+	if !ok || fm == "" {
+		return map[string]any{}
+	}
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(fm), &raw); err != nil {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(raw))
+	for k, v := range raw {
+		if serverOwnedKeys[k] {
+			continue
+		}
+		out[k] = yamlScalar(v)
+	}
+	return out
+}
+
 // parseDoc parses one OKF document, also returning the frontmatter type
 // verbatim so the caller can report an unusable one. k.Type is "" when the
 // frontmatter carries no type a knowledge entry can hold.

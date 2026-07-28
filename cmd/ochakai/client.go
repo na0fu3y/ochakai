@@ -205,6 +205,25 @@ func statusList() string {
 // to the second vocabulary OKF gives ochakai).
 func trustList() string { return strings.ReplaceAll(domain.TrustsHint(), ", ", "|") }
 
+// fmPairs turns repeated --fm key=value flags into the map the API takes.
+// A flag with no "=" is a mistake worth naming: silently ignoring it
+// would answer a narrower question than the caller asked, without saying
+// so.
+func fmPairs(vals []string) (map[string]string, error) {
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(vals))
+	for _, v := range vals {
+		key, value, ok := strings.Cut(v, "=")
+		if !ok || key == "" {
+			return nil, fmt.Errorf("--fm wants key=value, got %q", v)
+		}
+		out[key] = value
+	}
+	return out, nil
+}
+
 // parseRef parses an entry id (an "ochakai://" prefix is tolerated).
 func parseRef(s string) (string, error) {
 	id := strings.TrimPrefix(s, "ochakai://")
@@ -227,6 +246,8 @@ func cmdSearch(ctx context.Context, args []string) error {
 	source := fs.String("source", "", "only entries citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
+	var fm repeated
+	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's")
 	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
@@ -245,10 +266,14 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	pairs, err := fmPairs(fm)
+	if err != nil {
+		return err
+	}
 	hits, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
 		Source: *source, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
-		Trust: trust, Rejected: optBool(*rejected),
+		Trust: trust, Rejected: optBool(*rejected), FM: pairs,
 	})
 	if err != nil {
 		return err
@@ -344,6 +369,8 @@ func cmdContext(ctx context.Context, args []string) error {
 	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands")
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
+	var fm repeated
+	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
@@ -368,9 +395,13 @@ func cmdContext(ctx context.Context, args []string) error {
 	if *asJSON {
 		serverBudget = *budget
 	}
+	pairs, err := fmPairs(fm)
+	if err != nil {
+		return err
+	}
 	res, err := c.Context(ctx, apiclient.ContextParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
-		Prefixes: prefixes, Trust: trust, Limit: *limit, MinScore: *minScore, Budget: serverBudget,
+		Prefixes: prefixes, Trust: trust, FM: pairs, Limit: *limit, MinScore: *minScore, Budget: serverBudget,
 	})
 	if err != nil {
 		return err

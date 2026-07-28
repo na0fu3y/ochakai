@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -175,13 +176,25 @@ type Filter struct {
 	// default is not "no constraint" but "not the ones we said no to".
 	Trust    []domain.Trust
 	Rejected *bool
+
+	// Frontmatter narrows by any frontmatter key, which is what makes the
+	// query surface additive: a key OKF adds in a later version — or one
+	// a producer invented — is askable the day somebody writes it, with
+	// no column and no release (design doc 0046 §3.11). Every pair must
+	// match (AND), matching a scalar exactly or a list by membership.
+	//
+	// Exact and membership are the only two, deliberately: ranges,
+	// negation and boolean expressions are the doorway to a query
+	// language, and ochakai is a knowledge store whose answers are
+	// entries rather than a database whose answers are rows (0046 §5).
+	Frontmatter map[string]string
 }
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
 	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
-	links, attrs, body, created_at, updated_at, content_changed_at, doc, content_hash`
+	links, attrs, body, created_at, updated_at, content_changed_at, doc, frontmatter, content_hash`
 
 // ledgerCols is the two instance ledgers — verifications and the
 // rejection — read as JSON beside the entry's own columns (design doc
@@ -217,12 +230,33 @@ func lastVerifiedAt(alias string) string {
 // (design doc 0043 §3.1), and carrying the whole document beside the
 // body it contains would double every search result for nothing. Writes
 // keep it — they are what the index is derived from.
+// withoutFrontmatter drops only the index column, for the reads that do
+// want the document itself.
+func withoutFrontmatter(cols string) string {
+	var kept []string
+	for _, c := range strings.Split(cols, ",") {
+		if t := strings.TrimSpace(c); !strings.HasSuffix(t, "frontmatter") {
+			kept = append(kept, t)
+		}
+	}
+	return strings.Join(kept, ", ")
+}
+
 func withoutDoc(cols string) string {
 	var kept []string
 	for _, c := range strings.Split(cols, ",") {
-		if t := strings.TrimSpace(c); t != "doc" && t != "k.doc" && t != "knowledge.doc" {
-			kept = append(kept, t)
+		t := strings.TrimSpace(c)
+		if t == "doc" || t == "k.doc" || t == "knowledge.doc" {
+			continue
 		}
+		// The frontmatter index is never read back either: it is a
+		// question-answering copy of what the document already carries
+		// (design doc 0046 §3.11), so every read leaves it in the
+		// database where the filters use it.
+		if t == "frontmatter" || t == "k.frontmatter" || t == "knowledge.frontmatter" {
+			continue
+		}
+		kept = append(kept, t)
 	}
 	return strings.Join(kept, ", ")
 }
@@ -235,8 +269,21 @@ var (
 	// knowledgeSelectDoc is the same read with the stored document, for
 	// the paths that hand one out (design doc 0046 §2.2): a single get,
 	// an export, and the move that rewrites a body in place.
-	knowledgeSelectDoc = knowledgeCols + ", " + ledgerCols("knowledge")
+	knowledgeSelectDoc = withoutFrontmatter(knowledgeCols) + ", " + ledgerCols("knowledge")
 )
+
+// sortedKeys orders a filter's frontmatter keys so a query's arguments —
+// and therefore its prepared-statement text — are the same on every call
+// with the same filter. Map iteration order would otherwise make the
+// plan cache miss for no reason.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // notCurated is Knowledge.Curated() as a SQL predicate, for the guards
 // that must agree with it inside a transaction. alias names the knowledge
@@ -369,6 +416,13 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 // the only document it has. Either way the hash covers what is stored, so
 // the version means "these bytes", and neither a ruling nor a
 // verification, which write no bytes here, can move it.
+// storedFrontmatter is the queryable index over the document a write
+// stores (design doc 0046 §3.11) — derived from the same bytes, in the
+// same call, so the two cannot drift.
+func storedFrontmatter(doc string) ([]byte, error) {
+	return json.Marshal(okf.Frontmatter([]byte(doc)))
+}
+
 func storedDoc(k *domain.Knowledge) (doc, hash string, err error) {
 	b := []byte(k.Doc)
 	if len(b) > 0 && !documentSays(b, k) {
@@ -572,13 +626,17 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		if err != nil {
 			return err
 		}
+		fm, err := storedFrontmatter(doc)
+		if err != nil {
+			return err
+		}
 		k.ContentHash = hash
 		args := []any{
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, hash,
+			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash,
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES (`+knowledgeParams+`)
@@ -641,12 +699,16 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
+		fm, err := storedFrontmatter(doc)
+		if err != nil {
+			return err
+		}
 		k.ContentHash = hash
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, hash}
+			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash}
 		if ifMatch != nil {
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
@@ -656,7 +718,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
 			links=$20, attrs=$21, body=$22, updated_at=$23, content_changed_at=$24,
-			doc=$25, content_hash=$26
+			doc=$25, frontmatter=$26, content_hash=$27
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -1121,14 +1183,18 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		if err != nil {
 			return err
 		}
+		fm, err := storedFrontmatter(doc)
+		if err != nil {
+			return err
+		}
 		r.ContentHash = hash
 		tag, err := tx.Exec(ctx,
 			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8,
-			 doc=$9, content_hash=$10, content_changed_at=$11
+			 doc=$9, content_hash=$10, content_changed_at=$11, frontmatter=$12
 			 WHERE id=$1 AND deleted_at IS NULL`,
 			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash,
-			r.ContentChangedAt)
+			r.ContentChangedAt, fm)
 		if err != nil {
 			return err
 		}
@@ -1607,6 +1673,24 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 	if len(f.Tags) > 0 {
 		args = append(args, f.Tags)
 		conds = append(conds, fmt.Sprintf("%stags && $%d", prefix, len(args)))
+	}
+	// Containment against the frontmatter index, twice per key: a value
+	// the document wrote as a scalar and one it wrote inside a list are
+	// both "the entry says k is v", and a caller asking `fm.tags=finance`
+	// should not have to know which shape the writer chose. Both forms
+	// are answered by the same GIN index.
+	for _, key := range sortedKeys(f.Frontmatter) {
+		scalar, err := json.Marshal(map[string]any{key: f.Frontmatter[key]})
+		if err != nil {
+			continue
+		}
+		list, err := json.Marshal(map[string]any{key: []string{f.Frontmatter[key]}})
+		if err != nil {
+			continue
+		}
+		args = append(args, string(scalar), string(list))
+		conds = append(conds, fmt.Sprintf("(%[1]sfrontmatter @> $%[2]d OR %[1]sfrontmatter @> $%[3]d)",
+			prefix, len(args)-1, len(args)))
 	}
 	if f.Source != "" {
 		// Containment, so the GIN index on sources answers it directly.
