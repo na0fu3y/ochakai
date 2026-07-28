@@ -30,6 +30,20 @@ last entry.
   endpoint or status code changed; the guard that pins the vocabulary now
   reads the whole document rather than only the `Type` schema.
 
+### Fixed
+
+- `api/openapi.yaml` describes what a read-only deployment actually
+  answers: the `403` every write gets and the `Ochakai-Read-Only: true`
+  header stamped on every `/api/v1` response (design doc 0040 §2.3),
+  neither of which the spec mentioned. The same `403` also covers a
+  caller that sends `X-Ochakai-On-Behalf-Of` without being on the
+  delegator allowlist (design doc 0027) — promised in prose there since
+  it landed, declared on no operation. No behavior changed; the one REST
+  contract (design doc 0015 §2) now says what the server has been doing.
+  The read-only tests run through the spec-checking test server, so a
+  status or a route the spec does not describe now fails the build
+  rather than drifting quietly.
+
 ## [0.15.0] - 2026-07-28
 
 ### Added
