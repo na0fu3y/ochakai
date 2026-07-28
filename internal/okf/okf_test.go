@@ -556,3 +556,58 @@ attester:
 		t.Errorf("round trip changed the entry:\n got %+v\nwant %+v", back.Knowledge, d.Knowledge)
 	}
 }
+
+// A read hands back the document that was stored, not a rendering of it
+// (design docs 0046 §2.2, 0043 §3.5). The editing surfaces — the web UI's
+// editor, `ochakai get` — read this field and write it back, so a
+// rendering here would reformat every entry they touch: the comment
+// below would go, the key order would settle, and a status the writer
+// never wrote would appear.
+func TestViewOfHandsBackTheStoredDocument(t *testing.T) {
+	const stored = "---\ntype: Metric\n# 定義は財務の合意による\ntitle: 売上\nowner: finance\n---\n\n受注合計。\n"
+	k := domain.Knowledge{
+		Type: domain.TypeMetrics, ID: "metrics/revenue", Title: "売上",
+		Status: domain.StatusStable, Body: "受注合計。", Doc: stored,
+		CreatedBy: domain.Actor{Kind: domain.ActorHuman, Name: "na0"},
+		UpdatedBy: domain.Actor{Kind: domain.ActorHuman, Name: "na0"},
+	}
+	v, err := ViewOf(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Document != stored {
+		t.Errorf("the view rewrote the stored document:\n got %q\nwant %q", v.Document, stored)
+	}
+	// The projection still applies OKF's default to a document that names
+	// no status (SPEC §5.4) — the reading is the projection's job, and it
+	// is not written into the document (design doc 0046 §3.9).
+	if v.Summary.Status != domain.StatusStable {
+		t.Errorf("summary status = %q, want stable", v.Summary.Status)
+	}
+	if strings.Contains(v.Document, "status:") {
+		t.Errorf("the view wrote a status the document does not carry:\n%s", v.Document)
+	}
+	// Server-owned keys stay in observed, so what comes back can be sent
+	// straight back as a write.
+	for _, owned := range []string{"generated:", "created_by:", "verified:"} {
+		if strings.Contains(v.Document, owned) {
+			t.Errorf("the view's document carries the server-owned key %q:\n%s", owned, v.Document)
+		}
+	}
+
+	// An entry with no stored bytes — one composed in memory, or a row
+	// read for a listing — falls back to the canonical rendering, which
+	// is the only document it has.
+	k.Doc = ""
+	v, err = ViewOf(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canon, err := Canonical(&k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Document != string(canon) {
+		t.Errorf("an entry with no document did not fall back to the canonical form:\n%s", v.Document)
+	}
+}

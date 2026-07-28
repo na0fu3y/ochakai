@@ -1049,9 +1049,9 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	if back.Observed.CreatedBy.Name != created.Observed.CreatedBy.Name {
 		t.Errorf("a document's created_by was read back as provenance: %+v", back.Observed.CreatedBy)
 	}
-	// The view's document is canonical: the server-owned keys the
+	// The view's document is the stored one: the server-owned keys the
 	// text/markdown read carries are not in it, so it needs no stripping
-	// before the next edit (design doc 0043 §3.5).
+	// before the next edit (design docs 0043 §3.5, 0046 §2.2).
 	if strings.Contains(back.Document, "generated:") || strings.Contains(back.Document, "created_by:") {
 		t.Errorf("the view's document carries server-owned keys:\n%s", back.Document)
 	}
@@ -1067,5 +1067,108 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusPreconditionFailed {
 		t.Errorf("stale If-Match = %d, want 412", resp.StatusCode)
+	}
+}
+
+// TestRESTIntegrationDocumentSurvivesTheRoundTrip pins design doc 0046
+// §2.2 at the surface: what a read hands back is what was written.
+//
+// Storing the bytes is only half of it. The web UI's editor and
+// `ochakai get` read the JSON view's document and write it back, so a
+// canonical rendering there would reformat every entry those surfaces
+// touch — comments gone, key order settled, a status the writer never
+// wrote appearing — and the promise would hold only for the callers that
+// asked for text/markdown. The property is stated as a round trip
+// because that is how it is broken: read, send back, nothing happened.
+func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := checkedServer(t, Handler(svc))
+	defer srv.Close()
+
+	id := fmt.Sprintf("restbytes%d/revenue", time.Now().UnixNano())
+	// Cleaned up at the end of the body rather than from t.Cleanup: the
+	// cleanups run after this function's defers, so the server the
+	// request would go to is already closed by then.
+	defer func() {
+		for _, u := range []string{"", "?purge=true"} {
+			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id+u, nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		}
+	}()
+
+	// Everything a rendering would quietly normalize: a comment, the
+	// title after a producer key, a lowercase recommended type, and no
+	// status at all.
+	const written = "---\ntype: metric\n# 定義は財務の合意による\nowner: finance\ntitle: 売上\n---\n\n受注合計。\n"
+
+	resp := putDoc(t, srv.URL, id, []byte(written), true)
+	var created domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	if created.Document != written {
+		t.Errorf("the write rewrote the document:\n got %q\nwant %q", created.Document, written)
+	}
+
+	var read domain.View
+	getJSON(t, srv.URL+"/api/v1/knowledge/"+id, &read)
+	if read.Document != written {
+		t.Errorf("the read rewrote the document:\n got %q\nwant %q", read.Document, written)
+	}
+	// The projection applies OKF's default to a silent document (SPEC
+	// §5.4) without the document gaining a key (design doc 0046 §3.9),
+	// and the writer's casing is the stored casing.
+	if read.Summary.Status != domain.StatusStable {
+		t.Errorf("summary status = %q, want stable", read.Summary.Status)
+	}
+	if strings.Contains(read.Document, "status:") {
+		t.Errorf("a status was written into a document that named none:\n%s", read.Document)
+	}
+	if read.Summary.Type != "metric" {
+		t.Errorf("type = %q, want the writer's casing", read.Summary.Type)
+	}
+
+	// The markdown representation is the same bytes with this instance's
+	// observations appended — the export form, not a second document.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req.Header.Set("Accept", "text/markdown")
+	mdResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, _ := io.ReadAll(mdResp.Body)
+	mdResp.Body.Close()
+	for _, want := range []string{"# 定義は財務の合意による", "type: metric", "generated:", "created_by:"} {
+		if !strings.Contains(string(served), want) {
+			t.Errorf("the served document is missing %q:\n%s", want, served)
+		}
+	}
+
+	// And the loop closes: what the read handed over, sent back, is not
+	// a change.
+	resp = putDoc(t, srv.URL, id, []byte(read.Document), false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("sending back what was read = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
 	}
 }

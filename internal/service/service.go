@@ -791,7 +791,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 		for _, l := range entries[i].Links {
 			add(l.Target)
 		}
-		linking, err := s.Store.ListLinkingTo(ctx, entries[i].ID, 2*limit)
+		linking, err := s.Store.ListLinkingToDocs(ctx, entries[i].ID, 2*limit)
 		if err != nil {
 			s.Log.Warn("backlink lookup failed", "id", entries[i].ID, "error", err)
 			continue

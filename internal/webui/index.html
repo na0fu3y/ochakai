@@ -1797,19 +1797,28 @@ async function viewDetail(id) {
   });
 }
 
-// withStatus returns doc with its status line set. A canonical document
-// always carries one — the server writes status unconditionally — so this
-// is a line replacement on text ochakai itself produced, not a parser
-// (design doc 0044 §2.1 refuses the parser; this refuses to need one).
+// withStatus returns doc with its status line set: the line replaced when
+// the document has one, and appended to the frontmatter when it does not.
+// A writer who named no status leaves the key absent, and the server does
+// not fill it in (design doc 0046 §3.9) — so promoting such an entry has
+// to add the line, or the button would report success and change nothing.
 //
-// The alternative, rebuilding a document from the fields the page holds,
-// is what erased data before: the page holds the projection, and a
-// document assembled from it would drop everything the projection does
-// not carry — the citations, the contract, the body (design doc 0035 §4
-// is the same bug with fewer fields).
+// Still a line edit rather than a parser (design doc 0044 §2.1 refuses
+// the parser; this refuses to need one). The alternative, rebuilding a
+// document from the fields the page holds, is what erased data before:
+// the page holds the projection, and a document assembled from it would
+// drop everything the projection does not carry — the citations, the
+// contract, the body (design doc 0035 §4 is the same bug with fewer
+// fields).
 function withStatus(doc, status) {
   const line = 'status: ' + status;
-  return /^status:.*$/m.test(doc) ? doc.replace(/^status:.*$/m, line) : doc;
+  if (/^status:.*$/m.test(doc)) return doc.replace(/^status:.*$/m, line);
+  // Append inside the frontmatter block: after the opening delimiter's
+  // line, before the closing one. A document with no frontmatter is not
+  // one this UI can write, so it is handed back untouched and the PUT
+  // fails with the server's own message.
+  const m = doc.match(/^(---\r?\n[\s\S]*?)(---\r?\n[\s\S]*)$/);
+  return m ? m[1] + line + '\n' + m[2] : doc;
 }
 
 // Apply a status transition (full-replacement PUT), prompting for a

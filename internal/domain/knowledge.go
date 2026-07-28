@@ -991,6 +991,12 @@ func ObservedOf(k *Knowledge) Observed {
 
 // View is a read of one entry: the document it is, the projection to read
 // it by, and what this instance observed about it (design doc 0043 §3.5).
+//
+// Document is the stored document — the writer's own bytes (design doc
+// 0046 §2.2), without the keys this instance owns, which Observed carries
+// instead. It is what the editing surfaces read and write back, so it has
+// to be the thing that was written: a rendering here would mean every
+// edit through the web UI or `ochakai get` silently reformatted the entry.
 type View struct {
 	ID          string       `json:"id"`
 	Document    string       `json:"document"`

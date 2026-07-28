@@ -378,7 +378,11 @@ func sourcesOut(in []domain.Source) []source {
 // the keys this instance owns and only ever writes — generated and
 // verified (SPEC §5.2), and ochakai's created_by / rejected_* extensions.
 // This is what an export writes, what a read with Accept: text/markdown
-// returns, and what `ochakai get` hands to an editor.
+// returns, and what a revision records.
+//
+// The editing surfaces read ViewOf instead, which hands back the same
+// stored bytes without the owned keys: a document beside an Observed
+// that already says who wrote and confirmed the entry.
 //
 // The stored document is the writer's own bytes (design doc 0046 §2.2),
 // so the keys are appended to its frontmatter rather than merged into a
@@ -495,19 +499,30 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-// ViewOf assembles a read of one entry: the canonical document it is,
-// the projection to read it by, and what this instance observed about it
+// ViewOf assembles a read of one entry: the document it is, the
+// projection to read it by, and what this instance observed about it
 // (design doc 0043 §3.5).
 //
-// The document is rendered rather than fetched. It is a pure function of
-// the columns a read already returns, and the store pins that rendering
-// against the stored bytes — so re-rendering here reproduces what is
-// stored, and no read has to carry the document twice over the wire from
-// the database.
+// The document is the stored one — the writer's own bytes, comments, key
+// order and all (design doc 0046 §2.2). It has to be: this is the shape
+// the web UI's editor and `ochakai get` hand to whoever edits the entry,
+// so a rendering here would be a rewrite there, and the promise that a
+// document survives a round trip would hold only for the callers that
+// asked for text/markdown.
+//
+// Server-owned keys stay out of it. They are what Observed carries, and
+// putting them in the document too would hand an editor keys it is not
+// allowed to set — Document is the export form, and this is not it.
+//
+// The canonical rendering is the fallback for an entry with no stored
+// bytes: one composed in memory, or a row read for a listing.
 func ViewOf(k *domain.Knowledge) (domain.View, error) {
-	doc, err := Canonical(k)
-	if err != nil {
-		return domain.View{}, err
+	doc := []byte(k.Doc)
+	if len(doc) == 0 {
+		var err error
+		if doc, err = Canonical(k); err != nil {
+			return domain.View{}, err
+		}
 	}
 	return domain.View{
 		ID:          k.ID,

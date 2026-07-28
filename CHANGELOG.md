@@ -198,6 +198,15 @@ last entry.
     (design doc [0038](docs/design/0038-type-vocabulary-realignment.md)),
     and rewriting it would also leave the index disagreeing with the
     document it is derived from.
+  - **A read hands those bytes back.** The `document` field of a read —
+    what `ochakai get` prints, what the web UI's editor loads, what
+    `get_knowledge` returns — is the stored document, not a rendering of
+    it. Storing the bytes and rendering them back would have kept the
+    promise only for callers that asked for `text/markdown`, and every
+    edit through the UI or the CLI would have reformatted the entry on
+    its way past. The server-owned keys stay out of that field, as they
+    always were: `observed` is where they are, which is what makes the
+    field editable and sendable back as it came.
   - The canonical rendering stays as the form ochakai writes when it
     composes a document itself, and as what a write path falls back to
     when a caller changes an entry's fields rather than its document.

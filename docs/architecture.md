@@ -161,11 +161,12 @@ level and inside a `sources` entry, a parameter, the executor or the
 attester, because a key discarded on the way in is a key no later
 release can recover.
 
-An entry's version is the hash of its canonical document, which a read
+An entry's version is the hash of the document as stored, which a read
 returns as an `ETag` and a write takes back as `If-Match`. Being a hash
-of the content alone, it moves when the entry's content moves and at no
-other time — confirming an entry, rejecting it or attaching a file to it
-all leave a held precondition valid.
+of the document alone, confirming an entry, rejecting it or attaching a
+file to it all leave a held precondition valid; reformatting the entry
+moves it, because the file did change — what the entry *says* did not,
+and that is what `generated.at` reports.
 
 What this instance *observed* about an entry travels beside the document
 rather than inside it: who created it, who last changed it, every
@@ -291,7 +292,7 @@ memory and flushed periodically, statistics are documented as
 best-effort, an overrun is dropped rather than backing up the request,
 and shutdown drains before a final flush (design doc
 [0029](design/0029-usage-recording-off-the-read-path.md)). Concurrent
-edits are handled by optional optimistic locking — the canonical
+edits are handled by optional optimistic locking — the stored
 document's hash as the version, exposed as an ETag with `If-Match`
 (design doc
 [0030](design/0030-optimistic-locking.md)).
