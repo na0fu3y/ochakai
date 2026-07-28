@@ -143,14 +143,14 @@ func TestUpdateIfMatchIntegration(t *testing.T) {
 	}
 
 	// Writer A updates against the current version — accepted.
-	v2, _, err := svc.Update(ctx, mk("v2"), actor, &base.UpdatedAt)
+	v2, _, err := svc.Update(ctx, mk("v2"), actor, &base.ContentHash)
 	if err != nil {
 		t.Fatalf("If-Match update on the current version: %v", err)
 	}
 
 	// Writer B still holds the pre-A version: its update must be rejected,
 	// not silently clobber A's write (the lost-update this fix closes).
-	if _, _, err := svc.Update(ctx, mk("v3-from-stale"), actor, &base.UpdatedAt); !errors.Is(err, store.ErrConflict) {
+	if _, _, err := svc.Update(ctx, mk("v3-from-stale"), actor, &base.ContentHash); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("stale If-Match: got %v, want ErrConflict", err)
 	}
 	// The stored content is still A's, untouched by B.
@@ -161,7 +161,7 @@ func TestUpdateIfMatchIntegration(t *testing.T) {
 	}
 
 	// After re-reading A's version, B can proceed.
-	if _, _, err := svc.Update(ctx, mk("v3"), actor, &v2.UpdatedAt); err != nil {
+	if _, _, err := svc.Update(ctx, mk("v3"), actor, &v2.ContentHash); err != nil {
 		t.Fatalf("If-Match update after re-read: %v", err)
 	}
 
@@ -238,8 +238,8 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			t.Fatalf("draft must be writable: %v", err)
 		}
 		// The guard hands back a usable precondition, not just a verdict.
-		if version == nil || !version.Equal(k.UpdatedAt) {
-			t.Errorf("version = %v, want the entry's updated_at %v", version, k.UpdatedAt)
+		if version == nil || *version != k.ContentHash {
+			t.Errorf("version = %v, want the entry's content hash %q", version, k.ContentHash)
 		}
 		// Promotion to stable is not restricted — 0002 stands.
 		setStatus(t, k, domain.StatusStable, actor)

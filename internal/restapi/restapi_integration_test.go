@@ -122,7 +122,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 	getJSON(t, srv.URL+"/api/v1/revisions/"+typ+"/sales/orders", &revs)
 	if len(revs.Revisions) != 1 || revs.Revisions[0].Change != "create" ||
-		revs.Revisions[0].Snapshot.Title != "REST round trip" {
+		!strings.Contains(revs.Revisions[0].Document, "title: REST round trip") {
 		t.Errorf("revisions = %+v", revs.Revisions)
 	}
 
@@ -469,7 +469,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	// A create returns the entry, so it returns the version with it: a
 	// client that creates and then updates conditionally should not have
 	// to GET the entry it just wrote to learn what to put in If-Match.
-	if got, want := resp.Header.Get("ETag"), `"`+created.UpdatedAt.Format(time.RFC3339Nano)+`"`; got != want {
+	if got, want := resp.Header.Get("ETag"), `"`+created.ContentHash+`"`; got != want || created.ContentHash == "" {
 		t.Errorf("create ETag = %q, want %q", got, want)
 	}
 

@@ -90,9 +90,12 @@ curates from.
 ### What happens when two people edit the same entry?
 
 Last write wins, unless the client asks for better. Every `GET` and `PUT`
-returns an `ETag` — the entry's `updated_at` as a quoted RFC3339 stamp,
-e.g. `"2026-07-27T14:55:19.865822Z"` — and a `PUT` carrying `If-Match`
-with a stale value gets `412` and writes nothing (design doc 0030). MCP
+returns an `ETag` — the hash of the entry's canonical OKF document,
+quoted, and also in the body as `content_hash` — and a `PUT` carrying
+`If-Match` with a stale value gets `412` and writes nothing (design docs
+0030, 0043 §3.4). It is a hash of the content alone, so verifying or
+rejecting the entry, or attaching a file to it, leaves your precondition
+valid: only an edit invalidates it. MCP
 exposes no version field but uses the same mechanism internally to protect
 curated entries.
 

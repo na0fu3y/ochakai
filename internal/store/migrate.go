@@ -3,11 +3,15 @@ package store
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 //go:embed migrations/*.sql
@@ -86,6 +90,12 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 		}
 	}
 
+	// Runs inside the advisory lock, like the SQL migrations, so several
+	// instances starting at once do not compose the same documents twice.
+	if err := s.backfillDocuments(ctx); err != nil {
+		return fmt.Errorf("backfill documents: %w", err)
+	}
+
 	if embedDim > 0 {
 		if err := s.migrateEmbedding(ctx, embedDim); err != nil {
 			return err
@@ -93,6 +103,143 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 	}
 	return nil
 }
+
+// backfillDocuments composes the canonical document (and its hash) for
+// every entry and revision written before migration 0024 made the
+// document the stored form (design doc 0043 §§3.1, 3.9).
+//
+// It lives here rather than in the migration file because composing a
+// document means writing YAML in the spelling and key order the spec
+// fixes — the same renderer an export uses, which is Go. An empty doc is
+// the marker for "not yet composed", so this is idempotent: a run that
+// dies half-way resumes, and a database that has been through it does a
+// single counting query and returns.
+//
+// updated_at is deliberately not touched. Composing the stored form is a
+// change of representation, not of content.
+func (s *Store) backfillDocuments(ctx context.Context) error {
+	if err := s.backfillEntryDocuments(ctx); err != nil {
+		return err
+	}
+	return s.backfillRevisionDocuments(ctx)
+}
+
+func (s *Store) backfillEntryDocuments(ctx context.Context) error {
+	for {
+		rows, err := s.pool.Query(ctx,
+			`SELECT `+knowledgeSelect+` FROM knowledge WHERE doc = '' ORDER BY id LIMIT $1`,
+			backfillBatch)
+		if err != nil {
+			return err
+		}
+		batch, err := pgx.CollectRows(rows, scanKnowledge)
+		if err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			return nil
+		}
+		for i := range batch {
+			doc, hash, err := canonicalDoc(&batch[i])
+			if err != nil {
+				// A row the renderer cannot read is left with an empty
+				// doc rather than a wrong one, and named so somebody can
+				// look. Returning here would wedge every later start.
+				s.log.Warn("cannot compose the stored document", "id", batch[i].ID, "err", err)
+				continue
+			}
+			if _, err := s.pool.Exec(ctx,
+				`UPDATE knowledge SET doc = $2, content_hash = $3 WHERE id = $1`,
+				batch[i].ID, doc, hash); err != nil {
+				return err
+			}
+		}
+		// Rows the renderer refused keep doc = '' and would be selected
+		// again forever; stop once a batch converted nothing.
+		if !anyConverted(ctx, s, batch) {
+			return nil
+		}
+	}
+}
+
+// anyConverted reports whether any of the batch now has a document, so a
+// batch that failed wholesale ends the loop instead of repeating it.
+func anyConverted(ctx context.Context, s *Store, batch []domain.Knowledge) bool {
+	ids := make([]string, len(batch))
+	for i := range batch {
+		ids[i] = batch[i].ID
+	}
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge WHERE id = ANY($1) AND doc <> ''`, ids).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// backfillRevisionDocuments renders each stored snapshot as the document
+// that revision held. A snapshot the current shape cannot read loses what
+// it cannot express — design doc 0043 §3.9 accepts that in exchange for a
+// history whose shape does not depend on knowing every past release.
+func (s *Store) backfillRevisionDocuments(ctx context.Context) error {
+	for {
+		rows, err := s.pool.Query(ctx,
+			`SELECT id, rev, snapshot FROM knowledge_revision
+			 WHERE doc = '' AND snapshot IS NOT NULL ORDER BY id, rev LIMIT $1`, backfillBatch)
+		if err != nil {
+			return err
+		}
+		type row struct {
+			id       string
+			rev      int
+			snapshot []byte
+		}
+		batch, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+			var v row
+			return v, r.Scan(&v.id, &v.rev, &v.snapshot)
+		})
+		if err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			return nil
+		}
+		for _, b := range batch {
+			doc := ""
+			var k domain.Knowledge
+			if err := json.Unmarshal(b.snapshot, &k); err != nil {
+				s.log.Warn("cannot read a revision snapshot", "id", b.id, "rev", b.rev, "err", err)
+			} else if rendered, err := okf.Document(&k); err != nil {
+				s.log.Warn("cannot compose a revision document", "id", b.id, "rev", b.rev, "err", err)
+			} else {
+				doc = string(rendered)
+			}
+			// An unreadable snapshot is marked with a placeholder rather
+			// than left empty: empty means "not yet converted", and the
+			// loop would come back to it every start.
+			if doc == "" {
+				doc = unreadableRevision
+			}
+			if _, err := s.pool.Exec(ctx,
+				`UPDATE knowledge_revision SET doc = $3 WHERE id = $1 AND rev = $2`,
+				b.id, b.rev, doc); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// backfillBatch bounds how much of the knowledge base the backfill holds
+// at once, the way the exporter batches for the same reason.
+const backfillBatch = 200
+
+// unreadableRevision stands in for a snapshot the current shape cannot
+// read. It is a valid OKF document, so every consumer of a revision gets
+// a document — and it says plainly that the content is gone rather than
+// pretending the revision was empty.
+const unreadableRevision = "---\ntype: Reference\nstatus: deprecated\n---\n\n" +
+	"This revision was written in a shape this release cannot read, and its\n" +
+	"content did not survive the move to document storage (design doc 0043 §3.9).\n"
 
 // migrateEmbedding sets up pgvector storage. Runs only when an embedding
 // provider is configured, keeping plain PostgreSQL sufficient by default.

@@ -1140,8 +1140,11 @@ func TestIntegrationListRevisions(t *testing.T) {
 	if revs[0].Rev != 3 || revs[2].Rev != 1 {
 		t.Errorf("revs = %d..%d, want 3..1", revs[0].Rev, revs[2].Rev)
 	}
-	if revs[1].Snapshot.Title != "v2" || revs[2].Snapshot.Title != "v1" {
-		t.Errorf("snapshot titles = %q, %q; want v2, v1", revs[1].Snapshot.Title, revs[2].Snapshot.Title)
+	// A revision is the document the entry was, so the title is read out
+	// of the frontmatter rather than off a struct field (design doc 0043
+	// §3.9).
+	if !strings.Contains(revs[1].Document, "title: v2") || !strings.Contains(revs[2].Document, "title: v1") {
+		t.Errorf("revision documents do not carry v2, v1:\n%s\n%s", revs[1].Document, revs[2].Document)
 	}
 	if revs[0].ChangedBy != actor {
 		t.Errorf("changed_by = %+v, want %+v", revs[0].ChangedBy, actor)
@@ -2006,15 +2009,11 @@ func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
 		}
 		t.Fatalf("revisions (newest first) = %v, want [move create] — the moved entry must not get its own trailing \"update\"", changes)
 	}
-	if revs[0].Snapshot.Body != stored.Body {
-		t.Errorf("move revision snapshot body %q contradicts the stored row %q", revs[0].Snapshot.Body, stored.Body)
+	if !strings.Contains(revs[0].Document, stored.Body) {
+		t.Errorf("move revision document contradicts the stored row %q:\n%s", stored.Body, revs[0].Document)
 	}
-	if !revs[0].Snapshot.UpdatedAt.Equal(stored.UpdatedAt) {
-		t.Errorf("move revision snapshot updated_at %v, stored row has %v", revs[0].Snapshot.UpdatedAt, stored.UpdatedAt)
-	}
-	if revs[0].Snapshot.UpdatedAt.Before(revs[1].Snapshot.UpdatedAt) {
-		t.Errorf("revision timestamps run backwards: rev %d has %v, rev %d has %v",
-			revs[1].Rev, revs[1].Snapshot.UpdatedAt, revs[0].Rev, revs[0].Snapshot.UpdatedAt)
+	if want := stored.UpdatedAt.UTC().Format(time.RFC3339); !strings.Contains(revs[0].Document, want) {
+		t.Errorf("move revision document does not carry generated.at %s:\n%s", want, revs[0].Document)
 	}
 	if revs[0].ChangedAt.Before(revs[1].ChangedAt) {
 		t.Errorf("revision changed_at runs backwards: rev %d at %v, rev %d at %v",
@@ -2030,8 +2029,8 @@ func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
 	if len(refRevs) != 2 || refRevs[0].Change != "update" {
 		t.Fatalf("referrer revisions = %+v, want an \"update\" on top of \"create\"", refRevs)
 	}
-	if !strings.Contains(refRevs[0].Snapshot.Body, "/"+dest+".md") {
-		t.Errorf("referrer's update snapshot still points at the old id: %q", refRevs[0].Snapshot.Body)
+	if !strings.Contains(refRevs[0].Document, "/"+dest+".md") {
+		t.Errorf("referrer's update revision still points at the old id:\n%s", refRevs[0].Document)
 	}
 }
 
@@ -2505,5 +2504,147 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 		if n != 0 {
 			t.Errorf("purge left %d row(s) in %s", n, table)
 		}
+	}
+}
+
+// The version is the content's, not the row's (design doc 0043 §3.4).
+// This is the invariant the whole change turns on: until 0.16 the ETag
+// was updated_at, so verifying an entry — or attaching a file to it —
+// moved a version whose content nobody had touched, and an editor's held
+// If-Match died for a reason unrelated to their edit.
+func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+	id := fmt.Sprintf("it-hash-%d", time.Now().UnixNano())
+	k := &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: "first",
+		Status: domain.StatusDraft, Body: "One.", CreatedBy: actor}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	if k.ContentHash == "" {
+		t.Fatal("create returned no version")
+	}
+	original := k.ContentHash
+
+	for _, tc := range []struct {
+		what string
+		do   func() error
+	}{
+		{"verifying", func() error { _, err := s.Verify(ctx, id, actor); return err }},
+		{"rejecting", func() error { _, err := s.Reject(ctx, id, actor, "no"); return err }},
+		{"lifting a rejection", func() error { _, err := s.LiftRejection(ctx, id, actor); return err }},
+	} {
+		if err := tc.do(); err != nil {
+			t.Fatalf("%s: %v", tc.what, err)
+		}
+		read, err := s.Get(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if read.ContentHash != original {
+			t.Errorf("%s moved the version %q -> %q; a ruling is not an edit",
+				tc.what, original, read.ContentHash)
+		}
+	}
+
+	// An edit does move it, and the old version stops matching.
+	read, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read.Body = "Two."
+	if err := s.Update(ctx, read, actor, &original); err != nil {
+		t.Fatalf("an update against the unchanged version must be accepted: %v", err)
+	}
+	if read.ContentHash == original {
+		t.Error("an edit left the version where it was")
+	}
+	stale := original
+	read.Body = "Three."
+	if err := s.Update(ctx, read, actor, &stale); !errors.Is(err, ErrConflict) {
+		t.Errorf("update with a stale version = %v, want ErrConflict", err)
+	}
+
+	// Two entries that say the same thing hash alike: the version is a
+	// statement about content, not about which row holds it.
+	twin := &domain.Knowledge{Type: domain.TypeTerms, ID: id + "-twin", Title: "first",
+		Status: domain.StatusDraft, Body: "One.", CreatedBy: domain.Actor{Kind: domain.ActorProcess, Name: "other"}}
+	if err := s.Create(ctx, twin, false); err != nil {
+		t.Fatal(err)
+	}
+	if twin.ContentHash != original {
+		t.Errorf("identical content hashed differently: %q vs %q", twin.ContentHash, original)
+	}
+}
+
+// The stored document and the columns beside it are one value written
+// twice: the columns are the index derived from the document (design doc
+// 0043 §3.1), so re-rendering what a read returns must reproduce exactly
+// what is stored. If these drift, the index is no longer derived.
+func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+	id := fmt.Sprintf("it-storeddoc-%d", time.Now().UnixNano())
+	count := 7
+	k := &domain.Knowledge{
+		Type: domain.TypeComputations, ID: id, Title: "月次売上", Description: "説明",
+		Resource: "bq://p.d.t", Tags: []string{"finance", "core"},
+		Status: domain.StatusStable, StatusNote: "checked", StaleAfter: "2027-01-31",
+		Runtime: "bigquery", Computation: "queries/rev.sql",
+		Sources: []domain.Source{{Resource: "https://example.test/policy", ID: "pol",
+			UsageCount: &count, LastModified: "2026-05-30"}},
+		UsageWindow: &domain.UsageWindow{From: "2026-06-01", To: "2026-06-30"},
+		Parameters:  []domain.Parameter{{Name: "year", Type: "integer", Required: true}},
+		Executor:    &domain.Executor{Resource: "run.md", Receipt: []string{"job_id"}},
+		Attester:    &domain.Attester{Resource: "check.py"},
+		Attrs:       map[string]any{"question": "月次の売上は?", "owner": "finance"},
+		Body:        "本文。[売上](/metrics/revenue.md) を見る。", CreatedBy: actor,
+	}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id) })
+
+	var stored string
+	if err := s.pool.QueryRow(ctx, `SELECT doc FROM knowledge WHERE id = $1`, id).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered, hash, err := canonicalDoc(read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rendered != stored {
+		t.Errorf("the index no longer reproduces the stored document:\n--- stored ---\n%s\n--- from the index ---\n%s", stored, rendered)
+	}
+	if hash != read.ContentHash {
+		t.Errorf("stored hash %q does not match the document's %q", read.ContentHash, hash)
 	}
 }

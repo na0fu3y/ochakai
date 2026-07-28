@@ -478,12 +478,13 @@ Usage: ochakai revisions [flags] <id>
 
 List an entry's change history, newest first: who changed it, how,
 and when — the audit surface behind "every change kept as a
-revision". Works for soft-deleted entries too. Full snapshots are in
-the JSON output (--json).
+revision". Works for soft-deleted entries too. The whole entry as it
+stood, as an OKF document, is in the JSON output (--json), so a diff
+between two revisions is a text diff.
 
 Flags:
   -json
-    	print the raw JSON response (includes full snapshots)
+    	print the raw JSON response (includes each revision's document)
   -limit int
     	max revisions (server default 50, max 200)
   -url ochakai use
@@ -491,7 +492,7 @@ Flags:
 
 Examples:
   ochakai revisions metrics/revenue
-  ochakai revisions queries/sales/monthly-revenue --json | jq '.revisions[0].snapshot'
+  ochakai revisions queries/sales/monthly-revenue --json | jq -r '.revisions[0].document'
 ```
 
 ## ochakai search
@@ -594,7 +595,7 @@ Flags:
   -f string
     	input file (default: stdin)
   -if-match version
-    	update only if the entry still has this version — its updated_at (`ochakai get <id> --json` prints it as .updated_at; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting
+    	update only if the entry still has this version — its content hash (`ochakai get <id> --json` prints it as .content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does
   -json
     	print the updated entry as JSON
   -url ochakai use
@@ -603,7 +604,7 @@ Flags:
 Examples:
   ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue
   ochakai update metrics/revenue -f revenue.md
-  ochakai update metrics/revenue -f revenue.md --if-match "$(ochakai get metrics/revenue --json | jq -r .updated_at)"
+  ochakai update metrics/revenue -f revenue.md --if-match "$(ochakai get metrics/revenue --json | jq -r .content_hash)"
 ```
 
 ## ochakai usage
