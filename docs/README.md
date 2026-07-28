@@ -12,6 +12,9 @@ types, and every environment variable.
 - [Architecture](architecture.md) — how the pieces fit, what the data
   model is, and why there is no authorization layer. English summary of
   the decision records.
+- [Compatibility and support](compatibility.md) — every interface is
+  unstable at 0.x, there is no deprecation window, and only the latest
+  release is supported. Read this before building on ochakai.
 - [Roadmap](../ROADMAP.md) — what is being worked on, and what is
   deliberately refused.
 - [Changelog](../CHANGELOG.md) — what changed between releases.

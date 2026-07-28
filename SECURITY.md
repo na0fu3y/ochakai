@@ -5,7 +5,8 @@
 Please report vulnerabilities privately via
 [GitHub Security Advisories](https://github.com/na0fu3y/ochakai/security/advisories/new)
 — do not open a public issue. You should receive a response within a few
-days. The latest release is the supported version.
+days. The latest release is the supported version — there is no support
+window and no backporting ([docs/compatibility.md](docs/compatibility.md)).
 
 ## Scope notes
 
