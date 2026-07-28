@@ -38,6 +38,15 @@ last entry.
   Storage became additive when the document became the stored form;
   querying did not follow until now.
 
+  A value is text, and one that spells a number or a boolean matches the
+  typed value the document wrote as well: YAML types frontmatter, so
+  `required: true` is indexed as a boolean and `usage_count: 5` as a
+  number, and asking for them by their text alone found nothing —
+  silently, since a filter matching nothing is zero rows rather than an
+  error. `fm.required=true` now finds both the document that wrote
+  `true` and the one that wrote `"true"`, while text that only looks
+  numeric stays text (`fm.code=007` finds `code: "007"`).
+
   Exact match and list membership are the only two comparisons. Ranges,
   negation and boolean expressions are the doorway to a query language,
   and what ochakai returns is knowledge rather than rows.
@@ -55,10 +64,9 @@ last entry.
   have depended on how you spelled the key. The prefix carries the keys
   ochakai does not name, and only those.
 
-  Migration 0027 adds the column
-  and a GIN index and backfills from each stored document; no timestamp
-  moves and no hash changes, since indexing what an entry already said is
-  not a change to what it says.
+  Migration 0027 adds the column and a GIN index and backfills from each
+  stored document; no timestamp moves and no hash changes, since indexing
+  what an entry already said is not a change to what it says.
 
 - `ochakai import --strict` — fail on a bundle that was not read exactly
   as written, instead of reporting it. A note is still the default and
@@ -79,7 +87,47 @@ last entry.
   (`… 0 skipped, 0 notes`), because a count that only appears in the
   scrollback is a count nobody reads.
 
+### Security
+
+- **A file is served the way its media type deserves** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2). An image, a PDF
+  or plain text is served `inline` as before; anything else now goes out
+  as a download, under `Content-Security-Policy: sandbox`, and
+  `X-Content-Type-Options: nosniff` is set on both.
+
+  Nothing stored today takes the second branch — the write path still
+  refuses every media type but those (design doc
+  [0013](docs/design/0013-attachment-files-gcs-only.md)), and it refuses
+  `text/html` and `image/svg+xml` by name. That is exactly why the rule
+  belongs on the way out as well: an SVG is an image by every convention
+  and a document that carries script by specification, and the only thing
+  standing between one and the web UI's own origin was a sniffer check at
+  write time. A row written before that check, or bytes a browser reads
+  differently than `http.DetectContentType` did, had nothing behind it.
+
+  It is also the half that has to exist first. 0046 §3.2 stops refusing
+  media types on the way in — a bundle whose files come back missing does
+  not round-trip — and "receive it, do not render it" is only a policy
+  once the second half is true.
+
 ### Fixed
+
+- The invalid-status error names the statuses there are. It offered
+  `draft, verified, deprecated, rejected` — two of which stopped being
+  statuses when design doc
+  [0043](docs/design/0043-document-first.md) §§3.2-3.3 moved confirmation
+  into the verification ledger and rejection into a ruling — and omitted
+  `stable`, the value the writer usually wants. A caller who wrote
+  `status: published` was told to retry with `verified`, which fails the
+  same way. It now renders `domain.Statuses` like every other
+  enumeration, and a test reads the whole tree for a lifecycle list
+  spelled by hand, so this copy cannot come back.
+
+- The shipped Claude Code write-back hook told the agent to search with
+  `--status rejected`, which is not an invocation `ochakai search`
+  accepts — `--status` takes a lifecycle value and a rejection is not
+  one. It now says `--rejected`, the flag that actually shows entries a
+  human turned down.
 
 - Producer-defined keys **inside** a `sources` entry, a `parameter`, an
   `executor` or an `attester` are kept rather than dropped (SPEC §4.1,
@@ -103,12 +151,35 @@ last entry.
 
 ### Changed
 
+- **The store is keyed by the bundle path** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§2.1, 3.1). Migration
+  0028 renames `knowledge` to `object` and moves its primary key to
+  `path`, the address each object lives at; the revision ledger is
+  re-keyed the same way, so a file's history will land beside the
+  concept's instead of in a second place.
+
+  Nothing on the wire moves. The concept id is still the address a
+  concept is called by — SPEC §2's "the path with `.md` removed", which
+  every ledger joins on and every surface names an entry by — and it
+  keeps a unique index of its own. What changed is what the table is a
+  table *of*: one bundle, mapping a path to an object, with a knowledge
+  entry as one kind of object in it. Files arrive in a later change
+  (§3.13), which is where the path stops being derivable from the id.
+
+  Operators: the migration is one rename, two column additions and two
+  primary-key swaps, all in one transaction. It rewrites no content and
+  moves no timestamp.
+
 - **BREAKING**: the two files OKF reserves are served at the paths OKF
   reserves them at (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.7-3.8).
   `GET /api/v1/bundle/{path}` answers `index.md` (SPEC §8's directory
   listing) and `log.md` (SPEC §9's update history); both are generated
-  from the bundle, so `PUT` and `DELETE` are `405`.
+  from the bundle, so `PUT` and `DELETE` against either are `409`.
+  Any other path under `/api/v1/bundle/` is `404` on read and `501` on
+  write: the rest of the bundle joins this address in a later change
+  (0046 §3.5), and a refusal there says so rather than explaining
+  itself in terms of two files the caller never named.
 
   - **`GET /api/v1/browse` is gone.** A directory listing is what
     `index.md` is, and ochakai was serving it at an address of its own

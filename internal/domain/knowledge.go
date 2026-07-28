@@ -170,6 +170,19 @@ func ValidStatus(s Status) bool {
 	return slices.Contains(Statuses, s)
 }
 
+// StatusesHint renders the lifecycle vocabulary for help and error text,
+// so no surface keeps a copy of the list to fall behind. The write path's
+// invalid-status error did, and named `verified` and `rejected` for years
+// after they stopped being statuses (design doc 0043 §§3.2-3.3) — telling
+// a caller to retry with a value that fails the same way.
+func StatusesHint() string {
+	names := make([]string, len(Statuses))
+	for i, s := range Statuses {
+		names[i] = string(s)
+	}
+	return strings.Join(names, ", ")
+}
+
 // Trust is the tier a consumer derives from an entry's verification
 // ledger, in OKF's own vocabulary (SPEC §5.3). It is not a lifecycle
 // value and not a field a writer can set: status says whether the entry
@@ -424,7 +437,7 @@ func ValidActorKind(kind string) bool {
 // what it was called.
 type Link struct {
 	Target string `json:"target"`         // the target entry's id (its bundle path)
-	Text   string `json:"text,omitempty"` // the anchor text; empty for a bare ochakai:// reference
+	Text   string `json:"text,omitempty"` // the anchor text; empty when the link gave none
 }
 
 // DisplayText returns how the link should read: its anchor text when the
@@ -1042,14 +1055,16 @@ type SearchHit struct {
 
 // ContextRank is what a hit is worth once the entries travel in the same
 // response: an ordering, not a second copy of the knowledge (design doc
-// 0033). SearchHit embeds the whole Knowledge — body, attrs and all — so
-// a context pack that returned hits verbatim sent every top entry twice
-// and left the byte budget governing one of the copies.
+// 0033). A SearchHit embedded the whole Knowledge — body, attrs and all
+// — when this split was made, so a context pack that returned hits
+// verbatim sent every top entry twice and left the byte budget governing
+// one of the copies. A hit is a projection now (see SearchHit above), but
+// a rank stays narrower still: a pack that already ships the entries
+// needs no second description of them.
 //
 // The fields are the ones a caller needs to decide whether to spend a
 // round trip on an id it was not handed: search results below the pack's
-// own cut-off arrive only this way. Search itself keeps returning full
-// hits — there the entries are the answer, not a duplicate of one.
+// own cut-off arrive only this way.
 type ContextRank struct {
 	ID     string `json:"id"`
 	Type   Type   `json:"type"`
@@ -1093,4 +1108,17 @@ type ContextOutline struct {
 	Description string `json:"description,omitempty"`
 	Status      Status `json:"status"`
 	Bytes       int    `json:"bytes"`
+}
+
+// ConceptPath is the bundle path a concept lives at: its id with ".md"
+// on the end (OKF SPEC §2, design doc 0017). The path is what an object
+// is keyed by (design doc 0046 §3.1) and the id is the address a concept
+// is called by, so every place that has one and needs the other goes
+// through here rather than concatenating a suffix of its own.
+func ConceptPath(id string) string { return id + ".md" }
+
+// ConceptID is the inverse: the id addressed by a bundle path, and ""
+// when the path is not a markdown file and so names no concept.
+func ConceptID(path string) (string, bool) {
+	return strings.CutSuffix(path, ".md")
 }

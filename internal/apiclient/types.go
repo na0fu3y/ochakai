@@ -6,7 +6,8 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// BrowseResult mirrors GET /api/v1/browse (design docs 0014, 0016): one
+// BrowseResult mirrors the JSON representation of a directory's index.md
+// (design docs 0014, 0016, and 0046 §3.7 for where it now lives): one
 // level of the ID hierarchy — the subdirectories and entries directly
 // under the prefix ("" is the root). TestBrowseResultMatchesServerWire
 // pins it to service.BrowseResult.

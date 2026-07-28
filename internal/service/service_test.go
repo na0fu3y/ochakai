@@ -277,6 +277,25 @@ func TestValidateRejectsBadInput(t *testing.T) {
 			t.Errorf("%s: want InvalidInputError, got %v", name, err)
 		}
 	}
+
+	// Rejecting is half the job: the message has to name the vocabulary
+	// the writer can use. It named `verified` and `rejected` — a ledger
+	// and a ruling since design doc 0043 §§3.2-3.3, not statuses — and
+	// never named `stable`, so whoever wrote `published` was told to retry
+	// with a value that fails exactly the same way.
+	bad := base()
+	bad.Status = "published"
+	msg := validate(bad).Error()
+	for _, s := range domain.Statuses {
+		if !strings.Contains(msg, string(s)) {
+			t.Errorf("the invalid-status error never names %q: %s", s, msg)
+		}
+	}
+	for _, retired := range []string{"verified", "rejected"} {
+		if strings.Contains(msg, retired) {
+			t.Errorf("the invalid-status error still offers %q, not a status since design doc 0043: %s", retired, msg)
+		}
+	}
 }
 
 // A write payload's byte-compared keys — the id, and the link targets

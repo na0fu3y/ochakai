@@ -128,9 +128,17 @@ func carriesOpaqueBytes(r *http.Request) bool {
 // path: it fails the test on any request or response the spec does not
 // describe. Integration tests use it instead of httptest.NewServer so
 // their existing traffic doubles as the contract's coverage.
+//
+// The close is registered here rather than left to the caller's `defer
+// srv.Close()`: cleanups run after a function's defers, so a test that
+// closed the server with defer and deleted its rows from t.Cleanup sent
+// those deletes to a server that was already gone — the error discarded,
+// the rows left in a reused test database (issue #278). Registered at
+// creation it is the first cleanup on the list, and cleanups are LIFO, so
+// it runs after everything the test body registers afterwards.
 func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 	v := openAPIValidator(t)
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if carriesOpaqueBytes(r) {
 			h.ServeHTTP(w, r)
 			return
@@ -172,6 +180,30 @@ func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 		w.WriteHeader(rec.Code)
 		_, _ = w.Write(rec.Body.Bytes())
 	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestCheckedServerOutlivesTheTestBody pins that ordering. It needs no
+// database — readOnlyServer is checkedServer over a service that reaches
+// none — because whether a cleanup can still reach the server is the
+// whole of what the integration tests' row deletion rests on: a closed
+// server answers a delete with a transport error, entry or no entry.
+func TestCheckedServerOutlivesTheTestBody(t *testing.T) {
+	srv := readOnlyServer(t)
+	t.Cleanup(func() {
+		req, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/gone", nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Errorf("a cleanup registered after checkedServer cannot reach it: %v", err)
+			return
+		}
+		resp.Body.Close()
+	})
 }
 
 // reportSpecErrors prints what the spec objected to, including the

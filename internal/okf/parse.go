@@ -257,7 +257,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	status, known := domain.StatusFromOKF(strings.TrimSpace(fm.status))
 	if !known {
 		notes = append(notes, fmt.Sprintf("status %q is not an OKF lifecycle value (%s); read as %s",
-			fm.status, statusesHint(), status))
+			fm.status, domain.StatusesHint(), status))
 	}
 	if !domain.ValidStaleAfter(fm.staleAfter) {
 		notes = append(notes, fmt.Sprintf("stale_after %q is not a YYYY-MM-DD date; dropped", fm.staleAfter))
@@ -308,16 +308,6 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	}}, fm.typ, notes, nil
 }
 
-// statusesHint renders the lifecycle vocabulary for a note, from the one
-// place it is spelled.
-func statusesHint() string {
-	names := make([]string, len(domain.Statuses))
-	for i, st := range domain.Statuses {
-		names[i] = string(st)
-	}
-	return strings.Join(names, ", ")
-}
-
 // The v0.2 family readers. All of them follow the same rule: never reject
 // the document (SPEC's conformance section tells consumers to accept a
 // concept without rejecting it, and design doc 0036 §3.12 fixed the same
@@ -363,11 +353,13 @@ func windowFrom(v any, where string) (*domain.UsageWindow, []string) {
 	return w, notes
 }
 
-// sourceKeys is the closed set SPEC §5.1 defines. A producer key inside a
-// source mapping is dropped with a note rather than kept: the point of
-// modeling sources is that four surfaces can describe one shape, and an
-// open map defeats the form editor and the tool schema alike (design doc
-// 0036 §3.5).
+// sourceKeys is the closed set SPEC §5.1 defines: the keys ochakai reads
+// into fields of its own, which is what lets four surfaces describe one
+// shape — the form editor and the tool schema are built from them
+// (design doc 0036 §3.5). A producer key inside a source mapping is not
+// one of them and is not dropped either: extraKeys carries it through
+// untouched, because the document is the stored form and a key discarded
+// here is a key no later release can recover (design doc 0043 §3.6).
 var sourceKeys = map[string]bool{
 	"resource": true, "id": true, "title": true, "author": true,
 	"usage_count": true, "last_modified": true, "usage_window": true,

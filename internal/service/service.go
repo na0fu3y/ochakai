@@ -195,11 +195,12 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 // just read must not bury real history under identical snapshots.
 //
 // ifMatch is an optional optimistic-concurrency precondition (design doc
-// 0030): when non-nil it is the updated_at the caller based the edit
-// on, and an entry that has changed since — whether before this call's
-// read, or in the read-modify-write window below — yields store.ErrConflict
-// rather than silently clobbering the other write. nil keeps the prior
-// last-write-wins behavior for callers that do not opt in.
+// 0030): when non-nil it is the content hash the caller based the edit
+// on (design doc 0043 §3.4), and an entry that has changed since —
+// whether before this call's read, or in the read-modify-write window
+// below — yields store.ErrConflict rather than silently clobbering the
+// other write. nil keeps the prior last-write-wins behavior for callers
+// that do not opt in.
 func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) (updated *domain.Knowledge, changed bool, err error) {
 	if err := s.readOnly(); err != nil {
 		return nil, false, err
@@ -557,7 +558,7 @@ func validate(k *domain.Knowledge) error {
 		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)
 	}
 	if k.Status != "" && !domain.ValidStatus(k.Status) {
-		return Invalidf("invalid status %q (valid: draft, verified, deprecated, rejected)", k.Status)
+		return Invalidf("invalid status %q (valid: %s)", k.Status, domain.StatusesHint())
 	}
 	if !domain.ValidStaleAfter(k.StaleAfter) {
 		return Invalidf("invalid stale_after %q (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)", k.StaleAfter)

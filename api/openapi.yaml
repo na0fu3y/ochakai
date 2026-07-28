@@ -93,6 +93,13 @@ paths:
             matching a scalar or a member of a list. Repeat with
             different keys to AND them.
 
+            A value is text, and one that spells a number or a boolean
+            also matches the typed value a document wrote: YAML types
+            frontmatter, so `fm.required=true` finds `required: true` and
+            `fm.usage_count=5` finds `usage_count: 5`, as well as the
+            entries that quoted them. Text that only looks numeric stays
+            text — `fm.code=007` finds `code: "007"`.
+
             This is the filter that does not need a release. A key OKF
             adds in a later version, or one a producer invented, is
             askable the day somebody writes it — the whole frontmatter is
@@ -154,7 +161,7 @@ paths:
           explode: true
           # A path is segments joined by "/", so the separator travels
           # literally rather than percent-encoded — as it does for the
-          # prefix of GET /api/v1/browse.
+          # path of GET /api/v1/bundle/{path}.
           allowReserved: true
         - name: limit
           in: query
@@ -341,10 +348,10 @@ paths:
         names. Two representations of one thing, at one address — the
         JSON is what a web UI's tree needs, not a second surface.
 
-        PUT and DELETE are 405: a generated file is not one anybody
-        writes. Paths other than the two reserved names are 404 for now —
-        the rest of the bundle joins this address in a later change
-        (0046 §3.5).
+        PUT and DELETE against these two names are 409: a generated file
+        is not one anybody writes. Paths other than the two reserved
+        names are 404 on read and 501 on write for now — the rest of the
+        bundle joins this address in a later change (0046 §3.5).
       parameters:
         - name: path
           in: path
@@ -427,28 +434,74 @@ paths:
                         updated_at: "2026-07-14T02:33:41.019778Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
-    put:
-      operationId: putBundleFile
-      summary: Refused — the reserved files are generated
-      description: >
-        index.md and log.md are derived from the bundle (design doc 0046
-        §§3.7-3.8), so neither is written. The same goes for DELETE.
-      responses:
-        "405":
-          description: A generated file is not one anybody writes.
+        "404":
+          description: >
+            No object at this path. Today that is every path but the two
+            reserved names: the concepts and files join this address in a
+            later change (design doc 0046 §3.5).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   error: { type: string }
+              example:
+                error: 'no object at "metrics/revenue.md": the bundle surface serves index.md and log.md'
+    put:
+      operationId: putBundleFile
+      summary: Refused — generated at the reserved names, not built yet elsewhere
+      description: >
+        Two refusals, and the path decides which. index.md and log.md are
+        derived from the bundle (design doc 0046 §§3.7-3.8), so a write
+        there is a conflict with what the address is: 409. Every other
+        path is the write face 0046 §3.5 describes, which lands in a
+        later change: 501. The same goes for DELETE.
+      responses:
+        "409":
+          description: A generated file is not one anybody writes.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              example:
+                error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
+        "501":
+          description: The bundle write surface is not built yet.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              example:
+                error: the bundle write surface lands in a later change (design doc 0046 §3.5)
     delete:
       operationId: deleteBundleFile
-      summary: Refused — the reserved files are generated
+      summary: Refused — generated at the reserved names, not built yet elsewhere
       description: See PUT.
       responses:
-        "405":
-          description: A generated file is not one anybody writes.
+        "409":
+          description: A generated file is not one anybody deletes.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        "501":
+          description: The bundle write surface is not built yet.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -501,6 +554,13 @@ paths:
             finds the entries whose frontmatter says owner is finance,
             matching a scalar or a member of a list. Repeat with
             different keys to AND them.
+
+            A value is text, and one that spells a number or a boolean
+            also matches the typed value a document wrote: YAML types
+            frontmatter, so `fm.required=true` finds `required: true` and
+            `fm.usage_count=5` finds `usage_count: 5`, as well as the
+            entries that quoted them. Text that only looks numeric stays
+            text — `fm.code=007` finds `code: "007"`.
 
             This is the filter that does not need a release. A key OKF
             adds in a later version, or one a producer invented, is
@@ -1784,11 +1844,34 @@ paths:
         no-cache: names are mutable (replace-by-name), so clients
         revalidate every time. Fetching the bytes records a usage event
         against the owning entry; a 304 revalidation does not.
+
+        The bytes were uploaded by somebody, so what a browser may do
+        with them is decided here (design doc 0046 §3.2). An image, a
+        PDF or plain text is served `inline`; anything else — an SVG and
+        an HTML file above all, which are documents that carry script —
+        is served as an `attachment` under
+        `Content-Security-Policy: sandbox`, so it has no origin to run
+        in. `X-Content-Type-Options: nosniff` is set either way, because
+        the media type was decided by sniffing the bytes and a browser
+        must not decide it again.
       responses:
         "200":
           description: The attachment bytes.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+            Content-Disposition:
+              description: >
+                `inline` for an image, a PDF or plain text; `attachment`
+                for everything else (design doc 0046 §3.2).
+              schema: { type: string }
+            Content-Security-Policy:
+              description: >
+                `sandbox`, on the responses that are not served inline —
+                bytes that could carry script get no origin to run in.
+              schema: { type: string }
+            X-Content-Type-Options:
+              description: "`nosniff`, always."
+              schema: { type: string }
           content:
             "*/*":
               schema: { type: string, format: binary }

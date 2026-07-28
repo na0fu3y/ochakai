@@ -34,7 +34,7 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 	}
 	for _, del := range []string{
 		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-ext%'`,
-		`DELETE FROM knowledge WHERE id LIKE 'it-ext%'`,
+		`DELETE FROM object WHERE id LIKE 'it-ext%'`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-ext%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
@@ -150,7 +150,7 @@ func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
 	id := fmt.Sprintf("it-attach-race-%d", time.Now().UnixNano())
 	defer func() {
 		_, _ = s.pool.Exec(ctx, `DELETE FROM attachment WHERE knowledge_id = $1`, id)
-		for _, table := range []string{"knowledge_revision", "knowledge"} {
+		for _, table := range []string{"knowledge_revision", "object"} {
 			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id)
 		}
 	}()
@@ -169,7 +169,7 @@ func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
 	}
 	defer func() { _ = del.Rollback(ctx) }()
 	if _, err := del.Exec(ctx,
-		`UPDATE knowledge SET deleted_at = now(), updated_at = now() WHERE id = $1`, id); err != nil {
+		`UPDATE object SET deleted_at = now(), updated_at = now() WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
 
@@ -186,7 +186,8 @@ func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
 		var waiting int
 		if err := s.pool.QueryRow(ctx,
 			`SELECT count(*) FROM pg_stat_activity
-			  WHERE wait_event_type = 'Lock' AND query LIKE '%knowledge%'`).Scan(&waiting); err != nil {
+			  WHERE wait_event_type = 'Lock'
+			    AND (query LIKE '%object%' OR query LIKE '%knowledge%')`).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting > 0 {

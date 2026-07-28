@@ -248,7 +248,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
-	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
+	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
 	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
@@ -371,7 +371,7 @@ func cmdContext(ctx context.Context, args []string) error {
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
-	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
+	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")

@@ -45,7 +45,7 @@ type BrowseEntry struct {
 // has an id column of its own, and a bare one inside the subquery would
 // bind to it and match everything.
 const browseNotRejected = `deleted_at IS NULL
-	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = knowledge.id)`
+	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = object.id)`
 
 // MaxBrowseEntries bounds one directory listing. A directory this wide
 // is a modeling smell, not a paging problem — the caller renders a
@@ -61,7 +61,7 @@ const MaxBrowseEntries = 1000
 func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, entries []BrowseEntry, truncated bool, err error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT split_part(substr(id, length($1::text)+1), '/', 1) AS dir, count(*)
-		FROM knowledge
+		FROM object
 		WHERE `+browseNotRejected+`
 		  AND left(id, length($1::text)) = $1
 		  AND strpos(substr(id, length($1::text)+1), '/') > 0
@@ -79,7 +79,7 @@ func (s *Store) Browse(ctx context.Context, prefix string) (dirs []DirCount, ent
 	}
 	rows, err = s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT type, id, title, description, status, updated_at
-		FROM knowledge
+		FROM object
 		WHERE `+browseNotRejected+`
 		  AND left(id, length($1::text)) = $1
 		  AND strpos(substr(id, length($1::text)+1), '/') = 0
