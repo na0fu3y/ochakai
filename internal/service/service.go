@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -638,7 +640,7 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 		return nil, Invalidf("search needs a query; use sort=%s to list entries without one, "+
 			"or source=URI to list what cites a resource", strings.Join(domain.ListSorts, "|"))
 	}
-	f, err := scopedFilter(f)
+	f, err := checkedFilter(f)
 	if err != nil {
 		return nil, err
 	}
@@ -982,11 +984,29 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort string, f store.
 // the filter already says what is wanted.
 const sortBySource = "source"
 
-// scopedFilter returns f with its path scopes normalized, rejecting one
-// that could not lead an id. Every surface hands its prefixes through
-// here — the contract lives on the server (design doc 0015 §2), so REST,
-// MCP and the CLI cannot disagree about whether "teams/growth/" is the
-// same scope as "teams/growth".
+// namedFilter maps the frontmatter keys ochakai reads through a column
+// of its own onto the filter that asks about them. A "fm." parameter
+// naming one of these is refused rather than answered (design doc 0047):
+// the column and the jsonb path do not answer the same question, and the
+// caller cannot see which one they got.
+//
+// Only keys with a filter beside them are listed. The boundary is "the
+// key already has a way to ask", not "ochakai knows the key" — refusing
+// one with nothing to point at would take away the only way to ask it.
+var namedFilter = map[string]string{
+	"type":        "type=",
+	"status":      "status=",
+	"tags":        "tag=",
+	"sources":     "source=URI",
+	"stale_after": "sort=stale_after",
+}
+
+// checkedFilter returns f with its path scopes normalized, rejecting one
+// that could not lead an id, and refuses a frontmatter filter that
+// shadows a named one. Every surface hands its filter through here — the
+// contract lives on the server (design doc 0015 §2), so REST, MCP and the
+// CLI cannot disagree about whether "teams/growth/" is the same scope as
+// "teams/growth", nor about which spellings of a question exist.
 //
 // An empty prefix is the root, which narrows nothing: it drops out rather
 // than erroring, because asking for everything is a request the server can
@@ -995,7 +1015,15 @@ const sortBySource = "source"
 // This is not an access check. A caller may pass any prefix or none, and
 // none returns the whole base — reading is bounded by who can reach the
 // service, not by what they ask for (design doc 0002, and 0041 §4).
-func scopedFilter(f store.Filter) (store.Filter, error) {
+func checkedFilter(f store.Filter) (store.Filter, error) {
+	// Sorted, so a request naming two of them reports the same one every
+	// time rather than whichever the map handed over first.
+	for _, key := range slices.Sorted(maps.Keys(f.Frontmatter)) {
+		if use, ok := namedFilter[key]; ok {
+			return f, Invalidf("fm.%s is not a filter: ochakai reads %s through a column of its own, "+
+				"which does not answer what the frontmatter says — use %s", key, key, use)
+		}
+	}
 	if len(f.Prefixes) == 0 {
 		return f, nil
 	}
@@ -1041,7 +1069,7 @@ func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit i
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	f, err := scopedFilter(f)
+	f, err := checkedFilter(f)
 	if err != nil {
 		return nil, err
 	}

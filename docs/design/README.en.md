@@ -118,10 +118,27 @@ For the shape of the system rather than the history of it, read
 
 ## The knowledge model — structure, ids, types, names, links
 
+- **[0047 `fm.` carries the keys ochakai does not name](0047-fm-carries-unnamed-keys.md)**
+  — *Accepted; amends 0046 §3.11, whose "the named filters become sugar
+  over the frontmatter expression" is not what shipped, and adds one
+  deliberate omission to 0015 §3.* The typed columns stay — they are the
+  better index — so `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+  `fm.stale_after` are refused with 400 instead of answering a different
+  question than the filter of the same name. The difference was real and
+  invisible: `status=stable` matches a document that says nothing, because
+  OKF's default is stable, and `fm.status=stable` never did — which after
+  0046 §3.9 is every entry an agent wrote without saying `draft`. The
+  boundary is "the key already has a way to ask", not "ochakai knows the
+  key", so a key with a projection but no filter is still queryable.
+  *For a user:* the refusal names the filter to use, so the next request
+  is the right one; `fm.` stays on REST, MCP and the CLI, and stays off
+  the web UI, whose filters show the values you can pick.
+
 - **[0046 The bundle is the address space](0046-bundle-address-space.md)**
   — *Accepted; the current record for OKF compatibility, superseding 0043,
   0008, 0011, 0013 and 0014. Implementation follows in later pull requests,
-  released together with 0043's.* Turns the remaining mapping inside out:
+  released together with 0043's. §3.11's "the named filters become sugar"
+  is amended by 0047.* Turns the remaining mapping inside out:
   what ochakai holds is one bundle — a map from path to object — and a
   knowledge entry is one kind of object in it. A `.md` without a `type` and
   a file nothing links to are stored and round-tripped instead of being
@@ -390,8 +407,9 @@ For the shape of the system rather than the history of it, read
   local `serve` and pointing client commands at it.
 
 - **[0015 Surface consistency](0015-surface-consistency.md)** —
-  *Accepted; §4's verify-as-sugar judgment was overturned by 0025 §6 and
-  its surface table restated by 0046 §3.14.*
+  *Accepted; §4's verify-as-sugar judgment was overturned by 0025 §6, its
+  surface table restated by 0046 §3.14, and one omission — `fm.` is not on
+  the web UI — added to §3 by 0047 §4.*
   Fixes what each surface is for and, more usefully, what each deliberately
   omits. REST is the contract; MCP's tool count is a context budget, so
   browse, revisions, backlinks, attachment writes, bulk export/import,

@@ -2804,6 +2804,11 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 		{"a key nobody wrote", map[string]string{"unheard-of": "x"}, nil},
 		{"two keys are AND-ed", map[string]string{"owner": "finance", "systems": "looker"}, []string{"owned"}},
 		{"one of them missing excludes the entry", map[string]string{"owner": "finance", "systems": "airflow"}, nil},
+		// The store indexes every key alike and answers for any of them.
+		// Refusing the five ochakai reads through a column of its own is
+		// the service's job (design doc 0047), not this layer's: the
+		// filter is the mechanism, and where a caller may point it is a
+		// contract about the query surface.
 		{"a key the spec does define, indexed like any other", map[string]string{"type": "Metric"},
 			[]string{"other", "owned", "quoted", "silent"}},
 		// A boolean and a number are askable in the spelling the document

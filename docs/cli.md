@@ -167,7 +167,7 @@ Flags:
   -budget int
     	cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under "outline"
   -fm key=value
-    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true)
+    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead
   -json
     	print the raw JSON response
   -limit int
@@ -564,7 +564,7 @@ from the company-wide vocabulary.
 
 Flags:
   -fm key=value
-    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true)
+    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead
   -json
     	print the raw JSON response
   -limit int

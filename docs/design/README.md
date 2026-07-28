@@ -63,9 +63,17 @@ PR の中に残る。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
+- [0047 `fm.` は名前を付けていないキーだけを運ぶ](0047-fm-carries-unnamed-keys.md)
+  — **Accepted**。0046 §3.11 の「named フィルタは式への糖衣」を改訂し、
+  typed column を残したまま `fm.type` / `fm.status` / `fm.tags` /
+  `fm.sources` / `fm.stale_after` を 400 で拒否する。同じキーが綴りに
+  よって別の問いになる状態(沈黙した `status` は `status=stable` に
+  当たり `fm.status=stable` に当たらない)を、解決ではなく除去する。
+  拒否はサービス層 1 か所で、REST / MCP / CLI が共有する。
+  0015 §3 に「`fm.` は Web UI に載せない」という省略を 1 件足す(§4)。
 - [0046 バンドルがアドレス空間](0046-bundle-address-space.md) —
   **Accepted**(実装は後続 PR、0.15.0 の次のリリースで 0043 の実装と
-  束ねて出る)。**OKF 互換領域の現行ドキュメント**。バンドルを
+  束ねて出る。§3.11 の「named フィルタは式への糖衣」は 0047 が改訂)。**OKF 互換領域の現行ドキュメント**。バンドルを
   「パス → オブジェクト」の写像そのものとし、概念でないファイルも
   往復させる(取り込みで消えるものが無くなる)。保存は**受け取った
   バイト列**で正準形は導出値、`index.md` / `log.md` は SPEC §8 / §9 の
@@ -93,7 +101,8 @@ PR の中に残る。
   `stale_after` / `sources` を引けるようにする: `sort=stale_after` の
   期限切れフィード(verify ではなく編集で空になる — 0025 の 2 フィードとの
   違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index。
-  0046 §3.11 で frontmatter の jsonb 上の containment になる)。
+  0046 §3.11 は frontmatter の jsonb 上の containment に置き換えるとしたが、
+  0047 がそれを取り消し、どちらも列のまま残る)。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) —
   **Superseded by 0043**(document-first への全面置き換え。0043 の実装が
   ランドするまでコードとリリースは 0036 の姿。§5 の 2 項目は 0037 が撤回して
@@ -190,7 +199,8 @@ PR の中に残る。
   データの出し入れを API 経由に一本化。DB 直結で残るのは `serve` のみ。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) —
   **Accepted**(§4 の verify 糖衣の判断は 0025 §6 が覆し、サーフェス表は
-  0046 §3.14 が現在の姿に言い直した)。
+  0046 §3.14 が現在の姿に言い直した。§3 の「載せないもの」に
+  0047 §4 が `fm.` の Web UI 省略を足した)。
   4 サーフェスの役割分担と、意図して実装しないもの。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
   — **Accepted**(0046 §3.10 が行に trust tier を足す)。バイト予算の決定を記録し、`hits` から知識の複製を外す

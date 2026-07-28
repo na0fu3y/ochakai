@@ -54,10 +54,19 @@ last entry.
   The typed columns stay where they are — they are the same values with
   better indexes (trigram over the text, a date for `stale_after`, an
   array for tags) — so `type`, `status`, `tag`, `source` and
-  `stale_after` keep answering from them. Migration 0027 adds the column
-  and a GIN index and backfills from each stored document; no timestamp
-  moves and no hash changes, since indexing what an entry already said is
-  not a change to what it says.
+  `stale_after` keep answering from them. Because they do, `fm.type`,
+  `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after` are refused
+  with a 400 naming the filter to use instead (design doc
+  [0047](docs/design/0047-fm-carries-unnamed-keys.md)). A column and a
+  jsonb path do not answer the same question — `status=stable` matches a
+  document that says nothing, since OKF's default is stable, while
+  `fm.status=stable` never would — and which of the two you got would
+  have depended on how you spelled the key. The prefix carries the keys
+  ochakai does not name, and only those.
+
+  Migration 0027 adds the column and a GIN index and backfills from each
+  stored document; no timestamp moves and no hash changes, since indexing
+  what an entry already said is not a change to what it says.
 
 - `ochakai import --strict` — fail on a bundle that was not read exactly
   as written, instead of reporting it. A note is still the default and
