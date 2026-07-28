@@ -120,8 +120,9 @@ For the shape of the system rather than the history of it, read
 
 - **[0043 The document is the truth](0043-document-first.md)** —
   *Accepted; the current record for OKF compatibility, superseding 0036.
-  Implementation follows in later pull requests; until it lands, the code
-  and releases keep 0036's shape.* Both storage and the wire become the
+  Implemented across later pull requests and not yet released; the
+  breaking changes ship in the release after 0.15.0. §3.11's web UI form
+  sugar was withdrawn by 0044.* Both storage and the wire become the
   canonical OKF document itself (frontmatter + markdown); the database is
   reduced to derived index columns and instance-local ledgers. Status
   becomes OKF's three values verbatim; "a human confirmed this" is a row
