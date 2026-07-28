@@ -54,7 +54,7 @@ func TestIntegration(t *testing.T) {
 	}
 	// Hard-delete leftovers from prior runs (soft-deleted rows still
 	// conflict on the primary key).
-	for _, table := range []string{"knowledge", "knowledge_revision", "knowledge_embedding"} {
+	for _, table := range []string{"object", "knowledge_revision", "knowledge_embedding"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -444,7 +444,7 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-link-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -505,7 +505,7 @@ func TestIntegrationPrefixFilterMatchesSegments(t *testing.T) {
 	}
 	// Both families this test creates, or a second run trips over its own
 	// leftovers: soft-deleted rows still hold the primary key.
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx,
 			`DELETE FROM `+table+` WHERE id LIKE 'it-scope%' OR id LIKE 'it-elsewhere%'`); err != nil {
 			t.Fatal(err)
@@ -597,7 +597,7 @@ func TestIntegrationSearchLexicalWildcardEscape(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-wild-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -653,7 +653,7 @@ func TestIntegrationUsageBuffering(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-buf-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -713,7 +713,7 @@ func TestIntegrationMove(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.UseBlobStore(newFakeBlobStore())
-	for _, table := range []string{"knowledge", "knowledge_revision", "knowledge_embedding"} {
+	for _, table := range []string{"object", "knowledge_revision", "knowledge_embedding"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-move-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -883,7 +883,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-revive-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -993,7 +993,7 @@ func TestIntegrationAttachments(t *testing.T) {
 	}
 	for _, del := range []string{
 		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-att%'`,
-		`DELETE FROM knowledge WHERE id LIKE 'it-att%'`,
+		`DELETE FROM object WHERE id LIKE 'it-att%'`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-att%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
@@ -1102,7 +1102,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-revs-%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -1213,7 +1213,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 
 	searchText := func(id string) string {
 		var got string
-		if err := s.pool.QueryRow(ctx, `SELECT search_text FROM knowledge WHERE id = $1`, id).Scan(&got); err != nil {
+		if err := s.pool.QueryRow(ctx, `SELECT search_text FROM object WHERE id = $1`, id).Scan(&got); err != nil {
 			t.Fatalf("read search_text for %s: %v", id, err)
 		}
 		return got
@@ -1221,7 +1221,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 
 	const id, moved = "it-haystack", "it-haystack-moved"
 	for _, dead := range []string{id, moved} {
-		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, dead)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, dead)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dead)
 	}
 	k := &domain.Knowledge{
@@ -1286,7 +1286,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 
 	const src, dst = "it-purge-src", "it-purge-dst"
 	for _, id := range []string{src, dst} {
-		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 	}
 	create := func(id string) {
@@ -1364,7 +1364,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	if moved.ID != dst {
 		t.Errorf("moved entry id = %q, want %q", moved.ID, dst)
 	}
-	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, dst)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, dst)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dst)
 }
 
@@ -1392,7 +1392,7 @@ func TestIntegrationPurgeLosesToRevival(t *testing.T) {
 
 	const id = "it-purge-race"
 	cleanup := func() {
-		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_purge WHERE id = $1`, id)
 	}
@@ -1417,7 +1417,7 @@ func TestIntegrationPurgeLosesToRevival(t *testing.T) {
 	}
 	defer func() { _ = revive.Rollback(ctx) }()
 	if _, err := revive.Exec(ctx,
-		`UPDATE knowledge SET deleted_at = NULL, updated_at = now() WHERE id = $1`, id); err != nil {
+		`UPDATE object SET deleted_at = NULL, updated_at = now() WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1432,7 +1432,8 @@ func TestIntegrationPurgeLosesToRevival(t *testing.T) {
 		var waiting int
 		if err := s.pool.QueryRow(ctx,
 			`SELECT count(*) FROM pg_stat_activity
-			  WHERE wait_event_type = 'Lock' AND query LIKE '%knowledge%'`).Scan(&waiting); err != nil {
+			  WHERE wait_event_type = 'Lock'
+			    AND (query LIKE '%object%' OR query LIKE '%knowledge%')`).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting > 0 {
@@ -1488,7 +1489,7 @@ func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	const id = "it-flush-on-close"
-	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE knowledge_id = $1`, id)
@@ -1519,7 +1520,7 @@ func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
 	if u.Fetches != 1 {
 		t.Errorf("fetches = %d after Close, want 1 — the buffer was dropped", u.Fetches)
 	}
-	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = verify.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_usage WHERE knowledge_id = $1`, id)
 	_, _ = verify.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE knowledge_id = $1`, id)
@@ -1546,7 +1547,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 	}
 
 	const id = "it-delegated"
-	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 	via := "process:insightflow@example.iam.gserviceaccount.com"
 	delegated := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp", Via: via}
@@ -1602,7 +1603,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 		t.Errorf("revision changed_by lost the delegation: %+v", create.ChangedBy)
 	}
 
-	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+	_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 }
 
@@ -1660,7 +1661,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 	}
 	clean := func() {
 		for _, id := range ids {
-			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 		}
 	}
@@ -1756,7 +1757,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	const id = "it-verify-feed"
-	for _, table := range []string{"knowledge", "knowledge_revision", "knowledge_verification", "knowledge_rejection"} {
+	for _, table := range []string{"object", "knowledge_revision", "knowledge_verification", "knowledge_rejection"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id); err != nil {
 			t.Fatal(err)
 		}
@@ -1873,7 +1874,7 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-relmove%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -1894,7 +1895,7 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() {
-		for _, table := range []string{"knowledge", "knowledge_revision"} {
+		for _, table := range []string{"object", "knowledge_revision"} {
 			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-relmove%'`)
 		}
 	})
@@ -1946,13 +1947,13 @@ func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-selfmove%'`); err != nil {
 			t.Fatal(err)
 		}
 	}
 	defer func() {
-		for _, table := range []string{"knowledge", "knowledge_revision"} {
+		for _, table := range []string{"object", "knowledge_revision"} {
 			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-selfmove%'`)
 		}
 	}()
@@ -2057,7 +2058,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 		t.Fatal(err)
 	}
 	const doomed = "it-exportsnap/doomed"
-	for _, table := range []string{"knowledge", "knowledge_revision"} {
+	for _, table := range []string{"object", "knowledge_revision"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-exportsnap%'`); err != nil {
 			t.Fatal(err)
 		}
@@ -2068,7 +2069,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		for _, table := range []string{"knowledge", "knowledge_revision"} {
+		for _, table := range []string{"object", "knowledge_revision"} {
 			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-exportsnap%'`)
 		}
 	})
@@ -2246,7 +2247,7 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 	moved := fmt.Sprintf("it-clobber-%d/renamed", stamp)
 	referrer := fmt.Sprintf("it-clobber-%d/insight", stamp)
 	cleanup := func() {
-		for _, table := range []string{"knowledge", "knowledge_revision"} {
+		for _, table := range []string{"object", "knowledge_revision"} {
 			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE $1`,
 				fmt.Sprintf("it-clobber-%d%%", stamp))
 		}
@@ -2273,7 +2274,7 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 	defer func() { _ = edit.Rollback(ctx) }()
 	const added = "A sentence the move must not eat."
 	if _, err := edit.Exec(ctx,
-		`UPDATE knowledge SET body = body || $2, updated_at = now() WHERE id = $1`,
+		`UPDATE object SET body = body || $2, updated_at = now() WHERE id = $1`,
 		referrer, "\n\n"+added); err != nil {
 		t.Fatal(err)
 	}
@@ -2290,7 +2291,8 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 		var waiting int
 		if err := s.pool.QueryRow(ctx,
 			`SELECT count(*) FROM pg_stat_activity
-			  WHERE wait_event_type = 'Lock' AND query LIKE '%knowledge%'`).Scan(&waiting); err != nil {
+			  WHERE wait_event_type = 'Lock'
+			    AND (query LIKE '%object%' OR query LIKE '%knowledge%')`).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting > 0 {
@@ -2631,10 +2633,10 @@ func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id) })
+	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id) })
 
 	var stored string
-	if err := s.pool.QueryRow(ctx, `SELECT doc FROM knowledge WHERE id = $1`, id).Scan(&stored); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT doc FROM object WHERE id = $1`, id).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
 	read, err := s.Get(ctx, id)
@@ -2695,7 +2697,7 @@ func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, id) })
+	t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id) })
 
 	got, err := s.Get(ctx, id)
 	if err != nil {
@@ -2711,7 +2713,7 @@ func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
 	// changes nothing else is still a no-op, so they are part of the
 	// content the hash is over.
 	var doc string
-	if err := s.pool.QueryRow(ctx, `SELECT doc FROM knowledge WHERE id = $1`, id).Scan(&doc); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT doc FROM object WHERE id = $1`, id).Scan(&doc); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(doc, "license: CC-BY") {
@@ -2768,7 +2770,7 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 		if err := s.Create(ctx, &d.Knowledge, false); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM knowledge WHERE id = $1`, d.ID) })
+		t.Cleanup(func() { _, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, d.ID) })
 	}
 
 	find := func(fm map[string]string) []string {
@@ -2806,5 +2808,78 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 				t.Errorf("fm=%v matched %v, want %v", tc.fm, got, tc.want)
 			}
 		})
+	}
+}
+
+// A row is at the path its concept lives at, and stays there through a
+// move (design doc 0046 §§2.1, 3.1). The path is the key of the bundle,
+// so a write that set the id and left the path behind would put the
+// entry at an address nothing resolves — and the revision ledger, which
+// counts by path now, would start a second history for it.
+func TestIntegrationObjectIsKeyedByBundlePath(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "t"}
+	id := fmt.Sprintf("it-path-%d/revenue", time.Now().UnixNano())
+	moved := id + "-moved"
+	defer func() {
+		for _, i := range []string{id, moved} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, i)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, i)
+		}
+	}()
+
+	k := &domain.Knowledge{Type: domain.TypeMetrics, ID: id, Title: "売上",
+		Status: domain.StatusDraft, Body: "受注合計。", CreatedBy: actor, UpdatedBy: actor}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	pathOf := func(id string) string {
+		t.Helper()
+		var p string
+		if err := s.pool.QueryRow(ctx, `SELECT path FROM object WHERE id = $1`, id).Scan(&p); err != nil {
+			t.Fatalf("no row at id %s: %v", id, err)
+		}
+		return p
+	}
+	if got, want := pathOf(id), domain.ConceptPath(id); got != want {
+		t.Errorf("created at path %q, want %q", got, want)
+	}
+
+	if _, err := s.Move(ctx, id, moved, actor); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := pathOf(moved), domain.ConceptPath(moved); got != want {
+		t.Errorf("after the move the row is at %q, want %q", got, want)
+	}
+	// One history, carried to the new path rather than restarted there.
+	var revs int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_revision WHERE path = $1`,
+		domain.ConceptPath(moved)).Scan(&revs); err != nil {
+		t.Fatal(err)
+	}
+	if revs != 2 { // create, move
+		t.Errorf("revisions at the new path: got %d, want 2", revs)
+	}
+	var stale int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_revision WHERE path = $1`,
+		domain.ConceptPath(id)).Scan(&stale); err != nil {
+		t.Fatal(err)
+	}
+	if stale != 0 {
+		t.Errorf("%d revisions were left at the old path", stale)
 	}
 }

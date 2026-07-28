@@ -116,6 +116,25 @@ last entry.
 
 ### Changed
 
+- **The store is keyed by the bundle path** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§2.1, 3.1). Migration
+  0028 renames `knowledge` to `object` and moves its primary key to
+  `path`, the address each object lives at; the revision ledger is
+  re-keyed the same way, so a file's history will land beside the
+  concept's instead of in a second place.
+
+  Nothing on the wire moves. The concept id is still the address a
+  concept is called by — SPEC §2's "the path with `.md` removed", which
+  every ledger joins on and every surface names an entry by — and it
+  keeps a unique index of its own. What changed is what the table is a
+  table *of*: one bundle, mapping a path to an object, with a knowledge
+  entry as one kind of object in it. Files arrive in a later change
+  (§3.13), which is where the path stops being derivable from the id.
+
+  Operators: the migration is one rename, two column additions and two
+  primary-key swaps, all in one transaction. It rewrites no content and
+  moves no timestamp.
+
 - **BREAKING**: the two files OKF reserves are served at the paths OKF
   reserves them at (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.7-3.8).

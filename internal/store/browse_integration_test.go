@@ -27,7 +27,7 @@ func TestIntegrationBrowse(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, del := range []string{
-		`DELETE FROM knowledge WHERE id LIKE 'it-br-%'`,
+		`DELETE FROM object WHERE id LIKE 'it-br-%'`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-br-%'`,
 		`DELETE FROM knowledge_rejection WHERE id LIKE 'it-br-%'`,
 		`DELETE FROM knowledge_verification WHERE id LIKE 'it-br-%'`,

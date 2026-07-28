@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -246,14 +247,14 @@ func withoutDoc(cols string) string {
 	var kept []string
 	for _, c := range strings.Split(cols, ",") {
 		t := strings.TrimSpace(c)
-		if t == "doc" || t == "k.doc" || t == "knowledge.doc" {
+		if t == "doc" || t == "k.doc" || t == "object.doc" {
 			continue
 		}
 		// The frontmatter index is never read back either: it is a
 		// question-answering copy of what the document already carries
 		// (design doc 0046 §3.11), so every read leaves it in the
 		// database where the filters use it.
-		if t == "frontmatter" || t == "k.frontmatter" || t == "knowledge.frontmatter" {
+		if t == "frontmatter" || t == "k.frontmatter" || t == "object.frontmatter" {
 			continue
 		}
 		kept = append(kept, t)
@@ -264,12 +265,12 @@ func withoutDoc(cols string) string {
 var (
 	// knowledgeSelect and knowledgeSelectK are what a read selects: the
 	// entry's columns (minus the stored document) plus its ledgers.
-	knowledgeSelect  = withoutDoc(knowledgeCols) + ", " + ledgerCols("knowledge")
+	knowledgeSelect  = withoutDoc(knowledgeCols) + ", " + ledgerCols("object")
 	knowledgeSelectK = withoutDoc(knowledgeColsK) + ", " + ledgerCols("k")
 	// knowledgeSelectDoc is the same read with the stored document, for
 	// the paths that hand one out (design doc 0046 §2.2): a single get,
 	// an export, and the move that rewrites a body in place.
-	knowledgeSelectDoc = withoutFrontmatter(knowledgeCols) + ", " + ledgerCols("knowledge")
+	knowledgeSelectDoc = withoutFrontmatter(knowledgeCols) + ", " + ledgerCols("object")
 )
 
 // sortedKeys orders a filter's frontmatter keys so a query's arguments —
@@ -554,7 +555,7 @@ func (s *Store) getOneFrom(ctx context.Context, q querier, id string, deleted bo
 		cond = "deleted_at IS NOT NULL"
 	}
 	rows, err := q.Query(ctx,
-		`SELECT `+knowledgeSelectDoc+` FROM knowledge WHERE id = $1 AND `+cond, id)
+		`SELECT `+knowledgeSelectDoc+` FROM object WHERE id = $1 AND `+cond, id)
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +605,7 @@ func (s *Store) listLinkingTo(ctx context.Context, id string, limit int, cols st
 	scan func(pgx.CollectableRow) (domain.Knowledge, error),
 ) ([]domain.Knowledge, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT `+cols+` FROM knowledge
+		`SELECT `+cols+` FROM object
 		 WHERE deleted_at IS NULL AND links @> $1
 		 ORDER BY updated_at DESC LIMIT $2`,
 		fmt.Sprintf(`[{"target": %q}]`, id),
@@ -631,7 +632,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 	// instead of being erased by it.
 	revive := ""
 	if keepCuratedTombstones {
-		revive = " AND " + notCurated("knowledge")
+		revive = " AND " + notCurated("object")
 	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		j, err := marshalJSONFields(k)
@@ -664,10 +665,16 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
 			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash,
 		}
-		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
-			VALUES (`+knowledgeParams+`)
+		// The path is the row's key (design doc 0046 §3.1) and the id is
+		// the concept's address within it, so a concept write states both.
+		// ON CONFLICT still names the id: reviving a tombstone is about the
+		// entry at that address, and for a concept the two keys move
+		// together.
+		args = append(args, domain.ConceptPath(k.ID))
+		tag, err := tx.Exec(ctx, `INSERT INTO object (`+knowledgeCols+`, path)
+			VALUES (`+knowledgeParams+`, $`+strconv.Itoa(len(args))+`)
 			ON CONFLICT (id) DO UPDATE SET `+knowledgeExcluded+`, deleted_at=NULL
-			WHERE knowledge.deleted_at IS NOT NULL`+revive,
+			WHERE object.deleted_at IS NOT NULL`+revive,
 			args...)
 		if err != nil {
 			return err
@@ -745,7 +752,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
 		}
-		tag, err := tx.Exec(ctx, `UPDATE knowledge SET
+		tag, err := tx.Exec(ctx, `UPDATE object SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
@@ -761,7 +768,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			if ifMatch != nil {
 				var live bool
 				if err := tx.QueryRow(ctx,
-					`SELECT EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)`,
+					`SELECT EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`,
 					k.ID).Scan(&live); err != nil {
 					return err
 				}
@@ -812,7 +819,7 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, at)
 			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
 				$2, $3, $4, now()
-			WHERE EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)
+			WHERE EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)
 			RETURNING at`,
 			id, actor.Kind, actor.Name, actor.Via).Scan(&at)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -850,7 +857,7 @@ func (s *Store) Reject(ctx context.Context, id string, actor domain.Actor, note 
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge_rejection (id, by_kind, by_name, by_via, at, note)
 			SELECT $1, $2, $3, $4, now(), $5
-			WHERE EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)
+			WHERE EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)
 			ON CONFLICT (id) DO UPDATE SET
 				by_kind=EXCLUDED.by_kind, by_name=EXCLUDED.by_name, by_via=EXCLUDED.by_via,
 				at=EXCLUDED.at, note=EXCLUDED.note`,
@@ -880,7 +887,7 @@ func (s *Store) LiftRejection(ctx context.Context, id string, actor domain.Actor
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `DELETE FROM knowledge_rejection r
 			WHERE r.id = $1
-			  AND EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)`, id)
+			  AND EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`, id)
 		if err != nil {
 			return err
 		}
@@ -910,7 +917,7 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) e
 		// Get above ran outside this transaction, and a double delete must
 		// not record a second "delete" revision.
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET deleted_at = now(), updated_at = now()
+			`UPDATE object SET deleted_at = now(), updated_at = now()
 			 WHERE id=$1 AND deleted_at IS NULL`, id)
 		if err != nil {
 			return err
@@ -955,7 +962,7 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 		// same id, which would otherwise both log an audit row.
 		var deleted bool
 		err := tx.QueryRow(ctx,
-			`SELECT deleted_at IS NOT NULL FROM knowledge WHERE id=$1 FOR UPDATE`, id).Scan(&deleted)
+			`SELECT deleted_at IS NOT NULL FROM object WHERE id=$1 FOR UPDATE`, id).Scan(&deleted)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -970,7 +977,7 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			SELECT k.id, k.type, k.title,
 			       (SELECT count(*) FROM knowledge_revision r WHERE r.id = k.id),
 			       $2, $3, $4
-			  FROM knowledge k WHERE k.id = $1`,
+			  FROM object k WHERE k.id = $1`,
 			id, actor.Kind, actor.Name, actor.Via); err != nil {
 			return err
 		}
@@ -990,7 +997,7 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 		// statement carries the precondition itself, not just the lock
 		// taken above: a purge that would hit a live row aborts the
 		// transaction instead of erasing it.
-		tag, err := tx.Exec(ctx, `DELETE FROM knowledge WHERE id=$1 AND deleted_at IS NOT NULL`, id)
+		tag, err := tx.Exec(ctx, `DELETE FROM object WHERE id=$1 AND deleted_at IS NOT NULL`, id)
 		if err != nil {
 			return err
 		}
@@ -1039,7 +1046,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// blocked forever.
 		var occupied, occupantDeleted bool
 		if err := tx.QueryRow(ctx,
-			`SELECT true, deleted_at IS NOT NULL FROM knowledge WHERE id=$1`, newID).
+			`SELECT true, deleted_at IS NOT NULL FROM object WHERE id=$1`, newID).
 			Scan(&occupied, &occupantDeleted); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -1053,10 +1060,10 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// exactly as in SoftDelete: the Get above ran outside this
 		// transaction.
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET id=$2, updated_at=$3, content_changed_at=$3,
+			`UPDATE object SET id=$2, path=$7, updated_at=$3, content_changed_at=$3,
 			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via)
+			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via, domain.ConceptPath(newID))
 		if isUniqueViolation(err) {
 			// The probe above found the destination free, but it took no
 			// lock — a create can land on newID in the window. The primary
@@ -1072,7 +1079,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			return ErrNotFound
 		}
 		for _, q := range []string{
-			`UPDATE knowledge_revision SET id=$2 WHERE id=$1`,
+			`UPDATE knowledge_revision SET id=$2, path=$2 || '.md' WHERE id=$1`,
 			`UPDATE knowledge_verification SET id=$2 WHERE id=$1`,
 			`UPDATE knowledge_rejection SET id=$2 WHERE id=$1`,
 			`UPDATE attachment SET knowledge_id=$2 WHERE knowledge_id=$1`,
@@ -1132,7 +1139,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	// was lost. ORDER BY id gives concurrent moves one lock order, so they
 	// queue instead of deadlocking.
 	rows, err := tx.Query(ctx,
-		`SELECT `+knowledgeSelectDoc+` FROM knowledge
+		`SELECT `+knowledgeSelectDoc+` FROM object
 		 WHERE deleted_at IS NULL AND (links @> $1 OR attrs->>'model' = $2 OR id = $3)
 		 ORDER BY id FOR UPDATE`,
 		fmt.Sprintf(`[{"target": %q}]`, oldID),
@@ -1221,7 +1228,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		}
 		r.ContentHash = hash
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
+			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8,
 			 doc=$9, content_hash=$10, content_changed_at=$11, frontmatter=$12
 			 WHERE id=$1 AND deleted_at IS NULL`,
@@ -1306,7 +1313,7 @@ func (s *Store) ListRevisionsUnder(ctx context.Context, prefix string, limit int
 		`SELECT r.id, COALESCE(k.title, ''), r.change,
 		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_at
 		 FROM knowledge_revision r
-		 LEFT JOIN knowledge k ON k.id = r.id
+		 LEFT JOIN object k ON k.id = r.id
 		 WHERE $1 = '' OR r.id = $1 OR r.id LIKE $2
 		 ORDER BY r.changed_at DESC, r.id, r.rev DESC LIMIT $3`,
 		prefix, prefix+"/%", limit)
@@ -1328,9 +1335,12 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
-		VALUES ($1, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE id=$1), $2, $3, $4, $5, $6)`,
-		k.ID, change, actor.Kind, actor.Name, actor.Via, string(doc))
+	// A revision is an event about an object, so the ledger counts by
+	// path (design doc 0046 §3.1): when a file's create and delete land
+	// here too, they share one history with the concept beside them.
+	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
+		VALUES ($1, $2, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $3, $4, $5, $6, $7)`,
+		domain.ConceptPath(k.ID), k.ID, change, actor.Kind, actor.Name, actor.Via, string(doc))
 	return err
 }
 
@@ -1542,14 +1552,14 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 						CASE WHEN k.search_text ILIKE $%[5]d THEN 0.3 ELSE 0 END AS whole,
 						CASE WHEN EXISTS (SELECT 1 FROM knowledge_verification v
 							WHERE v.id = k.id) THEN 0.05 ELSE 0 END AS verified
-					FROM knowledge k
+					FROM object k
 					WHERE (%[6]s) AND %[7]s
 				) c
 			) w
 			ORDER BY score DESC LIMIT %[8]d
 		)
 		SELECT `+knowledgeSelectK+`, scored.score
-		FROM knowledge k JOIN scored ON scored.id = k.id
+		FROM object k JOIN scored ON scored.id = k.id
 		ORDER BY scored.score DESC`,
 		strings.Join(weighted, " + "), strings.Join(weights, " + "),
 		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam,
@@ -1575,7 +1585,7 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 	args = append(args, model)
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`, 1 - (e.embedding <=> $%d::vector) AS score
-		FROM knowledge k JOIN knowledge_embedding e ON k.id = e.id AND e.model = $%d
+		FROM object k JOIN knowledge_embedding e ON k.id = e.id AND e.model = $%d
 		WHERE %s
 		ORDER BY e.embedding <=> $%d::vector LIMIT %d`, vecParam, len(args), where, vecParam, limit)
 	return s.annSearch(ctx, limit, q, args)
@@ -1593,7 +1603,7 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 	q := fmt.Sprintf(`
 		SELECT `+withoutDoc(knowledgeCols)+", "+ledgerCols("best")+`, score FROM (
 			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
-			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
+			FROM object k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
 			WHERE %s
 			ORDER BY k.id, e.embedding <=> $%d::vector
 		) best
@@ -1704,7 +1714,7 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 	// — true for every row, which silently empties every unaliased query.
 	outer := prefix
 	if outer == "" {
-		outer = "knowledge."
+		outer = "object."
 	}
 	rejectedExists := fmt.Sprintf(
 		"EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = %sid)", outer)
@@ -1809,7 +1819,7 @@ func sourceContainment(resource string) []byte {
 // order beats a relevance score nothing computed.
 func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM knowledge WHERE %s
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
 		ORDER BY id LIMIT %d`, where, limit), args...)
 }
 
@@ -1832,7 +1842,7 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]do
 	// doc 0036 §3.9), and current_date would hand that decision to
 	// whatever TimeZone the database session happens to carry — the same
 	// entry would be stale on one deployment and not on another.
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM knowledge WHERE %s
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
 		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date
 		ORDER BY stale_after ASC, id LIMIT %d`, where, limit), args...)
 }
@@ -1842,8 +1852,8 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]do
 // query canary runs: "which verified queries have gone longest unchecked".
 func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM knowledge WHERE %s
-		ORDER BY `+lastVerifiedAt("knowledge")+` ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
+		ORDER BY `+lastVerifiedAt("object")+` ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
 }
 
 // usageLateral aggregates a knowledge entry's per-event running totals
@@ -1874,7 +1884,7 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
-		FROM knowledge k`+usageLateral+`
+		FROM object k`+usageLateral+`
 		WHERE %s
 		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -1908,7 +1918,7 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
-		FROM knowledge k`+usageLateral+`
+		FROM object k`+usageLateral+`
 		WHERE %s AND u.failed > 0
 			AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)
 		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
@@ -1952,7 +1962,7 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 // nothing — never reaches the rest of the corpus.
 func (s *Store) ListUnembedded(ctx context.Context, model, after string, limit int) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT k.id FROM knowledge k
+		`SELECT k.id FROM object k
 		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
 		 WHERE k.deleted_at IS NULL AND e.id IS NULL AND ($2 = '' OR k.id > $2)
 		 ORDER BY k.id LIMIT $3`, model, after, limit)
@@ -1976,7 +1986,7 @@ type UnembeddedAttachment struct {
 func (s *Store) ListUnembeddedAttachments(ctx context.Context, model, afterID, afterName string, limit int) ([]UnembeddedAttachment, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT a.knowledge_id, a.name FROM attachment a
-		 JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		 JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
 		 LEFT JOIN attachment_embedding e
 		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
 		 WHERE e.knowledge_id IS NULL
@@ -2004,7 +2014,7 @@ func (s *Store) CountUnembeddedAttachments(ctx context.Context, model string) (i
 	var n int
 	err := s.pool.QueryRow(ctx,
 		`SELECT count(*) FROM attachment a
-		 JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
+		 JOIN object k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
 		 LEFT JOIN attachment_embedding e
 		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
 		 WHERE e.knowledge_id IS NULL`, model).Scan(&n)
@@ -2020,7 +2030,7 @@ func (s *Store) CountUnembeddedAttachments(ctx context.Context, model string) (i
 func (s *Store) CountUnembedded(ctx context.Context, model string) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM knowledge k
+		`SELECT count(*) FROM object k
 		 LEFT JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
 		 WHERE k.deleted_at IS NULL AND e.id IS NULL`, model).Scan(&n)
 	return n, err
