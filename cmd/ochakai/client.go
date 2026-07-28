@@ -1128,7 +1128,7 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be read is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
@@ -1140,7 +1140,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	entries, atts, skipped, notes := okf.FromBundle(files)
+	entries, atts, loose, skipped, notes := okf.FromBundle(files)
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
 	}
@@ -1166,8 +1166,11 @@ func cmdImport(ctx context.Context, args []string) error {
 		for _, a := range atts {
 			fmt.Printf("would attach %s/%s (from %s)\n", a.ID, a.Name, a.Path)
 		}
-		fmt.Printf("dry run: %d entries, %d attachments, %d skipped, %d notes\n",
-			len(entries), len(atts), len(skipped), noted)
+		for _, f := range loose {
+			fmt.Printf("would write %s\n", f.Path)
+		}
+		fmt.Printf("dry run: %d entries, %d attachments, %d files, %d skipped, %d notes\n",
+			len(entries), len(atts), len(loose), len(skipped), noted)
 		return nil
 	}
 	c, err := newClient(ctx, *url)
@@ -1255,8 +1258,27 @@ func cmdImport(ctx context.Context, args []string) error {
 		attached++
 		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped, %d notes)\n",
-		created+updated+unchanged, created, updated, unchanged, attached, len(skipped), noted)
+	// The files that belong to no entry, at the paths they arrived at.
+	// A bundle carries more than its concepts, and what enters it leaves
+	// it (design doc 0046 §3.2): a producer's seed data in a shared
+	// directory, a diagram nothing links yet, a markdown file with no
+	// type. Whether an entry ever claims one is a question that entry's
+	// body answers (§3.3), so nothing is attributed here.
+	var written int
+	for _, f := range loose {
+		if err := c.PutBundleFile(ctx, f.Path, f.Data); err != nil {
+			if !isInvalid(err) {
+				return fmt.Errorf("write %s: %w", f.Path, err)
+			}
+			skipped = append(skipped, f.Path+": rejected by the server: "+err.Error())
+			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+			continue
+		}
+		written++
+		fmt.Printf("wrote %s\n", f.Path)
+	}
+	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d files, %d skipped, %d notes)\n",
+		created+updated+unchanged, created, updated, unchanged, attached, written, len(skipped), noted)
 	// The parse-time gate above cannot see what the server read differently
 	// or refused, so --strict asks again with the writes already done. The
 	// summary is printed first: the exit code says the sync is not clean,

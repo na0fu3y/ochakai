@@ -113,7 +113,7 @@ func TestBundleRoundTrip(t *testing.T) {
 			Body:        "本文。", UpdatedAt: now},
 	}
 	files := bundle(t, want)
-	got, _, skipped, _ := FromBundle(files)
+	got, _, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -145,7 +145,7 @@ func TestBundleTitleOptional(t *testing.T) {
 	files := map[string][]byte{
 		"insights/サンプル.md": []byte("---\ntype: Insight\n---\n\n本文。\n"),
 	}
-	entries, _, skipped, _ := FromBundle(files)
+	entries, _, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -172,7 +172,7 @@ func TestFromBundleNFCPaths(t *testing.T) {
 			"![chart](" + nfd + "/chart.png)\n"),
 		"insights/" + nfd + "/chart.png": pngBytes(),
 	}
-	entries, atts, skipped, _ := FromBundle(files)
+	entries, atts, _, skipped, _ := FromBundle(files)
 	if len(skipped) != 0 {
 		t.Fatalf("skipped %v", skipped)
 	}
@@ -187,8 +187,9 @@ func TestFromBundleNFCPaths(t *testing.T) {
 // A foreign OKF bundle — free layout, spelled frontmatter types,
 // non-markdown extras — imports with structure preserved: the path is the
 // id verbatim, the frontmatter alone names the type (design doc 0016),
-// the reserved index.md / log.md files are skipped silently, and
-// non-markdown files and typeless documents are skipped with a report.
+// the reserved index.md / log.md files are skipped silently, and a
+// non-markdown file or a typeless document — neither of which is a
+// concept — is kept as a file of the bundle (design doc 0046 §3.2).
 func TestFromBundleForeign(t *testing.T) {
 	files := map[string][]byte{
 		"index.md":         []byte("# my bundle\n"),
@@ -200,9 +201,19 @@ func TestFromBundleForeign(t *testing.T) {
 		"notes/2026/q3.md": []byte("---\ntitle: Q3 notes\n---\n"), // no frontmatter type at all
 		"viz.html":         []byte("<html></html>"),
 	}
-	entries, _, skipped, _ := FromBundle(files)
-	if len(skipped) != 2 || !strings.Contains(skipped[0], "notes/2026/q3.md") || !strings.Contains(skipped[1], "viz.html") {
-		t.Errorf("skipped = %v, want the typeless document and viz.html", skipped)
+	entries, _, loose, skipped, _ := FromBundle(files)
+	// A document with no type is not a concept (SPEC §11) and not a
+	// mistake either: it is a markdown file, and it goes back where it
+	// came from. So does the HTML nobody references.
+	var kept []string
+	for _, f := range loose {
+		kept = append(kept, f.Path)
+	}
+	if !reflect.DeepEqual(kept, []string{"notes/2026/q3.md", "viz.html"}) {
+		t.Errorf("kept = %v, want the typeless document and viz.html", kept)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("skipped = %v, want nothing", skipped)
 	}
 	byURI := map[string]domain.Knowledge{}
 	for _, e := range entries {
@@ -256,9 +267,12 @@ func TestFromBundleFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries, _, skipped, _ := FromBundle(files)
-	if len(skipped) != 1 || !strings.Contains(skipped[0], "viz.html") {
-		t.Errorf("skipped = %v, want only viz.html", skipped)
+	entries, _, loose, skipped, _ := FromBundle(files)
+	if len(loose) != 1 || loose[0].Path != "viz.html" {
+		t.Errorf("loose = %+v, want only viz.html", loose)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("skipped = %v, want nothing", skipped)
 	}
 	if len(entries) != 3 {
 		t.Fatalf("entries = %d, want 3", len(entries))
@@ -309,7 +323,7 @@ func TestFromBundleWrappedArchive(t *testing.T) {
 		"._ga4":                []byte("apple double"),
 		"ga4/.DS_Store":        []byte("finder noise"),
 	}
-	entries, _, skipped, _ := FromBundle(wrapped)
+	entries, _, _, skipped, _ := FromBundle(wrapped)
 	if len(skipped) != 0 {
 		t.Errorf("skipped = %v, want none (hidden files skip silently)", skipped)
 	}
@@ -320,5 +334,66 @@ func TestFromBundleWrappedArchive(t *testing.T) {
 	// changes the namespace, never the type.
 	if entries[0].Type != domain.TypeTables || len(entries[0].Attrs) != 0 {
 		t.Errorf("type = %q attrs = %v", entries[0].Type, entries[0].Attrs)
+	}
+}
+
+// What enters the bundle leaves it (design doc 0046 §3.2). The reading
+// that FromBundle used to take — anything that is not a concept and not
+// an attachment is reported and dropped — meant a producer's bundle came
+// back smaller than it went in, which is the one thing a bundle store
+// must not do. The only paths still reported are the ones that cannot be
+// stored at all.
+func TestFromBundleKeepsWhatItCannotAttribute(t *testing.T) {
+	files := map[string][]byte{
+		// The concepts, and a file each of them claims.
+		"metrics/revenue.md":        []byte("---\ntype: Metric\ntitle: 売上\n---\n\n![chart](revenue/chart.png)\n"),
+		"metrics/revenue/chart.png": pngBytes(),
+
+		// Nobody's, all of it kept.
+		"seeds/orders.csv":  []byte("a,b\n1,2\n"),
+		"notes/meeting.md":  []byte("# 議事録\n\ntype なし。\n"),      // not a concept (SPEC §11)
+		"vendor/report.zip": append([]byte("PK\x03\x04"), 0, 0), // never was on any allowlist
+		"diagrams/er.svg":   []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`),
+
+		// Generated, and hidden: skipped in silence, as before.
+		"index.md":          []byte("# bundle\n"),
+		"metrics/log.md":    []byte("# log\n"),
+		".git/config":       []byte("[core]\n"),
+		"._AppleDouble":     []byte("junk"),
+		"metrics/.DS_Store": []byte("junk"),
+
+		// The one thing that cannot be kept: nothing to store.
+		"empty.txt": {},
+	}
+	entries, atts, loose, skipped, _ := FromBundle(files)
+	if len(entries) != 1 || len(atts) != 1 {
+		t.Fatalf("entries = %d, attachments = %d, want 1 and 1", len(entries), len(atts))
+	}
+	var kept []string
+	for _, f := range loose {
+		kept = append(kept, f.Path)
+	}
+	want := []string{"diagrams/er.svg", "notes/meeting.md", "seeds/orders.csv", "vendor/report.zip"}
+	if !reflect.DeepEqual(kept, want) {
+		t.Errorf("kept = %v, want %v", kept, want)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "empty.txt") {
+		t.Errorf("skipped = %v, want only empty.txt", skipped)
+	}
+	// Every path the bundle carried is accounted for exactly once.
+	seen := map[string]int{}
+	for _, e := range entries {
+		seen[e.ID+".md"]++
+	}
+	for _, a := range atts {
+		seen[a.Path]++
+	}
+	for _, f := range loose {
+		seen[f.Path]++
+	}
+	for p, n := range seen {
+		if n != 1 {
+			t.Errorf("%s was taken %d times", p, n)
+		}
 	}
 }
