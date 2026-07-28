@@ -9,14 +9,24 @@ never tokens or passwords (0002, 0003).
 
 Architecture decisions live in [docs/design](docs/design) as numbered,
 immutable decision records (mostly Japanese).
-[docs/design/README.md](docs/design/README.md) is the index — read it
-first to find which docs describe the current state of an area; a
-superseded or amended doc says so in its `Status:` header.
+[docs/design/README.md](docs/design/README.md) is the index — its
+opening table says which doc describes each area today; the prose below
+it carries the history, and a superseded or amended doc says so in its
+`Status:` header.
 
-When a change alters an accepted decision, add a new numbered design
-doc in the same PR and keep the index truthful — the `design-doc` skill
-has the full procedure (new number, older docs' `Status:` headers, the
-index entry, and why amendment chains get a replacement instead).
+A numbered doc is for a decision **a user can observe**
+([0048](docs/design/0048-decision-records-for-wire-contracts.md)): the
+shape of the wire, the stored form and its round trip, what identity and
+provenance mean, a new Google Cloud dependency, or something ochakai
+refuses to do. Internal changes that leave the outside unchanged belong
+in the PR description instead. **A doc that has not reached a release is
+revised by replacing it, not by taking a new number** — immutability is a
+promise about decisions somebody could be depending on.
+
+When one is needed, it lands in the same PR as the change and the index
+stays truthful — the `design-doc` skill has the full procedure (new
+number, older docs' `Status:` headers, the index entry, and why amendment
+chains get a replacement instead).
 
 ## Checks and conventions
 

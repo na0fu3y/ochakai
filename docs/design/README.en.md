@@ -11,8 +11,14 @@ and this file gets fixed.
 Each entry gives the status, what was decided, and — where there is one —
 what it means for somebody using ochakai rather than building it. The
 grouping follows [the index](README.md), which is the file that says which
-records still describe the current state of an area. Numbers have gaps:
-proposals that were never accepted stay in their pull requests.
+records still describe the current state of an area — start with the table
+at the top of it. Numbers have gaps: proposals that were never accepted
+stay in their pull requests.
+
+Only the records that are still current are summarized in full. A record
+that has been superseded keeps a one-line pointer to whatever replaced it,
+which is enough to follow the trail and is all the maintenance it earns
+(design record [0048](0048-decision-records-for-wire-contracts.md) §2.5).
 
 For the shape of the system rather than the history of it, read
 [docs/architecture.md](../architecture.md) first.
@@ -54,6 +60,24 @@ For the shape of the system rather than the history of it, read
   tree reports nothing.
   *For a user:* none — internal, but it is why an endpoint that drifts
   from the published spec fails CI.
+
+## How decisions get written down
+
+- **[0048 Decision records are for wire-contract decisions](0048-decision-records-for-wire-contracts.md)**
+  — *Accepted.* Narrows what earns a numbered record to decisions a user
+  can observe: the shape of the wire (REST, MCP, CLI, web UI), the stored
+  form and its round trip, what identity and provenance mean, dependence
+  on a Google Cloud service, and the things ochakai refuses to do.
+  Internal changes that leave the outside unchanged belong in a pull
+  request instead. **A record that has not reached a release is revised by
+  replacing it, not by taking a new number** — 0034 already did this, and
+  it becomes the rule; immutability is a promise about decisions somebody
+  could be depending on. The 47 existing records are left untouched;
+  instead the index gains a table of which record describes each area
+  today, and summaries here are required only for the records that are
+  still current (a superseded one needs a one-line forward pointer).
+  *For a user:* the design directory should get easier to enter — there is
+  now one table to read instead of forty-seven headers to follow.
 
 ## Authentication, authorization and provenance
 

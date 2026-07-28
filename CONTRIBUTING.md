@@ -108,8 +108,9 @@ to it. It is not part of this repository's own setup.
 
 Architecture decisions live in [docs/design](docs/design) as numbered
 documents (mostly Japanese). Start from the
-[index](docs/design/README.md), which groups them by area and marks
-which ones describe the current state; a new record needs a summary in
+[index](docs/design/README.md): its opening table says which document
+describes each area today, and the prose below it carries the history. A
+new record needs a summary in
 [README.en.md](docs/design/README.en.md) beside it, which a test checks.
 [docs/architecture.md](docs/architecture.md) summarizes the accepted ones
 in English if you would rather read the shape of the system first.
@@ -117,10 +118,17 @@ in English if you would rather read the shape of the system first.
 The Japanese is the maintainer's habit, not a rule — write your design
 doc in English if that is what you think in, and say so in the PR. What
 the review cares about is that the decision and its rejected
-alternatives are legible, not which language they are legible in. A change that alters an accepted
-decision — new interface, new dependency on a Google Cloud service, a
-change to the auth model — should add a new numbered doc in the same
-PR. Small fixes and additions within existing decisions don't need one.
+alternatives are legible, not which language they are legible in.
+
+A numbered doc is for a decision **somebody using ochakai can observe**
+([0048](docs/design/0048-decision-records-for-wire-contracts.md)): the
+shape of the wire (REST, MCP, CLI, web UI), the stored form and its
+round trip, what identity and provenance mean, a new dependency on a
+Google Cloud service, or something the project refuses to do. Internal
+work that leaves the outside unchanged — restructuring, queries and
+indexes, performance, dependencies, a new spelling within an existing
+decision — belongs in the PR description instead. If you are unsure, ask
+whether anybody will reopen the question in three months.
 
 Docs are immutable decision records; the incremental history lives in
 them and in PRs. What the repo must keep readable is the *current*
@@ -128,11 +136,21 @@ state per area, so when a design doc lands:
 
 - Take the next free number. Gaps are fine — proposals that never land
   stay in their PRs.
+- **Unless the doc you are revising has not reached a release**, in which
+  case replace it rather than numbering a successor: immutability is a
+  promise about decisions somebody could be depending on, and nobody
+  depends on an unreleased one. If the implementation is still in the
+  changelog's `Unreleased` section, edit that doc — or delete it and fold
+  it into the one replacing it, as 0034 did.
 - Update the `Status:` header of every older doc the new one supersedes
   or amends, linking to the new number (see 0011 or 0018 for the style).
 - Update [docs/design/README.md](docs/design/README.md): add the new
-  doc to its area with a one-line summary, and adjust the status notes
-  of the docs it amends.
+  doc to its area with a one-line summary, adjust the status notes of
+  the docs it amends, and — if it becomes the doc to read for that area —
+  update the area's row in the opening table.
+- Summarize it in `README.en.md`. A doc the new one supersedes drops to a
+  one-line pointer at its replacement; full summaries are maintained only
+  for what is current.
 - Avoid amendment chains. If the new decision would be the second
   partial amendment stacked on the same doc, don't add another diff:
   write it as a full replacement that states the area's whole current
