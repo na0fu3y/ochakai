@@ -12,6 +12,37 @@
 節にある。番号には欠番があり得る — 採択・ランドに至らなかった提案は
 PR の中に残る。
 
+番号付きドキュメントを要するのは、**利用者が観測できるものを変える決定**
+だけである(ワイヤの形、保存形と往復、identity と provenance の意味、
+Google Cloud への依存、意図してやらないこと)。外形の変わらない内部変更は
+PR の説明で足り、まだリリースに乗っていない決定の改訂は新しい番号ではなく
+元のドキュメントの差し替えになる — 基準は
+[0048](0048-decision-records-for-wire-contracts.md)。
+
+## 現行ドキュメント早見表
+
+**改訂の履歴を追わずに現在の姿にたどり着くための表**(0048 §2.4)。
+各領域について、いま読むべきドキュメントだけを挙げている。ここに無い
+番号は Superseded か、下の各節の括弧書きが行き先を書いている。
+
+| 領域 | いま読むドキュメント |
+|---|---|
+| 全体アーキテクチャ | [0001](0001-architecture.md) |
+| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
+| 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用) |
+| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-unnamed-keys.md)(`fm.`)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
+| 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
+| 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
+| 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
+| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio) |
+| Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
+| 検証ループと利用測定 | [0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md) |
+| 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
+| 実装の品質ゲート | [0035](0035-verifiability.md) |
+| 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
+| バンドル往復と provenance の所有権 | [0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
+| やらないと決めたこと | [0028](0028-retire-compile-sql.md)(compile_sql)、[0018](0018-semantic-model-as-knowledge.md)(専用機構)、[0012](0012-retire-mcp-oauth-connector.md)(OAuth コネクタ) |
+
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
 要約が食い違えば本体が正しい。新しいドキュメントを足したら要約も足す —
@@ -35,6 +66,16 @@ PR の中に残る。
   型に載らない不変条件(網羅性・wire 契約・往復の正確さ)を、
   golangci-lint / openapi 契約テスト / fuzz の三層で外から検査する。
   linter の選定基準は「clean tree で 0 件」。
+
+## 決定の書き方
+
+- [0048 決定記録はワイヤ契約の決定に絞る](0048-decision-records-for-wire-contracts.md)
+  — **Accepted**。番号付きドキュメントを要するのは利用者が観測できるものを
+  変える決定だけ(ワイヤ・保存形・identity・GCP 依存・refusal)とし、
+  外形の変わらない内部変更は PR に置く。**まだリリースに乗っていない決定の
+  改訂は、新しい番号ではなく元のドキュメントの差し替え**(0034 の先例を
+  規則にする)。既存 47 本は書き換えず、代わりに index に現行ドキュメントの
+  早見表を置き、英語要約の維持義務を現行ドキュメントだけに縮める。
 
 ## 認証・認可と provenance
 

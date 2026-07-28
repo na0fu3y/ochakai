@@ -16,10 +16,34 @@ every older doc it touches **plus** the index, in one PR.
 
 ## When one is needed
 
-A change that alters an accepted decision: a new interface, a new
-dependency on a Google Cloud service, a change to the auth model, a
-change to what a surface carries. Small fixes and additions *within* an
-existing decision do not need one.
+A numbered doc is for a decision **a user can observe** (0048 §2.1):
+
+- **the shape of the wire** — a REST endpoint, parameter or response
+  shape; an MCP tool added or removed; a CLI command added or removed;
+  what the web UI carries
+- **the stored form and its round trip** — the OKF document,
+  canonicalization, what gets hashed, the bundle address space
+- **what identity and provenance mean** — who a write is recorded as,
+  what is refused, read-only and its edges
+- **a new dependency on a Google Cloud service**, or anything touching
+  secret-zero (0002, 0003)
+- **something ochakai refuses to do** — the kind of judgment that lands
+  in the ROADMAP's refusals
+
+Everything else belongs in the PR description: internal restructuring
+that leaves the outside unchanged, query and index work, performance,
+dependencies, additions *within* an existing decision (a new type
+spelling, an error message), and docs- or tests-only changes. When
+unsure, ask whether somebody will reopen this in three months. If not,
+the PR is enough.
+
+**A doc that has not reached a release is revised by replacing it, not by
+taking a new number** (0048 §2.3). Immutability is a promise about
+decisions somebody could be depending on; nobody depends on an unreleased
+one. Check the `Unreleased` section of [the changelog](../../../CHANGELOG.md):
+if the implementation is still sitting there, edit that doc (or delete
+and fold it into its successor, as 0034 did) instead of taking the next
+number. The alternatives you dropped stay in the PR history.
 
 Two decisions to check any proposal against first:
 
@@ -65,9 +89,17 @@ one the whole scheme rests on.
 
 **5. Update the index.** Add the doc to its area with a one-line summary
 in the surrounding style (bold status, then what it decides), and adjust
-the status notes of the docs it amends.
+the status notes of the docs it amends. If this doc becomes the one to
+read for an area, update that area's row in the index's opening table —
+that table is what a reader is meant to reach the current state from
+(0048 §2.4).
 
-**6. Avoid amendment chains.** If this would be the *second* partial
+**6. Summarize it in English.** `docs/design/README.en.md` needs an entry
+or `TestEnglishDesignIndexCoversEveryRecord` fails. A doc this one
+supersedes drops to a one-line pointer at its replacement — full
+summaries are only maintained for what is current (0048 §2.5).
+
+**7. Avoid amendment chains.** If this would be the *second* partial
 amendment stacked on the same doc, do not add another diff. Write a full
 replacement that states the area's whole current picture, and mark the
 older docs **Superseded**.
@@ -92,6 +124,7 @@ Keep `api/openapi.yaml`, `internal/restapi`, `internal/mcpserver`, and
 
 ## Before opening the PR
 
-Reread the index top to bottom and ask the question it exists to answer:
-can someone learn an area's current state by reading that area's docs and
-following the Status notes? If not, the index change is not done.
+Reread the index and ask the question it exists to answer: can someone
+learn an area's current state from the opening table alone, and then from
+that area's docs by following the Status notes? If not, the index change
+is not done.
