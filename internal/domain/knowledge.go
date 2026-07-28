@@ -345,9 +345,44 @@ const (
 // A verification is this instance's observation, never something a
 // document asserts: import reads only whether a verified key was present,
 // not who or when (design docs 0009, 0036 §2.2).
+//
+// Source says what the confirmation was. Empty means a review performed
+// here — somebody read the entry and said so. Non-empty names where the
+// claim was adopted from, which today is one thing: a bundle taken with
+// `ochakai import --adopt-verified` (design doc 0045 §3.2). By is the
+// same either way, because the actor who adopts a bundle's claim is
+// vouching for it; what Source adds is which act that was, and that is
+// not recoverable from By.
+//
+// It is the verifier's own statement and not a boundary the server
+// enforces — the same kind of value as Rejection.Note. Omitting it only
+// strengthens the claim, and only somebody who could already verify
+// under that name can omit it (design doc 0045 §3.3).
 type Verification struct {
-	By Actor     `json:"by"`
-	At time.Time `json:"at"`
+	By     Actor     `json:"by"`
+	At     time.Time `json:"at"`
+	Source string    `json:"source,omitempty"`
+}
+
+// MaxVerificationSource bounds Verification.Source. It names a bundle,
+// not a story: long enough for a path or a URL, short enough that the
+// ledger stays a ledger.
+const MaxVerificationSource = 200
+
+// BundleSource renders the Source a bundle import records, from the
+// argument naming the bundle. One spelling, in one place, so a ledger
+// row can be read back as "this came from an import" without matching
+// prose. Over-long arguments keep their tail: the end of a path is what
+// identifies it.
+func BundleSource(bundle string) string {
+	if bundle == "-" {
+		bundle = "stdin"
+	}
+	const prefix = "okf-bundle:"
+	if n := len([]rune(bundle)); n > MaxVerificationSource-len(prefix) {
+		bundle = "…" + string([]rune(bundle)[n-(MaxVerificationSource-len(prefix)-1):])
+	}
+	return prefix + bundle
 }
 
 // Rejection is this instance's ruling that an entry was not accepted —

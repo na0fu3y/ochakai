@@ -233,7 +233,16 @@ func Handler(svc *service.Service) http.Handler {
 	// /knowledge/ for the same reason /usage does — a "/verify" suffix
 	// would be indistinguishable from an ID segment.
 	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		k, err := svc.Verify(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
+		var body struct {
+			Source string `json:"source"`
+		}
+		// A bare POST with no body is the ordinary case: a review
+		// performed here, which is what an empty source means (design
+		// doc 0045 §3.2).
+		if r.ContentLength != 0 && !readJSON(w, r, &body) {
+			return
+		}
+		k, err := svc.Verify(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()), body.Source)
 		if err != nil {
 			writeError(w, err)
 			return

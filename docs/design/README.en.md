@@ -122,9 +122,11 @@ For the shape of the system rather than the history of it, read
   *Accepted; the current record for OKF compatibility, superseding 0036.
   Implemented across later pull requests and not yet released; the
   breaking changes ship in the release after 0.15.0. §3.11's web UI form
-  sugar was withdrawn by 0044.* Both storage and the wire become the
-  canonical OKF document itself (frontmatter + markdown); the database is
-  reduced to derived index columns and instance-local ledgers. Status
+  sugar was withdrawn by 0044; §3.2's rule for import-time verification
+  was revised by 0045, which also gives a verification a `source`.* Both
+  storage and the wire become the canonical OKF document itself
+  (frontmatter + markdown); the database is reduced to derived index
+  columns and instance-local ledgers. Status
   becomes OKF's three values verbatim; "a human confirmed this" is a row
   in an append-only verification ledger (so verifications are plural and
   re-verification is history, not an overwrite); rejection moves to its
@@ -377,6 +379,29 @@ For the shape of the system rather than the history of it, read
   `entries`, not from `hits`.
 
 ## The verification loop and usage measurement
+
+- **[0045 Adopted verifications, told apart from reviews](0045-adopted-verifications.md)**
+  — *Accepted; the current record for the verification ledger, revising
+  0043 §3.2. Implemented and not yet released.* 0043 had a bundle's
+  `verified` key raise a verification in the importing actor's name. The
+  name was right — provenance comes from authentication, never from the
+  payload — but two things followed: one command asked for a transfer
+  also issued a trust claim per entry that its operator never chose to
+  make, and the ledger row could not say whether that actor had read the
+  entry or run one import over sixty-six of them. So adoption becomes an
+  explicit act (`ochakai import --adopt-verified`; without it the keys
+  are counted and reported, not acted on), and a verification carries a
+  `source`: empty for a review performed here, non-empty naming where the
+  claim was adopted from. The record is candid that `source` is the
+  verifier's own statement rather than a boundary the server enforces —
+  the same kind of field as a rejection's note — and that its job is to
+  make the normal path tell the truth, not to stop anyone. It does not
+  travel: an export writes SPEC §5.2's `{by, at}`, because this is one
+  instance's note about its own record-keeping.
+  *For a user:* importing a bundle no longer confirms anything in your
+  name unless you say so, and a round trip through export/import loses
+  the ledger by default — pass `--adopt-verified` when restoring your own
+  backup. The web UI marks an adopted confirmation as such.
 
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
   *Accepted; 0037 later added a third feed, and 0043 turns verify's record

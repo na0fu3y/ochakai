@@ -89,7 +89,7 @@ works too:
 
 ```sh
 export OCHAKAI_URL=http://localhost:8080
-go run ./cmd/ochakai import examples/demo
+go run ./cmd/ochakai import examples/demo --adopt-verified
 curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
 ```
 
@@ -518,6 +518,14 @@ the way the spec defines them: `status` is the lifecycle value alone
 confirmation, so the two signals stay independent. A draft somebody
 checked and a stable entry nobody has are both states the model can hold,
 and a foreign bundle's lifecycle value survives the trip unaltered.
+
+A bundle's `verified` entries are somebody else's review, so importing
+one does not make them yours: the keys are counted and reported, and
+`ochakai import --adopt-verified` is how you say you vouch for them. The
+ledger then records that they were adopted from that bundle rather than
+read here — an entry a person on this instance checked and an entry a
+bundle arrived asserting should not look the same six months later
+(design doc [0045](docs/design/0045-adopted-verifications.md)).
 
 A rejection — reviewed and *not* accepted — is this instance's ruling
 rather than a stage of the concept, so it is not a status either. It

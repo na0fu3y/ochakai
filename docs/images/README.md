@@ -17,7 +17,7 @@ OCHAKAI_DATABASE_URL='postgres://…/shots?sslmode=disable' \
   OCHAKAI_INSECURE_DEV=true PORT=8095 go run ./cmd/ochakai serve &
 
 export OCHAKAI_URL=http://127.0.0.1:8095
-go run ./cmd/ochakai import examples/demo
+go run ./cmd/ochakai import examples/demo --adopt-verified
 ```
 
 The bundle already carries the two drafts the review queue needs and a

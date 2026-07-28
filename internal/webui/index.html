@@ -1447,6 +1447,10 @@ async function viewDetail(id) {
     observed.created_by && observed.created_by.name ? `created by ${actorStr(observed.created_by)} ${fmtDate(entry.created_at)}` : `created ${fmtDate(entry.created_at)}`,
     lastVerification(observed)
       ? `verified by ${actorStr(lastVerification(observed).by)} ${fmtDate(lastVerification(observed).at)}`
+        // A confirmation adopted from a bundle and one somebody read the
+        // entry to make are different acts, and telling them apart is the
+        // whole reason the ledger carries a source (design doc 0045).
+        + (lastVerification(observed).source ? ` (adopted from ${lastVerification(observed).source})` : '')
         + ((observed.verified || []).length > 1 ? ` (${observed.verified.length} verifications)` : '')
       : '',
     observed.rejection ? `rejected by ${actorStr(observed.rejection.by)} ${fmtDate(observed.rejection.at)}` : '',

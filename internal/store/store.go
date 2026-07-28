@@ -196,7 +196,7 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 func ledgerCols(alias string) string {
 	return `(SELECT jsonb_agg(jsonb_build_object(
 			'by', jsonb_build_object('kind', v.by_kind, 'name', v.by_name, 'via', v.by_via),
-			'at', v.at) ORDER BY v.seq)
+			'at', v.at, 'source', v.source) ORDER BY v.seq)
 		FROM knowledge_verification v WHERE v.id = ` + alias + `.id),
 		(SELECT jsonb_build_object(
 			'by', jsonb_build_object('kind', r.by_kind, 'name', r.by_name, 'via', r.by_via),
@@ -630,18 +630,18 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // hide a report that arrived after the verification, or to keep one that
 // arrived before it — so both sides read the same clock, and RETURNING
 // hands back exactly what was stored.
-func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor, source string) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		var at time.Time
 		// The EXISTS guard makes the insert and the liveness check one
 		// statement, closing the race with a concurrent delete.
-		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, at)
+		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, at, source)
 			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
-				$2, $3, $4, now()
+				$2, $3, $4, now(), $5
 			WHERE EXISTS (SELECT 1 FROM knowledge WHERE id=$1 AND deleted_at IS NULL)
 			RETURNING at`,
-			id, actor.Kind, actor.Name, actor.Via).Scan(&at)
+			id, actor.Kind, actor.Name, actor.Via, source).Scan(&at)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}

@@ -43,7 +43,7 @@ types, and every environment variable.
   checked rather than described: the integration tests validate every
   request and response against it, so an endpoint that drifts fails CI.
 - [examples/demo](../examples/demo) — a ten-entry knowledge base to import
-  and poke at (`ochakai import examples/demo`). Linked entries, mixed
+  and poke at (`ochakai import examples/demo --adopt-verified`). Linked entries, mixed
   statuses, and an entry past its declared expiry, so the feeds and
   `get_context` have something to show.
 - [examples/claude-code](../examples/claude-code) — drop-in agent

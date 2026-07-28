@@ -67,8 +67,16 @@ ochakai.
 ### Restoring from a bundle
 
 ```sh
-ochakai import ./knowledge
+ochakai import ./knowledge --adopt-verified
 ```
+
+`--adopt-verified` is what carries the confirmations over. Without it the
+bundle's `verified` keys are counted and reported, not acted on: taking a
+bundle and vouching for what is in it are different acts, and a restore is
+the one case where you do mean both (design doc
+[0045](../design/0045-adopted-verifications.md)). The ledger records that
+they were adopted from that bundle rather than reviewed on the restored
+instance, which is the truth about what happened.
 
 Import is a client-side loop over ordinary endpoints — there is no
 server-side bulk import, by decision (design doc 0015 §3.2) — so a
@@ -94,9 +102,11 @@ instance:
   instance observed, never what a document asserts (design doc 0009).
 - **Usage counts and outcome reports do not travel** at all.
 
-What *does* survive is the knowledge and its trust: the verifications
-came back verified, through the OKF `verified` key rather than an ochakai
-alias, along with every envelope field.
+What *does* survive is the knowledge, and — with `--adopt-verified` — its
+trust: the verifications came back verified, through the OKF `verified`
+key rather than an ochakai alias, along with every envelope field. Each
+restored verification carries `source: okf-bundle:./knowledge`, so the
+ledger says these were adopted in the restore rather than read there.
 
 So: **run the import under an identity you are willing to see on every
 entry**, and if provenance matters to you, keep a database backup as

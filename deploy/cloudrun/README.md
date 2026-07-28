@@ -642,7 +642,7 @@ gcloud login, nothing special:
 
 ```sh
 git clone --depth 1 https://github.com/na0fu3y/ochakai && cd ochakai
-go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL from above
+go run ./cmd/ochakai import examples/demo --adopt-verified   # $OCHAKAI_URL from above
 ```
 
 Those ten entries are recorded as `human:you@your-org.example` — the last

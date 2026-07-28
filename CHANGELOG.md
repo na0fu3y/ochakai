@@ -18,6 +18,46 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: importing a bundle no longer confirms anything in your
+  name unless you ask it to, and a verification records what kind of
+  confirmation it was (design doc
+  [0045](docs/design/0045-adopted-verifications.md)).
+
+  0043 had a bundle's `verified` key raise a verification in the
+  importing actor's name. The name was right — provenance comes from
+  authentication, never from the payload, so `verified: by: alice@corp`
+  never put alice in the ledger. Two things followed anyway. One command
+  asked for a *transfer* also issued one trust claim per entry that its
+  operator never chose to make: a 66-entry bundle meant 66 of them. And
+  the ledger row, being `{by, at}` alone, could not say whether that
+  actor had read the entry or had run one import over all sixty-six.
+
+  - `ochakai import` counts the entries carrying a `verified` key and
+    says so; it adopts none of them. `--adopt-verified` is the opt-in,
+    and it is the flag to pass when restoring your own backup — a round
+    trip through `export | import` otherwise arrives unverified, which
+    is what 0009 already says about provenance and bundles.
+  - A `Verification` carries `source`. Absent means a review performed
+    here. Present names where the claim was adopted from, which today is
+    one thing: `okf-bundle:<bundle>`. `by` is unchanged either way — the
+    actor who adopts a bundle's claim is vouching for it — and `source`
+    says which act that was, which `by` cannot.
+  - `POST /api/v1/verify/{id}` takes an optional `{"source": "…"}` body.
+    A bare POST is still a bare POST. `ochakai verify` deliberately has
+    no `--source`: somebody typing it is reviewing, and the vocabulary
+    for saying otherwise belongs to the command that does otherwise.
+  - The web UI marks an adopted confirmation as adopted. Verify is not
+    an MCP tool and does not become one.
+  - `source` does not travel: an export writes SPEC §5.2's `{by, at}`,
+    because this is one instance's note about its own record-keeping —
+    the same reason a rejection stays home.
+
+  Migration 0025 adds the column with an empty default, so every
+  verification already recorded reads as "reviewed here", which is what
+  each of them is.
+
 ### Added
 
 - `ochakai import --diff` — say what a re-sync would change, per entry,

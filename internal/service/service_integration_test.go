@@ -202,7 +202,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	}{
 		{domain.RulingVerified, func(t *testing.T, k *domain.Knowledge) {
 			t.Helper()
-			if _, err := svc.Verify(ctx, k.ID, human); err != nil {
+			if _, err := svc.Verify(ctx, k.ID, human, ""); err != nil {
 				t.Fatal(err)
 			}
 		}, nil},
@@ -677,7 +677,7 @@ func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
 		at   func(*domain.Knowledge) *time.Time
 	}{
 		{"verification",
-			func(id string) (*domain.Knowledge, error) { return svc.Verify(ctx, id, actor) },
+			func(id string) (*domain.Knowledge, error) { return svc.Verify(ctx, id, actor, "") },
 			func(k *domain.Knowledge) *time.Time {
 				if v := k.LastVerified(); v != nil {
 					return &v.At
@@ -789,7 +789,7 @@ func TestUpdatedByFollowsContentIntegration(t *testing.T) {
 		t.Errorf("stale_after = %q; an update that omits it clears it, like every other content field", read.StaleAfter)
 	}
 
-	if _, err := svc.Verify(ctx, id, reviewer); err != nil {
+	if _, err := svc.Verify(ctx, id, reviewer, ""); err != nil {
 		t.Fatal(err)
 	}
 	if read, err = svc.Get(ctx, id); err != nil {

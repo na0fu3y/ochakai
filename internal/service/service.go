@@ -399,16 +399,29 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 // Not an MCP tool. Verification is the human ruling the write-back loop
 // turns on; an agent that finds an entry wrong reports the outcome or
 // drafts a replacement (design docs 0015 §3.1, 0025).
-func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+// source says what kind of confirmation this was: empty for a review
+// performed here, non-empty when the claim was adopted from somewhere —
+// today, a bundle taken with `ochakai import --adopt-verified` (design
+// doc 0045). It is the verifier's own statement, not a value the server
+// vouches for, so it is validated for shape and stored as given.
+func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor, source string) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
+	source = strings.TrimSpace(source)
+	if len([]rune(source)) > domain.MaxVerificationSource {
+		return nil, Invalidf("source is longer than %d characters: it names where a confirmation came from, not why",
+			domain.MaxVerificationSource)
+	}
+	if strings.ContainsAny(source, "\n\r") {
+		return nil, Invalidf("source is one line")
+	}
 	id = domain.Normalize(id)
-	k, err := s.Store.Verify(ctx, id, actor)
+	k, err := s.Store.Verify(ctx, id, actor, source)
 	if err != nil {
 		return nil, err
 	}
-	s.Log.Info("knowledge verified", "id", id, "actor", actor.String())
+	s.Log.Info("knowledge verified", "id", id, "actor", actor.String(), "source", source)
 	return k, nil
 }
 

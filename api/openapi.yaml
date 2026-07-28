@@ -1232,6 +1232,28 @@ paths:
         hierarchical id could be confused with an ID segment.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
+      requestBody:
+        required: false
+        description: >
+          Optional. A bare POST with no body is the ordinary case: a
+          review performed here. Send `source` only when the confirmation
+          is being adopted from somewhere rather than made — that is what
+          `ochakai import --adopt-verified` does (design doc 0045 §3.2).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source:
+                  type: string
+                  maxLength: 200
+                  description: >
+                    Where this confirmation was adopted from, one line.
+                    Empty or absent means it was made here.
+            examples:
+              adopted:
+                summary: A confirmation carried in by a bundle
+                value: { source: "okf-bundle:ga4-bundle.tar.gz" }
       responses:
         "200":
           description: The verified entry.
@@ -1291,6 +1313,7 @@ paths:
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/reject/{id}:
@@ -2095,6 +2118,26 @@ components:
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
+        source:
+          type: string
+          maxLength: 200
+          description: >
+            What kind of confirmation this was. Absent means a review
+            performed here — somebody read the entry and said so.
+            Present names where the claim was adopted from, which today
+            is one thing: a bundle taken with
+            `ochakai import --adopt-verified`, recorded as
+            `okf-bundle:<bundle>` (design doc 0045 §3.2). `by` is the
+            same either way — the actor who adopts a bundle's claim is
+            vouching for it — and this says which act that was, which
+            `by` cannot.
+            It is the verifier's own statement, not a value the server
+            vouches for; the same kind of field as a rejection's note.
+            Omitting it only strengthens the claim, and only a caller who
+            could already verify under that name can omit it (§3.3).
+            It does not travel: an export writes SPEC §5.2's `{by, at}`,
+            because this is one instance's note about its own
+            record-keeping (§3.6).
     Rejection:
       type: object
       description: >
@@ -2281,7 +2324,9 @@ components:
             unverified, which is SPEC §5.3's own signal. Written by
             POST /api/v1/verify/{id}: this is an instance ledger, and
             import reads only whether a bundle's `verified` key was
-            present (design docs 0009, 0043 §3.2).
+            present (design docs 0009, 0043 §3.2) — and does not adopt it
+            unless asked to, which is what a row's `source` records
+            (design doc 0045).
         rejection:
           allOf: [{ $ref: "#/components/schemas/Rejection" }]
           description: >

@@ -331,8 +331,14 @@ credentials — the answer before a bundle has ever been imported.
 entries and says, per entry, whether the bundle would create it,
 update it or leave it alone. It writes nothing either, but it does
 need to reach the server.
+A bundle's verified keys are counted and reported, not adopted: what
+they record is the exporting instance's review, and this instance has
+not done one. --adopt-verified says you vouch for them, and the
+ledger keeps that they came from this bundle rather than from a read.
 
 Flags:
+  -adopt-verified
+    	confirm, in your name, every entry whose document carries a verified key. Off by default: taking a bundle and vouching for what is in it are different acts, and one command should not do the second because you asked for the first. The ledger records that these were adopted from this bundle rather than reviewed here
   -diff
     	say what would change — created, updated or unchanged, per entry — by reading the stored entries and comparing. Implies --dry-run and writes nothing, but unlike it needs to reach the server
   -dry-run
@@ -347,6 +353,7 @@ Examples:
   ochakai import ga4-bundle.tar.gz --dry-run
   ochakai import ./knowledge --diff             # what would a re-sync change?
   ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse
+  ochakai export - | ochakai import - --adopt-verified   # restoring your own backup
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
 ```
 

@@ -1571,7 +1571,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 	if err := s.Update(ctx, k, verifier, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Verify(ctx, id, verifier); err != nil {
+	if _, err := s.Verify(ctx, id, verifier, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Get(ctx, id)
@@ -1770,7 +1770,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verified, err := s.Verify(ctx, id, human)
+	verified, err := s.Verify(ctx, id, human, "")
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -1811,7 +1811,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	}
 
 	// Re-verifying does.
-	again, err := s.Verify(ctx, id, human)
+	again, err := s.Verify(ctx, id, human, "")
 	if err != nil {
 		t.Fatalf("re-Verify: %v", err)
 	}
@@ -1819,6 +1819,22 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	// "how often, and by whom", not just "when last".
 	if len(again.Verifications) != 2 {
 		t.Fatalf("re-verification replaced the ledger instead of appending: %+v", again.Verifications)
+	}
+	// A review performed here records no source; adopting somebody else's
+	// says where it came from, and that is what tells the two apart
+	// afterwards (design doc 0045 §3.2).
+	if s := again.LastVerified().Source; s != "" {
+		t.Errorf("a plain verification recorded source %q, want none", s)
+	}
+	adopted, err := s.Verify(ctx, id, human, "okf-bundle:ga4.tar.gz")
+	if err != nil {
+		t.Fatalf("adopted Verify: %v", err)
+	}
+	if got := adopted.LastVerified().Source; got != "okf-bundle:ga4.tar.gz" {
+		t.Errorf("adopted verification source = %q", got)
+	}
+	if adopted.Verifications[1].Source != "" {
+		t.Errorf("adopting rewrote an earlier row's source: %+v", adopted.Verifications)
 	}
 	if !again.LastVerified().At.After(first) {
 		t.Fatalf("re-verification did not move the newest verification: %v -> %v", first, again.LastVerified().At)
@@ -2147,7 +2163,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 		rule   func(id string)
 	}{
 		{domain.RulingVerified, func(id string) {
-			if _, err := s.Verify(ctx, id, actor); err != nil {
+			if _, err := s.Verify(ctx, id, actor, ""); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -2476,7 +2492,7 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 	}, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Verify(ctx, from, actor); err != nil {
+	if _, err := s.Verify(ctx, from, actor, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Reject(ctx, from, actor, "on second thoughts"); err != nil {
@@ -2542,7 +2558,7 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 		what string
 		do   func() error
 	}{
-		{"verifying", func() error { _, err := s.Verify(ctx, id, actor); return err }},
+		{"verifying", func() error { _, err := s.Verify(ctx, id, actor, ""); return err }},
 		{"rejecting", func() error { _, err := s.Reject(ctx, id, actor, "no"); return err }},
 		{"lifting a rejection", func() error { _, err := s.LiftRejection(ctx, id, actor); return err }},
 	} {

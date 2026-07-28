@@ -882,7 +882,10 @@ func cmdVerify(ctx context.Context, args []string) error {
 	}
 	var failed []string
 	for _, id := range ids {
-		k, err := c.Verify(ctx, id)
+		// No --source flag: somebody typing `ochakai verify` is reviewing,
+		// and a vocabulary for saying otherwise belongs to the command
+		// that does otherwise (design doc 0045 §3.4).
+		k, err := c.Verify(ctx, id, "")
 		if err != nil {
 			// A lone id keeps the bare error: the caller named one entry,
 			// so the failure is the whole answer and needs no tally.
@@ -1123,10 +1126,11 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be read is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run parses and lists, reaching no server and needing no\ncredentials — the answer before a bundle has ever been imported.\n--diff is the answer on every import after that: it reads the stored\nentries and says, per entry, whether the bundle would create it,\nupdate it or leave it alone. It writes nothing either, but it does\nneed to reach the server.",
-		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --diff             # what would a re-sync change?\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — files\nwithout one are skipped and reported), reserved index.md / log.md\nfiles are skipped, keys the format does not define are kept as\nwritten, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be read is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run parses and lists, reaching no server and needing no\ncredentials — the answer before a bundle has ever been imported.\n--diff is the answer on every import after that: it reads the stored\nentries and says, per entry, whether the bundle would create it,\nupdate it or leave it alone. It writes nothing either, but it does\nneed to reach the server.\nA bundle's verified keys are counted and reported, not adopted: what\nthey record is the exporting instance's review, and this instance has\nnot done one. --adopt-verified says you vouch for them, and the\nledger keeps that they came from this bundle rather than from a read.",
+		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --diff             # what would a re-sync change?\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | ochakai import - --adopt-verified   # restoring your own backup\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	diff := fs.Bool("diff", false, "say what would change — created, updated or unchanged, per entry — by reading the stored entries and comparing. Implies --dry-run and writes nothing, but unlike it needs to reach the server")
+	adopt := fs.Bool("adopt-verified", false, "confirm, in your name, every entry whose document carries a verified key. Off by default: taking a bundle and vouching for what is in it are different acts, and one command should not do the second because you asked for the first. The ledger records that these were adopted from this bundle rather than reviewed here")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
@@ -1185,18 +1189,27 @@ func cmdImport(ctx context.Context, args []string) error {
 		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 	}
 	// A document that carried a verified key is confirmed by whoever ran
-	// the import — the actor who put it through the review gate (design
-	// docs 0009 §3.2, 0043 §3.2). The values inside the key are never
-	// read: they are the exporting instance's observations, not claims
-	// this one can adopt.
+	// the import, and only when they asked for it (design doc 0045 §3.1).
+	// The values inside the key are never read: they are the exporting
+	// instance's observations, not claims this one can adopt. What is
+	// recorded beside the actor is that this was an adoption and which
+	// bundle it came from — the one thing the actor's name cannot say.
+	carried, adopted := 0, 0
+	source := domain.BundleSource(pos[0])
 	confirm := func(d *okf.Doc) {
 		if !d.Verified {
 			return
 		}
-		if _, err := c.Verify(ctx, d.ID); err != nil {
+		carried++
+		if !*adopt {
+			return
+		}
+		if _, err := c.Verify(ctx, d.ID, source); err != nil {
 			noted++
 			fmt.Fprintf(os.Stderr, "note: %s imported, but recording its verification failed: %v\n", d.ID, err)
+			return
 		}
+		adopted++
 	}
 	for i := range entries {
 		d := &entries[i]
@@ -1254,8 +1267,20 @@ func cmdImport(ctx context.Context, args []string) error {
 		attached++
 		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped, %d notes)\n",
-		created+updated+unchanged, created, updated, unchanged, attached, len(skipped), noted)
+	// Saying nothing about a bundle's verifications would make the safe
+	// default look like the bundle had none. The count is the prompt: an
+	// operator who does mean to vouch for them learns the flag here.
+	if carried > 0 && !*adopt {
+		subject := fmt.Sprintf("%d entries carry", carried)
+		if carried == 1 {
+			subject = "1 entry carries"
+		}
+		noted++
+		fmt.Fprintf(os.Stderr, "note: %s a verified key and none was adopted; "+
+			"pass --adopt-verified to confirm them in your name\n", subject)
+	}
+	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d adopted, %d attachments, %d skipped, %d notes)\n",
+		created+updated+unchanged, created, updated, unchanged, adopted, attached, len(skipped), noted)
 	// The parse-time gate above cannot see what the server read differently
 	// or refused, so --strict asks again with the writes already done. The
 	// summary is printed first: the exit code says the sync is not clean,

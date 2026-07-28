@@ -369,9 +369,20 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 // the same call — the re-check is what takes an entry out of the review
 // feeds (design doc 0025 §6), and Update cannot do it. It does not touch
 // the document, so the entry's status and ETag do not move.
-func (c *Client) Verify(ctx context.Context, id string) (*domain.View, error) {
+//
+// source says what kind of confirmation this was: "" for a review
+// performed here, non-empty when the claim was adopted from a bundle
+// (design doc 0045 §3.2). An empty source sends no body at all, which is
+// the shape a server that predates the field understands.
+func (c *Client) Verify(ctx context.Context, id, source string) (*domain.View, error) {
 	var k domain.View
-	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, nil, &k); err != nil {
+	var body any
+	if source != "" {
+		body = struct {
+			Source string `json:"source"`
+		}{Source: source}
+	}
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, body, &k); err != nil {
 		return nil, err
 	}
 	return &k, nil

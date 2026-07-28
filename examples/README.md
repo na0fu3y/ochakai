@@ -23,7 +23,7 @@ type that carries the knowledge no semantic layer holds.
 Load it into a running server:
 
 ```sh
-OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
+OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo --adopt-verified
 ```
 
 Then try `ochakai context "why is revenue down?"`,

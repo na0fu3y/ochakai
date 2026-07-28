@@ -273,7 +273,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	for _, want := range []string{
 		"unchanged ochakai://metrics/same\n",
 		"updated ochakai://metrics/diff\n",
-		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 skipped, 0 notes)\n",
+		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 adopted, 0 attachments, 0 skipped, 0 notes)\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
@@ -340,6 +340,57 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 	}
 	if puts != 1 {
 		t.Errorf("import without --strict wrote %d entries, want 1", puts)
+	}
+}
+
+// TestImportDoesNotAdoptVerificationsUnasked pins design doc 0045 §3.1:
+// a bundle's verified key is counted and reported, never acted on, until
+// the operator says they vouch for it. The point is that one command
+// asked for a transfer does not also issue sixty-six trust claims in the
+// caller's name — and that when it is asked to, the ledger records that
+// they came from a bundle rather than from somebody reading the entry.
+func TestImportDoesNotAdoptVerificationsUnasked(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A v0.2 document whose verified key names somebody else. The name is
+	// never read; what is at issue is whether the key acts at all.
+	doc := "---\ntype: Metric\ntitle: Revenue\nstatus: stable\nverified:\n    - by: alice@corp\n      at: 2026-01-01T00:00:00Z\n---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "revenue.md"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var sources []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: r.PathValue("id")})
+	})
+	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Source string `json:"source"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		sources = append(sources, body.Source)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: r.PathValue("id")})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	if err := cmdImport(context.Background(), []string{dir, "--url", srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if len(sources) != 0 {
+		t.Errorf("import verified %d entries nobody asked it to: %q", len(sources), sources)
+	}
+
+	if err := cmdImport(context.Background(), []string{dir, "--adopt-verified", "--url", srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{domain.BundleSource(dir)}
+	if !reflect.DeepEqual(sources, want) {
+		t.Errorf("--adopt-verified recorded %q, want %q — the row must say it came from the bundle", sources, want)
 	}
 }
 

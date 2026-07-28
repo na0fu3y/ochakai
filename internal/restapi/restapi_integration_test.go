@@ -503,9 +503,13 @@ func TestRESTIntegrationVerify(t *testing.T) {
 		t.Errorf("create ETag = %q, want %q", got, want)
 	}
 
-	verify := func() domain.View {
+	verify := func(body ...string) domain.View {
 		t.Helper()
-		resp, err := http.Post(srv.URL+"/api/v1/verify/"+id, "", nil)
+		ct, rd := "", io.Reader(nil)
+		if len(body) > 0 {
+			ct, rd = "application/json", strings.NewReader(body[0])
+		}
+		resp, err := http.Post(srv.URL+"/api/v1/verify/"+id, ct, rd)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -546,6 +550,33 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	if !second.Observed.LastVerified().At.After(first.Observed.LastVerified().At) {
 		t.Errorf("re-verify did not move the newest verification: %v -> %v",
 			first.Observed.LastVerified().At, second.Observed.LastVerified().At)
+	}
+	// A bare POST is a review performed here, so it records no source; a
+	// body says the confirmation was adopted from somewhere, which is
+	// what tells the two acts apart in the ledger (design doc 0045 §3.2).
+	if s := second.Observed.LastVerified().Source; s != "" {
+		t.Errorf("a bare verify recorded source %q, want none", s)
+	}
+	adopted := verify(`{"source":"okf-bundle:ga4-bundle.tar.gz"}`)
+	if s := adopted.Observed.LastVerified().Source; s != "okf-bundle:ga4-bundle.tar.gz" {
+		t.Errorf("adopted verification source = %q", s)
+	}
+	if adopted.Summary.ContentHash != hash {
+		t.Errorf("an adopted verification moved the version: %q -> %q", hash, adopted.Summary.ContentHash)
+	}
+	// It is this instance's note about its own record-keeping, so it does
+	// not reach the document any more than the rest of the ledger does.
+	if strings.Contains(adopted.Document, "okf-bundle") {
+		t.Errorf("source leaked into the document: %q", adopted.Document)
+	}
+	tooLong, _ := json.Marshal(map[string]string{"source": strings.Repeat("x", domain.MaxVerificationSource+1)})
+	resp, err = http.Post(srv.URL+"/api/v1/verify/"+id, "application/json", bytes.NewReader(tooLong))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("an over-long source = %d, want 400", resp.StatusCode)
 	}
 
 	resp, err = http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)

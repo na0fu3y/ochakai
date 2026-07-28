@@ -123,7 +123,11 @@ producer's bundle, not just ours.
 
 Provenance is the one thing that does not travel: it is what an instance
 observed, not a claim a document can carry, so an import records the
-importer rather than replaying history (design doc 0009).
+importer rather than replaying history (design doc 0009). By the same
+rule an import does not confirm anything on your behalf —
+`ochakai import --adopt-verified` is how you say you vouch for a bundle's
+verified entries, and the ledger keeps that they came from that bundle
+(design doc 0045).
 
 ### Is there a hosted version?
 
