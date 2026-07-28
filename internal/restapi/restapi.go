@@ -16,7 +16,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -136,23 +135,50 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			writeMarkdown(w, doc)
 		default:
-			// Not yet an address for everything in the bundle: the
-			// objects and concepts join it in a later change (design
-			// doc 0046 §3.5), and until then this path serves the two
-			// files the format reserves.
-			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error": fmt.Sprintf("no object at %q: the bundle surface serves index.md and log.md", path),
-			})
+			serveFile(w, r, svc, path)
 		}
 	})
 
-	for _, m := range []string{"PUT", "DELETE"} {
-		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+	// PUT /api/v1/bundle/{path...} — put a file in the bundle. The bytes
+	// are the body, the path is the address, and the media type is
+	// sniffed (design doc 0046 §3.2). Nothing is refused for being the
+	// wrong kind of file: a bundle whose files ochakai will not hold is a
+	// bundle that does not round-trip.
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if okf.ReservedName(path) {
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
 				"error": "index.md and log.md are generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)",
 			})
-		})
-	}
+			return
+		}
+		data, ok := readBody(w, r, domain.MaxFileSize,
+			fmt.Sprintf("file exceeds %d MiB", domain.MaxFileSize>>20))
+		if !ok {
+			return
+		}
+		f, err := svc.PutFile(r.Context(), path, data, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, f)
+	})
+
+	mux.HandleFunc("DELETE /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if okf.ReservedName(path) {
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
+				"error": "index.md and log.md are generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)",
+			})
+			return
+		}
+		if err := svc.DeleteFile(r.Context(), path, httpauth.Actor(r.Context())); err != nil {
+			writeError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	// GET /api/v1/context?q=...&type=...&status=...&tag=...&prefix=...&limit=...&budget=...
 	// The one-call read before answering a data question: full entries
@@ -365,132 +391,6 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	})
 
-	// GET /api/v1/backlinks/{id...} — live entries whose links point at
-	// this entry, most recently updated first. The reverse edge
-	// get_context follows when packing companions, exposed so UIs can
-	// show "linked from" next to an entry's own links.
-	mux.HandleFunc("GET /api/v1/backlinks/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		limit, err := queryInt(r.URL.Query(), "limit")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		entries, err := svc.Backlinks(r.Context(), r.PathValue("id"), limit)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// A backlink row names an entry; it does not hand it over. The
-		// projection is what a caller needs to decide whether to follow
-		// the edge (design doc 0043 §3.5).
-		rows := make([]domain.Summary, len(entries))
-		for i := range entries {
-			rows[i] = domain.SummaryOf(&entries[i])
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"entries": rows})
-	})
-	// Attachments (design docs 0008, 0013): files attached to an entry
-	// (images, PDFs, plain text), bytes fetched on demand — entry reads
-	// carry metadata only. The path is
-	// /attachments/{id segments...}/{name}; the final segment is always
-	// the filename (attachment names are single segments), so the
-	// wildcard split is unambiguous. Lives outside /knowledge/ for the
-	// same reason /usage does: a suffix after a hierarchical {id...}
-	// would be unroutable.
-	attachmentRef := func(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-		id, name, ok := splitAttachmentPath(r.PathValue("path"))
-		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid attachment path (want /api/v1/attachments/{id}/{name})"})
-			return "", "", false
-		}
-		return id, name, true
-	}
-
-	mux.HandleFunc("PUT /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		data, ok := readBody(w, r, domain.MaxAttachmentSize,
-			fmt.Sprintf("attachment exceeds %d MiB", domain.MaxAttachmentSize>>20))
-		if !ok {
-			return
-		}
-		// okf_path preserves the bundle location a foreign import carried
-		// this file at, so re-export keeps the original body links working.
-		okfPath := r.URL.Query().Get("okf_path")
-		if okfPath != "" && (okfPath != path.Clean(okfPath) || okfPath == "." ||
-			strings.HasPrefix(okfPath, "/") || strings.HasPrefix(okfPath, "..")) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid okf_path (want a clean bundle-relative path)"})
-			return
-		}
-		att, err := svc.Attach(r.Context(), id, name, okfPath, data, httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, att)
-	})
-
-	mux.HandleFunc("GET /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		// Conditional GET before touching the blob store: bytes are
-		// content-addressed, so the hash is a perfect ETag, and the web
-		// UI re-renders the same images on every search — a 304 answered
-		// from metadata alone keeps GCS reads and egress off the bill.
-		// no-cache means "revalidate every time", which is required
-		// because the name→content mapping is mutable (replace-by-name).
-		meta, err := svc.AttachmentMeta(r.Context(), id, name)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		etag := `"` + meta.SHA256 + `"`
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Cache-Control", "private, no-cache")
-		if r.Header.Get("If-None-Match") == etag {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-		att, data, err := svc.Attachment(r.Context(), id, name)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// Re-stamp from the row the bytes came from, in case the
-		// attachment was replaced between the two reads.
-		w.Header().Set("ETag", `"`+att.SHA256+`"`)
-		ct := att.MediaType
-		// Plain text without a charset invites browser guessing; the sniffer
-		// only passes UTF-8/UTF-16 text through, so declare it.
-		if ct == "text/plain" {
-			ct = "text/plain; charset=utf-8"
-		}
-		w.Header().Set("Content-Type", ct)
-		// The bytes are user-uploaded and served inline; the media type is
-		// sniffed and allowlisted (design doc 0013 — nothing executable, no
-		// text/html, no image/svg+xml), but nosniff keeps a browser from
-		// overriding that and interpreting them as anything else.
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Disposition", `inline; filename="`+att.Name+`"`)
-		_, _ = w.Write(data)
-	})
-
-	mux.HandleFunc("DELETE /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		if err := svc.Detach(r.Context(), id, name, httpauth.Actor(r.Context())); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
 	// DELETE soft-deletes; ?purge=true hard-deletes an entry that is
 	// already soft-deleted, freeing its id (a tombstone still owns the
 	// primary key, so a move onto it fails). Two calls, deliberately: the
@@ -577,10 +477,10 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		var atts []store.ExportAttachment
+		var files []domain.File
 		if withAttachments {
-			// Metadata only; bytes are pulled one attachment at a time below.
-			if atts, err = snap.AttachmentMeta(r.Context()); err != nil {
+			// Metadata only; bytes are pulled one file at a time below.
+			if files, err = snap.Files(r.Context()); err != nil {
 				writeError(w, err)
 				return
 			}
@@ -649,25 +549,23 @@ func Handler(svc *service.Service) http.Handler {
 				}
 			}
 		}
-		// Attachments go next to their entries: "<id>/<name>", or the
-		// foreign path they were imported at (okf_path) so original body
-		// links keep working. A foreign path already taken by a concept
-		// document falls back to the canonical layout — identical content
-		// at the same path (the same image referenced by two entries) is
-		// no conflict.
-		for i := range atts {
-			a := &atts[i]
-			data, err := svc.Store.AttachmentBytes(r.Context(), a.Att.SHA256)
+		// Files go where they are: the path is the address, so an export
+		// writes each one back exactly where it was read from and a
+		// re-import finds it unchanged (design doc 0046 §3.2). The
+		// okf_path bookkeeping that used to reconstruct a foreign
+		// location has no subject any more.
+		for i := range files {
+			f := &files[i]
+			data, err := svc.Store.FileBytes(r.Context(), f.SHA256)
 			if err != nil {
-				fail("fetch attachment "+a.ID+"/"+a.Att.Name, err)
+				fail("fetch file "+f.Path, err)
 				return
 			}
-			p := okf.AttachmentPath(a.ID, &a.Att)
-			if written[p] {
-				p = a.ID + "/" + a.Att.Name
+			if written[f.Path] {
+				continue // a concept document already claimed the path
 			}
-			if err := add(p, data); err != nil {
-				fail("write attachment "+p, err)
+			if err := add(f.Path, data); err != nil {
+				fail("write file "+f.Path, err)
 				return
 			}
 		}
@@ -716,9 +614,9 @@ func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 	})
 }
 
-// writeHits responds with a hit list, attachment metadata filled in one
-// batch — the REST list surface carries it so UIs can render image
-// previews; MCP search results stay lean (design doc 0015).
+// writeHits responds with a hit list, file metadata filled in one batch
+// — the REST list surface carries it so UIs can render image previews;
+// MCP search results stay lean (design doc 0015).
 func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, hits []domain.SearchHit) {
 	// A row is a projection now (design doc 0043 §3.5), so the batch fill
 	// runs against stand-ins carrying only the ids and the metadata is
@@ -727,12 +625,12 @@ func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, hit
 	for i := range hits {
 		ptrs[i] = &domain.Knowledge{ID: hits[i].ID}
 	}
-	if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
+	if err := svc.FillFiles(r.Context(), ptrs); err != nil {
 		writeError(w, err)
 		return
 	}
 	for i := range hits {
-		hits[i].Attachments = ptrs[i].Attachments
+		hits[i].Files = ptrs[i].Files
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 }
@@ -825,6 +723,59 @@ func frontmatterFilter(q url.Values) map[string]string {
 		out[name] = vals[len(vals)-1]
 	}
 	return out
+}
+
+// serveFile answers a file in the bundle.
+//
+// A conditional GET comes first, before the blob store is touched: bytes
+// are content-addressed, so the hash is a perfect ETag, and the web UI
+// re-renders the same images on every search — a 304 answered from
+// metadata alone keeps GCS reads and egress off the bill. no-cache means
+// "revalidate every time", which is required because a path's content is
+// mutable.
+func serveFile(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) {
+	meta, err := svc.FileMeta(r.Context(), path)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	etag := `"` + meta.SHA256 + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	f, data, err := svc.File(r.Context(), path)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// Re-stamp from the row the bytes came from, in case the file was
+	// replaced between the two reads.
+	w.Header().Set("ETag", `"`+f.SHA256+`"`)
+	ct := f.MediaType
+	// Plain text without a charset invites browser guessing; the sniffer
+	// only passes UTF-8/UTF-16 text through, so declare it.
+	if ct == "text/plain" {
+		ct = "text/plain; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", ct)
+	// nosniff on everything: the media type is sniffed from the bytes,
+	// and a browser must not second-guess it.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if domain.RenderableInline(f.MediaType) {
+		w.Header().Set("Content-Disposition", `inline; filename="`+f.Name()+`"`)
+	} else {
+		// Anything else is a download and never a rendering. This is
+		// where design doc 0013's refusal of text/html and image/svg+xml
+		// moved to: the bundle may carry them, because refusing them
+		// would break the round trip, and a browser still never runs
+		// them (design doc 0046 §3.2).
+		w.Header().Set("Content-Disposition", `attachment; filename="`+f.Name()+`"`)
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	}
+	_, _ = w.Write(data)
 }
 
 // splitReserved cuts a bundle path into the directory it names and its

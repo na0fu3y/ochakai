@@ -71,6 +71,57 @@ func LinksFromBody(id, body string) []Link {
 	return links
 }
 
+// FileLinksFromBody returns the bundle paths a body references that are
+// not concepts: the image an insight shows, the seeds file a table entry
+// cites. It is the other half of LinksFromBody — same reading of the
+// same prose, same skipping of code — and it derives which files belong
+// to an entry (design doc 0046 §3.3).
+//
+// Images count here and nowhere else: "![chart](orders/chart.png)" is a
+// file reference, which is exactly why LinksFromBody skips it.
+func FileLinksFromBody(id, body string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, line := range proseLines(body) {
+		for _, m := range mdLinkRe.FindAllStringSubmatch(line, -1) {
+			p := Normalize(resolveFileTarget(id, m[3]))
+			if p == "" || seen[p] {
+				continue
+			}
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// resolveFileTarget is resolveTarget for the other kind of target: a
+// bundle path when the reference names a file, "" when it names a
+// concept, an anchor, or something outside the bundle.
+func resolveFileTarget(id, target string) string {
+	if i := strings.IndexAny(target, "#?"); i >= 0 {
+		target = target[:i]
+	}
+	if target == "" || schemeRe.MatchString(target) {
+		return ""
+	}
+	if strings.HasSuffix(strings.ToLower(target), ".md") {
+		return "" // a concept: resolveTarget answers for those
+	}
+	if strings.HasPrefix(target, "/") {
+		return strings.Trim(target, "/")
+	}
+	dir := path.Dir(id)
+	if dir == "." {
+		dir = ""
+	}
+	joined := path.Join(dir, target)
+	if joined == "." || strings.HasPrefix(joined, "..") {
+		return ""
+	}
+	return joined
+}
+
 // resolveTarget turns one link target into an entry id, or "" when the
 // target does not address an entry (an external URL, an attachment, an
 // anchor). id is the referring entry, whose directory relative targets

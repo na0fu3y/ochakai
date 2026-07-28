@@ -194,7 +194,7 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
-	links, attrs, body, created_at, updated_at, content_changed_at, doc, frontmatter, content_hash`
+	links, file_links, attrs, body, created_at, updated_at, content_changed_at, doc, frontmatter, content_hash`
 
 // ledgerCols is the two instance ledgers — verifications and the
 // rejection — read as JSON beside the entry's own columns (design doc
@@ -373,7 +373,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
 		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
-		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentChangedAt}
+		&links, &k.FileLinks, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentChangedAt}
 	if withDoc {
 		dests = append(dests, &k.Doc)
 	}
@@ -636,7 +636,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash,
+			j.links, k.FileLinks, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash,
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES (`+knowledgeParams+`)
@@ -708,7 +708,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash}
+			j.links, k.FileLinks, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash}
 		if ifMatch != nil {
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
@@ -717,8 +717,8 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
-			links=$20, attrs=$21, body=$22, updated_at=$23, content_changed_at=$24,
-			doc=$25, frontmatter=$26, content_hash=$27
+			links=$20, file_links=$21, attrs=$22, body=$23, updated_at=$24, content_changed_at=$25,
+			doc=$26, frontmatter=$27, content_hash=$28
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -968,7 +968,7 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 		// Embedding tables exist only once semantic search has been enabled.
 		for _, q := range []string{
 			`DELETE FROM knowledge_embedding WHERE id=$1`,
-			`DELETE FROM attachment_embedding WHERE knowledge_id=$1`,
+			`DELETE FROM file_embedding WHERE path LIKE $1 || '/%'`,
 		} {
 			if err := execTolerateMissingTable(ctx, tx, q, id); err != nil {
 				return err
@@ -1056,7 +1056,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// re-keying is enough — no re-embed.
 		for _, q := range []string{
 			`UPDATE knowledge_embedding SET id=$2 WHERE id=$1`,
-			`UPDATE attachment_embedding SET knowledge_id=$2 WHERE knowledge_id=$1`,
+
 		} {
 			if err := execTolerateMissingTable(ctx, tx, q, oldID, newID); err != nil {
 				return err
@@ -1549,11 +1549,15 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 	return s.annSearch(ctx, limit, q, args)
 }
 
-// SearchVectorAttachments ranks entries by their closest attachment
-// embedding (design doc 0020). Each entry appears once, carrying its
-// best attachment's score — attachments never stand alone, so the hit
-// is the owning entry.
-func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, model string, f Filter, limit int) ([]domain.SearchHit, error) {
+// SearchVectorFiles ranks entries by their closest file embedding
+// (design doc 0020). Each entry appears once, carrying its best file's
+// score — a file never stands alone as a result, so the hit is an entry
+// the file belongs to.
+//
+// Belonging is derived in the join (ownedBy) rather than read from a
+// foreign key, which is the whole of design doc 0046 §3.3 as SQL: a file
+// in an entry's directory, or one its body links to.
+func (s *Store) SearchVectorFiles(ctx context.Context, vec []float32, model string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
 	vecParam := len(args)
@@ -1561,7 +1565,7 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 	q := fmt.Sprintf(`
 		SELECT `+withoutDoc(knowledgeCols)+", "+ledgerCols("best")+`, score FROM (
 			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
-			FROM knowledge k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
+			FROM knowledge k JOIN file_embedding e ON e.model = $%d AND `+ownedBy("k", "e.path")+`
 			WHERE %s
 			ORDER BY k.id, e.embedding <=> $%d::vector
 		) best
@@ -1930,58 +1934,6 @@ func (s *Store) ListUnembedded(ctx context.Context, model, after string, limit i
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
-// UnembeddedAttachment names one attachment awaiting a vector.
-type UnembeddedAttachment struct {
-	KnowledgeID string
-	Name        string
-}
-
-// ListUnembeddedAttachments is ListUnembedded for attachment vectors
-// (design doc 0020). Attach writes them, so a corpus loaded before
-// semantic search — or one whose embedding tables were dropped to change
-// dimensions — has none, and the files are findable by name only. The
-// cursor is the (knowledge_id, name) pair, for the same reason.
-func (s *Store) ListUnembeddedAttachments(ctx context.Context, model, afterID, afterName string, limit int) ([]UnembeddedAttachment, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT a.knowledge_id, a.name FROM attachment a
-		 JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		 LEFT JOIN attachment_embedding e
-		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
-		 WHERE e.knowledge_id IS NULL
-		   AND ($2 = '' OR (a.knowledge_id, a.name) > ($2, $3))
-		 ORDER BY a.knowledge_id, a.name LIMIT $4`, model, afterID, afterName, limit)
-	if err != nil {
-		if isUndefinedTable(err) {
-			return nil, nil // embedding tables appear with semantic search
-		}
-		return nil, err
-	}
-	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (UnembeddedAttachment, error) {
-		var a UnembeddedAttachment
-		return a, row.Scan(&a.KnowledgeID, &a.Name)
-	})
-	if err != nil && isUndefinedTable(err) {
-		return nil, nil
-	}
-	return out, err
-}
-
-// CountUnembeddedAttachments counts what ListUnembeddedAttachments would
-// eventually return.
-func (s *Store) CountUnembeddedAttachments(ctx context.Context, model string) (int, error) {
-	var n int
-	err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM attachment a
-		 JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		 LEFT JOIN attachment_embedding e
-		   ON e.knowledge_id = a.knowledge_id AND e.name = a.name AND e.model = $1
-		 WHERE e.knowledge_id IS NULL`, model).Scan(&n)
-	if err != nil && isUndefinedTable(err) {
-		return 0, nil
-	}
-	return n, err
-}
-
 // CountUnembedded counts the live entries with no vector for the named
 // model. Reembed reports it so a bounded pass cannot be mistaken for a
 // finished one.
@@ -2000,16 +1952,6 @@ func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []flo
 		VALUES ($1, $2, $3::vector, now())
 		ON CONFLICT (id) DO UPDATE SET model = $2, embedding = $3::vector, updated_at = now()`,
 		id, model, encodeVector(vec))
-	return err
-}
-
-// UpsertAttachmentEmbedding stores the document embedding for one
-// attachment (design doc 0020).
-func (s *Store) UpsertAttachmentEmbedding(ctx context.Context, id, name, model string, vec []float32) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO attachment_embedding (knowledge_id, name, model, embedding, updated_at)
-		VALUES ($1, $2, $3, $4::vector, now())
-		ON CONFLICT (knowledge_id, name) DO UPDATE SET model = $3, embedding = $4::vector, updated_at = now()`,
-		id, name, model, encodeVector(vec))
 	return err
 }
 
@@ -2123,15 +2065,28 @@ func isUndefinedTable(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "42P01")
 }
 
-// CountAttachmentEmbedding reports whether one attachment has a vector
-// for the named model (0 or 1). Reembed uses it to tell an embedding
-// that landed from one the provider declined — the attach path logs its
-// own failures rather than returning them.
-func (s *Store) CountAttachmentEmbedding(ctx context.Context, id, name, model string) (int, error) {
+// CountFileEmbedding reports whether one file has a vector for the named
+// model (0 or 1). Reembed uses it to tell an embedding that landed from
+// one the provider declined — the write path logs its own failures
+// rather than returning them.
+func (s *Store) CountFileEmbedding(ctx context.Context, path, model string) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM attachment_embedding
-		 WHERE knowledge_id = $1 AND name = $2 AND model = $3`, id, name, model).Scan(&n)
+		`SELECT count(*) FROM file_embedding WHERE path = $1 AND model = $2`, path, model).Scan(&n)
+	if err != nil && isUndefinedTable(err) {
+		return 0, nil
+	}
+	return n, err
+}
+
+// CountUnembeddedFiles counts what ListUnembeddedFiles would eventually
+// return.
+func (s *Store) CountUnembeddedFiles(ctx context.Context, model string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM object o
+		 LEFT JOIN file_embedding e ON e.path = o.path AND e.model = $1
+		 WHERE o.deleted_at IS NULL AND e.path IS NULL`, model).Scan(&n)
 	if err != nil && isUndefinedTable(err) {
 		return 0, nil
 	}

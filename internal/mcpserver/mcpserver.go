@@ -366,41 +366,6 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_attachment",
-		Annotations: readOnly,
-		Description: "Fetch one file attached to a knowledge entry (get_knowledge lists attachment " +
-			"metadata under \"attachments\": images, PDFs, plain-text data files). Returns the " +
-			"file as content plus its metadata. Attachments are context-heavy — fetch them " +
-			"deliberately, when the entry's body references one you need to see (a dashboard's " +
-			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
-			"if you learn something from one, write it back into the entry's body with " +
-			"update_knowledge so the knowledge becomes searchable text.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
-		att, data, err := svc.Attachment(ctx, in.ID, in.Name)
-		if err != nil {
-			return nil, attachmentOut{}, err
-		}
-		// The content block matches the media type (design doc 0013):
-		// images as image content, plain text inline, PDFs as an embedded
-		// blob resource.
-		var content mcp.Content
-		switch {
-		case strings.HasPrefix(att.MediaType, "image/"):
-			content = &mcp.ImageContent{Data: data, MIMEType: att.MediaType}
-		case att.MediaType == "text/plain":
-			content = &mcp.TextContent{Text: string(data)}
-		default:
-			content = &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
-				URI:      fmt.Sprintf("ochakai://%s/attachments/%s", in.ID, att.Name),
-				MIMEType: att.MediaType,
-				Blob:     data,
-			}}
-		}
-		res := &mcp.CallToolResult{Content: []mcp.Content{content}}
-		return res, attachmentOut{Attachment: *att}, nil
-	}))
-
-	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_knowledge_usage",
 		Annotations: readOnly,
 		Description: "Usage totals for one knowledge entry: how often it appeared in search results, " +
@@ -567,14 +532,6 @@ type knowledgeOut struct {
 	Notes []string `json:"notes,omitempty"`
 }
 
-type attachmentIn struct {
-	ID   string `json:"id" jsonschema:"the entry's id (its path, e.g. metrics/revenue)"`
-	Name string `json:"name" jsonschema:"attachment filename, from the entry's attachments metadata"`
-}
-
-type attachmentOut struct {
-	Attachment domain.Attachment `json:"attachment"`
-}
 
 type usageOut struct {
 	Usage domain.Usage `json:"usage"`

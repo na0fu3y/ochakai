@@ -451,34 +451,28 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 	return &moved, nil
 }
 
-// Attach uploads data as an attachment of the entry (PUT
-// /api/v1/attachments/{id}/{name}), replacing any attachment of
-// the same name. okfPath preserves a foreign bundle location for
-// round-trips; "" for attachments born here. The server sniffs the media
-// type from the bytes.
-func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
-	var q url.Values
-	if okfPath != "" {
-		q = url.Values{"okf_path": {okfPath}}
-	}
-	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), q,
+// PutFile stores a file at a bundle path (PUT /api/v1/bundle/{path}).
+// The bytes are the body and the media type is sniffed by the server —
+// what a client claims about a file is not evidence (design doc 0013).
+func (c *Client) PutFile(ctx context.Context, path string, data []byte) (*domain.File, error) {
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(path), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	var att domain.Attachment
-	if err := json.NewDecoder(resp.Body).Decode(&att); err != nil {
+	var f domain.File
+	if err := json.NewDecoder(resp.Body).Decode(&f); err != nil {
 		return nil, err
 	}
-	return &att, nil
+	return &f, nil
 }
 
-// Attachment fetches one attachment's bytes and media type (GET
-// /api/v1/attachments/{id}/{name}). Full metadata travels with
-// the entry (Get → Knowledge.Attachments).
-func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, mediaType string, err error) {
-	resp, err := c.get(ctx, attachmentPath(id, name), nil)
+// File fetches one file's bytes and media type (GET
+// /api/v1/bundle/{path}). Its metadata travels with the entries it
+// belongs to (Get → View.Files).
+func (c *Client) File(ctx context.Context, path string) (data []byte, mediaType string, err error) {
+	resp, err := c.get(ctx, bundlePath(path), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -490,14 +484,13 @@ func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, 
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
-// Detach removes an attachment (DELETE /api/v1/attachments/{id}/{name}).
-func (c *Client) Detach(ctx context.Context, id, name string) error {
-	return c.doJSON(ctx, http.MethodDelete, attachmentPath(id, name), nil, nil, nil)
+// DeleteFile removes a file from the bundle (DELETE
+// /api/v1/bundle/{path}).
+func (c *Client) DeleteFile(ctx context.Context, path string) error {
+	return c.doJSON(ctx, http.MethodDelete, bundlePath(path), nil, nil, nil)
 }
 
-func attachmentPath(id, name string) string {
-	return escapedPath("/api/v1/attachments/", id) + "/" + url.PathEscape(name)
-}
+func bundlePath(p string) string { return escapedPath("/api/v1/bundle/", p) }
 
 // Usage fetches usage totals for one entry (GET /api/v1/usage/{id}):
 // search hits, fetches, outcome reports, and last-used time.

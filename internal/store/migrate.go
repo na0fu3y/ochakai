@@ -412,18 +412,18 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 		)`, dim)); err != nil {
 		return fmt.Errorf("create knowledge_embedding: %w", err)
 	}
-	// Attachment vectors (design doc 0020): one row per embedded
-	// attachment, mapped back to the owning entry at search time.
+	// File vectors (design doc 0020): one row per embedded file, keyed by
+	// its bundle path (design doc 0046 §3.3) and resolved back to the
+	// entries it belongs to at search time — a derivation now, where it
+	// used to be a stored foreign key.
 	if _, err := s.pool.Exec(ctx, fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS attachment_embedding (
-			knowledge_id text NOT NULL,
-			name         text NOT NULL,
-			model        text NOT NULL,
-			embedding    vector(%d) NOT NULL,
-			updated_at   timestamptz NOT NULL DEFAULT now(),
-			PRIMARY KEY (knowledge_id, name)
+		`CREATE TABLE IF NOT EXISTS file_embedding (
+			path       text NOT NULL PRIMARY KEY,
+			model      text NOT NULL,
+			embedding  vector(%d) NOT NULL,
+			updated_at timestamptz NOT NULL DEFAULT now()
 		)`, dim)); err != nil {
-		return fmt.Errorf("create attachment_embedding: %w", err)
+		return fmt.Errorf("create file_embedding: %w", err)
 	}
 	if err := s.checkEmbeddingDim(ctx, dim); err != nil {
 		return err
@@ -464,7 +464,7 @@ func (s *Store) checkEmbeddingDim(ctx context.Context, dim int) error {
 	return fmt.Errorf("knowledge_embedding.embedding is vector(%d) but OCHAKAI_EMBEDDING_DIM is %d: "+
 		"the stored vectors are in a space nothing would query, so writes and searches would both fail. "+
 		"Set OCHAKAI_EMBEDDING_DIM back to %d, or drop the old vectors and rebuild them "+
-		"(DROP TABLE knowledge_embedding, attachment_embedding; restart; ochakai reembed)",
+		"(DROP TABLE knowledge_embedding, file_embedding; restart; ochakai reembed)",
 		stored, dim, stored)
 }
 
@@ -499,8 +499,8 @@ func (s *Store) migrateVectorIndexes(ctx context.Context, dim int) error {
 	for _, stmt := range []string{
 		`CREATE INDEX IF NOT EXISTS knowledge_embedding_hnsw
 			ON knowledge_embedding USING hnsw (embedding vector_cosine_ops)`,
-		`CREATE INDEX IF NOT EXISTS attachment_embedding_hnsw
-			ON attachment_embedding USING hnsw (embedding vector_cosine_ops)`,
+		`CREATE INDEX IF NOT EXISTS file_embedding_hnsw
+			ON file_embedding USING hnsw (embedding vector_cosine_ops)`,
 	} {
 		if _, err := s.pool.Exec(ctx, stmt); err != nil {
 			return fmt.Errorf("create vector index: %w", err)

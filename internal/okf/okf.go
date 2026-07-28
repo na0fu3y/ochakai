@@ -514,7 +514,7 @@ func ViewOf(k *domain.Knowledge) (domain.View, error) {
 		Document:    string(doc),
 		Summary:     domain.SummaryOf(k),
 		Observed:    domain.ObservedOf(k),
-		Attachments: k.Attachments,
+		Files:    k.Files,
 	}, nil
 }
 

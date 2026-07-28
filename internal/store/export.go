@@ -93,35 +93,33 @@ func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.
 	return pgx.CollectRows(rows, scanKnowledgeDoc)
 }
 
-// AttachmentMeta returns every live entry's attachment metadata, ordered
-// by owning entry then name; the bytes are fetched one at a time as the
-// archive is written (design doc 0013). An entry with attachments in a
-// deployment that has no blob store is an error, not an empty archive.
+// Files returns every live file in the bundle, in path order; the bytes
+// are fetched one at a time as the archive is written (design doc 0013).
+// A bundle with files in a deployment that has no blob store is an
+// error, not an archive quietly missing them.
+//
+// It lists files rather than "each entry's attachments" because a file
+// belongs to the bundle, not to an entry (design doc 0046 §3.3) — which
+// is also what stops an export from dropping the ones no entry claims,
+// the way the attachment query did.
 //
 // Blobs live in GCS, outside this snapshot: a blob deleted mid-export
 // still fails when it is reached. The metadata being consistent is what
 // makes that failure visible as a missing file rather than as an archive
 // quietly disagreeing with its own index.
-func (e *ExportSnapshot) AttachmentMeta(ctx context.Context) ([]ExportAttachment, error) {
-	rows, err := e.tx.Query(ctx, `SELECT a.knowledge_id, `+attachmentCols+`
-		FROM attachment a
-		JOIN blob b ON b.sha256 = a.sha256
-		JOIN knowledge k ON k.id = a.knowledge_id AND k.deleted_at IS NULL
-		ORDER BY a.knowledge_id, a.name`)
+func (e *ExportSnapshot) Files(ctx context.Context) ([]domain.File, error) {
+	rows, err := e.tx.Query(ctx, `SELECT `+objectCols+`
+		FROM object o JOIN blob b ON b.sha256 = o.sha256
+		WHERE o.deleted_at IS NULL ORDER BY o.path`)
 	if err != nil {
 		return nil, err
 	}
-	atts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
-		var a ExportAttachment
-		err := row.Scan(&a.ID, &a.Att.Name, &a.Att.MediaType, &a.Att.Size, &a.Att.SHA256, &a.Att.OKFPath,
-			&a.Att.CreatedBy.Kind, &a.Att.CreatedBy.Name, &a.Att.CreatedAt)
-		return a, err
-	})
+	files, err := pgx.CollectRows(rows, scanFile)
 	if err != nil {
 		return nil, err
 	}
-	if len(atts) > 0 && e.store.blobs == nil {
+	if len(files) > 0 && e.store.blobs == nil {
 		return nil, errNoBlobStore
 	}
-	return atts, nil
+	return files, nil
 }

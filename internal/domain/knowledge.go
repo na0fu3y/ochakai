@@ -612,12 +612,21 @@ type Knowledge struct {
 	Verifications []Verification `json:"verifications,omitempty"`
 	Rejection     *Rejection     `json:"rejection,omitempty"`
 	Links         []Link         `json:"links,omitempty"`
+	// FileLinks are the bundle paths the body references that are not
+	// concepts — the other half of what a body points at, derived on
+	// write the same way Links is (design docs 0024, 0046 §3.3). It is
+	// an index: it answers "which entry does this file belong to"
+	// without re-reading every body, and nothing reads it back as a
+	// stored relationship.
+	FileLinks []string `json:"file_links,omitempty"`
 	Attrs         map[string]any `json:"attrs,omitempty"`
 	Body          string         `json:"body,omitempty"`
-	// Attachments is read-only metadata (no bytes), populated on single-
-	// entry reads. Attachments are managed through their own endpoints,
-	// never through create/update payloads.
-	Attachments []Attachment `json:"attachments,omitempty"`
+	// Files is read-only metadata (no bytes), populated on single-entry
+	// reads: the objects in the bundle that belong to this entry, which
+	// is derived from the body and the entry's namespace rather than
+	// stored (design doc 0046 §3.3). Written by putting a file at its
+	// path, never through a create or update payload.
+	Files []File `json:"files,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 	// ContentChangedAt is when what the entry says last changed, which is
@@ -996,7 +1005,7 @@ type View struct {
 	Document    string       `json:"document"`
 	Summary     Summary      `json:"summary"`
 	Observed    Observed     `json:"observed"`
-	Attachments []Attachment `json:"attachments,omitempty"`
+	Files []File `json:"files,omitempty"`
 }
 
 // URI is the entry's canonical address, as on Knowledge and Summary.
@@ -1031,7 +1040,7 @@ type SearchHit struct {
 	// so a UI can draw a thumbnail without a round trip per row (design
 	// doc 0015). It is not part of Summary: a row is a projection of the
 	// entry, and an attachment is a file beside it.
-	Attachments []Attachment `json:"attachments,omitempty"`
+	Files []File `json:"files,omitempty"`
 }
 
 // ContextRank is what a hit is worth once the entries travel in the same

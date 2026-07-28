@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -38,8 +39,8 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"purge":     cmdPurge,
 	"reembed":   cmdReembed,
 	"move":      cmdMove,
-	"attach":    cmdAttach,
-	"detach":    cmdDetach,
+	"put":       cmdPut,
+	"rm":        cmdRm,
 	"usage":     cmdUsage,
 	"report":    cmdReport,
 	"revisions": cmdRevisions,
@@ -653,20 +654,20 @@ func cmdGet(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if *download != "" && len(k.Attachments) > 0 {
+	if *download != "" && len(k.Files) > 0 {
 		if err := os.MkdirAll(*download, 0o755); err != nil {
 			return err
 		}
-		for _, att := range k.Attachments {
-			data, _, err := c.Attachment(ctx, id, att.Name)
+		for _, f := range k.Files {
+			data, _, err := c.File(ctx, f.Path)
 			if err != nil {
-				return fmt.Errorf("attachment %s: %w", att.Name, err)
+				return fmt.Errorf("file %s: %w", f.Path, err)
 			}
-			dst := filepath.Join(*download, att.Name)
+			dst := filepath.Join(*download, path.Base(f.Path))
 			if err := os.WriteFile(dst, data, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "saved %s (%s, %d bytes)\n", dst, att.MediaType, att.Size)
+			fmt.Fprintf(os.Stderr, "saved %s (%s, %d bytes)\n", dst, f.MediaType, f.Size)
 		}
 	}
 	if *asJSON {
@@ -678,37 +679,39 @@ func cmdGet(ctx context.Context, args []string) error {
 	// stdout stays the document and nothing else, so `ochakai get | …
 	// | ochakai update` is one pipe. What this instance observed is not
 	// part of the document (design docs 0009, 0043 §3.5), so it goes
-	// where the attachment hints already go.
+	// where the file hints already go.
 	prov := "created by " + k.Observed.CreatedBy.String()
 	if lv := k.Observed.LastVerified(); lv != nil {
 		prov = fmt.Sprintf("verified by %s on %s; ", lv.By.String(), lv.At.Format("2006-01-02")) + prov
 	}
 	fmt.Fprintln(os.Stderr, prov)
 	if *download == "" {
-		for _, att := range k.Attachments {
-			fmt.Fprintf(os.Stderr, "attachment: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
-				att.Name, att.MediaType, att.Size, id)
+		for _, f := range k.Files {
+			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
+				f.Path, f.MediaType, f.Size, id)
 		}
 	}
 	return nil
 }
 
-func cmdAttach(ctx context.Context, args []string) error {
+// cmdPut writes a file into the bundle at its path. It replaces attach:
+// a file is an object at an address, not something bolted to an entry
+// (design doc 0046 §§3.2-3.3), so what a writer names is where it goes.
+func cmdPut(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"attach",
-		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge entry (png, jpeg, webp, pdf, plain\ntext — the type is sniffed from the bytes; max 5 MiB each, 20 per\nentry). An attachment of the same name is replaced (the change is kept\nas a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
-		"  ochakai attach insights/reading-revenue weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
-	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
-	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
+		"put",
+		"Usage: ochakai put [flags] <path> <file>\n\nPut a file into the bundle at <path> — a screenshot, a seeds file, a\nPDF. The media type is sniffed from the bytes.\n\nWhich entry a file belongs to is derived, not declared: an entry claims\nthe files its body links to, plus whatever sits in its own directory. So\nthe usual path is \"<entry id>/<filename>\".\n\nMarkdown is written with `ochakai update`, not here: whether a .md is a\nconcept depends on what is in it.",
+		"  ochakai put insights/reading-revenue/weekly.png weekly.png\n  ochakai put tables/orders/seeds.txt ./seeds.txt\n")
+	asJSON := fs.Bool("json", false, "print the file metadata as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) < 2 || (*name != "" && len(pos) != 2) {
+	if len(pos) != 2 {
 		fs.Usage()
 		return errReported
 	}
-	id, err := parseRef(pos[0])
+	data, err := os.ReadFile(pos[1])
 	if err != nil {
 		return err
 	}
@@ -716,31 +719,19 @@ func cmdAttach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// The canonical body link is relative to the entry's own document:
-	// "<id last segment>/<name>" (design doc 0008).
-	lastSeg := id[strings.LastIndex(id, "/")+1:]
-	for _, file := range pos[1:] {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return err
-		}
-		attName := *name
-		if attName == "" {
-			attName = filepath.Base(file)
-		}
-		att, err := c.Attach(ctx, id, attName, "", data)
-		if err != nil {
-			return fmt.Errorf("%s: %w", file, err)
-		}
-		if *asJSON {
-			if err := printJSON(att); err != nil {
-				return err
-			}
-			continue
-		}
-		fmt.Printf("attached %s/%s (%s, %d bytes)\n", id, att.Name, att.MediaType, att.Size)
-		link := fmt.Sprintf("[%s](%s/%s)", att.Name, lastSeg, att.Name)
-		if strings.HasPrefix(att.MediaType, "image/") {
+	f, err := c.PutFile(ctx, pos[0], data)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(f)
+	}
+	fmt.Printf("put %s (%s, %d bytes)\n", f.Path, f.MediaType, f.Size)
+	// The link that makes the file an entry's: relative to the entry's
+	// own document, which is what an export writes and GitHub renders.
+	if strings.Contains(f.Path, "/") {
+		link := fmt.Sprintf("[%s](%s)", path.Base(f.Path), path.Base(f.Path))
+		if strings.HasPrefix(f.MediaType, "image/") {
 			link = "!" + link
 		}
 		fmt.Fprintf(os.Stderr, "hint: reference it from the body: %s\n", link)
@@ -748,23 +739,31 @@ func cmdAttach(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdDetach(ctx context.Context, args []string) error {
+// cmdRm removes a file from the bundle. Entries are removed with
+// `ochakai delete`, which soft-deletes and keeps history; a file has no
+// history of its own to keep — the bytes are content-addressed and stay
+// wherever a revision or an export still names them.
+func cmdRm(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"detach",
-		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
-		"  ochakai detach insights/reading-revenue weekly.png\n")
-	id, rest, err := idArgs(fs, args, 2)
+		"rm",
+		"Usage: ochakai rm [flags] <path>\n\nRemove a file from the bundle. The bytes stay in the blob store, which\nis how a revision or an export somebody took can still name them.",
+		"  ochakai rm insights/reading-revenue/weekly.png\n")
+	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
+	}
+	if len(pos) != 1 {
+		fs.Usage()
+		return errReported
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
 	}
-	if err := c.Detach(ctx, id, rest[0]); err != nil {
+	if err := c.DeleteFile(ctx, pos[0]); err != nil {
 		return err
 	}
-	fmt.Printf("detached %s/%s\n", id, rest[0])
+	fmt.Printf("removed %s\n", pos[0])
 	return nil
 }
 
@@ -1136,11 +1135,11 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	files, err := readBundle(pos[0])
+	raw, err := readBundle(pos[0])
 	if err != nil {
 		return err
 	}
-	entries, atts, skipped, notes := okf.FromBundle(files)
+	entries, files, skipped, notes := okf.FromBundle(raw)
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
 	}
@@ -1163,11 +1162,11 @@ func cmdImport(ctx context.Context, args []string) error {
 		for i := range entries {
 			fmt.Printf("would import %s\n", entries[i].URI())
 		}
-		for _, a := range atts {
-			fmt.Printf("would attach %s/%s (from %s)\n", a.ID, a.Name, a.Path)
+		for _, f := range files {
+			fmt.Printf("would put %s\n", f.Path)
 		}
-		fmt.Printf("dry run: %d entries, %d attachments, %d skipped, %d notes\n",
-			len(entries), len(atts), len(skipped), noted)
+		fmt.Printf("dry run: %d entries, %d files, %d skipped, %d notes\n",
+			len(entries), len(files), len(skipped), noted)
 		return nil
 	}
 	c, err := newClient(ctx, *url)
@@ -1236,27 +1235,21 @@ func cmdImport(ctx context.Context, args []string) error {
 		confirm(d)
 		fmt.Printf("updated %s\n", k.URI())
 	}
-	attached := 0
-	for _, a := range atts {
-		if rejected[a.ID] {
-			skipped = append(skipped, a.Path+": its entry "+a.ID+" was not imported")
-			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
-			continue
+	// Files go where they were found: the path is the address, so an
+	// import writes each one back at the path the bundle carried it at
+	// and nothing has to be reconstructed (design doc 0046 §3.2). Which
+	// entry a file belongs to is not asked here at all — it is derived
+	// when somebody reads the entry.
+	written := 0
+	for _, f := range files {
+		if _, err := c.PutFile(ctx, f.Path, f.Data); err != nil {
+			return fmt.Errorf("put %s: %w", f.Path, err)
 		}
-		// A file already at the canonical layout needs no okf_path — the
-		// preserved-location rule is for foreign layouts only.
-		okfPath := a.Path
-		if okfPath == a.ID+"/"+a.Name {
-			okfPath = ""
-		}
-		if _, err := c.Attach(ctx, a.ID, a.Name, okfPath, a.Data); err != nil {
-			return fmt.Errorf("attach %s/%s: %w", a.ID, a.Name, err)
-		}
-		attached++
-		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
+		written++
+		fmt.Printf("put %s\n", f.Path)
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d skipped, %d notes)\n",
-		created+updated+unchanged, created, updated, unchanged, attached, len(skipped), noted)
+	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d files, %d skipped, %d notes)\n",
+		created+updated+unchanged, created, updated, unchanged, written, len(skipped), noted)
 	// The parse-time gate above cannot see what the server read differently
 	// or refused, so --strict asks again with the writes already done. The
 	// summary is printed first: the exit code says the sync is not clean,

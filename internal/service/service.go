@@ -82,8 +82,10 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 		return nil, err
 	}
 	// Metadata only — the bytes are a separate, deliberate fetch
-	// (design doc 0008): images are heavy in agent context.
-	if k.Attachments, err = s.Store.ListAttachments(ctx, id); err != nil {
+	// (design doc 0008): files are heavy in agent context. Which files
+	// belong to the entry is derived from its body and its namespace
+	// (design doc 0046 §3.3), not read from a stored relationship.
+	if k.Files, err = s.FilesOf(ctx, k); err != nil {
 		return nil, err
 	}
 	s.recordUsage(ctx, domain.EventFetched, []string{id})
@@ -545,6 +547,11 @@ func normalizeKeys(k *domain.Knowledge) {
 // not back.
 func deriveLinks(k *domain.Knowledge) {
 	k.Links = domain.LinksFromBody(k.ID, k.Body)
+	// The file half of the same reading (design doc 0046 §3.3): which
+	// files an entry claims is a question about its body, so it is
+	// answered when the body is written rather than every time somebody
+	// asks.
+	k.FileLinks = domain.FileLinksFromBody(k.ID, k.Body)
 }
 
 func validate(k *domain.Knowledge) error {
@@ -681,14 +688,14 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, err
 	}
-	// Entries whose attachments match are the third list (design doc
-	// 0020): an entry matching in both body and attachment gains rank
-	// from both, so evidence-backed entries surface first.
-	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
+	// Entries whose files match are the third list (design doc 0020): an
+	// entry matching in both body and evidence gains rank from both, so
+	// evidence-backed entries surface first.
+	files, err := s.Store.SearchVectorFiles(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
 		return nil, err
 	}
-	fused := rrfFuse(limit, lexical, vector, attachments)
+	fused := rrfFuse(limit, lexical, vector, files)
 	return fused, nil
 }
 
@@ -1278,7 +1285,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	if limit <= 0 || limit > maxReembedPass {
 		limit = defaultReembedPass
 	}
-	entryCursor, attachCursor := splitReembedCursor(cursor)
+	entryCursor, fileCursor := splitReembedCursor(cursor)
 	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), entryCursor, limit)
 	if err != nil {
 		return nil, err
@@ -1313,7 +1320,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	// first and attachments fill the rest of the pass, so a corpus with
 	// both makes progress on both.
 	if rest := limit - len(ids); rest > 0 {
-		attachCursor, err = s.reembedAttachments(ctx, res, attachCursor, rest)
+		fileCursor, err = s.reembedFiles(ctx, res, fileCursor, rest)
 		if err != nil {
 			return nil, err
 		}
@@ -1329,53 +1336,52 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 		s.Log.Warn("reembed: counting what is left failed", "error", err)
 		return res, nil
 	}
-	attMissing, err := s.Store.CountUnembeddedAttachments(ctx, s.Embedder.Model())
+	fileMissing, err := s.Store.CountUnembeddedFiles(ctx, s.Embedder.Model())
 	if err != nil {
 		s.Log.Warn("reembed: counting attachments left failed", "error", err)
 	}
-	res.Missing = missing + attMissing
+	res.Missing = missing + fileMissing
 	if res.Missing > 0 {
-		res.Cursor = joinReembedCursor(entryCursor, attachCursor)
+		res.Cursor = joinReembedCursor(entryCursor, fileCursor)
 	}
 	return res, nil
 }
 
-// reembedAttachments re-embeds up to limit attachments, returning the
-// cursor to resume from. Failures are counted like entry failures: a
-// file the provider rejects must not strand the rest.
-func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, cursor string, limit int) (string, error) {
-	afterID, afterName := splitReembedCursor(cursor)
-	pending, err := s.Store.ListUnembeddedAttachments(ctx, s.Embedder.Model(), afterID, afterName, limit)
+// reembedFiles re-embeds up to limit files, returning the cursor to
+// resume from. Failures are counted like entry failures: a file the
+// provider rejects must not strand the rest.
+func (s *Service) reembedFiles(ctx context.Context, res *ReembedResult, cursor string, limit int) (string, error) {
+	pending, err := s.Store.ListUnembeddedFiles(ctx, s.Embedder.Model(), cursor, limit)
 	if err != nil {
 		return cursor, err
 	}
-	for _, a := range pending {
-		att, data, err := s.Store.GetAttachment(ctx, a.KnowledgeID, a.Name)
+	for _, u := range pending {
+		f, data, err := s.Store.GetFile(ctx, u.Path)
 		if err != nil {
 			res.Failed++
-			s.Log.Warn("reembed: attachment disappeared", "id", a.KnowledgeID, "name", a.Name, "error", err)
+			s.Log.Warn("reembed: file disappeared", "path", u.Path, "error", err)
 			continue
 		}
-		// The same path attach uses, so the vectors match what a fresh
-		// attach would have produced; it logs and swallows its own
+		// The same path a write uses, so the vectors match what a fresh
+		// write would have produced; it logs and swallows its own
 		// failures, which is why the count below is of rows written.
-		before := s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name)
-		s.updateAttachmentEmbedding(ctx, a.KnowledgeID, att, data)
-		if s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name) > before {
+		before := s.fileVectorCount(ctx, u.Path)
+		s.updateFileEmbedding(ctx, f, data)
+		if s.fileVectorCount(ctx, u.Path) > before {
 			res.Attachments++
 		} else {
 			res.Failed++
 		}
-		afterID, afterName = a.KnowledgeID, a.Name
+		cursor = u.Path
 	}
-	return joinReembedCursor(afterID, afterName), nil
+	return cursor, nil
 }
 
-// attachmentVectorCount reports whether a current-model vector exists,
-// so a pass can tell an embedding that landed from one the provider (or
-// the model's file support) declined.
-func (s *Service) attachmentVectorCount(ctx context.Context, id, name string) int {
-	n, err := s.Store.CountAttachmentEmbedding(ctx, id, name, s.Embedder.Model())
+// fileVectorCount reports whether a current-model vector exists, so a
+// pass can tell an embedding that landed from one the provider (or the
+// model's file support) declined.
+func (s *Service) fileVectorCount(ctx context.Context, path string) int {
+	n, err := s.Store.CountFileEmbedding(ctx, path, s.Embedder.Model())
 	if err != nil {
 		return 0
 	}
