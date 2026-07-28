@@ -240,6 +240,33 @@ last entry.
 
 ### Changed
 
+- **The published contract says which address to build on.** While
+  [0046](docs/design/0046-bundle-address-space.md) §3.5's fold is in
+  flight, three addresses answer for the same object, and
+  `api/openapi.yaml` did not say which one survives it.
+  `/api/v1/bundle/{path}` does. The operations it replaces —
+  `GET|PUT|DELETE /api/v1/knowledge/{id}` and
+  `GET|PUT|DELETE /api/v1/attachments/{path}` — are now marked
+  `deprecated`, each naming the bundle call that answers the same
+  question. Nothing is removed and no behaviour changes: a removal
+  arrives in a minor release with a changelog entry, as
+  [the compatibility policy](docs/compatibility.md) says, not after a
+  deprecation window.
+
+  `/api/v1/knowledge` (the list), `/api/v1/backlinks/{id}` and
+  `/api/v1/export` are retired by the same section but carry no mark:
+  their successors are not built yet, so they are still the only way to
+  ask what they answer. The document says so rather than leaving a
+  reader to find out.
+
+  Two things that read as holes are closed with it. The `501` on
+  `PUT /api/v1/bundle/{path}` now says what it is — writing a file needs
+  GCS (design doc 0013), and a concept is unaffected — rather than
+  standing unexplained where a "not built yet" placeholder used to be.
+  And `/api/v1/export`'s recipe for writing your own importer no longer
+  sends the reader to a `POST /api/v1/knowledge` that does not exist:
+  it is one PUT per bundle member, at the path it arrived at.
+
 - **A file is an object in the bundle** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.3, 3.13). Migration
   0029 moves every `attachment` row into `object`, at the path the file
