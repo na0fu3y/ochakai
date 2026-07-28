@@ -750,9 +750,10 @@ paths:
       operationId: getKnowledge
       summary: Get one knowledge entry
       description: >
-        Answers a View by default: the entry's canonical document, the
-        projection to read it by, and what this instance observed about
-        it (design doc 0043 §3.5).
+        Answers a View by default: the entry's document as it was
+        written, the projection to read it by, and what this instance
+        observed about it (design docs 0043 §3.5, 0046 §2.2). Comments,
+        key order and quoting style are the writer's, and stay theirs.
 
         With "Accept: text/markdown" it answers a document instead — the
         export form, keys the server owns included, which is what a
@@ -1054,9 +1055,9 @@ paths:
                     wrote the entry. The verifications ledger is untouched
                     — a PUT edits the document and rules on nothing;
                     POST /api/v1/verify/{id} is what confirms an entry.
-                    `document` comes back canonical: key order normalized,
-                    and no server-owned keys to strip before the next
-                    edit.
+                    `document` comes back as it was written — the bytes
+                    that were stored (design doc 0046 §2.2), with no
+                    server-owned keys to strip before the next edit.
                   value:
                     id: metrics/revenue
                     document: |
@@ -1949,15 +1950,15 @@ components:
   headers:
     ETag:
       description: >
-        The entry's version — the hash of its canonical OKF document,
+        The entry's version — the hash of the document as stored,
         quoted, and the same value as the body's summary.content_hash
-        (design doc 0043 §3.4). A client echoes it in If-Match on a later update
-        to write only if nothing changed meanwhile (design doc 0030).
-        It is a hash of the content alone, so it moves when the entry's
-        content moves and at no other time: verifying, rejecting or
-        attaching a file all leave a held precondition valid. Treat it as
-        opaque — two entries that say the same thing carry the same
-        version.
+        (design docs 0043 §3.4, 0046 §3.4). A client echoes it in
+        If-Match on a later update to write only if nothing changed
+        meanwhile (design doc 0030). It covers the document and nothing
+        else, so verifying, rejecting or attaching a file all leave a
+        held precondition valid — while reformatting the entry moves it,
+        because the file did change (what the entry *says* did not, which
+        is what observed.generated.at reports). Treat it as opaque.
       schema: { type: string }
     Note:
       description: >
@@ -2253,12 +2254,12 @@ components:
         content_hash:
           type: string
           description: >
-            The entry's version: the hash of its canonical OKF document,
-            and the same value the ETag header carries (design doc 0043
-            §3.4). Send it back as If-Match to write only if nothing
-            changed meanwhile. Opaque — it moves when the content moves
-            and at no other time, so a verification or an attachment
-            leaves a held precondition valid.
+            The entry's version: the hash of the document as stored, and
+            the same value the ETag header carries (design docs 0043
+            §3.4, 0046 §3.4). Send it back as If-Match to write only if
+            nothing changed meanwhile. Opaque — it covers the document
+            alone, so a verification or an attachment leaves a held
+            precondition valid, while a reformat moves it.
         created_at: { type: string, format: date-time }
         updated_at:
           type: string

@@ -80,6 +80,14 @@ func TestAStatusChangeEditsTheDocumentRatherThanRebuildingIt(t *testing.T) {
 	if strings.Contains(page, "function toDocument(") || strings.Contains(page, "const WRITABLE") {
 		t.Error("the page rebuilds a document from fields again; a projection cannot be rebuilt into an entry")
 	}
+	// A document that names no status has to gain one. The server does
+	// not write a status its writer left out (design doc 0046 §3.9), and
+	// the document a read hands back is the one that was written (§2.2) —
+	// so a replace-only edit would report success and change nothing.
+	fn := section(t, page, "function withStatus(doc, status)", "\n}")
+	if !strings.Contains(fn, "doc.match(") {
+		t.Error("withStatus only replaces a status line; a document that names none would come back unchanged")
+	}
 }
 
 // "Stale" already meant two different things on this page — the

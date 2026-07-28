@@ -587,12 +587,32 @@ func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge,
 // round. A stored target is always the resolved id, whichever of SPEC
 // §6's two forms the body wrote it in.
 func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
-	return s.queryKnowledge(ctx,
-		`SELECT `+knowledgeSelect+` FROM knowledge
+	return s.listLinkingTo(ctx, id, limit, knowledgeSelect, scanKnowledge)
+}
+
+// ListLinkingToDocs is ListLinkingTo for the caller that hands the
+// entries over rather than naming them: a context pack delivers its
+// companions as documents, and a companion read without one would come
+// back rendered while the entries beside it came back as written (design
+// doc 0046 §2.2). Backlinks stays on the lighter read — a row there is a
+// projection, and the document would be paid for and dropped.
+func (s *Store) ListLinkingToDocs(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
+	return s.listLinkingTo(ctx, id, limit, knowledgeSelectDoc, scanKnowledgeDoc)
+}
+
+func (s *Store) listLinkingTo(ctx context.Context, id string, limit int, cols string,
+	scan func(pgx.CollectableRow) (domain.Knowledge, error),
+) ([]domain.Knowledge, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+cols+` FROM knowledge
 		 WHERE deleted_at IS NULL AND links @> $1
 		 ORDER BY updated_at DESC LIMIT $2`,
 		fmt.Sprintf(`[{"target": %q}]`, id),
 		limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scan)
 }
 
 // Create inserts a new entry. A live entry with the same id is
@@ -630,7 +650,13 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		if err != nil {
 			return err
 		}
-		k.ContentHash = hash
+		// The row's bytes go back onto the entry, so what a write returns
+		// is what a later read returns (design doc 0046 §2.2). The two
+		// differ whenever storedDoc fell back to the canonical form — a
+		// caller that changed fields rather than a document — and a
+		// surface rendering the payload back would show bytes nothing
+		// stored.
+		k.Doc, k.ContentHash = doc, hash
 		args := []any{
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
@@ -703,7 +729,13 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
-		k.ContentHash = hash
+		// The row's bytes go back onto the entry, so what a write returns
+		// is what a later read returns (design doc 0046 §2.2). The two
+		// differ whenever storedDoc fell back to the canonical form — a
+		// caller that changed fields rather than a document — and a
+		// surface rendering the payload back would show bytes nothing
+		// stored.
+		k.Doc, k.ContentHash = doc, hash
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
