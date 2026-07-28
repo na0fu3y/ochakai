@@ -540,9 +540,11 @@ function lastVerification(observed) {
   const vs = (observed || {}).verified || [];
   return vs.length ? vs[vs.length - 1] : null;
 }
-// A summary answers "has anyone confirmed this" as a bool; the ledger
-// itself travels in observed (design doc 0043 §3.5).
-function isVerified(e) { return !!e.verified; }
+// A summary answers "who confirmed this" with OKF's tier (SPEC §5.3);
+// the ledger itself travels in observed (design docs 0043 §3.5, 0046
+// §3.10).
+function trustOf(e) { return e.trust || 'unverified'; }
+function isVerified(e) { return trustOf(e) !== 'unverified'; }
 
 // Whole days since an ISO timestamp (null for unparseable input).
 function daysSince(s) {
@@ -838,8 +840,8 @@ function viewExplore() {
     // point — and being able to read them is how somebody checks what was
     // already declined.
     + `
-    <label class="chip" title="Only entries somebody has confirmed"><input type="checkbox" id="f-verified"
-      aria-label="verified only" ${explore.verified ? 'checked' : ''}>✓ verified</label>
+    <label class="chip" title="Only entries somebody has confirmed — machine-confirmed or human-reviewed (OKF SPEC §5.3)"><input type="checkbox" id="f-verified"
+      aria-label="confirmed only" ${explore.verified ? 'checked' : ''}>✓ confirmed</label>
     <label class="chip" title="Only entries a human reviewed and turned down — hidden everywhere else"><input type="checkbox" id="f-rejected"
       aria-label="rejected only" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
   // Filters collapse into a disclosure on narrow screens; keep it open on
@@ -961,7 +963,9 @@ async function runSearch() {
   else if (!explore.source) p.set('sort', 'usage');
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);
-  if (explore.verified) p.set('verified', 'true');
+  // The filter asks SPEC §5.3's question — who confirmed this — rather
+  // than a boolean the spec has no word for (design doc 0046 §3.10).
+  if (explore.verified) { p.append('trust', 'human-reviewed'); p.append('trust', 'machine-confirmed'); }
   if (explore.rejected) p.set('rejected', 'true');
   if (explore.tag) p.append('tag', explore.tag);
   // A path scope is a filter like tag, so it rides along with whatever
@@ -1481,7 +1485,7 @@ async function viewDetail(id) {
           ${STATUSES.map(s => `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </span>
-      ${isVerified(entry) ? '<span class="badge verified-mark" title="Somebody confirmed this entry">✓ verified</span>' : ''}
+      ${isVerified(entry) ? `<span class="badge verified-mark" title="The trust tier OKF derives from the verification ledger (SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
       ${entry.rejected ? '<span class="badge rejected-mark" title="Reviewed and not accepted">rejected</span>' : ''}
       ${tags}
       <span class="actions write-only">

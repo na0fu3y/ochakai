@@ -144,9 +144,12 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 		return &domain.Knowledge{
 			Type: domain.TypeMetrics, ID: id, Title: "売上",
 			Description: "統合テスト用", Tags: []string{"sales"},
-			Status: domain.StatusDraft,
-			Attrs:  map[string]any{"threshold": 5},
-			Body:   "受注合計。[sales モデル](/model/sales.md) で定義。",
+			// No status: the entry reads as OKF's default, which is what
+			// makes the status-omitting payload below content-identical
+			// rather than a claim about a different lifecycle value
+			// (design doc 0046 §3.9).
+			Attrs: map[string]any{"threshold": 5},
+			Body:  "受注合計。[sales モデル](/model/sales.md) で定義。",
 		}
 	}
 	if _, err := svc.Create(ctx, entry(), actor); err != nil {

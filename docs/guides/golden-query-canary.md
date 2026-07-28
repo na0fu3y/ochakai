@@ -27,7 +27,7 @@ supplies the material and records what you found.
 ### 1. List — least recently verified first
 
 ```sh
-ochakai search --sort verified_at --type 'Attested Computation' --verified true --limit 100 --json \
+ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100 --json \
   | jq -r '.hits[] | [.id, .verified_at, .title] | @tsv'
 ```
 
@@ -38,7 +38,7 @@ Fetch the ones you are about to run with `ochakai get <id>`, which prints
 the document — question, `runtime` and `# Computation` fence included.
 
 Straight REST is
-`GET /api/v1/knowledge?type=Attested%20Computation&verified=true&sort=verified_at&limit=100`;
+`GET /api/v1/knowledge?type=Attested%20Computation&trust=human-reviewed&sort=verified_at&limit=100`;
 over MCP, `search_knowledge` with `sort: "verified_at"` returns the same
 feed. `sort=verified_at` orders by verification time, oldest first, with
 unverified entries last. "Verified queries not re-checked in 90 days" is
@@ -88,7 +88,7 @@ canonicalize a run against. ochakai takes no part in this step.
   and failed totals show up under `/usage`, so verified entries that have
   accumulated failures can be picked up for re-verification first. **The
   `sort=failed` re-verification feed** (`ochakai search --sort failed
-  --verified true`, REST: `GET /api/v1/knowledge?sort=failed`, MCP:
+  --trust human-reviewed`, REST: `GET /api/v1/knowledge?sort=failed`, MCP:
   `search_knowledge` with `sort: "failed"`) lists them in order of how
   often they were reported wrong. It is the evidence-based entrance,
   complementing the time-based `sort=verified_at` (design doc 0025).
@@ -114,7 +114,7 @@ jobs:
         run: |
           TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
           curl -s -H "Authorization: Bearer $TOKEN" \
-            "$OCHAKAI_URL/api/v1/knowledge?type=Attested%20Computation&verified=true&sort=verified_at&limit=50" \
+            "$OCHAKAI_URL/api/v1/knowledge?type=Attested%20Computation&trust=human-reviewed&sort=verified_at&limit=50" \
           | jq -r '.hits[].id' | while read -r id; do
               doc=$(curl -s -H "Authorization: Bearer $TOKEN" \
                 -H 'Accept: text/markdown' "$OCHAKAI_URL/api/v1/knowledge/$id")

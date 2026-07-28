@@ -85,7 +85,11 @@ func TestRESTIntegration(t *testing.T) {
 	// §3.5).
 	var got domain.View
 	getJSON(t, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", &got)
-	if got.Summary.Title != "REST round trip" || got.Summary.Status != domain.StatusDraft {
+	// The document named no status, so it reads as OKF's default rather
+	// than as a draft — and nobody has confirmed it, which is what the
+	// trust tier says (design doc 0046 §§3.9-3.10).
+	if got.Summary.Title != "REST round trip" || got.Summary.Status != domain.StatusStable ||
+		got.Summary.Trust != domain.TrustUnverified {
 		t.Errorf("summary = %+v", got.Summary)
 	}
 	if !strings.Contains(got.Document, "title: REST round trip") {
@@ -525,7 +529,9 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	}
 
 	first := verify()
-	if len(first.Observed.Verified) != 1 || !first.Summary.Verified {
+	// The test server reads no identity, so the confirmation is a
+	// process's: machine-confirmed, not human-reviewed (SPEC §5.3).
+	if len(first.Observed.Verified) != 1 || first.Summary.Trust != domain.TrustMachine {
 		t.Fatalf("verify appended nothing: %+v", first.Observed.Verified)
 	}
 	// The ledger is an observation, so it travels beside the document

@@ -52,11 +52,6 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		verified, err := queryTriBool(q, "verified")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
 		rejected, err := queryTriBool(q, "rejected")
 		if err != nil {
 			writeError(w, err)
@@ -68,7 +63,7 @@ func Handler(svc *service.Service) http.Handler {
 			Tags:     q["tag"],
 			Source:   q.Get("source"),
 			Prefixes: q["prefix"],
-			Verified: verified,
+			Trust:    domain.ToTrusts(q["trust"]),
 			Rejected: rejected,
 		}
 		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
@@ -122,11 +117,6 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		verified, err := queryTriBool(q, "verified")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
 		res, err := svc.Context(r.Context(), service.ContextRequest{
 			Query: q.Get("q"),
 			Filter: store.Filter{
@@ -134,7 +124,7 @@ func Handler(svc *service.Service) http.Handler {
 				Statuses: domain.ToStatuses(q["status"]),
 				Tags:     q["tag"],
 				Prefixes: q["prefix"],
-				Verified: verified,
+				Trust:    domain.ToTrusts(q["trust"]),
 			},
 			Limit: limit, MinScore: minScore, Budget: budget,
 		})

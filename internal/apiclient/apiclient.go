@@ -136,12 +136,12 @@ type SearchParams struct {
 	// (design doc 0041). Repeatable and OR-ed, matched on segment
 	// boundaries. Composes with Query and with any Sort.
 	Prefixes []string
-	// Verified and Rejected ask about the instance ledgers rather than the
+	// Trust and Rejected ask about the instance ledgers rather than the
 	// document (design doc 0043 §§3.2-3.3), independently of Statuses.
 	// Both are tri-state: nil leaves the question unasked. Nil Rejected
 	// still hides rejected entries — asking for them is opt-in, which is
 	// how an agent checks whether a proposal was already turned down.
-	Verified *bool
+	Trust    []string
 	Rejected *bool
 	Limit    int
 }
@@ -169,8 +169,8 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	for _, pre := range p.Prefixes {
 		q.Add("prefix", pre)
 	}
-	if p.Verified != nil {
-		q.Set("verified", strconv.FormatBool(*p.Verified))
+	for _, t := range p.Trust {
+		q.Add("trust", t)
 	}
 	if p.Rejected != nil {
 		q.Set("rejected", strconv.FormatBool(*p.Rejected))
@@ -208,10 +208,10 @@ type ContextParams struct {
 	Statuses []string
 	Tags     []string
 	Prefixes []string
-	// Verified narrows to confirmed (or unconfirmed) entries, as on
+	// Trust narrows by who confirmed the entry, as on
 	// SearchParams. Rejected has no counterpart here: a context pack never
 	// carries knowledge somebody turned down.
-	Verified *bool
+	Trust    []string
 	Limit    int
 	MinScore float64
 	// Budget, when positive, caps the response bytes server-side: entries
@@ -240,8 +240,8 @@ func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, 
 	for _, pre := range p.Prefixes {
 		q.Add("prefix", pre)
 	}
-	if p.Verified != nil {
-		q.Set("verified", strconv.FormatBool(*p.Verified))
+	for _, t := range p.Trust {
+		q.Add("trust", t)
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))

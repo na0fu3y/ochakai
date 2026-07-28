@@ -389,7 +389,7 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(domain.View{
 			ID: r.PathValue("id"),
 			Summary: domain.Summary{Type: domain.TypeComputations, ID: r.PathValue("id"),
-				Status: domain.StatusStable, Title: "Monthly revenue", Verified: true},
+				Status: domain.StatusStable, Title: "Monthly revenue", Trust: domain.TrustHuman},
 			Observed: domain.Observed{Verified: []domain.Verification{{By: human, At: verified}}},
 		})
 	})
