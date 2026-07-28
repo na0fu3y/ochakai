@@ -38,6 +38,8 @@ Most answers are already written down, and the docs are short enough to check:
   which is usually the fastest answer to "why does it work like that".
 - [ROADMAP.md](ROADMAP.md) — what is being worked on, and what has been ruled
   out on purpose.
+- [docs/compatibility.md](docs/compatibility.md) — what may break between
+  releases, and which release is supported (one: the latest).
 
 When you do ask, the useful details are the same ones the bug form asks for:
 version (`ochakai version`), deployment (docker compose or Cloud Run),
