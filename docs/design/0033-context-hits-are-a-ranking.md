@@ -1,6 +1,7 @@
 # ochakai 設計ドキュメント 0033: context の `hits` は順位に徹する
 
-Status: Accepted(2026-07-26)
+Status: Accepted(2026-07-26)。[0046](0046-bundle-address-space.md) §3.10 が
+`hits` の行に trust tier を足す(順位に徹するという決定は不変)
 Date: 2026-07-26
 
 ## 1. 背景

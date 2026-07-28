@@ -81,12 +81,16 @@ func (e *ExportSnapshot) IndexRows(ctx context.Context) ([]domain.Knowledge, err
 // memory at once.
 func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.Knowledge, error) {
 	rows, err := e.tx.Query(ctx,
-		`SELECT `+knowledgeSelect+` FROM knowledge
+		`SELECT `+knowledgeSelectDoc+` FROM knowledge
 		 WHERE deleted_at IS NULL AND id = ANY($1) ORDER BY id`, ids)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanKnowledge)
+	// With the document: an export writes what the entry is stored as,
+	// plus this instance's own keys (design doc 0046 §2.2). Composing it
+	// from the index columns instead would hand back a reformatted copy
+	// of what the writer wrote.
+	return pgx.CollectRows(rows, scanKnowledgeDoc)
 }
 
 // AttachmentMeta returns every live entry's attachment metadata, ordered

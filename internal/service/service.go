@@ -221,13 +221,29 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	// replaces the document and rules on nothing (design doc 0043
 	// §§3.2-3.3). Carrying them over keeps the returned entry honest.
 	k.Verifications, k.Rejection = old.Verifications, old.Rejection
-	if k.SameContent(old) {
+	// Three outcomes, because the document being the writer's own bytes
+	// (design doc 0046 §2.2) separates two questions that used to be one.
+	//
+	// The same bytes: nothing happened. No row written, no revision, and
+	// the surface says so.
+	doc, _, err := store.StoredDocument(k)
+	if err != nil {
+		return nil, false, err
+	}
+	if doc == old.Doc {
 		return old, false, nil
 	}
-	// Past this point the content really changes, so the caller is who the
-	// entry now stands by — OKF's generated.by (design doc 0036 §3.3).
-	// Unchanged writes return above and leave the old one in place.
-	k.UpdatedBy = actor
+	// Different bytes saying the same thing — a reformat, a comment, a
+	// reordered frontmatter. The file changed, so it is written and its
+	// version moves; what the entry says did not, so generated stays with
+	// whoever the content already stood by (design doc 0046 §3.4).
+	if k.SameContent(old) {
+		k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
+	} else {
+		// Past this point the content really changes, so the caller is who
+		// the entry now stands by — OKF's generated (design doc 0036 §3.3).
+		k.UpdatedBy, k.ContentChangedAt = actor, store.NowStored()
+	}
 	// Pass the precondition through so the write is also guarded against a
 	// concurrent update landing between the Get above and the write.
 	if err := s.Store.Update(ctx, k, actor, ifMatch); err != nil {
@@ -498,16 +514,22 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 // written. The type joined them in 0023: it is free text now, so a
 // foreign bundle can carry a non-ASCII type, and search filters compare
 // against it. Filters fold case themselves (domain.FoldType), but not
-// width or accent composition — so the type is stored NFC and trimmed,
-// leaving lower() enough to fold the column. A recommended type also
-// settles on its canonical spelling, so storage holds one casing.
+// width or accent composition — so the type is indexed NFC and trimmed,
+// leaving lower() enough to fold the column.
+//
+// The casing is not touched. A recommended type used to settle on its
+// canonical spelling here, which meant the stored entry no longer said
+// what its writer wrote — and once the document is what is stored
+// (design doc 0046 §2.2), it would also mean the index disagreeing with
+// the document it is derived from. The type is the writer's vocabulary
+// (design doc 0038); matching folds case, storage keeps it.
 //
 // Links are not normalized here because they are not read from the
 // payload at all — deriveLinks recomputes them from the body, normalizing
 // each target on the way (design doc 0024).
 func normalizeKeys(k *domain.Knowledge) {
 	k.ID = domain.Normalize(k.ID)
-	k.Type = domain.CanonicalType(domain.Type(strings.TrimSpace(domain.Normalize(string(k.Type)))))
+	k.Type = domain.Type(strings.TrimSpace(domain.Normalize(string(k.Type))))
 }
 
 // deriveLinks replaces whatever links the payload carried with the ones

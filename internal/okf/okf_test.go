@@ -21,22 +21,24 @@ func sample() []domain.Knowledge {
 			Type: domain.TypeInsights, ID: "insights/revenue-seasonality",
 			Title: "売上の季節性", Description: "12月は繁忙期",
 			Tags: []string{"sales"}, Status: domain.StatusStable,
-			StaleAfter:    "2026-12-31",
-			CreatedBy:     domain.Actor{Kind: "process", Name: "claude-code"},
-			UpdatedBy:     domain.Actor{Kind: "process", Name: "claude-code"},
-			Verifications: []domain.Verification{{By: domain.Actor{Kind: "human", Name: "na0"}, At: verifiedAt}},
-			Attrs:         map[string]any{"kind": "seasonality"},
-			Body:          "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
-			UpdatedAt:     verifiedAt,
+			StaleAfter:       "2026-12-31",
+			CreatedBy:        domain.Actor{Kind: "process", Name: "claude-code"},
+			UpdatedBy:        domain.Actor{Kind: "process", Name: "claude-code"},
+			Verifications:    []domain.Verification{{By: domain.Actor{Kind: "human", Name: "na0"}, At: verifiedAt}},
+			Attrs:            map[string]any{"kind": "seasonality"},
+			Body:             "12月は+40%が通常。[売上](/metrics/revenue.md) の話である。",
+			UpdatedAt:        verifiedAt,
+			ContentChangedAt: verifiedAt,
 		},
 		{
 			Type: domain.TypeTables, ID: "tables/orders",
 			Title: "orders", Status: domain.StatusDraft,
-			CreatedBy: domain.Actor{Kind: "human", Name: "na0"},
-			UpdatedBy: domain.Actor{Kind: "human", Name: "na0", Via: "process:insightflow"},
-			Resource:  "myproject.shop.orders",
-			Attrs:     map[string]any{"model": "sales_analytics"},
-			UpdatedAt: verifiedAt,
+			CreatedBy:        domain.Actor{Kind: "human", Name: "na0"},
+			UpdatedBy:        domain.Actor{Kind: "human", Name: "na0", Via: "process:insightflow"},
+			Resource:         "myproject.shop.orders",
+			Attrs:            map[string]any{"model": "sales_analytics"},
+			UpdatedAt:        verifiedAt,
+			ContentChangedAt: verifiedAt,
 		},
 	}
 }
@@ -131,7 +133,8 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		Rejection: &domain.Rejection{
 			By: domain.Actor{Kind: "human", Name: "na0"}, At: rejectedAt, Note: "重複",
 		},
-		UpdatedAt: rejectedAt,
+		UpdatedAt:        rejectedAt,
+		ContentChangedAt: rejectedAt,
 	}
 	doc, err := Document(&k)
 	if err != nil {
@@ -173,7 +176,8 @@ func TestDocumentWritesEveryVerification(t *testing.T) {
 			{By: domain.Actor{Kind: "human", Name: "na0"}, At: first},
 			{By: domain.Actor{Kind: "human", Name: "tanaka"}, At: second},
 		},
-		UpdatedAt: second,
+		UpdatedAt:        second,
+		ContentChangedAt: second,
 	}
 	doc, err := Document(&k)
 	if err != nil {
@@ -429,8 +433,9 @@ func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
 		Verifications: []domain.Verification{
 			{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
 		},
-		Rejection: &domain.Rejection{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
-		UpdatedAt: at,
+		Rejection:        &domain.Rejection{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
+		UpdatedAt:        at,
+		ContentChangedAt: at,
 	}
 	canon, err := Canonical(&k)
 	if err != nil {

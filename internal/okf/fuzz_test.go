@@ -101,13 +101,15 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, typ, title, desc, tags, status, staleAfter, body string) {
 		k := &domain.Knowledge{
-			// Types are canonicalized on every write path (service's
+			// Every write path trims and NFC-normalizes the type (service's
 			// normalizeKeys), so this is the only form that can reach
 			// storage — and therefore the only one an export can contain.
 			// Without it the property is about entries that cannot exist:
 			// "Metric " is a valid type by ValidType, but Parse trims it
 			// and no write would have stored the trailing space either.
-			Type:  domain.CanonicalType(domain.Type(strings.TrimSpace(domain.Normalize(typ)))),
+			// The casing is *not* normalized (design doc 0046 §3.9), so
+			// whatever the fuzzer produces has to survive as written.
+			Type:  domain.Type(strings.TrimSpace(domain.Normalize(typ))),
 			Title: title, Description: desc,
 			Status: domain.Status(status), StaleAfter: staleAfter, Body: body,
 		}

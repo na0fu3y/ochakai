@@ -1,6 +1,8 @@
 # ochakai 設計ドキュメント 0031: purge — id を解放する二段階目の削除
 
-Status: Accepted(2026-07-26)
+Status: Accepted(2026-07-26)。[0046](0046-bundle-address-space.md) §3.5 が
+面をオブジェクトの語で言い直す(`DELETE /api/v1/bundle/{path}?purge=true`)。
+二段階・不可逆・監査行・GCS の blob を回収しないという決定は不変
 Date: 2026-07-26
 
 ## 1. 背景: 決定はランドしていたが、記録されていなかった

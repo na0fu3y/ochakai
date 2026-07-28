@@ -180,7 +180,7 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 	sources, usage_window, runtime, parameters, computation, executor, attester,
 	created_by_kind, created_by_name, created_by_via,
 	updated_by_kind, updated_by_name, updated_by_via,
-	links, attrs, body, created_at, updated_at, doc, content_hash`
+	links, attrs, body, created_at, updated_at, content_changed_at, doc, content_hash`
 
 // ledgerCols is the two instance ledgers — verifications and the
 // rejection — read as JSON beside the entry's own columns (design doc
@@ -231,6 +231,10 @@ var (
 	// entry's columns (minus the stored document) plus its ledgers.
 	knowledgeSelect  = withoutDoc(knowledgeCols) + ", " + ledgerCols("knowledge")
 	knowledgeSelectK = withoutDoc(knowledgeColsK) + ", " + ledgerCols("k")
+	// knowledgeSelectDoc is the same read with the stored document, for
+	// the paths that hand one out (design doc 0046 §2.2): a single get,
+	// an export, and the move that rewrites a body in place.
+	knowledgeSelectDoc = knowledgeCols + ", " + ledgerCols("knowledge")
 )
 
 // notCurated is Knowledge.Curated() as a SQL predicate, for the guards
@@ -298,7 +302,21 @@ var (
 // k, plus a finish func that decodes the JSON columns and nullable actors
 // after the scan. Row shapes with trailing columns (score, usage totals)
 // append their own destinations — the column list lives here once.
+//
+// doc is included only for withDoc: a listing does not select the stored
+// document (withoutDoc), because the index columns beside it already
+// answer the query and carrying the document per row would double every
+// result for nothing. The reads that hand out a document — one entry, an
+// export, a move about to rewrite a body — do.
 func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
+	return knowledgeDestFor(k, false)
+}
+
+func knowledgeDestWithDoc(k *domain.Knowledge) (dests []any, finish func() error) {
+	return knowledgeDestFor(k, true)
+}
+
+func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish func() error) {
 	var staleAfter *time.Time
 	var links, attrs []byte
 	var sources, usageWindow, parameters, executor, attester []byte
@@ -307,8 +325,11 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
 		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
-		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentHash,
-		&verifications, &rejection}
+		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentChangedAt}
+	if withDoc {
+		dests = append(dests, &k.Doc)
+	}
+	dests = append(dests, &k.ContentHash, &verifications, &rejection)
 	finish = func() error {
 		if staleAfter != nil {
 			k.StaleAfter = staleAfter.UTC().Format(domain.StaleAfterLayout)
@@ -337,21 +358,62 @@ func knowledgeDest(k *domain.Knowledge) (dests []any, finish func() error) {
 	return dests, finish
 }
 
-// canonicalDoc renders the entry's stored form and its version: the
-// canonical OKF document with no server-owned key in it, and the SHA-256
-// of exactly those bytes (design doc 0043 §§3.4, 3.7).
+// storedDoc returns what the row holds as the entry's document, and the
+// entry's version: the document as received, and the SHA-256 of exactly
+// those bytes (design doc 0046 §§2.2, 3.4).
 //
-// The hash is taken over the canonical text rather than over the struct
-// so that the version means "what this entry says", not "how this
-// release happened to serialize it" — and so that a ruling, which writes
-// no key into the canonical form, cannot move it.
-func canonicalDoc(k *domain.Knowledge) (doc, hash string, err error) {
-	b, err := okf.Canonical(k)
-	if err != nil {
-		return "", "", err
+// A write that came from a document carries it. One that did not — an
+// entry composed in memory — is written in the canonical form, which is
+// the only document it has. Either way the hash covers what is stored, so
+// the version means "these bytes", and neither a ruling nor a
+// verification, which write no bytes here, can move it.
+func storedDoc(k *domain.Knowledge) (doc, hash string, err error) {
+	b := []byte(k.Doc)
+	if len(b) > 0 && !documentSays(b, k) {
+		b = nil
+	}
+	if len(b) == 0 {
+		if b, err = okf.Canonical(k); err != nil {
+			return "", "", err
+		}
 	}
 	sum := sha256.Sum256(b)
 	return string(b), hex.EncodeToString(sum[:]), nil
+}
+
+// StoredDocument is what a write of k would put in the row: the document
+// as received when it still says what k says, and the canonical
+// rendering otherwise (storedDoc). The service compares it with the
+// stored one to tell a write that changes nothing at all from a write
+// that changes only the layout (design doc 0046 §3.4).
+func StoredDocument(k *domain.Knowledge) (doc, hash string, err error) { return storedDoc(k) }
+
+// documentSays reports whether doc still says what k says. A caller that
+// edited the entry's fields without editing the document it came from is
+// not asking for those bytes to be stored — storing them anyway would
+// leave the row's document contradicting the index derived from it, and
+// the document is what wins that argument (design doc 0043 §3.1). So the
+// document is dropped and the canonical form composed instead.
+//
+// This is the guard that lets every write path share one rule: hand over
+// a document and it is stored verbatim; change fields and what is stored
+// is what the fields say.
+func documentSays(doc []byte, k *domain.Knowledge) bool {
+	d, _, err := okf.Parse(doc)
+	if err != nil {
+		return false
+	}
+	// A document carries neither the entry's address — the path is
+	// (design doc 0017) — nor its links, which are derived from the body
+	// it does carry (design doc 0024).
+	d.ID, d.Links = k.ID, k.Links
+	// Nor is a document that names no status disagreeing about one: it is
+	// saying nothing, and the write path still fills a default in until
+	// the read projection applies OKF's (design doc 0046 §3.9).
+	if d.Status == "" {
+		d.Status = k.Status
+	}
+	return d.SameContent(k)
 }
 
 // staleAfterArg turns the entry's stale_after into a date argument: NULL
@@ -372,6 +434,17 @@ func staleAfterArg(s string) (*time.Time, error) {
 func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {
 	var k domain.Knowledge
 	dests, finish := knowledgeDest(&k)
+	if err := row.Scan(dests...); err != nil {
+		return k, err
+	}
+	return k, finish()
+}
+
+// scanKnowledgeDoc scans a row selected with knowledgeSelectDoc: the same
+// entry, with the document it is stored as.
+func scanKnowledgeDoc(row pgx.CollectableRow) (domain.Knowledge, error) {
+	var k domain.Knowledge
+	dests, finish := knowledgeDestWithDoc(&k)
 	if err := row.Scan(dests...); err != nil {
 		return k, err
 	}
@@ -428,11 +501,11 @@ func (s *Store) getOneFrom(ctx context.Context, q querier, id string, deleted bo
 		cond = "deleted_at IS NOT NULL"
 	}
 	rows, err := q.Query(ctx,
-		`SELECT `+knowledgeSelect+` FROM knowledge WHERE id = $1 AND `+cond, id)
+		`SELECT `+knowledgeSelectDoc+` FROM knowledge WHERE id = $1 AND `+cond, id)
 	if err != nil {
 		return nil, err
 	}
-	k, err := pgx.CollectExactlyOneRow(rows, scanKnowledge)
+	k, err := pgx.CollectExactlyOneRow(rows, scanKnowledgeDoc)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -477,7 +550,7 @@ func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]doma
 // either way.
 func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTombstones bool) error {
 	now := NowStored()
-	k.CreatedAt, k.UpdatedAt = now, now
+	k.CreatedAt, k.UpdatedAt, k.ContentChangedAt = now, now, now
 	// Reviving a tombstone overwrites its status in place. When the caller
 	// must not replace a human ruling (design doc 0015 §3.1), the revival
 	// carries the same restriction as the UPDATE itself, so a curation
@@ -496,7 +569,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		if err != nil {
 			return err
 		}
-		doc, hash, err := canonicalDoc(k)
+		doc, hash, err := storedDoc(k)
 		if err != nil {
 			return err
 		}
@@ -506,7 +579,7 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, doc, hash,
+			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, hash,
 		}
 		tag, err := tx.Exec(ctx, `INSERT INTO knowledge (`+knowledgeCols+`)
 			VALUES (`+knowledgeParams+`)
@@ -550,6 +623,12 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 // the prior last-write-wins behavior for callers that do not opt in.
 func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) error {
 	k.UpdatedAt = NowStored()
+	// The caller decides whether this write changed what the entry says;
+	// only then does generated.at move (design doc 0046 §3.4). A write
+	// that reformats the document leaves it where it was.
+	if k.ContentChangedAt.IsZero() {
+		k.ContentChangedAt = k.UpdatedAt
+	}
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		j, err := marshalJSONFields(k)
 		if err != nil {
@@ -559,7 +638,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if err != nil {
 			return err
 		}
-		doc, hash, err := canonicalDoc(k)
+		doc, hash, err := storedDoc(k)
 		if err != nil {
 			return err
 		}
@@ -568,7 +647,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
 			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
-			j.links, j.attrs, k.Body, k.UpdatedAt, doc, hash}
+			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, hash}
 		if ifMatch != nil {
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
@@ -577,7 +656,8 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
-			links=$20, attrs=$21, body=$22, updated_at=$23, doc=$24, content_hash=$25
+			links=$20, attrs=$21, body=$22, updated_at=$23, content_changed_at=$24,
+			doc=$25, content_hash=$26
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -851,6 +931,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		return nil, err
 	}
 	k.UpdatedAt = NowStored()
+	k.ContentChangedAt = k.UpdatedAt
 	// A move rewrites the entry's own relative links and every referrer's
 	// body, so the mover is who the content now stands by: generated.by
 	// in an export (design doc 0036 §3.3).
@@ -879,7 +960,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// exactly as in SoftDelete: the Get above ran outside this
 		// transaction.
 		tag, err := tx.Exec(ctx,
-			`UPDATE knowledge SET id=$2, updated_at=$3,
+			`UPDATE knowledge SET id=$2, updated_at=$3, content_changed_at=$3,
 			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6
 			 WHERE id=$1 AND deleted_at IS NULL`,
 			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via)
@@ -958,7 +1039,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	// was lost. ORDER BY id gives concurrent moves one lock order, so they
 	// queue instead of deadlocking.
 	rows, err := tx.Query(ctx,
-		`SELECT `+knowledgeSelect+` FROM knowledge
+		`SELECT `+knowledgeSelectDoc+` FROM knowledge
 		 WHERE deleted_at IS NULL AND (links @> $1 OR links @> $2 OR attrs->>'model' = $3 OR id = $4)
 		 ORDER BY id FOR UPDATE`,
 		fmt.Sprintf(`[{"target": %q}]`, oldID),
@@ -967,7 +1048,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	if err != nil {
 		return err
 	}
-	referrers, err := pgx.CollectRows(rows, scanKnowledge)
+	// With the document: the rewrite below replaces the body inside the
+	// stored bytes, leaving the frontmatter of every entry that merely
+	// cited the moved one exactly as its writer left it.
+	referrers, err := pgx.CollectRows(rows, scanKnowledgeDoc)
 	if err != nil {
 		return err
 	}
@@ -1001,6 +1085,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			continue // matched the links index but nothing to repair
 		}
 		r.Body = body
+		r.Doc = string(okf.ReplaceBody([]byte(r.Doc), body))
 		r.Links = domain.LinksFromBody(r.ID, r.Body)
 		// The rewrite is a content change by the mover, and it is recorded
 		// as one ("update" revision below), so the entry's generated.by
@@ -1021,15 +1106,20 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		} else {
 			r.UpdatedAt = now
 		}
+		// A repaired link is a change to what the entry says, so
+		// generated moves with it — both halves of it, the actor above
+		// and the timestamp here (design doc 0046 §3.4).
+		r.ContentChangedAt = r.UpdatedAt
 		// deleted_at IS NULL restates what the locked read already
 		// established, so the statement does not depend on the reader
 		// having filtered: rewriting a tombstone would plant a repaired
 		// body and a revision on an entry nobody can see, to resurface
 		// whenever someone revives it.
-		// The stored document and its hash are recomposed with the body:
-		// they are what the entry says, and the index columns beside them
-		// are derived from the same value (design doc 0043 §3.1).
-		doc, hash, err := canonicalDoc(r)
+		// The stored document and its hash move with the body: the body
+		// is swapped inside the bytes the entry is stored as, and the
+		// index columns beside them are derived from the same value
+		// (design docs 0043 §3.1, 0046 §2.2).
+		doc, hash, err := storedDoc(r)
 		if err != nil {
 			return err
 		}
@@ -1037,9 +1127,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		tag, err := tx.Exec(ctx,
 			`UPDATE knowledge SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8,
-			 doc=$9, content_hash=$10
+			 doc=$9, content_hash=$10, content_changed_at=$11
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash)
+			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash,
+			r.ContentChangedAt)
 		if err != nil {
 			return err
 		}
@@ -1052,6 +1143,11 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			moved.Body = r.Body
 			moved.Links = r.Links
 			moved.Attrs = r.Attrs
+			// And the document the body was rewritten inside, with the
+			// version that goes with it: the "move" revision the caller
+			// records is written from this entry (design doc 0046 §2.2).
+			moved.Doc = r.Doc
+			moved.ContentHash = r.ContentHash
 			continue
 		}
 		if err := s.addRevision(ctx, tx, r, "update", actor); err != nil {

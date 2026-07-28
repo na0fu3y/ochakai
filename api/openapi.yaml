@@ -2304,14 +2304,15 @@ components:
         document:
           type: string
           description: >
-            The canonical OKF document: YAML frontmatter, then markdown
-            body. Canonical means the keys this instance owns
-            (`generated`, `verified`) are left out — it is what a writer
-            authored, in one normal form, and what content_hash is taken
-            over (design doc 0043 §§3.4, 3.7). So it can be edited and
-            PUT back with nothing to strip, and the provenance those keys
-            would have carried is in `observed` instead. Fetch the export
-            form, server-owned keys included, with "Accept: text/markdown".
+            The stored OKF document: YAML frontmatter, then markdown
+            body — the bytes as they were written, normalized only for
+            line endings, with the keys this instance owns (`generated`,
+            `verified`) taken out. It is what content_hash is taken over
+            (design docs 0043 §3.4, 0046 §§2.2, 3.4), so it can be
+            edited and PUT back with nothing to strip, and the
+            provenance those keys would have carried is in `observed`
+            instead. Fetch the export form, server-owned keys included,
+            with "Accept: text/markdown".
         summary: { $ref: "#/components/schemas/Summary" }
         observed: { $ref: "#/components/schemas/Observed" }
         attachments:
@@ -2321,6 +2322,19 @@ components:
             Attachment metadata (no bytes — fetch them via
             /api/v1/attachments/{id}/{name}). Managed through the
             attachment endpoints. Absent when the entry has none.
+        created_at: { type: string, format: date-time, readOnly: true }
+        updated_at: { type: string, format: date-time, readOnly: true }
+        content_changed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: >
+            When what the entry says last changed — OKF's generated.at
+            (SPEC §5.2). Distinct from updated_at, which is when the row
+            was last written: reformatting a document (reordering its
+            frontmatter, adding a comment) changes the file and moves the
+            ETag, while what the entry says stays put (design doc 0046
+            §3.4).
     Attachment:
       type: object
       description: >

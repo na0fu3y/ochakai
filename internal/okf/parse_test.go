@@ -342,12 +342,24 @@ func TestParseStaleAfter(t *testing.T) {
 	if _, ok := k.Attrs["stale_after"]; ok {
 		t.Errorf("stale_after is an envelope key, not an attr: %v", k.Attrs)
 	}
+	// The export is the document as written, so the writer's own bare
+	// date comes back (design doc 0046 §2.2) — while the canonical
+	// rendering, which composes a date rather than passing one through,
+	// quotes it so YAML does not type it as a timestamp on the way back
+	// in (design doc 0036 §3.7).
 	doc, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(doc), "stale_after: \"2026-12-31\"") {
+	if !strings.Contains(string(doc), "stale_after: 2026-12-31\n") {
 		t.Errorf("stale_after lost on export:\n%s", doc)
+	}
+	canon, err := Canonical(&k.Knowledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(canon), "stale_after: \"2026-12-31\"") {
+		t.Errorf("stale_after lost in the canonical form:\n%s", canon)
 	}
 
 	// A malformed date is dropped with a note — the document still imports
@@ -443,7 +455,12 @@ dialect: standard-sql
 		t.Errorf("attrs = %v, want only the producer extension key", k.Attrs)
 	}
 
-	out, err := Document(&k.Knowledge)
+	// The canonical form is what ochakai writes when it composes a
+	// document itself; it is also what the index has to be able to
+	// reproduce, so the spellings and the key order are asserted on it
+	// rather than on the export, which now hands back the writer's bytes
+	// (design doc 0046 §2.2).
+	out, err := Canonical(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +475,7 @@ dialect: standard-sql
 	// The frontmatter follows the spec's own family order (design doc
 	// 0036 §3.6), so a document reads the way SPEC introduces it.
 	var last int
-	for _, key := range []string{"\ntype:", "\ntags:", "\nsources:", "\nusage_window:", "\ngenerated:", "\nstatus:", "\nruntime:", "\nparameters:", "\nexecutor:", "\nattester:", "\ncreated_by:"} {
+	for _, key := range []string{"\ntype:", "\ntags:", "\nsources:", "\nusage_window:", "\nstatus:", "\nruntime:", "\nparameters:", "\nexecutor:", "\nattester:"} {
 		at := strings.Index("\n"+string(out), key)
 		if at < 0 {
 			t.Fatalf("key %q missing from the export:\n%s", key, out)

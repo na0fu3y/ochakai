@@ -1,7 +1,12 @@
 # ochakai 設計ドキュメント 0043: 文書を真とする — document-first への全面置き換え
 
-Status: Accepted(2026-07-28)。[0036](0036-okf-schema-first.md) を
-Superseded にし、[0030](0030-optimistic-locking.md) §3.1 の
+Status: **Superseded by [0046](0046-bundle-address-space.md)**(バンドルを
+アドレス空間とする全面置き換え。0046 は本ドキュメントの §2.1-§2.2 と
+§3.2 / §3.3 / §3.6 / §3.8 を引き継ぎ、§3.1 の保存形・§3.4 のハッシュの対象・
+§3.5 のワイヤ・§3.7 の正準化・§3.9 のリビジョン・§3.11 のサーフェス・§5 の
+log.md を改める。0046 の実装がランドするまで、コードは本ドキュメントの姿の
+ままである)。当初 Accepted(2026-07-28):
+[0036](0036-okf-schema-first.md) を Superseded にし、[0030](0030-optimistic-locking.md) §3.1 の
 「版は `updated_at`」、[0001](0001-architecture.md) §3 の共通エンベロープの
 表現と §9.1 の rejected ステータス、[0025](0025-closing-the-loop.md) §6 の
 verify の記録形、[0036](0036-okf-schema-first.md) §3.5 の「構造化

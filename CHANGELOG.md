@@ -105,7 +105,7 @@ last entry.
     "Document" tab.
 
 - **BREAKING**: the web UI edits documents, and the form sugar is gone
-  (design doc [0044](docs/design/0044-web-ui-edits-documents.md)). The
+  (design doc [0046](docs/design/0044-web-ui-edits-documents.md)). The
   editor is the canonical document in a textarea, checked for parse
   errors before it is sent; new entries start from a per-type template.
   The row editors for `sources` and `parameters`, and the contract
@@ -118,6 +118,32 @@ last entry.
   dropping a field from a form. If the demand comes back, the answer is
   a server-side "give me this document as structure" surface, not a
   second wire shape for reads.
+
+- **BREAKING**: a document is stored as it was written (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§2.2, 3.4, 3.9). The
+  bytes a writer sends are the bytes the entry holds: frontmatter
+  comments, key order and quoting style survive a round trip, because
+  nothing re-serializes them. Only the line endings are normalized, and
+  the keys this instance owns are taken out line-wise on the way in and
+  appended on the way out — so a document served by `ochakai get` can be
+  sent straight back.
+
+  - The **ETag is the hash of those bytes**, so reformatting an entry
+    moves its version: the file did change. What the entry *says* did
+    not, so `generated` stays with whoever the content already stood by
+    — which needs a column of its own, `content_changed_at`, since
+    `updated_at` had been standing in for it. It rides on the wire
+    beside `updated_at`. Sending byte-identical bytes is still nothing
+    happening: no row written, no revision, `Ochakai-Unchanged: true`.
+  - A **recommended type keeps the writer's casing**. `type: metric` is
+    stored as written rather than corrected to `Metric`; filters still
+    match case-insensitively. The type is the writer's vocabulary
+    (design doc [0038](docs/design/0038-type-vocabulary-realignment.md)),
+    and rewriting it would also leave the index disagreeing with the
+    document it is derived from.
+  - The canonical rendering stays as the form ochakai writes when it
+    composes a document itself, and as what a write path falls back to
+    when a caller changes an entry's fields rather than its document.
 
 - **BREAKING**: knowledge is written as an OKF document, and `PUT` is the
   whole write surface (design doc

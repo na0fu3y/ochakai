@@ -140,7 +140,10 @@ func (s *Store) backfillEntryDocuments(ctx context.Context) error {
 			return nil
 		}
 		for i := range batch {
-			doc, hash, err := canonicalDoc(&batch[i])
+			// The row has no received bytes — it predates the document
+			// being what is stored — so storedDoc composes the canonical
+			// form, which is the document this entry has.
+			doc, hash, err := storedDoc(&batch[i])
 			if err != nil {
 				// A row the renderer cannot read is left with an empty
 				// doc rather than a wrong one, and named so somebody can
