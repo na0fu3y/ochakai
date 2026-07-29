@@ -604,6 +604,17 @@ last entry.
   in the log of the directory it happened in, and a file's history
   follows the file when a `move` carries its namespace along.
 
+- **The archive carries a file nothing owns.** `Accept: application/gzip`
+  on a bundle path built its file list from what was *attributed* to a
+  live entry, so a file at a path no body points at — a producer's seed
+  data in a shared directory, or a file whose concept has since been
+  deleted — was stored, served at its own address, and left out of the
+  archive. Silently, in the one endpoint that exists to be the copy you
+  keep. What enters the bundle leaves it (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2): the archive is
+  every file under the path now, at the path it lives at, plus the files
+  an in-scope entry's body points at from outside the subtree.
+
 - **A concept written where a file already lives is a 409.** The two
   kinds of object share one address space (0046 §3.5), and the insert
   named the concept id in its conflict clause — which a file has none

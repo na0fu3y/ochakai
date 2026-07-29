@@ -74,10 +74,10 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		writeError(w, err)
 		return
 	}
-	var atts []store.ExportAttachment
+	var atts []domain.Attachment
 	if withAttachments {
-		// Metadata only; bytes are pulled one attachment at a time below.
-		if atts, err = snap.AttachmentMeta(r.Context(), prefix); err != nil {
+		// Metadata only; bytes are pulled one file at a time below.
+		if atts, err = snap.FileMeta(r.Context(), prefix); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -146,25 +146,23 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 			}
 		}
 	}
-	// Attachments go next to their entries: "<id>/<name>", or the
-	// foreign path they were imported at (okf_path) so original body
-	// links keep working. A foreign path already taken by a concept
-	// document falls back to the canonical layout — identical content
-	// at the same path (the same image referenced by two entries) is
-	// no conflict.
+	// Files go where they live: a file's path is its address (design doc
+	// 0046 §3.3), so the archive is the layout, and body links that use
+	// it keep working byte-for-byte. A path a concept document already
+	// took is skipped rather than written twice — one address holds one
+	// object, and the concept is the one that answers there.
 	for i := range atts {
 		a := &atts[i]
-		data, err := svc.Store.AttachmentBytes(r.Context(), a.Att.SHA256)
+		if written[a.Path] {
+			continue
+		}
+		data, err := svc.Store.AttachmentBytes(r.Context(), a.SHA256)
 		if err != nil {
-			fail("fetch attachment "+a.ID+"/"+a.Att.Name, err)
+			fail("fetch file "+a.Path, err)
 			return
 		}
-		p := okf.AttachmentPath(a.ID, &a.Att)
-		if written[p] {
-			p = a.ID + "/" + a.Att.Name
-		}
-		if err := add(p, data); err != nil {
-			fail("write attachment "+p, err)
+		if err := add(a.Path, data); err != nil {
+			fail("write file "+a.Path, err)
 			return
 		}
 	}

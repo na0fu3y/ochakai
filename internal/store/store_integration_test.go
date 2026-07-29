@@ -994,13 +994,25 @@ func TestIntegrationAttachments(t *testing.T) {
 	}
 	for _, del := range []string{
 		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-att%'`,
-		`DELETE FROM object WHERE id LIKE 'it-att%'`,
+		// The files too — an entry's namespace outlives it (0046 §3.3).
+		`DELETE FROM object WHERE id LIKE 'it-att%' OR starts_with(path, 'it-att')`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-att%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
 			t.Fatal(err)
 		}
 	}
+	// And again on the way out, inside the lock this test holds: the
+	// rows would otherwise outlive it, and another package's
+	// whole-bundle export would resolve this test's file against a blob
+	// fake it does not have. Deferred rather than t.Cleanup so it runs
+	// before the pool closes.
+	defer func() {
+		if _, err := s.pool.Exec(ctx,
+			`DELETE FROM object WHERE id LIKE 'it-att%' OR starts_with(path, 'it-att')`); err != nil {
+			t.Errorf("cleaning up: %v", err)
+		}
+	}()
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	k := &domain.Knowledge{
@@ -2922,6 +2934,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL) // live files, on a blob fake only this test can read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -3153,6 +3166,7 @@ func TestIntegrationAFileReportsItsPath(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL) // live files, on a blob fake only this test can read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

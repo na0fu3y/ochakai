@@ -31,6 +31,9 @@ func newObjectPathStore(t *testing.T) (*Store, context.Context, string) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	// Every test here holds a live file riding a fake blob store, which
+	// another package's whole-bundle export cannot read.
+	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

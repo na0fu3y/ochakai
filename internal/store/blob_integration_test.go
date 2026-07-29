@@ -34,13 +34,25 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 	}
 	for _, del := range []string{
 		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-ext%'`,
-		`DELETE FROM object WHERE id LIKE 'it-ext%'`,
+		// The files too — an entry's namespace outlives it (0046 §3.3).
+		`DELETE FROM object WHERE id LIKE 'it-ext%' OR starts_with(path, 'it-ext')`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-ext%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
 			t.Fatal(err)
 		}
 	}
+	// And again on the way out, inside the lock this test holds: the
+	// rows would otherwise outlive it, and another package's
+	// whole-bundle export would resolve this test's file against a blob
+	// fake it does not have. Deferred rather than t.Cleanup so it runs
+	// before the pool closes.
+	defer func() {
+		if _, err := s.pool.Exec(ctx,
+			`DELETE FROM object WHERE id LIKE 'it-ext%' OR starts_with(path, 'it-ext')`); err != nil {
+			t.Errorf("cleaning up: %v", err)
+		}
+	}()
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	k := &domain.Knowledge{
@@ -85,17 +97,17 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metas, err := snap.AttachmentMeta(ctx, "")
+	metas, err := snap.FileMeta(ctx, "")
 	snap.Close(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	found := false
 	for _, m := range metas {
-		if m.ID != k.ID || m.Att.Name != "chart.png" {
+		if m.Path != k.ID+"/chart.png" {
 			continue
 		}
-		data, err := s.AttachmentBytes(ctx, m.Att.SHA256)
+		data, err := s.AttachmentBytes(ctx, m.SHA256)
 		if err != nil {
 			t.Fatalf("AttachmentBytes: %v", err)
 		}
@@ -135,6 +147,7 @@ func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
 	if dbURL == "" {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
+	lockLiveAttachments(t, dbURL) // a live file, on a blob fake only this test can read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

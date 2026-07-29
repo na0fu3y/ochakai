@@ -439,9 +439,10 @@ paths:
 
         **`Accept: application/gzip` reads the path as a subtree** and
         streams it as an OKF bundle: a tar.gz of markdown + YAML
-        frontmatter, the generated `index.md` files, and the files
-        entries show. The root (`/api/v1/bundle/`) is the whole knowledge
-        base — this is what `GET /api/v1/export` was, at the address of
+        frontmatter, the generated `index.md` files, and every file under
+        the path — including one no entry shows, because what enters the
+        bundle leaves it (design doc 0046 §3.2). The root
+        (`/api/v1/bundle/`) is the whole knowledge base — this is what `GET /api/v1/export` was, at the address of
         the thing it returns (design doc 0046 §3.5). Your knowledge is
         yours.
 
@@ -519,10 +520,10 @@ paths:
           in: query
           description: >
             `Accept: application/gzip` only — `false` archives the
-            markdown without the files entries show. Their bytes live in
-            GCS, so a periodic backup can copy them from there directly
-            instead of pulling them through here. A value that is neither
-            `true` nor `false` is a 400.
+            markdown without any file bytes. They live in GCS, so a
+            periodic backup can copy them from there directly instead of
+            pulling them through here. A value that is neither `true` nor
+            `false` is a 400.
           schema: { type: boolean, default: true }
       responses:
         "200":
