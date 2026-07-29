@@ -16,16 +16,18 @@ Everything a client can touch:
 
 - **REST** — paths, request and response shapes, status codes. `0.13.0`
   moved the knowledge out of `/context`'s `hits`; `0.14.0` moved seven
-  keys out of `attrs` into envelope fields. Right now several addresses
-  answer for the same object while
-  [0046](design/0046-bundle-address-space.md) §3.5's fold is in flight:
-  **build on `/api/v1/bundle/{path}`**, which is the one that survives
-  it. The addresses it replaces are marked `deprecated` in
-  [api/openapi.yaml](../api/openapi.yaml) and name their successor;
-  where no successor is serving yet, the operation says so and carries
-  no such mark.
+  keys out of `attrs` into envelope fields. The largest move so far is
+  [0046](design/0046-bundle-address-space.md) §3.5's fold, which left an
+  object with one address: **build on `/api/v1/bundle/{path}`**. The
+  second spellings it replaced — `/api/v1/knowledge/{id}`,
+  `/api/v1/attachments/{id}/{name}`, `/api/v1/backlinks/{id}`,
+  `/api/v1/export` — were removed rather than deprecated, which is what
+  the paragraph above means by "no deprecation window".
+  [api/openapi.yaml](../api/openapi.yaml) is the list of addresses that
+  exist; a changelog entry names the successor of each one that went.
 - **MCP** — tool names, arguments, and which tools exist at all.
-  `compile_sql` existed until `0.13.0` and does not now.
+  `compile_sql` existed until `0.13.0` and does not now, and the five
+  tools that said `knowledge` say `concept`.
 - **The CLI** — commands, flags, and the shape of what they print.
 - **The stored data** — migrations run automatically at server start, and
   they are one-way. There is no downgrade path.

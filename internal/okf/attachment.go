@@ -47,7 +47,7 @@ func AttachmentPath(id string, att *domain.Attachment) string {
 type BundleAttachment struct {
 	ID   string
 	Name string // filename (last segment of Path)
-	Path string // bundle path, preserved as okf_path for round-trips
+	Path string // bundle path — the file's address, kept so it round-trips
 	Data []byte
 }
 
