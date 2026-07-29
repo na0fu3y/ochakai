@@ -1379,3 +1379,160 @@ func TestMigrationObjectPathKey(t *testing.T) {
 		t.Errorf("revisions under the path: got %d, want 2", revs)
 	}
 }
+
+// TestMigrationFilesBecomeObjects covers 0029 on the case that has files
+// in it (design doc 0046 §§3.3, 3.13). A base with no attachment rows
+// moves nothing, so the statement order inside the migration is only
+// exercised by one that has them: the rows arrive with a NULL id, and
+// 0016's trigger — which is still the one on the table when they land —
+// computes the haystack from that id and hands back NULL. The column is
+// NOT NULL, so the migration fails, and it fails after 0022-0028 have
+// applied: the old binary is then looking for a table that no longer
+// exists under that name. That is a failed upgrade taking the service
+// down, which is why this test seeds a file rather than trusting an
+// empty base.
+func TestMigrationFilesBecomeObjects(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA files_scratch`,
+		`SET LOCAL search_path TO files_scratch`,
+		// The post-0028 shape, reduced to what 0029 reads and writes.
+		`CREATE TABLE object (
+			path text NOT NULL PRIMARY KEY, id text, type text NOT NULL DEFAULT '',
+			title text NOT NULL DEFAULT '', description text NOT NULL DEFAULT '',
+			tags text[] NOT NULL DEFAULT '{}', body text NOT NULL DEFAULT '',
+			search_text text NOT NULL DEFAULT '',
+			created_by_kind text NOT NULL DEFAULT '', created_by_name text NOT NULL DEFAULT '',
+			updated_by_kind text NOT NULL DEFAULT '', updated_by_name text NOT NULL DEFAULT '',
+			created_at timestamptz NOT NULL DEFAULT now(),
+			updated_at timestamptz NOT NULL DEFAULT now(),
+			content_changed_at timestamptz NOT NULL DEFAULT now(),
+			deleted_at timestamptz)`,
+		`CREATE UNIQUE INDEX object_id ON object (id)`,
+		`CREATE TABLE attachment (
+			knowledge_id text NOT NULL, name text NOT NULL, sha256 text NOT NULL,
+			okf_path text NOT NULL DEFAULT '',
+			created_by_kind text NOT NULL, created_by_name text NOT NULL,
+			created_at timestamptz NOT NULL DEFAULT now(),
+			PRIMARY KEY (knowledge_id, name))`,
+		`CREATE TABLE blob (sha256 text PRIMARY KEY, media_type text NOT NULL, size bigint NOT NULL)`,
+		// 0016's haystack, which is what is on the table when the files
+		// land — the whole point of the ordering this test pins.
+		`CREATE OR REPLACE FUNCTION ochakai_search_text(
+			p_id text, p_title text, p_description text, p_tags text[], p_body text
+		 ) RETURNS text LANGUAGE sql STABLE AS $fn$
+			SELECT p_id || ' ' || p_title || ' ' || p_description || ' '
+				|| array_to_string(p_tags, ' ') || ' ' || p_body || ' '
+				|| COALESCE((SELECT string_agg(a.name, ' ')
+							   FROM attachment a WHERE a.knowledge_id = p_id), '')
+		 $fn$`,
+		`CREATE OR REPLACE FUNCTION ochakai_knowledge_search_text() RETURNS trigger
+		 LANGUAGE plpgsql AS $fn$
+		 BEGIN
+			NEW.search_text := ochakai_search_text(NEW.id, NEW.title, NEW.description, NEW.tags, NEW.body);
+			RETURN NEW;
+		 END $fn$`,
+		`CREATE TRIGGER knowledge_search_text BEFORE INSERT OR UPDATE ON object
+			FOR EACH ROW EXECUTE FUNCTION ochakai_knowledge_search_text()`,
+		`INSERT INTO object (path, id, title) VALUES
+			('metrics/revenue.md', 'metrics/revenue', '売上'),
+			('insights/q2.md', 'insights/q2', 'Q2')`,
+		`INSERT INTO blob (sha256, media_type, size) VALUES
+			('aaa', 'image/png', 11), ('bbb', 'application/pdf', 22)`,
+		// One file at the canonical <id>/<name>, one an import placed
+		// elsewhere in the bundle — the second is the attribution the
+		// files column has to carry, since its path does not say it.
+		`INSERT INTO attachment (knowledge_id, name, sha256, okf_path, created_by_kind, created_by_name) VALUES
+			('metrics/revenue', 'chart.png', 'aaa', '', 'human', 'na0'),
+			('insights/q2', 'deck.pdf', 'bbb', 'shared/deck.pdf', 'human', 'na0')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0029_files_become_objects.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0029 to a base that has files: %v", err)
+	}
+
+	// Both files are objects now, at the path each lives at: the canonical
+	// one under its entry's namespace, the imported one where it arrived.
+	for _, tc := range []struct {
+		path, mediaType string
+		size            int64
+	}{
+		{"metrics/revenue/chart.png", "image/png", 11},
+		{"shared/deck.pdf", "application/pdf", 22},
+	} {
+		var id *string
+		var mediaType, searchText string
+		var size int64
+		if err := tx.QueryRow(ctx,
+			`SELECT id, media_type, size, search_text FROM object WHERE path = $1`,
+			tc.path).Scan(&id, &mediaType, &size, &searchText); err != nil {
+			t.Fatalf("%s: %v", tc.path, err)
+		}
+		if id != nil {
+			t.Errorf("%s has concept id %q: an id is the address of a concept", tc.path, *id)
+		}
+		if mediaType != tc.mediaType || size != tc.size {
+			t.Errorf("%s = %s/%d, want %s/%d", tc.path, mediaType, size, tc.mediaType, tc.size)
+		}
+		// A file is found by its path, not by a haystack.
+		if searchText != "" {
+			t.Errorf("%s search_text = %q, want empty", tc.path, searchText)
+		}
+	}
+
+	// Attribution: the canonical path says it, so nothing is written down;
+	// the imported one cannot, so the owning entry names it.
+	for _, tc := range []struct{ id, wantFiles string }{
+		{"metrics/revenue", `[]`},
+		{"insights/q2", `["shared/deck.pdf"]`},
+	} {
+		var files string
+		if err := tx.QueryRow(ctx,
+			`SELECT files::text FROM object WHERE id = $1`, tc.id).Scan(&files); err != nil {
+			t.Fatal(err)
+		}
+		if files != tc.wantFiles {
+			t.Errorf("%s files = %s, want %s", tc.id, files, tc.wantFiles)
+		}
+	}
+
+	// And the entries can still be found by their filenames (design doc
+	// 0020), now derived from the objects rather than the attachment rows.
+	for _, tc := range []struct{ id, want string }{
+		{"metrics/revenue", "chart.png"},
+		{"insights/q2", "deck.pdf"},
+	} {
+		var searchText string
+		if err := tx.QueryRow(ctx,
+			`SELECT search_text FROM object WHERE id = $1`, tc.id).Scan(&searchText); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(searchText, tc.want) {
+			t.Errorf("%s search_text = %q, want it to carry %q", tc.id, searchText, tc.want)
+		}
+	}
+}
