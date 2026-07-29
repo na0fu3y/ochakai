@@ -31,6 +31,27 @@ chains get a replacement instead). The bookkeeping half of it is checked:
 an index that disagrees with a record's `Status:` header about whether it
 is current, or a supersession recorded at only one end.
 
+## Surface, and the default answer
+
+What ochakai costs the person using it is its **surface** — the endpoints
+they can call, the tool schemas that spend their agent's context, the
+commands they have to learn — not the code behind it.
+[docs/surface.md](docs/surface.md) counts all three in one place, and
+`cmd/ochakai/surface_test.go` fails when the count and the build
+disagree, so an addition shows up as a heading moving from `(19)` to
+`(20)` instead of disappearing into a spec diff.
+
+**The default answer to a new feature is no.** Before writing code that
+widens a surface, answer that document's three questions in the PR
+description: who actually got stuck, whether an existing surface already
+covers it (if it does, don't add), and what can be folded away in
+exchange. Per-surface defaults are
+[0015 §3.1](docs/design/0015-surface-consistency.md) — REST is the only
+contract, CLI is the completeness surface, MCP's default is *no* because
+tool schemas are paid for out of the agent's context window, and the web
+UI is a curation surface rather than a BI tool. Proposing the smaller
+thing, or nothing, is the useful answer more often than not.
+
 ## Checks and conventions
 
 Run the checks CI runs:
@@ -51,7 +72,8 @@ fuzzing.
   in sync.
 - New features must land consistently across surfaces per
   [docs/design/0015](docs/design/0015-surface-consistency.md)
-  (REST / MCP / CLI / Web UI — including deliberate omissions).
+  (REST / MCP / CLI / Web UI — including deliberate omissions), and
+  [docs/surface.md](docs/surface.md) has to stay true to what shipped.
 - Write commit messages and code comments in English.
 - Cutting a release is a reviewed PR, then a tag, then verification —
   use the `release` skill rather than working from memory. A pushed tag

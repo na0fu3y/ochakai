@@ -104,6 +104,21 @@ Unrelated to any of this, `examples/claude-code/` is a *product* example
 — hooks that pull team knowledge out of a running ochakai and write back
 to it. It is not part of this repository's own setup.
 
+## Proposing a feature
+
+The default answer is no, and [docs/surface.md](docs/surface.md) is where
+that is made concrete. It counts every REST operation, MCP tool and CLI
+command in one place — what somebody using ochakai actually pays for —
+and `cmd/ochakai/surface_test.go` fails when the count and the build
+disagree, so an addition arrives as a heading moving from `(19)` to
+`(20)` rather than as a few lines buried in a spec.
+
+A PR that widens a surface answers three questions in its description:
+who actually got stuck and on what, whether an existing surface already
+covers it (if it does, don't add), and what can be folded away in
+exchange. The test holds the arithmetic; those answers are the part
+review spends time on.
+
 ## Design docs
 
 Architecture decisions live in [docs/design](docs/design) as numbered
@@ -176,6 +191,8 @@ Two decisions worth knowing before proposing features:
 ## Pull requests
 
 - Keep PRs small and focused; include tests for behavior changes.
+- A PR that widens a surface updates [docs/surface.md](docs/surface.md)
+  and answers its three questions in the description.
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml) — keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
   in sync (wire compatibility is pinned by tests). The REST half is
