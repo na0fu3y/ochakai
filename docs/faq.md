@@ -79,7 +79,7 @@ index — about 16 ms across 5000 entries.
 
 ### Can an agent overwrite or delete knowledge a human verified?
 
-Not over MCP. `put_knowledge` and `delete_knowledge` both refuse an entry
+Not over MCP. `put_concept` and `delete_concept` both refuse an entry
 a human has ruled on — verified, rejected or deprecated — and the refusal
 says what to do instead:
 
@@ -87,7 +87,7 @@ says what to do instead:
 > this surface has no If-Match precondition to replace curated knowledge
 > safely. If it is wrong, say so with report_outcome failed — that puts it
 > in the re-verification feed. If you have something better,
-> put_knowledge a new draft. A human changes curated entries from the
+> put_concept a new draft. A human changes curated entries from the
 > web UI or CLI.
 
 This is not authorization — a human on the same deployment can edit

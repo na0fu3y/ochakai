@@ -87,14 +87,14 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	sw.set("human:bob@example.co.jp")
 	id := fmt.Sprintf("mcpit%d/delegation", time.Now().UnixNano())
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "put_knowledge",
+		Name:      "put_concept",
 		Arguments: map[string]any{"id": id, "document": "---\ntype: glossary\n---\n\nwritten on behalf of bob\n"},
 	})
 	if err != nil {
-		t.Fatalf("put_knowledge: %v", err)
+		t.Fatalf("put_concept: %v", err)
 	}
 	if res.IsError {
-		t.Fatalf("put_knowledge failed: %+v", res.Content)
+		t.Fatalf("put_concept failed: %+v", res.Content)
 	}
 
 	k, err := svc.Get(context.Background(), id)
@@ -143,7 +143,7 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	}
 }
 
-// put_knowledge creates on a free id and replaces on a taken one, and
+// put_concept creates on a free id and replaces on a taken one, and
 // the guards that used to belong to two tools still apply to the right
 // half: reviving a curated tombstone is refused on the create side, and
 // replacing a curated entry on the other (design docs 0015 §3.1, 0046
@@ -181,14 +181,14 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 	put := func(t *testing.T, doc string) *mcp.CallToolResult {
 		t.Helper()
 		res, err := cs.CallTool(ctx, &mcp.CallToolParams{
-			Name:      "put_knowledge",
+			Name:      "put_concept",
 			Arguments: map[string]any{"id": id, "document": doc},
 		})
 		if err != nil {
-			t.Fatalf("put_knowledge: %v", err)
+			t.Fatalf("put_concept: %v", err)
 		}
 		if res.IsError {
-			t.Fatalf("put_knowledge failed: %+v", res.Content)
+			t.Fatalf("put_concept failed: %+v", res.Content)
 		}
 		return res
 	}
@@ -224,14 +224,14 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "put_knowledge",
+		Name:      "put_concept",
 		Arguments: map[string]any{"id": id, "document": "---\ntype: Metric\ntitle: 上書き\n---\n\nx\n"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !res.IsError {
-		t.Fatal("put_knowledge replaced a verified entry")
+		t.Fatal("put_concept replaced a verified entry")
 	}
 	var said string
 	for _, c := range res.Content {

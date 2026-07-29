@@ -30,7 +30,7 @@ func connect(t *testing.T) *mcp.ClientSession {
 	return cs
 }
 
-// TestSearchQueryNotRequired pins the search_knowledge input schema:
+// TestSearchQueryNotRequired pins the search_concepts input schema:
 // query must stay optional so sort="verified_at" calls can omit it
 // (the handler rejects the combination of both).
 func TestSearchQueryNotRequired(t *testing.T) {
@@ -40,7 +40,7 @@ func TestSearchQueryNotRequired(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 	for _, tool := range res.Tools {
-		if tool.Name != "search_knowledge" {
+		if tool.Name != "search_concepts" {
 			continue
 		}
 		raw, err := json.Marshal(tool.InputSchema)
@@ -55,12 +55,12 @@ func TestSearchQueryNotRequired(t *testing.T) {
 		}
 		for _, r := range schema.Required {
 			if r == "query" {
-				t.Errorf("search_knowledge schema requires %q; it must stay optional for sort mode", r)
+				t.Errorf("search_concepts schema requires %q; it must stay optional for sort mode", r)
 			}
 		}
 		return
 	}
-	t.Fatal("search_knowledge tool not found")
+	t.Fatal("search_concepts tool not found")
 }
 
 // TestLimitContractsInSchema pins that the tool schemas document the
@@ -73,8 +73,8 @@ func TestLimitContractsInSchema(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 	want := map[string][]string{
-		"search_knowledge": {"default 10", "max 50", "default 100", "max 1000"},
-		"get_context":      {"default 5", "max 20"},
+		"search_concepts": {"default 10", "max 50", "default 100", "max 1000"},
+		"get_context":     {"default 5", "max 20"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]
@@ -117,7 +117,7 @@ func TestFMSchemaListsTheAskableKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	tools := map[string]bool{"search_knowledge": true, "get_context": true}
+	tools := map[string]bool{"search_concepts": true, "get_context": true}
 	for _, tool := range res.Tools {
 		if !tools[tool.Name] {
 			continue
@@ -168,7 +168,7 @@ func TestSearchSortValidation(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
-				Name: "search_knowledge", Arguments: c.args,
+				Name: "search_concepts", Arguments: c.args,
 			})
 			if err != nil {
 				t.Fatalf("CallTool: %v", err)
@@ -279,13 +279,13 @@ func TestToolAnnotations(t *testing.T) {
 	}
 	yes, no := true, false
 	want := map[string]ann{
-		"search_knowledge":    {readOnly: true},
-		"get_context":         {readOnly: true},
-		"get_knowledge":       {readOnly: true},
-		"get_attachment":      {readOnly: true},
-		"get_knowledge_usage": {readOnly: true},
-		"put_knowledge":       {destructive: &no},
-		"delete_knowledge":    {destructive: &yes},
+		"search_concepts":   {readOnly: true},
+		"get_context":       {readOnly: true},
+		"get_concept":       {readOnly: true},
+		"get_attachment":    {readOnly: true},
+		"get_concept_usage": {readOnly: true},
+		"put_concept":       {destructive: &no},
+		"delete_concept":    {destructive: &yes},
 	}
 	seen := map[string]bool{}
 	for _, tool := range res.Tools {
@@ -406,7 +406,7 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 // so this string is the only copy it will ever see.
 func TestContextHint(t *testing.T) {
 	plain := contextHint(0)
-	for _, want := range []string{"report_outcome", "put_knowledge", "rejected"} {
+	for _, want := range []string{"report_outcome", "put_concept", "rejected"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("hint does not mention %q: %s", want, plain)
 		}
@@ -415,7 +415,7 @@ func TestContextHint(t *testing.T) {
 		t.Errorf("nothing was dropped; hint must not mention the outline: %s", plain)
 	}
 	truncated := contextHint(3)
-	for _, want := range []string{"3 entries", "outline", "get_knowledge"} {
+	for _, want := range []string{"3 entries", "outline", "get_concept"} {
 		if !strings.Contains(truncated, want) {
 			t.Errorf("truncated hint does not mention %q: %s", want, truncated)
 		}
@@ -434,11 +434,11 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 	}
 	want := map[string][]string{
 
-		"delete_knowledge": {"verified, rejected, or deprecated", "erase the record of why"},
+		"delete_concept": {"verified, rejected, or deprecated", "erase the record of why"},
 		// Reviving a curated tombstone is the third way to overwrite a
 		// ruling, and an agent that only learns of it from an error has
 		// already written the draft (design doc 0015 §3.1).
-		"put_knowledge": {"deleted can be reused", "verified, rejected, deprecated", "different id",
+		"put_concept": {"deleted can be reused", "verified, rejected, deprecated", "different id",
 			"verified, rejected, or deprecated", "report_outcome failed"},
 	}
 	for _, tool := range res.Tools {
@@ -537,7 +537,7 @@ func TestRequestActorFallsBackToContext(t *testing.T) {
 	}
 }
 
-// Both lookups design doc 0037 adds ride on search_knowledge rather than
+// Both lookups design doc 0037 adds ride on search_concepts rather than
 // on new tools — tool count is a budget (0015 §2). An argument an agent
 // cannot see is an argument it will not use, so the schema has to carry
 // both, and the descriptions have to say what they match.
@@ -548,7 +548,7 @@ func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 	for _, tool := range res.Tools {
-		if tool.Name != "search_knowledge" {
+		if tool.Name != "search_concepts" {
 			continue
 		}
 		raw, err := json.Marshal(tool.InputSchema)
@@ -565,7 +565,7 @@ func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
 		}
 		src, ok := schema.Properties["source"]
 		if !ok {
-			t.Fatal("search_knowledge has no source argument")
+			t.Fatal("search_concepts has no source argument")
 		}
 		if !strings.Contains(src.Description, "sources[].resource") {
 			t.Errorf("the source argument does not say what it matches: %q", src.Description)
@@ -580,7 +580,7 @@ func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("search_knowledge is gone")
+	t.Fatal("search_concepts is gone")
 }
 
 // The listing modes live in one list so no surface can offer a value
@@ -611,8 +611,8 @@ func TestToolSchemasCarryTheTypeVocabulary(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 	// Only the tools that take a type: the read filters and the writes.
-	want := map[string]bool{"search_knowledge": true, "get_context": true,
-		"put_knowledge": true}
+	want := map[string]bool{"search_concepts": true, "get_context": true,
+		"put_concept": true}
 	seen := 0
 	for _, tool := range res.Tools {
 		if !want[tool.Name] {
@@ -734,7 +734,7 @@ func TestOneWriteFace(t *testing.T) {
 	}
 	for _, gone := range []string{"create_knowledge", "update_knowledge"} {
 		if names[gone] {
-			t.Errorf("%s is back; the write face is put_knowledge", gone)
+			t.Errorf("%s is back; the write face is put_concept", gone)
 		}
 	}
 	// The eight the surface carries (design doc 0046 §3.14, issue #272).
@@ -742,8 +742,8 @@ func TestOneWriteFace(t *testing.T) {
 	// went the other way: they are the cheapest tools here, and the
 	// saving was in the merge above.
 	want := []string{
-		"search_knowledge", "get_context", "get_knowledge", "put_knowledge", "report_outcome",
-		"delete_knowledge", "get_knowledge_usage", "get_attachment",
+		"search_concepts", "get_context", "get_concept", "put_concept", "report_outcome",
+		"delete_concept", "get_concept_usage", "get_attachment",
 	}
 	for _, w := range want {
 		if !names[w] {

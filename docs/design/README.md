@@ -33,6 +33,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
+| 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
@@ -225,6 +226,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   `Golden Query` を外し、`Skill` / `Playbook` / `Policy` / `API Endpoint` を
   足して 11 型に(退役した綴りは自由型として存続、マイグレーションなし)。
   語彙を述べる 11 箇所を `domain.TypesHint()` と外側のテストで固定する。
+- [0054 知識の単位は concept と呼ぶ](0054-concept-is-the-okf-word.md)
+  — **Accepted**。MCP のツール名 5 本の `knowledge` を OKF SPEC §2 の語
+  `concept` に改める(`search_concepts` / `get_concept` / `put_concept` /
+  `delete_concept` / `get_concept_usage`)。0046 §3.5 の畳み込みが終わった
+  時点で、ワイヤ上の `knowledge` は MCP のツール名だけになっていた
+  — REST も CLI も 0 で、設計文書(0046 §2)もコードのコメントも既に
+  「概念(concept)」と書いていた。0023・0038 と同じ「綴りが割れたら OKF
+  を採る」の三度目で、二重語彙としては最後に残ったものである。検索だけ
+  複数形なのは concept が可算だから(§3.1)。ツールは 8 本のまま、
+  引数も応答も変わらない。`get_attachment` は別の問い、
+  `domain.Knowledge` は内部なので射程外(§3.2、§3.4)。反対の論拠
+  ——「`search_knowledge` はエージェントに何屋かを伝えている」—— と、
+  別名を並べる案(ツールが 13 本になる)を退けた理由は §4。
+
 - [0024 リンクは本文から導出する](0024-links-from-body.md) —
   **Accepted**(本文の `ochakai://` は 0046 §3.6 が退役させ、SPEC §6 の
   バンドル絶対と相対だけが正準形になる)。構造化 `links` フィールドを

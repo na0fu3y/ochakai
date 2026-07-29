@@ -39,7 +39,7 @@ the document — question, `runtime` and `# Computation` fence included.
 
 Straight REST is
 `GET /api/v1/search?type=Attested%20Computation&trust=human-reviewed&sort=verified_at&limit=100`;
-over MCP, `search_knowledge` with `sort: "verified_at"` returns the same
+over MCP, `search_concepts` with `sort: "verified_at"` returns the same
 feed. `sort=verified_at` orders by verification time, oldest first, with
 unverified entries last. "Verified queries not re-checked in 90 days" is
 where a canary run starts. Checking out an OKF export
@@ -90,7 +90,7 @@ canonicalize a run against. ochakai takes no part in this step.
   accumulated failures can be picked up for re-verification first. **The
   `sort=failed` re-verification feed** (`ochakai search --sort failed
   --trust human-reviewed`, REST: `GET /api/v1/search?sort=failed`, MCP:
-  `search_knowledge` with `sort: "failed"`) lists them in order of how
+  `search_concepts` with `sort: "failed"`) lists them in order of how
   often they were reported wrong. It is the evidence-based entrance,
   complementing the time-based `sort=verified_at` (design doc 0025).
 
@@ -149,7 +149,7 @@ aggregates as an artifact and diffing those is the easy version.
 ## A supporting signal: usage telemetry
 
 `ochakai usage queries/<id>` (REST: `GET /api/v1/usage/queries/<id>`,
-MCP: `get_knowledge_usage`) returns how often that query was actually
+MCP: `get_concept_usage`) returns how often that query was actually
 returned by a search or fetched, the worked and failed report counts, and
 when it was last used. **A verified entry nobody has used in a long time**
 is a reason to lower its canary priority — or to consider deprecating it.
