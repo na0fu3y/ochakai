@@ -8,13 +8,13 @@ import (
 	"log/slog"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // lockLiveAttachments serializes, across the test packages sharing the
@@ -114,7 +114,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	// of the code under test. The shared test database (CONTRIBUTING)
 	// grows past that, and the test would then fail for a reason that has
 	// nothing to do with attachments. Scoping the search fixes the field.
-	typ := domain.Type(fmt.Sprintf("svcatt%d", time.Now().UnixNano()))
+	typ := domain.Type(testdb.Unique(t, "svcatt"))
 	id := string(typ) + "/z-target" // sorts last: an RRF tie must not favor it
 	content := "quarterly revenue by region, expected results"
 	query := "四半期の地域別売上の検証結果"
@@ -254,11 +254,11 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	if err := s.Migrate(ctx, 4); err != nil {
 		t.Fatal(err)
 	}
-	model := fmt.Sprintf("reembed-att-%d", time.Now().UnixNano())
+	model := testdb.Unique(t, "reembed-att-")
 	svc := &Service{Store: s, Embedder: stubEmbedder{}, Log: slog.New(slog.DiscardHandler)}
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	typ := domain.Type(fmt.Sprintf("svcre%d", time.Now().UnixNano()))
+	typ := domain.Type(testdb.Unique(t, "svcre"))
 	id := string(typ) + "/host"
 	if _, err := svc.Create(ctx, &domain.Knowledge{Type: typ, ID: id, Title: "host"}, actor); err != nil {
 		t.Fatal(err)

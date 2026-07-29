@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // A search that finds nothing is recorded as a question this base could
@@ -37,7 +37,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler)}
 	// Nothing in the base is like it — not even by trigram, which is
 	// what a shared test database makes easy to get wrong.
-	nonsense := fmt.Sprintf("qqzzxx%d", time.Now().UnixNano())
+	nonsense := testdb.Unique(t, "qqzzxx")
 	t.Cleanup(func() { deleteMisses(ctx, t, dbURL, nonsense) })
 
 	since := time.Now().Add(-time.Hour)

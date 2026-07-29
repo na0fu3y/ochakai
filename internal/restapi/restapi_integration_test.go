@@ -25,6 +25,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // testDatabaseURL is the test database, or a skip (see the store
@@ -122,7 +123,7 @@ func TestRESTIntegration(t *testing.T) {
 	lockLiveAttachments(t) // the export step scans every live attachment
 	srv, _ := newIntegrationServer(t)
 
-	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restit")
 	id := typ + "/sales/orders"
 	entry := map[string]any{"type": typ, "id": id, "title": "REST round trip"}
 	payload := docFrom(t, entry)
@@ -354,7 +355,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	typ := fmt.Sprintf("restatt%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restatt")
 	payload := docFrom(t, map[string]any{"type": typ, "id": typ + "/reading", "title": "attachment hits"})
 	resp := putDoc(t, srv.URL, typ+"/reading", payload, true)
 	resp.Body.Close()
@@ -607,7 +608,7 @@ func getMarkdown(t *testing.T, url string) string {
 func TestRESTIntegrationVerify(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	typ := fmt.Sprintf("restit%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restit")
 	id := typ + "/verify-me"
 	payload := docFrom(t, map[string]any{"type": typ, "id": id, "title": "verify round trip"})
 	resp := putDoc(t, srv.URL, id, payload, true)
@@ -705,7 +706,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	typ := fmt.Sprintf("ctxbudget%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "ctxbudget")
 	body := strings.Repeat("x", 2000)
 	var ids []string
 	for i := range 4 {
@@ -774,7 +775,7 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	root := fmt.Sprintf("restumb%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "restumb")
 	metric, insight := root+"/revenue", root+"/revenue-reading"
 	create := func(id, title, body string) {
 		t.Helper()
@@ -892,7 +893,7 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 
 	// A run-unique root keeps other tests' rows (and reruns) out of the
 	// assertions, the way the other REST integration tests do it.
-	root := fmt.Sprintf("scope%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "scope")
 	term := root + "/company/glossary/activation"
 	entries := []struct{ id, body string }{
 		// The team metric cites the shared term, so context must reach it.
@@ -1006,7 +1007,7 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	id := fmt.Sprintf("restdoc%d/revenue", time.Now().UnixNano())
+	id := testdb.Unique(t, "restdoc") + "/revenue"
 	removeEntries(t, srv, id)
 	const doc = "---\ntype: Metric\ntitle: 売上\nowner: finance\n---\n\n本文。\n"
 
@@ -1103,7 +1104,7 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	id := fmt.Sprintf("restbytes%d/revenue", time.Now().UnixNano())
+	id := testdb.Unique(t, "restbytes") + "/revenue"
 	removeEntries(t, srv, id)
 
 	// Everything a rendering would quietly normalize: a comment, the
@@ -1175,7 +1176,7 @@ func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 func TestRESTIntegrationForeignTrustFamilyIsKeptAsAClaim(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	id := fmt.Sprintf("restclaim%d/revenue", time.Now().UnixNano())
+	id := testdb.Unique(t, "restclaim") + "/revenue"
 	removeEntries(t, srv, id)
 
 	// The export form of another instance: a human wrote it there, and a
@@ -1267,7 +1268,7 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	typ := fmt.Sprintf("restany%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restany")
 	id := typ + "/diagram"
 	// Purge at the end, like every other test that holds live files: the
 	// shared test database is scanned whole by the export and by the
@@ -1364,7 +1365,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	typ := fmt.Sprintf("restbundle%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restbundle")
 	id := typ + "/revenue"
 	bundle := srv.URL + "/api/v1/bundle/"
 	defer func() {
@@ -1491,7 +1492,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 func TestRESTIntegrationStats(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 
-	root := fmt.Sprintf("stats%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "stats")
 	id := root + "/revenue"
 	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
 		"type": root, "id": id, "title": "Revenue", "status": "draft",
@@ -1610,7 +1611,7 @@ func TestRESTIntegrationListingsPage(t *testing.T) {
 	// A run-unique root, as the other REST integration tests do it: the
 	// feed below is filtered to this test's own entries, so a shared test
 	// database cannot change what the walk should see.
-	root := fmt.Sprintf("page%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "page")
 	var ids []string
 	for i := range 5 {
 		id := fmt.Sprintf("%s/e%d", root, i)
@@ -1709,7 +1710,7 @@ func cursorOf(t *testing.T, page func(string) ([]string, string), feed string) s
 func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	root := fmt.Sprintf("queuesit%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "queuesit")
 	draft := root + "/proposals/margin"
 	broken := root + "/queries/revenue"
 	expired := root + "/insights/seasonality"
@@ -1800,7 +1801,7 @@ func TestRESTIntegrationTheArchiveCarriesAFileNothingOwns(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	root := fmt.Sprintf("restloose%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "restloose")
 	loose := root + "/seed-data.csv"
 	// A defer rather than t.Cleanup: cleanups run after this function's
 	// defers, by which time the server is closed.
@@ -1865,7 +1866,7 @@ func TestRESTIntegrationPurgeOnAFileRemovesIt(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	path := fmt.Sprintf("restpurge%d/seed.csv", time.Now().UnixNano())
+	path := testdb.Unique(t, "restpurge") + "/seed.csv"
 	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+path,
 		bytes.NewReader([]byte("a,b\n1,2\n")))
 	if err != nil {
@@ -1910,7 +1911,7 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	typ := fmt.Sprintf("restfiles%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restfiles")
 	id := typ + "/revenue"
 	loose := typ + "/seed-data.csv"
 	removeEntries(t, srv, id)
@@ -2002,7 +2003,7 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
-	typ := fmt.Sprintf("restlog%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "restlog")
 	id := typ + "/revenue"
 	removeEntries(t, srv, id)
 	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
@@ -2076,7 +2077,7 @@ func TestRESTIntegrationHistoryIsAtTheObjectAndTheDirectory(t *testing.T) {
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	typ := fmt.Sprintf("resthist%d", time.Now().UnixNano())
+	typ := testdb.Unique(t, "resthist")
 	id := typ + "/revenue"
 	file := id + "/chart.png"
 	removeEntries(t, srv, id)

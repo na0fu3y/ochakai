@@ -17,6 +17,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/okf"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // hitScore returns the score of id among hits, or -1 when it is absent.
@@ -160,7 +161,13 @@ func TestIntegration(t *testing.T) {
 		{"Metric", k.ID}, {"metric", k.ID}, {"METRIC", k.ID},
 		{"Data Contract", free.ID}, {"data contract", free.ID}, {"DATA CONTRACT", free.ID},
 	} {
-		hits, err := s.SearchLexical(ctx, "売上", Filter{Types: []domain.Type{tc.typ}}, 10)
+		// Scoped to the one entry each case is about. What is under
+		// test is whether the type filter matches it, and an unscoped
+		// search answers that only while the shared corpus is small
+		// enough for a bounded hit list to still contain it — a
+		// property of the database, not of the code (issue #278).
+		hits, err := s.SearchLexical(ctx, "売上",
+			Filter{Types: []domain.Type{tc.typ}, Prefixes: []string{tc.want}}, 10)
 		if err != nil {
 			t.Fatalf("SearchLexical(type=%q): %v", tc.typ, err)
 		}
@@ -1664,7 +1671,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 	// the limit, failing recall on a corpus the test never planted. So
 	// every entry carries a run tag and every search is scoped to it,
 	// which is what the rest of this file does (see the 0037 feeds).
-	run := fmt.Sprintf("it-q-%d", time.Now().UnixNano())
+	run := testdb.Unique(t, "it-q-")
 	mine := Filter{Tags: []string{run}}
 
 	target, decoy := run+"/target", run+"/decoy"
@@ -2186,7 +2193,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 		}},
 	} {
 		t.Run("guarded create refuses a "+string(tc.ruling)+" tombstone", func(t *testing.T) {
-			id := fmt.Sprintf("it-tomb-%s-%d", tc.ruling, time.Now().UnixNano())
+			id := testdb.Unique(t, "it-tomb-"+string(tc.ruling)+"-")
 			tombstone(t, id, tc.rule)
 			if err := s.Create(ctx, revive(id), true); !errors.Is(err, ErrCuratedTombstone) {
 				t.Fatalf("create = %v, want ErrCuratedTombstone", err)
@@ -2216,7 +2223,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 	}
 
 	t.Run("guarded create still revives a draft tombstone", func(t *testing.T) {
-		id := fmt.Sprintf("it-tomb-draft-%d", time.Now().UnixNano())
+		id := testdb.Unique(t, "it-tomb-draft-")
 		tombstone(t, id, func(string) {})
 		if err := s.Create(ctx, revive(id), true); err != nil {
 			t.Fatalf("draft tombstone must stay revivable: %v", err)
@@ -2224,7 +2231,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 	})
 
 	t.Run("guarded create over a live entry is still ErrAlreadyExists", func(t *testing.T) {
-		id := fmt.Sprintf("it-tomb-live-%d", time.Now().UnixNano())
+		id := testdb.Unique(t, "it-tomb-live-")
 		if err := s.Create(ctx, revive(id), false); err != nil {
 			t.Fatal(err)
 		}
@@ -2255,18 +2262,8 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 	}
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	stamp := time.Now().UnixNano()
-	target := fmt.Sprintf("it-clobber-%d/metric", stamp)
-	moved := fmt.Sprintf("it-clobber-%d/renamed", stamp)
-	referrer := fmt.Sprintf("it-clobber-%d/insight", stamp)
-	cleanup := func() {
-		for _, table := range []string{"object", "knowledge_revision"} {
-			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE $1`,
-				fmt.Sprintf("it-clobber-%d%%", stamp))
-		}
-	}
-	cleanup()
-	defer cleanup()
+	run := testdb.Unique(t, "it-clobber-")
+	target, moved, referrer := run+"/metric", run+"/renamed", run+"/insight"
 
 	for _, k := range []*domain.Knowledge{
 		{Type: domain.TypeMetrics, ID: target, Title: "target", Status: domain.StatusDraft, CreatedBy: actor},
@@ -2363,7 +2360,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run := fmt.Sprintf("it37-%d", time.Now().UnixNano())
+	run := testdb.Unique(t, "it37-")
 	mine := Filter{Tags: []string{run}}
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	policy := "https://wiki.example/" + run + "/revenue-recognition"
@@ -2487,7 +2484,7 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
-	from := fmt.Sprintf("it-ledger-move-%d", time.Now().UnixNano())
+	from := testdb.Unique(t, "it-ledger-move-")
 	to := from + "-moved"
 
 	if err := s.Create(ctx, &domain.Knowledge{
@@ -2546,7 +2543,7 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
-	id := fmt.Sprintf("it-hash-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "it-hash-")
 	k := &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: "first",
 		Status: domain.StatusDraft, Body: "One.", CreatedBy: actor}
 	if err := s.Create(ctx, k, false); err != nil {
@@ -2627,7 +2624,7 @@ func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
-	id := fmt.Sprintf("it-storeddoc-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "it-storeddoc-")
 	count := 7
 	k := &domain.Knowledge{
 		Type: domain.TypeComputations, ID: id, Title: "月次売上", Description: "説明",
@@ -2694,7 +2691,7 @@ func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
-	id := fmt.Sprintf("it-extra-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "it-extra-")
 	k := &domain.Knowledge{
 		Type: domain.TypeComputations, ID: id, Title: "extras", Runtime: "bigquery",
 		Status: domain.StatusDraft, CreatedBy: actor,
@@ -2762,7 +2759,7 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	prefix := fmt.Sprintf("it-fm-%d", time.Now().UnixNano())
+	prefix := testdb.Unique(t, "it-fm-")
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
 
 	// Written as documents, because the index is derived from the
@@ -2870,7 +2867,7 @@ func TestIntegrationObjectIsKeyedByBundlePath(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "t"}
-	id := fmt.Sprintf("it-path-%d/revenue", time.Now().UnixNano())
+	id := testdb.Unique(t, "it-path-") + "/revenue"
 	moved := id + "-moved"
 	defer func() {
 		for _, i := range []string{id, moved} {
@@ -2946,7 +2943,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "t"}
-	base := fmt.Sprintf("it-files-%d", time.Now().UnixNano())
+	base := testdb.Unique(t, "it-files-")
 	id := base + "/revenue"
 	defer func() {
 		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE path LIKE $1 || '%'`, base)
@@ -3178,7 +3175,7 @@ func TestIntegrationAFileReportsItsPath(t *testing.T) {
 	}
 	s.UseBlobStore(newFakeBlobStore())
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "t"}
-	base := fmt.Sprintf("it-path-%d", time.Now().UnixNano())
+	base := testdb.Unique(t, "it-path-")
 	id := base + "/revenue"
 	defer func() {
 		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE path LIKE $1 || '%'`, base)
@@ -3246,7 +3243,7 @@ func TestIntegrationQueueCounts(t *testing.T) {
 
 	// Scoped by prefix, both because the test database is shared and
 	// because scoping is the only filter the counts take.
-	run := fmt.Sprintf("it49-%d", time.Now().UnixNano())
+	run := testdb.Unique(t, "it49-")
 	mine := Filter{Prefixes: []string{run}}
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	mk := func(name string, status domain.Status, staleAfter string) string {

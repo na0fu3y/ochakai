@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // A listing walked one page at a time must hand back exactly the listing
@@ -45,7 +45,7 @@ func TestListingsWalkToTheEndIntegration(t *testing.T) {
 	// The test database is shared with the other packages' integration
 	// tests, which leave entries behind: a tag only this run's entries
 	// carry is what keeps the walk over a set this test controls.
-	run := fmt.Sprintf("svcit-cursor-%d", time.Now().UnixNano())
+	run := testdb.Unique(t, "svcit-cursor-")
 	resource := "https://example.test/" + run
 	ids := make([]string, 6)
 	for i := range ids {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // TestMigrationLegacyData verifies the 0010 → 0011 migration chain
@@ -377,7 +378,7 @@ func TestMigrateConcurrent(t *testing.T) {
 	if _, err := admin.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pg_trgm`); err != nil {
 		t.Fatal(err)
 	}
-	schema := fmt.Sprintf("migrate_race_%d", time.Now().UnixNano())
+	schema := testdb.Unique(t, "migrate_race_")
 	if _, err := admin.pool.Exec(ctx, `CREATE SCHEMA `+schema); err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +657,7 @@ func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
 		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
 	}
 	ctx := context.Background()
-	s := scopedStore(ctx, t, fmt.Sprintf("embed_dim_%d", time.Now().UnixNano()))
+	s := scopedStore(ctx, t, testdb.Unique(t, "embed_dim_"))
 	// The vector tables are created outside the versioned migrations, and
 	// 0010/0011/0013 probe for them with an *unqualified* `to_regclass`,
 	// which walks the whole search path: with none in this schema they
@@ -1199,7 +1200,7 @@ func TestBackfillComposesStoredDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
-	id := fmt.Sprintf("it-backfill-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "it-backfill-")
 	k := &domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: "季節性",
 		Status: domain.StatusStable, Body: "12月は+40%。", CreatedBy: actor}
 	if err := s.Create(ctx, k, false); err != nil {

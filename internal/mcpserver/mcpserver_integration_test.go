@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,6 +18,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // headerSwitcher injects the delegation header into every outgoing MCP
@@ -85,7 +84,7 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	// The session now exists, initialized under alice's identity. The
 	// next call arrives on the same session but on behalf of bob.
 	sw.set("human:bob@example.co.jp")
-	id := fmt.Sprintf("mcpit%d/delegation", time.Now().UnixNano())
+	id := testdb.Unique(t, "mcpit") + "/delegation"
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "put_concept",
 		Arguments: map[string]any{"id": id, "document": "---\ntype: glossary\n---\n\nwritten on behalf of bob\n"},
@@ -173,7 +172,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 	}
 	defer cs.Close()
 
-	id := fmt.Sprintf("mcpput%d/revenue", time.Now().UnixNano())
+	id := testdb.Unique(t, "mcpput") + "/revenue"
 	defer func() {
 		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"})
 	}()
