@@ -424,7 +424,7 @@ claude mcp add --transport http ochakai http://localhost:8787/mcp
 Smoke test over REST (through the proxy, also tokenless):
 
 ```sh
-curl "http://localhost:8787/api/v1/knowledge?q=revenue"
+curl "http://localhost:8787/api/v1/search?q=revenue"
 ```
 
 ## 5b. Optional: the team web UI behind IAP (separate service, by design)
@@ -692,8 +692,8 @@ The demo is the one deployment where a plain `curl` is supposed to work, so
 it is also the one you can verify without a proxy:
 
 ```sh
-curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/knowledge?q=revenue"  # 200, no token
-curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/knowledge/queries/monthly-revenue"  # 403
+curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue"  # 200, no token
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/bundle/queries/monthly-revenue.md"  # 403
 ```
 
 200 without a token proves the public grant and `OCHAKAI_PUBLIC_READ_ONLY`
@@ -902,7 +902,7 @@ doesn't work as written.
   than the organization.
 - **`run.app` returns Google's HTML 404 ("That's an error") even though
   the service is Ready**: before suspecting infrastructure, test a real
-  application endpoint (e.g. `/api/v1/knowledge?q=x`) and check request
+  application endpoint (e.g. `/api/v1/search?q=x`) and check request
   logs. Two Google Frontend behaviors conspire to make a healthy service
   look dead:
   1. `/healthz` is intercepted by Google Frontends on `run.app` and 404s

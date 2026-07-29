@@ -74,7 +74,7 @@ func TestServeUIProxySignsAsService(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
 	req.Header.Set("Authorization", "Bearer browser-supplied")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -157,7 +157,7 @@ func TestServeUIProxyStripsBrowserDelegation(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
 	req.Header.Set(httpauth.OnBehalfOfHeader, "human:attacker@example.co.jp")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -186,7 +186,7 @@ func TestServeUIProxyNamesTheIAPUser(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
 	req.Header.Set(httpauth.OnBehalfOfHeader, "human:attacker@example.co.jp")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -215,7 +215,7 @@ func TestServeUIProxyRefusesUnsignedRequestsWhenIAPConfigured(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	resp, err := http.Get(local.URL + "/api/v1/knowledge?q=x")
+	resp, err := http.Get(local.URL + "/api/v1/search?q=x")
 	if err != nil {
 		t.Fatal(err)
 	}

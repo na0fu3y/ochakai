@@ -31,8 +31,8 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 	srv := readOnlyServer(t)
 	const doc = "---\ntype: Metric\ntitle: m\n---\n"
 	for _, w := range []struct{ method, path, body, mediaType string }{
-		{http.MethodPut, "/api/v1/knowledge/m", doc, "text/markdown"},
-		{http.MethodDelete, "/api/v1/knowledge/m", "", ""},
+		{http.MethodPut, "/api/v1/bundle/m.md", doc, "text/markdown"},
+		{http.MethodDelete, "/api/v1/bundle/m.md", "", ""},
 		{http.MethodPost, "/api/v1/verify/m", "", ""},
 		{http.MethodPost, "/api/v1/reject/m", `{"note":"no"}`, "application/json"},
 		{http.MethodDelete, "/api/v1/reject/m", "", ""},
@@ -71,7 +71,7 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 // (design doc 0040 §2.3).
 func TestReadOnlyAnnouncesItselfOnEveryResponse(t *testing.T) {
 	srv := readOnlyServer(t)
-	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/knowledge/m",
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/m.md",
 		strings.NewReader("---\ntype: Metric\ntitle: m\n---\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestReadOnlyAnnouncesItselfOnEveryResponse(t *testing.T) {
 	}
 	resp.Body.Close()
 	if got := resp.Header.Get("Ochakai-Read-Only"); got != "true" {
-		t.Errorf("PUT /api/v1/knowledge/m: Ochakai-Read-Only = %q, want \"true\"", got)
+		t.Errorf("PUT /api/v1/bundle/m:.md Ochakai-Read-Only = %q, want \"true\"", got)
 	}
 
 	// A route that does not exist carries it too: the header describes the

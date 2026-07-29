@@ -70,7 +70,7 @@ func TestAStatusChangeEditsTheDocumentRatherThanRebuildingIt(t *testing.T) {
 		t.Fatal("the status change no longer goes through a document edit")
 	}
 	body := section(t, page, "async function applyStatus(", "\n}")
-	if !strings.Contains(body, "api('/api/v1/knowledge/' + idPath(id))") {
+	if !strings.Contains(body, "api(conceptURL(id))") {
 		t.Error("applyStatus does not read the document first, so it cannot be editing one")
 	}
 	if !strings.Contains(body, "withStatus(") {

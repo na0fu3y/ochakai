@@ -121,7 +121,7 @@ func (e *APIError) Error() string {
 	return http.StatusText(e.StatusCode)
 }
 
-// SearchParams are the query parameters of GET /api/v1/knowledge.
+// SearchParams are the query parameters of GET /api/v1/search.
 type SearchParams struct {
 	Query    string
 	Types    []string
@@ -211,7 +211,7 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 		q.Set("cursor", p.Cursor)
 	}
 	var out SearchResult
-	err := c.doJSON(ctx, http.MethodGet, "/api/v1/knowledge", q, nil, &out)
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/search", q, nil, &out)
 	return &out, err
 }
 
@@ -380,7 +380,7 @@ func (c *Client) Get(ctx context.Context, id string) (*domain.View, error) {
 }
 
 // Put writes doc — an OKF document — to the entry at id, creating it
-// when the id is free (PUT /api/v1/knowledge/{id}). One call, because a
+// when the id is free (PUT /api/v1/bundle/{path}). One call, because a
 // document says what the entry should say and nothing about whether it
 // already existed (design doc 0043 §3.5).
 //
@@ -620,9 +620,11 @@ func (c *Client) Reembed(ctx context.Context, cursor string, limit int) (*Reembe
 	return &out, nil
 }
 
-// entryPath escapes each ID segment separately: the id is a path
-// ("metric/revenue") and its slashes must stay real path separators.
-func entryPath(id string) string { return escapedPath("/api/v1/knowledge/", id) }
+// entryPath is where a concept lives in the bundle: its id plus `.md`,
+// which is its only address (design doc 0046 §3.5). Each ID segment is
+// escaped separately — the id is a path ("metrics/revenue") and its
+// slashes must stay real path separators.
+func entryPath(id string) string { return escapedPath("/api/v1/bundle/", id) + ".md" }
 
 func escapedPath(base, id string) string {
 	var b strings.Builder

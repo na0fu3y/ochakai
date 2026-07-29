@@ -119,7 +119,7 @@ It is `/health` and not `/healthz` because Google Frontends intercept
 `/healthz` on `run.app` URLs and return their own 404.
 
 A stricter check, if you want one, is any read that touches the store:
-`GET /api/v1/knowledge?sort=verified_at&limit=1` succeeds only when the
+`GET /api/v1/search?sort=verified_at&limit=1` succeeds only when the
 database answers. `ochakai whoami` does the same thing from a shell and
 also prints which identity the server sees.
 

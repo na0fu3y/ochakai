@@ -49,7 +49,7 @@ func TestUIHandlerProxiesWithToken(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
 	req.Header.Set("Authorization", "Bearer browser-supplied")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestUIHandlerNilTokensSendsNoCredentials(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search", nil)
 	req.Header.Set("Authorization", "Bearer browser-supplied")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -141,7 +141,7 @@ func TestUIHandlerRejectsForeignOrigin(t *testing.T) {
 		"null":                      http.StatusForbidden, // opaque origin (sandboxed iframe, data: page)
 	} {
 		reached = false
-		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8098/api/v1/knowledge", nil)
+		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8098/api/v1/search", nil)
 		if origin != "" {
 			req.Header.Set("Origin", origin)
 		}
@@ -176,7 +176,7 @@ func TestUIHandlerStripsDelegationHeader(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
 	req.Header.Set(httpauth.OnBehalfOfHeader, "human:someone-else@example.co.jp")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestUIHandlerStripsServerlessAuthorization(t *testing.T) {
 	local := httptest.NewServer(h)
 	defer local.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/knowledge?q=x", nil)
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
 	req.Header.Set("X-Serverless-Authorization", "Bearer browser-supplied")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

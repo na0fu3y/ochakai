@@ -69,18 +69,16 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (19)
+## REST (16)
 
 - `DELETE /api/v1/bundle/{path}`
-- `DELETE /api/v1/knowledge/{id}`
 - `DELETE /api/v1/reject/{id}`
 - `GET /api/v1/backlinks/{id}`
 - `GET /api/v1/bundle/{path}`
 - `GET /api/v1/context`
 - `GET /api/v1/export`
-- `GET /api/v1/knowledge`
-- `GET /api/v1/knowledge/{id}`
 - `GET /api/v1/queues`
+- `GET /api/v1/search`
 - `GET /api/v1/stats`
 - `GET /api/v1/usage/{id}`
 - `POST /api/v1/move`
@@ -89,7 +87,17 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `POST /api/v1/usage/{id}`
 - `POST /api/v1/verify/{id}`
 - `PUT /api/v1/bundle/{path}`
-- `PUT /api/v1/knowledge/{id}`
+
+19 から 16 へ。[0046 §3.5](design/0046-bundle-address-space.md) の
+畳み込みの一部で、**足したものは無く、消えたのは重複である** —
+`/api/v1/knowledge/{id}` の 3 操作は、`/api/v1/bundle/{path}` が同じ
+オブジェクトに与えていた第二の綴りだった。一覧は `/api/v1/search` に
+改名してある(順位はバンドルの中に無いので、住所もバンドルの外にある)。
+
+§3.5 が畳むと決めた面のうち **2 つがまだ残っている**:
+`/api/v1/backlinks/{id}`(検索の `links_to=` に吸収される)と
+`/api/v1/export`(`Accept: application/gzip` の部分木に吸収される)。
+どちらも後継が無いので今は消せない。畳み終えると 14 になる。
 
 ## MCP (8)
 

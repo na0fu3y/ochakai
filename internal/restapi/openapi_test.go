@@ -76,12 +76,11 @@ func TestOpenAPISpecIsValid(t *testing.T) {
 // idAddressed are the endpoints whose trailing path parameter is an entry
 // id — or, for attachments, an id followed by a filename.
 var idAddressed = []string{
-	"/api/v1/knowledge/",
+	"/api/v1/bundle/",
 	"/api/v1/verify/",
+	"/api/v1/reject/",
 	"/api/v1/usage/",
-	"/api/v1/bundle/",
 	"/api/v1/backlinks/",
-	"/api/v1/bundle/",
 }
 
 // forSpecRouting collapses a multi-segment id down to one segment so the
@@ -206,7 +205,7 @@ func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 func TestCheckedServerOutlivesTheTestBody(t *testing.T) {
 	srv := readOnlyServer(t)
 	t.Cleanup(func() {
-		req, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/gone", nil)
+		req, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/gone.md", nil)
 		if err != nil {
 			t.Error(err)
 			return

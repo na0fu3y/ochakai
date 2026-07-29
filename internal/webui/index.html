@@ -585,6 +585,9 @@ function idPath(id) {
   return String(id).split('/').map(encodeURIComponent).join('/');
 }
 const entryHash = e => '#/k/' + idPath(e.id);
+// API path for a concept: it lives in the bundle at its id plus `.md`,
+// which is the only address it has (design doc 0046 §3.5).
+const conceptURL = id => '/api/v1/bundle/' + idPath(id) + '.md';
 // Display name: the title when set, else the id's last segment — with
 // title optional, the filename usually is the name (design doc 0022).
 const displayTitle = e => e.title || String(e.id).split('/').pop();
@@ -1014,7 +1017,7 @@ async function runSearch(append = false) {
     runSearch();
   });
   try {
-    const page = await api('/api/v1/knowledge?' + p);
+    const page = await api('/api/v1/search?' + p);
     if (my !== runSearch._seq || out !== $('#results')) return; // stale response
     // The cursor is the server's word for "there is more"; its absence
     // ends the listing, and no count comes with either (0050 §2.3).
@@ -1456,7 +1459,7 @@ async function viewDetail(id) {
     // A read is {id, document, summary, observed, attachments} (design
     // doc 0043 §3.5). The summary is flattened onto entry so the header
     // reads one object; the document is the entry itself.
-    const v = await api('/api/v1/knowledge/' + idPath(id));
+    const v = await api(conceptURL(id));
     entry = Object.assign({ id: v.id, attachments: v.attachments || [] }, v.summary);
     observed = v.observed || {};
     document_ = v.document || '';
@@ -1820,7 +1823,7 @@ async function viewDetail(id) {
     closeMenu();
     if (!confirm(`Soft-delete ${entry.id}? Revision history is retained.`)) return;
     try {
-      await api('/api/v1/knowledge/' + idPath(entry.id), { method: 'DELETE' });
+      await api(conceptURL(entry.id), { method: 'DELETE' });
       toast('Deleted.');
       refreshTree();
       location.hash = '#/';
@@ -1863,8 +1866,8 @@ async function applyStatus(id, status) {
   // what makes this safe: the page never holds the whole entry, only the
   // projection, so anything assembled from what it holds would be missing
   // the rest of the document.
-  const v = await api('/api/v1/knowledge/' + idPath(id));
-  await api('/api/v1/knowledge/' + idPath(id), {
+  const v = await api(conceptURL(id));
+  await api(conceptURL(id), {
     method: 'PUT', doc: withStatus(v.document || '', status),
   });
   return true;
@@ -2023,7 +2026,7 @@ async function runReview(append = false) {
   if (!out) return;
   const my = runReview._seq = (runReview._seq || 0) + 1;
   const limit = 100;
-  let url = '/api/v1/knowledge?sort=usage&status=draft&limit=' + limit;
+  let url = '/api/v1/search?sort=usage&status=draft&limit=' + limit;
   if (append && review.cursor) url += '&cursor=' + encodeURIComponent(review.cursor);
   else { review.loaded = []; review.cursor = ''; }
   try {
@@ -2146,7 +2149,7 @@ async function viewEditor(id, prefix = '') {
   let entryID = prefix;
   if (editing) {
     try {
-      const v = await api('/api/v1/knowledge/' + idPath(id));
+      const v = await api(conceptURL(id));
       doc = v.document || '';
       entryID = v.id;
     } catch (e) {
@@ -2229,7 +2232,7 @@ async function viewEditor(id, prefix = '') {
       return;
     }
     try {
-      const saved = await api('/api/v1/knowledge/' + idPath(entryId), {
+      const saved = await api(conceptURL(entryId), {
         method: 'PUT', doc: document_, onlyIfAbsent: !editing,
       });
       dirty = false;

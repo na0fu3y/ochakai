@@ -20,6 +20,40 @@ last entry.
 
 ### Added
 
+- **BREAKING** — `GET|PUT|DELETE /api/v1/knowledge/{id}` is retired, and
+  `GET /api/v1/knowledge` is now `GET /api/v1/search` (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.5). A concept is
+  read, written and deleted at the path it lives at, its id plus `.md`:
+
+  ```
+  GET    /api/v1/knowledge/metrics/revenue      →  GET    /api/v1/bundle/metrics/revenue.md
+  PUT    /api/v1/knowledge/metrics/revenue      →  PUT    /api/v1/bundle/metrics/revenue.md
+  DELETE /api/v1/knowledge/metrics/revenue      →  DELETE /api/v1/bundle/metrics/revenue.md
+  DELETE /api/v1/knowledge/metrics/revenue?purge=true
+                                                →  DELETE /api/v1/bundle/metrics/revenue.md?purge=true
+  GET    /api/v1/knowledge?q=revenue            →  GET    /api/v1/search?q=revenue
+  ```
+
+  Nothing was added and nothing can no longer be asked: the retired
+  address was a *second spelling* of what the bundle address already
+  answered, one suffix away, and a client had to know which of two names
+  ochakai preferred for the same object. The View, the document under
+  `Accept: text/markdown`, the ETag, `If-Match`, `If-None-Match: *`,
+  `Ochakai-Unchanged` and the 415 for a JSON body are all unchanged —
+  they are the same code, reached at the address the object has.
+
+  The list face is renamed rather than moved, because it does not return
+  an object of the bundle at all: it returns a *ranking*, which is
+  ochakai's own. Under the old name it read as the collection that
+  `/api/v1/knowledge/{id}` indexed into, and it was neither that
+  collection nor addressable as one.
+
+  The CLI, the MCP tools and the web UI are unchanged — they speak this
+  for you. A direct REST caller edits the URL. The REST surface goes from
+  19 operations to 16 (docs/surface.md); `/api/v1/backlinks/{id}` and
+  `/api/v1/export`, which §3.5 also folds, keep working until their
+  successors exist.
+
 - **Which agent, at which build, wrote this** (design doc
   [0052](docs/design/0052-producer-beside-the-actor.md)). An actor now
   carries a fourth field, `producer` — OKF SPEC §7's
