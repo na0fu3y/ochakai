@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/mcpserver"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
@@ -596,4 +598,76 @@ func TestNoTestRollsItsOwnNamespace(t *testing.T) {
 	if checked == 0 || !found {
 		t.Error("no test builds a run-unique token: this check now guards nothing")
 	}
+}
+
+// The six sections above count mechanisms — what a caller can invoke and
+// what a deployer can set. None of them counts the thing a curator
+// actually has to hold in their head: the **words**. A type spelling, a
+// lifecycle value, a trust tier, a listing mode, a ruling, the name of a
+// queue, the verb a revision is filed under — each is something the
+// documentation teaches and somebody has to remember, and none of them
+// moves a single number in the other six.
+//
+// That is where the pressure went. 0055 folded three REST operations
+// into one and the vocabulary stayed three words; 0054 renamed five MCP
+// tools and no count moved, though what changed was exactly the word a
+// reader has to know. docs/surface.md said as much about itself —
+// "adding a way to count only makes the next escape hatch visible" —
+// and this is the next one.
+//
+// The values are read out of internal/domain, where the surfaces already
+// take them from, so a word is counted the moment the product can say
+// it. Each is written family-first (`status.draft`, `sort.failed`), for
+// two reasons: an alphabetical list of bare values would be unreadable,
+// and a spelling that means two things in two families — `failed` is a
+// listing mode and an outcome — should be visible as two words to learn
+// rather than collapse into one.
+func TestSurfaceDocCountsVocabulary(t *testing.T) {
+	var words []string
+	add := func(family string, values ...string) {
+		if len(values) == 0 {
+			t.Fatalf("vocabulary %q is empty: this check now guards nothing", family)
+		}
+		for _, v := range values {
+			words = append(words, family+"."+v)
+		}
+	}
+	types := make([]string, 0, len(domain.Types))
+	for _, x := range domain.Types {
+		types = append(types, string(x))
+	}
+	statuses := make([]string, 0, len(domain.Statuses))
+	for _, x := range domain.Statuses {
+		statuses = append(statuses, string(x))
+	}
+	trusts := make([]string, 0, len(domain.Trusts))
+	for _, x := range domain.Trusts {
+		trusts = append(trusts, string(x))
+	}
+	add("type", types...)
+	add("status", statuses...)
+	add("trust", trusts...)
+	add("sort", domain.ListSorts...)
+	add("ruling", domain.Rulings...)
+	add("change", domain.Changes...)
+	add("outcome", domain.Outcomes...)
+	add("queue", jsonFieldNames(t, domain.QueueCounts{})...)
+	compareSurface(t, "VOCAB", words)
+}
+
+// jsonFieldNames reads a struct's wire names off its json tags, so a
+// vocabulary that is already spelled once — as the keys of a response —
+// is not spelled a second time here.
+func jsonFieldNames(t *testing.T, v any) []string {
+	t.Helper()
+	rt := reflect.TypeOf(v)
+	names := make([]string, 0, rt.NumField())
+	for i := range rt.NumField() {
+		tag, _, _ := strings.Cut(rt.Field(i).Tag.Get("json"), ",")
+		if tag == "" || tag == "-" {
+			t.Fatalf("%s.%s carries no json name", rt.Name(), rt.Field(i).Name)
+		}
+		names = append(names, tag)
+	}
+	return names
 }

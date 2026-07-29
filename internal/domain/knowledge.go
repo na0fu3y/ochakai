@@ -341,6 +341,29 @@ func ValidOutcome(o string) bool {
 	return false
 }
 
+// Rulings are the values POST /api/v1/review/{id} accepts in its body
+// (design doc 0055 §3.2): append a verification, stand up a rejection,
+// take a live rejection back. The single source for the surfaces'
+// validation and their refusal messages.
+//
+// Distinct from the Ruling type below, which is what an entry's ledger
+// *says* after the fact rather than what a caller asks for: "deprecated"
+// is a lifecycle value nobody posts here, and "withdrawn" leaves no
+// ruling behind at all.
+var Rulings = []string{"verified", "rejected", "withdrawn"}
+
+func ValidRuling(r string) bool { return slices.Contains(Rulings, r) }
+
+// Changes are the values a revision's Change carries — what the product
+// calls each kind of write in an entry's history. They are the verb form
+// of what happened; a ruling posted as "withdrawn" is recorded here as
+// "withdraw", the way "verified" is recorded as "verify".
+var Changes = []string{
+	"create", "update", "move", "delete",
+	"verify", "reject", "withdraw",
+	"attach", "detach",
+}
+
 // QueueCounts is how much work each review queue is holding — the three
 // listing feeds that a curator is meant to empty, counted rather than
 // listed (design doc 0049). Each field is the size of a feed that
@@ -942,7 +965,7 @@ func attrsEqual(a, b map[string]any) bool {
 // behind "every change kept as a revision".
 type Revision struct {
 	Rev       int       `json:"rev"`
-	Change    string    `json:"change"` // create | update | move | delete | verify | reject | withdraw | attach | detach
+	Change    string    `json:"change"` // one of Changes
 	ChangedBy Actor     `json:"changed_by"`
 	ChangedAt time.Time `json:"changed_at"`
 	// Document is the entry as it stood, as an OKF document (design doc

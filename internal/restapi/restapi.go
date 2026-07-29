@@ -630,8 +630,11 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			k, err = svc.WithdrawRejection(r.Context(), id, actor)
 		default:
+			// The arms above are the vocabulary; domain.Rulings is what
+			// every surface quotes it as, so the refusal cannot name a
+			// different set than the one the switch accepts.
 			writeError(w, service.Invalidf(
-				`ruling must be "verified", "rejected" or "withdrawn", not %q`, in.Ruling))
+				`ruling must be one of %s, not %q`, strings.Join(domain.Rulings, ", "), in.Ruling))
 			return
 		}
 		if err != nil {
