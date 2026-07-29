@@ -241,7 +241,7 @@ func TestIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	backdateVerification(t, ctx, s, older.ID, oldAt)
-	list, err := s.ListByVerifiedAt(ctx, Filter{Statuses: []domain.Status{domain.StatusStable}}, 100)
+	list, err := s.ListByVerifiedAt(ctx, Filter{Statuses: []domain.Status{domain.StatusStable}}, nil, 100)
 	if err != nil {
 		t.Fatalf("ListByVerifiedAt: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestIntegration(t *testing.T) {
 		Types:    []domain.Type{domain.TypeInsights},
 		Statuses: []domain.Status{domain.StatusDraft},
 		Tags:     []string{feedTag},
-	}, 100)
+	}, nil, 100)
 	if err != nil {
 		t.Fatalf("ListByUsage: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestIntegration(t *testing.T) {
 	if err := s.RecordOutcome(ctx, domain.EventFailed, actor, draftFail.ID, ""); err != nil {
 		t.Fatalf("RecordOutcome: %v", err)
 	}
-	failFeed, err := s.ListByFailed(ctx, Filter{Tags: []string{failTag}}, 100)
+	failFeed, err := s.ListByFailed(ctx, Filter{Tags: []string{failTag}}, nil, 100)
 	if err != nil {
 		t.Fatalf("ListByFailed: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestIntegrationPrefixFilterMatchesSegments(t *testing.T) {
 	// (design doc 0041 §2.5).
 	got := func(f Filter) []string {
 		t.Helper()
-		entries, err := s.ListBySource(ctx, f, 100)
+		entries, err := s.ListBySource(ctx, f, nil, 100)
 		if err != nil {
 			t.Fatalf("ListBySource: %v", err)
 		}
@@ -1796,7 +1796,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	inFeed := func() bool {
-		hits, err := s.ListByFailed(ctx, Filter{}, 100)
+		hits, err := s.ListByFailed(ctx, Filter{}, nil, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2391,7 +2391,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	// Most overdue first. The future declaration and the undated entry are
 	// absent: a date that has not come due is not work (0037 §2.1), and
 	// today counts as stale because the rule is today >= stale_after.
-	stale, err := s.ListByStaleAfter(ctx, mine, 100)
+	stale, err := s.ListByStaleAfter(ctx, mine, nil, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2400,7 +2400,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	}
 
 	// The reverse lookup, matched on resource and ordered by id.
-	cited, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: policy}, 100)
+	cited, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: policy}, nil, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2411,7 +2411,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	// Exact, on resource only: a prefix, a longer string, and the
 	// per-document source id all match nothing (0037 §2.3).
 	for _, miss := range []string{"https://wiki.example/" + run, policy + "#section", "rev"} {
-		hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: miss}, 100)
+		hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: miss}, nil, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2421,7 +2421,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	}
 
 	// The two compose: "cites this and is overdue" is one question.
-	both, err := s.ListByStaleAfter(ctx, Filter{Tags: []string{run}, Source: policy}, 100)
+	both, err := s.ListByStaleAfter(ctx, Filter{Tags: []string{run}, Source: policy}, nil, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2433,7 +2433,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	// jsonb literal the filter builds.
 	odd := `https://x.test/a"b\c`
 	quoted := mk("quoted", "", domain.Source{Resource: odd})
-	hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: odd}, 100)
+	hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: odd}, nil, 100)
 	if err != nil {
 		t.Fatalf("resource with a quote: %v", err)
 	}
@@ -2784,7 +2784,7 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 		t.Helper()
 		// Any listing takes the same filter; the verification-age feed is
 		// the one that needs no query and no other precondition.
-		hits, err := s.ListByVerifiedAt(ctx, Filter{Prefixes: []string{prefix}, Frontmatter: fm}, 10)
+		hits, err := s.ListByVerifiedAt(ctx, Filter{Prefixes: []string{prefix}, Frontmatter: fm}, nil, 10)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3165,15 +3165,15 @@ func TestIntegrationQueueCounts(t *testing.T) {
 
 	// Same filter, same numbers as the feeds themselves.
 	drafts, err := s.ListByUsage(ctx, Filter{Prefixes: []string{run},
-		Statuses: []domain.Status{domain.StatusDraft}}, 1000)
+		Statuses: []domain.Status{domain.StatusDraft}}, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reported, err := s.ListByFailed(ctx, mine, 1000)
+	reported, err := s.ListByFailed(ctx, mine, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expired, err := s.ListByStaleAfter(ctx, mine, 1000)
+	expired, err := s.ListByStaleAfter(ctx, mine, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}

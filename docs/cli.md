@@ -599,8 +599,13 @@ or with any --sort. --source narrows to the entries citing one resource
 (the reverse of sources[].resource); --prefix narrows to the entries
 living under a path, which is how a team's own knowledge is told apart
 from the company-wide vocabulary.
+A listing that has more behind it prints the way on to stderr; pass it
+back with --cursor to read the next page. A search prints none: it is
+bounded by --limit, and a ranking has no page two.
 
 Flags:
+  -cursor cursor
+    	resume a listing where the last page ended: the cursor the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit
   -fm key=value
     	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
   -json

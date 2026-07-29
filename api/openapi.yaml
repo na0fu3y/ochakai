@@ -71,6 +71,10 @@ paths:
         and so is omitting both (searching needs a query to rank by).
         source and prefix are filters rather than modes, so they compose
         with either.
+        A listing — any sort, or source with no q — pages: it answers
+        with a cursor when more entries follow, and walks past the limit
+        one page at a time (design doc 0050). A search does not: it is
+        bounded by limit, and passing a cursor with q is a 400.
       parameters:
         - name: q
           in: query
@@ -189,7 +193,35 @@ paths:
             more per page:
             default 100, max 1000. Out-of-range values fall back to the
             default; non-integer values are a 400.
+
+            For a listing this bounds the page, not the answer — walk the
+            rest with cursor.
           schema: { type: integer }
+        - name: cursor
+          in: query
+          description: >
+            Resume a listing where the previous page ended: pass back the
+            cursor that page returned, with the same sort and the same
+            filters (design doc 0050 §2.1). Listings are the sort feeds
+            and the source lookup — the modes with a total order to
+            resume from.
+
+            The value is opaque: it carries the position in that order
+            and nothing else. One from a different listing is a 400, and
+            so is one this server did not hand out. The filters are not
+            in it, so changing them mid-walk asks a new question from an
+            old position.
+
+            **A search refuses it with a 400.** Relevance is a fused
+            window rather than an order, so a ranking has no page two:
+            50 hits are the whole contract, and the way past them is a
+            narrower question (design doc 0050 §2.2).
+
+            A cursor is a position, not a snapshot. The feeds are live,
+            so an entry that moves while you walk may be missed or seen
+            twice; what a cursor promises is that the listing does not
+            stop at a cap.
+          schema: { type: string }
       responses:
         "200":
           description: >
@@ -198,6 +230,11 @@ paths:
             sort=usage or sort=failed, hits carry score 0 and each
             populates the usage object (demand order, resp. worst-failed
             first).
+
+            A listing carries cursor when more entries follow this page.
+            Its absence is the end of the listing — that is the only
+            count given, since an exact one over a filtered feed costs a
+            second scan of it (design doc 0050 §2.3).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -208,6 +245,11 @@ paths:
                   hits:
                     type: array
                     items: { $ref: "#/components/schemas/SearchHit" }
+                  cursor:
+                    type: string
+                    description: >
+                      Where the next page of this listing resumes. Absent
+                      on the last page, and on every search.
               examples:
                 search:
                   summary: GET /api/v1/knowledge?q=monthly+revenue&limit=3
@@ -341,6 +383,14 @@ paths:
                   summary: Neither q nor sort was given
                   value:
                     error: search needs a query; use sort=verified_at|usage|failed|stale_after to list entries without one, or source=URI to list what cites a resource
+                cursorOnSearch:
+                  summary: A ranking has no next page
+                  value:
+                    error: "a search is bounded by limit and has no next page: its ranking is a fused window, not an order to resume from — narrow it with filters, or walk a listing with sort=verified_at|usage|failed|stale_after"
+                cursorFromAnotherListing:
+                  summary: The cursor belongs to a different order
+                  value:
+                    error: cursor belongs to the usage listing; it cannot resume the failed one
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/bundle/{path}:
     get:

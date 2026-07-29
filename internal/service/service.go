@@ -960,7 +960,11 @@ func jsonSize(v any) int {
 // queue a reviewer works through, and ranking it by relevance to a query
 // would leave the reviewer with neither the whole queue nor the best
 // matches. The CLI refuses the same pair before it ever gets here.
-func (s *Service) SearchOrList(ctx context.Context, query, sort string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+//
+// cursor resumes a listing where the previous page ended, and is refused
+// on a search: a listing has a total order to resume from, a ranking has
+// a window (design doc 0050 §2.2).
+func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, f store.Filter, limit int) (*Listing, error) {
 	if sort != "" {
 		if !domain.ValidListSort(sort) {
 			return nil, Invalidf("invalid sort %q (valid: %s)", sort, strings.Join(domain.ListSorts, ", "))
@@ -968,15 +972,22 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort string, f store.
 		if strings.TrimSpace(query) != "" {
 			return nil, Invalidf("sort=%s lists entries; it cannot be combined with a search query", sort)
 		}
-		return s.list(ctx, sort, f, limit)
+		return s.list(ctx, sort, cursor, f, limit)
 	}
 	// A source filter with nothing to search by is the reverse lookup:
 	// "what derives from this material" has no text to rank, so it lists
 	// (design doc 0037 §2.3).
 	if strings.TrimSpace(query) == "" && f.Source != "" {
-		return s.list(ctx, sortBySource, f, limit)
+		return s.list(ctx, sortBySource, cursor, f, limit)
 	}
-	return s.Search(ctx, query, f, limit)
+	if cursor != "" {
+		return nil, searchBoundError()
+	}
+	hits, err := s.Search(ctx, query, f, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &Listing{Hits: hits}, nil
 }
 
 // sortBySource is the listing mode a source filter with no query selects.
@@ -1062,7 +1073,13 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 //     editing the entry to declare a new expiry (design doc 0037 §2.2).
 //   - source — the entries citing one resource, the reverse of
 //     sources[].resource (design doc 0037 §2.3).
-func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+//
+// Every mode pages: each has a total order ending in the id, so a cursor
+// carries a position in it and the caller walks past the cap instead of
+// stopping at it (design doc 0050 §2.1). One row beyond the page is read
+// to tell a full page from the last one — without it, a listing whose
+// length happens to equal the limit would hand out a cursor onto nothing.
+func (s *Service) list(ctx context.Context, sort, cursor string, f store.Filter, limit int) (*Listing, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
@@ -1070,13 +1087,30 @@ func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit i
 	if err != nil {
 		return nil, err
 	}
-	// The two usage feeds rank by the usage totals and hand them back with
-	// each hit, so they are hits already.
+	after, err := decodeCursor(cursor, sort, cursorSortKeys(sort))
+	if err != nil {
+		return nil, err
+	}
+	hits, err := s.listPage(ctx, sort, f, after, limit+1)
+	if err != nil {
+		return nil, err
+	}
+	more := len(hits) > limit
+	if more {
+		hits = hits[:limit]
+	}
+	return &Listing{Hits: hits, Cursor: nextCursor(sort, hits, more)}, nil
+}
+
+// listPage runs one feed's query. The two usage feeds rank by the usage
+// totals and hand them back with each hit, so they are hits already; the
+// rest return entries to project.
+func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, after *store.After, limit int) ([]domain.SearchHit, error) {
 	switch sort {
 	case "usage":
-		return s.Store.ListByUsage(ctx, f, limit)
+		return s.Store.ListByUsage(ctx, f, after, limit)
 	case "failed":
-		return s.Store.ListByFailed(ctx, f, limit)
+		return s.Store.ListByFailed(ctx, f, after, limit)
 	}
 	list := s.Store.ListByVerifiedAt
 	switch sort {
@@ -1085,7 +1119,7 @@ func (s *Service) list(ctx context.Context, sort string, f store.Filter, limit i
 	case sortBySource:
 		list = s.Store.ListBySource
 	}
-	entries, err := list(ctx, f, limit)
+	entries, err := list(ctx, f, after, limit)
 	if err != nil {
 		return nil, err
 	}

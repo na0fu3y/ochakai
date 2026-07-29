@@ -92,23 +92,23 @@ func TestSearchOrListValidation(t *testing.T) {
 	ctx := context.Background()
 	var inputErr *InvalidInputError
 
-	_, err := s.SearchOrList(ctx, "", "created_at", store.Filter{}, 0)
+	_, err := s.SearchOrList(ctx, "", "created_at", "", store.Filter{}, 0)
 	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "invalid sort") {
 		t.Errorf("unknown sort: got %v, want an invalid-sort InvalidInputError", err)
 	}
 	for _, sort := range domain.ListSorts {
-		_, err := s.SearchOrList(ctx, "revenue", sort, store.Filter{}, 0)
+		_, err := s.SearchOrList(ctx, "revenue", sort, "", store.Filter{}, 0)
 		if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "cannot be combined") {
 			t.Errorf("sort=%s with a query: got %v, want a cannot-be-combined InvalidInputError", sort, err)
 		}
 	}
-	if _, err := s.SearchOrList(ctx, "  ", "", store.Filter{}, 0); !errors.As(err, &inputErr) ||
+	if _, err := s.SearchOrList(ctx, "  ", "", "", store.Filter{}, 0); !errors.As(err, &inputErr) ||
 		!strings.Contains(err.Error(), "needs a query") {
 		t.Errorf("neither query nor sort: got %v, want a needs-a-query InvalidInputError", err)
 	}
 	// The way out of that error is a listing mode, so the message has to
 	// name all of them. It named three for as long as there were three.
-	_, err = s.SearchOrList(ctx, "", "", store.Filter{}, 0)
+	_, err = s.SearchOrList(ctx, "", "", "", store.Filter{}, 0)
 	for _, sort := range domain.ListSorts {
 		if !strings.Contains(err.Error(), sort) {
 			t.Errorf("the needs-a-query message never mentions sort=%s: %v", sort, err)

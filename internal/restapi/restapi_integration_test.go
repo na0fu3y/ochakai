@@ -1321,6 +1321,107 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	}
 }
 
+// A listing on the wire pages: the response carries a cursor while there
+// is more behind it, passing that cursor back continues the same order,
+// and the last page carries none — which is the only signal a caller gets
+// that the listing ended (design doc 0050 §§2.1, 2.3). A search refuses
+// the parameter with a 400, because a ranking has no page two (§2.2).
+func TestRESTIntegrationListingsPage(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	// A run-unique root, as the other REST integration tests do it: the
+	// feed below is filtered to this test's own entries, so a shared test
+	// database cannot change what the walk should see.
+	root := fmt.Sprintf("page%d", time.Now().UnixNano())
+	var ids []string
+	for i := range 5 {
+		id := fmt.Sprintf("%s/e%d", root, i)
+		doc := docFrom(t, map[string]any{
+			"type": "Insight", "id": id, "title": "draft " + id,
+			"status": "draft", "tags": []string{root},
+			"stale_after": fmt.Sprintf("2020-01-%02d", i+1),
+		})
+		resp := putDoc(t, srv.URL, id, doc, true)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s: status %d", id, resp.StatusCode)
+		}
+		ids = append(ids, id)
+	}
+	removeEntries(t, srv, ids...)
+
+	page := func(query string) (hits []string, cursor string) {
+		t.Helper()
+		resp, err := http.Get(srv.URL + "/api/v1/knowledge?" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET ?%s: status %d", query, resp.StatusCode)
+		}
+		var got struct {
+			Hits   []domain.SearchHit `json:"hits"`
+			Cursor string             `json:"cursor"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		for _, h := range got.Hits {
+			hits = append(hits, h.ID)
+		}
+		return hits, got.Cursor
+	}
+
+	feed := "sort=stale_after&tag=" + root
+	whole, cursor := page(feed + "&limit=50")
+	if len(whole) != len(ids) {
+		t.Fatalf("the feed read whole = %v, want the %d entries this test wrote", whole, len(ids))
+	}
+	if cursor != "" {
+		t.Errorf("a listing that ended carried a cursor: %q", cursor)
+	}
+
+	var walked []string
+	cursor = ""
+	for range len(ids) + 2 {
+		q := feed + "&limit=2"
+		if cursor != "" {
+			q += "&cursor=" + url.QueryEscape(cursor)
+		}
+		var got []string
+		got, cursor = page(q)
+		walked = append(walked, got...)
+		if cursor == "" {
+			break
+		}
+	}
+	if !slices.Equal(walked, whole) {
+		t.Errorf("walking the feed in pages of 2 saw %v, reading it whole saw %v", walked, whole)
+	}
+
+	// A ranking has no next page, and saying so is a client error rather
+	// than a cursor quietly ignored.
+	resp, err := http.Get(srv.URL + "/api/v1/knowledge?q=" + root + "&cursor=" + url.QueryEscape(cursorOf(t, page, feed)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("a cursor on a search: status %d, want 400", resp.StatusCode)
+	}
+}
+
+// cursorOf reads the first page of a listing for a cursor to reuse.
+func cursorOf(t *testing.T, page func(string) ([]string, string), feed string) string {
+	t.Helper()
+	_, cursor := page(feed + "&limit=1")
+	if cursor == "" {
+		t.Fatal("the feed ended after one entry; the test set never reached the store")
+	}
+	return cursor
+}
+
 // GET /api/v1/queues answers "is there anything to do" with the sizes of
 // the three feeds a curator empties (design doc 0049), and the answer
 // moves as the work is done: a failure report puts an entry in, the

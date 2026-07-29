@@ -44,6 +44,9 @@ func Handler(svc *service.Service) http.Handler {
 	// query or with any sort. prefix narrows to the entries addressed
 	// under a path, repeatable and OR-ed, for scoping a search to a team's
 	// subtree and the shared one at once (design doc 0041).
+	// cursor walks a listing past the limit — a listing has a total order
+	// to resume from, a search has a ranking window and refuses it
+	// (design doc 0050).
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
@@ -66,12 +69,12 @@ func Handler(svc *service.Service) http.Handler {
 			Rejected:    rejected,
 			Frontmatter: frontmatterFilter(q),
 		}
-		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
+		page, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), q.Get("cursor"), f, limit)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeHits(w, r, svc, hits)
+		writeHits(w, r, svc, page)
 	})
 
 	// GET /api/v1/bundle/{path...} — the two files OKF reserves, at the
@@ -766,22 +769,28 @@ func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 // writeHits responds with a hit list, attachment metadata filled in one
 // batch — the REST list surface carries it so UIs can render image
 // previews; MCP search results stay lean (design doc 0015).
-func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, hits []domain.SearchHit) {
+// The page's cursor rides along when a listing has more behind it
+// (design doc 0050 §2.1); a search never has one.
+func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, page *service.Listing) {
 	// A row is a projection now (design doc 0043 §3.5), so the batch fill
 	// runs against stand-ins carrying only the ids and the metadata is
 	// copied back onto the rows.
-	ptrs := make([]*domain.Knowledge, len(hits))
-	for i := range hits {
-		ptrs[i] = &domain.Knowledge{ID: hits[i].ID}
+	ptrs := make([]*domain.Knowledge, len(page.Hits))
+	for i := range page.Hits {
+		ptrs[i] = &domain.Knowledge{ID: page.Hits[i].ID}
 	}
 	if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
 		writeError(w, err)
 		return
 	}
-	for i := range hits {
-		hits[i].Attachments = ptrs[i].Attachments
+	for i := range page.Hits {
+		page.Hits[i].Attachments = ptrs[i].Attachments
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
+	body := map[string]any{"hits": page.Hits}
+	if page.Cursor != "" {
+		body["cursor"] = page.Cursor
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

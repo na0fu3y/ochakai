@@ -195,18 +195,21 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"source and prefixes are filters rather than modes, and combine with a query or with any sort: " +
 			"source narrows to the entries citing one resource — use it when a source document changed and " +
 			"you need everything derived from it — while prefixes narrows to the entries living under given " +
-			"paths, which is how you separate a team's own knowledge from the company-wide vocabulary.",
+			"paths, which is how you separate a team's own knowledge from the company-wide vocabulary. " +
+			"A listing (any sort, or source alone) answers with a cursor when more entries follow: pass it " +
+			"back to read the next page, and walk a feed in pages rather than asking for one huge one. " +
+			"A search has no cursor — it is bounded by limit, and a ranking has no page two.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
 			Trust: domain.ToTrusts(in.Trust), Rejected: in.Rejected, Frontmatter: in.FM,
 		}
-		hits, err := svc.SearchOrList(ctx, in.Query, in.Sort, f, in.Limit)
+		page, err := svc.SearchOrList(ctx, in.Query, in.Sort, in.Cursor, f, in.Limit)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
-		return nil, searchOut{Hits: hits}, nil
+		return nil, searchOut{Hits: page.Hits, Cursor: page.Cursor}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -489,10 +492,14 @@ type searchIn struct {
 	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
 	Sort     string            `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists entries reported wrong (re-verification feed), \"stale_after\" lists entries past their declared expiry (most overdue first) — all mutually exclusive with query"`
 	Limit    int               `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
+	Cursor   string            `json:"cursor,omitempty" jsonschema:"resume a listing where the last page ended: pass back the cursor that page returned, with the same sort and filters. Only for listings (any sort, or source alone) — a search is bounded by limit and refuses it"`
 }
 
 type searchOut struct {
 	Hits []domain.SearchHit `json:"hits"`
+	// Cursor is present only when a listing has more behind this page;
+	// its absence is the end (design doc 0050 §2.3 — no total is given).
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // contextIn deliberately omits min_score, which the REST surface still
