@@ -129,6 +129,11 @@ for what they still don't do:
   with trust in the spec's own keys. MIT-licensed and self-hosted per
   tenant: your knowledge is never a hostage.
 
+Each of those has an alternative you may already run — a catalog, a
+memory layer, a markdown vault with an MCP server.
+[Positioning](docs/positioning.md) takes them one at a time, says where
+ochakai loses, and says who should pick something else.
+
 ### What it refuses
 
 | ochakai has no… | because |
@@ -161,6 +166,7 @@ This README describes `main`; the [changelog](CHANGELOG.md) says what is
 in the version you are running.
 
 - **Evaluating** — [FAQ](docs/faq.md) ·
+  [Positioning](docs/positioning.md) ·
   [Architecture](docs/architecture.md) ·
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)

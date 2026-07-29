@@ -2,7 +2,9 @@
 
 Answers that the README implies but never states in one place. When a
 question is really about a symptom, it is in
-[troubleshooting](guides/troubleshooting.md) instead.
+[troubleshooting](guides/troubleshooting.md) instead; when it is "why not
+just use X?", the three below are the short forms and
+[positioning](positioning.md) is the full landscape.
 
 ### Can I run this without Google Cloud?
 
@@ -54,6 +56,33 @@ unaudited: nobody reviews what got remembered, and a wrong memory persists
 quietly. ochakai is team-shared knowledge that passes through human
 review. They compose — preferences in your memory layer, verified data
 knowledge here.
+
+### How is it different from an Obsidian vault with an MCP server?
+
+By everything except the file format. Both store markdown with YAML
+frontmatter and take their relationships from links in the body, and an
+`ochakai export` bundle opens as a vault — so if what you want is to
+browse and edit your knowledge with a good editor, use one.
+
+What a vault has no notion of is a *ruling*. OKF's trust keys are
+ordinary YAML, so a vault can hold a `verified` entry naming a human —
+but there it is a line somebody typed, where here it is what the instance
+observed of an authenticated caller and is never read back from a
+document (design docs [0009](design/0009-provenance-portability.md),
+[0043](design/0043-document-first.md)). Nothing in a vault appends to
+that ledger, derives a trust tier from it, refuses an overwrite against
+it, or resurfaces an entry whose last confirmation has aged out.
+There is no review queue, no rejection that keeps its reason, no usage
+count, no outcome report — the [improvement loop](loop.md) has no
+analogue there at all. Nor is there an identity to record as provenance
+(a vault MCP server usually carries a local API key, and the writer is
+whoever's laptop it was), a precondition that stops two writers from
+clobbering each other, or reach beyond the one machine the vault sits on.
+
+A vault is where a person thinks. ochakai is where a team's verified data
+knowledge lives and is served to agents — including agents in CI and
+hosted ones that will never see your laptop. The long form, with the
+other five alternatives, is in [positioning](positioning.md).
 
 ### Do I need embeddings?
 
