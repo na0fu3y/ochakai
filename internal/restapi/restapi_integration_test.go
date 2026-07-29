@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -1972,5 +1973,76 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 	if archived != generated {
 		t.Errorf("the archive's index.md and the generated one differ:\n--- archive ---\n%s\n--- generated ---\n%s",
 			archived, generated)
+	}
+}
+
+// The archive carries the other file OKF reserves (design doc 0046
+// §3.8). An export that held the bundle but not what happened to it left
+// the ledger readable only from the instance that holds it, and a purge
+// is the only thing that ever removes a row from it (0031) — so the
+// history was portable in the record and not in the artifact.
+//
+// The copy in the archive is the copy at the address: one renderer, one
+// bound, so a reader extracting the bundle and a reader calling the
+// endpoint are not reading two different histories.
+func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := fmt.Sprintf("restlog%d", time.Now().UnixNano())
+	id := typ + "/revenue"
+	removeEntries(t, srv, id)
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	archived := map[string]string{}
+	resp, err := getArchive(t, srv.URL+"/api/v1/bundle/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archived[hdr.Name] = string(b)
+	}
+
+	// One beside every index.md, the root's included.
+	for path := range archived {
+		if !strings.HasSuffix(path, "index.md") {
+			continue
+		}
+		if _, ok := archived[strings.TrimSuffix(path, "index.md")+"log.md"]; !ok {
+			t.Errorf("%s has no log.md beside it", path)
+		}
+	}
+	if got := archived[typ+"/log.md"]; !strings.Contains(got, "**Create**") ||
+		!strings.Contains(got, "[Revenue](/"+id+".md)") {
+		t.Errorf("the directory's history does not record the write:\n%s", got)
+	}
+	if root := archived["log.md"]; !strings.Contains(root, "# Update Log") {
+		t.Errorf("the root history is not titled as one:\n%s", root)
+	}
+
+	// And it is the same document the address serves.
+	if served := getMarkdown(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md"); served != archived[typ+"/log.md"] {
+		t.Errorf("the archived history and the served one differ:\n--- archive ---\n%s\n--- served ---\n%s",
+			archived[typ+"/log.md"], served)
 	}
 }
