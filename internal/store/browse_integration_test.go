@@ -26,11 +26,15 @@ func TestIntegrationBrowse(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
+	// starts_with rather than LIKE 'it-br-%', which is the very trap
+	// this test is about: the "it-br_x" id below has "_" where the
+	// pattern has "-", so LIKE left it behind and the next run of this
+	// test failed on an id it had created itself.
 	for _, del := range []string{
-		`DELETE FROM object WHERE id LIKE 'it-br-%'`,
-		`DELETE FROM knowledge_revision WHERE id LIKE 'it-br-%'`,
-		`DELETE FROM knowledge_rejection WHERE id LIKE 'it-br-%'`,
-		`DELETE FROM knowledge_verification WHERE id LIKE 'it-br-%'`,
+		`DELETE FROM object WHERE starts_with(id, 'it-br')`,
+		`DELETE FROM knowledge_revision WHERE starts_with(id, 'it-br')`,
+		`DELETE FROM knowledge_rejection WHERE starts_with(id, 'it-br')`,
+		`DELETE FROM knowledge_verification WHERE starts_with(id, 'it-br')`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
 			t.Fatal(err)

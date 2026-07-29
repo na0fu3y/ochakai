@@ -135,7 +135,7 @@ func (s *Service) LogDocument(ctx context.Context, prefix string, limit int) ([]
 	lines := make([]okf.LogLine, 0, len(rows))
 	for _, r := range rows {
 		lines = append(lines, okf.LogLine{
-			At: r.ChangedAt, Change: r.Change, Path: r.ID + ".md", Title: r.Title, By: r.ChangedBy,
+			At: r.ChangedAt, Change: r.Change, Path: r.Path, Title: r.Title, By: r.ChangedBy,
 		})
 	}
 	title := "Update Log"

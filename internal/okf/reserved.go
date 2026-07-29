@@ -80,7 +80,7 @@ type IndexSection struct {
 type LogLine struct {
 	At     time.Time
 	Change string // create | update | move | delete, the revision vocabulary
-	Path   string // the concept's bundle path
+	Path   string // the object's bundle path — a concept's or a file's
 	Title  string
 	By     domain.Actor
 }

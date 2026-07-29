@@ -37,11 +37,16 @@ import (
 
 // attributedTo is the predicate joining file objects f to the entry row
 // k: living directly under the entry's namespace (no further slash), or
-// named by the entry's own body. Both halves are indexed —
-// object_concept keeps concepts out of the path scan, object_files is
-// the GIN index behind the containment test.
+// named by the entry's own body. The containment half is indexed by
+// object_files, the GIN index; object_concept keeps concepts out of the
+// path scan.
+//
+// The namespace half is starts_with rather than LIKE, for the reason
+// browsing gives (browse.go): an id may contain "_", which LIKE reads as
+// a wildcard. "sales_2024" would have claimed every file under
+// "salesX2024/" as its own.
 const attributedTo = `f.id IS NULL AND f.deleted_at IS NULL
-	AND (f.path LIKE k.id || '/%' AND strpos(substr(f.path, length(k.id) + 2), '/') = 0
+	AND (starts_with(f.path, k.id || '/') AND strpos(substr(f.path, length(k.id) + 2), '/') = 0
 	     OR k.files ? f.path)`
 
 // fileCols is one file object as an attachment is read: the path is what

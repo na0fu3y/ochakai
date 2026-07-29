@@ -573,6 +573,44 @@ last entry.
 
 ### Fixed
 
+- **A path prefix is a string, not a pattern.** An id may contain `_`,
+  and `LIKE` reads it as "any single character". The statements that
+  decide which files sit inside a concept's namespace were written with
+  `LIKE`, so `sales_2024` matched everything under `salesX2024/` as
+  well as its own — and three of those statements write:
+
+  - moving `sales_2024` carried `salesX2024`'s files away with it;
+  - purging `sales_2024` deleted `salesX2024`'s files;
+  - `salesX2024`'s filenames were searchable as `sales_2024`'s, and its
+    files came back on `sales_2024`'s reads.
+
+  Browsing has avoided `LIKE` for this reason since design doc
+  [0014](docs/design/0014-folder-browse.md) and the search filters since
+  [0041](docs/design/0041-path-scoped-search.md); the object-path
+  statements introduced with
+  [0046](docs/design/0046-bundle-address-space.md) §3.3 did not inherit
+  it. They match by string now, in Go and in the one SQL function that
+  had it too (migration 0033, which recomputes the affected lexical
+  haystacks). Only ids containing `_` (or `%`) were affected, and only
+  when another id differed from them exactly at that character.
+
+- **The update history survives a file, and carries one.** A revision is
+  an event about an object (0046 §3.1), so writing a file records one
+  with no concept id — and the log read them by id. The root
+  `GET /api/v1/bundle/log.md` (`ochakai log` with no path) answered 500
+  on any instance that had ever attached a file, and every other
+  `log.md` left files out of the history they belong in. The ledger is
+  read by path now, so attaching, replacing and removing a file appears
+  in the log of the directory it happened in, and a file's history
+  follows the file when a `move` carries its namespace along.
+
+- **A concept written where a file already lives is a 409.** The two
+  kinds of object share one address space (0046 §3.5), and the insert
+  named the concept id in its conflict clause — which a file has none
+  of. The primary key on the path caught it and the caller read a 500
+  with a constraint name in it. It now reads the same "already exists"
+  a live entry gives, saying that a file holds the path.
+
 - The invalid-status error names the statuses there are. It offered
   `draft, verified, deprecated, rejected` — two of which stopped being
   statuses when design doc
