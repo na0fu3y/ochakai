@@ -74,10 +74,17 @@ mechanism rather than habit, and still without an LLM.
 
 ### RAG over your documents
 
-Answered in full in the [FAQ](faq.md#how-is-this-different-from-rag-over-our-documents).
-Short version: the unit is a reviewed claim, not a chunk, and the
-direction is reversed — a RAG index is built *from* documents, a
-knowledge base here is written *by the agents using it*.
+RAG retrieves passages from documents somebody wrote for other reasons;
+what comes back is as right as whatever was in the wiki. ochakai returns
+entries a human marked `verified`, with provenance saying who wrote it,
+who checked it and when, and a feed that resurfaces knowledge which has
+gone too long unchecked or came back wrong. **The unit is a reviewed
+claim, not a chunk.**
+
+The other difference is direction. A RAG index is built *from*
+documents; a knowledge base here is written *by the agents using it* and
+promoted by a human — the write-back loop is the product, and a rejected
+proposal keeps its reason so agents stop re-proposing it.
 
 ### Verified-query stores inside an AI-analyst product
 

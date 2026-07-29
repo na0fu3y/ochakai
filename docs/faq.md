@@ -1,25 +1,24 @@
 # FAQ
 
-Answers that the README implies but never states in one place. When a
-question is really about a symptom, it is in
-[troubleshooting](guides/troubleshooting.md) instead; when it is "why not
-just use X?", the three below are the short forms and
-[positioning](positioning.md) is the full landscape.
+Answers that the README implies but never states in one place.
+
+Several questions here are really about an area another page owns, and
+those get a short answer and a link rather than a second copy — **"why
+not just use X?" is [positioning](positioning.md), every symptom is
+[troubleshooting](guides/troubleshooting.md), every setting is
+[requirements and configuration](configuration.md).** Two texts saying
+the same thing means one of them is out of date and nobody can tell
+which.
 
 ### Can I run this without Google Cloud?
 
-Not in production. Cloud Run's IAM check is the access model and Cloud SQL
-IAM is the database credential, which together are why ochakai holds no
-secret of its own (design docs 0002, 0003) — a deployment elsewhere would
-have to invent both, and that is the thing the design refuses. Locally,
-`deploy/compose.yaml` runs the same binary against plain PostgreSQL with
-`OCHAKAI_INSECURE_DEV=true`, which disables authentication and records
-everyone as `human:anonymous`. That is a development harness, not the
-small end of production.
-
-What is portable is the knowledge: `ochakai export` writes an OKF bundle
-of markdown and YAML that any OKF consumer can read, so leaving does not
-depend on the runtime you are leaving.
+Not in production: Cloud Run's IAM check is the access model and Cloud
+SQL IAM is the database credential, which together are why ochakai holds
+no secret of its own. `deploy/compose.yaml` runs the same binary locally
+against plain PostgreSQL with authentication disabled — a development
+harness, not the small end of production. What is portable is the
+knowledge, not the runtime. In full:
+[requirements](configuration.md#requirements).
 
 ### Does my data leave my project?
 
@@ -35,76 +34,31 @@ either way an instance then talks to its database and nothing else.
 Usage counts are rows in your own database. They exist so a reviewer can
 see which knowledge is earning its place, and they never leave it.
 
-### How is this different from RAG over our documents?
+### How is it different from RAG, a memory layer, or a markdown vault?
 
-RAG retrieves passages from documents somebody wrote for other reasons;
-what comes back is as right as whatever was in the wiki. ochakai returns
-entries a human marked `verified`, with provenance saying who wrote it,
-who checked it and when, and a feed that resurfaces knowledge which has
-gone too long unchecked or came back wrong. The unit is a reviewed claim,
-not a chunk.
+One page answers all six neighbours at once, says where ochakai loses,
+and says who should pick something else:
+[positioning](positioning.md) — semantic layers, catalogs, memory
+layers, RAG, the verified-query store inside an AI-analyst product, and
+a vault of markdown notes with an MCP server.
 
-The other difference is direction. A RAG index is built from documents; a
-knowledge base here is written *by the agents using it* and promoted by a
-human — the write-back loop is the product, and a rejected proposal keeps
-its reason so agents stop re-proposing it.
-
-### How is it different from a memory layer (mem0, Zep, Letta)?
-
-Memory layers extract per-user memories with an LLM and inject them back
-unaudited: nobody reviews what got remembered, and a wrong memory persists
-quietly. ochakai is team-shared knowledge that passes through human
-review. They compose — preferences in your memory layer, verified data
-knowledge here.
-
-### How is it different from an Obsidian vault with an MCP server?
-
-By everything except the file format. Both store markdown with YAML
-frontmatter and take their relationships from links in the body, and an
-`ochakai export` bundle opens as a vault — so if what you want is to
-browse and edit your knowledge with a good editor, use one.
-
-What a vault has no notion of is a *ruling*. OKF's trust keys are
-ordinary YAML, so a vault can hold a `verified` entry naming a human —
-but there it is a line somebody typed, where here it is what the instance
-observed of an authenticated caller and is never read back from a
-document (design docs [0009](design/0009-provenance-portability.md),
-[0043](design/0043-document-first.md)). Nothing in a vault appends to
-that ledger, derives a trust tier from it, refuses an overwrite against
-it, or resurfaces an entry whose last confirmation has aged out.
-There is no review queue, no rejection that keeps its reason, no usage
-count, no outcome report — the [improvement loop](loop.md) has no
-analogue there at all. Nor is there an identity to record as provenance
-(a vault MCP server usually carries a local API key, and the writer is
-whoever's laptop it was), a precondition that stops two writers from
-clobbering each other, or reach beyond the one machine the vault sits on.
-
-A vault is where a person thinks. ochakai is where a team's verified data
-knowledge lives and is served to agents — including agents in CI and
-hosted ones that will never see your laptop. The long form, with the
-other five alternatives, is in [positioning](positioning.md).
+The one-line version: *memory layers remember what happened; ochakai
+curates what's true* — and against a vault, the difference is
+everything except the file format, because an `ochakai export` bundle
+**opens as a vault** ([positioning](positioning.md#a-markdown-vault-with-an-mcp-server)).
 
 ### Do I need embeddings?
 
 Usually yes, which is why you get them without asking: running on Google
 Cloud, ochakai finds its own project and turns hybrid search on, provided
-its service identity may call Vertex AI (design doc
-[0053](design/0053-embeddings-by-default.md)). They earn their keep when
-your knowledge base is in Japanese, when questions arrive as sentences
-rather than keywords, or when you attach images and PDFs you want
-searchable by content.
-
-Search still works without them — lexical-only, calling no external API.
-That is what you get outside Google Cloud, without the
-`roles/aiplatform.user` grant, or with `OCHAKAI_EMBEDDINGS=off`. Since
-every write becomes an embedding call, a deployment that wants no Vertex
-AI spend should say so with one of those three.
-
-The reason Japanese is called out: PostgreSQL's full-text search does not
-tokenize it, so a Japanese query is matched by two-character windows
-against a stored haystack. That finds the right entry for a term, but it
-is a bag of words, and it is answered by scanning rather than from an
-index — about 16 ms across 5000 entries.
+its service identity may call Vertex AI. They earn their keep when your
+knowledge base is in Japanese, when questions arrive as sentences rather
+than keywords, or when you attach images and PDFs you want searchable by
+content. Search still works without them — lexical-only, calling no
+external API. What that costs, and why Japanese is the case that needs
+them, is in [what search does with it](knowledge.md#what-search-does-with-it);
+the three ways to decline are in
+[configuration](configuration.md#environment-variables).
 
 ### Can an agent overwrite or delete knowledge a human verified?
 
@@ -184,9 +138,9 @@ contract and never fetches or executes any part of it.
 
 Nobody has measured a ceiling, and the honest answer is that ochakai is
 built for the scale a *curated* base reaches — thousands of entries, not
-millions, because every one of them passed a human. The only published
-figure is the search cost quoted above (about 16 ms per Japanese search
-across 5000 entries, against 0.2 ms for a latin word). If you are
+millions, because every one of them passed a human. What has been
+measured, and what has not, is in
+[operating a deployment](guides/operating.md#capacity). If you are
 planning a deployment materially larger than that, say so in
 [Discussions](https://github.com/na0fu3y/ochakai/discussions) — it is the
 kind of thing that should be measured before it is promised.

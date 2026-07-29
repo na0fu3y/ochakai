@@ -5,10 +5,10 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 ## For someone evaluating ochakai
 
-- [FAQ](faq.md) — can it run outside Google Cloud, does anything leave
-  your project, how it differs from RAG, from a memory layer and from a
-  markdown vault, what an agent may do to verified knowledge, and what
-  leaving looks like.
+- [FAQ](faq.md) — what an agent may do to verified knowledge, what
+  happens when two people edit one entry, who can read and write, and
+  what leaving looks like. Questions another page owns get a short
+  answer and a link there rather than a second copy.
 - [Positioning](positioning.md) — every "why not just use X?" in one
   place: semantic layers, catalogs, memory layers, RAG, the verified-query
   store inside an AI-analyst product, and a markdown vault with an MCP
