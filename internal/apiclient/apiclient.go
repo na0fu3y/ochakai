@@ -341,15 +341,21 @@ func (c *Client) Log(ctx context.Context, prefix string, limit int) ([]byte, err
 	return io.ReadAll(resp.Body)
 }
 
-// Revisions fetches an entry's change history, newest first — the JSON
-// representation of its directory's log.md, narrowed to the entry
-// (design doc 0046 §3.8). Works for soft-deleted entries too; limit 0
-// uses the server default.
+// Revisions fetches an entry's change history, newest first: ?history on
+// the object's own address, which is where the history of an object
+// lives (design doc 0046 §3.5). Each revision carries the entry as it
+// stood, so a diff between two is a text diff. Works for soft-deleted
+// entries too; limit 0 uses the server default.
 func (c *Client) Revisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	var out struct {
 		Revisions []domain.Revision `json:"revisions"`
 	}
-	err := c.doJSON(ctx, http.MethodGet, reservedPath(id, "log.md"), limitQuery(limit), nil, &out)
+	q := limitQuery(limit)
+	if q == nil {
+		q = url.Values{}
+	}
+	q.Set("history", "")
+	err := c.doJSON(ctx, http.MethodGet, bundlePath(id+".md"), q, nil, &out)
 	return out.Revisions, err
 }
 

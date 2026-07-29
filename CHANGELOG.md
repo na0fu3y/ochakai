@@ -618,6 +618,40 @@ last entry.
 
 ### Fixed
 
+- **BREAKING** — **an object's history is at the object's address**, and
+  a `log.md`'s two representations say the same thing (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §§3.5, 3.8):
+
+  ```
+  GET /api/v1/bundle/{id}/log.md   (Accept: application/json)
+      →  GET /api/v1/bundle/{id}.md?history
+  ```
+
+  The JSON at a `log.md` was the ledger of the concept named by the
+  *directory*, while the markdown at the same address was the history of
+  the whole subtree. So `Accept: application/json` on the root, or on any
+  directory that is not also a concept, was a **404** — the structured
+  history of a directory could not be read at all, and the spec's own
+  "two representations of one thing, at one address" was not true of this
+  one. A concept's history also sat at `{id}/log.md`, inside a directory
+  named after it that need not exist.
+
+  `?history` is that history, at the object's own address, for a file as
+  much as for a concept — a revision is an event about an object (§3.1)
+  and the ledger is keyed by path, so "what happened to this object" is
+  one question. A concept's carries each revision's whole document, so a
+  diff between two revisions is a text diff; a file's carries the changes
+  alone, having none. A `log.md` is now the subtree's changes in both of
+  its representations, at every path including the root, under a
+  `changes[]` key that names each object by its path.
+
+  Breaking for a client reading `{id}/log.md` as JSON — `ochakai
+  revisions`, the web UI's history panel and `apiclient.Revisions` all
+  moved with it, so only a hand-written client is affected.
+
+  **This raises `docs/surface.md`'s PARAM ceiling from 18 to 19.** Said
+  out loud, which is what the ceiling is for.
+
 - **The archive carries the history.** Design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.8 ends "the history
   becomes portable", and the archive carried the `index.md` of every

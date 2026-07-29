@@ -1399,6 +1399,28 @@ type LogRow struct {
 	ChangedAt time.Time
 }
 
+// ListRevisionsAt returns the changes to the one object at this path,
+// newest first — the ledger behind ?history (design doc 0046 §3.5).
+//
+// Keyed by path rather than by concept id, so it answers for a file as
+// well: a revision is an event about an object (§3.1), and "what
+// happened to this object" should not be two questions depending on
+// what kind it is. It reads history, so a soft-deleted or purged-around
+// object still answers, which is when a history is most worth having.
+func (s *Store) ListRevisionsAt(ctx context.Context, path string, limit int) ([]LogRow, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT r.path, COALESCE(k.title, ''), r.change,
+		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_by_producer, r.changed_at
+		 FROM knowledge_revision r
+		 LEFT JOIN object k ON k.path = r.path
+		 WHERE r.path = $1
+		 ORDER BY r.rev DESC LIMIT $2`, path, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanLogRow)
+}
+
 // ListRevisionsUnder returns the newest changes anywhere under a path
 // prefix, newest first — concepts and files alike, which is the whole
 // point of one ledger keyed by path. An empty prefix is the whole

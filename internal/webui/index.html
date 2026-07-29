@@ -1765,7 +1765,9 @@ async function viewDetail(id) {
         : '<div class="empty">Nothing links to this entry yet.</div>';
     },
     history: async () => {
-      const { revisions } = await api('/api/v1/bundle/' + idPath(entry.id) + '/log.md?limit=200');
+      // ?history is the object's own ledger, at the object's own address
+      // (design doc 0046 §3.5); the log.md beside it is the directory's.
+      const { revisions } = await api('/api/v1/bundle/' + idPath(entry.id) + '.md?history&limit=200');
       const rows = (revisions || []).map(r => `
         <tr>
           <td class="k mono">#${r.rev}</td>

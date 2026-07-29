@@ -200,6 +200,7 @@ func ownedSchemas() map[string]any {
 		"Observed":             domain.Observed{},
 		"Revision":             domain.Revision{},
 		"BundleListing":        service.BrowseResult{},
+		"Change":               change{},
 		"Stats":                domain.Stats{},
 		"Stats.entries":        domain.StatsEntries{},
 		"Stats.review":         domain.StatsReview{},

@@ -178,18 +178,32 @@ func TestRESTIntegration(t *testing.T) {
 		t.Errorf("generated index.md:\n%s", doc)
 	}
 
-	// log.md: exactly the create, in both representations.
+	// The object's own history is at the object's own address (design
+	// doc 0046 §3.5): exactly the create, carrying the document it was.
 	var revs struct {
 		Revisions []domain.Revision `json:"revisions"`
 	}
-	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/sales/orders/log.md", &revs)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md?history", &revs)
 	if len(revs.Revisions) != 1 || revs.Revisions[0].Change != "create" ||
 		!strings.Contains(revs.Revisions[0].Document, "title: REST round trip") {
 		t.Errorf("revisions = %+v", revs.Revisions)
 	}
+	// The directory's log.md is the changes under it, in both
+	// representations of the one address.
 	logDoc := getText(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md")
 	if !strings.Contains(logDoc, "**Create**") || !strings.Contains(logDoc, "/"+id+".md") {
 		t.Errorf("generated log.md:\n%s", logDoc)
+	}
+	var changes struct {
+		Changes []struct {
+			Path   string `json:"path"`
+			Change string `json:"change"`
+		} `json:"changes"`
+	}
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md", &changes)
+	if len(changes.Changes) != 1 || changes.Changes[0].Path != id+".md" ||
+		changes.Changes[0].Change != "create" {
+		t.Errorf("the JSON of a directory's log.md = %+v", changes.Changes)
 	}
 
 	// Neither is writable: they are generated, not stored, so a write to
@@ -2044,5 +2058,111 @@ func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
 	if served := getMarkdown(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md"); served != archived[typ+"/log.md"] {
 		t.Errorf("the archived history and the served one differ:\n--- archive ---\n%s\n--- served ---\n%s",
 			archived[typ+"/log.md"], served)
+	}
+}
+
+// The two representations of a log.md say the same thing, at every path
+// (design doc 0046 §3.8), and the history of one object is at that
+// object's own address (§3.5).
+//
+// They used to be two different things. The JSON was the ledger of the
+// concept named by the directory, so `Accept: application/json` on the
+// root or on any directory that is not also a concept answered 404
+// while the markdown beside it listed the subtree — and a concept's own
+// history lived at <id>/log.md, inside a directory named after it that
+// need not exist.
+func TestRESTIntegrationHistoryIsAtTheObjectAndTheDirectory(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := fmt.Sprintf("resthist%d", time.Now().UnixNano())
+	id := typ + "/revenue"
+	file := id + "/chart.png"
+	removeEntries(t, srv, id)
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+file, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+file,
+		bytes.NewReader(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err = http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	type changeRow struct {
+		Path   string `json:"path"`
+		Change string `json:"change"`
+	}
+	var log struct {
+		Changes []changeRow `json:"changes"`
+	}
+
+	// A directory that is not a concept: JSON, where it used to 404.
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md", &log)
+	seen := map[string]string{}
+	for _, c := range log.Changes {
+		seen[c.Path] = c.Change
+	}
+	if seen[id+".md"] != "create" || seen[file] != "create" {
+		t.Errorf("the directory's history = %+v, want the concept and its file", log.Changes)
+	}
+
+	// The root, likewise — and it is the same set the markdown lists.
+	log.Changes = nil
+	getJSON(t, srv.URL+"/api/v1/bundle/log.md", &log)
+	if len(log.Changes) == 0 {
+		t.Error("the root history has no JSON representation")
+	}
+	rootDoc := getMarkdown(t, srv.URL+"/api/v1/bundle/log.md")
+	for _, c := range log.Changes {
+		if !strings.Contains(rootDoc, "(/"+c.Path+")") && !strings.Contains(rootDoc, c.Path) {
+			t.Errorf("the JSON names %s and the document does not:\n%s", c.Path, rootDoc)
+			break
+		}
+	}
+
+	// ?history on the concept: its own revisions, carrying the document.
+	var revs struct {
+		Revisions []domain.Revision `json:"revisions"`
+	}
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md?history", &revs)
+	if len(revs.Revisions) != 1 || revs.Revisions[0].Change != "create" ||
+		!strings.Contains(revs.Revisions[0].Document, "title: Revenue") {
+		t.Errorf("the concept's own history = %+v", revs.Revisions)
+	}
+
+	// ?history on the file: it has one too, and no document to carry.
+	log.Changes = nil
+	getJSON(t, srv.URL+"/api/v1/bundle/"+file+"?history", &log)
+	if len(log.Changes) != 1 || log.Changes[0].Path != file || log.Changes[0].Change != "create" {
+		t.Errorf("the file's own history = %+v", log.Changes)
+	}
+
+	// And as a document, at either kind of address.
+	if doc := getMarkdown(t, srv.URL+"/api/v1/bundle/"+id+".md?history"); !strings.Contains(doc, "**Create**") {
+		t.Errorf("the concept's history as a document:\n%s", doc)
+	}
+
+	// Nothing ever happened here.
+	resp, err = http.Get(srv.URL + "/api/v1/bundle/" + typ + "/nothing.md?history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("history of an object that never existed = %d, want 404", resp.StatusCode)
 	}
 }
