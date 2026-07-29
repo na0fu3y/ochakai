@@ -684,8 +684,35 @@ func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// What public holds before the resize. The rebuild drops the vector
+	// tables, and it must drop *this* schema's — the store's path is
+	// "<schema>,public", so a bare table name in that DROP reaches past
+	// the scope this test declares (there is no attachment_embedding
+	// here, and there is one in public). It took public's, and the tests
+	// that share public failed afterwards, somewhere else and not every
+	// time.
+	publicHas := func(table string) bool {
+		t.Helper()
+		var exists bool
+		if err := s.pool.QueryRow(ctx,
+			`SELECT to_regclass('public.'||$1) IS NOT NULL`, table).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		return exists
+	}
+	before := map[string]bool{
+		"knowledge_embedding":  publicHas("knowledge_embedding"),
+		"attachment_embedding": publicHas("attachment_embedding"),
+	}
+
 	if err := s.Migrate(ctx, 8); err != nil {
 		t.Fatalf("a changed embedding dimension must rebuild rather than refuse: %v", err)
+	}
+	for table, had := range before {
+		if had && !publicHas(table) {
+			t.Errorf("the resize dropped public.%s: a scoped store rebuilt its own vector space "+
+				"and took another schema's table with it", table)
+		}
 	}
 	// The space is the new one, and empty: the old vectors were in a
 	// space nothing would query, and nothing was carried into this one

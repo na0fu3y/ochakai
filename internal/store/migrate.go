@@ -480,9 +480,26 @@ func (s *Store) resizeVectorSpace(ctx context.Context, dim int) error {
 	var stored int
 	// to_regclass rather than a cast: the cast raises when the table is
 	// absent, and "absent" is the one case with nothing to disagree about.
+	//
+	// Qualified by current_schema(), and so is the drop below. Both used
+	// to name the tables bare, which resolves through the whole
+	// search_path — so a store whose path is "<schema>,public" could
+	// probe or drop *another schema's* table. The creates a few lines
+	// down are unqualified and therefore land in current_schema(), so
+	// that is the schema this function is about; reading or dropping
+	// anywhere else was never what it meant.
+	//
+	// Nothing in a deployment has a second schema on its path, which is
+	// why this held in production. It did not hold under test: the
+	// scoped store used for the destructive migration tests puts public
+	// second, has knowledge_embedding of its own and no
+	// attachment_embedding — so the bare drop took its own table and
+	// then public's, and the tests sharing public failed later,
+	// intermittently and somewhere else.
 	err := s.pool.QueryRow(ctx,
 		`SELECT atttypmod FROM pg_attribute
-		 WHERE attrelid = to_regclass('knowledge_embedding') AND attname = 'embedding'`).
+		 WHERE attrelid = to_regclass(quote_ident(current_schema()) || '.knowledge_embedding')
+		   AND attname = 'embedding'`).
 		Scan(&stored)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -494,7 +511,10 @@ func (s *Store) resizeVectorSpace(ctx context.Context, dim int) error {
 		return nil
 	}
 	if _, err := s.pool.Exec(ctx,
-		`DROP TABLE IF EXISTS knowledge_embedding, attachment_embedding`); err != nil {
+		`DO $$ BEGIN
+			EXECUTE format('DROP TABLE IF EXISTS %I.knowledge_embedding, %I.attachment_embedding',
+				current_schema(), current_schema());
+		 END $$`); err != nil {
 		return fmt.Errorf("%w: drop the vector tables of the previous dimension: %w",
 			ErrEmbeddingUnavailable, err)
 	}
