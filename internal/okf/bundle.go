@@ -54,7 +54,7 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment
 		if hiddenPath(clean) {
 			continue
 		}
-		if base := path.Base(clean); base == "index.md" || base == "log.md" {
+		if domain.ReservedBundleName(path.Base(clean)) {
 			continue
 		}
 		if !strings.HasSuffix(clean, ".md") {

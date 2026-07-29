@@ -113,3 +113,39 @@ func TestInlineServable(t *testing.T) {
 		}
 	}
 }
+
+// The reservation is exactly the two spellings SPEC §3.1 writes, and the
+// two validators either side of an address have to agree about it: at
+// one path a concept is accepted and a file refused only if they
+// disagree, which is what folding case here produced. "Index.md" is a
+// file OKF says nothing about — a bundle that carried one gets it back
+// (design doc 0046 §3.2), and the concept id "Index" was never refused.
+func TestReservedNamesAreTheTwoSpellingsTheSpecWrites(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		reserved bool
+	}{
+		{"index.md", true},
+		{"log.md", true},
+		{"Index.md", false},
+		{"LOG.md", false},
+		{"index.MD", false},
+		{"index.md.md", false},
+		{"reindex.md", false},
+	} {
+		if got := ReservedBundleName(tc.name); got != tc.reserved {
+			t.Errorf("ReservedBundleName(%q) = %v, want %v", tc.name, got, tc.reserved)
+		}
+		// The two halves of one address have to answer alike: a name a
+		// file may be written under is an id a concept may be written
+		// under, and a reserved one is neither.
+		if got, want := ValidBundlePath(tc.name), !tc.reserved; got != want {
+			t.Errorf("ValidBundlePath(%q) = %v, want %v", tc.name, got, want)
+		}
+		id := strings.TrimSuffix(tc.name, ".md")
+		if got, want := ValidID(id), !tc.reserved; got != want {
+			t.Errorf("ValidID(%q) = %v, want %v — a path a file may take is an id a concept may take",
+				id, got, want)
+		}
+	}
+}
