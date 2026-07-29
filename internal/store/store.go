@@ -1901,22 +1901,38 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		args = append(args, linkContainment(f.LinksTo))
 		conds = append(conds, fmt.Sprintf("%slinks @> $%d", prefix, len(args)))
 	}
-	if len(f.Prefixes) > 0 {
-		// Matching is on segment boundaries, not raw string prefixes: a
-		// path is a sequence of segments, so "metrics" covers "metrics"
-		// itself and everything under "metrics/" while leaving
-		// "metrics-legacy/churn" alone. A raw prefix would pull a
-		// neighbouring directory into a scope the caller drew around one
-		// (design doc 0041 §2.2). LIKE stays out for the same reason
-		// browsing avoids it — ids may contain "_", which LIKE reads as a
-		// wildcard.
-		args = append(args, f.Prefixes)
-		conds = append(conds, fmt.Sprintf(
-			`EXISTS (SELECT 1 FROM unnest($%d::text[]) AS p
-				WHERE %sid = p OR left(%sid, length(p) + 1) = p || '/')`,
-			len(args), prefix, prefix))
+	if cond, prefixArgs := prefixScope(prefix+"id", f.Prefixes, len(args)+1); cond != "" {
+		args = append(args, prefixArgs...)
+		conds = append(conds, cond)
 	}
 	return strings.Join(conds, " AND "), args
+}
+
+// prefixScope is the subtree condition on its own, over whichever column
+// holds the id. buildWhere is the whole of a listing's filter and carries
+// defaults a tally must not inherit — it hides rejected entries, and
+// stats counts them — so the one predicate the two do share is written
+// once here rather than twice, differently. Two faces that disagree about
+// what "teams/growth" covers is the failure this exists to prevent.
+//
+// Matching is on segment boundaries, not raw string prefixes: a path is a
+// sequence of segments, so "metrics" covers "metrics" itself and
+// everything under "metrics/" while leaving "metrics-legacy/churn" alone.
+// A raw prefix would pull a neighbouring directory into a scope the
+// caller drew around one (design doc 0041 §2.2). LIKE stays out for the
+// same reason browsing avoids it — ids may contain "_", which LIKE reads
+// as a wildcard.
+//
+// argN is the placeholder number the caller's next argument takes; the
+// empty prefix list is no condition at all.
+func prefixScope(column string, prefixes []string, argN int) (string, []any) {
+	if len(prefixes) == 0 {
+		return "", nil
+	}
+	return fmt.Sprintf(
+		`EXISTS (SELECT 1 FROM unnest($%d::text[]) AS p
+			WHERE %s = p OR left(%s, length(p) + 1) = p || '/')`,
+		argN, column, column), []any{prefixes}
 }
 
 // frontmatterContainment builds the jsonb documents that answer one

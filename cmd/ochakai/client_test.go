@@ -395,7 +395,7 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	verified := time.Date(2026, 7, 26, 9, 0, 0, 0, time.UTC)
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/review/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(domain.View{
 			ID: r.PathValue("id"),
 			Summary: domain.Summary{Type: domain.TypeComputations, ID: r.PathValue("id"),
@@ -441,7 +441,10 @@ func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 	var gotPrefixes []string
 	counts := domain.QueueCounts{Drafts: 3, ReportedWrong: 1, PastExpiry: 0}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
+	// The depths come off the stats face: the address they had of their
+	// own is gone (design doc 0049 §3.1), and `queues` is the client-side
+	// convenience over the same three numbers.
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
 		gotPrefixes = r.URL.Query()["prefix"]
 		_ = json.NewEncoder(w).Encode(map[string]any{"queues": counts})
 	})
@@ -518,7 +521,7 @@ func TestImportReportsAKeptClaim(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(domain.View{Document: string(body)})
 		})
-		mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("POST /api/v1/review/{id...}", func(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(domain.View{})
 		})
 		srv := httptest.NewServer(mux)

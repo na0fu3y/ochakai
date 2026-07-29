@@ -20,6 +20,51 @@ last entry.
 
 ### Added
 
+- **BREAKING** — the three faces a human rules from become one,
+  `POST /api/v1/review/{id}`, taking `ruling` in the body (design doc
+  [0055](docs/design/0055-one-ruling-one-face.md)):
+
+  ```
+  POST   /api/v1/verify/{id}          →  POST /api/v1/review/{id}  {"ruling":"verified"}
+  POST   /api/v1/reject/{id} {note}   →  POST /api/v1/review/{id}  {"ruling":"rejected","note":…}
+  DELETE /api/v1/reject/{id}          →  POST /api/v1/review/{id}  {"ruling":"withdrawn"}
+  ```
+
+  The three shared every structural property — each appends to a ledger,
+  none touches the document, its lifecycle status or its ETag, each is
+  recorded against the caller's identity, and each is on the human
+  surfaces and off MCP — and differed only in the value written. That is
+  one operation with a parameter. `withdrawn` is not a DELETE because
+  nothing is deleted: verifications are append-only, a rejection is the
+  one live ruling, and lifting it adds the row the revision log has
+  always called `unreject`. A `note` belongs to `rejected` alone and is a
+  400 elsewhere. `report_outcome` (`POST /api/v1/usage/{id}`) is
+  deliberately *not* folded in — a human's ruling and a machine's
+  observation land on opposite surfaces.
+
+  **`ochakai verify` and `ochakai reject [--lift]` are unchanged**, as is
+  every MCP tool. No stored data, ledger, export form, revision `change`
+  value or trust derivation moves. Clients calling REST directly rewrite
+  three calls, each a one-liner.
+
+- **BREAKING** — `GET /api/v1/queues` is gone; its three numbers are the
+  `queues` key of `GET /api/v1/stats`, which they already were (design
+  doc [0049 §3.1](docs/design/0049-queue-counts.md), revised before
+  release). The endpoint returned what the stats response already
+  carried, under the same key and from the same query; the only thing it
+  could do that stats could not was scope the counts to a subtree.
+
+  So **`prefix` moved to `GET /api/v1/stats`** — and got wider there.
+  Every number keyed by an entry now honors it (`entries`, `queues`,
+  `review`, `outcomes`), where before a team on a shared deployment could
+  count its own review queue but not its own knowledge. `misses` is never
+  scoped and cannot be: a search that found nothing found it nowhere, so
+  there is no id to scope by (design doc
+  [0051 §3.7](docs/design/0051-instance-metrics-and-search-misses.md)).
+
+  **`ochakai queues` is unchanged**, including `--exit-code`; it reads
+  the stats face now. `ochakai stats` gains `--prefix`.
+
 - **BREAKING** — the five MCP tools carrying `knowledge` are renamed to
   OKF's word for the unit of knowledge, `concept` (design doc
   [0054](docs/design/0054-concept-is-the-okf-word.md)):
@@ -573,6 +618,40 @@ last entry.
 
 ### Fixed
 
+- `api/openapi.yaml` stopped promising fields the server never sent, and
+  started declaring things it did. The contract test validates requests
+  and responses against the spec, but JSON Schema only checks what is
+  *present*, so a schema could advertise a field no release ever wrote
+  and every response still passed. Four had drifted:
+
+  - `ContextRank` declared `verified: boolean`; the server sends
+    `trust` (the three-tier value of SPEC §5.3). The spec's own example
+    showed `trust`, so the schema disagreed with the sample above it, and
+    a generated client waited for a field that never came.
+  - `View` declared `created_at`, `updated_at`, `trust` and
+    `content_changed_at`. None is sent — the first three live in
+    `summary` and the fourth is `observed.generated.at`.
+  - `components/headers/Note` was declared and referenced by no
+    operation, so the `Ochakai-Note` header the server sets on a write
+    (an unrecognized status, an unparseable date) appeared nowhere in the
+    contract. It is now declared on `PUT /api/v1/bundle/{path}`.
+  - `components/parameters/IfMatch` was likewise unreferenced, and
+    `PUT /api/v1/bundle/{path}` — the write that honors it — declared no
+    parameters at all. `If-Match`, `If-None-Match`,
+    `X-Ochakai-On-Behalf-Of` and `X-Ochakai-Producer` are now on it, and
+    the two provenance headers on `DELETE` beside it.
+
+  `log.md`'s JSON representation is also declared now (`BundleLog`,
+  carrying `Revision`, which had been a component nothing referenced):
+  the prose said `Accept: application/json` returns "the listing or the
+  revisions" and only the listing had a schema, so a generated client
+  could not read the history at all.
+
+  Two new checks keep it that way: `TestOpenAPISchemasMatchGoTypes`
+  compares each response schema to the Go type that marshals into it, in
+  both directions, and `TestOpenAPIComponentsAreReachable` fails on a
+  component no operation points at.
+
 - **A path prefix is a string, not a pattern.** An id may contain `_`,
   and `LIKE` reads it as "any single character". The statements that
   decide which files sit inside a concept's namespace were written with
@@ -668,6 +747,28 @@ last entry.
   a write that only repeats it is still a no-op.
 
 ### Changed
+
+- [docs/surface.md](docs/surface.md) counts two more dimensions and sets
+  a ceiling on each. Counting operations alone measured the one dimension
+  the pressure escapes through: folding an endpoint into a query
+  parameter or a content type always lowers the operation count and can
+  never raise it, so every fold read as a pure win. 0046 §3.5's 19 → 14
+  moved three endpoints into `links_to=`, `Accept: application/gzip` and
+  a path suffix, and the document recorded only the five that went away.
+
+  `## PARAM (18)` and `## HEADER (9)` are read back out of
+  `api/openapi.yaml` by `cmd/ochakai/surface_test.go`, so a fold now
+  shows as a trade rather than a subtraction. Distinct names, not
+  occurrences — `limit` means the same thing on five operations and is
+  learned once, so reusing the vocabulary is free and inventing a word is
+  what costs. Path parameters are not counted: `{path}` and `{id}` are
+  the address of the thing being operated on, not an option beside it.
+
+  The new caps section declares a ceiling per surface and
+  `TestSurfaceStaysUnderItsCaps` fails when one is exceeded. The cap is
+  one number anybody can raise, which is the point rather than a
+  weakness: a PR that moves it is a PR saying out loud that it is making
+  ochakai bigger.
 
 - **BREAKING: semantic search is on by default on Google Cloud** (design
   doc [0053](docs/design/0053-embeddings-by-default.md)). ochakai asks the

@@ -516,6 +516,7 @@ paths:
           in: query
           description: log.md only — maximum entries (default and max 1000).
           schema: { type: integer }
+        - $ref: "#/components/parameters/IfNoneMatch"
         - name: attachments
           in: query
           description: >
@@ -552,29 +553,22 @@ paths:
                 * [Churn](churn.md) - Monthly logo churn.
             application/json:
               schema:
-                type: object
-                properties:
-                  dirs:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name: { type: string, description: Next ID segment. }
-                        count: { type: integer, description: Entries anywhere beneath. }
-                  entries:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        type: { $ref: "#/components/schemas/Type" }
-                        id: { type: string }
-                        title: { type: string, description: "Absent when the id's last segment is the name (design doc 0022)." }
-                        description: { type: string, description: The one-line summary, so a directory listing can render as an index page. }
-                        status: { $ref: "#/components/schemas/Status" }
-                        updated_at: { type: string, format: date-time }
-                  truncated:
-                    type: boolean
-                    description: The entry list hit the 1000-per-level cap.
+                description: >
+                  Which shape arrives is decided by the path, not by a
+                  parameter: a concept answers with its View, `index.md`
+                  with the listing, `log.md` with the history. A file
+                  answers with its bytes rather than JSON, so it is not
+                  here.
+
+                  `anyOf` rather than `oneOf` because the three are not
+                  disjoint as schemas — a listing level with no
+                  subdirectories and no entries is `{}`, which every
+                  object satisfies. The path is the discriminator, and
+                  it is one no JSON Schema keyword can read.
+                anyOf:
+                  - $ref: "#/components/schemas/View"
+                  - $ref: "#/components/schemas/BundleListing"
+                  - $ref: "#/components/schemas/BundleLog"
               examples:
                 root:
                   summary: "GET /api/v1/bundle/index.md (Accept: application/json)"
@@ -604,6 +598,29 @@ paths:
                         description: Net revenue from completed orders, excluding tax and shipping.
                         status: stable
                         updated_at: "2026-07-14T02:33:41.019778Z"
+                log:
+                  summary: "GET /api/v1/bundle/metrics/log.md (Accept: application/json)"
+                  description: >
+                    The other reserved name, as structure rather than as
+                    SPEC §9 prose: the update history under the path,
+                    newest first, each row carrying the entry as it stood
+                    after the change.
+                  value:
+                    revisions:
+                      - rev: 4
+                        change: verify
+                        changed_by: { kind: human, name: sato@example.co.jp }
+                        changed_at: "2026-07-14T02:33:41.019778Z"
+                        document: |
+                          ---
+                          type: Metric
+                          title: Revenue
+                          description: Net revenue from completed orders, excluding tax and shipping.
+                          status: stable
+                          ---
+
+                          Revenue is the sum of `net_amount` over every
+                          completed order.
         "304":
           description: Not modified — a file whose If-None-Match matched its content hash.
           headers:
@@ -666,11 +683,17 @@ paths:
         (OCHAKAI_GCS_BUCKET); without it an instance stores concepts and
         nothing else, and a write that is not a concept is a 501 (design
         doc 0013). A concept is unaffected.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IfNoneMatch"
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       responses:
         "200":
           description: The object as stored — a View for a concept, file metadata otherwise.
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Note: { $ref: "#/components/headers/Note" }
             Ochakai-Unchanged:
               description: Concepts only — the payload matched what was stored, so nothing was written.
               schema: { type: string, enum: ["true"] }
@@ -687,6 +710,7 @@ paths:
           description: A concept was created (If-None-Match "*", or the path was free).
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
+            Ochakai-Note: { $ref: "#/components/headers/Note" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
@@ -734,6 +758,8 @@ paths:
         way it is without the parameter. A 404 there would say a file was
         gone while it was still being served.
       parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
         - name: purge
           in: query
           description: >
@@ -1182,7 +1208,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
-  /api/v1/verify/{id}:
+  /api/v1/review/{id}:
     parameters:
       - name: id
         in: path
@@ -1190,42 +1216,127 @@ paths:
         description: The entry's id; slashes are real path separators.
         schema: { type: string }
     post:
-      operationId: verifyKnowledge
-      summary: Record a verification against the entry as it stands
+      operationId: reviewKnowledge
+      summary: Record a human's ruling on an entry
       description: >
-        Appends the caller and the current time to the entry's
-        verifications ledger, whether this is the first confirmation or
-        the tenth re-check. Re-checking is why the endpoint exists: PUT
-        writes nothing at all when the content is unchanged, so "checked
-        again, still right" could not be recorded — and both review feeds
-        (sort=verified_at, sort=failed) had no exit (design doc 0025 §6).
-        It does not touch the document: the entry's status, updated_at and
-        ETag all stay put, because confirming knowledge and publishing it
-        are different acts (design doc 0043 §3.2). Promoting a draft to
-        stable is a PUT.
-        A rejection is cleared. Not an MCP tool: verification is the human
-        ruling the write-back loop turns on. Lives at its own top-level
-        path for the same reason /usage does — a suffix after the
-        hierarchical id could be confused with an ID segment.
+        One ruling on the entry as it stands, by the caller, now. This
+        replaced three endpoints — `POST /api/v1/verify/{id}`,
+        `POST /api/v1/reject/{id}` and `DELETE /api/v1/reject/{id}` —
+        which shared every structural property and differed only in the
+        value they wrote (design doc 0055 §3.1).
+
+        **None of them edits the entry.** The document, its lifecycle
+        status, its `updated_at` and its ETag all stay put, because
+        ruling on knowledge and publishing it are different acts (design
+        doc 0043 §§3.2-3.3). Promoting a draft to stable is a PUT. That
+        shared property is what says these are one operation: a face that
+        writes the document and a face that rules on it are different
+        things, and three faces that all leave the document alone are the
+        same thing said three times.
+
+        Not an MCP tool: a ruling is what a person does, and it is the
+        human judgment the write-back loop turns on. An agent that finds
+        a verified entry wrong reports the outcome (`POST
+        /api/v1/usage/{id}`) or drafts a replacement (design doc 0015
+        §3.1).
+
+        Lives at its own top-level path for the same reason `/usage`
+        does — a suffix after the hierarchical id could be confused with
+        an ID segment.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ruling]
+              properties:
+                ruling:
+                  type: string
+                  enum: [verified, rejected, withdrawn]
+                  description: >
+                    `verified` appends the caller and the time to the
+                    entry's verifications ledger, whether this is the
+                    first confirmation or the tenth re-check — and clears
+                    any rejection. Re-checking is why this exists at all
+                    rather than being sugar over PUT: a PUT writes
+                    nothing when the content is unchanged, so "checked
+                    again, still right" could not be recorded and both
+                    review feeds (`sort=verified_at`, `sort=failed`) had
+                    no exit (design doc 0025 §6).
+
+                    `rejected` writes the caller, the time and the reason
+                    as the entry's live ruling, replacing any earlier
+                    one. Rejected entries drop out of searches that did
+                    not ask for them (`rejected=true`), which is how an
+                    agent checks whether a proposal was already turned
+                    down before making it again — the memory of *no* the
+                    write-back loop is built on (design doc 0001 §9.1).
+                    Verifications are not cleared: somebody vouched for
+                    this and somebody later ruled against it is exactly
+                    the history worth keeping.
+
+                    `withdrawn` removes the live rejection, returning the
+                    entry to the ordinary pool. A 404 when the entry
+                    carries none: lifting nothing is a mistake worth
+                    reporting rather than a silent success. It is spelled
+                    as a ruling rather than as a DELETE because **nothing
+                    is deleted** — the verifications stay, and the
+                    withdrawal is its own row in the entry's history,
+                    which is what the revision log has always called
+                    `unreject`.
+                note:
+                  type: string
+                  maxLength: 2000
+                  description: >
+                    Why it was not accepted. `rejected` only: with any
+                    other ruling it is a 400. A verification says the
+                    entry is right as it stands, and anything to say
+                    about it belongs in the entry; carrying a note there
+                    would be a new thing to say rather than the same
+                    three said once.
+
+                    The rejecter's words, distinct from the entry's own
+                    `status_note`, which belongs to whoever wrote it.
+            examples:
+              verify:
+                summary: Confirm the entry as it stands
+                description: >
+                  The first confirmation and the tenth re-check are the
+                  same call. A verification is appended to
+                  `observed.verified` and `summary.trust` moves; nothing
+                  else does — the entry is still the draft its writer
+                  published, and `content_hash` (the ETag, and the
+                  version an editor may be holding) is untouched.
+                value:
+                  ruling: verified
+              reject:
+                summary: Turn it down, with the reason
+                value:
+                  ruling: rejected
+                  note: double-counts refunds; see policies/revenue-recognition
+              withdraw:
+                summary: Lift a rejection
+                value:
+                  ruling: withdrawn
       responses:
         "200":
-          description: The verified entry.
+          description: The entry, carrying the ruling.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/View" }
               examples:
                 confirmed:
-                  summary: POST /api/v1/verify/insights/revenue-seasonality
+                  summary: 'POST /api/v1/review/insights/revenue-seasonality {"ruling":"verified"}'
                   description: >
                     A verification by the caller is appended to
-                    observed.verified, and summary.verified flips. Nothing
-                    else moves: the entry is still the draft its writer
-                    published, the document is byte-for-byte what it was,
-                    and content_hash (the ETag, and the version an editor
-                    may be holding) is untouched.
+                    observed.verified, and summary.trust flips. Nothing
+                    else moves: the document is byte-for-byte what it
+                    was, and the status is still draft — confirming
+                    knowledge and publishing it are different acts.
                   value:
                     id: insights/revenue-seasonality
                     document: |
@@ -1266,65 +1377,16 @@ paths:
                       verified:
                         - by: { kind: human, name: tanaka@example.co.jp }
                           at: "2026-07-27T00:41:12.905337Z"
-          headers:
-            ETag: { $ref: "#/components/headers/ETag" }
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/Error" }
-  /api/v1/reject/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: The entry's id; slashes are real path separators.
-        schema: { type: string }
-    post:
-      operationId: rejectKnowledge
-      summary: Record that an entry was reviewed and not accepted
-      description: >
-        Writes the caller, the time and the reason as the entry's live
-        ruling, replacing any earlier one. Rejected entries drop out of
-        searches that did not ask for them (rejected=true), which is how
-        an agent checks whether a proposal was already turned down before
-        making it again — the memory of no the write-back loop is built on
-        (design doc 0001 §9.1).
-        Like verify it is a ruling and not an edit: the document keeps its
-        lifecycle status, its updated_at and its ETag (design doc 0043
-        §3.3). Verifications are not cleared — somebody vouched for this
-        and somebody later ruled against it is exactly the history worth
-        keeping. Not an MCP tool.
-      parameters:
-        - $ref: "#/components/parameters/OnBehalfOf"
-        - $ref: "#/components/parameters/Producer"
-      requestBody:
-        required: false
-        description: Omit the body entirely to reject without a stated reason.
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                note:
-                  type: string
-                  description: Why it was not accepted, up to 2000 bytes.
-            example: { note: "double-counts refunds; see policies/revenue-recognition" }
-      responses:
-        "200":
-          description: The entry, carrying its new rejection.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/View" }
-              examples:
-                rejected:
-                  summary: POST /api/v1/reject/metrics/gross-revenue
+                turnedDown:
+                  summary: 'POST /api/v1/review/metrics/gross-revenue {"ruling":"rejected"}'
                   description: >
-                    The ruling is in observed.rejection, and summary.rejected
-                    is how a row says so. The document is untouched — a
-                    rejection is a judgment about the concept, not a stage
-                    of it, and it could not round-trip as a status because
-                    export would have to fold it onto deprecated, which
-                    asserts the opposite thing about the entry (design doc
-                    0043 §3.3).
+                    The ruling is in observed.rejection, and
+                    summary.rejected is how a row says so. The document is
+                    untouched — a rejection is a judgment about the
+                    concept, not a stage of it, and it could not
+                    round-trip as a status because export would have to
+                    fold it onto deprecated, which asserts the opposite
+                    thing about the entry (design doc 0043 §3.3).
                   value:
                     id: metrics/gross-revenue
                     document: |
@@ -1362,28 +1424,25 @@ paths:
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/Error" }
-    delete:
-      operationId: liftKnowledgeRejection
-      summary: Withdraw a rejection
-      description: >
-        Deletes the live ruling, returning the entry to the ordinary pool.
-        A 404 when the entry carries no rejection: lifting nothing is a
-        mistake worth reporting rather than a silent success.
-      parameters:
-        - $ref: "#/components/parameters/OnBehalfOf"
-        - $ref: "#/components/parameters/Producer"
-      responses:
-        "200":
-          description: The entry, with no rejection.
+        "400":
+          description: Error.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/View" }
-          headers:
-            ETag: { $ref: "#/components/headers/ETag" }
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              examples:
+                unknownRuling:
+                  summary: A ruling outside the vocabulary
+                  value:
+                    error: 'ruling must be "verified", "rejected" or "withdrawn", not "approved"'
+                noteOnVerification:
+                  summary: A note belongs to a rejection
+                  value:
+                    error: 'a verification carries no note: "verified" says the entry is right as it stands, and anything to say about it belongs in the entry. Use ruling=rejected to record a reason'
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
@@ -1504,9 +1563,14 @@ paths:
         whole, and this is the face that answers it (design doc 0051).
 
 
-        It carries the queue depths of GET /api/v1/queues too, under the
-        same key and from the same query (design doc 0049 §3.1). That
-        endpoint stays the cheap one to poll; this is the whole picture.
+        It carries the queue depths under `queues` (design doc 0049
+        §3.1). `GET /api/v1/queues` used to answer those three numbers at
+        an address of their own and is gone (design doc 0049 §3.1): it
+        returned what this response already carried, under the same key
+        and from the same query, and the one thing it could do that this
+        could not was scope them to a subtree. So the scope came here
+        instead — see `prefix` below, which now narrows every number keyed
+        by an entry rather than only the three.
 
 
         Two kinds of number come back. A *state* is how things stand now
@@ -1528,6 +1592,25 @@ paths:
             pruned after 180 days, so a longer window would answer with
             less than it was asked for.
           schema: { type: integer }
+        - name: prefix
+          in: query
+          description: >
+            Measure only what lives under this path, e.g. teams/growth —
+            matched on segment boundaries, repeatable and OR-ed, as on
+            search (design doc 0041). This is how a team asks about its
+            own knowledge on a deployment it shares: before this, it could
+            count its own review queue and could not count its own
+            entries.
+
+            Every number keyed by an entry honors it — the tallies, the
+            queues, the verifications, the outcomes. **`misses` does
+            not**, and cannot: a search that found nothing found it
+            nowhere, so there is no id to scope by, and the questions this
+            base could not answer stay the instance's whatever prefix is
+            passed (design doc 0051 §3.7).
+          schema: { type: array, items: { type: string } }
+          explode: true
+          allowReserved: true
       responses:
         "200":
           description: The loop as this instance sees it.
@@ -1572,77 +1655,6 @@ paths:
                         - query: "arr by segment"
                           count: 3
                           last_at: "2026-07-26T08:11:02.104233Z"
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /api/v1/queues:
-    get:
-      operationId: getQueues
-      summary: How much work each review queue is holding
-      description: >
-        The three listing feeds of GET /api/v1/search, counted rather
-        than listed (design doc 0049): drafts waiting to be published or
-        turned down (sort=usage with status=draft), entries whose failure
-        reports are still unanswered (sort=failed), and entries past the
-        expiry their author declared (sort=stale_after). The feeds answer "what is
-        waiting"; this answers "is anything", which is the question a
-        scheduled job can ask cheaply — and the one nothing could answer
-        without paging through the work itself.
-
-        The verification-age feed (sort=verified_at) has no count here.
-        It ranks every verified entry rather than holding the ones that
-        need something, so its size is the size of the knowledge base and
-        never reaches zero; a number nobody can drive down is not a
-        queue.
-
-        Counts respect nothing but prefix. Every other filter is a
-        question about which entries, and once the answer here is "yes"
-        the feed itself is where that question is asked. Rejected and
-        soft-deleted entries are excluded, exactly as the feeds exclude
-        them. An entry can sit in more than one queue and is counted in
-        each.
-      parameters:
-        - name: prefix
-          in: query
-          description: >
-            Count only what lives under this path, e.g. teams/growth —
-            matched on segment boundaries, repeatable and OR-ed, as on
-            search (design doc 0041). This is how a team asks about its
-            own queue on a deployment it shares.
-          schema: { type: array, items: { type: string } }
-          explode: true
-      responses:
-        "200":
-          description: The queue sizes.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  queues: { $ref: "#/components/schemas/QueueCounts" }
-              examples:
-                work:
-                  summary: GET /api/v1/queues
-                  description: >
-                    Something to review, one entry reported wrong and not
-                    yet re-verified, nothing overdue.
-                  value:
-                    queues:
-                      drafts: 12
-                      reported_wrong: 1
-                      past_expiry: 0
-                empty:
-                  summary: A base that is kept up
-                  description: >
-                    All three at zero is the honest answer, and the one a
-                    quiet review queue could not be told apart from
-                    before this existed.
-                  value:
-                    queues:
-                      drafts: 0
-                      reported_wrong: 0
-                      past_expiry: 0
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/reembed:
@@ -1792,6 +1804,17 @@ components:
         The version is opaque, so there is no format to reject: a value
         that never matched anything fails the precondition with a 412,
         which is what a merely stale one does too.
+      schema: { type: string }
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >
+        The other precondition (design doc 0030). On a concept, `*` means
+        "only if the path is free": the write creates or fails with a 412,
+        which is how a caller states that it is not replacing anything.
+        On a file it is the ordinary cache validator — the content hash a
+        prior read returned, answered with a 304 when it still matches.
       schema: { type: string }
     OnBehalfOf:
       name: X-Ochakai-On-Behalf-Of
@@ -2142,6 +2165,13 @@ components:
         writes, a PUT takes, and `ochakai get` prints — and `summary` is
         an index over it, so where the two could disagree the document is
         right.
+
+        These four are the whole object. It used to declare `created_at`,
+        `updated_at`, `trust` and `content_changed_at` beside them, none
+        of which any release ever sent: the first three are `summary`'s
+        and the fourth is `observed.generated.at`. A schema may not
+        advertise a field the server does not write, which is now checked
+        rather than reviewed (`TestOpenAPISchemasMatchGoTypes`).
       required: [id, document, summary, observed]
       properties:
         id:
@@ -2169,26 +2199,6 @@ components:
             Attachment metadata (no bytes — fetch them via
             /api/v1/bundle/{path}, which is also where they are written).
             Absent when the entry has none.
-        created_at: { type: string, format: date-time, readOnly: true }
-        updated_at: { type: string, format: date-time, readOnly: true }
-        trust:
-          allOf: [{ $ref: "#/components/schemas/Trust" }]
-          readOnly: true
-          description: >
-            The trust tier derived from `verifications` (SPEC §5.3),
-            carried so a caller reading a listing gets the same answer as
-            one reading the ledger.
-        content_changed_at:
-          type: string
-          format: date-time
-          readOnly: true
-          description: >
-            When what the entry says last changed — OKF's generated.at
-            (SPEC §5.2). Distinct from updated_at, which is when the row
-            was last written: reformatting a document (reordering its
-            frontmatter, adding a comment) changes the file and moves the
-            ETag, while what the entry says stays put (design doc 0046
-            §3.4).
     Attachment:
       type: object
       description: >
@@ -2264,13 +2274,13 @@ components:
         queues:
           allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
           description: >
-            State: what GET /api/v1/queues answers, unscoped by any prefix
-            — how much each review queue is holding right now. The same
-            three numbers from the same query (design doc 0049 §3.1 kept
-            this place for the metrics beside it); ask that endpoint
-            instead when the question is only "is there anything", and
-            for the `ochakai queues --exit-code` a scheduled job goes red
-            on.
+            State: how much each review queue is holding right now (design
+            doc 0049 §3.1 kept this place for the metrics beside it), and
+            since 0049 §3.1 the only place it is answered — `prefix`
+            scopes it like everything else here. When the question is only
+            "is there anything", `ochakai queues` prints these three with
+            the next step on each line, and its `--exit-code` is what a
+            scheduled job goes red on.
         review:
           type: object
           description: The human side of the loop, as a flow — what is waiting is `queues`.
@@ -2389,13 +2399,14 @@ components:
           description: The display title — the entry's own, or its filename.
           type: string
         status: { $ref: "#/components/schemas/Status" }
-        verified:
-          type: boolean
+        trust:
+          allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >
-            Whether anybody confirmed the entry — the ledger's answer,
-            which the lifecycle status no longer carries (design doc 0043
-            §3.2). A caller deciding whether to spend a round trip on an
-            id below the pack's cut-off wants it.
+            The ledger's answer in OKF's vocabulary (SPEC §5.3), which the
+            lifecycle status does not carry (design docs 0043 §3.2, 0046
+            §3.10). A caller deciding whether to spend a round trip on an
+            id below the pack's cut-off wants to know who confirmed the
+            entry, not merely whether somebody did.
         score: { type: number }
     ContextOutline:
       type: object
@@ -2414,6 +2425,47 @@ components:
         bytes:
           description: What the full entry would have cost.
           type: integer
+    BundleListing:
+      type: object
+      description: >
+        `index.md` as structure — one level of the tree, which is what a
+        web UI's navigator needs and what the markdown says in prose
+        (design docs 0014, 0016). Two representations of one generated
+        file, at one address; the JSON is not a second surface.
+      properties:
+        dirs:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string, description: Next ID segment. }
+              count: { type: integer, description: Entries anywhere beneath. }
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { $ref: "#/components/schemas/Type" }
+              id: { type: string }
+              title: { type: string, description: "Absent when the id's last segment is the name (design doc 0022)." }
+              description: { type: string, description: The one-line summary, so a directory listing can render as an index page. }
+              status: { $ref: "#/components/schemas/Status" }
+              updated_at: { type: string, format: date-time }
+        truncated:
+          type: boolean
+          description: The entry list hit the 1000-per-level cap.
+    BundleLog:
+      type: object
+      description: >
+        `log.md` as structure — the same update history the markdown
+        publishes, newest first, bounded by `limit`. It is an instance
+        ledger rather than knowledge: an import never reads it back, the
+        same way it never reads back `generated` (design doc 0009).
+      required: [revisions]
+      properties:
+        revisions:
+          type: array
+          items: { $ref: "#/components/schemas/Revision" }
     Revision:
       type: object
       description: >

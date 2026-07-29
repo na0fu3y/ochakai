@@ -689,12 +689,15 @@ Flags:
     	how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)
   -json
     	print JSON
+  -prefix path
+    	measure only entries under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai stats
   ochakai stats --days 7
+  ochakai stats --prefix teams/growth       # our subtree only
   ochakai stats --json | jq .misses.queries
 ```
 

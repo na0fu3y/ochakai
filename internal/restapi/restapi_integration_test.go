@@ -498,6 +498,13 @@ func docFrom(t *testing.T, entry map[string]any) []byte {
 
 // putDoc writes a document to id. onlyIfAbsent asks for a create, which
 // is what the tests that used to POST mean.
+// postRuling records one human ruling on an entry — the single face that
+// replaced verify, reject and un-reject (design doc 0055 §3.1). The body
+// travels as a string so a test can send one the vocabulary refuses.
+func postRuling(base, id, body string) (*http.Response, error) {
+	return http.Post(base+"/api/v1/review/"+id, "application/json", strings.NewReader(body))
+}
+
 func putDoc(t *testing.T, base, id string, doc []byte, onlyIfAbsent bool) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPut, base+"/api/v1/bundle/"+id+".md", bytes.NewReader(doc))
@@ -557,10 +564,11 @@ func getJSON(t *testing.T, url string, v any) {
 	}
 }
 
-// POST /api/v1/verify/{id} records a verification against the entry as it
-// stands. The second call is the point: re-affirming an entry that is
-// already verified is what empties the review feeds, and PUT cannot do it
-// (design doc 0025 §6).
+// POST /api/v1/review/{id} {"ruling":"verified"} records a verification
+// against the entry as it stands. The second call is the point:
+// re-affirming an entry that is already verified is what empties the
+// review feeds, and PUT cannot do it (design doc 0025 §6, respelled onto
+// the one ruling face by 0055).
 func TestRESTIntegrationVerify(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
@@ -587,7 +595,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 
 	verify := func() domain.View {
 		t.Helper()
-		resp, err := http.Post(srv.URL+"/api/v1/verify/"+id, "", nil)
+		resp, err := postRuling(srv.URL, id, `{"ruling":"verified"}`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -632,7 +640,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 			first.Observed.LastVerified().At, second.Observed.LastVerified().At)
 	}
 
-	resp, err := http.Post(srv.URL+"/api/v1/verify/"+typ+"/no-such-entry", "", nil)
+	resp, err := postRuling(srv.URL, typ+"/no-such-entry", `{"ruling":"verified"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1485,11 +1493,27 @@ func TestRESTIntegrationStats(t *testing.T) {
 
 	var after domain.Stats
 	getJSON(t, srv.URL+"/api/v1/stats?days=1", &after)
-	if d := after.Misses.Count - before.Misses.Count; d != 1 {
-		t.Errorf("misses.count moved by %d, want 1", d)
-	}
 	if !after.Misses.Recording {
 		t.Error("misses.recording is false on a deployment that records them")
+	}
+	// `misses` is the one number here that no prefix can narrow — a
+	// search that found nothing found it nowhere, so there is no id to
+	// scope it by (design doc 0051 §3.7). That makes it instance-wide,
+	// and the test database is one instance shared by every package's
+	// tests, which run as concurrent processes and delete their own miss
+	// rows as they finish (CONTRIBUTING). A before/after delta on a
+	// global count is therefore not this test's to assert: it went
+	// negative in CI when a sibling package's cleanup landed between the
+	// two reads.
+	//
+	// What is this test's is its own miss, so that is what it checks —
+	// that the read path recorded it, and that the count the face
+	// reports includes it.
+	if n := missCount(t, nonsense); n != 1 {
+		t.Errorf("the read path recorded %d misses for its own query, want 1", n)
+	}
+	if after.Misses.Count < 1 {
+		t.Errorf("misses.count = %d after a miss was flushed, want at least 1", after.Misses.Count)
 	}
 
 	// The window is bounded by what the raw events can answer for.
@@ -1501,6 +1525,26 @@ func TestRESTIntegrationStats(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("stats?days=365 = %d, want 400", resp.StatusCode)
 	}
+}
+
+// missCount is how many misses this exact query left behind. Scoping to
+// the query is what makes it this test's own number: the table is shared
+// with every other package's tests against the same database, so a
+// count over all of it answers about them too.
+func missCount(t *testing.T, query string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, testDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("counting misses: %v", err)
+	}
+	defer conn.Close(ctx)
+	var n int64
+	if err := conn.QueryRow(ctx,
+		`SELECT count(*) FROM search_miss WHERE query = $1`, query).Scan(&n); err != nil {
+		t.Fatalf("counting misses: %v", err)
+	}
+	return n
 }
 
 // deleteMisses removes the rows a test's own query left behind: misses
@@ -1621,12 +1665,12 @@ func cursorOf(t *testing.T, page func(string) ([]string, string), feed string) s
 	return cursor
 }
 
-// GET /api/v1/queues answers "is there anything to do" with the sizes of
-// the three feeds a curator empties (design doc 0049), and the answer
-// moves as the work is done: a failure report puts an entry in, the
-// verification that answers it takes the entry out. The prefix scope is
-// what keeps this test's numbers its own, and it is also the only filter
-// the endpoint takes.
+// The `queues` key of GET /api/v1/stats answers "is there anything to
+// do" with the sizes of the three feeds a curator empties (design doc
+// 0049), and the answer moves as the work is done: a failure report puts
+// an entry in, the verification that answers it takes the entry out. The
+// prefix scope is what keeps this test's numbers its own — and since the
+// counts lost their own endpoint (0049 §3.1) it is `stats` that takes it.
 func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 
@@ -1654,7 +1698,7 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 		var out struct {
 			Queues domain.QueueCounts `json:"queues"`
 		}
-		getJSON(t, srv.URL+"/api/v1/queues?prefix="+root, &out)
+		getJSON(t, srv.URL+"/api/v1/stats?prefix="+root, &out)
 		return out.Queues
 	}
 	if got, want := counts(), (domain.QueueCounts{Drafts: 1, PastExpiry: 1}); got != want {
@@ -1675,7 +1719,7 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 
 	// Verifying is the answer to that report, and the queue must shorten
 	// — a queue nobody can empty stops being read (design doc 0025 §6.1).
-	resp, err = http.Post(srv.URL+"/api/v1/verify/"+broken, "", nil)
+	resp, err = postRuling(srv.URL, broken, `{"ruling":"verified"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1688,7 +1732,7 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 	var elsewhere struct {
 		Queues domain.QueueCounts `json:"queues"`
 	}
-	getJSON(t, srv.URL+"/api/v1/queues?prefix="+root+"x", &elsewhere)
+	getJSON(t, srv.URL+"/api/v1/stats?prefix="+root+"x", &elsewhere)
 	if elsewhere.Queues != (domain.QueueCounts{}) {
 		t.Errorf("a neighbouring prefix counted %+v, want all zero", elsewhere.Queues)
 	}

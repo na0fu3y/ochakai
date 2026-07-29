@@ -234,7 +234,7 @@ func TestStatsSendsTheWindowOnlyWhenSet(t *testing.T) {
 					Queries: []domain.MissedQuery{{Query: "解約率の定義", Count: 2}}},
 			})
 		})
-		st, err := c.Stats(context.Background(), tc.days)
+		st, err := c.Stats(context.Background(), tc.days, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

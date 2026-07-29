@@ -150,7 +150,7 @@ _ochakai() {
       _arguments '--json[print JSON]' '--url[server URL]:url:'
       ;;
     stats)
-      _arguments '--days[flow window in days, 1-180]:days:' '--json[print JSON]' '--url[server URL]:url:'
+      _arguments '--days[flow window in days, 1-180]:days:' '--prefix[measure only this subtree]:path:' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     browse)
       _arguments '--json[print the raw JSON response]' '--url[server URL]:url:'
@@ -250,7 +250,7 @@ _ochakai() {
     context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
-    stats)         opts="--days --json --url" ;;
+    stats)         opts="--days --prefix --json --url" ;;
     revisions|backlinks) opts="--limit --json --url" ;;
     log)           opts="--limit --url" ;;
     report)
@@ -331,6 +331,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail o
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get put verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
+complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
