@@ -85,6 +85,7 @@ type Store struct {
 	// once more before flushWG releases (see New/Close, usage.go).
 	usageMu   sync.Mutex
 	usageBuf  []usageEvent
+	missBuf   []missEvent
 	flushStop chan struct{}
 	flushWG   sync.WaitGroup
 }
@@ -230,6 +231,28 @@ func ledgerCols(alias string) string {
 // that used to read a verified_at column read this instead.
 func lastVerifiedAt(alias string) string {
 	return `(SELECT max(v.at) FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
+}
+
+// unansweredFailure is what puts an entry in the re-verification feed: it
+// has failure reports, and none of them has been answered by a
+// verification since (design doc 0025 §6.2). Needs usageLateral joined as
+// u. Written once because the instance stats count the same feed, and a
+// queue whose depth disagrees with the queue is worse than no depth at
+// all (design doc 0051 §3.5).
+func unansweredFailure(alias string) string {
+	v := lastVerifiedAt(alias)
+	return `u.failed > 0 AND (` + v + ` IS NULL OR u.last_failed_at > ` + v + `)`
+}
+
+// pastExpiry is what puts an entry in the stale_after feed: the writer
+// declared an expiry and it has passed (design doc 0037 §2.1). "Today" is
+// UTC, spelled out rather than left to current_date — the column is a
+// bare date so staleness needs no timezone (design doc 0036 §3.9), and
+// current_date would hand that decision to whatever TimeZone the database
+// session happens to carry, making the same entry stale on one deployment
+// and not on another.
+func pastExpiry(prefix string) string {
+	return prefix + `stale_after IS NOT NULL AND ` + prefix + `stale_after <= (now() AT TIME ZONE 'UTC')::date`
 }
 
 // withoutDoc drops the stored document from a column list. A read does
@@ -2032,13 +2055,8 @@ func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, after *After, li
 	if err != nil {
 		return nil, err
 	}
-	// "Today" is UTC, spelled out rather than left to current_date. The
-	// column is a bare date so that staleness needs no timezone (design
-	// doc 0036 §3.9), and current_date would hand that decision to
-	// whatever TimeZone the database session happens to carry — the same
-	// entry would be stale on one deployment and not on another.
 	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date%s
+		AND `+pastExpiry("")+`%s
 		ORDER BY stale_after ASC, id LIMIT %d`, where, keyset, limit), args...)
 }
 
@@ -2135,8 +2153,7 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit 
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
-		WHERE %s AND u.failed > 0
-			AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)%[4]s
+		WHERE %s AND `+unansweredFailure("k")+`%[4]s
 		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
 		where, lastVerifiedAt("k"), limit, keyset)
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -2148,27 +2165,23 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit 
 
 // QueueCounts counts the three review queues in one pass: how many
 // entries each of ListByUsage's draft feed, ListByFailed and
-// ListByStaleAfter would return (design doc 0049). The predicates are
-// the feeds' own, spelled once more here rather than shared, because a
-// count and a listing want different queries — the alternative was
-// fetching up to a thousand rows three times to measure them.
+// ListByStaleAfter would return (design doc 0049). A count and a listing
+// want different queries — measuring three feeds by fetching a thousand
+// rows from each is not measuring — but they must not want different
+// *predicates*: those are the feeds' own (unansweredFailure, pastExpiry),
+// so a queue's depth cannot come to mean something other than the queue.
 //
 // The filter is the same one the feeds take, so a count is scoped by
 // prefix the way the listings are: a team asks about its own subtree.
 func (s *Store) QueueCounts(ctx context.Context, f Filter) (domain.QueueCounts, error) {
 	where, args := f.buildWhere("k.")
-	// "Today" is UTC for the same reason ListByStaleAfter says so: a bare
-	// date needs no timezone, and current_date would take one from the
-	// session.
 	q := fmt.Sprintf(`
 		SELECT
 			count(*) FILTER (WHERE k.status = 'draft'),
-			count(*) FILTER (WHERE u.failed > 0
-				AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)),
-			count(*) FILTER (WHERE k.stale_after IS NOT NULL
-				AND k.stale_after <= (now() AT TIME ZONE 'UTC')::date)
+			count(*) FILTER (WHERE `+unansweredFailure("k")+`),
+			count(*) FILTER (WHERE `+pastExpiry("k.")+`)
 		FROM object k`+usageLateral+`
-		WHERE %[1]s`, where, lastVerifiedAt("k"))
+		WHERE %[1]s`, where)
 	var c domain.QueueCounts
 	err := s.pool.QueryRow(ctx, q, args...).
 		Scan(&c.Drafts, &c.ReportedWrong, &c.PastExpiry)

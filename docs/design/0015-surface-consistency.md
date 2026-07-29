@@ -2,7 +2,7 @@
 
 Status: Accepted(2026-07-18 の議論で決定)。§4 のサーフェス表は
 [0046](0046-bundle-address-space.md) §3.14 が現在の姿(REST 8 面・MCP 5 ツール)に
-言い直した — 役割分担と「意図して載せない」という方針そのものは不変。§4 の「verify は新 API を作らず PUT の糖衣として」は [0025](0025-closing-the-loop.md) §6 が覆した — 内容の変わらない PUT は何も書かないので糖衣では再検証を表現できず、`POST /api/v1/verify/{id}` を新設した(REST / CLI / Web UI に載り、MCP には載らない)。§3 の「載せないもの」に [0047](0047-fm-carries-okf-keys.md) §4 が 1 件足した — frontmatter キー(`fm.`)のフィルタは Web UI に載せない
+言い直した — 役割分担と「意図して載せない」という方針そのものは不変。§4 の「verify は新 API を作らず PUT の糖衣として」は [0025](0025-closing-the-loop.md) §6 が覆した — 内容の変わらない PUT は何も書かないので糖衣では再検証を表現できず、`POST /api/v1/verify/{id}` を新設した(REST / CLI / Web UI に載り、MCP には載らない)。§3 の「載せないもの」に [0047](0047-fm-carries-okf-keys.md) §4 が 1 件足した — frontmatter キー(`fm.`)のフィルタは Web UI に載せない。§3.1 にも [0051](0051-instance-metrics-and-search-misses.md) §4 が 1 件足した — インスタンスの集計(`stats`)は MCP に載せない
 Date: 2026-07-18
 
 ## 1. 目的

@@ -133,6 +133,7 @@ them warnings that describe **degraded but running**:
 |---|---|
 | `usage flush failed` | a batch of usage events was lost. Best-effort by design (0029); a *stream* of these means the database is unhappy |
 | `usage recording failed` | the in-memory buffer was full — 20,000 events — and events were dropped |
+| `search miss recording failed` | same buffer, same bargain (0051): a question that found no answer was not kept. The knowledge is unaffected; `ochakai stats` undercounts |
 | `query embedding failed; falling back to lexical-only` | Vertex AI did not answer a search; results are still returned, ranked by the lexical half alone |
 | `document embedding failed` / `storing embedding failed` | an entry was written but is not in the vector index. It stays findable lexically; `ochakai reembed` repairs it |
 | `attachment embedding failed` | same, for an attachment: still findable by filename |
@@ -218,6 +219,31 @@ jobs:
 
 ochakai delivers nothing itself — no mail, no chat, no webhooks (design
 doc 0049 §4). The job above is the delivery, and it is yours.
+
+`ochakai stats` is the same shape for the question one step further out —
+not "is anything waiting" but "is this working": how much of the base is
+confirmed, how much moved through review this month, and what people
+searched for and did not find (design doc
+[0051](../design/0051-instance-metrics-and-search-misses.md)). One number
+per line, so the same cron that watches the queues can keep a history of
+it with `>>` and a date:
+
+```console
+$ ochakai stats --days 7
+entries	128
+draft	31
+stable	92
+…
+misses	11
+gap	5	解約率の定義
+gap	3	arr by segment
+```
+
+The `gap` lines are the questions that came back empty, most-asked first
+— the one list that says what to write next. A deployment that keeps none
+prints `misses -` rather than `misses 0`, because those are not the same
+answer (`OCHAKAI_RECORD_MISSES`, and a public deployment keeps none at
+all).
 
 ## Capacity
 

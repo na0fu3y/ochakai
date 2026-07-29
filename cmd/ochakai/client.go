@@ -42,6 +42,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"attach":    cmdAttach,
 	"detach":    cmdDetach,
 	"usage":     cmdUsage,
+	"stats":     cmdStats,
 	"report":    cmdReport,
 	"revisions": cmdRevisions,
 	"log":       cmdLog,
@@ -591,6 +592,54 @@ func cmdUsage(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("search_hits\t%d\nfetches\t%d\nworked\t%d\nfailed\t%d\nlast_used_at\t%s\n",
 		u.SearchHits, u.Fetches, u.Worked, u.Failed, last)
+	return nil
+}
+
+func cmdStats(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"stats",
+		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one entry; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue numbers are the ones `ochakai queues` prints; that is\nthe command with the next step on each line and the --exit-code a\nscheduled job goes red on. This one is the whole picture, not the\nnudge.",
+		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --json | jq .misses.queries\n")
+	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
+	asJSON := fs.Bool("json", false, "print JSON")
+	if _, err := parseArgs(fs, args); err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	st, err := c.Stats(ctx, *days)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(st)
+	}
+	// Tab-separated key/value, like `usage`: the vocabularies are printed
+	// in their own order (domain.Statuses, domain.Trusts) so a value
+	// added to either shows up here without this command being edited.
+	fmt.Printf("entries\t%d\n", st.Entries.Total)
+	for _, s := range domain.Statuses {
+		fmt.Printf("%s\t%d\n", s, st.Entries.Status[string(s)])
+	}
+	for _, t := range domain.Trusts {
+		fmt.Printf("%s\t%d\n", t, st.Entries.Trust[string(t)])
+	}
+	fmt.Printf("rejected\t%d\ndrafts\t%d\nreported_wrong\t%d\npast_expiry\t%d\nwindow_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
+		st.Entries.Rejected, st.Queues.Drafts, st.Queues.ReportedWrong, st.Queues.PastExpiry,
+		st.WindowDays, st.Entries.Created, st.Review.Verifications,
+		st.Outcomes.Worked, st.Outcomes.Failed)
+	if !st.Misses.Recording {
+		// Not zero — unknown. A deployment that keeps no questions must
+		// not read as one that was asked none.
+		fmt.Print("misses\t-\n")
+		return nil
+	}
+	fmt.Printf("misses\t%d\n", st.Misses.Count)
+	for _, q := range st.Misses.Queries {
+		fmt.Printf("gap\t%d\t%s\n", q.Count, q.Query)
+	}
 	return nil
 }
 

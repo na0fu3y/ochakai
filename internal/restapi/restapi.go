@@ -430,6 +430,26 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	})
 
+	// GET /api/v1/stats?days=30 — the instance's own view of the loop
+	// (design doc 0051): what the base is made of, what review did
+	// lately, what callers reported, and what they searched for and did
+	// not find. Every other measurement here is per entry; this is the
+	// only face that answers a question about the base as a whole, which
+	// is what running an improvement loop needs.
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
+		days, err := queryInt(r.URL.Query(), "days")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		st, err := svc.Stats(r.Context(), days)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, st)
+	})
+
 	// GET /api/v1/backlinks/{id...} — live entries whose links point at
 	// this entry, most recently updated first. The reverse edge
 	// get_context follows when packing companions, exposed so UIs can

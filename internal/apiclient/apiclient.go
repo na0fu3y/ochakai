@@ -549,6 +549,22 @@ func (c *Client) ReportOutcome(ctx context.Context, id, outcome, note string) (*
 	return &u, nil
 }
 
+// Stats fetches the instance's view of the improvement loop
+// (GET /api/v1/stats): what the base is made of, what review did in the
+// last days days, what callers reported, and what they searched for and
+// did not find. days 0 leaves the server's default (30).
+func (c *Client) Stats(ctx context.Context, days int) (*domain.Stats, error) {
+	var q url.Values
+	if days != 0 {
+		q = url.Values{"days": {strconv.Itoa(days)}}
+	}
+	var st domain.Stats
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/stats", q, nil, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
 // Export streams the knowledge base as an OKF tar.gz bundle. The caller
 // must close the reader.
 func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, error) {

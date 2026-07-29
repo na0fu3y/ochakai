@@ -1410,6 +1410,86 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	}
 }
 
+// The instance stats on the wire (design doc 0051), which also brings
+// them under the contract check (design doc 0035 §3.2): the tally counts
+// the entry this test just wrote, the search that found nothing is
+// counted as a question, and a window past the retention is refused
+// rather than quietly shortened.
+func TestRESTIntegrationStats(t *testing.T) {
+	srv, s := newIntegrationServer(t)
+
+	root := fmt.Sprintf("stats%d", time.Now().UnixNano())
+	id := root + "/revenue"
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": root, "id": id, "title": "Revenue", "status": "draft",
+	}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	removeEntries(t, srv, id)
+
+	var before domain.Stats
+	getJSON(t, srv.URL+"/api/v1/stats?days=1", &before)
+	if before.WindowDays != 1 || before.Entries.Total == 0 {
+		t.Fatalf("stats = %+v", before)
+	}
+	if _, ok := before.Entries.Status[string(domain.StatusDraft)]; !ok {
+		t.Errorf("status tally has no draft: %+v", before.Entries.Status)
+	}
+
+	// A search nothing answers. Recording is off the read path, so the
+	// count only moves after a flush (design docs 0029, 0051 §3.2).
+	nonsense := "qqzzxx" + root
+	var hits struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/knowledge?q="+nonsense, &hits)
+	if len(hits.Hits) != 0 {
+		t.Fatalf("the nonsense query matched %d entries", len(hits.Hits))
+	}
+	if err := s.FlushUsage(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { deleteMisses(t, nonsense) })
+
+	var after domain.Stats
+	getJSON(t, srv.URL+"/api/v1/stats?days=1", &after)
+	if d := after.Misses.Count - before.Misses.Count; d != 1 {
+		t.Errorf("misses.count moved by %d, want 1", d)
+	}
+	if !after.Misses.Recording {
+		t.Error("misses.recording is false on a deployment that records them")
+	}
+
+	// The window is bounded by what the raw events can answer for.
+	resp, err := http.Get(srv.URL + "/api/v1/stats?days=365")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("stats?days=365 = %d, want 400", resp.StatusCode)
+	}
+}
+
+// deleteMisses removes the rows a test's own query left behind: misses
+// are pruned on the raw events' 180-day schedule, not by any test, and
+// the test database is shared and long-lived (issue #278).
+func deleteMisses(t *testing.T, query string) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, testDatabaseURL(t))
+	if err != nil {
+		t.Errorf("cleaning up misses: %v", err)
+		return
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `DELETE FROM search_miss WHERE query = $1`, query); err != nil {
+		t.Errorf("cleaning up misses: %v", err)
+	}
+}
+
 // A listing on the wire pages: the response carries a cursor while there
 // is more behind it, passing that cursor back continues the same order,
 // and the last page carries none — which is the only signal a caller gets

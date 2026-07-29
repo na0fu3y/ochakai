@@ -1828,6 +1828,89 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/stats:
+    get:
+      operationId: getStats
+      summary: The instance's own view of the improvement loop
+      description: >
+        Every other measurement here is per entry — how often this one was
+        searched, fetched, reported worked. Those are counters, and running
+        an improvement loop needs a trend: whether the verified share is
+        growing, whether failure reports are being answered, and what people
+        asked for and did not find. That is a question about the base as a
+        whole, and this is the face that answers it (design doc 0051).
+
+
+        It carries the queue depths of GET /api/v1/queues too, under the
+        same key and from the same query (design doc 0049 §3.1). That
+        endpoint stays the cheap one to poll; this is the whole picture.
+
+
+        Two kinds of number come back. A *state* is how things stand now
+        (how many entries, how many are waiting for review); a *flow* is
+        what happened inside `days` (created, verified, reported, missed).
+        The schema says which is which per field.
+
+
+        Computed on demand, with no rollup behind it — so the window cannot
+        reach past the 180 days after which raw events and misses are
+        pruned, and asking for more is a 400 rather than a quietly short
+        answer.
+      parameters:
+        - name: days
+          in: query
+          description: >
+            The flow window, 1–180 (default 30). Out-of-range values are a
+            400: the raw events behind the outcome and miss counts are
+            pruned after 180 days, so a longer window would answer with
+            less than it was asked for.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The loop as this instance sees it.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+              examples:
+                loop:
+                  summary: GET /api/v1/stats?days=30
+                  description: >
+                    A base being curated: two thirds of it confirmed, seven
+                    verifications last month, four failure reports nobody has
+                    answered — and eleven questions that found nothing, which
+                    is the list of what to write next.
+                  value:
+                    at: "2026-07-28T02:07:44.291508Z"
+                    window_days: 30
+                    entries:
+                      total: 128
+                      status: { draft: 31, stable: 92, deprecated: 5 }
+                      trust: { unverified: 42, machine-confirmed: 19, human-reviewed: 67 }
+                      rejected: 3
+                      created: 12
+                    queues:
+                      drafts: 31
+                      reported_wrong: 4
+                      past_expiry: 2
+                    review:
+                      verifications: 7
+                    outcomes:
+                      worked: 30
+                      failed: 4
+                    misses:
+                      recording: true
+                      count: 11
+                      queries:
+                        - query: "解約率の定義"
+                          count: 5
+                          last_at: "2026-07-27T23:58:07.336114Z"
+                        - query: "arr by segment"
+                          count: 3
+                          last_at: "2026-07-26T08:11:02.104233Z"
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/backlinks/{id}:
     parameters:
       - name: id
@@ -2721,6 +2804,94 @@ components:
         worked: { type: integer, description: Outcome reports saying the entry led to a correct result. }
         failed: { type: integer, description: Outcome reports saying the entry led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
+    Stats:
+      description: >
+        The instance-level view of the loop (design doc 0051). State
+        fields describe the base as it stands; flow fields cover the last
+        `window_days`.
+      type: object
+      properties:
+        at: { type: string, format: date-time, description: When the server computed this. }
+        window_days: { type: integer, description: How far back the flow numbers reach. }
+        entries:
+          type: object
+          description: What the base is made of. Deleted entries are in none of it.
+          properties:
+            total: { type: integer, description: "State: live entries." }
+            status:
+              type: object
+              additionalProperties: { type: integer }
+              description: >
+                State: live entries per lifecycle value, every value of the
+                vocabulary present (0 included). An entry whose document
+                names no status counts as OKF's default, `stable`, which is
+                how every other surface reads it.
+            trust:
+              type: object
+              additionalProperties: { type: integer }
+              description: >
+                State: live entries per trust tier (SPEC §5.3), every tier
+                present. This is the tally behind "is the confirmed share
+                growing".
+            rejected:
+              type: integer
+              description: >
+                State: live entries carrying this instance's rejection. They
+                are counted in status and trust as well — a rejection is a
+                ruling beside the lifecycle value, not one of them.
+            created: { type: integer, description: "Flow: live entries created in the window." }
+        queues:
+          allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
+          description: >
+            State: what GET /api/v1/queues answers, unscoped by any prefix
+            — how much each review queue is holding right now. The same
+            three numbers from the same query (design doc 0049 §3.1 kept
+            this place for the metrics beside it); ask that endpoint
+            instead when the question is only "is there anything", and
+            for the `ochakai queues --exit-code` a scheduled job goes red
+            on.
+        review:
+          type: object
+          description: The human side of the loop, as a flow — what is waiting is `queues`.
+          properties:
+            verifications:
+              type: integer
+              description: >
+                Flow: verifications recorded in the window, counted from the
+                ledger — re-verifying an entry counts each time. This is what
+                answers "how much moved through review last week", which no
+                queue depth can: a queue says what is left, never what went
+                through.
+        outcomes:
+          type: object
+          description: "Flow: what callers reported back in the window (report_outcome)."
+          properties:
+            worked: { type: integer }
+            failed: { type: integer }
+        misses:
+          type: object
+          description: >
+            Flow: the searches that found nothing — the questions this base
+            could not answer, which is the list of what to write next.
+          properties:
+            recording:
+              type: boolean
+              description: >
+                Whether this deployment keeps misses at all. False makes the
+                two fields below meaningless rather than zero: a public
+                deployment keeps none (it reads no identity either), and any
+                deployment can turn recording off with
+                OCHAKAI_RECORD_MISSES=false.
+            count: { type: integer, description: Every miss in the window, including queries not listed below. }
+            queries:
+              type: array
+              description: The most-asked unanswered questions, most first (at most 10).
+              items:
+                type: object
+                properties:
+                  query: { type: string, description: The query as it was typed (kept up to 500 bytes). }
+                  count: { type: integer }
+                  last_at: { type: string, format: date-time }
     QueueCounts:
       type: object
       description: >
