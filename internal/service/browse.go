@@ -143,13 +143,26 @@ func (s *Service) LogDocument(ctx context.Context, prefix string, limit int) ([]
 	if err != nil {
 		return nil, err
 	}
-	if limit <= 0 || limit > maxLogLines {
-		limit = maxLogLines
+	if limit <= 0 || limit > MaxLogLines {
+		limit = MaxLogLines
 	}
 	rows, err := s.Store.ListRevisionsUnder(ctx, prefix, limit)
 	if err != nil {
 		return nil, err
 	}
+	return RenderLog(prefix, rows), nil
+}
+
+// RenderLog is the log.md of one directory, given the ledger rows under
+// it. Split from the read above because the export renders the same
+// file from a snapshot of its own (design doc 0046 §3.8), and a log.md
+// whose shape depended on which caller asked would be two formats — the
+// same reason the index.md renderer is shared.
+//
+// prefix is already normalized. The root's document is titled for what
+// it is; every other one is titled by its path, which is what a reader
+// extracting the bundle sees above the list.
+func RenderLog(prefix string, rows []store.LogRow) []byte {
 	lines := make([]okf.LogLine, 0, len(rows))
 	for _, r := range rows {
 		lines = append(lines, okf.LogLine{
@@ -160,11 +173,14 @@ func (s *Service) LogDocument(ctx context.Context, prefix string, limit int) ([]
 	if prefix != "" {
 		title = prefix
 	}
-	return okf.LogDocument(title, lines), nil
+	return okf.LogDocument(title, lines)
 }
 
-// maxLogLines bounds a generated history the way the tree listing is
+// MaxLogLines bounds a generated history the way the tree listing is
 // bounded: a log is for reading, and a directory with a hundred thousand
 // changes under it does not become more readable by containing all of
 // them. The whole ledger is still there — ask a narrower path.
-const maxLogLines = 1000
+//
+// The export applies it per directory too, so a log.md in an archive
+// says the same thing the one at its address says.
+const MaxLogLines = 1000

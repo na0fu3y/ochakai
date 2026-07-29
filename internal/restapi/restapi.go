@@ -126,6 +126,31 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 			fail("index "+path, err)
 			return
 		}
+		// The other file OKF reserves, beside the one that names the
+		// directory's contents (design doc 0046 §3.8). This is what
+		// makes the history portable: an archive that carried the
+		// bundle but not what happened to it left the ledger reachable
+		// only from the instance that holds it, and a purge (0031) is
+		// the only thing that ever removes a row from it.
+		//
+		// One query per directory, bounded the same way the address is,
+		// so a log.md in an archive says what the one at its address
+		// says. Against a file's bytes — a round trip to GCS each — the
+		// cost of these does not register.
+		//
+		// An import never reads them back (§2.3): the history of what
+		// happened here is this instance's observation, published the
+		// way generated and verified are (design doc 0009).
+		dir := strings.TrimSuffix(strings.TrimSuffix(path, "index.md"), "/")
+		log, err := snap.RevisionsUnder(r.Context(), dir, service.MaxLogLines)
+		if err != nil {
+			fail("history "+dir, err)
+			return
+		}
+		if err := add(strings.TrimSuffix(path, "index.md")+"log.md", service.RenderLog(dir, log)); err != nil {
+			fail("log "+dir, err)
+			return
+		}
 	}
 	// Entries in batches: one batch in memory at a time. The snapshot
 	// does hold a pooled connection for the length of the download —

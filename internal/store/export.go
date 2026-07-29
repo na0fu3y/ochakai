@@ -140,6 +140,19 @@ func (e *ExportSnapshot) FileMeta(ctx context.Context, prefix string) ([]domain.
 	return atts, nil
 }
 
+// RevisionsUnder is ListRevisionsUnder inside the export's snapshot, so
+// the log.md files an archive carries describe the same instant as the
+// documents beside them (design doc 0046 §3.8). A history read outside
+// the snapshot could name a change to an entry the archive does not
+// contain, or miss one it does.
+func (e *ExportSnapshot) RevisionsUnder(ctx context.Context, prefix string, limit int) ([]LogRow, error) {
+	rows, err := e.tx.Query(ctx, revisionsUnderSQL, prefix, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, scanLogRow)
+}
+
 // underPrefix scopes an export to one subtree, matched on segment
 // boundaries like every other path scope (design doc 0041 §2.2): a
 // "metrics" scope covers metrics itself and everything under "metrics/",

@@ -439,9 +439,13 @@ paths:
 
         **`Accept: application/gzip` reads the path as a subtree** and
         streams it as an OKF bundle: a tar.gz of markdown + YAML
-        frontmatter, the generated `index.md` files, and every file under
-        the path — including one no entry shows, because what enters the
-        bundle leaves it (design doc 0046 §3.2). The root
+        frontmatter, the generated `index.md` and `log.md` of every
+        directory, and every file under the path — including one no
+        entry shows, because what enters the bundle leaves it (design
+        doc 0046 §3.2). The history travels with it (§3.8): a purge is
+        the only thing that removes a row from the ledger, and an
+        archive without it left the record readable only from the
+        instance holding it. An import never reads it back. The root
         (`/api/v1/bundle/`) is the whole knowledge base — this is what `GET /api/v1/export` was, at the address of
         the thing it returns (design doc 0046 §3.5). Your knowledge is
         yours.
