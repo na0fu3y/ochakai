@@ -396,6 +396,74 @@ folded away in exchange.`, name, section.declared, limit, name)
 	}
 }
 
+// Guard: a path variable says which of the two address spaces an
+// operation is on.
+//
+// There are two, and design doc 0046 §3.5 says which is which: the
+// bundle address carries the object and the representations OKF defines
+// for it, and the id-keyed top-level faces carry what this instance
+// observed about a concept. That line is the reason `?history` sits on
+// the object's own address while `/usage` and `/review` do not, and the
+// reason a file has neither.
+//
+// The line is a judgment, and no test can make it for the next person.
+// What a test can hold is the spelling it leaves behind: an operation on
+// the object says `{path}` and lives under /api/v1/bundle/, an operation
+// on the concept's ledger says `{id}` and lives at a name of its own.
+// The two are one address seen from either end — a concept ID is its
+// path without `.md` (SPEC §2) — so the variable is not decoration, it
+// is which end you are holding. A new face that mixes them
+// (/api/v1/notes/{path}, or an {id} under the bundle address) is a face
+// whose side nobody decided, and that is what this catches.
+func TestPathVariablesSayWhichAddressSpaceAnOperationIsOn(t *testing.T) {
+	const objectAddress = "/api/v1/bundle/"
+	spec := readWireSpec(t)
+	checked := 0
+	for path, item := range spec.Paths {
+		want := "id"
+		if strings.HasPrefix(path, objectAddress) {
+			want = "path"
+		}
+		var shared []wireParam
+		if node, ok := item["parameters"]; ok {
+			if err := node.Decode(&shared); err != nil {
+				t.Fatalf("%s: parameters: %v", path, err)
+			}
+		}
+		params := append([]wireParam{}, shared...)
+		for method, node := range item {
+			if !httpMethods[method] {
+				continue
+			}
+			var op wireOperation
+			if err := node.Decode(&op); err != nil {
+				t.Fatalf("%s %s: %v", method, path, err)
+			}
+			params = append(params, op.Parameters...)
+		}
+		for _, p := range params {
+			p := spec.resolve(t, p)
+			if p.In != "path" {
+				continue
+			}
+			checked++
+			if p.Name != want {
+				t.Errorf(`%s addresses its object as {%s}, and an operation there is on the %s.
+
+An operation on an object of the bundle lives under %s and spells its
+address {path}; one on what this instance observed about a concept lives
+at a top-level name and spells it {id} (design doc 0046 §3.5). If this
+face genuinely belongs on the other side, move it; if the rule is what
+should move, that is a decision to record.`,
+					path, p.Name, map[string]string{"path": "object", "id": "concept's ledger"}[want], objectAddress)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no path variables found in openapi.yaml: this check now guards nothing")
+	}
+}
+
 func sortedKeys(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
 	for name := range set {

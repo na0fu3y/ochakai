@@ -583,9 +583,16 @@ func Handler(svc *service.Service) http.Handler {
 	// writes nothing when the content is unchanged, which left both
 	// review feeds without an exit (design doc 0025 §6).
 	//
-	// It lives at a top-level path for the reason /usage does — a
-	// "/review" suffix after the hierarchical {id...} would be
-	// indistinguishable from an ID segment.
+	// It lives off the bundle address because of what it writes, not
+	// because of how it would have to be spelled there (design doc 0046
+	// §3.5). The bundle address carries the object and the
+	// representations OKF defines for it — which is why ?history is on
+	// it, being SPEC §9's log.md — and a ruling is neither: it is what
+	// this instance observed about a concept, and an observation has no
+	// address in a bundle (0009). Where it goes instead is a spelling
+	// question, and there a top-level path wins: a "/review" suffix
+	// after the hierarchical {id...} would be indistinguishable from an
+	// ID segment.
 	mux.HandleFunc("POST /api/v1/review/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Ruling string `json:"ruling"`
@@ -631,9 +638,11 @@ func Handler(svc *service.Service) http.Handler {
 
 	// GET /api/v1/usage/{id...} — how often the entry was actually used
 	// (search hits, fetches, outcomes). The measure of the write-back
-	// loop: draft promotion evidence, staleness signal. Lives outside
-	// /knowledge/ so a "/usage" suffix can never be confused with an ID
-	// segment.
+	// loop: draft promotion evidence, staleness signal. Totals are what
+	// this instance observed about a concept rather than something the
+	// bundle carries, so they are not at the object's address the way
+	// ?history is (design doc 0046 §3.5); a top-level path is then the
+	// spelling that keeps "/usage" from reading as an ID segment.
 	mux.HandleFunc("GET /api/v1/usage/{id...}", func(w http.ResponseWriter, r *http.Request) {
 		u, err := svc.Usage(r.Context(), r.PathValue("id"))
 		if err != nil {
@@ -702,9 +711,10 @@ func Handler(svc *service.Service) http.Handler {
 	// id is the address (design doc 0017), so the move carries revisions,
 	// usage, and attachments along and rewrites inbound references (link
 	// targets, attrs.model) so nothing breaks (design doc 0021). Its own
-	// top-level path for the same reason /usage and /review have one:
-	// a suffix after the hierarchical {id...} wildcard could be confused
-	// with an ID segment.
+	// top-level path for the same reason /usage and /review have one: it
+	// moves a concept's id rather than an object's bytes (design doc
+	// 0046 §3.5), and a suffix after the hierarchical {id...} wildcard
+	// could be confused with an ID segment.
 	mux.HandleFunc("POST /api/v1/move", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			From string `json:"from"`

@@ -28,6 +28,23 @@ info:
     path, so it is `Accept: application/gzip` on that path, and the root
     is the whole knowledge base. §3.5's fold is complete.
 
+
+    **Which address an operation is on.** The bundle address carries the
+    object and the representations OKF defines for it; the id-keyed
+    top-level faces carry what this instance observed about a concept.
+    So `?history` is on the object's own address — it is SPEC §9's
+    `log.md`, a representation the bundle has, as `index.md` and the
+    archive are — while `/api/v1/usage/{id}` and `/api/v1/review/{id}`
+    are not, because OKF represents neither and an observation has no
+    address in a bundle (design docs 0046 §3.5, 0009). The rule predicts
+    the rest: a file has no usage and no ruling, only concepts do;
+    `/api/v1/move` moves a concept's id rather than bytes; and a ledger
+    write leaves the ETag alone, because the version belongs to the
+    bytes. A path variable says which side you are on — `{path}` reads
+    the object, `{id}` reads the concept — and the two are the same
+    address seen from either end, since a concept ID is its path without
+    `.md` (SPEC §2).
+
     Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
     changelog entry, not after a deprecation window.
