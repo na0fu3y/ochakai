@@ -1302,14 +1302,3 @@ func serveDefensively(w http.ResponseWriter, mediaType, name string) {
 	w.Header().Set("Content-Disposition",
 		disposition+`; filename="`+strings.ReplaceAll(name, `"`, `\"`)+`"`)
 }
-
-// splitAttachmentPath cuts "{id...}/{name}" at the final slash: attachment
-// names are single segments, so the last segment is always the filename
-// and the rest is the (possibly hierarchical) entry ID.
-func splitAttachmentPath(p string) (id, name string, ok bool) {
-	i := strings.LastIndex(p, "/")
-	if i <= 0 || i == len(p)-1 {
-		return "", "", false
-	}
-	return p[:i], p[i+1:], true
-}

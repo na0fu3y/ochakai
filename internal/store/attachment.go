@@ -30,10 +30,9 @@ import (
 // the metric's diagram is that the metric's document shows it.
 //
 // The two halves are one SQL predicate, attributedTo, which every read
-// here goes through. The name a surface calls a file by is the last
-// segment of its path, and okf_path is that path when it is not the
-// canonical <id>/<name> — both derived on the way out, so the wire is
-// unchanged while the storage underneath it is a bundle.
+// here goes through. The path is what the wire carries, and the name a
+// surface calls a file by is its last segment — derived on the way out,
+// the way a concept keeps its id beside its path.
 
 // attributedTo is the predicate joining file objects f to the entry row
 // k: living directly under the entry's namespace (no further slash), or
@@ -50,8 +49,7 @@ const attributedTo = `f.id IS NULL AND f.deleted_at IS NULL
 	     OR k.files ? f.path)`
 
 // fileCols is one file object as an attachment is read: the path is what
-// the name and okf_path are derived from, so it is selected rather than
-// either of them.
+// the name is derived from, so it is selected rather than the name.
 const fileCols = `f.path, f.media_type, f.size, f.blob_hash,
 	f.created_by_kind, f.created_by_name, f.created_at`
 

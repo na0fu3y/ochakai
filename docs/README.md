@@ -72,11 +72,12 @@ and what it refuses to do. It is deliberately short; the manual is here.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — local setup, the exact checks CI
   runs, and how design docs work.
 - [The surface](surface.md) — the seven conditions ochakai exists to
-  satisfy, and every REST operation, MCP tool, CLI command and environment
-  variable counted in one place, with the three questions a change that
-  adds one has to answer. The default answer is no. A test reads the four
-  lists back out of the build, so the count cannot drift and a feature
-  cannot arrive without the diff saying so.
+  satisfy, and every REST operation, query parameter, header, MCP tool,
+  CLI command and environment variable counted in one place, with the
+  three questions a change that adds one has to answer. The default
+  answer is no. A test reads the six lists back out of the build, so the
+  count cannot drift and a feature cannot arrive without the diff saying
+  so.
 - [docs/design](design) — the numbered, immutable decision records, and
   the [index](design/README.md) that says which ones still describe the
   current state. Mostly Japanese; authoritative where they and the English
