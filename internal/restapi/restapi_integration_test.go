@@ -1317,8 +1317,8 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 		return resp
 	}
 
-	// A concept, written at the path it lives at. It is the entry
-	// surface's write: same status, same ETag, same View.
+	// A concept, written at the path it lives at — which is now the only
+	// place it can be written (design doc 0046 §3.5).
 	doc := fmt.Sprintf("---\ntype: %s\ntitle: 売上\n---\n\n![chart](revenue/chart.png)\n", typ)
 	resp := put(t, id+".md", []byte(doc))
 	var view domain.View
@@ -1333,7 +1333,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	if etag == "" {
 		t.Error("no ETag on a concept written through the bundle address")
 	}
-	// The same bytes again write nothing, exactly as on the entry surface.
+	// The same bytes again write nothing.
 	resp = put(t, id+".md", []byte(doc))
 	resp.Body.Close()
 	if resp.Header.Get("Ochakai-Unchanged") != "true" {
@@ -1385,15 +1385,18 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	if string(got) != string(notes) {
 		t.Errorf("the typeless markdown file came back as %q", got)
 	}
-	// It is not an entry: nothing lists it, and the concept surface does
-	// not know it.
-	resp, err = http.Get(srv.URL + "/api/v1/bundle/" + typ + "/notes.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("a typeless markdown file answers the entry surface: %d", resp.StatusCode)
+	// It is not a concept, and the way to see that is what lists it —
+	// nothing does. There is no second surface left to ask: the concept
+	// address /api/v1/knowledge/{id} is gone (design doc 0046 §3.5), so
+	// "the concept surface 404s for it" is no longer a question anybody
+	// can put. index.md lists the concepts at a level, and this file is
+	// not among them.
+	var listing service.BrowseResult
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
+	for _, e := range listing.Entries {
+		if e.ID == typ+"/notes" || e.ID == typ+"/notes.md" {
+			t.Errorf("a typeless markdown file is listed as a concept: %+v", e)
+		}
 	}
 
 	// Delete reaches both kinds.
