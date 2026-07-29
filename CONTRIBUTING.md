@@ -156,6 +156,15 @@ state per area, so when a design doc lands:
   write it as a full replacement that states the area's whole current
   picture and mark the older docs Superseded.
 
+Most of that list is checked rather than remembered
+(`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
+indexes, the two indexes have to agree with the record's own `Status:`
+header about whether it is current or superseded, and a supersession has
+to be recorded at both ends — the new record naming what it retires, and
+the retired one saying so. What no test can read is the judgment: whether
+the opening table's row still points at the doc somebody should actually
+read. That is where the attention goes.
+
 Two decisions worth knowing before proposing features:
 
 - **No LLM inside, no SQL execution.** ochakai stores and serves
