@@ -470,9 +470,9 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.ListLinkingTo(ctx, "it-link-metric", 10)
+	got, err := s.ListByAddress(ctx, Filter{LinksTo: "it-link-metric"}, nil, 10)
 	if err != nil {
-		t.Fatalf("ListLinkingTo: %v", err)
+		t.Fatalf("the links_to reverse lookup: %v", err)
 	}
 	ids := map[string]bool{}
 	for _, k := range got {
@@ -541,9 +541,9 @@ func TestIntegrationPrefixFilterMatchesSegments(t *testing.T) {
 	// (design doc 0041 §2.5).
 	got := func(f Filter) []string {
 		t.Helper()
-		entries, err := s.ListBySource(ctx, f, nil, 100)
+		entries, err := s.ListByAddress(ctx, f, nil, 100)
 		if err != nil {
-			t.Fatalf("ListBySource: %v", err)
+			t.Fatalf("ListByAddress: %v", err)
 		}
 		var out []string
 		for _, k := range entries {
@@ -854,7 +854,7 @@ func TestIntegrationMove(t *testing.T) {
 	if ka.Attrs["model"] != "it-move-dst/metric" {
 		t.Errorf("attrs.model after move: %v", ka.Attrs["model"])
 	}
-	backlinks, err := s.ListLinkingTo(ctx, "it-move-dst/metric", 10)
+	backlinks, err := s.ListByAddress(ctx, Filter{LinksTo: "it-move-dst/metric"}, nil, 10)
 	if err != nil || len(backlinks) != 2 {
 		t.Errorf("backlinks after move: %d, %v", len(backlinks), err)
 	}
@@ -1918,7 +1918,7 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 		t.Errorf("body re-derives to %+v, want a link to %s (body: %q)", derived, neighbour, moved.Body)
 	}
 	// Backlinks are the same edge read the other way round.
-	back, err := s.ListLinkingTo(ctx, neighbour, 10)
+	back, err := s.ListByAddress(ctx, Filter{LinksTo: neighbour}, nil, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2400,7 +2400,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	}
 
 	// The reverse lookup, matched on resource and ordered by id.
-	cited, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: policy}, nil, 100)
+	cited, err := s.ListByAddress(ctx, Filter{Tags: []string{run}, Source: policy}, nil, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2411,7 +2411,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	// Exact, on resource only: a prefix, a longer string, and the
 	// per-document source id all match nothing (0037 §2.3).
 	for _, miss := range []string{"https://wiki.example/" + run, policy + "#section", "rev"} {
-		hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: miss}, nil, 100)
+		hits, err := s.ListByAddress(ctx, Filter{Tags: []string{run}, Source: miss}, nil, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2433,7 +2433,7 @@ func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
 	// jsonb literal the filter builds.
 	odd := `https://x.test/a"b\c`
 	quoted := mk("quoted", "", domain.Source{Resource: odd})
-	hits, err := s.ListBySource(ctx, Filter{Tags: []string{run}, Source: odd}, nil, 100)
+	hits, err := s.ListByAddress(ctx, Filter{Tags: []string{run}, Source: odd}, nil, 100)
 	if err != nil {
 		t.Fatalf("resource with a quote: %v", err)
 	}

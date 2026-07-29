@@ -7,7 +7,7 @@ info:
     terms, dataset and table catalog entries, and references (mirrors of
     external material) in one knowledge base. The REST API is a superset
     of the MCP tools — the same operations plus bulk export, the
-    human-facing backlinks read, and file writes — so users can build
+    human-facing reverse lookups, and file writes — so users can build
     their own web UIs. ochakai executes no SQL and uses no LLM.
 
 
@@ -21,11 +21,13 @@ info:
     ochakai's own rather than something the bundle holds, so the list
     face is `/api/v1/search` — the old spelling `/api/v1/knowledge` made
     it look like the collection its own detail address indexed into, and
-    it is neither. Two addresses named by §3.5 are still their old
-    selves: `/api/v1/backlinks/{id}` (a `links_to=` filter on search) and
-    `/api/v1/export` (a subtree under `Accept: application/gzip`). Their
-    successors are not built, so they carry no deprecation mark and are
-    the only way to ask those questions today.
+    it is neither. `/api/v1/backlinks/{id}` is gone the same way: what
+    points at an entry is a set of entries, so it is `links_to=` on the
+    search face beside `source=`, the reverse lookup that was already
+    there. One address named by §3.5 is still its old self —
+    `/api/v1/export`, whose successor is a subtree under
+    `Accept: application/gzip` — and it carries no deprecation mark
+    because that successor is not built.
 
     Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
@@ -169,6 +171,23 @@ paths:
             because it keys a document's own footnotes rather than
             identifying an artifact across entries. Single-valued, unlike
             tag. Composes with q and with any sort.
+          schema: { type: string }
+        - name: links_to
+          in: query
+          description: >
+            Only entries whose body links at this id — the reverse edge
+            of links (design doc 0024): the insight that explains a
+            metric links to the metric, not the other way round. This is
+            what `/api/v1/backlinks/{id}` was, folded into the face that
+            already had the other reverse lookup (design doc 0046 §3.5),
+            and `get_context` follows the same edge when packing
+            companions.
+
+            Single-valued, like source. Composes with q and with any
+            sort; on its own it lists in address order and answers with a
+            cursor, which the endpoint it replaces could not do. Rejected
+            entries are excluded unless `rejected=true`, as everywhere
+            else — the endpoint it replaces did not exclude them.
           schema: { type: string }
         - name: prefix
           in: query
@@ -1491,84 +1510,6 @@ paths:
                         - query: "arr by segment"
                           count: 3
                           last_at: "2026-07-26T08:11:02.104233Z"
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /api/v1/backlinks/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: The entry's id; slashes are real path separators.
-        schema: { type: string }
-    get:
-      operationId: listKnowledgeBacklinks
-      summary: Entries whose links point at this entry
-      description: >
-        The reverse edge of links, most recently updated first: the insight
-        that explains a metric links to the metric, not the other way
-        round. get_context already follows this edge when packing
-        companions; here it is exposed directly so UIs can show
-        "linked from" next to an entry's own links. An entry with no
-        backlinks returns an empty list (the target entry itself is not
-        checked for existence).
-      parameters:
-        - name: limit
-          in: query
-          description: >
-            Default 20, max 100. Out-of-range values fall back to the
-            default; non-integer values are a 400.
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Live entries linking to this one, most recently updated first.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  entries:
-                    type: array
-                    items: { $ref: "#/components/schemas/Summary" }
-              examples:
-                linkedFrom:
-                  summary: GET /api/v1/backlinks/metrics/revenue
-                  description: >
-                    The reverse edge: the insight and the golden query name
-                    the metric in their bodies, so they link to it. The metric
-                    does not link back — which is why a UI has to ask for this
-                    side separately.
-                  value:
-                    entries:
-                      - id: insights/revenue-seasonality
-                        type: Insight
-                        title: Reading revenue month over month
-                        description: Why a December spike and a January drop are normal.
-                        tags: [finance]
-                        status: draft
-                        stale_after: "2027-01-31"
-                        trust: unverified
-                        rejected: false
-                        links:
-                          - { target: metrics/revenue, text: Revenue }
-                        content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
-                        created_at: "2026-07-21T06:14:55.402881Z"
-                        updated_at: "2026-07-21T06:14:55.402881Z"
-                      - id: queries/monthly-revenue
-                        type: Attested Computation
-                        title: monthly-revenue
-                        description: Monthly net revenue for the last 12 complete months.
-                        tags: [finance]
-                        status: stable
-                        trust: human-reviewed
-                        verified_at: "2026-07-10T01:52:16.774301Z"
-                        rejected: false
-                        links:
-                          - { target: metrics/revenue, text: Revenue }
-                        content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
-                        created_at: "2026-06-09T07:41:02.110945Z"
-                        updated_at: "2026-07-10T01:52:16.774301Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/queues:

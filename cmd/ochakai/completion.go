@@ -120,6 +120,7 @@ _ochakai() {
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
         '--source[only entries citing this resource]:source:' \
+        '--links-to[only entries whose body links at this entry]:links-to:' \
         '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
         '--rejected[only entries a human turned down]' \
@@ -247,7 +248,7 @@ _ochakai() {
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --trust --fm --rejected --sort --limit --cursor --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --links-to --trust --fm --rejected --sort --limit --cursor --json --url" ;;
     queues)        opts="--prefix --exit-code --json --url" ;;
     browse)        opts="--json --url" ;;
     context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
@@ -349,6 +350,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x
 complete -c ochakai -n '__fish_seen_subcommand_from queues' -l prefix -x -d 'count only entries under this path'
 complete -c ochakai -n '__fish_seen_subcommand_from queues' -l exit-code -d 'exit 2 while any queue is non-empty'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l links-to -x -d 'only entries whose body links at this entry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the entry (OKF SPEC §5.3)'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 'filter by an OKF frontmatter key=value'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'

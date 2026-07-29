@@ -721,10 +721,10 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 	}
 }
 
-// TestRESTIntegrationUsageBacklinksAndMove covers the four endpoints the
-// REST integration tests had never called — report_outcome, usage,
-// backlinks, and move — which also left them outside the contract check
-// (design doc 0035 §3.2). The move is the assertion worth having: design
+// TestRESTIntegrationUsageBacklinksAndMove covers what the REST
+// integration tests had never called — report_outcome, usage, the
+// links_to reverse lookup, and move — which also left them outside the
+// contract check (design doc 0035 §3.2). The move is the assertion worth having: design
 // doc 0021 promises a rename carries everything keyed by the id and
 // rewrites inbound references, so the insight that linked to the metric
 // must still link to it afterwards, at its new address.
@@ -749,13 +749,35 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	create(insight, "Reading revenue", "Seasonality caveats for [Revenue](/"+metric+".md).")
 	removeEntries(t, srv, metric, insight)
 
-	// Backlinks: the insight links to the metric, not the other way round.
+	// The reverse edge: the insight links to the metric, not the other
+	// way round. It is a filter on the search face (design doc 0046
+	// §3.5), and with no query it lists rather than ranks.
 	var backlinks struct {
-		Entries []domain.Summary `json:"entries"`
+		Hits   []domain.SearchHit `json:"hits"`
+		Cursor string             `json:"cursor,omitempty"`
 	}
-	getJSON(t, srv.URL+"/api/v1/backlinks/"+metric, &backlinks)
-	if len(backlinks.Entries) != 1 || backlinks.Entries[0].ID != insight {
-		t.Fatalf("backlinks of %s = %+v, want just %s", metric, backlinks.Entries, insight)
+	linksTo := func(id string) string {
+		return srv.URL + "/api/v1/search?links_to=" + url.QueryEscape(id)
+	}
+	getJSON(t, linksTo(metric), &backlinks)
+	if len(backlinks.Hits) != 1 || backlinks.Hits[0].ID != insight {
+		t.Fatalf("links_to %s = %+v, want just %s", metric, backlinks.Hits, insight)
+	}
+	if backlinks.Cursor != "" {
+		t.Errorf("a one-page listing handed out a cursor: %q", backlinks.Cursor)
+	}
+	// It is a filter, so it narrows with the rest of them — which is
+	// what the endpoint it replaced could not do.
+	var narrowed struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, linksTo(metric)+"&type="+url.QueryEscape(root), &narrowed)
+	if len(narrowed.Hits) != 1 {
+		t.Errorf("links_to narrowed by type = %+v, want the insight", narrowed.Hits)
+	}
+	getJSON(t, linksTo(metric)+"&status=deprecated", &narrowed)
+	if len(narrowed.Hits) != 0 {
+		t.Errorf("links_to narrowed to a status nothing has = %+v, want none", narrowed.Hits)
 	}
 
 	// Report an outcome, then read the totals back.
@@ -797,10 +819,10 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || after.ID != moved {
 		t.Fatalf("move = %d, id = %q, want 200 and %q", resp.StatusCode, after.ID, moved)
 	}
-	backlinks.Entries = nil
-	getJSON(t, srv.URL+"/api/v1/backlinks/"+moved, &backlinks)
-	if len(backlinks.Entries) != 1 || backlinks.Entries[0].ID != insight {
-		t.Errorf("backlinks after the move = %+v, want the insight to have followed", backlinks.Entries)
+	backlinks.Hits = nil
+	getJSON(t, linksTo(moved), &backlinks)
+	if len(backlinks.Hits) != 1 || backlinks.Hits[0].ID != insight {
+		t.Errorf("links_to after the move = %+v, want the insight to have followed", backlinks.Hits)
 	}
 
 	// Usage is keyed by the id, so it moved too.

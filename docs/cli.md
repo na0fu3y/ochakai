@@ -90,9 +90,10 @@ Examples:
 ```
 Usage: ochakai backlinks [flags] <id>
 
-List live entries whose links point at this entry, most recently
-updated first — the reverse edge the web UI shows as "linked from"
-(context already follows it when packing companions).
+List live entries whose links point at this entry, in address order —
+the reverse edge the web UI shows as "linked from" (context already
+follows it when packing companions). Same question as
+`ochakai search --links-to <id>`, which is where it lives on the wire.
 Output: uri, status, title — description (one entry per line).
 
 Flags:
@@ -600,11 +601,13 @@ With --sort stale_after it lists entries whose declared stale_after has
 passed, most overdue first; output leads with that date. Verifying does
 not empty this one — the date is the writer's declaration, so clearing it
 means editing the entry to re-declare an expiry.
---source and --prefix are filters, not modes: both combine with a query
-or with any --sort. --source narrows to the entries citing one resource
-(the reverse of sources[].resource); --prefix narrows to the entries
-living under a path, which is how a team's own knowledge is told apart
-from the company-wide vocabulary.
+--source, --links-to and --prefix are filters, not modes: they combine
+with a query or with any --sort. --source narrows to the entries citing
+one resource (the reverse of sources[].resource); --links-to narrows to
+the entries whose body links at one entry (the reverse of its inbound
+edges, which `ochakai backlinks` asks on its own); --prefix narrows to
+the entries living under a path, which is how a team's own knowledge is
+told apart from the company-wide vocabulary.
 A listing that has more behind it prints the way on to stderr; pass it
 back with --cursor to read the next page. A search prints none: it is
 bounded by --limit, and a ranking has no page two.
@@ -618,6 +621,8 @@ Flags:
     	print the raw JSON response
   -limit int
     	max results (server default 10, max 50; with --sort: 100, max 1000)
+  -links-to id
+    	only entries whose body links at this id — what points at one entry (`ochakai backlinks` is this, on its own)
   -prefix path
     	only entries under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
   -rejected
@@ -645,6 +650,7 @@ Examples:
   ochakai search --sort failed --trust human-reviewed     # re-verification queue
   ochakai search --sort stale_after                         # past their declared expiry
   ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
+  ochakai search --links-to metrics/revenue --type Insight   # which insights read this metric
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
 ```
 

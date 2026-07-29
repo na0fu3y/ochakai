@@ -170,13 +170,22 @@ func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 	}
 }
 
-func TestBacklinksHitsCanonicalPathAndDecodesEntries(t *testing.T) {
+// Backlinks is the links_to reverse lookup on the search face now
+// (design doc 0046 §3.5): one filter, no path of its own, and hits
+// rather than an entries array.
+func TestBacklinksAsksTheSearchFaceWithLinksTo(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/backlinks/metrics/revenue" {
+		if r.URL.Path != "/api/v1/search" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"entries": []domain.Knowledge{
-			{Type: domain.TypeInsights, ID: "revenue-reading", Title: "売上の読み方"},
+		if got := r.URL.Query().Get("links_to"); got != "metrics/revenue" {
+			t.Errorf("links_to = %q", got)
+		}
+		if r.URL.Query().Has("q") {
+			t.Error("a reverse lookup sent a query; it has no text to rank by")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
+			{Summary: domain.Summary{Type: domain.TypeInsights, ID: "revenue-reading", Title: "売上の読み方"}},
 		}})
 	})
 	entries, err := c.Backlinks(context.Background(), "metrics/revenue", 0)
