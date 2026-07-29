@@ -81,19 +81,38 @@ placeholder; see [Releases](#releases).
 
 The store integration test is skipped unless a real PostgreSQL is
 available (CI runs one as a service container). `scripts/check --db`
-starts one in Docker and removes it afterwards; by hand it is:
+starts one and removes it afterwards; by hand it is:
 
 ```sh
 docker run -d --rm -p 55433:5432 -e POSTGRES_PASSWORD=t -e POSTGRES_USER=t -e POSTGRES_DB=t pgvector/pgvector:pg17
 OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go test ./internal/store/
 ```
 
+`--db` prefers Docker, because `pgvector/pgvector:pg17` is the database
+CI runs. Where Docker cannot serve one — no daemon, or a network that
+will not let the image be pulled — it builds a throwaway cluster out of
+whatever PostgreSQL the machine has installed, provided pgvector is
+installed beside it, and deletes it on exit. That is a real run of the
+store tests but not CI's, so the script's closing line names which
+database it used.
+
 ## Working with Claude Code
 
-The repository checks in a `.claude/settings.json` with **hooks only** —
-currently one that runs `gofmt` on Go files as they are written, since
-that is the cheapest CI failure to avoid. Permissions are a personal
-choice and belong in `.claude/settings.local.json`, which is not tracked.
+The repository checks in a `.claude/settings.json` with **hooks only**.
+One runs `gofmt` on Go files as they are written, since that is the
+cheapest CI failure to avoid. The other runs at session start and does
+nothing at all unless `CLAUDE_CODE_REMOTE` says the session is a
+disposable cloud container, where it installs pgvector beside the
+container's PostgreSQL so `scripts/check --db` has something to fall back
+to, and tells the agent what that environment cannot check. Docker has a
+CLI there but no daemon, and starting `dockerd` does not help because the
+egress policy refuses Docker Hub's blob CDN; the same policy refuses
+`vuln.go.dev`. So the store tests run, `core` and `lint` are honest there,
+and the `Dockerfile`, `deploy/compose.yaml` and `govulncheck` are CI's to
+verify — which is worth saying plainly, because an agent that reports a
+blocked host as a failing check is the expensive outcome. Permissions
+are a personal choice and belong in `.claude/settings.local.json`, which
+is not tracked.
 
 `.claude/skills/` holds the procedures that are long enough to get wrong
 from memory: `release` and `design-doc`. They are the same procedures

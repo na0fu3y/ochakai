@@ -14,14 +14,18 @@
 # ci.yaml rather than pinning a second copy of it.
 #
 # The store integration test is skipped unless a PostgreSQL is reachable.
-# `--db` starts one in Docker on port 55433 and removes it on exit;
-# without it, an already-exported OCHAKAI_TEST_DATABASE_URL is used as is.
+# `--db` starts one on port 55433 and removes it on exit — in Docker for
+# CI's own pgvector/pgvector:pg17, or, where Docker cannot serve one, as a
+# throwaway cluster built from the machine's own PostgreSQL programs.
+# Without `--db`, an already-exported OCHAKAI_TEST_DATABASE_URL is used as
+# is.
 set -eu
 
 cd "$(git rev-parse --show-toplevel)"
 
 want_db=no
 skipped_store=no
+db_note=""
 steps=""
 for arg in "$@"; do
 	case $arg in
@@ -57,14 +61,26 @@ start_db() {
 		return
 	fi
 
-	command -v docker >/dev/null 2>&1 || {
-		echo "check: --db needs docker, or a PostgreSQL on port 55433" >&2
-		exit 2
+	# Docker first: it is the one that runs the image CI runs. When it
+	# cannot — no daemon, or a network that will not let the image be
+	# pulled — a cluster built from the machine's own PostgreSQL is a
+	# closer approximation than skipping the store tests entirely.
+	start_db_docker && return 0
+	start_db_local && return 0
+	echo "check: --db needs Docker able to pull pgvector/pgvector:pg17, or PostgreSQL server programs with pgvector installed, or a PostgreSQL already on port 55433" >&2
+	exit 2
+}
+
+start_db_docker() {
+	command -v docker >/dev/null 2>&1 || return 1
+	docker info >/dev/null 2>&1 || {
+		echo "check: the docker CLI is here but its daemon is not answering" >&2
+		return 1
 	}
-	step "starting PostgreSQL for the store tests"
+	step "starting PostgreSQL for the store tests (docker, pgvector/pgvector:pg17)"
 	cid=$(docker run -d --rm -p 55433:5432 --name ochakai-test-pg \
 		-e POSTGRES_USER=t -e POSTGRES_PASSWORD=t -e POSTGRES_DB=t \
-		pgvector/pgvector:pg17)
+		pgvector/pgvector:pg17) || return 1
 	# shellcheck disable=SC2064 # $cid is meant to expand now, not at exit
 	trap "docker stop $cid >/dev/null" EXIT INT TERM
 	i=0
@@ -76,6 +92,77 @@ start_db() {
 		}
 		sleep 1
 	done
+}
+
+# pg_bindir prints the programs of a PostgreSQL installed on this machine
+# that can serve the store tests, or fails if there is none. pgvector is
+# part of the requirement: the tests migrate a vector schema, and a
+# cluster that cannot `CREATE EXTENSION vector` fails them for a reason
+# that has nothing to do with the change under test.
+pg_bindir() {
+	dirs=""
+	if command -v pg_ctl >/dev/null 2>&1; then
+		dirs=$(dirname "$(command -v pg_ctl)")
+	fi
+	# Debian and its derivatives keep the server programs off PATH.
+	for d in /usr/lib/postgresql/*/bin /usr/local/pgsql/bin \
+		/opt/homebrew/opt/postgresql@*/bin; do
+		if [ -d "$d" ]; then dirs="$dirs $d"; fi
+	done
+	# Newest first, so a machine with several offers the one closest to
+	# the pg17 CI runs.
+	# shellcheck disable=SC2086 # $dirs is a list, and meant to split
+	for d in $(printf '%s\n' $dirs | sort -r); do
+		if [ -x "$d/initdb" ] && [ -x "$d/pg_ctl" ] && [ -x "$d/pg_config" ] &&
+			[ -f "$("$d/pg_config" --sharedir)/extension/vector.control" ]; then
+			echo "$d"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# as_pg runs a server program as a user PostgreSQL will accept. It
+# refuses to run as root, and root is the usual account in a container.
+as_pg() {
+	if [ -n "${pg_as:-}" ]; then
+		su "$pg_as" -c "$1"
+	else
+		sh -c "$1"
+	fi
+}
+
+start_db_local() {
+	bin=$(pg_bindir) || {
+		echo "check: no PostgreSQL server programs with pgvector on this machine" >&2
+		return 1
+	}
+	dir=$(mktemp -d "${TMPDIR:-/tmp}/ochakai-check-pg.XXXXXX")
+	pg_as=
+	if [ "$(id -u)" = 0 ]; then
+		id postgres >/dev/null 2>&1 || {
+			echo "check: running as root, and there is no postgres user to run the server as" >&2
+			rm -rf "$dir"
+			return 1
+		}
+		pg_as=postgres
+		chown postgres "$dir"
+	fi
+	step "starting PostgreSQL for the store tests ($("$bin/pg_ctl" --version))"
+	# shellcheck disable=SC2064 # the paths are meant to expand now, not at exit
+	trap "as_pg \"$bin/pg_ctl -D $dir/data -m immediate -w stop\" >/dev/null 2>&1; rm -rf $dir" EXIT INT TERM
+	as_pg "$bin/initdb -D $dir/data -U t --auth=trust --no-sync" >"$dir/initdb.log" 2>&1 || {
+		cat "$dir/initdb.log" >&2
+		return 1
+	}
+	# -k keeps the socket in the throwaway directory: the default one
+	# belongs to whatever server this machine runs for itself.
+	as_pg "$bin/pg_ctl -D $dir/data -l $dir/log -w -o '-p 55433 -k $dir -c listen_addresses=localhost -c fsync=off' start" >/dev/null 2>&1 || {
+		cat "$dir/log" >&2
+		return 1
+	}
+	"$bin/createdb" -h localhost -p 55433 -U t t || return 1
+	db_note="$("$bin/pg_config" --version), not the pgvector/pgvector:pg17 CI runs"
 }
 
 # The version the golangci-lint action installs in CI. Parsed rather than
@@ -150,9 +237,12 @@ done
 
 # What the last line says is what gets remembered, and CI runs these steps
 # against a database while a local run without --db does not. "ok" alone
-# would let a run that never touched the store read as the run CI will do.
+# would let a run that never touched the store read as the run CI will do
+# — and so would a run against a PostgreSQL that is not the one CI runs.
 if [ "$skipped_store" = yes ]; then
 	step "ok — store tests skipped (rerun with --db; CI runs them)"
+elif [ -n "$db_note" ]; then
+	step "ok — store tests ran against $db_note"
 else
 	step "ok"
 fi

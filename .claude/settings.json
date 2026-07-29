@@ -1,6 +1,17 @@
 {
   "$comment": "Checked-in Claude Code settings for this repository. Hooks only — permissions are a personal choice and belong in the untracked settings.local.json.",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
