@@ -62,7 +62,7 @@ the three ways to decline are in
 
 ### Can an agent overwrite or delete knowledge a human verified?
 
-Not over MCP. `put_concept` and `delete_concept` both refuse an entry
+Not over MCP. `put_concept` and `delete_concept` both refuse a concept
 a human has ruled on — verified, rejected or deprecated — and the refusal
 says what to do instead:
 
@@ -70,35 +70,35 @@ says what to do instead:
 > this surface has no If-Match precondition to replace curated knowledge
 > safely. If it is wrong, say so with report_outcome failed — that puts it
 > in the re-verification feed. If you have something better,
-> put_concept a new draft. A human changes curated entries from the
+> put_concept a new draft. A human changes curated concepts from the
 > web UI or CLI.
 
 This is not authorization — a human on the same deployment can edit
 anything from REST, the CLI or the web UI. It is a surface rule: MCP has
 no way to carry the `If-Match` precondition that makes a safe replacement
-expressible (design docs 0015 §3.1, 0030). Reviving a curated entry's
+expressible (design docs 0015 §3.1, 0030). Reviving a curated concept's
 tombstone with `create` is refused on MCP for the same reason: it would
 put a fresh draft where a rejection's recorded reason used to be. On REST
 and the CLI that revival is allowed — those are the surfaces a human
 curates from.
 
-### What happens when two people edit the same entry?
+### What happens when two people edit the same concept?
 
 Last write wins, unless the client asks for better. Every `GET` and `PUT`
-returns an `ETag` — the hash of the entry's canonical OKF document,
+returns an `ETag` — the hash of the concept's canonical OKF document,
 quoted, and also in the body as `summary.content_hash` — and a `PUT` carrying
 `If-Match` with a stale value gets `412` and writes nothing (design docs
 0030, 0043 §3.4). It is a hash of the content alone, so verifying or
-rejecting the entry, or attaching a file to it, leaves your precondition
+rejecting the concept, or attaching a file to it, leaves your precondition
 valid: only an edit invalidates it. MCP
 exposes no version field but uses the same mechanism internally to protect
-curated entries.
+curated concepts.
 
 ### Who can read and write?
 
 Anyone who can reach the deployment. ochakai identifies the caller from
 what Cloud Run forwards, records it as provenance, and does no
-authorization at all — no roles, no per-entry permissions, no read-only
+authorization at all — no roles, no per-concept permissions, no read-only
 users. Deciding who may reach it is Cloud Run IAM's job, and running the
 service publicly invokable is a misconfiguration rather than a deployment
 mode (design doc 0002).
@@ -110,7 +110,7 @@ not of the caller. It refuses the operator too.
 ### What happens to my knowledge if I stop using ochakai?
 
 `ochakai export ./knowledge` writes the whole base as an OKF v0.2 bundle:
-one markdown file per entry with YAML frontmatter, attachments as plain
+one markdown file per concept with YAML frontmatter, attachments as plain
 files beside them, trust and lifecycle in the spec's own keys. It is a
 git-friendly directory that another OKF consumer reads without knowing
 ochakai exists. `ochakai import` is the inverse, and it accepts any
@@ -137,7 +137,7 @@ contract and never fetches or executes any part of it.
 ### How large a knowledge base does this hold?
 
 Nobody has measured a ceiling, and the honest answer is that ochakai is
-built for the scale a *curated* base reaches — thousands of entries, not
+built for the scale a *curated* base reaches — thousands of concepts, not
 millions, because every one of them passed a human. What has been
 measured, and what has not, is in
 [operating a deployment](guides/operating.md#capacity). If you are
@@ -152,13 +152,13 @@ Yes, two ways. Take a
 macOS and Windows on amd64 and arm64, with checksums and build provenance
 — or skip the client entirely and talk to the REST API, which is all the
 CLI does. [Writing knowledge](knowledge.md) opens with a `curl` that
-creates an entry.
+creates a concept.
 
-### What is an "entry", exactly?
+### What is a "concept", exactly?
 
 One markdown document with YAML frontmatter, addressed by a path-like id
 (`queries/sales/monthly-revenue`). The id is the address and the type is
 an attribute, not a directory (design doc 0017). Relationships come from
 ordinary markdown links in the body — there is no links field to fill in
 (design doc 0024) — and a `title` is optional, because the last segment of
-the id already names the entry (design doc 0022).
+the id already names the concept (design doc 0022).

@@ -22,7 +22,7 @@ info:
     face is `/api/v1/search` — the old spelling `/api/v1/knowledge` made
     it look like the collection its own detail address indexed into, and
     it is neither. `/api/v1/backlinks/{id}` is gone the same way: what
-    points at an entry is a set of entries, so it is `links_to=` on the
+    points at a concept is a set of concepts, so it is `links_to=` on the
     search face beside `source=`, the reverse lookup that was already
     there. `/api/v1/export` is gone too: an archive is the bundle at a
     path, so it is `Accept: application/gzip` on that path, and the root
@@ -50,36 +50,36 @@ paths:
       operationId: searchKnowledge
       summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
-        Rejected entries are excluded unless rejected=true is passed (so
-        agents can check for already-rejected proposals). Whether an entry
+        Rejected concepts are excluded unless rejected=true is passed (so
+        agents can check for already-rejected proposals). Whether a concept
         was confirmed is asked with verified, independently of the status
         filter — status is the lifecycle value alone (design doc 0043
         §§3.2-3.3).
-        With sort=verified_at the endpoint lists entries by verification age
+        With sort=verified_at the endpoint lists concepts by verification age
         (oldest first, never-verified last) instead of searching — the feed
         for golden query canary runs (docs/guides/golden-query-canary.md).
         With sort=usage it lists by demand (most search_hits first, never-used
         oldest-first at the bottom) and each hit carries its usage totals —
         the draft review/promotion feed.
-        With sort=failed it lists entries whose failure reports
+        With sort=failed it lists concepts whose failure reports
         (report_outcome failed) are still unanswered, worst first, and each
-        hit carries its usage totals — the re-verification feed. An entry
+        hit carries its usage totals — the re-verification feed. A concept
         drops out once it is verified after its last failure report
         (POST /api/v1/review/{id} with ruling: verified), so a base that
         is kept up shows an empty feed.
-        With sort=stale_after it lists entries whose author declared a
+        With sort=stale_after it lists concepts whose author declared a
         stale_after that has now passed, most overdue first — the feed for
         knowledge dated by whoever wrote it (design doc 0037 §2.1).
-        Entries whose expiry has not come due are not listed. Unlike the
+        Concepts whose expiry has not come due are not listed. Unlike the
         two feeds above, verifying does not clear this one: the date is
-        the writer's declaration, so an entry leaves only when someone
+        the writer's declaration, so a concept leaves only when someone
         edits it to declare a new expiry (or removes the declaration).
         Exactly one of q and sort is required: combining them is a 400,
         and so is omitting both (searching needs a query to rank by).
         source and prefix are filters rather than modes, so they compose
         with either.
         A listing — any sort, or source with no q — pages: it answers
-        with a cursor when more entries follow, and walks past the limit
+        with a cursor when more concepts follow, and walks past the limit
         one page at a time (design doc 0050). A search does not: it is
         bounded by limit, and passing a cursor with q is a 400.
       parameters:
@@ -102,11 +102,11 @@ paths:
         - name: trust
           in: query
           description: >
-            Filter by who confirmed the entry — OKF's own trust tiers
+            Filter by who confirmed the concept — OKF's own trust tiers
             (SPEC §5.3), derived from the verification ledger. Repeatable
             and OR-ed, so "anything somebody confirmed" is two values.
             Omit to leave the question unasked. Independent of status: a
-            draft may be human-reviewed and a stable entry unverified
+            draft may be human-reviewed and a stable concept unverified
             (SPEC §§5.3-5.4).
           schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
           explode: true
@@ -114,7 +114,7 @@ paths:
           in: query
           description: >
             Filter by an OKF frontmatter key, exactly:
-            `fm.resource=bigquery://p.d.t` finds the entries whose
+            `fm.resource=bigquery://p.d.t` finds the concepts whose
             frontmatter names that resource, matching a scalar or a
             member of a list. Repeat with different keys to AND them.
 
@@ -122,7 +122,7 @@ paths:
             also matches the typed value a document wrote: YAML types
             frontmatter, so `fm.required=true` finds `required: true` and
             `fm.usage_count=5` finds `usage_count: 5`, as well as the
-            entries that quoted them. Text that only looks numeric stays
+            concepts that quoted them. Text that only looks numeric stays
             text — `fm.code=007` finds `code: "007"`.
 
             This is the filter that does not need a migration. A key OKF
@@ -151,7 +151,7 @@ paths:
         - name: rejected
           in: query
           description: >
-            true to list only entries a human turned down. Omitted, or
+            true to list only concepts a human turned down. Omitted, or
             false, keeps them out of results — asking for them is opt-in,
             which is how an agent checks whether a proposal was already
             rejected.
@@ -163,18 +163,18 @@ paths:
         - name: source
           in: query
           description: >
-            Only entries citing this resource — the reverse of
+            Only concepts citing this resource — the reverse of
             sources[].resource, for "this material changed, what derives
             from it?" (design doc 0037 §2.3). Matched exactly: no prefix
             or substring matching, and sources[].id is not consulted
             because it keys a document's own footnotes rather than
-            identifying an artifact across entries. Single-valued, unlike
+            identifying an artifact across concepts. Single-valued, unlike
             tag. Composes with q and with any sort.
           schema: { type: string }
         - name: links_to
           in: query
           description: >
-            Only entries whose body links at this id — the reverse edge
+            Only concepts whose body links at this id — the reverse edge
             of links (design doc 0024): the insight that explains a
             metric links to the metric, not the other way round. This is
             what `/api/v1/backlinks/{id}` was, folded into the face that
@@ -185,13 +185,13 @@ paths:
             Single-valued, like source. Composes with q and with any
             sort; on its own it lists in address order and answers with a
             cursor, which the endpoint it replaces could not do. Rejected
-            entries are excluded unless `rejected=true`, as everywhere
+            concepts are excluded unless `rejected=true`, as everywhere
             else — the endpoint it replaces did not exclude them.
           schema: { type: string }
         - name: prefix
           in: query
           description: >
-            Only entries addressed under this path. An id is an address
+            Only concepts addressed under this path. An id is an address
             (design doc 0017), so this scopes a search to a subtree:
             prefix=metrics covers metrics itself and everything under
             metrics/, and does not match metrics-legacy/churn — matching
@@ -242,20 +242,20 @@ paths:
             narrower question (design doc 0050 §2.2).
 
             A cursor is a position, not a snapshot. The feeds are live,
-            so an entry that moves while you walk may be missed or seen
+            so a concept that moves while you walk may be missed or seen
             twice; what a cursor promises is that the listing does not
             stop at a cap.
           schema: { type: string }
       responses:
         "200":
           description: >
-            Scored hits, verified entries boosted. With sort=verified_at,
+            Scored hits, verified concepts boosted. With sort=verified_at,
             hits are in verification-age order and carry score 0. With
             sort=usage or sort=failed, hits carry score 0 and each
             populates the usage object (demand order, resp. worst-failed
             first).
 
-            A listing carries cursor when more entries follow this page.
+            A listing carries cursor when more concepts follow this page.
             Its absence is the end of the listing — that is the only
             count given, since an exact one over a filtered feed costs a
             second scan of it (design doc 0050 §2.3).
@@ -278,8 +278,8 @@ paths:
                 search:
                   summary: GET /api/v1/search?q=monthly+revenue&limit=3
                   description: >
-                    A hit names an entry and says what ranked it; it does
-                    not hand the entry over. Read the ones worth reading
+                    A hit names a concept and says what ranked it; it does
+                    not hand the concept over. Read the ones worth reading
                     with GET /api/v1/bundle/{id}.md, or ask
                     GET /api/v1/context for the documents behind the top
                     hits in one call.
@@ -402,11 +402,11 @@ paths:
                 queryAndSortTogether:
                   summary: q and sort are mutually exclusive
                   value:
-                    error: sort=usage lists entries; it cannot be combined with a search query (q)
+                    error: sort=usage lists concepts; it cannot be combined with a search query (q)
                 noQuery:
                   summary: Neither q nor sort was given
                   value:
-                    error: search needs a query; use sort=verified_at|usage|failed|stale_after to list entries without one, or source=URI to list what cites a resource
+                    error: search needs a query; use sort=verified_at|usage|failed|stale_after to list concepts without one, or source=URI to list what cites a resource
                 cursorOnSearch:
                   summary: A ranking has no next page
                   value:
@@ -441,7 +441,7 @@ paths:
         streams it as an OKF bundle: a tar.gz of markdown + YAML
         frontmatter, the generated `index.md` and `log.md` of every
         directory, and every file under the path — including one no
-        entry shows, because what enters the bundle leaves it (design
+        concept shows, because what enters the bundle leaves it (design
         doc 0046 §3.2). The history travels with it (§3.8): a purge is
         the only thing that removes a row from the ledger, and an
         archive without it left the record readable only from the
@@ -455,7 +455,7 @@ paths:
         it came from, because this is a copy of a subtree rather than a
         move of one.
 
-        Written as it is read — indexes first, then entries in batches,
+        Written as it is read — indexes first, then concepts in batches,
         then one file at a time — so the server never holds the whole
         bundle in memory. Because the response starts before the last
         file is read, a failure mid-archive can only truncate the stream:
@@ -471,7 +471,7 @@ paths:
         member to `/api/v1/bundle/{path}` at the path it arrived at. One
         address takes both kinds — the bytes decide which — so there is
         nothing to attribute and nothing to route. `index.md` files are
-        generated and are not entries. Frontmatter keys the server owns
+        generated and are not concepts. Frontmatter keys the server owns
         — `generated`, `verified`, `created_by`, `rejected_by`,
         `rejected_at`, and the pre-v0.2 spellings `timestamp` /
         `verified_by` / `verified_at` — are ignored on write; provenance
@@ -481,9 +481,9 @@ paths:
         0036 §3.4).
 
         `index.md` is one level of the tree — the subdirectories directly
-        under the path, each with the count of entries beneath, plus the
-        entries at that level (design docs 0014, 0016). Rejected and
-        deleted entries are excluded, as in search; a level caps at 1000
+        under the path, each with the count of concepts beneath, plus the
+        concepts at that level (design docs 0014, 0016). Rejected and
+        deleted concepts are excluded, as in search; a level caps at 1000
         with truncated=true; listing records no usage.
 
         `log.md` is the update history under the path, newest first and
@@ -538,7 +538,7 @@ paths:
           allowEmptyValue: true
         - name: limit
           in: query
-          description: log.md and ?history only — maximum entries (default and max 1000).
+          description: log.md and ?history only — maximum concepts (default and max 1000).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
         - name: attachments
@@ -586,7 +586,7 @@ paths:
 
                   `anyOf` rather than `oneOf` because the three are not
                   disjoint as schemas — a listing level with no
-                  subdirectories and no entries is `{}`, which every
+                  subdirectories and no concepts is `{}`, which every
                   object satisfies. The path is the discriminator, and
                   it is one no JSON Schema keyword can read.
                 anyOf:
@@ -597,7 +597,7 @@ paths:
               examples:
                 root:
                   summary: "GET /api/v1/bundle/index.md (Accept: application/json)"
-                  description: The top-level segments of the ID hierarchy, with the entry count beneath each.
+                  description: The top-level segments of the ID hierarchy, with the concept count beneath each.
                   value:
                     dirs:
                       - { name: glossary, count: 18 }
@@ -651,7 +651,7 @@ paths:
                   description: >
                     One object's own history, at the object's own address
                     (design doc 0046 §3.5). A concept's carries the whole
-                    entry as it stood at each change, so a diff between
+                    concept as it stood at each change, so a diff between
                     two revisions is a text diff. A *file's* carries the
                     changes alone in the shape above, having no document
                     to carry — and a markdown document with no `type` is a
@@ -866,16 +866,16 @@ paths:
       operationId: getContext
       summary: The one-call read before answering a data question
       description: >
-        Searches the knowledge base (verified entries rank higher), returns
-        the full entries behind the top hits, and expands one hop through
+        Searches the knowledge base (verified concepts rank higher), returns
+        the full concepts behind the top hits, and expands one hop through
         links so companion knowledge (the insight explaining a metric, the
         golden query answering the question) arrives in the same response.
-        Rejected entries never appear. limit caps the primary entries
+        Rejected concepts never appear. limit caps the primary concepts
         (default 5, max 20); linked companions share a 2×limit total cap.
 
         Changed in 0.13.0 (design doc 0033): `hits` carries the ranking
         only — id, type, title, status, score. It used to repeat every
-        top entry in full, so the knowledge arrived twice and the budget
+        top concept in full, so the knowledge arrived twice and the budget
         bound one copy of it. A client that read bodies out of `hits`
         reads them from `entries` instead, where they always were.
       parameters:
@@ -904,7 +904,7 @@ paths:
           in: query
           description: >
             Filter by an OKF frontmatter key, exactly:
-            `fm.resource=bigquery://p.d.t` finds the entries whose
+            `fm.resource=bigquery://p.d.t` finds the concepts whose
             frontmatter names that resource, matching a scalar or a
             member of a list. Repeat with different keys to AND them.
 
@@ -912,7 +912,7 @@ paths:
             also matches the typed value a document wrote: YAML types
             frontmatter, so `fm.required=true` finds `required: true` and
             `fm.usage_count=5` finds `usage_count: 5`, as well as the
-            entries that quoted them. Text that only looks numeric stays
+            concepts that quoted them. Text that only looks numeric stays
             text — `fm.code=007` finds `code: "007"`.
 
             This is the filter that does not need a migration. A key OKF
@@ -945,10 +945,10 @@ paths:
         - name: prefix
           in: query
           description: >
-            Only entries addressed under this path, repeatable and OR-ed —
+            Only concepts addressed under this path, repeatable and OR-ed —
             the same subtree filter GET /api/v1/search takes (design doc
             0041). It scopes the search that picks the hits, not the link
-            expansion: an entry inside the scope that cites a glossary term
+            expansion: a concept inside the scope that cites a glossary term
             outside it still arrives with the term, which is the reason
             this endpoint follows links at all (design doc 0041 §2.6).
           schema: { type: array, items: { type: string } }
@@ -971,25 +971,25 @@ paths:
           in: query
           description: >
             Cap the serialized bytes of the knowledge in the response: the
-            entries delivered in full plus the outline rows naming the
+            concepts delivered in full plus the outline rows naming the
             rest. Nothing else in the response carries a body — `hits` is
             the ranking only — so the cap cannot be defeated by a second
-            copy of an entry it excluded. Entries past the
-            cap are listed under `outline` instead — an entry is delivered
+            copy of a concept it excluded. Concepts past the
+            cap are listed under `outline` instead — a concept is delivered
             whole or not at all, never truncated — and those rows count
             against the same cap, because naming what was left out is not
             free (an outline row carries a description). Packing is greedy,
-            so one oversized entry high in the ranking does not starve the
+            so one oversized concept high in the ranking does not starve the
             rest. The floor is the outline of everything that matched: a
             budget too small even for the names still gets them, since a
-            caller cannot raise a budget for entries it never heard about.
+            caller cannot raise a budget for concepts it never heard about.
             Defaults to 0 (no cap) here; the MCP get_context tool defaults
             it on, because an agent's context window is the scarce resource
             and an embedding host will not set it.
           schema: { type: integer, default: 0 }
       responses:
         "200":
-          description: The ranking plus the full entries behind the top hits.
+          description: The ranking plus the full concepts behind the top hits.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -1001,7 +1001,7 @@ paths:
                     description: >
                       The ranking behind the pack, not a second copy of it:
                       the knowledge travels once, under `entries`. A hit
-                      with no matching entry ranked below the pack's cut-off
+                      with no matching concept ranked below the pack's cut-off
                       — fetch it by id if the ranking suggests it is worth a
                       round trip.
                     type: array
@@ -1011,19 +1011,19 @@ paths:
                     items: { $ref: "#/components/schemas/View" }
                   outline:
                     description: >
-                      Entries the budget dropped: named and sized, not
+                      Concepts the budget dropped: named and sized, not
                       delivered. Fetch any of them by id. Absent when
                       nothing was dropped.
                     type: array
                     items: { $ref: "#/components/schemas/ContextOutline" }
                   truncated:
-                    description: How many entries went to the outline.
+                    description: How many concepts went to the outline.
                     type: integer
               examples:
                 pack:
                   summary: GET /api/v1/context?q=monthly+revenue&limit=2&budget=4000
                   description: >
-                    Two entries matched and one more arrived through their
+                    Two concepts matched and one more arrived through their
                     links — the metric the query rests on. The budget could
                     not afford the glossary term the metric rests on, so it
                     is named under outline with what it would have cost.
@@ -1176,7 +1176,7 @@ paths:
   /api/v1/move:
     post:
       operationId: moveKnowledge
-      summary: Move (rename) a knowledge entry to a new id
+      summary: Move (rename) a knowledge concept to a new id
       description: >
         The id is the address (design doc 0017), so a move carries
         everything keyed by it along in one transaction — revisions,
@@ -1184,8 +1184,8 @@ paths:
         (link targets in both of SPEC §6's forms, and the producer
         key `model` where a document carries one)
         so nothing breaks (design doc 0021). The destination must be a
-        fresh id: a live or soft-deleted entry there already owns that
-        address and its history — free an id held by a deleted entry with
+        fresh id: a live or soft-deleted concept there already owns that
+        address and its history — free an id held by a deleted concept with
         DELETE ...?purge=true. Lives at its own top-level path for the
         same reason /usage and /review do — a suffix after the
         hierarchical id could be confused with an ID segment.
@@ -1202,7 +1202,7 @@ paths:
               properties:
                 from:
                   type: string
-                  description: The entry's current id.
+                  description: The concept's current id.
                 to:
                   type: string
                   description: The new id (bundle path).
@@ -1211,20 +1211,20 @@ paths:
                 summary: Move a metric one level deeper
                 description: >
                   Everything keyed by the id follows — revisions, usage,
-                  attachments, embeddings — and every entry linking to the
+                  attachments, embeddings — and every concept linking to the
                   old id is rewritten to the new one.
                 value:
                   from: metrics/revenue
                   to: metrics/finance/revenue
       responses:
         "200":
-          description: The moved entry, now at its new id.
+          description: The moved concept, now at its new id.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/View" }
               examples:
                 moved:
-                  summary: The entry at its new address
+                  summary: The concept at its new address
                   description: >
                     The id changed and nothing the document says did, so
                     content_hash — and the ETag — are what they were
@@ -1288,19 +1288,19 @@ paths:
       - name: id
         in: path
         required: true
-        description: The entry's id; slashes are real path separators.
+        description: The concept's id; slashes are real path separators.
         schema: { type: string }
     post:
       operationId: reviewKnowledge
-      summary: Record a human's ruling on an entry
+      summary: Record a human's ruling on a concept
       description: >
-        One ruling on the entry as it stands, by the caller, now. This
+        One ruling on the concept as it stands, by the caller, now. This
         replaced three endpoints — `POST /api/v1/verify/{id}`,
         `POST /api/v1/reject/{id}` and `DELETE /api/v1/reject/{id}` —
         which shared every structural property and differed only in the
         value they wrote (design doc 0055 §3.1).
 
-        **None of them edits the entry.** The document, its lifecycle
+        **None of them edits the concept.** The document, its lifecycle
         status, its `updated_at` and its ETag all stay put, because
         ruling on knowledge and publishing it are different acts (design
         doc 0043 §§3.2-3.3). Promoting a draft to stable is a PUT. That
@@ -1311,7 +1311,7 @@ paths:
 
         Not an MCP tool: a ruling is what a person does, and it is the
         human judgment the write-back loop turns on. An agent that finds
-        a verified entry wrong reports the outcome (`POST
+        a verified concept wrong reports the outcome (`POST
         /api/v1/usage/{id}`) or drafts a replacement (design doc 0015
         §3.1).
 
@@ -1334,7 +1334,7 @@ paths:
                   enum: [verified, rejected, withdrawn]
                   description: >
                     `verified` appends the caller and the time to the
-                    entry's verifications ledger, whether this is the
+                    concept's verifications ledger, whether this is the
                     first confirmation or the tenth re-check — and clears
                     any rejection. Re-checking is why this exists at all
                     rather than being sugar over PUT: a PUT writes
@@ -1344,8 +1344,8 @@ paths:
                     no exit (design doc 0025 §6).
 
                     `rejected` writes the caller, the time and the reason
-                    as the entry's live ruling, replacing any earlier
-                    one. Rejected entries drop out of searches that did
+                    as the concept's live ruling, replacing any earlier
+                    one. Rejected concepts drop out of searches that did
                     not ask for them (`rejected=true`), which is how an
                     agent checks whether a proposal was already turned
                     down before making it again — the memory of *no* the
@@ -1355,12 +1355,12 @@ paths:
                     the history worth keeping.
 
                     `withdrawn` removes the live rejection, returning the
-                    entry to the ordinary pool. A 404 when the entry
+                    concept to the ordinary pool. A 404 when the concept
                     carries none: lifting nothing is a mistake worth
                     reporting rather than a silent success. It is spelled
                     as a ruling rather than as a DELETE because **nothing
                     is deleted** — the verifications stay, and the
-                    withdrawal is its own row in the entry's history,
+                    withdrawal is its own row in the concept's history,
                     recorded with the same word the ruling uses,
                     `withdraw`.
                 note:
@@ -1369,21 +1369,21 @@ paths:
                   description: >
                     Why it was not accepted. `rejected` only: with any
                     other ruling it is a 400. A verification says the
-                    entry is right as it stands, and anything to say
-                    about it belongs in the entry; carrying a note there
+                    concept is right as it stands, and anything to say
+                    about it belongs in the concept; carrying a note there
                     would be a new thing to say rather than the same
                     three said once.
 
-                    The rejecter's words, distinct from the entry's own
+                    The rejecter's words, distinct from the concept's own
                     `status_note`, which belongs to whoever wrote it.
             examples:
               verify:
-                summary: Confirm the entry as it stands
+                summary: Confirm the concept as it stands
                 description: >
                   The first confirmation and the tenth re-check are the
                   same call. A verification is appended to
                   `observed.verified` and `summary.trust` moves; nothing
-                  else does — the entry is still the draft its writer
+                  else does — the concept is still the draft its writer
                   published, and `content_hash` (the ETag, and the
                   version an editor may be holding) is untouched.
                 value:
@@ -1399,7 +1399,7 @@ paths:
                   ruling: withdrawn
       responses:
         "200":
-          description: The entry, carrying the ruling.
+          description: The concept, carrying the ruling.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/View" }
@@ -1461,7 +1461,7 @@ paths:
                     concept, not a stage of it, and it could not
                     round-trip as a status because export would have to
                     fold it onto deprecated, which asserts the opposite
-                    thing about the entry (design doc 0043 §3.3).
+                    thing about the concept (design doc 0043 §3.3).
                   value:
                     id: metrics/gross-revenue
                     document: |
@@ -1517,7 +1517,7 @@ paths:
                 noteOnVerification:
                   summary: A note belongs to a rejection
                   value:
-                    error: 'a verification carries no note: "verified" says the entry is right as it stands, and anything to say about it belongs in the entry. Use ruling=rejected to record a reason'
+                    error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
@@ -1525,16 +1525,16 @@ paths:
       - name: id
         in: path
         required: true
-        description: The entry's id; slashes are real path separators.
+        description: The concept's id; slashes are real path separators.
         schema: { type: string }
     get:
       operationId: getKnowledgeUsage
-      summary: Usage totals for one knowledge entry
+      summary: Usage totals for one knowledge concept
       description: >
-        How often the entry was actually used: appeared in search results,
+        How often the concept was actually used: appeared in search results,
         fetched individually, and how it was reported to have worked. The measure of
         the write-back loop — evidence for promoting drafts, and a staleness
-        signal for verified entries that stopped being used.
+        signal for verified concepts that stopped being used.
       responses:
         "200":
           description: Usage totals.
@@ -1548,7 +1548,7 @@ paths:
                   summary: GET /api/v1/usage/queries/monthly-revenue
                   description: >
                     search_hits and fetches are recorded by reads;
-                    worked and failed only by report_outcome. An entry never
+                    worked and failed only by report_outcome. A concept never
                     reported on has both at zero — which is not the same
                     signal as one that failed.
                   value:
@@ -1561,12 +1561,12 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
     post:
       operationId: reportOutcome
-      summary: Report an outcome (worked/failed) for a knowledge entry
+      summary: Report an outcome (worked/failed) for a knowledge concept
       description: >
         The last edge of the write-back loop: after acting on knowledge
-        (running a golden query, running SQL written from an entry), report whether
-        the result was correct. Reports feed the entry's usage totals;
-        failed counts against verified entries flag them for
+        (running a golden query, running SQL written from a concept), report whether
+        the result was correct. Reports feed the concept's usage totals;
+        failed counts against verified concepts flag them for
         re-verification. The caller's identity is recorded with each
         report; the optional note travels with the raw event.
       parameters:
@@ -1583,7 +1583,7 @@ paths:
                 outcome:
                   type: string
                   enum: [worked, failed]
-                  description: worked = acting on the entry gave a correct result; failed = wrong or unusable.
+                  description: worked = acting on the concept gave a correct result; failed = wrong or unusable.
                 note:
                   type: string
                   maxLength: 2000
@@ -1597,7 +1597,7 @@ paths:
               failed:
                 summary: It did not
                 description: >
-                  A failed report against a verified entry puts it on the
+                  A failed report against a verified concept puts it on the
                   re-verification feed (sort=failed), where it stays until
                   someone verifies it again.
                 value:
@@ -1630,7 +1630,7 @@ paths:
       operationId: getStats
       summary: The instance's own view of the improvement loop
       description: >
-        Every other measurement here is per entry — how often this one was
+        Every other measurement here is per concept — how often this one was
         searched, fetched, reported worked. Those are counters, and running
         an improvement loop needs a trend: whether the verified share is
         growing, whether failure reports are being answered, and what people
@@ -1645,11 +1645,11 @@ paths:
         and from the same query, and the one thing it could do that this
         could not was scope them to a subtree. So the scope came here
         instead — see `prefix` below, which now narrows every number keyed
-        by an entry rather than only the three.
+        by a concept rather than only the three.
 
 
         Two kinds of number come back. A *state* is how things stand now
-        (how many entries, how many are waiting for review); a *flow* is
+        (how many concepts, how many are waiting for review); a *flow* is
         what happened inside `days` (created, verified, reported, missed).
         The schema says which is which per field.
 
@@ -1675,9 +1675,9 @@ paths:
             search (design doc 0041). This is how a team asks about its
             own knowledge on a deployment it shares: before this, it could
             count its own review queue and could not count its own
-            entries.
+            concepts.
 
-            Every number keyed by an entry honors it — the tallies, the
+            Every number keyed by a concept honors it — the tallies, the
             queues, the verifications, the outcomes. **`misses` does
             not**, and cannot: a search that found nothing found it
             nowhere, so there is no id to scope by, and the questions this
@@ -1735,11 +1735,11 @@ paths:
   /api/v1/reembed:
     post:
       operationId: reembedKnowledge
-      summary: Embed entries that have no vector for the configured model
+      summary: Embed concepts that have no vector for the configured model
       description: >
-        Vectors are written when an entry is written, so a knowledge base
+        Vectors are written when a concept is written, so a knowledge base
         loaded before semantic search was reachable has none, and
-        hybrid search stays quietly lexical-only until every entry
+        hybrid search stays quietly lexical-only until every concept
         happens to be rewritten. Changing the embedding model has the
         same shape: the old vectors sit in a space nothing queries any
         more (design doc 0020). This fills the gap.
@@ -1748,7 +1748,7 @@ paths:
         Attachment vectors are covered too: only `attach` writes them, so
         a corpus loaded before semantic search — or one whose embedding
         tables were dropped to change dimensions — has files that are
-        findable by name alone until this runs. Entries go first and
+        findable by name alone until this runs. Concepts go first and
         attachments fill the rest of the pass.
 
 
@@ -1783,7 +1783,7 @@ paths:
                 type: object
                 properties:
                   embedded:
-                    description: Knowledge entries embedded by this pass.
+                    description: Knowledge concepts embedded by this pass.
                     type: integer
                   attachments:
                     description: Attachments embedded by this pass.
@@ -1791,7 +1791,7 @@ paths:
                   failed: { type: integer }
                   missing:
                     description: >
-                      Entries and attachments still unembedded once the
+                      Concepts and attachments still unembedded once the
                       pass was over — counted after the fact, so items
                       this pass failed on are included.
                     type: integer
@@ -1806,7 +1806,7 @@ paths:
                   summary: A pass with work still left
                   description: >
                     missing is above zero, so call again with this cursor.
-                    The cursor is opaque — it carries the entry and the
+                    The cursor is opaque — it carries the concept and the
                     attachment position in one token; pass it back unchanged
                     rather than parsing it.
                   value:
@@ -1830,14 +1830,14 @@ components:
   headers:
     ETag:
       description: >
-        The entry's version — the hash of the document as stored,
+        The concept's version — the hash of the document as stored,
         quoted, and the same value as the body's summary.content_hash
         (design docs 0043 §3.4, 0046 §3.4). A client echoes it in
         If-Match on a later update to write only if nothing changed
         meanwhile (design doc 0030). It covers the document and nothing
         else, so verifying, rejecting or attaching a file all leave a
-        held precondition valid — while reformatting the entry moves it,
-        because the file did change (what the entry *says* did not, which
+        held precondition valid — while reformatting the concept moves it,
+        because the file did change (what the concept *says* did not, which
         is what observed.generated.at reports). Treat it as opaque.
       schema: { type: string }
     Note:
@@ -1847,7 +1847,7 @@ components:
         trust family read as the document's own claim rather than as
         this instance's observation. Repeatable, one per reinterpretation. A reinterpretation is never
         silent (design doc 0036 §3.4), and there is no room for it in a
-        response whose body is the entry.
+        response whose body is the concept.
       schema: { type: string }
     ReadOnly:
       description: >
@@ -1869,11 +1869,11 @@ components:
       required: false
       description: >
         Optimistic-concurrency precondition (design doc 0030): the
-        entry's version, as a prior read or write returned it in the ETag
+        concept's version, as a prior read or write returned it in the ETag
         response header (quotes optional; the JSON body's
-        summary.content_hash field is the same value). Every response carrying an entry
-        carries the header. The write happens only if the entry still has
-        this version; an entry changed since it was read is a 412 and
+        summary.content_hash field is the same value). Every response carrying a concept
+        carries the header. The write happens only if the concept still has
+        this version; a concept changed since it was read is a 412 and
         nothing is written. Absent or "*" means no precondition — last
         write wins.
         The version is opaque, so there is no format to reject: a value
@@ -1992,10 +1992,10 @@ components:
         "not yet reviewed, possibly incomplete", stable is "ready for
         consumption", deprecated is "kept for links and history, no longer
         current".
-        It says nothing about whether anyone confirmed the entry — SPEC
+        It says nothing about whether anyone confirmed the concept — SPEC
         §5.3 puts that in `verified`, and ochakai keeps it in the
         verifications ledger, so a draft may be verified and a stable
-        entry unverified (design doc 0043 §3.2). "Was never accepted" is
+        concept unverified (design doc 0043 §3.2). "Was never accepted" is
         likewise not a lifecycle value but a ruling, in `rejection`
         (§3.3).
         A document that names no status is stable — SPEC §5.4's default.
@@ -2008,19 +2008,19 @@ components:
       description: >
         The tier a consumer derives from the verification ledger, in OKF's
         own vocabulary (SPEC §5.3): unverified when nobody has confirmed
-        the entry, machine-confirmed when something other than a person
+        the concept, machine-confirmed when something other than a person
         has, human-reviewed when a person vouched for it. Derived on read
         and never accepted from a payload — and independent of status,
-        which says whether the entry may be consumed (design doc 0046
+        which says whether the concept may be consumed (design doc 0046
         §3.10).
       enum: [unverified, machine-confirmed, human-reviewed]
     Verification:
       type: object
       description: >
         One recorded confirmation — an element of OKF's `verified` list
-        (SPEC §5.2), and under §5.3 the only thing that makes an entry
-        anything but unverified. Append-only and plural: re-checking an
-        entry adds a row rather than replacing one, so the record answers
+        (SPEC §5.2), and under §5.3 the only thing that makes a concept
+        anything but unverified. Append-only and plural: re-checking a
+        concept adds a row rather than replacing one, so the record answers
         "how often, and by whom" and not just "when last".
         Written by POST /api/v1/review/{id} with ruling: verified, never
         from a payload.
@@ -2030,14 +2030,14 @@ components:
     Rejection:
       type: object
       description: >
-        This instance's ruling that an entry was not accepted — the memory
+        This instance's ruling that a concept was not accepted — the memory
         that stops an agent re-proposing knowledge a human already turned
-        down. One live ruling per entry; POST /api/v1/review/{id} records
+        down. One live ruling per concept; POST /api/v1/review/{id} records
         it with ruling: rejected and lifts it with ruling: withdrawn.
         It is not a lifecycle value: a rejection is a judgment about the
         concept rather than a stage of it, and it could not round-trip as
         a status because export had to fold it onto deprecated, which
-        asserts the opposite thing about the entry (design doc 0043 §3.3).
+        asserts the opposite thing about the concept (design doc 0043 §3.3).
         A bundle does not carry it (design doc 0009).
       properties:
         by: { $ref: "#/components/schemas/Actor" }
@@ -2045,8 +2045,8 @@ components:
         note:
           description: >
             Why it was not accepted. The rejecter's words, distinct from
-            the entry's own status_note, which belongs to whoever wrote
-            the entry.
+            the concept's own status_note, which belongs to whoever wrote
+            the concept.
           type: string
     Actor:
       type: object
@@ -2068,7 +2068,7 @@ components:
             The delegating caller, when an application forwarded an end
             user's identity with X-Ochakai-On-Behalf-Of (design doc
             0027) — e.g. "process:app@project.iam.gserviceaccount.com" on
-            an entry whose actor is the person who used that application.
+            a concept whose actor is the person who used that application.
             Absent when the caller acted as itself. Recorded rather than
             replaced: a write made through an application must stay
             distinguishable from one the person made directly.
@@ -2089,11 +2089,11 @@ components:
     Link:
       type: object
       description: >
-        An edge to another entry, derived from a markdown link in the body.
+        An edge to another concept, derived from a markdown link in the body.
         Links are untyped: OKF SPEC §5 leaves the kind of relationship to the
         surrounding prose.
       properties:
-        target: { type: string, description: The target entry's id (its bundle path). }
+        target: { type: string, description: The target concept's id (its bundle path). }
         text:
           type: string
           description: >
@@ -2102,10 +2102,10 @@ components:
     Summary:
       type: object
       description: >
-        The projection of one entry: enough to name it, order it, and
+        The projection of one concept: enough to name it, order it, and
         decide whether to read it (design doc 0043 §3.5). It is derived
         from the document and never authoritative — the document is what
-        the entry says, and this is an index over it. A client that needs
+        the concept says, and this is an index over it. A client that needs
         a key not listed here reads the document; the projection carries
         what listing surfaces sort and filter by, and stops there.
       required: [id, type, title, status, trust, rejected, content_hash, created_at, updated_at]
@@ -2113,7 +2113,7 @@ components:
         id:
           type: string
           description: >
-            The entry's bundle path — where it lives (the type says what
+            The concept's bundle path — where it lives (the type says what
             it is): path segments separated by "/", the OKF concept ID
             (design docs 0016, 0019). OKF prescribes no character set,
             so only path safety constrains segments: no leading ".",
@@ -2126,7 +2126,7 @@ components:
         title:
           type: string
           description: >
-            The display name, already resolved: the entry's own title, or
+            The display name, already resolved: the concept's own title, or
             the id's last segment when it declared none (design doc
             0022). A row never has to work that fallback out for itself.
         description: { type: string }
@@ -2142,20 +2142,20 @@ components:
           type: string
           format: date
           description: >
-            Absolute date (YYYY-MM-DD) on and after which the entry is
+            Absolute date (YYYY-MM-DD) on and after which the concept is
             stale — OKF's lifecycle date (SPEC §5.5, design doc 0036
             §3.9). A date rather than a TTL so staleness is a plain
             comparison against today. Advisory: nothing hides a stale
-            entry and search ranking never reads it — a passed date means
+            concept and search ranking never reads it — a passed date means
             due for a re-check, not wrong. The one surface that reads it
-            is sort=stale_after, the feed of entries whose declared date
+            is sort=stale_after, the feed of concepts whose declared date
             has passed (design doc 0037 §2.1).
         trust:
           allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >
-            Who has confirmed the entry, in OKF's own vocabulary (SPEC
+            Who has confirmed the concept, in OKF's own vocabulary (SPEC
             §5.3), derived from the verifications ledger. Independent of
-            status: a draft may be human-reviewed and a stable entry
+            status: a draft may be human-reviewed and a stable concept
             unverified (design docs 0043 §3.2, 0046 §3.10). Who confirmed
             it, and how often, is in observed.verified.
         verified_at:
@@ -2168,7 +2168,7 @@ components:
         rejected:
           type: boolean
           description: >
-            Whether a live rejection stands against the entry. The ruling
+            Whether a live rejection stands against the concept. The ruling
             itself — by whom, when, and why — is in observed.rejection.
         links:
           type: array
@@ -2182,7 +2182,7 @@ components:
         content_hash:
           type: string
           description: >
-            The entry's version: the hash of the document as stored, and
+            The concept's version: the hash of the document as stored, and
             the same value the ETag header carries (design docs 0043
             §3.4, 0046 §3.4). Send it back as If-Match to write only if
             nothing changed meanwhile. Opaque — it covers the document
@@ -2200,7 +2200,7 @@ components:
       description: >
         OKF's generated family (SPEC §5.2): who the content stands by, and
         when it last changed. `by` is not the creator — once somebody else
-        edits an entry, the creator is no longer who the content stands by
+        edits a concept, the creator is no longer who the content stands by
         — and verifying moves neither value (design doc 0036 §3.3).
       properties:
         by: { $ref: "#/components/schemas/Actor" }
@@ -2208,8 +2208,8 @@ components:
     Observed:
       type: object
       description: >
-        What this instance saw happen to an entry, as against what the
-        entry says. A bundle carries knowledge, and provenance is an
+        What this instance saw happen to a concept, as against what the
+        concept says. A bundle carries knowledge, and provenance is an
         observation this instance made (design doc 0009) — so it travels
         beside the document rather than inside it, and import never reads
         it back. Every value here is resolved from the caller's Google
@@ -2237,9 +2237,9 @@ components:
     View:
       type: object
       description: >
-        A read of one entry: the document it is, the projection to read it
+        A read of one concept: the document it is, the projection to read it
         by, and what this instance observed about it (design doc 0043
-        §3.5). The document is the entry — the same shape an export
+        §3.5). The document is the concept — the same shape an export
         writes, a PUT takes, and `ochakai get` prints — and `summary` is
         an index over it, so where the two could disagree the document is
         right.
@@ -2254,7 +2254,7 @@ components:
       properties:
         id:
           type: string
-          description: The entry's bundle path — the address this document was read from.
+          description: The concept's bundle path — the address this document was read from.
         document:
           type: string
           description: >
@@ -2276,16 +2276,16 @@ components:
           description: >
             Attachment metadata (no bytes — fetch them via
             /api/v1/bundle/{path}, which is also where they are written).
-            Absent when the entry has none.
+            Absent when the concept has none.
     Attachment:
       type: object
       description: >
-        A file attached to a knowledge entry — a dashboard screenshot, an
+        A file attached to a knowledge concept — a dashboard screenshot, an
         ER diagram, a seeds file (design docs 0008, 0013). Metadata
-        travels with the entry; bytes are a separate, deliberate fetch so
+        travels with the concept; bytes are a separate, deliberate fetch so
         agent context is never flooded with base64.
       properties:
-        name: { type: string, description: Filename, unique within the entry. }
+        name: { type: string, description: Filename, unique within the concept. }
         media_type:
           type: string
           description: >
@@ -2308,10 +2308,10 @@ components:
     Usage:
       type: object
       properties:
-        search_hits: { type: integer, description: Times the entry appeared in search results. }
-        fetches: { type: integer, description: Times the entry was fetched individually. }
-        worked: { type: integer, description: Outcome reports saying the entry led to a correct result. }
-        failed: { type: integer, description: Outcome reports saying the entry led to a wrong or unusable result. }
+        search_hits: { type: integer, description: Times the concept appeared in search results. }
+        fetches: { type: integer, description: Times the concept was fetched individually. }
+        worked: { type: integer, description: Outcome reports saying the concept led to a correct result. }
+        failed: { type: integer, description: Outcome reports saying the concept led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
     Stats:
       description: >
@@ -2324,31 +2324,31 @@ components:
         window_days: { type: integer, description: How far back the flow numbers reach. }
         entries:
           type: object
-          description: What the base is made of. Deleted entries are in none of it.
+          description: What the base is made of. Deleted concepts are in none of it.
           properties:
-            total: { type: integer, description: "State: live entries." }
+            total: { type: integer, description: "State: live concepts." }
             status:
               type: object
               additionalProperties: { type: integer }
               description: >
-                State: live entries per lifecycle value, every value of the
-                vocabulary present (0 included). An entry whose document
+                State: live concepts per lifecycle value, every value of the
+                vocabulary present (0 included). A concept whose document
                 names no status counts as OKF's default, `stable`, which is
                 how every other surface reads it.
             trust:
               type: object
               additionalProperties: { type: integer }
               description: >
-                State: live entries per trust tier (SPEC §5.3), every tier
+                State: live concepts per trust tier (SPEC §5.3), every tier
                 present. This is the tally behind "is the confirmed share
                 growing".
             rejected:
               type: integer
               description: >
-                State: live entries carrying this instance's rejection. They
+                State: live concepts carrying this instance's rejection. They
                 are counted in status and trust as well — a rejection is a
                 ruling beside the lifecycle value, not one of them.
-            created: { type: integer, description: "Flow: live entries created in the window." }
+            created: { type: integer, description: "Flow: live concepts created in the window." }
         queues:
           allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
           description: >
@@ -2367,7 +2367,7 @@ components:
               type: integer
               description: >
                 Flow: verifications recorded in the window, counted from the
-                ledger — re-verifying an entry counts each time. This is what
+                ledger — re-verifying a concept counts each time. This is what
                 answers "how much moved through review last week", which no
                 queue depth can: a queue says what is left, never what went
                 through.
@@ -2406,7 +2406,7 @@ components:
       description: >
         The size of each queue a curator is meant to empty. Each one is a
         feed that already exists, and every count has a way to be driven
-        to zero: rule on the draft, verify the entry that was reported
+        to zero: rule on the draft, verify the concept that was reported
         wrong, edit the one whose expiry passed.
       properties:
         drafts:
@@ -2419,28 +2419,28 @@ components:
             rejected (design doc 0043 §3.2).
         reported_wrong:
           type: integer
-          description: Entries whose failure reports are still unanswered — sort=failed. Verifying takes one out.
+          description: Concepts whose failure reports are still unanswered — sort=failed. Verifying takes one out.
         past_expiry:
           type: integer
           description: >
-            Entries past the stale_after their author declared —
+            Concepts past the stale_after their author declared —
             sort=stale_after. Verifying does not clear this one: the date
-            is the writer's declaration, so the entry leaves when someone
+            is the writer's declaration, so the concept leaves when someone
             edits it (design doc 0037 §2.2).
     SearchHit:
       description: >
         One search or listing result: the projection plus what ranked it.
-        A hit no longer carries the entry. Search used to return whole
-        entries on the reasoning that there they are the answer rather
-        than a duplicate of one (design doc 0033) — true while an entry
+        A hit no longer carries the concept. Search used to return whole
+        concepts on the reasoning that there they are the answer rather
+        than a duplicate of one (design doc 0033) — true while a concept
         was a bag of fields, and false once it is a document: a page of
         results that shipped ten documents to answer "which of these
         should I read" spends the caller's context on the nine it will
         not. The document is one fetch away by id, and GET
-        /api/v1/context is the call that returns entries.
+        /api/v1/context is the call that returns concepts.
 
         REST hits carry attachment metadata (filled in batch) so UIs can
-        render image previews without a fetch per entry; MCP search
+        render image previews without a fetch per concept; MCP search
         results omit it to keep agent context lean (design doc 0015).
       allOf:
         - $ref: "#/components/schemas/Summary"
@@ -2460,7 +2460,7 @@ components:
               readOnly: true
               description: >
                 Attachment metadata for this row — a file beside the
-                entry rather than part of its projection, which is why it
+                concept rather than part of its projection, which is why it
                 is here and not in Summary. REST only.
     ContextRank:
       type: object
@@ -2469,12 +2469,12 @@ components:
         itself travels once, under `entries` — a rank that repeated it would
         double the response and leave the byte budget governing one of the
         copies (design doc 0033). Search results keep their full hits: there
-        the entries are the answer, not a duplicate of one.
+        the concepts are the answer, not a duplicate of one.
       properties:
         id: { type: string }
         type: { $ref: "#/components/schemas/Type" }
         title:
-          description: The display title — the entry's own, or its filename.
+          description: The display title — the concept's own, or its filename.
           type: string
         status: { $ref: "#/components/schemas/Status" }
         trust:
@@ -2484,24 +2484,24 @@ components:
             lifecycle status does not carry (design docs 0043 §3.2, 0046
             §3.10). A caller deciding whether to spend a round trip on an
             id below the pack's cut-off wants to know who confirmed the
-            entry, not merely whether somebody did.
+            concept, not merely whether somebody did.
         score: { type: number }
     ContextOutline:
       type: object
       description: >
-        An entry a context pack could not afford to deliver in full:
+        A concept a context pack could not afford to deliver in full:
         enough to decide whether to spend a round trip fetching it by id,
         and nothing more.
       properties:
         id: { type: string }
         type: { $ref: "#/components/schemas/Type" }
         title:
-          description: The display title — the entry's own, or its filename.
+          description: The display title — the concept's own, or its filename.
           type: string
         description: { type: string }
         status: { $ref: "#/components/schemas/Status" }
         bytes:
-          description: What the full entry would have cost.
+          description: What the full concept would have cost.
           type: integer
     BundleListing:
       type: object
@@ -2514,7 +2514,7 @@ components:
         Three kinds of thing sit in a directory and the listing carries
         all three (design doc 0046 §3.7): the subdirectories, the
         concepts, and the files — a file is an object in the bundle
-        rather than a property of an entry (§3.3), so a directory can
+        rather than a property of a concept (§3.3), so a directory can
         hold one that no concept shows.
       properties:
         dirs:
@@ -2556,7 +2556,7 @@ components:
               updated_at: { type: string, format: date-time }
         truncated:
           type: boolean
-          description: The entry or file list hit the 1000-per-level cap.
+          description: The concept or file list hit the 1000-per-level cap.
     BundleLog:
       type: object
       description: >
@@ -2580,7 +2580,7 @@ components:
         One line of a directory's update history: what happened to which
         object, when, and by whom. The document each revision holds is
         deliberately not here — a directory's history carrying every past
-        version of every entry under it would be the knowledge base
+        version of every concept under it would be the knowledge base
         several times over. `?history` on the object is where those are.
       properties:
         path: { type: string, description: The object's bundle path. }
@@ -2592,7 +2592,7 @@ components:
       type: object
       description: >
         `?history` on a concept's own address: its revisions, newest
-        first, each carrying the whole entry as it stood, as an OKF
+        first, each carrying the whole concept as it stood, as an OKF
         document — so a diff between two revisions is a text diff
         (design doc 0046 §3.5).
       required: [revisions]
@@ -2603,21 +2603,21 @@ components:
     Revision:
       type: object
       description: >
-        One entry in a knowledge entry's change history: who changed it,
-        how, when, and the whole entry as it stood, as an OKF document.
+        One concept in a knowledge concept's change history: who changed it,
+        how, when, and the whole concept as it stood, as an OKF document.
       properties:
-        rev: { type: integer, description: 1-based, monotonically increasing per entry. }
+        rev: { type: integer, description: 1-based, monotonically increasing per concept. }
         change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, attach, detach] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         document:
           type: string
           description: >
-            The entry as it stood after this change, as an OKF document
+            The concept as it stood after this change, as an OKF document
             (design doc 0043 §3.9). It replaced a JSON snapshot of the
             server's own struct: a record whose shape depends on the
             reader knowing every past release is the distortion, not the
             fidelity, and it also means a diff between two revisions
             reads. The keys this instance owns are included — a revision
-            records what the entry was, and who had confirmed it then is
+            records what the concept was, and who had confirmed it then is
             part of that.

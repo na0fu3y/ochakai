@@ -23,7 +23,7 @@ locally.
 [Requirements](#requirements) · [All docs](docs/README.md) ·
 [REST API](api/openapi.yaml) · [Changelog](CHANGELOG.md)
 
-![The draft review queue: entries agents wrote back, waiting for a human
+![The draft review queue: concepts agents wrote back, waiting for a human
 to verify or reject them](docs/images/webui-review.png)
 
 ## Quick start
@@ -33,7 +33,7 @@ git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up
 ```
 
-Load the demo knowledge base — [ten entries](examples/demo) about one
+Load the demo knowledge base — [ten concepts](examples/demo) about one
 invented retail domain, linked to each other, some of them drafts — and
 search it. Everything goes through the API, so plain curl works too:
 
@@ -93,18 +93,18 @@ In 2026, serving metric definitions to agents over MCP is table stakes —
 semantic layers, warehouses, and data catalogs all do it. ochakai exists
 for what they still don't do:
 
-- **Interpretation knowledge is a first-class type.** An `Insight` entry
+- **Interpretation knowledge is a first-class type.** An `Insight` concept
   records the baseline, the seasonality, the caveat, the threshold — the
   tribal knowledge that never fits in a semantic-model YAML and today
   travels by Slack. Your agent gets it in the same search that returns
   the metric definition.
 - **A write-back loop with a memory.** Agents write learnings back as
-  drafts and a human promotes them, with provenance on every entry and
+  drafts and a human promotes them, with provenance on every concept and
   every change kept as a revision. Proposals that don't make it are kept
   as `rejected` with the reason, so agents stop re-proposing them — a
   memory of *no*. And the loop is measured: usage counts, a
-  verification-age feed, and outcome reports from agents that acted on an
-  entry and found it wrong ([the loop](docs/loop.md)).
+  verification-age feed, and outcome reports from agents that acted on a
+  concept and found it wrong ([the loop](docs/loop.md)).
 - **No forward-deployed engineers, by design.** Encoding what your data
   means is labor, and it doesn't vanish — the only question is *who* does
   it. Palantir's answer is engineers on-site; the warehouse-native answer
@@ -143,7 +143,7 @@ ochakai loses, and says who should pick something else.
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
-| authorization | reachability is the whole access model: **whoever can reach the deployment can read and write everything** (design doc [0002](docs/design/0002-authn-authz.md)). If you need per-entry permissions, this is the wrong tool |
+| authorization | reachability is the whole access model: **whoever can reach the deployment can read and write everything** (design doc [0002](docs/design/0002-authn-authz.md)). If you need per-concept permissions, this is the wrong tool |
 | telemetry | nothing is reported anywhere. The only hosts ochakai contacts are Google Cloud APIs in your own project |
 
 ## Requirements

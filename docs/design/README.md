@@ -239,6 +239,14 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   `domain.Knowledge` は内部なので射程外(§3.2、§3.4)。反対の論拠
   ——「`search_knowledge` はエージェントに何屋かを伝えている」—— と、
   別名を並べる案(ツールが 13 本になる)を退けた理由は §4。
+  **改訂(リリース前)**: 当初はワイヤの綴りだけを数えて「残りはツール名
+  だけ」としたが、それは**利用者が読む英語**を勘定に入れていなかった —
+  改名直後の英語ドキュメントは `entry` が 287 回、`concept` が 6 回で、
+  `get_concept` の説明が「Fetch one entry」と書いていた。§3.6 が散文も
+  `concept` に揃える(README・docs・CLI ヘルプ・Web UI ラベル・ツール
+  説明・OpenAPI の description・エラー文)。境界は「読む語」と「識別子」
+  で、JSON のキー `entries`・Go の型名・DB の列名・別の意味の "entry"
+  (catalog entry など)は動かさない。
 
 - [0024 リンクは本文から導出する](0024-links-from-body.md) —
   **Accepted**(本文の `ochakai://` は 0046 §3.6 が退役させ、SPEC §6 の

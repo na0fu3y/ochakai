@@ -13,10 +13,10 @@ record they rest on as `(design doc NNNN)`, the way the
 ## What it is
 
 ochakai is one Go binary in front of a PostgreSQL database. It stores
-knowledge entries — metric definitions, verified golden queries,
+knowledge concepts — metric definitions, verified golden queries,
 interpretation notes, glossary terms, table catalog entries — and serves
 them to data agents over MCP, a REST API, a CLI, and a bundled web UI.
-Every entry carries who wrote it, who verified it, and when.
+Every concept carries who wrote it, who verified it, and when.
 
 Two refusals shape everything else (design doc
 [0001](design/0001-architecture.md)):
@@ -88,7 +88,7 @@ container image, a different argument (design doc
 ## Identity, provenance, and no authorization
 
 **Whoever can reach the service can read and write it.** ochakai has no
-roles, no scopes, no per-entry permissions, and no way to make a
+roles, no scopes, no per-concept permissions, and no way to make a
 read-only user (design doc [0002](design/0002-authn-authz.md)). This is
 a decision, not a gap, and for some organizations it is a hard stop. Read
 this section before the rest.
@@ -96,10 +96,10 @@ this section before the rest.
 What ochakai does with an identity is *record* it. Cloud Run performs the
 IAM check and forwards the verified caller identity in a header; ochakai
 reads that header for one purpose — deciding whose name goes on the
-entry. An email ending in `.gserviceaccount.com` becomes
+concept. An email ending in `.gserviceaccount.com` becomes
 `process:<sa-email>`, anything else `human:<email>`. Nothing else consults
-it. Verifying an entry is not restricted either: who verified an
-entry is always recorded, so the decision about whether to trust it is
+it. Verifying a concept is not restricted either: who verified a
+concept is always recorded, so the decision about whether to trust it is
 made by whoever reads the provenance, not by a gate at the write. The
 phrase the record uses is that trust is secured *by recording, not by
 authorizing*.
@@ -141,7 +141,7 @@ The consequences to plan around:
 A deployment can be made **read-only** with `OCHAKAI_READ_ONLY=true`
 (design doc [0040](design/0040-read-only-mode.md)). This is not
 authorization either, and for a sharper reason: it never looks at the
-caller. It cannot be narrowed to some entries or some people, and it
+caller. It cannot be narrowed to some concepts or some people, and it
 refuses whoever operates the deployment exactly as it refuses anyone
 else. The check sits in the service layer, which both REST and MCP come
 through, so a write endpoint added later is covered without its author
@@ -153,8 +153,8 @@ own observation, not content a caller wrote.
 
 There is one narrow exception to "no authorization", and it is
 deliberately framed as not being one: MCP refuses to overwrite, delete,
-or change an entry a human has ruled on — verified, rejected, or
-deprecated — and refuses to revive such an entry's
+or change a concept a human has ruled on — verified, rejected, or
+deprecated — and refuses to revive such a concept's
 soft-deleted tombstone with a create. The reasoning is visibility rather
 than permission: a silently replaced verified golden query is discovered
 only when somebody runs it and gets a wrong number, and MCP has no
@@ -164,7 +164,7 @@ it believed it was replacing. The human surfaces are unrestricted
 
 ## The data model
 
-**An entry is an OKF document** — YAML frontmatter, then a markdown
+**A concept is an OKF document** — YAML frontmatter, then a markdown
 body — and that is the stored form, the wire form, and the export form
 alike (design doc [0046](design/0046-bundle-address-space.md) §2.2,
 which carries design doc 0043's *the document is the only truth*
@@ -177,14 +177,14 @@ at the top level and inside a `sources` entry, a parameter, the executor
 or the attester, because a key discarded on the way in is a key no later
 release can recover.
 
-An entry's version is the hash of the document as stored, which a read
+A concept's version is the hash of the document as stored, which a read
 returns as an `ETag` and a write takes back as `If-Match`. Being a hash
-of the document alone, confirming an entry, rejecting it or attaching a
-file to it all leave a held precondition valid; reformatting the entry
-moves it, because the file did change — what the entry *says* did not,
+of the document alone, confirming a concept, rejecting it or attaching a
+file to it all leave a held precondition valid; reformatting the concept
+moves it, because the file did change — what the concept *says* did not,
 and that is what `generated.at` reports.
 
-What this instance *observed* about an entry travels beside the document
+What this instance *observed* about a concept travels beside the document
 rather than inside it: who created it, who last changed it, every
 recorded confirmation, and a live rejection if there is one. A bundle
 carries knowledge; provenance is an observation, and import never reads
@@ -197,14 +197,14 @@ and reported on the way in, while the trust tier and the `trust=` filter
 go on answering from this instance's ledger alone (design doc
 [0046](design/0046-bundle-address-space.md) §2.2).
 
-**Identity is a path.** An entry's id is its address and its bundle
-location: `queries/sales/monthly-revenue` is one entry, and the
+**Identity is a path.** A concept's id is its address and its bundle
+location: `queries/sales/monthly-revenue` is one concept, and the
 directories are how you organize a knowledge base. A type is an attribute
-of an entry, not part of its address, so the layout of an exported bundle
+of a concept, not part of its address, so the layout of an exported bundle
 comes from ids alone (design doc
-[0017](design/0017-path-addressing.md)). MCP addresses an entry as a
+[0017](design/0017-path-addressing.md)). MCP addresses a concept as a
 resource by that path under the `ochakai://` scheme — a URI for MCP's
-sake, which never travels in a bundle. `title` is optional — an entry without one
+sake, which never travels in a bundle. `title` is optional — a concept without one
 is displayed by the last segment of its id, the way a file is named by
 its filename — and ids are NFC-normalized and searchable in their own
 right (design doc [0022](design/0022-filename-as-name.md)).
@@ -233,9 +233,9 @@ bundles (design doc
 [0038](design/0038-type-vocabulary-realignment.md)). Any
 single-line string works as a type. `status`, by contrast, is a closed
 set, and it is OKF's lifecycle vocabulary and nothing else: `draft`,
-`stable`, `deprecated` (SPEC §5.4). Whether anybody confirmed an entry is
+`stable`, `deprecated` (SPEC §5.4). Whether anybody confirmed a concept is
 a separate question — an append-only ledger of verifications, so a draft
-may be verified and a `stable` entry unverified. "Considered and turned
+may be verified and a `stable` concept unverified. "Considered and turned
 down" is a third thing again, a ruling rather than a stage: a rejection
 carries who ruled, when, and why, and it is the record most stores lack —
 an agent can check it before re-proposing the same thing (design doc
@@ -274,7 +274,7 @@ The value of writing the roles down is that it makes the omissions
 reviewable. MCP carries no `browse` (walking a tree is multi-round-trip
 exploration, the opposite of `get_context`), no `revisions` and no
 `links_to` reverse lookup (duplicated or too heavy in tokens — an agent
-that wants what points at an entry gets it inside `get_context`, which
+that wants what points at a concept gets it inside `get_context`, which
 follows the same edge), no attachment writes
 (base64 in a tool argument wastes tokens, and an agent's write-back
 should be searchable text), no bulk export or import, and no `verify` —
@@ -296,7 +296,7 @@ demanded from an environment where the binary cannot be run (design doc
 
 ## Storage
 
-One database. Entries, revisions, links, usage totals, and embedding
+One database. Concepts, revisions, links, usage totals, and embedding
 vectors all live in PostgreSQL — pgvector for the vectors, which Cloud
 SQL and a plain Postgres both provide, so hybrid search adds no
 infrastructure (design doc [0001](design/0001-architecture.md) §4).
@@ -309,12 +309,12 @@ are fetched on demand, with the database keeping what addresses them
 keeps design doc 0013's judgment — GCS for non-markdown, one object up
 to 5 MiB, and the media type sniffed from the bytes rather than trusted
 from a filename). With `OCHAKAI_GCS_BUCKET` unset the instance stores
-markdown entries only and a non-markdown write is refused. What `attach`
+markdown concepts only and a non-markdown write is refused. What `attach`
 accepts today is narrower than what a bundle may carry — PNG, JPEG,
 WebP, PDF, plain text, the intersection of what Claude can read and what
 Gemini can embed — because that operation is one of the ones 0046 §3.5
 folds into the bundle address, and the fold is still landing.
-Attachments travel through OKF bundles as plain files beside their entry.
+Attachments travel through OKF bundles as plain files beside their concept.
 
 Usage recording is deliberately off the read path: events are buffered in
 memory and flushed periodically, statistics are documented as
@@ -337,13 +337,13 @@ tags, body, attachment filenames. Latin tokens stay whole; a run of
 Japanese, which has no spaces to split on, is cut into sliding
 two-character windows, and only the windows carrying a kanji or katakana
 are kept, since an all-hiragana window is grammar and matches nearly
-everything. Ranking is by how much of the *rare* part of a query an entry
+everything. Ranking is by how much of the *rare* part of a query a concept
 contains.
 
 The cost is known and written down: a trigram index cannot serve a
 two-character pattern — there is no whole trigram inside one — so a
 Japanese term like 売上 is answered by a table scan. Measured on 5000
-entries that is about 16 ms against 0.2 ms for an indexed Latin word.
+concepts that is about 16 ms against 0.2 ms for an indexed Latin word.
 Three-character windows would restore the index and lose exactly the
 terms the search exists to find, so the scan is the price. It is fine at
 the scale a curated knowledge base reaches, and it does not stay fine
@@ -356,22 +356,22 @@ project from the metadata server, and whether it may call Vertex AI there
 is IAM's answer rather than a setting, asked once at startup (design doc
 [0053](design/0053-embeddings-by-default.md)). A deployment that cannot
 call it, or that says `OCHAKAI_EMBEDDINGS=off`, runs lexical-only.
-Vectors are written when an entry is written, so a base loaded before
-embeddings were reachable — or a changed model — leaves older entries
+Vectors are written when a concept is written, so a base loaded before
+embeddings were reachable — or a changed model — leaves older concepts
 unembedded until `ochakai reembed` runs (design doc
 [0020](design/0020-attachment-search.md)). Attachments join the same
 search: filenames match lexically always, contents join the vector half
-when embeddings are on, and a hit is always the owning entry rather than
+when embeddings are on, and a hit is always the owning concept rather than
 the file.
 
 Scores are not calibrated and are not comparable between the two modes.
 Treat them as an ordering. To bound what comes back, use the byte
-budget rather than a score threshold: `get_context` returns full entries
+budget rather than a score threshold: `get_context` returns full concepts
 up to the budget and names the rest as outline rows, and `hits` carry a
 ranking only — id, type, title, status, whether it is verified, score —
 never a second copy of the knowledge (design doc
 [0033](design/0033-context-hits-are-a-ranking.md)). Search hits are the
-same kind of thing: a row names an entry and says what ranked it, and the
+same kind of thing: a row names a concept and says what ranked it, and the
 document is one fetch away by id (design doc
 [0046](design/0046-bundle-address-space.md) §3.5).
 
@@ -390,12 +390,12 @@ knowledge has stopped being true (design doc
 
 | Feed | What it lists | What empties it |
 |---|---|---|
-| `sort=verified_at` | Verified entries by verification age, oldest first | Re-verifying — `POST /api/v1/review/{id}` with `ruling: verified` appends to the entry's ledger |
-| `sort=failed` | Entries with unanswered `failed` outcome reports, worst first | Re-verifying, same call |
-| `sort=stale_after` | Entries past the expiry their own author declared | Editing the entry to re-declare the date |
+| `sort=verified_at` | Verified concepts by verification age, oldest first | Re-verifying — `POST /api/v1/review/{id}` with `ruling: verified` appends to the concept's ledger |
+| `sort=failed` | Concepts with unanswered `failed` outcome reports, worst first | Re-verifying, same call |
+| `sort=stale_after` | Concepts past the expiry their own author declared | Editing the concept to re-declare the date |
 
 `report_outcome` is the evidence-based half: an agent that ran a golden
-query and got a wrong number says so, and the entry rises in the second
+query and got a wrong number says so, and the concept rises in the second
 feed instead of being trusted blind by the next agent. Verification is
 its own operation rather than an update, for a reason the record spells
 out: an update that changes nothing writes nothing, so "I checked it
@@ -404,7 +404,7 @@ again and it is still right" would land nowhere (design doc
 differently because `stale_after` is a claim its author made rather than
 something the server observed — re-verifying does not answer it; editing
 does. The reverse lookup added alongside it answers the other direction:
-`?source=<uri>` lists every entry derived from a document that has
+`?source=<uri>` lists every concept derived from a document that has
 changed.
 
 Running verified golden queries on a schedule and writing the result back

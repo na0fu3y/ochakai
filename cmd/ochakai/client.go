@@ -153,7 +153,7 @@ func exactArgs(fs *flag.FlagSet, args []string, n int) ([]string, error) {
 }
 
 // idArgs is exactArgs for the commands whose first positional argument is
-// an entry id: it returns that id parsed, and the arguments after it.
+// a concept id: it returns that id parsed, and the arguments after it.
 func idArgs(fs *flag.FlagSet, args []string, n int) (id string, rest []string, err error) {
 	pos, err := exactArgs(fs, args, n)
 	if err != nil {
@@ -260,11 +260,11 @@ func fmPairs(vals []string) (map[string]string, error) {
 	return out, nil
 }
 
-// parseRef parses an entry id (an "ochakai://" prefix is tolerated).
+// parseRef parses a concept id (an "ochakai://" prefix is tolerated).
 func parseRef(s string) (string, error) {
 	id := strings.TrimPrefix(s, "ochakai://")
 	if id == "" {
-		return "", fmt.Errorf("want an entry id (e.g. metrics/revenue), got %q", s)
+		return "", fmt.Errorf("want a concept id (e.g. metrics/revenue), got %q", s)
 	}
 	return id, nil
 }
@@ -272,20 +272,20 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the entries citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe entries whose body links at one entry — its backlinks, the reverse\nof its inbound edges; --prefix narrows to\nthe entries living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists concepts whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes a concept out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists concepts whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the concept to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the concepts citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe concepts whose body links at one concept — its backlinks, the reverse\nof its inbound edges; --prefix narrows to\nthe concepts living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search --links-to metrics/revenue --type Insight   # which insights read this metric\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
-	source := fs.String("source", "", "only entries citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
-	linksTo := fs.String("links-to", "", "only entries whose body links at this `id` — what points at one entry, in address order (its backlinks)")
+	fs.Var(&prefixes, "prefix", "only concepts under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
+	source := fs.String("source", "", "only concepts citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
+	linksTo := fs.String("links-to", "", "only concepts whose body links at this `id` — what points at one concept, in address order (its backlinks)")
 	var trust repeated
-	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
+	fs.Var(&trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
 	fs.Var(&fm, "fm", fmUsage)
-	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
+	rejected := fs.Bool("rejected", false, "only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
 	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit")
@@ -295,10 +295,10 @@ func cmdSearch(ctx context.Context, args []string) error {
 		return err
 	}
 	if *sortBy != "" && len(pos) > 0 {
-		return fmt.Errorf("--sort lists entries; it cannot be combined with a search query")
+		return fmt.Errorf("--sort lists concepts; it cannot be combined with a search query")
 	}
 	if *sortBy == "" && *source == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
-		return fmt.Errorf("search needs a query; use --sort to list entries without one, or --source to list what cites a resource")
+		return fmt.Errorf("search needs a query; use --sort to list concepts without one, or --source to list what cites a resource")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -352,7 +352,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 	// the bound the caller set, and a listing that grew past it on its
 	// own would surprise whoever piped it into head.
 	if page.Cursor != "" {
-		fmt.Fprintf(os.Stderr, "note: more entries — rerun with --cursor %s\n", page.Cursor)
+		fmt.Fprintf(os.Stderr, "note: more concepts — rerun with --cursor %s\n", page.Cursor)
 	}
 	return nil
 }
@@ -360,7 +360,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"browse",
-		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design docs\n0014 and 0017, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their entry\ncounts; with a prefix, the subdirectories and entries directly under\nit. Directories print as \"name/\tcount\", entries as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected entries are hidden, as in\nsearch.",
+		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design docs\n0014 and 0017, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected concepts are hidden, as in\nsearch.",
 		"  ochakai browse\n  ochakai browse queries\n  ochakai browse ga4/tables\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -405,7 +405,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		fmt.Printf("%s\tfile\t%s\t%d\n", f.Name, f.MediaType, f.Size)
 	}
 	if res.Truncated {
-		fmt.Fprintln(os.Stderr, "note: showing the first 1000 entries at this level (server cap)")
+		fmt.Fprintln(os.Stderr, "note: showing the first 1000 concepts at this level (server cap)")
 	}
 	return nil
 }
@@ -413,19 +413,19 @@ func cmdBrowse(ctx context.Context, args []string) error {
 func cmdContext(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"context",
-		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full entries behind the top search hits (verified entries rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
+		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full concepts behind the top search hits (verified concepts rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
 		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --trust human-reviewed --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
 	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands")
+	fs.Var(&prefixes, "prefix", "only concepts under this `path`, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands")
 	var trust repeated
-	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
+	fs.Var(&trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
 	fs.Var(&fm, "fm", fmUsage)
-	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
-	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
+	limit := fs.Int("limit", 0, "max full concepts (server default 5, max 20)")
+	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing concepts, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -466,11 +466,11 @@ func cmdContext(ctx context.Context, args []string) error {
 	return nil
 }
 
-// renderContext prints the pack as compact markdown: per entry a heading
-// with URI, status, and title, a provenance line, then the entry's
+// renderContext prints the pack as compact markdown: per concept a heading
+// with URI, status, and title, a provenance line, then the concept's
 // document. Once the byte budget is
-// spent the remaining entries are dropped with a note (the first entry
-// always renders); hits without a rendered entry become one-line pointers.
+// spent the remaining concepts are dropped with a note (the first concept
+// always renders); hits without a rendered concept become one-line pointers.
 func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 	rendered := map[string]bool{}
 	written, omitted := 0, 0
@@ -486,7 +486,7 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 		rendered[k.ID] = true
 	}
 	if omitted > 0 {
-		fmt.Fprintf(w, "(%d more entries beyond --budget; raise it or `ochakai get` them)\n", omitted)
+		fmt.Fprintf(w, "(%d more concepts beyond --budget; raise it or `ochakai get` them)\n", omitted)
 	}
 	var rest []string
 	for i := range res.Hits {
@@ -496,16 +496,16 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 		}
 	}
 	if len(rest) > 0 {
-		fmt.Fprintf(w, "\nAlso relevant (`ochakai get <id>` for the full entry):\n%s\n", strings.Join(rest, "\n"))
+		fmt.Fprintf(w, "\nAlso relevant (`ochakai get <id>` for the full concept):\n%s\n", strings.Join(rest, "\n"))
 	}
 }
 
-// renderEntry writes one entry of a context pack: a heading, what this
-// instance observed about it, and then the entry itself — its document.
+// renderEntry writes one concept of a context pack: a heading, what this
+// instance observed about it, and then the concept itself — its document.
 //
 // It used to assemble a curated summary of selected fields, which was the
-// only way to show an entry when an entry was a bag of fields. Now that
-// an entry is a document, printing the document is both simpler and more
+// only way to show a concept when a concept was a bag of fields. Now that
+// a concept is a document, printing the document is both simpler and more
 // faithful: the agent reading this pack sees the same shape it will see
 // from `ochakai get`, from MCP, and in a git-tracked bundle, and nothing
 // the writer wrote is left out because this function did not know to look
@@ -538,7 +538,7 @@ func renderEntry(v *domain.View) string {
 func cmdUsage(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"usage",
-		"Usage: ochakai usage [flags] <id>\n\nShow how often an entry was actually used: appeared in search results,\nfetched individually, reported worked or failed — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified entries nobody uses.",
+		"Usage: ochakai usage [flags] <id>\n\nShow how often a concept was actually used: appeared in search results,\nfetched individually, reported worked or failed — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified concepts nobody uses.",
 		"  ochakai usage queries/sales/monthly-revenue\n  ochakai usage metrics/revenue --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	id, _, err := idArgs(fs, args, 1)
@@ -568,11 +568,11 @@ func cmdUsage(ctx context.Context, args []string) error {
 func cmdStats(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"stats",
-		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one entry; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue lines — drafts waiting to be published or turned down,\nentries whose failure reports are unanswered, entries past the expiry\ntheir author declared — carry the command that lists that queue, with\nthe scope you asked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nentry rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any of the three is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
+		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one concept; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue lines — drafts waiting to be published or turned down,\nentries whose failure reports are unanswered, concepts past the expiry\ntheir author declared — carry the command that lists that queue, with\nthe scope you asked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nentry rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any of the three is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
 		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --prefix teams/growth       # our subtree only\n  ochakai stats --json | jq .queues.drafts\n  ochakai stats --exit-code                 # in CI: red while somebody owes a review\n")
 	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
 	var prefixes repeated
-	fs.Var(&prefixes, "prefix", "measure only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere")
+	fs.Var(&prefixes, "prefix", "measure only concepts under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere")
 	exitCode := fs.Bool("exit-code", false, "exit 2 while any review queue is non-empty (0 when all are empty, 1 on error) — for cron and CI")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parseArgs(fs, args); err != nil {
@@ -653,7 +653,7 @@ func pendingWork(q domain.QueueCounts, asked bool) error {
 func cmdReport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"report",
-		"Usage: ochakai report [flags] <id> <worked|failed>\n\nReport whether acting on an entry gave a correct result — the last\nedge of the write-back loop. After running an attested computation or SQL you\nwrote from an entry, report worked or failed (say what went wrong with\n--note); failed counts against verified entries flag them for\nre-verification. Prints the entry's updated usage totals.",
+		"Usage: ochakai report [flags] <id> <worked|failed>\n\nReport whether acting on a concept gave a correct result — the last\nedge of the write-back loop. After running an attested computation or SQL you\nwrote from a concept, report worked or failed (say what went wrong with\n--note); failed counts against verified concepts flag them for\nre-verification. Prints the concept's updated usage totals.",
 		"  ochakai report queries/sales/monthly-revenue worked\n  ochakai report queries/sales/monthly-revenue failed --note \"joins dropped 2024 rows after schema change\"\n")
 	note := fs.String("note", "", "context recorded with the report: what was run, what went wrong (max 2000 bytes)")
 	asJSON := fs.Bool("json", false, "print the updated usage totals as JSON")
@@ -679,7 +679,7 @@ func cmdReport(ctx context.Context, args []string) error {
 func cmdRevisions(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"revisions",
-		"Usage: ochakai revisions [flags] <id>\n\nList an entry's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted entries too. The whole entry as it\nstood, as an OKF document, is in the JSON output (--json), so a diff\nbetween two revisions is a text diff.",
+		"Usage: ochakai revisions [flags] <id>\n\nList a concept's change history, newest first: who changed it, how,\nand when — the audit surface behind \"every change kept as a\nrevision\". Works for soft-deleted concepts too. The whole concept as it\nstood, as an OKF document, is in the JSON output (--json), so a diff\nbetween two revisions is a text diff.",
 		"  ochakai revisions metrics/revenue\n  ochakai revisions queries/sales/monthly-revenue --json | jq -r '.revisions[0].document'\n")
 	limit := fs.Int("limit", 0, "max revisions (server default 50, max 200)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response (includes each revision's document)")
@@ -714,7 +714,7 @@ func cmdLog(ctx context.Context, args []string) error {
 		"log",
 		"Usage: ochakai log [flags] [path]\n\nPrint the update history under a path as OKF's log.md (SPEC §9):\ndate-grouped, newest first. With no path, the whole bundle.\n\nIt is generated from the revision ledger, so it says the same thing\n`ochakai revisions` does — in the format a bundle carries, which is\nwhat makes the history portable.",
 		"  ochakai log\n  ochakai log metrics\n  ochakai log metrics/revenue --limit 20\n")
-	limit := fs.Int("limit", 0, "max entries (default 1000)")
+	limit := fs.Int("limit", 0, "max concepts (default 1000)")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -741,10 +741,10 @@ func cmdLog(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
-		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as attachment metadata\ndoes; --download saves the attachment files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
+		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge concept as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as attachment metadata\ndoes; --download saves the attachment files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
 		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n")
 	asJSON := fs.Bool("json", false, "print the whole read as JSON (document, summary, observed) instead of the document alone")
-	download := fs.String("download", "", "save the entry's attachments into this directory")
+	download := fs.String("download", "", "save the concept's attachments into this directory")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -800,7 +800,7 @@ func cmdGet(ctx context.Context, args []string) error {
 func cmdAttach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"attach",
-		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge entry (any file, up to 5 MiB each — the\nmedia type is sniffed from the bytes). A file of the same name is\nreplaced (the change is kept as a revision). Reference the file from the entry's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
+		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge concept (any file, up to 5 MiB each — the\nmedia type is sniffed from the bytes). A file of the same name is\nreplaced (the change is kept as a revision). Reference the file from the concept's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
 		"  ochakai attach insights/reading-revenue weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
 	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
 	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
@@ -820,7 +820,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// The canonical body link is relative to the entry's own document:
+	// The canonical body link is relative to the concept's own document:
 	// "<id last segment>/<name>" (design doc 0008).
 	lastSeg := id[strings.LastIndex(id, "/")+1:]
 	for _, file := range pos[1:] {
@@ -855,7 +855,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 func cmdDetach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"detach",
-		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge entry (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
+		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge concept (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
 		"  ochakai detach insights/reading-revenue weekly.png\n")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
@@ -865,8 +865,8 @@ func cmdDetach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// The file is at <id>/<name> unless the entry's body puts it
-	// elsewhere; read the entry and detach whichever one carries the
+	// The file is at <id>/<name> unless the concept's body puts it
+	// elsewhere; read the concept and detach whichever one carries the
 	// name, so the command means the same thing for both (design doc
 	// 0046 §3.3).
 	path := id + "/" + rest[0]
@@ -885,9 +885,9 @@ func cmdDetach(ctx context.Context, args []string) error {
 	return nil
 }
 
-// cmdPut writes an entry, whether or not one was there. The wire has
+// cmdPut writes a concept, whether or not one was there. The wire has
 // been create-or-replace since design doc 0043 §3.5 — a PUT states what
-// the entry should say, and whether the id was free is a precondition
+// the concept should say, and whether the id was free is a precondition
 // rather than a different act — but the CLI kept `create` and `update`,
 // so a caller had to answer a question the format does not ask. Two
 // commands, one endpoint, and a writer who guessed wrong got 409 or
@@ -903,12 +903,12 @@ func cmdDetach(ctx context.Context, args []string) error {
 func cmdPut(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"put",
-		"Usage: ochakai put [flags] <id>\n\nWrite a knowledge entry from -f or stdin, creating it or replacing\nwhat is there. Input is an OKF document (--- frontmatter with type,\nmarkdown body — the format `ochakai get` prints; title is optional,\nthe id's last segment is the display name when it is absent) or JSON\n(see api/openapi.yaml). The id is the entry's path; pass it as the\nargument (it overrides an id in the input, and OKF documents carry\nnone — the path is the id). New entries default to draft; provenance\nis recorded from your Google identity. Every change is kept as a\nrevision server-side.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the entry still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.",
-		"  ochakai put runbook/restore -f entry.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n")
+		"Usage: ochakai put [flags] <id>\n\nWrite a knowledge concept from -f or stdin, creating it or replacing\nwhat is there. Input is an OKF document (--- frontmatter with type,\nmarkdown body — the format `ochakai get` prints; title is optional,\nthe id's last segment is the display name when it is absent) or JSON\n(see api/openapi.yaml). The id is the concept's path; pass it as the\nargument (it overrides an id in the input, and OKF documents carry\nnone — the path is the id). New concepts default to draft; provenance\nis recorded from your Google identity. Every change is kept as a\nrevision server-side.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the concept still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.",
+		"  ochakai put runbook/restore -f concept.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	onlyIfNew := fs.Bool("only-if-new", false, "write only if the id is free; a taken id fails instead of being replaced")
-	ifMatch := fs.String("if-match", "", "write only if the entry still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does")
-	asJSON := fs.Bool("json", false, "print the written entry as JSON")
+	ifMatch := fs.String("if-match", "", "write only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting a concept does not move it: only an edit does")
+	asJSON := fs.Bool("json", false, "print the written concept as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -930,7 +930,7 @@ func cmdPut(ctx context.Context, args []string) error {
 	// inputs can get one. Saying so here beats the server's `invalid id ""`,
 	// which describes the id format and not the missing argument.
 	if k.ID == "" {
-		return errors.New("no id: pass the entry's path as the argument (e.g. `ochakai put queries/monthly-revenue -f entry.md`)")
+		return errors.New("no id: pass the concept's path as the argument (e.g. `ochakai put queries/monthly-revenue -f concept.md`)")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -981,16 +981,16 @@ func reportNotes(notes []string) {
 	}
 }
 
-// cmdVerify records a verification. Re-verifying an entry that is already
+// cmdVerify records a verification. Re-verifying a concept that is already
 // verified is the point as much as promoting a draft: it is how a review
 // feed empties (design doc 0025 §6), and `update` cannot express it —
 // an unchanged payload writes nothing and verified_at is carried over.
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.",
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the concept: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.\nVerifying a rejected concept lifts the rejection.",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
-	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
+	asJSON := fs.Bool("json", false, "print the verified concept as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1021,11 +1021,11 @@ func cmdVerify(ctx context.Context, args []string) error {
 func cmdReject(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"reject",
-		"Usage: ochakai reject [flags] <id>\n\nRecord that an entry was reviewed and not accepted, with the reason.\nRejected entries are hidden from search unless asked for\n(`search --rejected`), which is how an agent checks whether a proposal\nwas already turned down before making it again.\nIt does not edit the entry: the lifecycle status and the ETag stay put.\nA rejection is this instance's ruling, so an exported bundle carries the\nentry's real status rather than folding the ruling onto deprecated.\nUse --withdraw to take one back — the wire calls that ruling\n`withdrawn`, and so does the revision it writes.",
+		"Usage: ochakai reject [flags] <id>\n\nRecord that a concept was reviewed and not accepted, with the reason.\nRejected concepts are hidden from search unless asked for\n(`search --rejected`), which is how an agent checks whether a proposal\nwas already turned down before making it again.\nIt does not edit the concept: the lifecycle status and the ETag stay put.\nA rejection is this instance's ruling, so an exported bundle carries the\nentry's real status rather than folding the ruling onto deprecated.\nUse --withdraw to take one back — the wire calls that ruling\n`withdrawn`, and so does the revision it writes.",
 		"  ochakai reject metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai reject metrics/bad-revenue --withdraw\n")
 	note := fs.String("note", "", "why it was not accepted — the next agent reads this before proposing again")
 	withdraw := fs.Bool("withdraw", false, "withdraw the live rejection instead of recording one")
-	asJSON := fs.Bool("json", false, "print the entry as JSON")
+	asJSON := fs.Bool("json", false, "print the concept as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1060,7 +1060,7 @@ func cmdReject(ctx context.Context, args []string) error {
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"delete",
-		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge entry (history is retained server-side).",
+		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge concept (history is retained server-side).",
 		"  ochakai delete terms/obsolete-kpi\n")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -1078,14 +1078,14 @@ func cmdDelete(ctx context.Context, args []string) error {
 }
 
 // cmdPurge is the second half of a two-step destruction: delete makes an
-// entry invisible and recoverable, purge makes it gone. It exists because
-// a soft-deleted entry still owns its id — Create revives one in place,
+// concept invisible and recoverable, purge makes it gone. It exists because
+// a soft-deleted concept still owns its id — Create revives one in place,
 // but Move cannot, so without purge a renamed-away id would be blocked
 // forever (design doc 0021).
 func cmdPurge(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"purge",
-		"Usage: ochakai purge [flags] <id>\n\nHard-delete an already soft-deleted entry: the entry, its revisions,\nusage, and attachment metadata are erased and the id is freed for a\nmove. History is gone — `ochakai delete` first, then purge. A live\nentry is refused.",
+		"Usage: ochakai purge [flags] <id>\n\nHard-delete an already soft-deleted concept: the concept, its revisions,\nusage, and attachment metadata are erased and the id is freed for a\nmove. History is gone — `ochakai delete` first, then purge. A live\nentry is refused.",
 		"  ochakai delete terms/obsolete-kpi\n  ochakai purge terms/obsolete-kpi\n")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -1102,16 +1102,16 @@ func cmdPurge(ctx context.Context, args []string) error {
 	return nil
 }
 
-// cmdReembed exists because vectors are written on entry writes only: a
+// cmdReembed exists because vectors are written on concept writes only: a
 // base imported before semantic search was configured has none, and
-// hybrid search stays quietly lexical-only until every entry happens to
+// hybrid search stays quietly lexical-only until every concept happens to
 // be rewritten.
 func cmdReembed(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"reembed",
-		"Usage: ochakai reembed [flags]\n\nEmbed entries that have no vector for the configured model — entries\nwritten before semantic search was enabled, or before the model was\nchanged. Runs bounded passes until nothing is left, so it can be started\nonce and left alone.",
+		"Usage: ochakai reembed [flags]\n\nEmbed concepts that have no vector for the configured model — concepts\nwritten before semantic search was enabled, or before the model was\nchanged. Runs bounded passes until nothing is left, so it can be started\nonce and left alone.",
 		"  ochakai reembed\n  ochakai reembed --limit 50   # smaller passes, e.g. behind a short request timeout\n  ochakai reembed --once       # one pass, then report what is left\n")
-	limit := fs.Int("limit", 0, "max entries to embed per pass (server default 200)")
+	limit := fs.Int("limit", 0, "max concepts to embed per pass (server default 200)")
 	once := fs.Bool("once", false, "run a single pass instead of continuing until nothing is left")
 	asJSON := fs.Bool("json", false, "print the raw JSON response of each pass")
 	if _, err := exactArgs(fs, args, 0); err != nil {
@@ -1121,7 +1121,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// One pass is one HTTP request and one entry is one call to the
+	// One pass is one HTTP request and one concept is one call to the
 	// embedding provider, so a pass has to stay well inside the server's
 	// request timeout — which makes "run it until it is done" the client's
 	// job. Looping here also means an operator types one command instead
@@ -1141,7 +1141,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 				return err
 			}
 		} else {
-			fmt.Printf("pass %d: embedded %d entries, %d attachments, failed %d, still missing %d\n",
+			fmt.Printf("pass %d: embedded %d concepts, %d attachments, failed %d, still missing %d\n",
 				pass, res.Embedded, res.Attachments, res.Failed, res.Missing)
 		}
 		if *once || res.Missing == 0 {
@@ -1161,7 +1161,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 		cursor = res.Cursor
 	}
 	if !*asJSON {
-		fmt.Printf("done: embedded %d entries, %d attachments, failed %d\n", embedded, attachments, failed)
+		fmt.Printf("done: embedded %d concepts, %d attachments, failed %d\n", embedded, attachments, failed)
 	}
 	return nil
 }
@@ -1169,7 +1169,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 func cmdMove(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"move",
-		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge entry to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.",
+		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.",
 		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
@@ -1195,7 +1195,7 @@ func cmdExport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"export",
 		"Usage: ochakai export [flags] <dir | ->\n\nDownload the whole knowledge base as an OKF bundle (markdown + YAML\nfrontmatter) into dir, or stream the tar.gz to stdout with \"-\".\nYour knowledge is yours.",
-		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-attachments - > entries.tar.gz   # bytes are in GCS; copy them from there\n")
+		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-attachments - > concepts.tar.gz   # bytes are in GCS; copy them from there\n")
 	noAtt := fs.Bool("no-attachments", false, "export the markdown only, skipping attachment files")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
@@ -1225,7 +1225,7 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the entry still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per entry, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by a concept's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attach to that concept. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
@@ -1241,7 +1241,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
 	}
-	// Notes are not skips: the entry is imported, with one field read
+	// Notes are not skips: the concept is imported, with one field read
 	// differently than it was written. Reporting them keeps a foreign
 	// bundle's reinterpreted status or dropped stale_after visible without
 	// pretending the document was rejected (OKF SPEC §11).
@@ -1251,7 +1251,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	}
 	// Everything the parser reinterpreted is known before the first write,
 	// so --strict refuses here and the knowledge base is left untouched.
-	// The alternative — writing 65 entries and failing on the 66th — is
+	// The alternative — writing 65 concepts and failing on the 66th — is
 	// the half-applied sync this flag exists to prevent.
 	if *strict && (noted > 0 || len(skipped) > 0) {
 		return strictErr(noted, len(skipped), "nothing was written")
@@ -1266,7 +1266,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		for _, f := range loose {
 			fmt.Printf("would write %s\n", f.Path)
 		}
-		fmt.Printf("dry run: %d entries, %d attachments, %d files, %d skipped, %d notes\n",
+		fmt.Printf("dry run: %d concepts, %d attachments, %d files, %d skipped, %d notes\n",
 			len(entries), len(atts), len(loose), len(skipped), noted)
 		return nil
 	}
@@ -1274,7 +1274,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// A 400 is the server's judgment on one document (e.g. a models entry
+	// A 400 is the server's judgment on one document (e.g. a models concept
 	// whose spec fails write-time validation) — skip and report it like a
 	// parse failure, instead of aborting the bundle halfway (design doc
 	// 0019). Anything else (auth, network, 5xx) still aborts.
@@ -1347,24 +1347,24 @@ func cmdImport(ctx context.Context, args []string) error {
 	attached := 0
 	for _, a := range atts {
 		if rejected[a.ID] {
-			skipped = append(skipped, a.Path+": its entry "+a.ID+" was not imported")
+			skipped = append(skipped, a.Path+": its concept "+a.ID+" was not imported")
 			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 			continue
 		}
 		// At the path the bundle carried it at, which is the whole of
 		// what preserving a foreign location means now (design doc 0046
-		// §3.3): the entry claims it because its body points there.
+		// §3.3): the concept claims it because its body points there.
 		if err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
 			return fmt.Errorf("write %s: %w", a.Path, err)
 		}
 		attached++
 		fmt.Printf("attached %s (%s)\n", a.Path, a.ID)
 	}
-	// The files that belong to no entry, at the paths they arrived at.
+	// The files that belong to no concept, at the paths they arrived at.
 	// A bundle carries more than its concepts, and what enters it leaves
 	// it (design doc 0046 §3.2): a producer's seed data in a shared
 	// directory, a diagram nothing links yet, a markdown file with no
-	// type. Whether an entry ever claims one is a question that entry's
+	// type. Whether a concept ever claims one is a question that concept's
 	// body answers (§3.3), so nothing is attributed here.
 	var written int
 	for _, f := range loose {
@@ -1379,14 +1379,14 @@ func cmdImport(ctx context.Context, args []string) error {
 		written++
 		fmt.Printf("wrote %s\n", f.Path)
 	}
-	fmt.Printf("imported %d entries (%d created, %d updated, %d unchanged, %d attachments, %d files, %d skipped, %d notes)\n",
+	fmt.Printf("imported %d concepts (%d created, %d updated, %d unchanged, %d attachments, %d files, %d skipped, %d notes)\n",
 		created+updated+unchanged, created, updated, unchanged, attached, written, len(skipped), noted)
 	// The parse-time gate above cannot see what the server read differently
 	// or refused, so --strict asks again with the writes already done. The
 	// summary is printed first: the exit code says the sync is not clean,
 	// and the line above it says how far it got.
 	if *strict && (noted > 0 || len(skipped) > 0) {
-		return strictErr(noted, len(skipped), "the entries above are already written")
+		return strictErr(noted, len(skipped), "the concepts above are already written")
 	}
 	return nil
 }
@@ -1440,7 +1440,7 @@ func readBundle(path string) (map[string][]byte, error) {
 	return readBundleTarGz(f)
 }
 
-// readBundleDir walks root, skipping dot-entries (.git and friends —
+// readBundleDir walks root, skipping dot-concepts (.git and friends —
 // bundles live happily in git).
 func readBundleDir(root string) (map[string][]byte, error) {
 	files := map[string][]byte{}
@@ -1503,7 +1503,7 @@ func readBundleTarGz(r io.Reader) (map[string][]byte, error) {
 	}
 }
 
-// readEntry reads a knowledge entry from path ("" or "-" = stdin) in
+// readEntry reads a knowledge concept from path ("" or "-" = stdin) in
 // either of the interchange formats from design doc 0004 §5: an OKF
 // document (leading ---) or JSON.
 //
@@ -1535,7 +1535,7 @@ func decodeEntry(data []byte) (*domain.Knowledge, []string, error) {
 			return nil, nil, err
 		}
 		// A verified key on a single-document write is not acted on: this
-		// is an edit, and confirming an entry is a separate call
+		// is an edit, and confirming a concept is a separate call
 		// (ochakai verify). Only bundle import turns the key into a
 		// verification, because that is the review gate (design doc 0043
 		// §3.2).
@@ -1548,7 +1548,7 @@ func decodeEntry(data []byte) (*domain.Knowledge, []string, error) {
 	return &k, nil, nil
 }
 
-// extractTarGz unpacks the OKF bundle under dir, refusing entries that
+// extractTarGz unpacks the OKF bundle under dir, refusing concepts that
 // could escape it (absolute or non-local paths) and anything but regular
 // files.
 func extractTarGz(dir string, r io.Reader) (int, error) {

@@ -414,9 +414,22 @@ For the shape of the system rather than the history of it, read
   the argument against — a tool name is what tells an unfamiliar agent
   what the server is for — and why shipping both names (13 tools) was
   refused.
+  *Revised before release:* counting only the spellings on the wire
+  missed the ones a reader meets. Right after the rename the English
+  documentation said `entry` 287 times and `concept` 6, and
+  `get_concept`'s own description read "Fetch one entry" — the
+  translation table had moved, not gone. §3.6 extends the word to every
+  piece of English a user reads: README, docs, examples, the CLI's help
+  and output, the web UI's labels, the MCP tool and schema descriptions,
+  the OpenAPI descriptions and the server's error text. The line is
+  *words a reader meets* versus *identifiers*: the `entries` JSON key,
+  Go type names, database columns and "entry" in its other English
+  senses (a catalog entry, a `sources` entry, a changelog entry) all
+  stay.
   *For a user:* breaking for any client that names these tools in its
   configuration; a client that only reads the advertised list needs
-  nothing.
+  nothing. The prose change breaks nothing — only scripts matching on
+  help or error text see it.
 
 ## Attachments
 

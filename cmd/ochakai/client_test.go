@@ -39,7 +39,7 @@ func TestParseRef(t *testing.T) {
 	for in, want := range map[string]string{
 		"metrics/revenue":           "metrics/revenue",
 		"ochakai://metrics/revenue": "metrics/revenue",
-		"revenue":                   "revenue", // root-level ids are entries too
+		"revenue":                   "revenue", // root-level ids are concepts too
 	} {
 		id, err := parseRef(in)
 		if err != nil || id != want {
@@ -175,7 +175,7 @@ func TestUsageNamesEveryCommand(t *testing.T) {
 	_ = domain.Types // keep the import honest
 }
 
-// viewOf renders an entry the way a read does, so a rendering test works
+// viewOf renders a concept the way a read does, so a rendering test works
 // on the shape the CLI actually receives.
 func viewOf(t *testing.T, k domain.Knowledge) domain.View {
 	t.Helper()
@@ -217,7 +217,7 @@ func TestRenderContext(t *testing.T) {
 	for _, want := range []string{
 		"## ochakai://queries/monthly-revenue (stable) — Monthly revenue",
 		"verified by human:na0 on 2026-06-01; created by process:claude",
-		// The entry is its document: the producer key and the body come
+		// The concept is its document: the producer key and the body come
 		// out as written, without this renderer knowing about either.
 		"question: Revenue by month?",
 		"Prefer this over writing new SQL.",
@@ -230,26 +230,26 @@ func TestRenderContext(t *testing.T) {
 		}
 	}
 	if strings.Contains(s, "ochakai://queries/monthly-revenue (verified) — Monthly revenue\n- ") {
-		t.Error("rendered entries must not repeat in the Also relevant list")
+		t.Error("rendered concepts must not repeat in the Also relevant list")
 	}
 
-	// A tiny budget still renders the first entry, then reports the rest.
+	// A tiny budget still renders the first concept, then reports the rest.
 	out.Reset()
 	renderContext(&out, res, 10)
 	s = out.String()
 	if !strings.Contains(s, "## ochakai://queries/monthly-revenue") {
-		t.Errorf("first entry must render regardless of budget:\n%s", s)
+		t.Errorf("first concept must render regardless of budget:\n%s", s)
 	}
 	if strings.Contains(s, "## ochakai://insights/revenue-seasonality") {
-		t.Errorf("budget must drop later entries:\n%s", s)
+		t.Errorf("budget must drop later concepts:\n%s", s)
 	}
-	if !strings.Contains(s, "1 more entries beyond --budget") {
-		t.Errorf("omitted entries must be reported:\n%s", s)
+	if !strings.Contains(s, "1 more concepts beyond --budget") {
+		t.Errorf("omitted concepts must be reported:\n%s", s)
 	}
 }
 
 // TestImportReportsUnchanged pins the import summary against a fake
-// server: an existing entry whose PUT answers with Ochakai-Unchanged
+// server: an existing concept whose PUT answers with Ochakai-Unchanged
 // counts (and prints) as unchanged, everything else as before. Servers
 // without the header (absent on the second PUT) keep reporting updated.
 func TestImportReportsUnchanged(t *testing.T) {
@@ -269,7 +269,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		// The payload is a document now (design doc 0043 §3.5), and the
-		// import loop makes one call per entry rather than create-then-
+		// import loop makes one call per concept rather than create-then-
 		// update: whether the id was free is not something a bundle says.
 		if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/markdown") {
 			t.Errorf("Content-Type = %q, want text/markdown", ct)
@@ -311,7 +311,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	for _, want := range []string{
 		"unchanged ochakai://metrics/same\n",
 		"updated ochakai://metrics/diff\n",
-		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 files, 0 skipped, 0 notes)\n",
+		"imported 2 concepts (0 created, 1 updated, 1 unchanged, 0 attachments, 0 files, 0 skipped, 0 notes)\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
@@ -320,7 +320,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 }
 
 // TestImportStrictRefusesBeforeWriting pins the whole point of --strict:
-// a note is a report by default and an entry carrying one still imports,
+// a note is a report by default and a concept carrying one still imports,
 // but under --strict the same bundle fails — and fails before the first
 // PUT, so a sync that would drift lands nothing at all. Without the flag
 // the identical bundle is written, which is what makes this a posture and
@@ -366,7 +366,7 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 		t.Errorf("--strict error = %v, want it to say nothing was written", err)
 	}
 	if puts != 0 {
-		t.Errorf("--strict wrote %d entries before failing, want 0", puts)
+		t.Errorf("--strict wrote %d concepts before failing, want 0", puts)
 	}
 
 	// --dry-run --strict is the CI gate: same verdict, still no writes.
@@ -378,7 +378,7 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 		t.Fatalf("without --strict the same bundle must import: %v", err)
 	}
 	if puts != 1 {
-		t.Errorf("import without --strict wrote %d entries, want 1", puts)
+		t.Errorf("import without --strict wrote %d concepts, want 1", puts)
 	}
 }
 
@@ -417,7 +417,7 @@ func TestPutIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 
 // A verification's whole product is a timestamp and a name, and the only
 // way to read them back was a second call: verify printed one line and
-// dropped the entry the server had already returned. --json hands the
+// dropped the concept the server had already returned. --json hands the
 // same response every other write verb hands over, so a canary can stamp
 // and record verified_at in one round trip.
 func TestVerifyJSONPrintsTheEntry(t *testing.T) {
@@ -457,7 +457,7 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	}
 	last := got.Observed.LastVerified()
 	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
-		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
+		t.Errorf("verified concept = %+v, want the server's response with its verification", got)
 	}
 }
 

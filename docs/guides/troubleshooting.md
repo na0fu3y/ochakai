@@ -41,7 +41,7 @@ operator; it is a property of the deployment, not of the caller.
 `stale_after`), or a `--source` to list what cites a resource. Listing
 everything is deliberately not a mode.
 
-**Search returns nothing on a base that has entries.**
+**Search returns nothing on a base that has concepts.**
 
 - *A Japanese query of only hiragana returns no hits.* The lexical half
   cuts Japanese into two-character windows and keeps only the ones
@@ -50,35 +50,35 @@ everything is deliberately not a mode.
   particle — or check that embeddings are on (see the startup lines under
   [Startup](#startup): on Google Cloud they are the default, but only if
   the service identity may call Vertex AI).
-- *An English question returns the wrong entries.* Lexical search is a bag
-  of words: an entry sharing three function words can outrank the one that
+- *An English question returns the wrong concepts.* Lexical search is a bag
+  of words: a concept sharing three function words can outrank the one that
   names the subject. This is the case embeddings fix.
 - *Nothing matches a term you know is stored.* Rejected and soft-deleted
-  entries are excluded from default search, and `--status` narrows
-  further. Drop the filters before concluding the entry is missing.
+  concepts are excluded from default search, and `--status` narrows
+  further. Drop the filters before concluding the concept is missing.
 - *Embeddings are on but ranking did not change.* Vectors are written when
-  an entry is written, so entries that predate the setting have none. Run
+  a concept is written, so concepts that predate the setting have none. Run
   `ochakai reembed`.
 
 **Scores look meaningless.** They are an ordering, not a measure, and they
 are not comparable between the lexical and hybrid modes. To bound a
 response, use `budget` rather than a score floor.
 
-## Writing entries
+## Writing concepts
 
-**409 on create.** A live entry already has that id — including a
+**409 on create.** A live concept already has that id — including a
 `rejected` one. Use `update`, or pick another id. Creating over a
-*soft-deleted* entry revives it, with its prior history intact; over MCP,
+*soft-deleted* concept revives it, with its prior history intact; over MCP,
 reviving one that was verified, rejected or deprecated before deletion is
 refused instead, because it would put a fresh draft where a recorded
 ruling used to be. REST and the CLI allow that revival: they are the
 surfaces a human curates from.
 
-**404 on update.** `update` replaces an entry that exists; it does not
+**404 on update.** `update` replaces a concept that exists; it does not
 create one.
 
-**412 on update.** The `If-Match` you sent is not the entry's current
-`ETag` — somebody wrote in between. Re-read the entry, reapply your change
+**412 on update.** The `If-Match` you sent is not the concept's current
+`ETag` — somebody wrote in between. Re-read the concept, reapply your change
 and retry. Nothing was written.
 
 **`invalid type "…"`.** A type is one line, no `/`, up to 128 bytes. Any
@@ -86,7 +86,7 @@ value that fits is legal — the recommended vocabulary is a recommendation,
 not a closed set — but a multi-line string is not.
 
 **An agent gets `cannot update … it is verified`.** Working as intended:
-MCP refuses to overwrite or delete curated entries. See the
+MCP refuses to overwrite or delete curated concepts. See the
 [FAQ](../faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified).
 
 ## Import and export
@@ -100,21 +100,21 @@ MCP refuses to overwrite or delete curated entries. See the
 - it is a reserved `index.md` or `log.md`, or a hidden path;
 - the server rejected it, in which case the message carries the server's
   own complaint, and the rest of the bundle still imports;
-- it is an attachment whose entry was not imported.
+- it is an attachment whose concept was not imported.
 
 **Everything imported one directory deeper than expected.** The packed
 shape is the structure: an archive wrapped in a single directory imports
 under that directory, so a bundle keeps its own namespace. That is
 deliberate — unwrap the archive first if you did not want it.
 
-**Import says `unchanged`.** Entries identical to what is stored are left
+**Import says `unchanged`.** Concepts identical to what is stored are left
 alone rather than rewritten, so a re-import does not fill the revision
 history with copies.
 
 ## Attachments
 
 **501 on attach.** The instance has no `OCHAKAI_GCS_BUCKET`, so it stores
-markdown entries only. This is a whole-deployment setting, not a
+markdown concepts only. This is a whole-deployment setting, not a
 per-request one.
 
 **A file is refused.** Only for its size: 5 MiB per file is the limit,
@@ -134,7 +134,7 @@ predate the setting are not backfilled — `ochakai reembed`.
 
 ## The web UI
 
-**The UI is empty though the API has entries.** `ochakai ui` serves the UI
+**The UI is empty though the API has concepts.** `ochakai ui` serves the UI
 against the server *it* selected, which is not necessarily the one your
 last curl went to. Its startup line and `ochakai whoami` both say which.
 
@@ -151,7 +151,7 @@ what turns browser edits into `human:you via process:webui-sa` (design doc
 `OCHAKAI_EMBEDDING_DIM` on a database that already holds vectors rebuilds
 the vector tables at the new width and says so in the log: the old
 vectors were in a space nothing would query, and a vector is derived from
-the entry it describes, so nothing curated is lost (design doc
+the concept it describes, so nothing curated is lost (design doc
 [0053](../design/0053-embeddings-by-default.md) §3). The tables come back
 empty on purpose — run `ochakai reembed` to refill them, which is the
 step that spends money. Ranking is lexical-only until it finishes.

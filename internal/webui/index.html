@@ -468,7 +468,7 @@
       <div class="side-head">
         <span class="lbl">Knowledge</span>
         <button class="btn small" id="tree-refresh" title="Reload the tree">↻</button>
-        <a class="btn small write-only" href="#/new" title="Create a knowledge entry">＋</a>
+        <a class="btn small write-only" href="#/new" title="Create a concept">＋</a>
       </div>
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
@@ -883,9 +883,9 @@ function viewExplore() {
     // point — and being able to read them is how somebody checks what was
     // already declined.
     + `
-    <label class="chip" title="Only entries somebody has confirmed — machine-confirmed or human-reviewed (OKF SPEC §5.3)"><input type="checkbox" id="f-verified"
+    <label class="chip" title="Only concepts somebody has confirmed — machine-confirmed or human-reviewed (OKF SPEC §5.3)"><input type="checkbox" id="f-verified"
       aria-label="confirmed only" ${explore.verified ? 'checked' : ''}>✓ confirmed</label>
-    <label class="chip" title="Only entries a human reviewed and turned down — hidden everywhere else"><input type="checkbox" id="f-rejected"
+    <label class="chip" title="Only concepts a human reviewed and turned down — hidden everywhere else"><input type="checkbox" id="f-rejected"
       aria-label="rejected only" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
   // Filters collapse into a disclosure on narrow screens; keep it open on
   // wide ones (the summary is hidden there, so it could never be reopened).
@@ -906,13 +906,13 @@ function viewExplore() {
            <code>${esc(explore.source)}</code> — everything that derives from this material.
            <a href="#/search">Back to search</a>.</div>`
         : explore.expiredFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Stale feed — entries past the <code>stale_after</code>
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Stale feed — concepts past the <code>stale_after</code>
            their author declared, most overdue first. Verifying does <em>not</em> clear this one: the date is the writer's
            claim, so re-check the entry and then edit it to declare a new expiry (or remove it).
            Uncheck <strong>stale</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
-      <a class="btn write-only" href="#/new" title="Create a knowledge entry">＋ New entry</a>
+      <a class="btn write-only" href="#/new" title="Create a concept">＋ New concept</a>
     </div>
     <details id="filter-details" class="filterbar" ${wide ? 'open' : ''}>
       <summary>Filters</summary>
@@ -924,14 +924,14 @@ function viewExplore() {
         <span class="fb-sep"></span>
         <input type="text" id="f-tag" placeholder="tag" aria-label="tag" value="${esc(explore.tag)}" style="width:6rem">
         <input type="text" id="f-prefix" placeholder="path" aria-label="path scope"
-               title="Only entries under this path, e.g. teams/growth — the tree's “Search here” fills this in"
+               title="Only concepts under this path, e.g. teams/growth — the tree's “Search here” fills this in"
                value="${esc(explore.prefix)}" style="width:8rem">
         <span class="fb-sep"></span>
         <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
           type="checkbox" id="f-age" aria-label="verification age feed" ${explore.ageFeed ? 'checked' : ''}>verification age</label>
-        <label class="chip" title="Entries reported wrong (report_outcome failed) and not verified since — the re-verification feed"><input
+        <label class="chip" title="Concepts reported wrong (report_outcome failed) and not verified since — the re-verification feed"><input
           type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>reported wrong</label>
-        <label class="chip" title="Past the stale_after their author declared — cleared by editing the entry, not by verifying"><input
+        <label class="chip" title="Past the stale_after their author declared — cleared by editing the concept, not by verifying"><input
           type="checkbox" id="f-expired" aria-label="stale feed" ${explore.expiredFeed ? 'checked' : ''}>stale</label>
       </div>
     </details>
@@ -1067,7 +1067,7 @@ async function runSearch(append = false) {
     // Nothing typed: this is the most-searched listing, not everything
     // there is. The feeds say what they are; this one said nothing.
     if (!isFeed && !q) {
-      html = `<div class="truncation-note">Nothing searched yet — the most-searched entries first.</div>` + html;
+      html = `<div class="truncation-note">Nothing searched yet — the most-searched concepts first.</div>` + html;
     }
     if (weak.length) {
       html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
@@ -1169,7 +1169,7 @@ function nodeHTML(prefix, label, count) {
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
     <summary>${label}<span class="count">${count}</span><a class="node-new write-only"
       href="#/new/${prefix.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/"
-      title="New entry in ${esc(prefix)}">＋</a></summary>
+      title="New concept in ${esc(prefix)}">＋</a></summary>
     <div class="children"><div class="empty">…</div></div>
   </details>`;
 }
@@ -1365,7 +1365,7 @@ async function moveEntry(from, to) {
     dragId = null;
     const to = prefix + from.split('/').pop();
     if (to === from) return; // dropped on its own directory
-    if (confirm(`Move ${from} → ${to}?\nInbound references are rewritten; history follows the entry.`)) {
+    if (confirm(`Move ${from} → ${to}?\nInbound references are rewritten; history follows the concept.`)) {
       moveEntry(from, to);
     }
   });
@@ -1440,7 +1440,7 @@ function viewDir(rawPrefix) {
       <span class="grow"></span>
       ${clean ? `<a class="btn small" href="#/search/in/${idPath(clean)}"
         title="Search only what lives under ${esc(prefix)}">🔍 Search here</a>` : ''}
-      <a class="btn small write-only" href="${newHref}" title="Create a knowledge entry in ${esc(prefix) || 'the root'}">＋ New entry here</a>
+      <a class="btn small write-only" href="${newHref}" title="Create a concept in ${esc(prefix) || 'the root'}">＋ New concept here</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;
   loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the entries in them.');
@@ -1459,7 +1459,7 @@ function viewHome() {
     <p style="color:var(--muted);font-size:.9rem">
       <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
       <a href="#/search/reported-wrong">Reported wrong</a> — verified knowledge that came back wrong ·
-      <a class="write-only" href="#/new">＋ New entry</a> ·
+      <a class="write-only" href="#/new">＋ New concept</a> ·
       <a href="#" id="home-export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
     </p>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
@@ -1567,7 +1567,7 @@ async function viewDetail(id) {
               ? 'Checked again and still right — appends a verification, which is what clears the review feeds'
               : 'Confirm this entry — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
             ${entry.rejected
-              ? `<button id="act-withdraw" title="Withdraw the ruling and return the entry to the ordinary pool">Withdraw rejection</button>`
+              ? `<button id="act-withdraw" title="Withdraw the ruling and return the concept to the ordinary pool">Withdraw rejection</button>`
               : `<button class="danger" id="act-reject" title="Reviewed and not accepted — hidden from search, with the reason kept for the next agent">Reject…</button>`}
             <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
             <button class="danger" id="act-delete">Delete…</button>
@@ -1670,7 +1670,7 @@ async function viewDetail(id) {
     // 0024), so the body editor is where they are changed.
     links: () => {
       const links = entry.links || [];
-      if (!links.length) return '<div class="empty">The body links to no other entries yet.</div>';
+      if (!links.length) return '<div class="empty">The body links to no other concepts yet.</div>';
       return `<p class="provenance" style="margin:0 0 .8rem">Taken from the markdown links in the body — edit the body to change them.</p>`
         + '<table class="kv">' + links.map(l => {
         const target = String(l.target || '').replace(/^ochakai:\/\//, '');
@@ -1760,9 +1760,9 @@ async function viewDetail(id) {
     linked: async () => {
       const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
       return () => (entries && entries.length)
-        ? `<p class="provenance" style="margin:0 0 .8rem">Entries whose links point here — the entry's own links are in the Links tab.</p>`
+        ? `<p class="provenance" style="margin:0 0 .8rem">Concepts whose links point here — the concept's own links are in the Links tab.</p>`
           + entries.map(hitCard).join('')
-        : '<div class="empty">Nothing links to this entry yet.</div>';
+        : '<div class="empty">Nothing links to this concept yet.</div>';
     },
     history: async () => {
       // ?history is the object's own ledger, at the object's own address
@@ -1778,7 +1778,7 @@ async function viewDetail(id) {
           </td>
         </tr>`).join('');
       return () => `
-        <p class="provenance" style="margin:0 0 .8rem">Every change, newest first — who made it and the entry as of that change.</p>
+        <p class="provenance" style="margin:0 0 .8rem">Every change, newest first — who made it and the concept as of that change.</p>
         <table class="kv">${rows}</table>`;
     },
   };
@@ -2038,7 +2038,7 @@ async function loadLoopStats() {
   const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
-      <div class="tile"><div class="num">${s.entries?.total ?? 0}</div><div class="lbl">entries</div></div>
+      <div class="tile"><div class="num">${s.entries?.total ?? 0}</div><div class="lbl">concepts</div></div>
       <div class="tile"><div class="num">${confirmed}</div><div class="lbl">confirmed by somebody</div></div>
       <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
       <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>

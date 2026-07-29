@@ -75,23 +75,23 @@ const zshCompletionTmpl = `#compdef ochakai
 _ochakai() {
   local -a commands
   commands=(
-    'search:search knowledge; verified entries rank higher'
+    'search:search knowledge; verified concepts rank higher'
     'browse:list one level of the ID hierarchy (folder view)'
-    'context:the one-call read before a data question (full entries)'
-    'get:print one entry as an OKF document'
-    'put:write an entry from OKF markdown or JSON, creating or replacing'
-    'verify:append a verification (also re-affirms a verified entry)'
-    'reject:record that an entry was reviewed and not accepted'
-    'delete:soft-delete an entry'
-    'purge:hard-delete a soft-deleted entry, freeing its id'
-    'reembed:embed entries that have no vector for the configured model'
-    'move:move (rename) an entry; references are rewritten'
-    'attach:attach files to an entry'
+    'context:the one-call read before a data question (full concepts)'
+    'get:print one concept as an OKF document'
+    'put:write a concept from OKF markdown or JSON, creating or replacing'
+    'verify:append a verification (also re-affirms a verified concept)'
+    'reject:record that a concept was reviewed and not accepted'
+    'delete:soft-delete a concept'
+    'purge:hard-delete a soft-deleted concept, freeing its id'
+    'reembed:embed concepts that have no vector for the configured model'
+    'move:move (rename) a concept; references are rewritten'
+    'attach:attach files to a concept'
     'detach:remove an attachment'
-    'usage:show usage totals for an entry'
+    'usage:show usage totals for a concept'
     'stats:the whole loop: what is stored, what each queue holds, what review did'
-    'report:report an outcome (worked/failed) for an entry'
-    'revisions:list the change history of an entry (newest first)'
+    'report:report an outcome (worked/failed) for a concept'
+    'revisions:list the change history of a concept (newest first)'
     'log:print the history under a path as OKF log.md'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
@@ -115,12 +115,12 @@ _ochakai() {
         '*--type[filter by type]:type:(@TYPES@)' \
         '*--status[filter by status]:status:(@STATUSES@)' \
         '*--tag[filter by tag]:tag:' \
-        '*--prefix[only entries under this path]:prefix:' \
-        '--source[only entries citing this resource]:source:' \
-        '--links-to[only entries whose body links at this entry]:links-to:' \
-        '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
+        '*--prefix[only concepts under this path]:prefix:' \
+        '--source[only concepts citing this resource]:source:' \
+        '--links-to[only concepts whose body links at this concept]:links-to:' \
+        '*--trust[filter by who confirmed the concept (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
-        '--rejected[only entries a human turned down]' \
+        '--rejected[only concepts a human turned down]' \
         '--sort[list instead of searching: by verification age, demand, failed reports, or declared expiry]:sort:(verified_at usage failed stale_after)' \
         '--limit[max results]:limit:' \
         '--cursor[resume a listing where the last page ended]:cursor:' \
@@ -132,10 +132,10 @@ _ochakai() {
         '*--type[filter by type]:type:(@TYPES@)' \
         '*--status[filter by status]:status:(@STATUSES@)' \
         '*--tag[filter by tag]:tag:' \
-        '*--prefix[only entries under this path]:prefix:' \
-        '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
+        '*--prefix[only concepts under this path]:prefix:' \
+        '*--trust[filter by who confirmed the concept (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
-        '--limit[max full entries]:limit:' \
+        '--limit[max full concepts]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
         '--min-score[drop hits below this score]:min-score:' \
         '--json[print the raw JSON response]' \
@@ -162,19 +162,19 @@ _ochakai() {
       _arguments '--limit[max results]:limit:' '--json[print the raw JSON response]' '--url[server URL]:url:'
       ;;
     log)
-      _arguments '--limit[max entries]:limit:' '--url[server URL]:url:'
+      _arguments '--limit[max concepts]:limit:' '--url[server URL]:url:'
       ;;
     report)
       _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
       ;;
     put)
-      _arguments '-f[input file]:file:_files' '--only-if-new[write only if the id is free]' '--if-match[write only if the entry still has this version]:version:' '--json[print the entry as JSON]' '--url[server URL]:url:'
+      _arguments '-f[input file]:file:_files' '--only-if-new[write only if the id is free]' '--if-match[write only if the concept still has this version]:version:' '--json[print the concept as JSON]' '--url[server URL]:url:'
       ;;
     verify)
-      _arguments '--json[print the entry as JSON]' '--url[server URL]:url:'
+      _arguments '--json[print the concept as JSON]' '--url[server URL]:url:'
       ;;
     reject)
-      _arguments '--note[why it was not accepted]:note:' '--withdraw[take back the rejection]' '--json[print the entry as JSON]' '--url[server URL]:url:'
+      _arguments '--note[why it was not accepted]:note:' '--withdraw[take back the rejection]' '--json[print the concept as JSON]' '--url[server URL]:url:'
       ;;
     delete|purge|detach|move)
       _arguments '--url[server URL]:url:'
@@ -183,7 +183,7 @@ _ochakai() {
       _arguments '--name[attachment name]:name:' '--json[print the attachment metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
       ;;
     reembed)
-      _arguments '--limit[max entries per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
+      _arguments '--limit[max concepts per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     export)
       _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
@@ -288,23 +288,23 @@ complete -F _ochakai ochakai
 const fishCompletionTmpl = `# fish completion for ochakai — ochakai completion fish | source
 complete -c ochakai -f
 
-complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
+complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified concepts rank higher'
 complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
-complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full entries)'
-complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
-complete -c ochakai -n __fish_use_subcommand -a put -d 'write an entry from OKF markdown or JSON, creating or replacing'
-complete -c ochakai -n __fish_use_subcommand -a verify -d 'append a verification (also re-affirms a verified entry)'
-complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that an entry was reviewed and not accepted'
-complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
-complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted entry, freeing its id'
-complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed entries that have no vector for the configured model'
-complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) an entry; references are rewritten'
-complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to an entry'
+complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full concepts)'
+complete -c ochakai -n __fish_use_subcommand -a get -d 'print one concept as an OKF document'
+complete -c ochakai -n __fish_use_subcommand -a put -d 'write a concept from OKF markdown or JSON, creating or replacing'
+complete -c ochakai -n __fish_use_subcommand -a verify -d 'append a verification (also re-affirms a verified concept)'
+complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that a concept was reviewed and not accepted'
+complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete a concept'
+complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted concept, freeing its id'
+complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that have no vector for the configured model'
+complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept; references are rewritten'
+complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to a concept'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
-complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
+complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for a concept'
 complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
-complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
-complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
+complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for a concept'
+complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of a concept (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a log -d 'print the history under a path as OKF log.md'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
@@ -334,24 +334,24 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l type -x -
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x -a '@STATUSES@' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed stale_after' -d 'list instead of searching: by verification age, demand, failed reports, or declared expiry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only concepts under this path'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l exit-code -d 'exit 2 while any review queue is non-empty'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l links-to -x -d 'only entries whose body links at this entry'
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the entry (OKF SPEC §5.3)'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only concepts citing this resource'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l links-to -x -d 'only concepts whose body links at this concept'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the concept (OKF SPEC §5.3)'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 'filter by an OKF frontmatter key=value'
-complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only concepts a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l cursor -x -d 'resume a listing where the last page ended'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l withdraw -d 'take back the rejection'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions log' -l limit -x -d 'max results'
-complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
+complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max concepts per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -s f -r -F -d 'input file'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l only-if-new -d 'write only if the id is free'
-complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the entry still has this version'
+complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the concept still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

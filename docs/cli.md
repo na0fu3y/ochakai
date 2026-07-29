@@ -22,25 +22,25 @@ ochakai — context provider for data agents
 Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
-  search [query]          search knowledge; verified entries rank higher
+  search [query]          search knowledge; verified concepts rank higher
   browse [prefix]         list one level of the ID hierarchy (folder view)
-  context <question>      the one-call read before a data question (full entries)
-  get <id>                print one entry as an OKF document
-  put <id> [-f file]      write an entry from OKF markdown or JSON, creating
+  context <question>      the one-call read before a data question (full concepts)
+  get <id>                print one concept as an OKF document
+  put <id> [-f file]      write a concept from OKF markdown or JSON, creating
                           or replacing (every change kept as a revision)
-  verify <id>             record a verification (re-affirms a verified entry too)
+  verify <id>             record a verification (re-affirms a verified concept too)
   reject <id>             record a rejection and why (--withdraw takes it back)
-  delete <id>             soft-delete an entry (history retained)
-  purge <id>              hard-delete a soft-deleted entry, freeing its id
-  reembed                 embed entries missing a vector for the current model
-  move <id> <new-id>      move (rename) an entry; references are rewritten
-  attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
+  delete <id>             soft-delete a concept (history retained)
+  purge <id>              hard-delete a soft-deleted concept, freeing its id
+  reembed                 embed concepts missing a vector for the current model
+  move <id> <new-id>      move (rename) a concept; references are rewritten
+  attach <id> <file...>   attach files to a concept (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
-  revisions <id>          list an entry's change history (newest first)
+  revisions <id>          list a concept's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
@@ -64,9 +64,9 @@ Run "ochakai <command> -h" for flags and examples.
 ```
 Usage: ochakai attach [flags] <id> <file...>
 
-Attach files to a knowledge entry (any file, up to 5 MiB each — the
+Attach files to a knowledge concept (any file, up to 5 MiB each — the
 media type is sniffed from the bytes). A file of the same name is
-replaced (the change is kept as a revision). Reference the file from the entry's body so its
+replaced (the change is kept as a revision). Reference the file from the concept's body so its
 caption is searchable and it survives OKF export/import — the hint
 printed after attaching shows the canonical relative link. Requires
 the server to have GCS configured (OCHAKAI_GCS_BUCKET).
@@ -92,11 +92,11 @@ Usage: ochakai browse [flags] [prefix]
 
 List one level of the ID hierarchy (the folder view of design docs
 0014 and 0017, the CLI counterpart of the web UI's Browse tab).
-Without an argument, the top-level directories with their entry
-counts; with a prefix, the subdirectories and entries directly under
-it. Directories print as "name/	count", entries as
+Without an argument, the top-level directories with their concept
+counts; with a prefix, the subdirectories and concepts directly under
+it. Directories print as "name/	count", concepts as
 "segment	type	status	title", and the files in the directory as
-"name	file	media-type	bytes". Rejected entries are hidden, as in
+"name	file	media-type	bytes". Rejected concepts are hidden, as in
 search.
 
 Flags:
@@ -138,30 +138,30 @@ Examples:
 Usage: ochakai context [flags] <question>
 
 Gather what to read before answering a data question, in one call:
-the full entries behind the top search hits (verified entries rank
+the full concepts behind the top search hits (verified concepts rank
 higher), expanded one hop through links so the insight explaining a
 metric travels with it. Markdown on stdout, ready for an agent's
 context window. No hits print nothing (exit 0).
 
 Flags:
   -budget int
-    	cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under "outline"
+    	cap the response at ~this many bytes (0 = no cap); the rendered output stops printing concepts, --json asks the server to cap and list what did not fit under "outline"
   -fm key=value
     	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
   -json
     	print the raw JSON response
   -limit int
-    	max full entries (server default 5, max 20)
+    	max full concepts (server default 5, max 20)
   -min-score float
     	drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)
   -prefix path
-    	only entries under this path, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands
+    	only concepts under this path, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands
   -status value
     	filter by status: draft|stable|deprecated (repeatable)
   -tag value
     	filter by tag (repeatable)
   -trust value
-    	filter by who confirmed the entry: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
+    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
     	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
   -url ochakai use
@@ -179,7 +179,7 @@ Examples:
 ```
 Usage: ochakai delete [flags] <id>
 
-Soft-delete a knowledge entry (history is retained server-side).
+Soft-delete a knowledge concept (history is retained server-side).
 
 Flags:
   -url ochakai use
@@ -194,7 +194,7 @@ Examples:
 ```
 Usage: ochakai detach [flags] <id> <name>
 
-Remove an attachment from a knowledge entry (the change is kept as a
+Remove an attachment from a knowledge concept (the change is kept as a
 revision; content-addressed bytes stay referenced by history).
 
 Flags:
@@ -223,7 +223,7 @@ Flags:
 Examples:
   ochakai export ./knowledge
   ochakai export - > ochakai-okf.tar.gz
-  ochakai export --no-attachments - > entries.tar.gz   # bytes are in GCS; copy them from there
+  ochakai export --no-attachments - > concepts.tar.gz   # bytes are in GCS; copy them from there
 ```
 
 ## ochakai get
@@ -231,7 +231,7 @@ Examples:
 ```
 Usage: ochakai get [flags] <id>
 
-Print one knowledge entry as an OKF document (YAML frontmatter +
+Print one knowledge concept as an OKF document (YAML frontmatter +
 markdown body), and nothing else, so the output round-trips through
 `ochakai put`. Who wrote and confirmed it is an observation rather
 than part of the document, so it goes to stderr, as attachment metadata
@@ -242,7 +242,7 @@ document, the projection under .summary, and the provenance under
 
 Flags:
   -download string
-    	save the entry's attachments into this directory
+    	save the concept's attachments into this directory
   -json
     	print the whole read as JSON (document, summary, observed) instead of the document alone
   -url ochakai use
@@ -261,30 +261,30 @@ Usage: ochakai import [flags] <dir | file.tar.gz | ->
 
 Import an OKF bundle (a directory of markdown + YAML frontmatter, or
 a tar.gz of one; "-" reads the tar.gz from stdin). The inverse of
-`ochakai export`: each path names its entry (the path minus .md is
+`ochakai export`: each path names its concept (the path minus .md is
 the id), the frontmatter type key names the type (required — a
 markdown file without one is not a concept, and is kept as a file),
 reserved index.md / log.md files are skipped, keys the format does
-not define are kept as written, and existing entries are replaced (kept as revisions; entries identical
+not define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical
 to what is stored are left untouched and reported as unchanged;
 entries the server rejects as invalid — e.g. one whose type is not a
 single line — are skipped and reported).
-Files referenced by an entry's body markdown links become its
+Files referenced by a concept's body markdown links become its
 attachments, wherever they sit in the bundle (their location is
-preserved for re-export); unreferenced data files inside an entry's
-directory (<id>/<name>) attach to that entry. Everything else the
+preserved for re-export); unreferenced data files inside a concept's
+directory (<id>/<name>) attach to that concept. Everything else the
 bundle carried is written at the path it arrived at — what enters
-leaves, so nothing is dropped for belonging to no entry. The packed shape is
+leaves, so nothing is dropped for belonging to no concept. The packed shape is
 the structure: an archive wrapped in a single directory imports
 under that directory — the bundle keeps its own namespace. Works
 with any OKF bundle, not just ochakai's own.
 A file that cannot be stored at all — empty, oversized, or at a path
 ochakai cannot address — is skipped; a value read differently than
-it was written is a note and the entry still imports. A document
+it was written is a note and the concept still imports. A document
 that says who generated or confirmed it is one of those: the keys
 are kept as the document's own claim, under `received`, and never
 become this instance's provenance — so a bundle from another
-instance imports with a note per entry, while one exported from
+instance imports with a note per concept, while one exported from
 here imports silently. Both are
 reported and neither fails the command, because a consumer takes the
 document rather than rejecting it. --strict is the opposite posture,
@@ -320,7 +320,7 @@ what makes the history portable.
 
 Flags:
   -limit int
-    	max entries (default 1000)
+    	max concepts (default 1000)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
@@ -363,7 +363,7 @@ Examples:
 ```
 Usage: ochakai move [flags] <id> <new-id>
 
-Move (rename) a knowledge entry to a new id. Revisions, usage, and
+Move (rename) a knowledge concept to a new id. Revisions, usage, and
 attachments follow, and inbound references (link targets, and
 a `model` key where a document carries one) are rewritten so nothing
 breaks.
@@ -381,7 +381,7 @@ Examples:
 ```
 Usage: ochakai purge [flags] <id>
 
-Hard-delete an already soft-deleted entry: the entry, its revisions,
+Hard-delete an already soft-deleted concept: the concept, its revisions,
 usage, and attachment metadata are erased and the id is freed for a
 move. History is gone — `ochakai delete` first, then purge. A live
 entry is refused.
@@ -400,17 +400,17 @@ Examples:
 ```
 Usage: ochakai put [flags] <id>
 
-Write a knowledge entry from -f or stdin, creating it or replacing
+Write a knowledge concept from -f or stdin, creating it or replacing
 what is there. Input is an OKF document (--- frontmatter with type,
 markdown body — the format `ochakai get` prints; title is optional,
 the id's last segment is the display name when it is absent) or JSON
-(see api/openapi.yaml). The id is the entry's path; pass it as the
+(see api/openapi.yaml). The id is the concept's path; pass it as the
 argument (it overrides an id in the input, and OKF documents carry
-none — the path is the id). New entries default to draft; provenance
+none — the path is the id). New concepts default to draft; provenance
 is recorded from your Google identity. Every change is kept as a
 revision server-side.
 With --only-if-new the write lands only if the id is free, and fails
-instead of replacing. With --if-match it lands only if the entry still
+instead of replacing. With --if-match it lands only if the concept still
 has the version you read, and fails instead of overwriting someone
 else's edit.
 
@@ -418,16 +418,16 @@ Flags:
   -f string
     	input file (default: stdin)
   -if-match version
-    	write only if the entry still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does
+    	write only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting a concept does not move it: only an edit does
   -json
-    	print the written entry as JSON
+    	print the written concept as JSON
   -only-if-new
     	write only if the id is free; a taken id fails instead of being replaced
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
-  ochakai put runbook/restore -f entry.md
+  ochakai put runbook/restore -f concept.md
   ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new
 ```
 
@@ -436,7 +436,7 @@ Examples:
 ```
 Usage: ochakai reembed [flags]
 
-Embed entries that have no vector for the configured model — entries
+Embed concepts that have no vector for the configured model — concepts
 written before semantic search was enabled, or before the model was
 changed. Runs bounded passes until nothing is left, so it can be started
 once and left alone.
@@ -445,7 +445,7 @@ Flags:
   -json
     	print the raw JSON response of each pass
   -limit int
-    	max entries to embed per pass (server default 200)
+    	max concepts to embed per pass (server default 200)
   -once
     	run a single pass instead of continuing until nothing is left
   -url ochakai use
@@ -462,11 +462,11 @@ Examples:
 ```
 Usage: ochakai reject [flags] <id>
 
-Record that an entry was reviewed and not accepted, with the reason.
-Rejected entries are hidden from search unless asked for
+Record that a concept was reviewed and not accepted, with the reason.
+Rejected concepts are hidden from search unless asked for
 (`search --rejected`), which is how an agent checks whether a proposal
 was already turned down before making it again.
-It does not edit the entry: the lifecycle status and the ETag stay put.
+It does not edit the concept: the lifecycle status and the ETag stay put.
 A rejection is this instance's ruling, so an exported bundle carries the
 entry's real status rather than folding the ruling onto deprecated.
 Use --withdraw to take one back — the wire calls that ruling
@@ -474,7 +474,7 @@ Use --withdraw to take one back — the wire calls that ruling
 
 Flags:
   -json
-    	print the entry as JSON
+    	print the concept as JSON
   -note string
     	why it was not accepted — the next agent reads this before proposing again
   -url ochakai use
@@ -492,11 +492,11 @@ Examples:
 ```
 Usage: ochakai report [flags] <id> <worked|failed>
 
-Report whether acting on an entry gave a correct result — the last
+Report whether acting on a concept gave a correct result — the last
 edge of the write-back loop. After running an attested computation or SQL you
-wrote from an entry, report worked or failed (say what went wrong with
---note); failed counts against verified entries flag them for
-re-verification. Prints the entry's updated usage totals.
+wrote from a concept, report worked or failed (say what went wrong with
+--note); failed counts against verified concepts flag them for
+re-verification. Prints the concept's updated usage totals.
 
 Flags:
   -json
@@ -516,9 +516,9 @@ Examples:
 ```
 Usage: ochakai revisions [flags] <id>
 
-List an entry's change history, newest first: who changed it, how,
+List a concept's change history, newest first: who changed it, how,
 and when — the audit surface behind "every change kept as a
-revision". Works for soft-deleted entries too. The whole entry as it
+revision". Works for soft-deleted concepts too. The whole concept as it
 stood, as an OKF document, is in the JSON output (--json), so a diff
 between two revisions is a text diff.
 
@@ -540,27 +540,27 @@ Examples:
 ```
 Usage: ochakai search [flags] [query]
 
-Search the knowledge base; verified entries rank higher.
+Search the knowledge base; verified concepts rank higher.
 Output: score, uri, status, title — description (one hit per line).
 With --sort verified_at the command lists by verification age instead
 of searching (oldest first, never-verified last — the
 canary feed); output leads with verified_at. With --sort usage it lists
 by demand (most search_hits first, never-used oldest-first at the bottom
 — the draft review feed); output leads with the search_hits count.
-With --sort failed it lists entries whose failure reports (report_outcome
+With --sort failed it lists concepts whose failure reports (report_outcome
 failed) are still unanswered, worst first — the re-verification feed;
-output leads with the failed count. `ochakai verify` takes an entry out
+output leads with the failed count. `ochakai verify` takes a concept out
 of it, so a base that is kept up shows an empty feed.
-With --sort stale_after it lists entries whose declared stale_after has
+With --sort stale_after it lists concepts whose declared stale_after has
 passed, most overdue first; output leads with that date. Verifying does
 not empty this one — the date is the writer's declaration, so clearing it
-means editing the entry to re-declare an expiry.
+means editing the concept to re-declare an expiry.
 --source, --links-to and --prefix are filters, not modes: they combine
-with a query or with any --sort. --source narrows to the entries citing
+with a query or with any --sort. --source narrows to the concepts citing
 one resource (the reverse of sources[].resource); --links-to narrows to
-the entries whose body links at one entry — its backlinks, the reverse
+the concepts whose body links at one concept — its backlinks, the reverse
 of its inbound edges; --prefix narrows to
-the entries living under a path, which is how a team's own knowledge is
+the concepts living under a path, which is how a team's own knowledge is
 told apart from the company-wide vocabulary.
 A listing that has more behind it prints the way on to stderr; pass it
 back with --cursor to read the next page. A search prints none: it is
@@ -576,21 +576,21 @@ Flags:
   -limit int
     	max results (server default 10, max 50; with --sort: 100, max 1000)
   -links-to id
-    	only entries whose body links at this id — what points at one entry, in address order (its backlinks)
+    	only concepts whose body links at this id — what points at one concept, in address order (its backlinks)
   -prefix path
-    	only entries under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
+    	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
   -rejected
-    	only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results
+    	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
   -sort string
     	list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first
   -source resource
-    	only entries citing this resource (exact match against sources[].resource) — what derives from one piece of material
+    	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
   -status value
     	filter by status: draft|stable|deprecated (repeatable)
   -tag value
     	filter by tag (repeatable)
   -trust value
-    	filter by who confirmed the entry: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
+    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
     	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
   -url ochakai use
@@ -616,7 +616,7 @@ Usage: ochakai stats [flags]
 Show the improvement loop as the instance sees it: what the knowledge
 base is made of now, how much each queue is holding, what review did
 lately, what callers reported, and what they searched for and did not
-find. `usage` measures one entry; this measures the base.
+find. `usage` measures one concept; this measures the base.
 
 One line per number, so it composes: cron it and diff the output, or
 grep one line out of it for a prompt or a dashboard. The gap lines are
@@ -624,7 +624,7 @@ the questions that came back empty, most-asked first — the list of what
 to write next.
 
 The three queue lines — drafts waiting to be published or turned down,
-entries whose failure reports are unanswered, entries past the expiry
+entries whose failure reports are unanswered, concepts past the expiry
 their author declared — carry the command that lists that queue, with
 the scope you asked under, so the next step is the text on the line.
 The verification-age feed is not one of them: it ranks every verified
@@ -643,7 +643,7 @@ Flags:
   -json
     	print JSON
   -prefix path
-    	measure only entries under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere
+    	measure only concepts under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
@@ -684,10 +684,10 @@ Examples:
 ```
 Usage: ochakai usage [flags] <id>
 
-Show how often an entry was actually used: appeared in search results,
+Show how often a concept was actually used: appeared in search results,
 fetched individually, reported worked or failed — and when it was last
 used. The measure of the write-back loop: evidence for promoting a
-draft, and a staleness signal for verified entries nobody uses.
+draft, and a staleness signal for verified concepts nobody uses.
 
 Flags:
   -json
@@ -727,18 +727,18 @@ Examples:
 ```
 Usage: ochakai verify [flags] <id>
 
-Append a verification against the entry as it stands: you and the time
+Append a verification against the concept as it stands: you and the time
 are added to its ledger. The first confirmation and the tenth re-check
-are the same command, and re-checking is what takes an entry out of
+are the same command, and re-checking is what takes a concept out of
 both review feeds (--sort verified_at, --sort failed).
-It does not edit the entry: the lifecycle status and the ETag stay put,
+It does not edit the concept: the lifecycle status and the ETag stay put,
 because confirming knowledge and publishing it are different acts. Use
 `put` to move a draft to stable.
-Verifying a rejected entry lifts the rejection.
+Verifying a rejected concept lifts the rejection.
 
 Flags:
   -json
-    	print the verified entry as JSON
+    	print the verified concept as JSON
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 

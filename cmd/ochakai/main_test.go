@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Guard: the help text addresses entries by path (design doc 0017). The
+// Guard: the help text addresses concepts by path (design doc 0017). The
 // two-part "<type>/<id>" form predates it and no longer parses as two
 // arguments — an id is one path.
 func TestUsageAddressesEntriesByPath(t *testing.T) {
@@ -21,7 +21,7 @@ func TestUsageAddressesEntriesByPath(t *testing.T) {
 	}
 }
 
-// Guard: every `ochakai put` we ship names the entry's id. The id is an
+// Guard: every `ochakai put` we ship names the concept's id. The id is an
 // argument and an OKF document carries none (design doc 0017), so a
 // flags-only invocation is one an agent following our own instructions
 // cannot complete — it fails on the server with a format complaint about
@@ -58,7 +58,7 @@ func TestShippedPutExamplesPassAnID(t *testing.T) {
 
 // Guard: instructions we ship to agents name types in the 0023 vocabulary.
 // Free types mean a stale name is not rejected — an agent following the old
-// wording silently grows a "query"-typed entry beside the Golden Queries,
+// wording silently grows a "query"-typed concept beside the Golden Queries,
 // so these files are the only thing standing between the vocabulary and
 // drift.
 func TestShippedInstructionsUseCurrentTypeVocabulary(t *testing.T) {

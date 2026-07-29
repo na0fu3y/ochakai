@@ -37,7 +37,7 @@ agents that consume it write the next piece back.
 
 Closest on metric definitions, and by 2026 the warehouses hold them
 natively as schema objects. In a single-warehouse world that half is
-theirs and ochakai's `Metric` entries are redundant. What stays is
+theirs and ochakai's `Metric` concepts are redundant. What stays is
 everything that does not fit a semantic-model YAML: the baseline, the
 caveat, the threshold, the query somebody sanctioned, and knowledge that
 spans warehouses. ochakai stopped generating SQL deliberately
@@ -76,7 +76,7 @@ mechanism rather than habit, and still without an LLM.
 
 RAG retrieves passages from documents somebody wrote for other reasons;
 what comes back is as right as whatever was in the wiki. ochakai returns
-entries a human marked `verified`, with provenance saying who wrote it,
+concepts a human marked `verified`, with provenance saying who wrote it,
 who checked it and when, and a feed that resurfaces knowledge which has
 gone too long unchecked or came back wrong. **The unit is a reviewed
 claim, not a chunk.**
@@ -116,21 +116,21 @@ graph is untested.)
 What the vault does not have is everything that is not the file format:
 
 - **The unit.** A note is a document somebody wrote for their own
-  reasons. An ochakai entry is a claim carrying its lifecycle, its
+  reasons. An ochakai concept is a claim carrying its lifecycle, its
   `verified` ledger and its provenance in
   [OKF](design/0036-okf-schema-first.md)'s own keys. Those keys are
   ordinary YAML, so a vault can hold them — which is exactly where the
-  difference shows. In a vault, a `verified` entry naming a human is a
+  difference shows. In a vault, a `verified` concept naming a human is a
   line somebody typed. Here it is what the instance observed of an
   authenticated caller, and it is never read back from a document
   ([0009](design/0009-provenance-portability.md),
   [0043](design/0043-document-first.md)) — a file has no observer.
   Nothing in a vault appends to that ledger, derives a trust tier from
-  it, refuses a write against it, or resurfaces an entry when its last
+  it, refuses a write against it, or resurfaces a concept when its last
   confirmation has aged out.
 - **The loop (C7).** There is no analogue at all — no review queue, no
   memory of *no*, no usage counts, no verification-age feed, no outcome
-  reports from agents that acted on an entry and found it wrong
+  reports from agents that acted on a concept and found it wrong
   ([the loop](loop.md), [0025](design/0025-closing-the-loop.md)). This is
   the sharpest difference, and it is the product.
 - **Direction.** A vault is written by a human for a human, with the
@@ -184,10 +184,10 @@ an evaluation.
   production elsewhere ([0003](design/0003-gcp-only.md)). For many teams
   that is disqualifying, and it is a decision rather than a gap.
 - **No authorization.** Whoever can reach a deployment can read and write
-  everything ([0002](design/0002-authn-authz.md)). If you need per-entry
+  everything ([0002](design/0002-authn-authz.md)). If you need per-concept
   permissions, this is the wrong tool.
 - **Scale.** Built for the size a *curated* base reaches — thousands of
-  entries, not millions, because every one passed a human.
+  concepts, not millions, because every one passed a human.
 - **Ecosystem.** One maintainer, one binary, no plugins, no marketplace.
 
 ## Choosing

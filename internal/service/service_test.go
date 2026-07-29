@@ -51,7 +51,7 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 	vector := []domain.SearchHit{verifiedHit("verified-doc")}
 	out := rrfFuse(10, lexical, vector)
 	if out[0].ID != "verified-doc" {
-		t.Errorf("verified entry should outrank draft at equal RRF score, got %s first", out[0].ID)
+		t.Errorf("verified concept should outrank draft at equal RRF score, got %s first", out[0].ID)
 	}
 }
 
@@ -201,7 +201,7 @@ func TestEmbeddingTextCapsTheWholeText(t *testing.T) {
 
 // The window is a property of the model. Handing gemini-embedding-2's
 // 8192-token input the budget sized for a 2048-token model throws away
-// three quarters of it, and the entry embeds fine while carrying less of
+// three quarters of it, and the concept embeds fine while carrying less of
 // itself — a loss nothing reports.
 func TestEmbedBytesFollowsTheModel(t *testing.T) {
 	conservative := &Service{Embedder: &shrinkEmbedder{}}
@@ -254,14 +254,14 @@ func TestValidateRejectsBadInput(t *testing.T) {
 		return &domain.Knowledge{Type: "metric", ID: "revenue", Title: "Revenue"}
 	}
 	if err := validate(base()); err != nil {
-		t.Errorf("valid entry rejected: %v", err)
+		t.Errorf("valid concept rejected: %v", err)
 	}
 	// Title is optional (design doc 0022): the id's last segment is the
 	// display name when it is absent.
 	titleless := base()
 	titleless.Title = ""
 	if err := validate(titleless); err != nil {
-		t.Errorf("titleless entry rejected: %v", err)
+		t.Errorf("titleless concept rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*domain.Knowledge){
 		"bad type":   func(k *domain.Knowledge) { k.Type = "no/slash" },
@@ -359,7 +359,7 @@ func TestExampleGoldenQueryRegisters(t *testing.T) {
 		t.Errorf("type = %q, want %q", k.Type, domain.TypeComputations)
 	}
 	if err := validate(&k.Knowledge); err != nil {
-		t.Errorf("example entry rejected: %v", err)
+		t.Errorf("example concept rejected: %v", err)
 	}
 	if q, _ := k.Attrs["question"].(string); q == "" {
 		t.Error("attrs.question missing: a verified query without its question is not searchable as one")
@@ -377,7 +377,7 @@ func TestExampleGoldenQueryRegisters(t *testing.T) {
 	}
 }
 
-// packWithinBudget delivers whole entries or none: a body cut in half
+// packWithinBudget delivers whole concepts or none: a body cut in half
 // still looks like a body, and half of an attested computation's SQL
 // still looks executable.
 func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
@@ -392,8 +392,8 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	}
 	small := entry("insights/small", 100)
 	big := entry("insights/big", 5000)
-	// Room for the small entry plus the row that names the big one: the
-	// outline is inside the budget, so "room for one entry" has to include
+	// Room for the small concept plus the row that names the big one: the
+	// outline is inside the budget, so "room for one concept" has to include
 	// what saying "and there was another" costs.
 	one := serializedSize(&small)
 	oneAndARow := one + jsonSize(outlineRow(&big, serializedSize(&big))) + 10
@@ -408,10 +408,10 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	t.Run("overflow becomes an outline row", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.View{small, big}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
-			t.Fatalf("want only the small entry in full, got %d", len(kept))
+			t.Fatalf("want only the small concept in full, got %d", len(kept))
 		}
 		if len(outline) != 1 || outline[0].ID != big.ID {
-			t.Fatalf("want the big entry outlined, got %v", outline)
+			t.Fatalf("want the big concept outlined, got %v", outline)
 		}
 		if outline[0].Bytes != serializedSize(&big) || outline[0].Description != big.Summary.Description {
 			t.Errorf("outline row must carry size and description: %+v", outline[0])
@@ -421,24 +421,24 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 		}
 	})
 
-	// A model entry carries its whole spec in attrs and can outweigh the
+	// A model concept carries its whole spec in attrs and can outweigh the
 	// entire budget. A prefix cut would let it starve everything below it;
 	// greedy packing keeps the rest and names the giant.
 	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.View{big, small}, oneAndARow)
 		if len(kept) != 1 || kept[0].ID != small.ID {
-			t.Fatalf("want the small entry delivered behind the giant, got %+v", kept)
+			t.Fatalf("want the small concept delivered behind the giant, got %+v", kept)
 		}
 		if len(outline) != 1 || outline[0].ID != big.ID {
 			t.Fatalf("want the giant outlined, got %v", outline)
 		}
 	})
 
-	// Budgets below one entry outline everything rather than shipping a
-	// fragment: an empty entries list with a populated outline is a usable
-	// answer, a half-entry is not. Naming everything is also the floor —
-	// a caller cannot raise a budget for entries it never heard about.
-	t.Run("a budget below one entry outlines everything", func(t *testing.T) {
+	// Budgets below one concept outline everything rather than shipping a
+	// fragment: an empty concepts list with a populated outline is a usable
+	// answer, a half-concept is not. Naming everything is also the floor —
+	// a caller cannot raise a budget for concepts it never heard about.
+	t.Run("a budget below one concept outlines everything", func(t *testing.T) {
 		kept, outline := packWithinBudget([]domain.View{small, big}, 1)
 		if len(kept) != 0 || len(outline) != 2 {
 			t.Errorf("want everything outlined, got %d kept / %d outlined", len(kept), len(outline))
@@ -446,8 +446,8 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	})
 
 	// The budget governs the response, not half of it. An outline row
-	// carries a description — unbounded on the entry — so a budget that
-	// only counted delivered entries left the actual payload unbounded.
+	// carries a description — unbounded on the concept — so a budget that
+	// only counted delivered concepts left the actual payload unbounded.
 	t.Run("the outline is inside the budget", func(t *testing.T) {
 		wordy := make([]domain.View, 6)
 		for i := range wordy {
@@ -475,7 +475,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 				total, budget, len(kept), len(outline))
 		}
 		if len(kept)+len(outline) != len(wordy) {
-			t.Errorf("every entry must be delivered or named: %d kept, %d outlined, want %d total",
+			t.Errorf("every concept must be delivered or named: %d kept, %d outlined, want %d total",
 				len(kept), len(outline), len(wordy))
 		}
 		for _, row := range outline {
@@ -486,7 +486,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	})
 
 	// The whole document, not just the body: a producer key can be the
-	// largest thing an entry carries, and it is in the frontmatter.
+	// largest thing a concept carries, and it is in the frontmatter.
 	t.Run("size counts the whole document", func(t *testing.T) {
 		render := func(k domain.Knowledge) domain.View {
 			v, err := okf.ViewOf(&k)
@@ -505,7 +505,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 }
 
 // A byte budget only approximates a token count, and the approximation is
-// worst for Japanese. When the model rejects the text anyway, the entry
+// worst for Japanese. When the model rejects the text anyway, the concept
 // must not vanish from vector search: shorten and try again, rather than
 // log a warning and report the write as a success.
 func TestEmbedDocumentShortensOnOverlongInput(t *testing.T) {
@@ -571,11 +571,11 @@ func (e *shrinkEmbedder) Embed(_ context.Context, _ embed.Task, texts []string) 
 // This is also the guard the vocabulary change itself needed. Swapping a
 // test fixture's type to Attested Computation without giving it a runtime
 // compiles, passes every unit test, and only fails where a real write
-// happens — which, for the entry types that live in integration tests, is
+// happens — which, for the concept types that live in integration tests, is
 // nowhere a developer without a database will see.
 func TestRecommendedTypesAreWritable(t *testing.T) {
 	for _, ty := range domain.Types {
-		k := &domain.Knowledge{Type: ty, ID: "probe/entry", Title: "probe"}
+		k := &domain.Knowledge{Type: ty, ID: "probe/concept", Title: "probe"}
 		if ty == domain.TypeComputations {
 			k.Runtime = "bigquery"
 		}
@@ -583,7 +583,7 @@ func TestRecommendedTypesAreWritable(t *testing.T) {
 			t.Errorf("recommended type %q is not writable as-is: %v", ty, err)
 		}
 	}
-	bare := &domain.Knowledge{Type: domain.TypeComputations, ID: "probe/entry", Title: "probe"}
+	bare := &domain.Knowledge{Type: domain.TypeComputations, ID: "probe/concept", Title: "probe"}
 	if err := validate(bare); err == nil {
 		t.Error("an Attested Computation without a runtime must still be refused")
 	}

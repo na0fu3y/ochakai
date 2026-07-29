@@ -117,6 +117,18 @@ last entry.
   get_knowledge_usage   →  get_concept_usage
   ```
 
+  The same word now runs through **everything a reader meets**: the
+  README and docs, the CLI's help and output, the web UI's labels, the
+  tool and schema descriptions an agent is handed, the OpenAPI
+  descriptions, and the server's error text. Renaming the tools alone
+  had left `get_concept` describing itself as "Fetch one entry" and the
+  documentation saying `entry` 287 times against `concept` 6 — the
+  translation table had moved rather than gone. The line is words a
+  reader meets versus identifiers: the `entries` JSON key, Go type
+  names, database columns and "entry" in its other English senses (a
+  catalog entry, a `sources` entry, a changelog entry) are unchanged, so
+  nothing on the wire moves.
+
   OKF SPEC §2 defines a **concept** as "a single unit of knowledge within
   a bundle", and a **concept ID** as its path without `.md`. ochakai's own
   design records and code comments have said "concept" since 0046; once

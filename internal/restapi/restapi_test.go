@@ -97,8 +97,8 @@ func TestBadRequestValidation(t *testing.T) {
 // A note is the case worth a test. Dropping it would be the quiet
 // failure: a reviewer who wrote down why, and finds later that nowhere
 // kept it, is worse off than one told at the time. It belongs to
-// `rejected` alone — a verification says the entry is right as it
-// stands, and anything more to say about it belongs in the entry.
+// `rejected` alone — a verification says the concept is right as it
+// stands, and anything more to say about it belongs in the concept.
 //
 // These live here rather than beside the integration test because the
 // checked server validates every request against the spec, and a request
@@ -254,7 +254,7 @@ func TestReportOutcomeBadRequests(t *testing.T) {
 }
 
 // TestETagRoundTrip pins the ETag/If-Match wire format: etagOf quotes
-// the entry's content hash, and parseIfMatch reads it (and "*", and
+// the concept's content hash, and parseIfMatch reads it (and "*", and
 // absence) back — so a value from a response header is accepted verbatim
 // on the next request.
 func TestETagRoundTrip(t *testing.T) {

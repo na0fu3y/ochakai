@@ -6,7 +6,7 @@ and what it refuses to do. It is deliberately short; the manual is here.
 ## For someone evaluating ochakai
 
 - [FAQ](faq.md) — what an agent may do to verified knowledge, what
-  happens when two people edit one entry, who can read and write, and
+  happens when two people edit one concept, who can read and write, and
   what leaving looks like. Questions another page owns get a short
   answer and a link there rather than a second copy.
 - [Positioning](positioning.md) — every "why not just use X?" in one
@@ -26,7 +26,7 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 ## For someone using it
 
-- [Writing knowledge](knowledge.md) — what goes in an entry: the type
+- [Writing knowledge](knowledge.md) — what goes in a concept: the type
   vocabulary, ids as addresses, links that come from the prose,
   attachments, the OKF frontmatter that carries trust, and what search
   does with all of it.
@@ -66,9 +66,9 @@ and what it refuses to do. It is deliberately short; the manual is here.
 - [api/openapi.yaml](../api/openapi.yaml) — the REST contract. It is
   checked rather than described: the integration tests validate every
   request and response against it, so an endpoint that drifts fails CI.
-- [examples/demo](../examples/demo) — a ten-entry knowledge base to import
-  and poke at (`ochakai import examples/demo`). Linked entries, mixed
-  statuses, and an entry past its declared expiry, so the feeds and
+- [examples/demo](../examples/demo) — a ten-concept knowledge base to import
+  and poke at (`ochakai import examples/demo`). Linked concepts, mixed
+  statuses, and a concept past its declared expiry, so the feeds and
   `get_context` have something to show.
 - [examples/claude-code](../examples/claude-code) — drop-in agent
   instructions and the recall / write-back hooks.
