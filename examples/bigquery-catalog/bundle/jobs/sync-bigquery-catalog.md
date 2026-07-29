@@ -78,15 +78,25 @@ Three of those choices are load-bearing:
 
 The obvious failure mode of any sync is that it flattens what a person
 wrote, the next morning, silently. This one writes an entry only while
-**it is still `draft` and the last writer was the sync account**, and the
-update is conditional, so an edit landing between the read and the write
-loses the race instead of being erased by it.
+**nobody has ruled on it and the last writer was the sync account**, and
+the write is conditional on the version it read, so an edit landing
+between the read and the write loses the race instead of being erased by
+it.
+
+"Nobody has ruled on it" is three separate questions, because ochakai
+keeps the three apart: the **lifecycle** is what the writer declared
+(`draft`), the **trust tier** is what the verification ledger derives, and
+a **rejection** is a live ruling beside both. Verifying does not move the
+status — a ruling and a publication are different acts — so a sync
+watching `status` alone would go on overwriting an entry somebody had just
+confirmed. The job reads all three.
 
 A human takes an entry out of the sync by touching it, two ways that mean
 different things:
 
 - **`ochakai verify`** — "I checked this and it is right." The entry stops
-  being a projection and becomes curated knowledge.
+  being a projection and becomes curated knowledge. Its status does not
+  change; its trust tier does, and that is what the sync sees.
 - **Editing the body** — enough on its own; the sync sees a different
   writer and leaves it alone from then on.
 

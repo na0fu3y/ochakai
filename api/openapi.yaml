@@ -65,7 +65,7 @@ paths:
         (report_outcome failed) are still unanswered, worst first, and each
         hit carries its usage totals — the re-verification feed. An entry
         drops out once it is verified after its last failure report
-        (POST /api/v1/verify/{id}), so a base that is kept up shows an
+        (POST /api/v1/review/{id} with ruling=verified), so a base that is kept up shows an
         empty feed.
         With sort=stale_after it lists entries whose author declared a
         stale_after that has now passed, most overdue first — the feed for
@@ -627,9 +627,36 @@ paths:
                   summary: "GET /api/v1/bundle/metrics/log.md (Accept: application/json)"
                   description: >
                     The other reserved name, as structure rather than as
-                    SPEC §9 prose: the update history under the path,
-                    newest first, each row carrying the entry as it stood
-                    after the change.
+                    SPEC §9 prose: what changed under the path, newest
+                    first. Each row names its object by **path**, because
+                    a revision is an event about an object and a file has
+                    no concept id (design doc 0046 §3.1). The documents
+                    are not here — a directory's history carrying every
+                    past version of everything under it would be the
+                    knowledge base several times over. `?history` on the
+                    object is where those are.
+                  value:
+                    changes:
+                      - path: metrics/revenue.md
+                        title: Revenue
+                        change: verify
+                        changed_by: { kind: human, name: sato@example.co.jp }
+                        changed_at: "2026-07-14T02:33:41.019778Z"
+                      - path: metrics/revenue/chart.png
+                        change: attach
+                        changed_by: { kind: human, name: sato@example.co.jp }
+                        changed_at: "2026-07-13T11:02:07.401221Z"
+                history:
+                  summary: "GET /api/v1/bundle/metrics/revenue.md?history (Accept: application/json)"
+                  description: >
+                    One object's own history, at the object's own address
+                    (design doc 0046 §3.5). A concept's carries the whole
+                    entry as it stood at each change, so a diff between
+                    two revisions is a text diff. A *file's* carries the
+                    changes alone in the shape above, having no document
+                    to carry — and a markdown document with no `type` is a
+                    file (§3.2), so the shape follows what is stored at
+                    the path rather than the path's suffix.
                   value:
                     revisions:
                       - rev: 4
@@ -669,6 +696,29 @@ paths:
                   error: { type: string }
               example:
                 error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
+        "409":
+          description: >
+            A reserved name was read as something other than the file it
+            is: as an archive (`Accept: application/gzip`), or as an
+            object's own `?history`. Both read the path as a thing the
+            bundle stores — a directory to walk, an object with events —
+            and a generated file is neither (design doc 0046 §§3.7-3.8).
+            The same refusal PUT and DELETE make at these two names, for
+            the same reason. Reading the file itself is a 200: that is
+            what generating it is for.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              example:
+                error: >
+                  index.md is generated from the bundle, not stored in it
+                  (design doc 0046 §§3.7-3.8), so there is no subtree here
+                  to archive; ask the directory it sits in
         "404":
           description: No object at this path.
           headers:
@@ -1972,7 +2022,8 @@ components:
         anything but unverified. Append-only and plural: re-checking an
         entry adds a row rather than replacing one, so the record answers
         "how often, and by whom" and not just "when last".
-        Written by POST /api/v1/verify/{id}, never from a payload.
+        Written by POST /api/v1/review/{id} with ruling=verified, never
+        from a payload.
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
@@ -1981,8 +2032,10 @@ components:
       description: >
         This instance's ruling that an entry was not accepted — the memory
         that stops an agent re-proposing knowledge a human already turned
-        down. One live ruling per entry; POST /api/v1/reject/{id} records
-        it and DELETE lifts it.
+        down. One live ruling per entry; POST /api/v1/review/{id} records
+        it with ruling=rejected and lifts it with ruling=withdrawn —
+        nothing is deleted, which is why the second is not a DELETE
+        (design doc 0055).
         It is not a lifecycle value: a rejection is a judgment about the
         concept rather than a stage of it, and it could not round-trip as
         a status because export had to fold it onto deprecated, which
@@ -2173,14 +2226,15 @@ components:
           description: >
             Every recorded confirmation, oldest first. Absent means
             unverified, which is SPEC §5.3's own signal. Written by
-            POST /api/v1/verify/{id}: this is an instance ledger, and
-            import reads only whether a bundle's `verified` key was
-            present (design docs 0009, 0043 §3.2).
+            POST /api/v1/review/{id} with ruling=verified: this is an
+            instance ledger, and import reads only whether a bundle's
+            `verified` key was present (design docs 0009, 0043 §3.2).
         rejection:
           allOf: [{ $ref: "#/components/schemas/Rejection" }]
           description: >
             The live ruling, absent when there is none. Written by
-            POST /api/v1/reject/{id} and cleared by DELETE.
+            POST /api/v1/review/{id} with ruling=rejected and cleared with
+            ruling=withdrawn.
     View:
       type: object
       description: >

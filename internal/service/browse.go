@@ -180,21 +180,39 @@ func (s *Service) LogRows(ctx context.Context, prefix string, limit int) ([]stor
 // whose shape depended on which caller asked would be two formats — the
 // same reason the index.md renderer is shared.
 //
-// prefix is already normalized. The root's document is titled for what
-// it is; every other one is titled by its path, which is what a reader
-// extracting the bundle sees above the list.
+// prefix is already normalized, and is both the title and the directory
+// the links are relative to — this file is written into it. The root's
+// document is titled for what it is; every other one is titled by its
+// path, which is what a reader extracting the bundle sees above the list.
 func RenderLog(prefix string, rows []store.LogRow) []byte {
+	title := "Update Log"
+	if prefix != "" {
+		title = prefix
+	}
+	return renderLog(title, prefix, rows)
+}
+
+// RenderObjectLog is the history of the one object at path, rendered as
+// the same document (design doc 0046 §3.5). It differs from RenderLog in
+// where the links point from: this document is not a file of the bundle,
+// but the object it is about is, so the links read from that object's own
+// directory — the same place a reader following them is standing.
+func RenderObjectLog(path string, rows []store.LogRow) []byte {
+	dir := ""
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		dir = path[:i]
+	}
+	return renderLog(path, dir, rows)
+}
+
+func renderLog(title, dir string, rows []store.LogRow) []byte {
 	lines := make([]okf.LogLine, 0, len(rows))
 	for _, r := range rows {
 		lines = append(lines, okf.LogLine{
 			At: r.ChangedAt, Change: r.Change, Path: r.Path, Title: r.Title, By: r.ChangedBy,
 		})
 	}
-	title := "Update Log"
-	if prefix != "" {
-		title = prefix
-	}
-	return okf.LogDocument(title, lines)
+	return okf.LogDocument(title, dir, lines)
 }
 
 // ObjectHistory is the changes to the one object at a bundle path — the

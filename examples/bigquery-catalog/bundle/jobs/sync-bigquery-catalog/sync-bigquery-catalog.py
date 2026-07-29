@@ -133,14 +133,39 @@ def build_body(table, columns: list[dict], usage: dict | None, window: tuple[str
     return "\n".join(lines) + "\n"
 
 
-def build_document(table, fq: str, dataset: str, usage: dict | None,
-                   window: tuple[str, str], frequent: int) -> dict:
-    """The entry as ochakai's API takes it.
+def frontmatter(keys: dict) -> str:
+    """Render the entry's metadata as the YAML block an OKF document opens with.
 
-    `status` is deliberately absent: create defaults it to draft, and
-    update leaves whatever is stored alone. `title` is absent too — the
+    Values go through json.dumps because JSON is a subset of YAML 1.2:
+    every string it emits is a valid double-quoted scalar and every list
+    and map a valid flow collection, so a table description full of
+    colons, quotes or newlines cannot break the document. That is worth
+    more here than block style would be, and it keeps this file free of a
+    YAML dependency.
+    """
+    return "".join(
+        f"{k}: {json.dumps(v, ensure_ascii=False)}\n"
+        for k, v in keys.items()
+        if v not in ("", None, [], {})
+    )
+
+
+def build_document(table, fq: str, dataset: str, usage: dict | None,
+                   window: tuple[str, str], frequent: int) -> str:
+    """The entry as an OKF document: YAML frontmatter, then the body.
+
+    A concept *is* the document (design doc 0043) — there is no typed
+    write surface beside the format, and a JSON body at a concept's
+    address is a 415 naming this shape. The frontmatter is the metadata
+    and the markdown is the body.
+
+    `status` is deliberately absent: create defaults it to draft, and a
+    replace leaves whatever is stored alone. `title` is absent too — the
     id's last segment is the display name (design doc 0022), and that
-    segment is already the table id.
+    segment is already the table id. The keys this instance owns —
+    `generated`, `verified`, `created_by` — are never written from here:
+    provenance is the server's observation of who called, not something a
+    caller asserts (design doc 0009).
     """
     resource = f"bigquery://{fq}"
     tags = ["bigquery", dataset]
@@ -162,83 +187,133 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
         # corrupt the --sort usage review feed.
         source["usage_count"] = usage["queries"]
 
-    doc = {
+    keys = {
         "type": "BigQuery Table",
         "resource": resource,
         "description": (table.description or "").split("\n")[0][:280],
         "tags": tags,
         "sources": [source],
-        "body": build_body(table, flatten(table.schema), usage, window),
     }
     if usage:
-        doc["usage_window"] = {"from": window[0], "to": window[1]}
-    return doc
+        keys["usage_window"] = {"from": window[0], "to": window[1]}
+    body = build_body(table, flatten(table.schema), usage, window)
+    return f"---\n{frontmatter(keys)}---\n\n{body}"
 
 
 # ----------------------------------------------------------------- upsert
 
 
 class Ochakai:
+    """A client of /api/v1/bundle — one object, one address.
+
+    A concept lives at `<id>.md` in the bundle and that is the only
+    address it has (design doc 0046 §3.5): the same path reads it, writes
+    it and deletes it, and what the bytes become is decided by the
+    document rather than by which endpoint was called.
+    """
+
     def __init__(self, url: str, token: str):
         self.url = url.rstrip("/")
         self.headers = {"Authorization": f"Bearer {token}"} if token else {}
 
-    def get(self, entry_id: str) -> dict | None:
-        r = requests.get(f"{self.url}/api/v1/knowledge/{entry_id}",
-                         headers=self.headers, timeout=TIMEOUT)
+    def _at(self, entry_id: str) -> str:
+        return f"{self.url}/api/v1/bundle/{entry_id}.md"
+
+    def read(self, entry_id: str) -> tuple[dict | None, str]:
+        """The entry as it stands and the ETag to write against, or (None, "").
+
+        The ETag is a hash of the stored bytes and is opaque: hand it back
+        in If-Match exactly as it arrived (design doc 0030). It is not a
+        timestamp, and nothing here parses it.
+        """
+        r = requests.get(self._at(entry_id), headers=self.headers, timeout=TIMEOUT)
         if r.status_code == 404:
-            return None
+            return None, ""
         r.raise_for_status()
-        return r.json()
+        return r.json(), r.headers.get("ETag", "")
 
-    def create(self, entry_id: str, doc: dict) -> None:
-        r = requests.post(f"{self.url}/api/v1/knowledge",
-                          json=dict(doc, id=entry_id),
-                          headers=self.headers, timeout=TIMEOUT)
+    def write(self, entry_id: str, document: str, *, if_match: str = "",
+              only_if_absent: bool = False) -> bool:
+        """PUT the document. Returns whether anything actually changed.
+
+        One call for both cases, because a PUT states what the object
+        should say and existence is expressed by the precondition:
+        `If-None-Match: *` for "only if the id is free", `If-Match` for
+        "only if it still says this". A body identical to what is stored
+        writes nothing and says so with Ochakai-Unchanged, so a daily run
+        over an unchanged table leaves no revision behind.
+        """
+        headers = dict(self.headers, **{"Content-Type": "text/markdown"})
+        if only_if_absent:
+            headers["If-None-Match"] = "*"
+        elif if_match:
+            headers["If-Match"] = if_match
+        r = requests.put(self._at(entry_id), data=document.encode("utf-8"),
+                         headers=headers, timeout=TIMEOUT)
         r.raise_for_status()
-
-    def update(self, entry_id: str, doc: dict, version: str) -> None:
-        headers = dict(self.headers, **{"If-Match": f'"{version}"'})
-        r = requests.put(f"{self.url}/api/v1/knowledge/{entry_id}",
-                         json=doc, headers=headers, timeout=TIMEOUT)
-        r.raise_for_status()
+        return r.headers.get("Ochakai-Unchanged") != "true"
 
 
-def upsert(api: Ochakai, entry_id: str, doc: dict, identity: str, counts: dict) -> None:
+def ruled_on(view: dict) -> str:
+    """Why this entry is a person's now, or "" while it is still the sync's.
+
+    Three separate signals, because ochakai keeps them separate (design
+    doc 0043 §3.2): the **lifecycle** is what the writer declared, the
+    **trust tier** is what the verification ledger derives, and a
+    **rejection** is a live ruling beside both. Verifying an entry does
+    not move its status — a ruling and a publication are different acts —
+    so a sync that watched `status` alone would go on overwriting an entry
+    somebody had just confirmed, which is the one thing this guard exists
+    to prevent.
+    """
+    summary = view.get("summary", {})
+    if summary.get("rejected"):
+        return "rejected"
+    if summary.get("trust", "unverified") != "unverified":
+        return summary["trust"]
+    status = summary.get("status", "stable")
+    return "" if status == "draft" else status
+
+
+def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: dict) -> None:
     """Write the projection, unless a person has taken it over.
 
-    The rule, in full: write only while the entry is still draft and this
-    account was its last writer, and make the update conditional so an
+    The rule, in full: write only while nobody has ruled on the entry and
+    this account was its last writer, and make the write conditional so an
     edit landing between the read and the write loses the race instead of
     being erased by it (design doc 0030). Verifying an entry — or simply
     editing it — takes it out of the sync for good. That is the same line
     design doc 0015 §3.1 draws for MCP, applied from outside: a machine
     does not overwrite what a human ruled on. ochakai needs no owner field
-    and no authorization for this; status and provenance carry it.
+    and no authorization for this; the projection and provenance carry it.
     """
-    existing = api.get(entry_id)
-    if existing is None:
-        api.create(entry_id, doc)
+    view, etag = api.read(entry_id)
+    if view is None:
+        api.write(entry_id, document, only_if_absent=True)
         counts["written"] += 1
         print(f"create {entry_id}", file=sys.stderr)
         return
 
-    if existing["status"] != "draft":
+    if verdict := ruled_on(view):
         counts["skipped"] += 1
-        print(f"skip   {entry_id} — {existing['status']}, a human ruled on it", file=sys.stderr)
+        print(f"skip   {entry_id} — {verdict}, a human ruled on it", file=sys.stderr)
         return
 
-    writer = existing.get("updated_by", {}).get("name", "")
+    # Who wrote the words that stand there now (design doc 0052): under
+    # delegation this is the end user, which is exactly right — a person
+    # who edited through an application is a person who edited.
+    writer = view.get("observed", {}).get("generated", {}).get("by", {}).get("name", "")
     if identity and writer != identity:
         counts["skipped"] += 1
         print(f"skip   {entry_id} — last written by {writer}", file=sys.stderr)
         return
 
-    # An update with identical content is a no-op server-side: no revision,
-    # no new updated_at. A daily run over an unchanged table leaves no trace.
-    api.update(entry_id, doc, existing["updated_at"])
-    counts["written"] += 1
-    print(f"sync   {entry_id}", file=sys.stderr)
+    if api.write(entry_id, document, if_match=etag):
+        counts["written"] += 1
+        print(f"sync   {entry_id}", file=sys.stderr)
+    else:
+        counts["unchanged"] += 1
+        print(f"same   {entry_id}", file=sys.stderr)
 
 
 # -------------------------------------------------------------------- run
@@ -309,7 +384,7 @@ def main() -> int:
               f"in region-{args.jobs_region}", file=sys.stderr)
         usage = usage_counts(client, args.project, args.jobs_region, args.usage_days)
 
-    counts = {"tables_seen": 0, "written": 0, "skipped": 0, "failed": 0}
+    counts = {"tables_seen": 0, "written": 0, "unchanged": 0, "skipped": 0, "failed": 0}
     for dataset in args.datasets:
         for item in client.list_tables(dataset):
             if item.table_type not in ("TABLE", "VIEW"):
@@ -320,14 +395,18 @@ def main() -> int:
             entry_id = f"{args.prefix}/{args.project}/{dataset}/{name}"
             try:
                 table = client.get_table(f"{args.project}.{dataset}.{name}")
-                doc = build_document(table, fq, dataset,
-                                     usage.get(f"{dataset}.{name}"), window,
-                                     args.frequent_threshold)
+                document = build_document(table, fq, dataset,
+                                          usage.get(f"{dataset}.{name}"), window,
+                                          args.frequent_threshold)
                 if args.dry_run:
-                    print(f"=== {entry_id}")
-                    print(json.dumps(doc, indent=2, ensure_ascii=False))
+                    # The document, exactly as it would be written: what
+                    # goes over the wire is what an export brings back and
+                    # what `ochakai get` prints, so a dry run is readable
+                    # by the person who would have to review the entry.
+                    print(f"=== {entry_id}.md")
+                    print(document)
                     continue
-                upsert(api, entry_id, doc, identity, counts)
+                upsert(api, entry_id, document, identity, counts)
             except Exception as err:  # noqa: BLE001 — one bad table is not a bad run
                 counts["failed"] += 1
                 print(f"FAIL   {entry_id} — {err}", file=sys.stderr)

@@ -31,7 +31,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用) |
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
-| 住所とパス | [0017](0017-path-addressing.md)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
+| 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
 | 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |

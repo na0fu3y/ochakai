@@ -343,14 +343,18 @@ For the shape of the system rather than the history of it, read
 - **[0017 The path is the address; the type is an
   attribute](0017-path-addressing.md)** — *Accepted; the id character set
   was relaxed by 0019 §2, the type vocabulary replaced by 0023 and 0038,
-  and filtering by address added by 0041.* Removes the rule that a path's
+  filtering by address added by 0041, and the surfaces of §§4.5 and 4.7
+  revised by 0046 (the rulings by 0055).* Removes the rule that a path's
   first segment names the type. The full path is the id and the sole
   address; the primary key becomes the id alone. A file with no frontmatter
-  `type` is skipped and reported rather than having a type inferred from
-  where it sits.
+  `type` has no type inferred from where it sits — under 0046 §3.2 it is
+  not a broken concept but a file, kept at the path it arrived at.
   *For a user:* MCP address-taking tools take one argument instead of two,
   and an exported bundle's directory layout comes from ids alone — so
-  organize files however you like.
+  organize files however you like. The decision stands; where it is served
+  moved — a concept is read and written at `/api/v1/bundle/<id>.md`, its
+  history at `?history` there, and what points at it through the search
+  face's `links_to=`.
 
 - **[0019 Pre-0.10.0 consistency
   adjustments](0019-release-review-adjustments.md)** — *Accepted; §4 lost
@@ -503,10 +507,13 @@ For the shape of the system rather than the history of it, read
 ## Surfaces — REST, MCP, CLI, web UI
 
 - **[0004 The remote CLI](0004-cli.md)** — *Accepted; the compile row and
-  exit code 2 lost their subject with 0028.* The client commands are a pure
-  REST client in the same binary, adding no server surface. Resolution
-  order is `--url` > `$OCHAKAI_URL` > the `ochakai use` selection. There is
-  no `ochakai login`: the CLI resolves Google ID tokens itself.
+  exit code 2 lost their subject with 0028, and §3's command table names
+  endpoints and an id spelling that 0017, 0046 and 0055 have since
+  replaced — [docs/surface.md](../surface.md) counts what actually ships.*
+  The client commands are a pure REST client in the same binary, adding no
+  server surface. Resolution order is `--url` > `$OCHAKAI_URL` > the
+  `ochakai use` selection. There is no `ochakai login`: the CLI resolves
+  Google ID tokens itself.
 
 - **[0007 Retiring the direct-database commands](0007-api-only-cli.md)** —
   *Accepted.* Data in and out goes through the API; `serve` is the only
