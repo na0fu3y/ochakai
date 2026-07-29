@@ -698,6 +698,31 @@ function setReadOnly(on) {
   document.body.classList.toggle('read-only', on);
 }
 
+// The archive is a representation of the bundle root, asked for with an
+// Accept header (design doc 0046 §3.5) — and a plain <a href> cannot
+// send one, so the download goes through fetch and a blob URL.
+//
+// That means the archive lands in the page's memory before it lands on
+// disk, which a streaming <a download> would not have done. It is the
+// price of the bundle having one address instead of an endpoint named
+// after downloading, and it is bounded by what a curated knowledge base
+// holds. A real backup belongs in CI, where `ochakai export` streams it
+// (docs/guides/operating.md).
+async function downloadBundle(e) {
+  e.preventDefault();
+  const res = await fetch(BASE + '/api/v1/bundle/', { headers: { Accept: 'application/gzip' } });
+  if (!res.ok) {
+    toast('Export failed: ' + res.status);
+    return;
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ochakai-okf.tar.gz';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 async function api(path, opts = {}) {
   // Every call here wants the structured form. It matters at the paths
   // that serve a file by default — index.md and log.md are documents,
@@ -1419,13 +1444,14 @@ function viewHome() {
       <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
       <a href="#/search/reported-wrong">Reported wrong</a> — verified knowledge that came back wrong ·
       <a class="write-only" href="#/new">＋ New entry</a> ·
-      <a href="${BASE}/api/v1/export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
+      <a href="#" id="home-export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
     </p>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
   $('#home-q').addEventListener('keydown', e => {
     if (e.key === 'Enter') { explore.q = e.target.value; location.hash = '#/search'; }
   });
   $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
+  $('#home-export').addEventListener('click', downloadBundle);
   if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
   loadDirIndex($('#home-index'), '', 'No knowledge yet — create the first entry.');
 }

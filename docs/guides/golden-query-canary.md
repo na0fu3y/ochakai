@@ -43,7 +43,8 @@ over MCP, `search_knowledge` with `sort: "verified_at"` returns the same
 feed. `sort=verified_at` orders by verification time, oldest first, with
 unverified entries last. "Verified queries not re-checked in 90 days" is
 where a canary run starts. Checking out an OKF export
-(`ochakai export` / `GET /api/v1/export`) in CI works just as well.
+(`ochakai export`, or `GET /api/v1/bundle/` with
+`Accept: application/gzip`) in CI works just as well.
 
 ### 2. Run — with your own credentials
 

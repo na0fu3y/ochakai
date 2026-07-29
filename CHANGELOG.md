@@ -20,6 +20,35 @@ last entry.
 
 ### Added
 
+- **BREAKING** — `GET /api/v1/export` is retired. An archive is the
+  bundle at a path, so it is a representation of that path (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.5):
+
+  ```
+  GET /api/v1/export                     →  GET /api/v1/bundle/          + Accept: application/gzip
+  GET /api/v1/export?attachments=false   →  GET /api/v1/bundle/?attachments=false + the same header
+  ```
+
+  **This completes §3.5's fold: REST is 14 operations, from 19.** The
+  address space is the bundle, and what is not an object of it — a
+  ranking, a judgment, a measurement — is addressed outside it.
+
+  The archive gains a scope it did not have: **any path is a subtree**.
+  `GET /api/v1/bundle/metrics/` with the header archives `metrics/` and
+  everything under it, matched on segment boundaries as every other path
+  scope is (design doc 0041). Paths inside are not re-rooted — an archive
+  of `metrics/` carries `metrics/revenue.md` and imports back where it
+  came from, because this is a copy of a subtree and not a move of one.
+
+  `ochakai export` is unchanged and asks this way underneath. **The web
+  UI's "Export OKF" now downloads through the page rather than streaming
+  from a link**: a plain `<a href>` cannot send an `Accept` header, so the
+  archive lands in the browser's memory before it lands on disk. That is
+  the price of the bundle having one address instead of an endpoint named
+  after downloading, and it is bounded by what a curated base holds — a
+  real backup belongs in CI, where `ochakai export` streams it
+  ([operating guide](docs/guides/operating.md)).
+
 - **BREAKING** — `GET /api/v1/backlinks/{id}` is retired. What points at
   an entry is a filter on the search face now (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.5):

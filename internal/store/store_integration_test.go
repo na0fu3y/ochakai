@@ -2080,7 +2080,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer snap.Close(ctx)
-	rows, err := snap.IndexRows(ctx)
+	rows, err := snap.IndexRows(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}

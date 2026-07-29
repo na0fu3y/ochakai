@@ -85,7 +85,7 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metas, err := snap.AttachmentMeta(ctx)
+	metas, err := snap.AttachmentMeta(ctx, "")
 	snap.Close(ctx)
 	if err != nil {
 		t.Fatal(err)

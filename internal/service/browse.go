@@ -49,6 +49,11 @@ func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, err
 // a path pasted from a macOS filesystem arrives decomposed; no trailing
 // slash because "a/b/" and "a/b" name the same directory. The empty
 // prefix is the root, and valid.
+// NormalizePrefix is normalizePrefix for callers outside this package —
+// the archive face reads a bundle path as a subtree scope, and what a
+// scope means has to be decided in one place (design doc 0015 §2).
+func NormalizePrefix(p string) (string, error) { return normalizePrefix(p) }
+
 func normalizePrefix(p string) (string, error) {
 	p = domain.Normalize(strings.TrimSuffix(p, "/"))
 	if !domain.ValidIDPrefix(p) {

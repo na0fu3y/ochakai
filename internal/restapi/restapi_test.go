@@ -302,17 +302,24 @@ func TestJSONWriteSaysToSendADocument(t *testing.T) {
 func TestBooleanQueryParamsRejectUnreadableValues(t *testing.T) {
 	h := Handler(&service.Service{})
 	cases := []struct {
-		name, method, url, wantSubstr string
+		name, method, url, accept, wantSubstr string
 	}{
-		{"purge=1", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=1", "invalid purge"},
-		{"purge=True", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=True", "invalid purge"},
-		{"purge=yes", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=yes", "invalid purge"},
-		{"attachments=0", http.MethodGet, "/api/v1/export?attachments=0", "invalid attachments"},
+		{"purge=1", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=1", "", "invalid purge"},
+		{"purge=True", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=True", "", "invalid purge"},
+		{"purge=yes", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=yes", "", "invalid purge"},
+		// The archive of the whole bundle: the parameter is read before
+		// the snapshot is opened, which is what lets this run against a
+		// service with no store at all.
+		{"attachments=0", http.MethodGet, "/api/v1/bundle/?attachments=0", "application/gzip", "invalid attachments"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			req := httptest.NewRequest(c.method, c.url, nil)
+			if c.accept != "" {
+				req.Header.Set("Accept", c.accept)
+			}
+			h.ServeHTTP(rec, req)
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
 			}

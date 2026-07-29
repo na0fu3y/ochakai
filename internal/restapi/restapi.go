@@ -39,6 +39,140 @@ import (
 // large enough that the round trips disappear against the transfer.
 const exportBatch = 100
 
+// writeBundleArchive streams a subtree of the bundle as OKF: the tar.gz
+// a caller asks for with Accept: application/gzip. The root is the whole
+// knowledge base, which is what GET /api/v1/export was until design doc
+// 0046 §3.5 folded it here — an archive is the bundle at a path, so it is
+// answered at the address of that path rather than at an endpoint named
+// after the act of downloading. `prefix` has already been normalized.
+//
+// Your knowledge is yours.
+func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, prefix string) {
+	// Every read below comes from one snapshot. Streaming means the id
+	// list, the attachment metadata and the entries are read at
+	// different moments, and a write landing between them produces an
+	// archive that disagrees with its own index — an index.md naming a
+	// file that is not there, an entry that moved appearing twice or
+	// not at all. The archive would look fine.
+	// Parsed before the snapshot: a rejected parameter should not
+	// have held a pooled connection open, however briefly.
+	withAttachments, err := queryBool(r.URL.Query(), "attachments", true)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	snap, err := svc.Store.BeginExport(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer snap.Close(context.WithoutCancel(r.Context()))
+	// index.md files need every id, but only the id, title and
+	// description — never a body.
+	rows, err := snap.IndexRows(r.Context(), prefix)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var atts []store.ExportAttachment
+	if withAttachments {
+		// Metadata only; bytes are pulled one attachment at a time below.
+		if atts, err = snap.AttachmentMeta(r.Context(), prefix); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	indexes := okf.Indexes(rows) // also sorts rows by id
+	ids := make([]string, len(rows))
+	for i := range rows {
+		ids[i] = rows[i].ID
+	}
+
+	// Past this point the status is already sent, so a failure can only
+	// truncate the stream. Everything that can fail cheaply — the
+	// listings above — has already run; everything below is logged,
+	// because a silently short archive is the worst possible outcome
+	// for the backup this endpoint exists to serve.
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
+	tgz := okf.NewTarGzWriter(w, time.Now())
+	written := make(map[string]bool, len(ids)+len(indexes))
+	fail := func(what string, err error) {
+		svc.Log.Error("export truncated after the response began",
+			"at", what, "error", err, "files_written", len(written))
+	}
+	add := func(p string, data []byte) error {
+		if err := tgz.Add(p, data); err != nil {
+			return err
+		}
+		written[p] = true
+		return nil
+	}
+	// Sorted so the archive's file order is stable across runs: map
+	// iteration order is not an ordering. The bytes still differ run to
+	// run — every tar header carries the export's timestamp — so this
+	// buys a diffable listing, not a checksum.
+	indexPaths := make([]string, 0, len(indexes))
+	for path := range indexes {
+		indexPaths = append(indexPaths, path)
+	}
+	sort.Strings(indexPaths)
+	for _, path := range indexPaths {
+		if err := add(path, indexes[path]); err != nil {
+			fail("index "+path, err)
+			return
+		}
+	}
+	// Entries in batches: one batch in memory at a time. The snapshot
+	// does hold a pooled connection for the length of the download —
+	// the trade a point-in-time backup makes (see ExportSnapshot);
+	// batching bounds the memory, not the connection.
+	for start := 0; start < len(ids); start += exportBatch {
+		end := min(start+exportBatch, len(ids))
+		batch, err := snap.ListByIDs(r.Context(), ids[start:end])
+		if err != nil {
+			fail(fmt.Sprintf("entries %d-%d", start, end), err)
+			return
+		}
+		for i := range batch {
+			doc, err := okf.Document(&batch[i])
+			if err != nil {
+				fail("render "+batch[i].ID, err)
+				return
+			}
+			if err := add(batch[i].ID+".md", doc); err != nil {
+				fail("write "+batch[i].ID, err)
+				return
+			}
+		}
+	}
+	// Attachments go next to their entries: "<id>/<name>", or the
+	// foreign path they were imported at (okf_path) so original body
+	// links keep working. A foreign path already taken by a concept
+	// document falls back to the canonical layout — identical content
+	// at the same path (the same image referenced by two entries) is
+	// no conflict.
+	for i := range atts {
+		a := &atts[i]
+		data, err := svc.Store.AttachmentBytes(r.Context(), a.Att.SHA256)
+		if err != nil {
+			fail("fetch attachment "+a.ID+"/"+a.Att.Name, err)
+			return
+		}
+		p := okf.AttachmentPath(a.ID, &a.Att)
+		if written[p] {
+			p = a.ID + "/" + a.Att.Name
+		}
+		if err := add(p, data); err != nil {
+			fail("write attachment "+p, err)
+			return
+		}
+	}
+	if err := tgz.Close(); err != nil {
+		fail("close", err)
+	}
+}
+
 func Handler(svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
@@ -120,6 +254,21 @@ func Handler(svc *service.Service) http.Handler {
 	// of them has (design doc 0046 §3.5).
 	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
+		// An archive is the bundle at a path: everything under it, as
+		// OKF, in the layout it lives at (design doc 0046 §3.5). The
+		// root is the whole knowledge base, which is what
+		// GET /api/v1/export was. Paths inside the archive are not
+		// re-rooted — an export of metrics/ imports back to metrics/,
+		// because this is a copy of a subtree and not a move of one.
+		if wantsArchive(r) {
+			scope, err := service.NormalizePrefix(path)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			writeBundleArchive(w, r, svc, scope)
+			return
+		}
 		dir, base := splitReserved(path)
 		switch base {
 		case "index.md":
@@ -500,144 +649,6 @@ func Handler(svc *service.Service) http.Handler {
 		writeView(w, http.StatusOK, moved)
 	})
 
-	// GET /api/v1/export — the whole knowledge base as an OKF bundle
-	// (tar.gz of markdown + YAML frontmatter, plus attachment files).
-	// Your knowledge is yours.
-	//
-	// Written straight to the response, a batch of entries and one
-	// attachment at a time. Collecting the bundle first would mean holding
-	// every entry and every attachment's bytes in memory at once — a
-	// periodic CI backup would be the largest allocation the process ever
-	// makes, on the instance size Cloud Run runs it at. With
-	// ?attachments=false the bytes are skipped entirely: they live in GCS,
-	// so a backup can copy them from there far more cheaply than through
-	// this endpoint.
-	mux.HandleFunc("GET /api/v1/export", func(w http.ResponseWriter, r *http.Request) {
-		// Every read below comes from one snapshot. Streaming means the id
-		// list, the attachment metadata and the entries are read at
-		// different moments, and a write landing between them produces an
-		// archive that disagrees with its own index — an index.md naming a
-		// file that is not there, an entry that moved appearing twice or
-		// not at all. The archive would look fine.
-		// Parsed before the snapshot: a rejected parameter should not
-		// have held a pooled connection open, however briefly.
-		withAttachments, err := queryBool(r.URL.Query(), "attachments", true)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		snap, err := svc.Store.BeginExport(r.Context())
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		defer snap.Close(context.WithoutCancel(r.Context()))
-		// index.md files need every id, but only the id, title and
-		// description — never a body.
-		rows, err := snap.IndexRows(r.Context())
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		var atts []store.ExportAttachment
-		if withAttachments {
-			// Metadata only; bytes are pulled one attachment at a time below.
-			if atts, err = snap.AttachmentMeta(r.Context()); err != nil {
-				writeError(w, err)
-				return
-			}
-		}
-		indexes := okf.Indexes(rows) // also sorts rows by id
-		ids := make([]string, len(rows))
-		for i := range rows {
-			ids[i] = rows[i].ID
-		}
-
-		// Past this point the status is already sent, so a failure can only
-		// truncate the stream. Everything that can fail cheaply — the
-		// listings above — has already run; everything below is logged,
-		// because a silently short archive is the worst possible outcome
-		// for the backup this endpoint exists to serve.
-		w.Header().Set("Content-Type", "application/gzip")
-		w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
-		tgz := okf.NewTarGzWriter(w, time.Now())
-		written := make(map[string]bool, len(ids)+len(indexes))
-		fail := func(what string, err error) {
-			svc.Log.Error("export truncated after the response began",
-				"at", what, "error", err, "files_written", len(written))
-		}
-		add := func(p string, data []byte) error {
-			if err := tgz.Add(p, data); err != nil {
-				return err
-			}
-			written[p] = true
-			return nil
-		}
-		// Sorted so the archive's file order is stable across runs: map
-		// iteration order is not an ordering. The bytes still differ run to
-		// run — every tar header carries the export's timestamp — so this
-		// buys a diffable listing, not a checksum.
-		indexPaths := make([]string, 0, len(indexes))
-		for path := range indexes {
-			indexPaths = append(indexPaths, path)
-		}
-		sort.Strings(indexPaths)
-		for _, path := range indexPaths {
-			if err := add(path, indexes[path]); err != nil {
-				fail("index "+path, err)
-				return
-			}
-		}
-		// Entries in batches: one batch in memory at a time. The snapshot
-		// does hold a pooled connection for the length of the download —
-		// the trade a point-in-time backup makes (see ExportSnapshot);
-		// batching bounds the memory, not the connection.
-		for start := 0; start < len(ids); start += exportBatch {
-			end := min(start+exportBatch, len(ids))
-			batch, err := snap.ListByIDs(r.Context(), ids[start:end])
-			if err != nil {
-				fail(fmt.Sprintf("entries %d-%d", start, end), err)
-				return
-			}
-			for i := range batch {
-				doc, err := okf.Document(&batch[i])
-				if err != nil {
-					fail("render "+batch[i].ID, err)
-					return
-				}
-				if err := add(batch[i].ID+".md", doc); err != nil {
-					fail("write "+batch[i].ID, err)
-					return
-				}
-			}
-		}
-		// Attachments go next to their entries: "<id>/<name>", or the
-		// foreign path they were imported at (okf_path) so original body
-		// links keep working. A foreign path already taken by a concept
-		// document falls back to the canonical layout — identical content
-		// at the same path (the same image referenced by two entries) is
-		// no conflict.
-		for i := range atts {
-			a := &atts[i]
-			data, err := svc.Store.AttachmentBytes(r.Context(), a.Att.SHA256)
-			if err != nil {
-				fail("fetch attachment "+a.ID+"/"+a.Att.Name, err)
-				return
-			}
-			p := okf.AttachmentPath(a.ID, &a.Att)
-			if written[p] {
-				p = a.ID + "/" + a.Att.Name
-			}
-			if err := add(p, data); err != nil {
-				fail("write attachment "+p, err)
-				return
-			}
-		}
-		if err := tgz.Close(); err != nil {
-			fail("close", err)
-		}
-	})
-
 	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for
 	// entries and attachments that have none for the configured model.
 	// The response's cursor feeds the next call: a pass whose entries all
@@ -801,6 +812,14 @@ func writeMarkdown(w http.ResponseWriter, doc []byte) {
 // a browser sends */* and wants the JSON every existing client reads.
 func wantsDocument(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/markdown")
+}
+
+// wantsArchive reports whether the caller asked for a path as an OKF
+// bundle rather than as one object. Explicit only, like the other two: a
+// browser sending */* is asking to look at something, not to download
+// the knowledge base under it.
+func wantsArchive(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/gzip")
 }
 
 // onlyIfAbsent reports an If-None-Match "*" precondition: write only if
