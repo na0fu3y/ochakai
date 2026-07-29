@@ -76,6 +76,39 @@ type IndexSection struct {
 	Lines   []IndexLine
 }
 
+// FileSection is the heading the files of a directory are listed under
+// (design doc 0046 §3.7). Subdirectory lines end in "/" and concept
+// lines do not, so those two read as one list without help; a file line
+// would not, and this is where the reader is told which kind it is.
+const FileSection = "Files"
+
+// FileIndexLine is one file's row in a directory's index.md. The name is
+// what the directory holds it under and what the link resolves to; the
+// description is what the file is, because OKF's §8 line wants one and
+// nobody wrote prose for a .csv.
+//
+// Both callers render it here — the export writes the whole tree and a
+// read generates one directory, and an index.md whose shape depended on
+// which asked would be two formats (design doc 0046 §3.7).
+func FileIndexLine(name, mediaType string, size int64) IndexLine {
+	return IndexLine{Text: name, Target: name, Description: mediaType + ", " + humanSize(size)}
+}
+
+// humanSize renders a size the way a listing should read it — whole
+// units, one decimal past a kilobyte. The listing is for a person
+// deciding whether to open something, and "1.4 MB" answers that where
+// 1428406 does not.
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f kB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}
+
 // LogLine is one recorded change, as log.md lists it.
 type LogLine struct {
 	At     time.Time

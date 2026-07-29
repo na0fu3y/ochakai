@@ -119,7 +119,9 @@ List one level of the ID hierarchy (the folder view of design docs
 Without an argument, the top-level directories with their entry
 counts; with a prefix, the subdirectories and entries directly under
 it. Directories print as "name/	count", entries as
-"segment	type	status	title". Rejected entries are hidden, as in search.
+"segment	type	status	title", and the files in the directory as
+"name	file	media-type	bytes". Rejected entries are hidden, as in
+search.
 
 Flags:
   -json

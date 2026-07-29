@@ -8,20 +8,34 @@ import (
 
 // BrowseResult mirrors the JSON representation of a directory's index.md
 // (design docs 0014, 0016, and 0046 §3.7 for where it now lives): one
-// level of the ID hierarchy — the subdirectories and entries directly
-// under the prefix ("" is the root). TestBrowseResultMatchesServerWire
-// pins it to service.BrowseResult.
+// level of the ID hierarchy — the subdirectories, entries and files
+// directly under the prefix ("" is the root).
+// TestBrowseResultMatchesServerWire pins it to service.BrowseResult.
 type BrowseResult struct {
 	Dirs      []BrowseDir   `json:"dirs,omitempty"`
 	Entries   []BrowseEntry `json:"entries,omitempty"`
+	Files     []BrowseFile  `json:"files,omitempty"`
 	Truncated bool          `json:"truncated,omitempty"`
 }
 
-// BrowseDir is one subdirectory (ID segment) with the number of entries
-// anywhere beneath it.
+// BrowseDir is one subdirectory (ID segment) with the number of concepts
+// anywhere beneath it. Concepts only: a directory holding nothing but
+// files is not one of these (design doc 0046 §3.7).
 type BrowseDir struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+}
+
+// BrowseFile is one file sitting directly in the directory — the third
+// thing an index.md lists. A file is an object in the bundle rather than
+// a property of an entry (design doc 0046 §3.3), so a directory can hold
+// one that no concept shows.
+type BrowseFile struct {
+	Name      string    `json:"name"`
+	Path      string    `json:"path"`
+	MediaType string    `json:"media_type"`
+	Size      int64     `json:"size"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // BrowseEntry is the light projection of an entry in a tree listing:

@@ -564,6 +564,26 @@ func getJSON(t *testing.T, url string, v any) {
 	}
 }
 
+// getMarkdown fetches a generated file as the file it is — no Accept,
+// which is what a browser or a curl sends and what the reserved paths
+// answer with (design doc 0046 §§3.7-3.8).
+func getMarkdown(t *testing.T, url string) string {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s = %d: %s", url, resp.StatusCode, body)
+	}
+	return string(body)
+}
+
 // POST /api/v1/review/{id} {"ruling":"verified"} records a verification
 // against the entry as it stands. The second call is the point:
 // re-affirming an entry that is already verified is what empties the
@@ -1861,5 +1881,96 @@ func TestRESTIntegrationPurgeOnAFileRemovesIt(t *testing.T) {
 	got.Body.Close()
 	if got.StatusCode != http.StatusNotFound {
 		t.Errorf("the file is still there after the purge: %d", got.StatusCode)
+	}
+}
+
+// A directory's index.md lists the files in it, in both of its
+// representations and in the archive (design doc 0046 §3.7). A file is
+// an object in the bundle, not a property of an entry (§3.3), so a
+// listing that showed only concepts described a directory that was not
+// there — and the archive's index.md and the generated one have to say
+// the same thing, or a bundle's navigation depends on which asked.
+func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := fmt.Sprintf("restfiles%d", time.Now().UnixNano())
+	id := typ + "/revenue"
+	loose := typ + "/seed-data.csv"
+	removeEntries(t, srv, id)
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+loose, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+loose,
+		bytes.NewReader([]byte("region,orders\napac,12\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err = http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing the file = %d", resp.StatusCode)
+	}
+
+	// JSON: the third kind, beside dirs and entries.
+	var listing service.BrowseResult
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
+	if len(listing.Files) != 1 || listing.Files[0].Name != "seed-data.csv" ||
+		listing.Files[0].Path != loose || listing.Files[0].MediaType == "" {
+		t.Errorf("files in the listing = %+v", listing.Files)
+	}
+	if len(listing.Entries) != 1 {
+		t.Errorf("entries in the listing = %+v", listing.Entries)
+	}
+
+	// Markdown: the same listing, in the shape the format has a place for.
+	generated := getMarkdown(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md")
+	if !strings.Contains(generated, "## Files") || !strings.Contains(generated, "[seed-data.csv](seed-data.csv)") {
+		t.Errorf("the generated index.md does not list the file:\n%s", generated)
+	}
+
+	// And the archive's copy of that same file says the same thing.
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var archived string
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hdr.Name == typ+"/index.md" {
+			b, err := io.ReadAll(tr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			archived = string(b)
+		}
+	}
+	if archived != generated {
+		t.Errorf("the archive's index.md and the generated one differ:\n--- archive ---\n%s\n--- generated ---\n%s",
+			archived, generated)
 	}
 }

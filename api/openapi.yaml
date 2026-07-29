@@ -2432,6 +2432,12 @@ components:
         web UI's navigator needs and what the markdown says in prose
         (design docs 0014, 0016). Two representations of one generated
         file, at one address; the JSON is not a second surface.
+
+        Three kinds of thing sit in a directory and the listing carries
+        all three (design doc 0046 §3.7): the subdirectories, the
+        concepts, and the files — a file is an object in the bundle
+        rather than a property of an entry (§3.3), so a directory can
+        hold one that no concept shows.
       properties:
         dirs:
           type: array
@@ -2439,7 +2445,14 @@ components:
             type: object
             properties:
               name: { type: string, description: Next ID segment. }
-              count: { type: integer, description: Entries anywhere beneath. }
+              count:
+                description: >
+                  Concepts anywhere beneath. Concepts only: a directory
+                  holding nothing but files is not a subdirectory here,
+                  because OKF's listing is navigation between concept
+                  documents and a mixed count would misdescribe every
+                  directory that has both.
+                type: integer
         entries:
           type: array
           items:
@@ -2451,9 +2464,21 @@ components:
               description: { type: string, description: The one-line summary, so a directory listing can render as an index page. }
               status: { $ref: "#/components/schemas/Status" }
               updated_at: { type: string, format: date-time }
+        files:
+          description: >
+            The files sitting directly in this directory, in path order.
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string, description: The last path segment — what the directory holds it under. }
+              path: { type: string, description: The object's bundle path, which is what it is addressed by. }
+              media_type: { type: string, description: Sniffed from the bytes when it was written, never taken from the caller. }
+              size: { type: integer, description: Bytes. }
+              updated_at: { type: string, format: date-time }
         truncated:
           type: boolean
-          description: The entry list hit the 1000-per-level cap.
+          description: The entry or file list hit the 1000-per-level cap.
     BundleLog:
       type: object
       description: >

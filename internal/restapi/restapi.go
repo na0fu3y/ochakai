@@ -82,7 +82,11 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 			return
 		}
 	}
-	indexes := okf.Indexes(rows) // also sorts rows by id
+	// The generated index.md files list the concepts and the files that
+	// sit beside them (design doc 0046 §3.7). With ?attachments=false
+	// there are no file bytes to carry, and an index naming files the
+	// archive does not contain would describe a bundle nobody received.
+	indexes := okf.Indexes(rows, atts) // also sorts rows by id
 	ids := make([]string, len(rows))
 	for i := range rows {
 		ids[i] = rows[i].ID

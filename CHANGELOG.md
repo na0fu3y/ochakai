@@ -618,6 +618,27 @@ last entry.
 
 ### Fixed
 
+- **A directory's `index.md` lists the files in it** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.7). §3.7 names
+  three sections — subdirectories, concepts, files — and only the first
+  two were rendered, so a file at a path no concept shows was stored,
+  served at its own address, carried in the archive, and invisible in
+  the bundle's own navigation. It is listed now, under a `## Files`
+  heading, in all three places that render a listing: the generated
+  `index.md`, its JSON representation (`files[]`, so a web UI's
+  directory page can show them), and the copy the archive carries — the
+  same renderer, so a bundle's navigation does not depend on which asked.
+  `ochakai browse` prints them after the entries.
+
+  A subdirectory line still counts **concepts**, and a directory holding
+  nothing but files is still not a subdirectory: OKF's §8 listing is
+  navigation between concept documents, and a count mixing the kinds
+  would misdescribe every directory that has both. Asked about directly,
+  such a directory lists what it holds.
+
+  A bundle with no loose files exports byte-for-byte as it did — the
+  heading appears only where there is something under it.
+
 - `api/openapi.yaml` stopped promising fields the server never sent, and
   started declaring things it did. The contract test validates requests
   and responses against the spec, but JSON Schema only checks what is

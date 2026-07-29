@@ -235,3 +235,67 @@ func TestIntegrationConceptCannotLandOnAFile(t *testing.T) {
 		t.Errorf("the file did not survive the refused create: %v", err)
 	}
 }
+
+// A directory holds three kinds of thing and the listing carries all
+// three (design doc 0046 §3.7). The one that was missing is the file: a
+// file is an object in the bundle rather than a property of an entry
+// (§3.3), so a directory can hold one nothing shows, and a listing that
+// leaves it out describes a directory that is not there.
+//
+// What the listing still does not do is invent a subdirectory for a
+// directory of pure data. OKF's §8 listing is navigation between concept
+// documents, and a count mixing the kinds would misdescribe every
+// directory that has both.
+func TestIntegrationBrowseListsTheFilesInADirectory(t *testing.T) {
+	s, ctx, root := newObjectPathStore(t)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	mkConcept(t, s, ctx, root+"/revenue")
+	// One file beside the concept, one under it, one in a directory that
+	// holds nothing else.
+	for _, p := range []string{root + "/seed.csv", root + "/revenue/chart.png", root + "/seeds/orders.csv"} {
+		if _, err := s.PutFile(ctx, p, "text/plain", []byte("bytes here"), actor); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	lvl, err := s.Browse(ctx, root+"/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lvl.Files) != 1 || lvl.Files[0].Name != "seed.csv" || lvl.Files[0].Path != root+"/seed.csv" {
+		t.Errorf("files at this level = %+v, want seed.csv alone", lvl.Files)
+	}
+	if lvl.Files[0].Size == 0 || lvl.Files[0].MediaType == "" {
+		t.Errorf("a file line has nothing to describe it: %+v", lvl.Files[0])
+	}
+	if len(lvl.Entries) != 1 || lvl.Entries[0].ID != root+"/revenue" {
+		t.Errorf("entries = %+v", lvl.Entries)
+	}
+	// "revenue" is a subdirectory because a file sits under it, but it
+	// holds no concept, so it is not one of these — and neither is
+	// "seeds". Directories exist here through the concepts in them.
+	for _, d := range lvl.Dirs {
+		t.Errorf("a directory of files was listed as a subdirectory: %+v", d)
+	}
+
+	// Asked about directly, a directory of pure data lists what it holds.
+	lvl, err = s.Browse(ctx, root+"/seeds/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lvl.Files) != 1 || lvl.Files[0].Name != "orders.csv" {
+		t.Errorf("a directory of files lists nothing: %+v", lvl)
+	}
+
+	// A deleted file leaves the listing with it.
+	if err := s.DeleteFile(ctx, root+"/seed.csv", actor); err != nil {
+		t.Fatal(err)
+	}
+	lvl, err = s.Browse(ctx, root+"/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lvl.Files) != 0 {
+		t.Errorf("a deleted file is still listed: %+v", lvl.Files)
+	}
+}

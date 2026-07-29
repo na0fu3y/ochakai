@@ -16,17 +16,19 @@ import (
 // Not a search — no usage is recorded: walking the tree to see what
 // exists is not the demand signal search hits measure.
 
-// BrowseResult is one level of the tree: the subdirectories and entries
-// directly under the prefix.
+// BrowseResult is one level of the tree: the subdirectories, entries and
+// files directly under the prefix — the three sections the index.md OKF
+// SPEC §8 describes carries (design doc 0046 §3.7).
 type BrowseResult struct {
 	Dirs      []store.DirCount    `json:"dirs,omitempty"`
 	Entries   []store.BrowseEntry `json:"entries,omitempty"`
+	Files     []store.BrowseFile  `json:"files,omitempty"`
 	Truncated bool                `json:"truncated,omitempty"`
 }
 
-// Browse lists one level of the knowledge hierarchy: the subdirectories
-// and entries directly under prefix ("" is the root). prefix accepts
-// "a/b" or "a/b/".
+// Browse lists one level of the knowledge hierarchy: the subdirectories,
+// entries and files directly under prefix ("" is the root). prefix
+// accepts "a/b" or "a/b/".
 func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
 	prefix, err := normalizePrefix(prefix)
 	if err != nil {
@@ -35,11 +37,11 @@ func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, err
 	if prefix != "" {
 		prefix += "/"
 	}
-	dirs, entries, truncated, err := s.Store.Browse(ctx, prefix)
+	lvl, err := s.Store.Browse(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
-	return &BrowseResult{Dirs: dirs, Entries: entries, Truncated: truncated}, nil
+	return &BrowseResult{Dirs: lvl.Dirs, Entries: lvl.Entries, Files: lvl.Files, Truncated: lvl.Truncated}, nil
 }
 
 // normalizePrefix cleans one path prefix, for every surface that takes
@@ -65,8 +67,15 @@ func normalizePrefix(p string) (string, error) {
 // IndexDocument renders one directory as the index.md OKF SPEC §8
 // defines (design doc 0046 §3.7). It is the same listing Browse
 // returns — one level, subdirectories with counts, entries with their
-// descriptions, cut off at the same limit — in the shape the format
-// already has a place for.
+// descriptions, files with their size and type, cut off at the same
+// limit — in the shape the format already has a place for.
+//
+// The files carry a heading and the other two do not. A subdirectory
+// line ends in "/" and a concept line does not, so those two read
+// unambiguously as one list; a file line would not, and the heading is
+// where the reader is told which kind they are looking at. It also
+// leaves every index.md of a bundle that holds no loose files
+// byte-for-byte as it was.
 //
 // Two representations of one thing, at one address: a caller that wants
 // to render the tree asks for JSON, a caller that wants the file gets
@@ -101,6 +110,13 @@ func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, err
 		}
 		concepts = append(concepts, okf.IndexLine{Text: title, Target: name + ".md", Description: e.Description})
 	}
+	// A file is listed by the name it lives under, described by what it
+	// is: OKF's §8 line wants a description, and for a file the honest
+	// one is its media type and size rather than prose nobody wrote.
+	var files []okf.IndexLine
+	for _, f := range res.Files {
+		files = append(files, okf.FileIndexLine(f.Name, f.MediaType, f.Size))
+	}
 	var notes []string
 	if res.Truncated {
 		// The cut-off says so in the document. A listing that stops
@@ -109,7 +125,9 @@ func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, err
 		// the file rather than only to whoever read the JSON).
 		notes = append(notes, fmt.Sprintf("_This listing was cut off at %d entries._", store.MaxBrowseEntries))
 	}
-	return okf.IndexDocument(dir, []okf.IndexSection{{Lines: dirs}, {Lines: concepts}}, notes...), nil
+	return okf.IndexDocument(dir, []okf.IndexSection{
+		{Lines: dirs}, {Lines: concepts}, {Heading: okf.FileSection, Lines: files},
+	}, notes...), nil
 }
 
 // LogDocument renders a subtree's history as the log.md OKF SPEC §9
