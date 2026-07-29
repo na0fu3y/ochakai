@@ -39,6 +39,41 @@ transcribed from each client's own documentation as of July 2026 and
 marked where nobody here has run it — a config that turns out to be wrong
 is worth an issue.
 
+## What an agent gets
+
+| Tool | Description |
+|---|---|
+| `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
+| `search_concepts` | Cross-type search; verified entries rank higher |
+| `get_concept` | Fetch one entry as an OKF document, with its links and attachment metadata |
+| `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
+| `put_concept` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
+| `delete_concept` | Soft-delete (history retained) |
+| `get_concept_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
+| `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
+
+Every one of these is a knowledge operation: ochakai never executes SQL and
+never calls an LLM. `compile_sql` — deterministic SQL generation from a
+semantic model — existed until 0.13.0 and was retired (design doc
+[0028](../design/0028-retire-compile-sql.md)): what an agent actually needs
+is the verified query and the caveat around it, and both arrive from
+`get_context`.
+
+Every entry is also an **MCP resource** addressable by its canonical URI —
+`ochakai://` plus its id (the entry's path), e.g. `ochakai://metrics/revenue`
+or `ochakai://queries/sales/top-customers`. Clients that support resource
+references (`@`-mentions) can pull an entry in as an OKF document —
+frontmatter and body — without a tool call; discovery stays with
+`get_context`/`search_concepts`. Read tools carry `readOnly` annotations and
+`delete_concept` a `destructive` one, so client auto-approval policies work
+without parsing descriptions.
+
+The tool count is a budget, not a mirror of REST: schemas are paid for out of
+the agent's context window, so the REST API is a superset — bulk export, the
+human-facing reads, file writes, and no bulk import at all (design doc
+[0015 §3.1-3.2](../design/0015-surface-consistency.md)). For an agent with a
+shell, the [CLI](../cli.md) covers everything and costs no schema.
+
 ## What the bridge needs
 
 Every config below that launches a command needs `ochakai` on the
@@ -88,7 +123,7 @@ opening it in Claude Code connects automatically.
 Claude Code also has a shell, which is the other way in and often the
 better one: the CLI's tool schemas cost the agent no context, because
 `--help` is read on demand. See the README's
-[Connect Claude Code](../../README.md#connect-claude-code).
+[Connect an agent](../../README.md#connect-an-agent).
 
 ## Claude Desktop
 
@@ -309,7 +344,7 @@ supported path.
   serves.
 - **Searches come back empty on a base that has entries.** Not a
   connection problem. Japanese knowledge bases want embeddings on; see
-  the README's [search notes](../../README.md#configuration).
+  [what search does with it](../knowledge.md#what-search-does-with-it).
 
 `ochakai mcp-stdio` writes diagnostics to stderr and keeps stdout for the
 protocol, so a client that surfaces server logs will show you what it

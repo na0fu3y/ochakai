@@ -300,6 +300,22 @@ thing is to say so in
 [Discussions](https://github.com/na0fu3y/ochakai/discussions) with what
 you actually see. That is how this section gets numbers.
 
+## Supply chain
+
+Images are published to `ghcr.io/na0fu3y/ochakai` by GitHub Actions with
+SBOM and SLSA provenance; workflow actions are pinned by commit SHA. The
+binary is a static, trimmed-path Go build on `distroless/static`. Verify
+what you are about to deploy:
+
+```sh
+gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai
+```
+
+Release archives for the CLI carry the same attestations, plus a
+`checksums.txt`. Binary Authorization can enforce the check at deploy time —
+the deploy guide's [§6](../../deploy/cloudrun/README.md) has that and the
+rest of the hardening checklist.
+
 ## Upgrades
 
 Migrations run automatically at startup, so an upgrade is a new image

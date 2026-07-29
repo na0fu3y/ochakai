@@ -32,8 +32,8 @@ below is one HTTP call against the server named by ` + "`--url`" + `, ` + "`$OCH
 or the ` + "`ochakai use`" + ` selection, in that order (design docs
 [0004](design/0004-cli.md), [0007](design/0007-api-only-cli.md)). ` + "`serve`" + `
 and ` + "`serve-ui`" + ` are the exception: they are the deployed services, and they
-take their configuration from the environment rather than from flags — the
-README's [Configuration](../README.md#configuration) table lists it.
+take their configuration from the environment rather than from flags —
+[Requirements and configuration](configuration.md) lists it.
 
 The same text is what ` + "`ochakai <command> -h`" + ` prints, so nothing here can
 disagree with the binary you are running.
