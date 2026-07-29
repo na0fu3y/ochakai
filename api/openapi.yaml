@@ -502,6 +502,14 @@ paths:
             The object's bundle path — "metrics/revenue.md",
             "metrics/revenue/chart.png", or a reserved "index.md" /
             "metrics/log.md". Slashes are real path separators.
+
+            **The empty path is the bundle itself**: `/api/v1/bundle/`
+            with `Accept: application/gzip` is the archive of everything,
+            and with `Accept: application/json` the root `index.md` is at
+            `/api/v1/bundle/index.md`. A path template parameter cannot
+            be written as empty in OpenAPI, so this is said here rather
+            than in the path — as with the slashes above, the prose is as
+            precise as the format allows.
           schema: { type: string }
         - name: limit
           in: query
