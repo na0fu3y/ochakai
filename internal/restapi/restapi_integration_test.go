@@ -192,7 +192,8 @@ func TestRESTIntegration(t *testing.T) {
 	// The directory's log.md is the changes under it, in both
 	// representations of the one address.
 	logDoc := getText(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md")
-	if !strings.Contains(logDoc, "**Create**") || !strings.Contains(logDoc, "/"+id+".md") {
+	if !strings.Contains(logDoc, "**Create**") ||
+		!strings.Contains(logDoc, "("+strings.TrimPrefix(id, typ+"/")+".md)") {
 		t.Errorf("generated log.md:\n%s", logDoc)
 	}
 	var changes struct {
@@ -2047,10 +2048,18 @@ func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
 			t.Errorf("%s has no log.md beside it", path)
 		}
 	}
+	// The link is relative to the directory the file sits in, as
+	// index.md's are: an extracted bundle is a directory tree, and a
+	// root-absolute path in it resolves to the filesystem root.
 	if got := archived[typ+"/log.md"]; !strings.Contains(got, "**Create**") ||
-		!strings.Contains(got, "[Revenue](/"+id+".md)") {
+		!strings.Contains(got, "[Revenue](revenue.md)") {
 		t.Errorf("the directory's history does not record the write:\n%s", got)
 	}
+	// Only the title: the root's history is a bounded window over a
+	// database every other test writes into, so asserting that this
+	// entry's own line is in it is asserting that nobody else was busy
+	// (internal/testdb). Where the links point is pinned at every depth
+	// by TestLogDocumentLinksAreRelativeToTheDirectoryItSitsIn.
 	if root := archived["log.md"]; !strings.Contains(root, "# Update Log") {
 		t.Errorf("the root history is not titled as one:\n%s", root)
 	}
@@ -2165,5 +2174,113 @@ func TestRESTIntegrationHistoryIsAtTheObjectAndTheDirectory(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("history of an object that never existed = %d, want 404", resp.StatusCode)
+	}
+}
+
+// A markdown document that carries no type is a file (design doc 0046
+// §3.2), and it lives at a ".md" path like a concept does. Its history is
+// the same history whichever representation asks for it.
+//
+// It used to be two answers: ?history routed on the suffix alone, so the
+// JSON went looking for a concept ledger under an id nothing held and
+// answered 404 — at an address whose markdown listed the history fine.
+func TestRESTIntegrationTypelessMarkdownHasOneHistory(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := testdb.Unique(t, "resttypeless")
+	file := typ + "/notes.md"
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+file,
+		bytes.NewReader([]byte("# just a note\n\nno frontmatter, so no type, so not a concept\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PUT a typeless markdown file = %d, want 200 (it is a file)", resp.StatusCode)
+	}
+	defer func() {
+		r, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+file, nil)
+		if resp, err := http.DefaultClient.Do(r); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	if doc := getMarkdown(t, srv.URL+"/api/v1/bundle/"+file+"?history"); !strings.Contains(doc, "**Create**") {
+		t.Errorf("the file's history as a document:\n%s", doc)
+	}
+	var log struct {
+		Changes []struct {
+			Path   string `json:"path"`
+			Change string `json:"change"`
+		} `json:"changes"`
+	}
+	getJSON(t, srv.URL+"/api/v1/bundle/"+file+"?history", &log)
+	if len(log.Changes) != 1 || log.Changes[0].Path != file || log.Changes[0].Change != "create" {
+		t.Errorf("the file's history as JSON = %+v, want the one create the document lists", log.Changes)
+	}
+}
+
+// The two names OKF reserves are generated from the bundle rather than
+// stored in it (design doc 0046 §§3.7-3.8), and every face that reads a
+// path as something other than "the object at it" says so the same way.
+//
+// The archive face did not: it normalized "metrics/index.md" as a
+// directory nobody lives under and handed back an empty bundle with a 200
+// on it, which reads as "there is nothing under metrics" rather than as
+// "that is not a directory".
+func TestRESTIntegrationReservedNamesAreNotObjects(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restreserved")
+	id := typ + "/revenue"
+	removeEntries(t, srv, id)
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	for _, name := range []string{"index.md", "log.md"} {
+		at := srv.URL + "/api/v1/bundle/" + typ + "/" + name
+		// Read as an archive: not a subtree.
+		req, err := http.NewRequest(http.MethodGet, at, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Accept", "application/gzip")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			t.Errorf("archive at %s = %d, want 409 (it is generated, not a directory)", name, resp.StatusCode)
+		}
+		// Read as an object's history: it has none of its own.
+		resp, err = http.Get(at + "?history")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			t.Errorf("?history at %s = %d, want 409 (it is generated, not stored)", name, resp.StatusCode)
+		}
+		// And the file itself still reads, which is the whole point of
+		// generating it.
+		resp, err = http.Get(at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", name, resp.StatusCode)
+		}
 	}
 }

@@ -127,7 +127,14 @@ type LogLine struct {
 // rides at the end because an update history whose entries do not say
 // who is a history nobody can act on, and because the spec leaves the
 // prose to the producer.
-func LogDocument(title string, lines []LogLine) []byte {
+//
+// dir is the directory this document is written into, and the links are
+// relative to it — the way index.md's are (IndexDocument), and the way
+// SPEC §6 writes a link between two objects of one bundle. They used to
+// be root-absolute ("/metrics/revenue.md"), which resolves to the
+// filesystem root once somebody extracts the archive: the two generated
+// files in one directory disagreed about what a bundle path means.
+func LogDocument(title, dir string, lines []LogLine) []byte {
 	sort.SliceStable(lines, func(i, j int) bool { return lines[i].At.After(lines[j].At) })
 	var b strings.Builder
 	if title == "" {
@@ -144,8 +151,28 @@ func LogDocument(title string, lines []LogLine) []byte {
 		if text == "" {
 			text = l.Path
 		}
-		fmt.Fprintf(&b, "* **%s**: [%s](/%s) — %s\n",
-			strings.ToUpper(l.Change[:1])+l.Change[1:], text, l.Path, l.By.String())
+		fmt.Fprintf(&b, "* **%s**: [%s](%s) — %s\n",
+			strings.ToUpper(l.Change[:1])+l.Change[1:], text, relativeTo(dir, l.Path), l.By.String())
 	}
 	return []byte(b.String())
+}
+
+// relativeTo renders the bundle path target as it reads from inside dir.
+// dir is a directory ("" is the bundle root) and target an object's path,
+// both already clean.
+//
+// The "../" case is not hypothetical: a directory's log.md lists the
+// concept the directory is named after (revisionsUnderSQL matches
+// "<dir>.md" as well as the subtree), and that concept lives one level up
+// — metrics/log.md records what happened to ../metrics.md.
+func relativeTo(dir, target string) string {
+	if dir == "" {
+		return target
+	}
+	from, to := strings.Split(dir, "/"), strings.Split(target, "/")
+	i := 0
+	for i < len(from) && i < len(to)-1 && from[i] == to[i] {
+		i++
+	}
+	return strings.Repeat("../", len(from)-i) + strings.Join(to[i:], "/")
 }

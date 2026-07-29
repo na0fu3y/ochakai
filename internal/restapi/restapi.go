@@ -288,6 +288,15 @@ func Handler(svc *service.Service) http.Handler {
 		// re-rooted — an export of metrics/ imports back to metrics/,
 		// because this is a copy of a subtree and not a move of one.
 		if wantsArchive(r) {
+			// A reserved name is a file the bundle generates, not a
+			// directory in it, so there is no subtree at this address to
+			// archive — the same refusal the write face makes, for the
+			// same reason. Without it the path normalized to a directory
+			// nothing lives under and the caller got an empty archive
+			// with a 200 on it.
+			if refuseReserved(w, path, "so there is no subtree here to archive; ask the directory it sits in") {
+				return
+			}
 			scope, err := service.NormalizePrefix(path)
 			if err != nil {
 				writeError(w, err)
@@ -308,6 +317,14 @@ func Handler(svc *service.Service) http.Handler {
 		// this object" is one question with one answer whichever kind
 		// it is.
 		if r.URL.Query().Has("history") {
+			// Nothing ever happened to a file that is generated on
+			// demand, and "nothing ever happened here" (404) reads as a
+			// fact about the bundle rather than about the address. The
+			// history of what these two files *report* is the log.md
+			// beside them.
+			if refuseReserved(w, path, "so it has no history of its own; log.md is the history of its directory") {
+				return
+			}
 			writeObjectHistory(w, r, svc, path)
 			return
 		}
@@ -419,10 +436,7 @@ func Handler(svc *service.Service) http.Handler {
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
-			if _, base := splitReserved(path); domain.ReservedBundleName(base) {
-				writeJSON(w, http.StatusConflict, map[string]string{
-					"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)", base),
-				})
+			if refuseReserved(w, path, "and a generated file is not one anybody writes") {
 				return
 			}
 			actor := httpauth.Actor(r.Context())
@@ -841,14 +855,25 @@ func writeObjectHistory(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	// that is the point of the representation — a diff between two
 	// revisions is a text diff. A file's carry none, because a file has
 	// none, so its rows are the shape a directory's history has.
+	//
+	// Which of the two this is cannot be read off the path: a markdown
+	// document that carries no type is a *file* (design doc 0046 §3.2),
+	// and it lives at a ".md" path like any other. So the concept ledger
+	// is asked first and its ErrNotFound falls through to the object's —
+	// keyed by path, which is the one key both kinds have. Routing on the
+	// suffix alone answered 404 as JSON at an address whose markdown
+	// listed the history fine, which is the one thing two representations
+	// of one address may not do.
 	if id, isMarkdown := strings.CutSuffix(path, ".md"); isMarkdown && wantsJSON(r) {
 		revs, err := svc.Revisions(r.Context(), id, limit)
-		if err != nil {
+		if err == nil {
+			writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
+			return
+		}
+		if !errors.Is(err, store.ErrNotFound) {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
-		return
 	}
 	rows, err := svc.ObjectHistory(r.Context(), path, limit)
 	if err != nil {
@@ -859,7 +884,7 @@ func writeObjectHistory(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		writeJSON(w, http.StatusOK, changeLog{Changes: asChanges(rows)})
 		return
 	}
-	writeMarkdown(w, service.RenderLog(path, rows))
+	writeMarkdown(w, service.RenderObjectLog(path, rows))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -922,6 +947,29 @@ func frontmatterFilter(q url.Values) map[string]string {
 		out[name] = vals[len(vals)-1]
 	}
 	return out
+}
+
+// refuseReserved answers 409 when the path names one of the two files
+// OKF reserves per directory, and reports whether it did. because is what
+// follows "generated from the bundle, not stored in it," for the face
+// that asked — a write has no place to land, an archive has no subtree,
+// a history has no events.
+//
+// Every face that reads the path as something other than "the object at
+// it" goes through here, so the reservation is answered once. It used to
+// be the write face's own three lines, which is why asking a reserved
+// name for an archive returned an empty one with a 200 on it: the
+// address was the same address, and only one of its faces knew.
+func refuseReserved(w http.ResponseWriter, path, because string) bool {
+	_, base := splitReserved(path)
+	if !domain.ReservedBundleName(base) {
+		return false
+	}
+	writeJSON(w, http.StatusConflict, map[string]string{
+		"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8), %s",
+			base, because),
+	})
+	return true
 }
 
 // splitReserved cuts a bundle path into the directory it names and its

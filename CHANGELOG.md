@@ -482,8 +482,12 @@ last entry.
   under an entry's namespace arrives attributed and one nothing points
   at is simply a file.
 
-  `index.md` and `log.md` stay 409 on write, and a file's history lands
-  in the same ledger the concepts use — created and deleted, by whom.
+  `index.md` and `log.md` are 409 to every face that reads their address
+  as something other than the file itself — a write, an archive
+  (`Accept: application/gzip`, which reads a path as a subtree), or an
+  object's `?history`. Reading the generated file is a 200: that is what
+  generating it is for. A file's history lands in the same ledger the
+  concepts use — created and deleted, by whom.
 
 - **`ochakai log [path]`** prints the update history as OKF's `log.md`
   (SPEC §9): date-grouped, newest first, for a path or the whole bundle
@@ -617,6 +621,25 @@ last entry.
   once the second half is true.
 
 ### Fixed
+
+- **`?history` answers one history, whichever representation asks.** A
+  markdown document that carries no `type` is a *file* (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2) and lives at a
+  `.md` path like a concept does, but `?history` routed on that suffix
+  alone: with `Accept: application/json` it went looking for a concept
+  ledger under an id nothing held and answered 404, at an address whose
+  markdown listed the history fine. The concept ledger is asked first and
+  falls through to the object's, which is keyed by path — the one key
+  both kinds have.
+
+- **A generated `log.md` links relative to the directory it sits in**,
+  the way the `index.md` beside it does and the way SPEC §6 writes a link
+  between two objects of one bundle. The links were root-absolute
+  (`/metrics/revenue.md`), which resolves to the filesystem root once the
+  archive is extracted: two generated files in one directory disagreed
+  about what a bundle path means. A directory's history also covers the
+  concept it is named after, one level up, so `../metrics.md` is a form
+  these now take.
 
 - **One spelling decides what is reserved.** "Is this index.md or
   log.md" was answered in four places — `domain.ReservedBundleName`,

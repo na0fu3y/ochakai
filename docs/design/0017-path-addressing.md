@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0017: 配置とタイプの分離 — パスが住所、タイプは属性
 
-Status: Accepted(2026-07-19 承認。破壊的変更は許容、互換シムは置かない方針。同日の 0016(カタログ準拠)と併走のためマイグレーションは 0011、タイプの語彙は 0016 の複数形)。ID 文字種(§4.1)は [0019](0019-release-review-adjustments.md) §2 が OKF 同等に緩和。タイプの語彙は [0023](0023-okf-type-vocabulary.md) が複数形スラグから OKF 表示名に置き換え。住所を検索の絞り込みに使えるようにしたのは [0041](0041-path-scoped-search.md)(prefix フィルタ)
+Status: Accepted(2026-07-19 承認。破壊的変更は許容、互換シムは置かない方針。同日の 0016(カタログ準拠)と併走のためマイグレーションは 0011、タイプの語彙は 0016 の複数形)。ID 文字種(§4.1)は [0019](0019-release-review-adjustments.md) §2 が OKF 同等に緩和。タイプの語彙は [0023](0023-okf-type-vocabulary.md) が複数形スラグから OKF 表示名に置き換え。住所を検索の絞り込みに使えるようにしたのは [0041](0041-path-scoped-search.md)(prefix フィルタ)。**§4.5 と §4.7 のサーフェスは [0046](0046-bundle-address-space.md) が改訂した** — 「パスが住所、タイプは属性」という本ドキュメントの決定はそのまま(0046 §3 が明示して引き継ぐ)だが、その住所を出す面は動いた: 概念の第二の住所だった `/api/v1/knowledge/{id...}` は `/api/v1/bundle/{path}`(概念は `<id>.md`)一本になり、`/revisions/{id...}` は同じ住所の `?history`、`/backlinks/{id...}` は検索の `links_to=`、§4.7 の `GET /api/v1/browse` は生成される `index.md` になった(0046 §§3.5、3.7)。裁定の面は [0055](0055-one-ruling-one-face.md)
 Date: 2026-07-19
 
 ## 1. 目的
