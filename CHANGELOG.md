@@ -20,6 +20,43 @@ last entry.
 
 ### Added
 
+- **BREAKING** — two CLI commands fold into the ones that already
+  answered the same question, and taking back a rejection gets one
+  spelling everywhere (design doc
+  [0056](docs/design/0056-one-question-one-command.md)):
+
+  ```
+  ochakai backlinks <id>     →  ochakai search --links-to <id>
+  ochakai queues             →  ochakai stats  (--exit-code moves with it)
+  ochakai reject --lift      →  ochakai reject --withdraw
+  revision change "unreject" →  "withdraw"
+  ```
+
+  Both commands were second addresses for a face the wire had already
+  folded away — `/api/v1/backlinks/{id}` into `links_to=` (design doc
+  0046 §3.5) and `/api/v1/queues` into the `queues` key of `stats`
+  (0049 §3.1) — and each was quietly costing something. `ochakai
+  backlinks --limit` documented the defaults of the endpoint that no
+  longer existed (20/100, where the search listing it actually calls
+  gives 100/1000), and `queues` printed the same three numbers under
+  different keys than `stats` did. **No capability is lost.** The queue
+  lines of `ochakai stats` now carry the command that lists each queue,
+  under the scope you asked with, and `ochakai stats --exit-code` still
+  exits 2 while any of the three is holding something and 1 on an error.
+  `--links-to` with no query lists in address order, pages with
+  `--cursor`, and combines with every other filter.
+
+  `withdraw` is the spelling the wire already chose (`ruling:
+  "withdrawn"`, 0055 §3.2). The CLI flag, the web UI's button and the
+  revision log's `change` value said `lift`, `Lift rejection` and
+  `unreject` — four words for one act. Migration `0034` rewrites the
+  stored `change` values; who withdrew what and when is untouched. A
+  client that branches on a revision's `change` rewrites one word.
+
+  `ochakai verify` and `ochakai reject` stay two commands: what folds is
+  two commands with one capability, not two different acts. CLI commands
+  go 27 → 25, and [docs/surface.md](docs/surface.md)'s ceiling with them.
+
 - **BREAKING** — the three faces a human rules from become one,
   `POST /api/v1/review/{id}`, taking `ruling` in the body (design doc
   [0055](docs/design/0055-one-ruling-one-face.md)):
@@ -42,10 +79,11 @@ last entry.
   deliberately *not* folded in — a human's ruling and a machine's
   observation land on opposite surfaces.
 
-  **`ochakai verify` and `ochakai reject [--lift]` are unchanged**, as is
-  every MCP tool. No stored data, ledger, export form, revision `change`
-  value or trust derivation moves. Clients calling REST directly rewrite
-  three calls, each a one-liner.
+  **`ochakai verify` and `ochakai reject` are unchanged as commands**, as
+  is every MCP tool. No stored data, ledger, export form or trust
+  derivation moves. Clients calling REST directly rewrite three calls,
+  each a one-liner. (The flag and the revision `change` value for taking
+  a rejection back became `withdraw` — see below.)
 
 - **BREAKING** — `GET /api/v1/queues` is gone; its three numbers are the
   `queues` key of `GET /api/v1/stats`, which they already were (design
@@ -62,8 +100,10 @@ last entry.
   there is no id to scope by (design doc
   [0051 §3.7](docs/design/0051-instance-metrics-and-search-misses.md)).
 
-  **`ochakai queues` is unchanged**, including `--exit-code`; it reads
-  the stats face now. `ochakai stats` gains `--prefix`.
+  **`ochakai queues` went the same way** (design doc
+  [0056 §3.2](docs/design/0056-one-question-one-command.md)): its two
+  properties are now `ochakai stats`'s. `ochakai stats` gains `--prefix`
+  and `--exit-code`.
 
 - **BREAKING** — the five MCP tools carrying `knowledge` are renamed to
   OKF's word for the unit of knowledge, `concept` (design doc
@@ -569,6 +609,17 @@ last entry.
   The summary line now carries the note count on both paths
   (`… 0 skipped, 0 notes`), because a count that only appears in the
   scrollback is a count nobody reads.
+
+### Fixed
+
+- `ochakai reject` is named in `ochakai help` and in the CLI reference's
+  command list. It has shipped, run and carried its own `-h` text since
+  the ruling existed, but the one place a reader looks for the commands
+  never listed it, so half of review was reachable only by already
+  knowing it was there. The guard that should have caught it compared
+  the dispatch table against a list written out in the test — a copy of
+  the help rather than a reading of it — and now reads the help itself,
+  in both directions.
 
 ### Security
 

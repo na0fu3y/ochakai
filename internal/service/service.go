@@ -471,19 +471,19 @@ func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Acto
 	return k, nil
 }
 
-// LiftRejection withdraws a ruling, returning the entry to the ordinary
+// WithdrawRejection withdraws a ruling, returning the entry to the ordinary
 // pool. ErrNotFound when the entry carries no rejection: lifting nothing
 // is a mistake worth reporting rather than a silent success.
-func (s *Service) LiftRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+func (s *Service) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
 	id = domain.Normalize(id)
-	k, err := s.Store.LiftRejection(ctx, id, actor)
+	k, err := s.Store.WithdrawRejection(ctx, id, actor)
 	if err != nil {
 		return nil, err
 	}
-	s.Log.Info("knowledge rejection lifted", "id", id, "actor", actor.String())
+	s.Log.Info("knowledge rejection withdrawn", "id", id, "actor", actor.String())
 	return k, nil
 }
 

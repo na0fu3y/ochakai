@@ -27,7 +27,6 @@ import (
 
 var clientCommands = map[string]func(context.Context, []string) error{
 	"search":    cmdSearch,
-	"queues":    cmdQueues,
 	"browse":    cmdBrowse,
 	"context":   cmdContext,
 	"get":       cmdGet,
@@ -45,7 +44,6 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"report":    cmdReport,
 	"revisions": cmdRevisions,
 	"log":       cmdLog,
-	"backlinks": cmdBacklinks,
 	"export":    cmdExport,
 	"import":    cmdImport,
 	"use":       cmdUse,
@@ -274,7 +272,7 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the entries citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe entries whose body links at one entry (the reverse of its inbound\nedges, which `ochakai backlinks` asks on its own); --prefix narrows to\nthe entries living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the entries citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe entries whose body links at one entry — its backlinks, the reverse\nof its inbound edges; --prefix narrows to\nthe entries living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search --links-to metrics/revenue --type Insight   # which insights read this metric\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -282,7 +280,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 	fs.Var(&tags, "tag", "filter by tag (repeatable)")
 	fs.Var(&prefixes, "prefix", "only entries under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
 	source := fs.String("source", "", "only entries citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
-	linksTo := fs.String("links-to", "", "only entries whose body links at this `id` — what points at one entry (`ochakai backlinks` is this, on its own)")
+	linksTo := fs.String("links-to", "", "only entries whose body links at this `id` — what points at one entry, in address order (its backlinks)")
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
@@ -355,58 +353,6 @@ func cmdSearch(ctx context.Context, args []string) error {
 	// own would surprise whoever piped it into head.
 	if page.Cursor != "" {
 		fmt.Fprintf(os.Stderr, "note: more entries — rerun with --cursor %s\n", page.Cursor)
-	}
-	return nil
-}
-
-func cmdQueues(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"queues",
-		"Usage: ochakai queues [flags]\n\nPrint how much work each review queue is holding: drafts waiting to be\npublished or turned down, entries whose failure reports are unanswered,\nentries past the expiry their author declared. One line per queue —\ncount, name, and the command that lists it — so the next step is the\ntext on the line.\nThe verification-age feed is not here: it ranks every verified entry\nrather than holding the ones that need something, so its size is the\nsize of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any queue is non-empty and\n0 when all three are, which is how a scheduled job goes red on work\nnobody has picked up. An error still exits 1, so \"unreachable\" cannot\nbe read as \"nothing to do\".",
-		"  ochakai queues\n  ochakai queues --prefix teams/growth      # our subtree only\n  ochakai queues --json | jq .queues.drafts\n  ochakai queues --exit-code                # in CI: red while somebody owes a review\n")
-	var prefixes repeated
-	fs.Var(&prefixes, "prefix", "count only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)")
-	exitCode := fs.Bool("exit-code", false, "exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI")
-	asJSON := fs.Bool("json", false, "print the raw JSON response")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		fs.Usage()
-		return errReported
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	counts, err := c.Queues(ctx, prefixes)
-	if err != nil {
-		return err
-	}
-	if *asJSON {
-		if err := printJSON(map[string]any{"queues": counts}); err != nil {
-			return err
-		}
-	} else {
-		scope := ""
-		for _, p := range prefixes {
-			scope += " --prefix " + p
-		}
-		for _, q := range []struct {
-			count int64
-			name  string
-			lists string
-		}{
-			{counts.Drafts, "drafts", "--sort usage --status draft"},
-			{counts.ReportedWrong, "reported wrong", "--sort failed"},
-			{counts.PastExpiry, "past expiry", "--sort stale_after"},
-		} {
-			fmt.Printf("%d\t%s\tochakai search %s%s\n", q.count, q.name, q.lists, scope)
-		}
-	}
-	if *exitCode && counts.Total() > 0 {
-		return errWorkPending
 	}
 	return nil
 }
@@ -622,11 +568,12 @@ func cmdUsage(ctx context.Context, args []string) error {
 func cmdStats(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"stats",
-		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one entry; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue numbers are the ones `ochakai queues` prints; that is\nthe command with the next step on each line and the --exit-code a\nscheduled job goes red on. This one is the whole picture, not the\nnudge.",
-		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --prefix teams/growth       # our subtree only\n  ochakai stats --json | jq .misses.queries\n")
+		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one entry; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue lines — drafts waiting to be published or turned down,\nentries whose failure reports are unanswered, entries past the expiry\ntheir author declared — carry the command that lists that queue, with\nthe scope you asked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nentry rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any of the three is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
+		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --prefix teams/growth       # our subtree only\n  ochakai stats --json | jq .queues.drafts\n  ochakai stats --exit-code                 # in CI: red while somebody owes a review\n")
 	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
 	var prefixes repeated
 	fs.Var(&prefixes, "prefix", "measure only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere")
+	exitCode := fs.Bool("exit-code", false, "exit 2 while any review queue is non-empty (0 when all are empty, 1 on error) — for cron and CI")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parseArgs(fs, args); err != nil {
 		return err
@@ -640,7 +587,10 @@ func cmdStats(ctx context.Context, args []string) error {
 		return err
 	}
 	if *asJSON {
-		return printJSON(st)
+		if err := printJSON(st); err != nil {
+			return err
+		}
+		return pendingWork(st.Queues, *exitCode)
 	}
 	// Tab-separated key/value, like `usage`: the vocabularies are printed
 	// in their own order (domain.Statuses, domain.Trusts) so a value
@@ -652,19 +602,50 @@ func cmdStats(ctx context.Context, args []string) error {
 	for _, t := range domain.Trusts {
 		fmt.Printf("%s\t%d\n", t, st.Entries.Trust[string(t)])
 	}
-	fmt.Printf("rejected\t%d\ndrafts\t%d\nreported_wrong\t%d\npast_expiry\t%d\nwindow_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
-		st.Entries.Rejected, st.Queues.Drafts, st.Queues.ReportedWrong, st.Queues.PastExpiry,
+	fmt.Printf("rejected\t%d\n", st.Entries.Rejected)
+	// The three queues take a third field: the command that lists that
+	// queue, under the scope this call was made with. A number nobody can
+	// act on is a statistic, and these three exist to be emptied (design
+	// doc 0049) — so the next step is the text on the line. The key and
+	// the count stay in the first two fields, so the format still cuts.
+	scope := ""
+	for _, p := range prefixes {
+		scope += " --prefix " + p
+	}
+	for _, q := range []struct {
+		name  string
+		count int64
+		lists string
+	}{
+		{"drafts", st.Queues.Drafts, "--sort usage --status draft"},
+		{"reported_wrong", st.Queues.ReportedWrong, "--sort failed"},
+		{"past_expiry", st.Queues.PastExpiry, "--sort stale_after"},
+	} {
+		fmt.Printf("%s\t%d\tochakai search %s%s\n", q.name, q.count, q.lists, scope)
+	}
+	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
 		st.WindowDays, st.Entries.Created, st.Review.Verifications,
 		st.Outcomes.Worked, st.Outcomes.Failed)
 	if !st.Misses.Recording {
 		// Not zero — unknown. A deployment that keeps no questions must
 		// not read as one that was asked none.
 		fmt.Print("misses\t-\n")
-		return nil
+		return pendingWork(st.Queues, *exitCode)
 	}
 	fmt.Printf("misses\t%d\n", st.Misses.Count)
 	for _, q := range st.Misses.Queries {
 		fmt.Printf("gap\t%d\t%s\n", q.Count, q.Query)
+	}
+	return pendingWork(st.Queues, *exitCode)
+}
+
+// pendingWork turns "somebody owes a review" into an exit status a
+// scheduler can watch: 2 while a queue is holding something, 0 when the
+// three are empty. An error is still 1, so an unreachable server cannot
+// be read as nothing to do (design doc 0049).
+func pendingWork(q domain.QueueCounts, asked bool) error {
+	if asked && q.Total() > 0 {
+		return errWorkPending
 	}
 	return nil
 }
@@ -755,39 +736,6 @@ func cmdLog(ctx context.Context, args []string) error {
 	}
 	_, err = os.Stdout.Write(doc)
 	return err
-}
-
-func cmdBacklinks(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"backlinks",
-		"Usage: ochakai backlinks [flags] <id>\n\nList live entries whose links point at this entry, in address order —\nthe reverse edge the web UI shows as \"linked from\" (context already\nfollows it when packing companions). Same question as\n`ochakai search --links-to <id>`, which is where it lives on the wire.\nOutput: uri, status, title — description (one entry per line).",
-		"  ochakai backlinks metrics/revenue\n  ochakai backlinks metrics/revenue --json | jq '.entries[].id'\n")
-	limit := fs.Int("limit", 0, "max entries (server default 20, max 100)")
-	asJSON := fs.Bool("json", false, "print the raw JSON response")
-	id, _, err := idArgs(fs, args, 1)
-	if err != nil {
-		return err
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	entries, err := c.Backlinks(ctx, id, *limit)
-	if err != nil {
-		return err
-	}
-	if *asJSON {
-		return printJSON(map[string]any{"entries": entries})
-	}
-	for i := range entries {
-		e := &entries[i]
-		line := fmt.Sprintf("%s\t%s\t%s", e.URI(), e.Status, e.Title)
-		if e.Description != "" {
-			line += " — " + e.Description
-		}
-		fmt.Println(line)
-	}
-	return nil
 }
 
 func cmdGet(ctx context.Context, args []string) error {
@@ -1073,25 +1021,25 @@ func cmdVerify(ctx context.Context, args []string) error {
 func cmdReject(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"reject",
-		"Usage: ochakai reject [flags] <id>\n\nRecord that an entry was reviewed and not accepted, with the reason.\nRejected entries are hidden from search unless asked for\n(`search --rejected`), which is how an agent checks whether a proposal\nwas already turned down before making it again.\nIt does not edit the entry: the lifecycle status and the ETag stay put.\nA rejection is this instance's ruling, so an exported bundle carries the\nentry's real status rather than folding the ruling onto deprecated.\nUse --lift to withdraw one.",
-		"  ochakai reject metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai reject metrics/bad-revenue --lift\n")
+		"Usage: ochakai reject [flags] <id>\n\nRecord that an entry was reviewed and not accepted, with the reason.\nRejected entries are hidden from search unless asked for\n(`search --rejected`), which is how an agent checks whether a proposal\nwas already turned down before making it again.\nIt does not edit the entry: the lifecycle status and the ETag stay put.\nA rejection is this instance's ruling, so an exported bundle carries the\nentry's real status rather than folding the ruling onto deprecated.\nUse --withdraw to take one back — the wire calls that ruling\n`withdrawn`, and so does the revision it writes.",
+		"  ochakai reject metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai reject metrics/bad-revenue --withdraw\n")
 	note := fs.String("note", "", "why it was not accepted — the next agent reads this before proposing again")
-	lift := fs.Bool("lift", false, "withdraw the rejection instead of recording one")
+	withdraw := fs.Bool("withdraw", false, "withdraw the live rejection instead of recording one")
 	asJSON := fs.Bool("json", false, "print the entry as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
-	if *lift && *note != "" {
-		return fmt.Errorf("--lift withdraws a rejection; it takes no --note")
+	if *withdraw && *note != "" {
+		return fmt.Errorf("--withdraw takes back a rejection; it takes no --note")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
 	}
 	var k *domain.View
-	if *lift {
-		k, err = c.LiftRejection(ctx, id)
+	if *withdraw {
+		k, err = c.WithdrawRejection(ctx, id)
 	} else {
 		k, err = c.Reject(ctx, id, *note)
 	}
@@ -1101,8 +1049,8 @@ func cmdReject(ctx context.Context, args []string) error {
 	if *asJSON {
 		return printJSON(k)
 	}
-	if *lift {
-		fmt.Printf("rejection lifted on ochakai://%s\n", k.ID)
+	if *withdraw {
+		fmt.Printf("rejection withdrawn on ochakai://%s\n", k.ID)
 		return nil
 	}
 	fmt.Printf("rejected ochakai://%s by %s\n", k.ID, k.Observed.Rejection.By.String())

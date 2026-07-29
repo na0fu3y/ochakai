@@ -185,19 +185,21 @@ The list above is about the deployment. The other thing worth watching is
 the knowledge, and it fails silently: a review queue nobody opens looks
 exactly like a review queue with nothing in it.
 
-`ochakai queues` is the whole answer (design doc
-[0049](../design/0049-queue-counts.md)). It prints the three queues a
-curator empties, each line carrying the command that lists it:
+`ochakai stats` is the whole answer (design doc
+[0049](../design/0049-queue-counts.md)). Among its lines are the three
+queues a curator empties, each carrying the command that lists it:
 
 ```console
-$ ochakai queues
-12	drafts	ochakai search --sort usage --status draft
-1	reported wrong	ochakai search --sort failed
-0	past expiry	ochakai search --sort stale_after
+$ ochakai stats
+…
+drafts	12	ochakai search --sort usage --status draft
+reported_wrong	1	ochakai search --sort failed
+past_expiry	0	ochakai search --sort stale_after
+…
 ```
 
 `--exit-code` turns that into something a scheduler watches: **2 while
-any queue is non-empty, 0 when all three are** — and 1 stays what it
+any of the three is non-empty, 0 when all are** — and 1 stays what it
 always was, an error, so an unreachable server cannot be read as "nothing
 to do". `--prefix teams/growth` scopes it, which is how one team on a
 shared deployment asks about its own queue.
@@ -232,8 +234,8 @@ jobs:
 ochakai delivers nothing itself — no mail, no chat, no webhooks (design
 doc 0049 §4). The job above is the delivery, and it is yours.
 
-`ochakai stats` is the same shape for the question one step further out —
-not "is anything waiting" but "is this working": how much of the base is
+The same command answers the question one step further out — not "is
+anything waiting" but "is this working": how much of the base is
 confirmed, how much moved through review this month, and what people
 searched for and did not find (design doc
 [0051](../design/0051-instance-metrics-and-search-misses.md)). One number

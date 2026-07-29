@@ -942,7 +942,7 @@ func attrsEqual(a, b map[string]any) bool {
 // behind "every change kept as a revision".
 type Revision struct {
 	Rev       int       `json:"rev"`
-	Change    string    `json:"change"` // create | update | move | delete | verify | reject | unreject | attach | detach
+	Change    string    `json:"change"` // create | update | move | delete | verify | reject | withdraw | attach | detach
 	ChangedBy Actor     `json:"changed_by"`
 	ChangedAt time.Time `json:"changed_at"`
 	// Document is the entry as it stood, as an OKF document (design doc

@@ -89,7 +89,7 @@ their own author declared — that one clears by editing the entry to
 re-declare the date, since the date is a claim the writer made rather than
 something the server observed.
 
-Whether any of the three is holding anything is one call — `ochakai queues`,
+Whether any of the three is holding anything is one call — `ochakai stats`,
 and the Review tab's badge — so a queue going quiet stops looking like a
 queue being empty; with `--exit-code` it is a cron job away from telling your
 team (design doc [0049](design/0049-queue-counts.md)). And when a cited

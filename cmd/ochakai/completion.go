@@ -76,7 +76,6 @@ _ochakai() {
   local -a commands
   commands=(
     'search:search knowledge; verified entries rank higher'
-    'queues:how much work each review queue is holding'
     'browse:list one level of the ID hierarchy (folder view)'
     'context:the one-call read before a data question (full entries)'
     'get:print one entry as an OKF document'
@@ -90,11 +89,10 @@ _ochakai() {
     'attach:attach files to an entry'
     'detach:remove an attachment'
     'usage:show usage totals for an entry'
-    'stats:show the loop for the whole base (review queues, gaps)'
+    'stats:the whole loop: what is stored, what each queue holds, what review did'
     'report:report an outcome (worked/failed) for an entry'
     'revisions:list the change history of an entry (newest first)'
     'log:print the history under a path as OKF log.md'
-    'backlinks:list entries whose links point at this one'
     'export:download the knowledge base as an OKF bundle'
     'import:upload an OKF bundle'
     'use:pick the server for later commands'
@@ -150,19 +148,17 @@ _ochakai() {
       _arguments '--json[print JSON]' '--url[server URL]:url:'
       ;;
     stats)
-      _arguments '--days[flow window in days, 1-180]:days:' '--prefix[measure only this subtree]:path:' '--json[print JSON]' '--url[server URL]:url:'
+      _arguments \
+        '--days[flow window in days, 1-180]:days:' \
+        '*--prefix[measure only this subtree]:path:' \
+        '--exit-code[exit 2 while any review queue is non-empty]' \
+        '--json[print JSON]' \
+        '--url[server URL]:url:'
       ;;
     browse)
       _arguments '--json[print the raw JSON response]' '--url[server URL]:url:'
       ;;
-    queues)
-      _arguments \
-        '*--prefix[count only entries under this path]:prefix:' \
-        '--exit-code[exit 2 while any queue is non-empty]' \
-        '--json[print the raw JSON response]' \
-        '--url[server URL]:url:'
-      ;;
-    revisions|backlinks)
+    revisions)
       _arguments '--limit[max results]:limit:' '--json[print the raw JSON response]' '--url[server URL]:url:'
       ;;
     log)
@@ -178,7 +174,7 @@ _ochakai() {
       _arguments '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
     reject)
-      _arguments '--note[why it was not accepted]:note:' '--lift[withdraw the rejection]' '--json[print the entry as JSON]' '--url[server URL]:url:'
+      _arguments '--note[why it was not accepted]:note:' '--withdraw[take back the rejection]' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
     delete|purge|detach|move)
       _arguments '--url[server URL]:url:'
@@ -231,7 +227,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search queues browse context get put verify reject delete purge reembed move attach detach usage stats report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search browse context get put verify reject delete purge reembed move attach detach usage stats report revisions export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -245,13 +241,12 @@ _ochakai() {
 
   case $cmd in
     search)        opts="--type --status --tag --prefix --source --links-to --trust --fm --rejected --sort --limit --cursor --json --url" ;;
-    queues)        opts="--prefix --exit-code --json --url" ;;
     browse)        opts="--json --url" ;;
     context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
-    stats)         opts="--days --prefix --json --url" ;;
-    revisions|backlinks) opts="--limit --json --url" ;;
+    stats)         opts="--days --prefix --exit-code --json --url" ;;
+    revisions)     opts="--limit --json --url" ;;
     log)           opts="--limit --url" ;;
     report)
       if [[ $prev != -* && $COMP_CWORD -eq 3 && $cur != -* ]]; then
@@ -261,7 +256,7 @@ _ochakai() {
       opts="--note --json --url" ;;
     put)           opts="-f --only-if-new --if-match --json --url" ;;
     verify)        opts="--json --url" ;;
-    reject)        opts="--note --lift --json --url" ;;
+    reject)        opts="--note --withdraw --json --url" ;;
     delete|purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     reembed)       opts="--limit --once --json --url" ;;
@@ -294,7 +289,6 @@ const fishCompletionTmpl = `# fish completion for ochakai — ochakai completion
 complete -c ochakai -f
 
 complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
-complete -c ochakai -n __fish_use_subcommand -a queues -d 'how much work each review queue is holding'
 complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
 complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full entries)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
@@ -308,11 +302,10 @@ complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) an entry;
 complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to an entry'
 complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for an entry'
-complete -c ochakai -n __fish_use_subcommand -a stats -d 'show the loop for the whole base (review queues, gaps)'
+complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for an entry'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of an entry (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a log -d 'print the history under a path as OKF log.md'
-complete -c ochakai -n __fish_use_subcommand -a backlinks -d 'list entries whose links point at this one'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
@@ -324,12 +317,12 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get put verify reject delete purge reembed move attach detach usage stats report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get put verify reject delete purge reembed move attach detach usage stats report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get put verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search browse context get put verify reject reembed attach usage stats report revisions whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
@@ -342,8 +335,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed stale_after' -d 'list instead of searching: by verification age, demand, failed reports, or declared expiry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
-complete -c ochakai -n '__fish_seen_subcommand_from queues' -l prefix -x -d 'count only entries under this path'
-complete -c ochakai -n '__fish_seen_subcommand_from queues' -l exit-code -d 'exit 2 while any queue is non-empty'
+complete -c ochakai -n '__fish_seen_subcommand_from stats' -l exit-code -d 'exit 2 while any review queue is non-empty'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l links-to -x -d 'only entries whose body links at this entry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the entry (OKF SPEC §5.3)'
@@ -351,8 +343,8 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l cursor -x -d 'resume a listing where the last page ended'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
-complete -c ochakai -n '__fish_seen_subcommand_from reject' -l lift -d 'withdraw the rejection'
-complete -c ochakai -n '__fish_seen_subcommand_from search context revisions log backlinks' -l limit -x -d 'max results'
+complete -c ochakai -n '__fish_seen_subcommand_from reject' -l withdraw -d 'take back the rejection'
+complete -c ochakai -n '__fish_seen_subcommand_from search context revisions log' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max entries per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'

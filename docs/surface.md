@@ -76,7 +76,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - PARAM: 19
 - HEADER: 9
 - MCP: 8
-- CLI: 27
+- CLI: 25
 - ENV: 16
 
 **天井は一つのファイルの一行で、誰でも上げられる。それは弱点ではなく
@@ -204,10 +204,9 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 既にその語で書いていたのにツール名だけが `knowledge` を名乗っていた。
 能力も引数も応答も変わらない。
 
-## CLI (27)
+## CLI (25)
 
 - `ochakai attach`
-- `ochakai backlinks`
 - `ochakai browse`
 - `ochakai completion`
 - `ochakai context`
@@ -221,7 +220,6 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `ochakai move`
 - `ochakai purge`
 - `ochakai put`
-- `ochakai queues`
 - `ochakai reembed`
 - `ochakai reject`
 - `ochakai report`

@@ -88,14 +88,13 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
-  queues                  how much work each review queue is holding
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
   put <id> [-f file]      write an entry from OKF markdown or JSON, creating
                           or replacing (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified entry too)
-  reject <id>             record a rejection and why (--lift withdraws it)
+  reject <id>             record a rejection and why (--withdraw takes it back)
   delete <id>             soft-delete an entry (history retained)
   purge <id>              hard-delete a soft-deleted entry, freeing its id
   reembed                 embed entries missing a vector for the current model
@@ -103,11 +102,11 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
-  stats                   show the loop for the whole base (review queues, gaps)
+  stats                   the whole loop: what is stored, what each queue holds,
+                          what review did, what came back empty
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
-  backlinks <id>          list entries whose links point at this one
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)

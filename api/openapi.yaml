@@ -1361,8 +1361,8 @@ paths:
                     as a ruling rather than as a DELETE because **nothing
                     is deleted** — the verifications stay, and the
                     withdrawal is its own row in the entry's history,
-                    which is what the revision log has always called
-                    `unreject`.
+                    recorded with the same word the ruling uses,
+                    `withdraw`.
                 note:
                   type: string
                   maxLength: 2000
@@ -2356,7 +2356,7 @@ components:
             doc 0049 §3.1 kept this place for the metrics beside it), and
             since 0049 §3.1 the only place it is answered — `prefix`
             scopes it like everything else here. When the question is only
-            "is there anything", `ochakai queues` prints these three with
+            "is there anything", `ochakai stats` prints these three with
             the next step on each line, and its `--exit-code` is what a
             scheduled job goes red on.
         review:
@@ -2585,7 +2585,7 @@ components:
       properties:
         path: { type: string, description: The object's bundle path. }
         title: { type: string, description: "The object's title as it stands; absent for a file and for a concept since purged." }
-        change: { type: string, enum: [create, update, verify, reject, unreject, delete, move, attach, detach] }
+        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, attach, detach] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
     ObjectHistory:
@@ -2607,7 +2607,7 @@ components:
         how, when, and the whole entry as it stood, as an OKF document.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per entry. }
-        change: { type: string, enum: [create, update, verify, reject, unreject, delete, move, attach, detach] }
+        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, attach, detach] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         document:

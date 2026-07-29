@@ -36,9 +36,9 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
-| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
+| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング) |
+| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -313,6 +313,22 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   ないという refusal(§2.2)。総件数は返さず、`cursor` の不在が終わりを
   意味する(§2.3)。REST / MCP / CLI / Web UI の 4 面に載り、CLI が
   ページを自分で歩かないことだけが意図的な省略(§4)。
+- [0056 一つの問いに一つのコマンド、一つの裁定に一つの語](0056-one-question-one-command.md)
+  — **Accepted**、**BREAKING**。ワイヤで畳んだ面が CLI にコマンドとして
+  残っていた二件を畳む: `ochakai backlinks` は
+  `ochakai search --links-to`(0046 §3.5 が REST 側を畳んだ先)へ、
+  `ochakai queues` は `ochakai stats` へ。**失われた能力は無い** —
+  各行が次に打つコマンドを持つことも `--exit-code` も `stats` に移り、
+  クエリ無しの `--links-to` はアドレス順の一覧のままである(§3.1、§3.2)。
+  第二の面が高くついていた証拠として、`backlinks --limit` のヘルプは
+  既に嘘になっており(消えた面の既定値を説明していた)、`queues` と
+  `stats` は同じ三つの数を違うキーで印字していた(§1)。あわせて却下の
+  取り消しの綴りを `withdraw` 一語にする — ワイヤの `withdrawn`
+  (0055 §3.2 が選んだ綴り)へ CLI・Web UI・リビジョンの `change` を
+  揃え、既存行はマイグレーション 0034 が書き換える(§3.3)。
+  **`verify` と `reject` は 2 本のまま** — 畳むのは能力が同じ二本で
+  あって、行為が違う二本ではない(§2)。0015 §2 の「CLI は完全性の面」
+  に、完全性とは能力の完全性であるという一行を足す。
 - [0055 裁定は一つの面から下す](0055-one-ruling-one-face.md) —
   **Accepted**、**BREAKING**。0025 §6 の `POST /api/v1/verify/{id}` と
   0043 §3.3 の `POST|DELETE /api/v1/reject/{id}` を、`ruling` を本文に
@@ -325,7 +341,8 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   検証に言えることを増やさないため(§3.3)。**`report_outcome` は畳ま
   ない** — 人の裁定と機械の観測は載る面が逆である(§2)。CLI の
   `verify` / `reject --lift` と MCP は無変更で、壊れるのは REST の
-  三つの URL だけ(§5)。
+  三つの URL だけ(§5)。CLI の `--lift` とリビジョン値 `unreject` は
+  0056 §3.3 がリリース前に `withdraw` へ言い直した。
 - [0049 キューの長さを数える](0049-queue-counts.md) — **Accepted**
   (2026-07-29 にリリース前改訂 — 0048 §2.3)。
   0025 と 0037 の 3 本のフィードを一覧せずに**数える**ことと CLI
@@ -337,6 +354,9 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   `GET /api/v1/stats` の側で埋めた結果、3 つの数だけを返す面は同じキーへの
   二つ目の住所になった。唯一の能力差だった `prefix` は `stats` に移り、
   移った先でエントリに紐づく数すべてを絞るようになった(§3.1、§3.3)。
+  **CLI `ochakai queues` も畳まれた**(0056 §3.2、これもリリース前)—
+  各行が次に打つコマンドを持つことも `--exit-code` も `ochakai stats`
+  に移っており、失われた性質は無い。
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
   **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した。フィードは
   0037 が 3 つめを足した。§6 の verify の記録は 0043 が検証台帳への

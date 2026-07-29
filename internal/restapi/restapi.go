@@ -584,8 +584,7 @@ func Handler(svc *service.Service) http.Handler {
 	// "withdrawn" is the DELETE, said as what it is: nothing is deleted.
 	// Verifications are an append-only ledger and a rejection is the one
 	// live ruling (0043 §3.3), so withdrawing it clears that ruling and
-	// leaves the history — which is exactly what the revision log has
-	// always called `unreject`.
+	// leaves the history, recorded under the same word.
 	//
 	// The note belongs to "rejected" alone. Carrying one on a
 	// verification would be a new thing to say rather than the same three
@@ -629,7 +628,7 @@ func Handler(svc *service.Service) http.Handler {
 					`withdrawing a rejection carries no note: it removes a ruling rather than making one`))
 				return
 			}
-			k, err = svc.LiftRejection(r.Context(), id, actor)
+			k, err = svc.WithdrawRejection(r.Context(), id, actor)
 		default:
 			writeError(w, service.Invalidf(
 				`ruling must be "verified", "rejected" or "withdrawn", not %q`, in.Ruling))

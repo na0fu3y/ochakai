@@ -489,10 +489,10 @@ func (c *Client) Reject(ctx context.Context, id, note string) (*domain.View, err
 	return c.review(ctx, id, "rejected", note)
 }
 
-// LiftRejection withdraws a rejection. A 404 when the entry carries none:
+// WithdrawRejection withdraws a rejection. A 404 when the entry carries none:
 // lifting nothing is a mistake worth reporting. Nothing is deleted — the
 // verifications stay, and the withdrawal is its own row in the history.
-func (c *Client) LiftRejection(ctx context.Context, id string) (*domain.View, error) {
+func (c *Client) WithdrawRejection(ctx context.Context, id string) (*domain.View, error) {
 	return c.review(ctx, id, "withdrawn", "")
 }
 

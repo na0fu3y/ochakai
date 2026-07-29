@@ -461,18 +461,15 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	}
 }
 
-// TestQueuesPrintsEachQueueWithTheCommandThatListsIt pins the two halves
-// of what makes `queues` a nudge rather than a statistic: every line
-// carries the command that opens that queue (with the scope it was asked
-// under), and --exit-code turns "somebody owes a review" into an exit
-// status a scheduler can watch (design doc 0049).
-func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
+// TestStatsPrintsEachQueueWithTheCommandThatListsIt pins the two halves
+// of what makes the queue lines a nudge rather than a statistic: every
+// one carries the command that opens that queue (with the scope it was
+// asked under), and --exit-code turns "somebody owes a review" into an
+// exit status a scheduler can watch (design doc 0049).
+func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 	var gotPrefixes []string
 	counts := domain.QueueCounts{Drafts: 3, ReportedWrong: 1, PastExpiry: 0}
 	mux := http.NewServeMux()
-	// The depths come off the stats face: the address they had of their
-	// own is gone (design doc 0049 §3.1), and `queues` is the client-side
-	// convenience over the same three numbers.
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
 		gotPrefixes = r.URL.Query()["prefix"]
 		_ = json.NewEncoder(w).Encode(map[string]any{"queues": counts})
@@ -486,34 +483,34 @@ func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stdout = pw
-	queuesErr := cmdQueues(context.Background(), []string{"--prefix", "teams/growth", "--exit-code", "--url", srv.URL})
+	statsErr := cmdStats(context.Background(), []string{"--prefix", "teams/growth", "--exit-code", "--url", srv.URL})
 	pw.Close()
 	os.Stdout = orig
 	out, err := io.ReadAll(pr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !errors.Is(queuesErr, errWorkPending) {
-		t.Errorf("--exit-code with 4 waiting = %v, want errWorkPending (exit 2)", queuesErr)
+	if !errors.Is(statsErr, errWorkPending) {
+		t.Errorf("--exit-code with 4 waiting = %v, want errWorkPending (exit 2)", statsErr)
 	}
 	if len(gotPrefixes) != 1 || gotPrefixes[0] != "teams/growth" {
 		t.Errorf("server saw prefix %v, want [teams/growth]", gotPrefixes)
 	}
 	for _, want := range []string{
-		"3\tdrafts\tochakai search --sort usage --status draft --prefix teams/growth\n",
-		"1\treported wrong\tochakai search --sort failed --prefix teams/growth\n",
-		"0\tpast expiry\tochakai search --sort stale_after --prefix teams/growth\n",
+		"drafts\t3\tochakai search --sort usage --status draft --prefix teams/growth\n",
+		"reported_wrong\t1\tochakai search --sort failed --prefix teams/growth\n",
+		"past_expiry\t0\tochakai search --sort stale_after --prefix teams/growth\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
 		}
 	}
 
-	// All three empty is the case the whole command exists to make
+	// All three empty is the case the exit status exists to make
 	// visible: it prints the zeros and exits 0, so a quiet queue and an
 	// empty one stop looking alike.
 	counts = domain.QueueCounts{}
-	if err := cmdQueues(context.Background(), []string{"--exit-code", "--url", srv.URL}); err != nil {
+	if err := cmdStats(context.Background(), []string{"--exit-code", "--url", srv.URL}); err != nil {
 		t.Errorf("--exit-code on an empty base = %v, want nil (exit 0)", err)
 	}
 }

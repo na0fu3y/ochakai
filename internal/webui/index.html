@@ -1567,7 +1567,7 @@ async function viewDetail(id) {
               ? 'Checked again and still right — appends a verification, which is what clears the review feeds'
               : 'Confirm this entry — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
             ${entry.rejected
-              ? `<button id="act-unreject" title="Withdraw the ruling and return the entry to the ordinary pool">Lift rejection</button>`
+              ? `<button id="act-withdraw" title="Withdraw the ruling and return the entry to the ordinary pool">Withdraw rejection</button>`
               : `<button class="danger" id="act-reject" title="Reviewed and not accepted — hidden from search, with the reason kept for the next agent">Reject…</button>`}
             <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
             <button class="danger" id="act-delete">Delete…</button>
@@ -1842,11 +1842,11 @@ async function viewDetail(id) {
       viewDetail(entry.id);
     } catch (e) { toast('Failed: ' + e.message); }
   });
-  $('#act-unreject')?.addEventListener('click', async () => {
+  $('#act-withdraw')?.addEventListener('click', async () => {
     closeMenu();
     try {
       await liftRejection(entry.id);
-      toast('Rejection lifted.');
+      toast('Rejection withdrawn.');
       refreshTree();
       viewDetail(entry.id);
     } catch (e) { toast('Failed: ' + e.message); }

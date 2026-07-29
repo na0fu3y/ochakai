@@ -23,14 +23,13 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
-  queues                  how much work each review queue is holding
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
   put <id> [-f file]      write an entry from OKF markdown or JSON, creating
                           or replacing (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified entry too)
-  reject <id>             record a rejection and why (--lift withdraws it)
+  reject <id>             record a rejection and why (--withdraw takes it back)
   delete <id>             soft-delete an entry (history retained)
   purge <id>              hard-delete a soft-deleted entry, freeing its id
   reembed                 embed entries missing a vector for the current model
@@ -38,11 +37,11 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
-  stats                   show the loop for the whole base (review queues, gaps)
+  stats                   the whole loop: what is stored, what each queue holds,
+                          what review did, what came back empty
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
-  backlinks <id>          list entries whose links point at this one
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)
@@ -84,30 +83,6 @@ Examples:
   ochakai attach insights/reading-revenue weekly.png
   ochakai attach tables/orders seeds.txt
   ochakai attach tables/orders er-diagram.png --name schema.png
-```
-
-## ochakai backlinks
-
-```
-Usage: ochakai backlinks [flags] <id>
-
-List live entries whose links point at this entry, in address order —
-the reverse edge the web UI shows as "linked from" (context already
-follows it when packing companions). Same question as
-`ochakai search --links-to <id>`, which is where it lives on the wire.
-Output: uri, status, title — description (one entry per line).
-
-Flags:
-  -json
-    	print the raw JSON response
-  -limit int
-    	max entries (server default 20, max 100)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai backlinks metrics/revenue
-  ochakai backlinks metrics/revenue --json | jq '.entries[].id'
 ```
 
 ## ochakai browse
@@ -456,41 +431,6 @@ Examples:
   ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new
 ```
 
-## ochakai queues
-
-```
-Usage: ochakai queues [flags]
-
-Print how much work each review queue is holding: drafts waiting to be
-published or turned down, entries whose failure reports are unanswered,
-entries past the expiry their author declared. One line per queue —
-count, name, and the command that lists it — so the next step is the
-text on the line.
-The verification-age feed is not here: it ranks every verified entry
-rather than holding the ones that need something, so its size is the
-size of the knowledge base and never reaches zero.
-With --exit-code the command exits 2 while any queue is non-empty and
-0 when all three are, which is how a scheduled job goes red on work
-nobody has picked up. An error still exits 1, so "unreachable" cannot
-be read as "nothing to do".
-
-Flags:
-  -exit-code
-    	exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI
-  -json
-    	print the raw JSON response
-  -prefix path
-    	count only entries under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai queues
-  ochakai queues --prefix teams/growth      # our subtree only
-  ochakai queues --json | jq .queues.drafts
-  ochakai queues --exit-code                # in CI: red while somebody owes a review
-```
-
 ## ochakai reembed
 
 ```
@@ -529,21 +469,22 @@ was already turned down before making it again.
 It does not edit the entry: the lifecycle status and the ETag stay put.
 A rejection is this instance's ruling, so an exported bundle carries the
 entry's real status rather than folding the ruling onto deprecated.
-Use --lift to withdraw one.
+Use --withdraw to take one back — the wire calls that ruling
+`withdrawn`, and so does the revision it writes.
 
 Flags:
   -json
     	print the entry as JSON
-  -lift
-    	withdraw the rejection instead of recording one
   -note string
     	why it was not accepted — the next agent reads this before proposing again
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -withdraw
+    	withdraw the live rejection instead of recording one
 
 Examples:
   ochakai reject metrics/bad-revenue --note "double-counts refunds; see policies/revenue-recognition"
-  ochakai reject metrics/bad-revenue --lift
+  ochakai reject metrics/bad-revenue --withdraw
 ```
 
 ## ochakai report
@@ -617,8 +558,8 @@ means editing the entry to re-declare an expiry.
 --source, --links-to and --prefix are filters, not modes: they combine
 with a query or with any --sort. --source narrows to the entries citing
 one resource (the reverse of sources[].resource); --links-to narrows to
-the entries whose body links at one entry (the reverse of its inbound
-edges, which `ochakai backlinks` asks on its own); --prefix narrows to
+the entries whose body links at one entry — its backlinks, the reverse
+of its inbound edges; --prefix narrows to
 the entries living under a path, which is how a team's own knowledge is
 told apart from the company-wide vocabulary.
 A listing that has more behind it prints the way on to stderr; pass it
@@ -635,7 +576,7 @@ Flags:
   -limit int
     	max results (server default 10, max 50; with --sort: 100, max 1000)
   -links-to id
-    	only entries whose body links at this id — what points at one entry (`ochakai backlinks` is this, on its own)
+    	only entries whose body links at this id — what points at one entry, in address order (its backlinks)
   -prefix path
     	only entries under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
   -rejected
@@ -682,14 +623,23 @@ grep one line out of it for a prompt or a dashboard. The gap lines are
 the questions that came back empty, most-asked first — the list of what
 to write next.
 
-The three queue numbers are the ones `ochakai queues` prints; that is
-the command with the next step on each line and the --exit-code a
-scheduled job goes red on. This one is the whole picture, not the
-nudge.
+The three queue lines — drafts waiting to be published or turned down,
+entries whose failure reports are unanswered, entries past the expiry
+their author declared — carry the command that lists that queue, with
+the scope you asked under, so the next step is the text on the line.
+The verification-age feed is not one of them: it ranks every verified
+entry rather than holding the ones that need something, so its size is
+the size of the knowledge base and never reaches zero.
+With --exit-code the command exits 2 while any of the three is
+non-empty and 0 when all are, which is how a scheduled job goes red on
+work nobody has picked up. An error still exits 1, so "unreachable"
+cannot be read as "nothing to do".
 
 Flags:
   -days int
     	how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)
+  -exit-code
+    	exit 2 while any review queue is non-empty (0 when all are empty, 1 on error) — for cron and CI
   -json
     	print JSON
   -prefix path
@@ -701,7 +651,8 @@ Examples:
   ochakai stats
   ochakai stats --days 7
   ochakai stats --prefix teams/growth       # our subtree only
-  ochakai stats --json | jq .misses.queries
+  ochakai stats --json | jq .queues.drafts
+  ochakai stats --exit-code                 # in CI: red while somebody owes a review
 ```
 
 ## ochakai ui

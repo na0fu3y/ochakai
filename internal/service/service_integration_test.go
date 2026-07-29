@@ -313,7 +313,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			}
 		}, func(t *testing.T, k *domain.Knowledge) {
 			t.Helper()
-			if _, err := svc.LiftRejection(ctx, k.ID, human); err != nil {
+			if _, err := svc.WithdrawRejection(ctx, k.ID, human); err != nil {
 				t.Fatal(err)
 			}
 		}},
