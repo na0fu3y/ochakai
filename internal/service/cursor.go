@@ -12,7 +12,7 @@ import (
 )
 
 // Listing is one page of the query surface: the hits, and where the next
-// page resumes when the order has not run out (design doc 0049 §2.1).
+// page resumes when the order has not run out (design doc 0050 §2.1).
 // Cursor is empty on the last page — its absence is how a caller learns
 // there is nothing behind this one, which is the only count the surface
 // gives (§2.3).
@@ -39,7 +39,7 @@ const (
 
 // encodeCursor packs a position in a listing's order: which listing it
 // belongs to, that listing's ordering keys, and the id that breaks their
-// ties. It is opaque on purpose (design doc 0049 §2.1) — the caller hands
+// ties. It is opaque on purpose (design doc 0050 §2.1) — the caller hands
 // back what it received, and the shape stays ours to change.
 //
 // Not signed: a tampered cursor can only start a listing somewhere odd,
@@ -175,7 +175,7 @@ func nextCursor(sort string, hits []domain.SearchHit, more bool) string {
 }
 
 // searchBoundError is the refusal a cursor on a search gets: relevance
-// has no page two (design doc 0049 §2.2). It names the way forward,
+// has no page two (design doc 0050 §2.2). It names the way forward,
 // because the message is the caller's next request.
 func searchBoundError() error {
 	return Invalidf("a search is bounded by limit and has no next page: its ranking is a fused window, "+

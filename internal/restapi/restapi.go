@@ -16,7 +16,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,7 +46,7 @@ func Handler(svc *service.Service) http.Handler {
 	// subtree and the shared one at once (design doc 0041).
 	// cursor walks a listing past the limit — a listing has a total order
 	// to resume from, a search has a ranking window and refuses it
-	// (design doc 0049).
+	// (design doc 0050).
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
@@ -180,16 +179,14 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
-	// PUT and DELETE /api/v1/bundle/{path...} — two refusals, and which
-	// one the caller gets depends on the path.
+	// PUT and DELETE /api/v1/bundle/{path...} — the write face of the one
+	// address space (design doc 0046 §3.5).
 	//
-	// The reserved names are generated from the bundle rather than stored
-	// in it, so a write is a conflict with what the address is: 409, as
-	// design doc 0046 §3.5 says. Every other path is the write face that
-	// same section describes, and it lands in a later change: 501, which
-	// is what "not built yet" means. Answering the reserved-file reason
-	// there would explain a refusal in terms of two files the caller never
-	// named.
+	// The reserved names are the one refusal the address itself makes:
+	// they are generated from the bundle rather than stored in it, so a
+	// write there is a conflict with what the address is (409). Every
+	// other path is an object, and what it becomes is decided by the
+	// bytes rather than by the caller — see below.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
@@ -288,6 +285,20 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
+	})
+
+	// GET /api/v1/queues?prefix=... — the three review queues as counts
+	// (design doc 0049). The feeds under /api/v1/knowledge answer "what
+	// is waiting"; this answers "is anything", which is the question a
+	// scheduled job can ask cheaply and a human can be told the answer
+	// to. prefix scopes it to a subtree, as it scopes the feeds.
+	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
+		counts, err := svc.Queues(r.Context(), store.Filter{Prefixes: r.URL.Query()["prefix"]})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"queues": counts})
 	})
 
 	// {id...} because the id is the entry's full bundle path (design doc
@@ -470,15 +481,11 @@ func Handler(svc *service.Service) http.Handler {
 		if !ok {
 			return
 		}
-		// okf_path preserves the bundle location a foreign import carried
-		// this file at, so re-export keeps the original body links working.
-		okfPath := r.URL.Query().Get("okf_path")
-		if okfPath != "" && (okfPath != path.Clean(okfPath) || okfPath == "." ||
-			strings.HasPrefix(okfPath, "/") || strings.HasPrefix(okfPath, "..")) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid okf_path (want a clean bundle-relative path)"})
-			return
-		}
-		att, err := svc.Attach(r.Context(), id, name, okfPath, data, httpauth.Actor(r.Context()))
+		// This address writes at <id>/<name>, always. A file that lives
+		// somewhere else in the bundle is written at the path it lives
+		// at — PUT /api/v1/bundle/{path} — rather than here with a
+		// parameter saying where it really is (design doc 0046 §3.3).
+		att, err := svc.Attach(r.Context(), id, name, data, httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -763,7 +770,7 @@ func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 // batch — the REST list surface carries it so UIs can render image
 // previews; MCP search results stay lean (design doc 0015).
 // The page's cursor rides along when a listing has more behind it
-// (design doc 0049 §2.1); a search never has one.
+// (design doc 0050 §2.1); a search never has one.
 func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, page *service.Listing) {
 	// A row is a projection now (design doc 0043 §3.5), so the batch fill
 	// runs against stand-ins carrying only the ids and the metadata is
@@ -819,11 +826,16 @@ const documentMediaType = "text/markdown; charset=utf-8"
 // number with room for the envelope rather than a new policy.
 const maxDocument = 5 << 20
 
-// frontmatterFilter reads the "fm." query parameters — `?fm.question=…`,
-// `?fm.owner=finance` — into the filter that asks the frontmatter index
+// frontmatterFilter reads the "fm." query parameters — `?fm.resource=…`,
+// `?fm.runtime=sql` — into the filter that asks the frontmatter index
 // (design doc 0046 §3.11). The prefix is what keeps the surface
-// additive: a key the spec adds later needs no parameter of its own, and
-// none of the ones ochakai already names can be shadowed by one.
+// additive: a key OKF adds later needs no parameter of its own, and none
+// of the ones ochakai already names can be shadowed by one.
+//
+// Which keys are answered is the service's call (checkedFilter): OKF's
+// own, less the ones a named filter asks. Reading them all here and
+// refusing there keeps the refusal in the one place all three surfaces
+// pass through (design doc 0015 §2).
 //
 // A repeated parameter keeps its last value. The pairs are AND-ed, and
 // "the same key twice" is a contradiction rather than a question, so

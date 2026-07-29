@@ -15,7 +15,7 @@ import (
 // A cursor is opaque, which makes its round trip the only thing holding
 // the walk together: what comes back has to be the position that went out
 // — including the absent one, since a verification-age listing ends in
-// entries nobody has verified (design doc 0049 §2.1).
+// entries nobody has verified (design doc 0050 §2.1).
 func TestCursorRoundTrip(t *testing.T) {
 	at := "2026-07-14T02:33:41.019778Z"
 	for _, tc := range []struct {
@@ -92,7 +92,7 @@ func TestCursorRefusals(t *testing.T) {
 
 // A ranking has no next page, and the refusal has to name the way
 // forward: the caller reads the message and makes one more request
-// (design doc 0049 §2.2). Nothing here touches the store — the check runs
+// (design doc 0050 §2.2). Nothing here touches the store — the check runs
 // before any of it, as the mode checks beside it do.
 func TestSearchRefusesACursor(t *testing.T) {
 	s := &Service{}
@@ -155,7 +155,7 @@ func TestCursorKeysMatchTheOrder(t *testing.T) {
 
 // nextCursor is what decides whether a caller sees an end: a page with
 // nothing behind it must not hand one out, or every walk gains a trailing
-// request that returns nothing (design doc 0049 §2.3).
+// request that returns nothing (design doc 0050 §2.3).
 func TestNextCursorOnlyWhenMoreFollows(t *testing.T) {
 	hits := []domain.SearchHit{{Summary: domain.Summary{ID: "a", StaleAfter: "2026-01-01"}}}
 	if got := nextCursor("stale_after", hits, false); got != "" {

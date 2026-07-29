@@ -120,7 +120,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"After acting on knowledge (running an attested computation, writing SQL from a metric definition), report " +
 			"whether it actually worked with report_outcome — failed reports are how stale " +
 			"verified knowledge gets caught. " +
-			"Write learnings back with create_knowledge; leave new entries as drafts for a human to " +
+			"Write learnings back with put_knowledge; leave new entries as drafts for a human to " +
 			"confirm — status is how ready an entry is (draft, stable, deprecated), and whether " +
 			"anyone checked it is recorded separately, by whoever checked it. Knowledge that was " +
 			"reviewed and not accepted is marked rejected by a human, with the reason; " +
@@ -262,15 +262,32 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		return nil, knowledgeOut{Knowledge: v}, nil
 	}))
 
+	// put_knowledge is the one write face (design doc 0046 §3.14). It was
+	// create_knowledge and update_knowledge, which asked the agent a
+	// question the document does not answer: a write states what the
+	// entry should say, and whether an id was already taken is not part
+	// of that statement (0043 §3.5). Two tools also cost more of the
+	// agent's context than the three this surface was going to drop put
+	// together — the merge is where the saving actually was.
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "create_knowledge",
+		Name:        "put_knowledge",
 		Annotations: nonDestructive,
-		Description: "Create a knowledge entry. Write back what you learned: metric caveats, confirmed answers, " +
-			"glossary terms. Write status: draft unless you are recording something already agreed — a " +
-			"document that names no status reads as stable (OKF SPEC §5.4). Your identity is recorded as " +
-			"created_by, and the entry stays unverified until a person confirms it. " +
-			"Before creating, search with rejected=true to avoid " +
-			"re-proposing knowledge that was already rejected (the ruling records why). " +
+		Description: "Write a knowledge entry: create it if the id is free, replace it if it is taken. " +
+			"Write back what you learned: metric caveats, confirmed answers, glossary terms. " +
+			"Write status: draft unless you are recording something already agreed — a document that " +
+			"names no status reads as stable (OKF SPEC §5.4). Your identity is recorded as created_by, " +
+			"and the entry stays unverified until a person confirms it. " +
+			"The document you send is the whole entry: a key you leave out is cleared, so on a replace, " +
+			"get_knowledge first, change what you mean to change, and send the rest back as it came. " +
+			"Every change is kept as a revision; a write identical to the stored content writes nothing. " +
+			"Before writing something new, search with rejected=true to avoid re-proposing knowledge " +
+			"that was already rejected (the ruling records why). " +
+			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be replaced from " +
+			"this surface: if a verified entry is wrong, report_outcome failed; otherwise put_knowledge " +
+			"a better draft at a different id and let a human promote it. " +
+			"status is the lifecycle only — draft, stable, deprecated (OKF SPEC §5.4). Whether anyone " +
+			"has confirmed the entry is not yours to set: it comes from the verification ledger, and " +
+			"this surface does not verify or reject. Put the reason for deprecating in status_note. " +
 			"For BigQuery Table/BigQuery Dataset/Reference entries, set resource to the asset's canonical URI and favor " +
 			"the conventional body sections: # Schema, # Common query patterns. " +
 			"An \"Attested Computation\" entry records a sanctioned computation others must run instead of " +
@@ -294,46 +311,22 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		k, err := svc.CreateKeepingCurated(ctx, write, actor)
-		if err != nil {
-			return nil, knowledgeOut{}, err
+		// Whether the id is taken decides which guard applies, not which
+		// tool the agent should have called. Creating on a soft-deleted
+		// id revives it, which is the one way past the curation guards,
+		// so the create path has its own check; replacing a live entry
+		// is refused for a curated one and otherwise carries the version
+		// read by the guard as its precondition, since this surface has
+		// no If-Match channel of its own.
+		version, err := svc.RefuseIfCurated(ctx, in.ID, "replace")
+		if errors.Is(err, store.ErrNotFound) {
+			k, err := svc.CreateKeepingCurated(ctx, write, actor)
+			if err != nil {
+				return nil, knowledgeOut{}, err
+			}
+			out, err := view(k, notes)
+			return nil, out, err
 		}
-		v, err := okf.ViewOf(k)
-		if err != nil {
-			return nil, knowledgeOut{}, err
-		}
-		return nil, knowledgeOut{Knowledge: v, Notes: notes}, nil
-	}))
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "update_knowledge",
-		Annotations: nonDestructive,
-		Description: "Update a knowledge entry by replacing its document. The document you send is the " +
-			"whole entry: a key you leave out is cleared, so get_knowledge first, change what you mean " +
-			"to change, and send the rest back as it came. " +
-			"Links are not a key: they come from the markdown links in the body, so keep the ones you want to keep. " +
-			"Every change is kept as a revision; an update identical to the stored content writes nothing. " +
-			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be updated from " +
-			"this surface: if a verified entry is wrong, report_outcome failed; otherwise create_knowledge " +
-			"a better draft and let a human promote it. " +
-			"status is the lifecycle only — draft, stable, deprecated (OKF SPEC §5.4); a document that " +
-			"names none reads as stable, so write status: draft for a draft. Whether anyone has confirmed " +
-			"the entry is not yours to set: it comes from the verification ledger, and this surface does " +
-			"not verify or reject. Put the reason for deprecating in status_note.",
-	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		// MCP has no conditional-update channel, so it cannot opt into the
-		// If-Match precondition (nil) and writes are last-write-wins. That
-		// is tolerable for drafts and not for curated knowledge, so
-		// verified entries are refused here rather than clobbered.
-		version, err := svc.RefuseIfCurated(ctx, in.ID, "update")
-		if err != nil {
-			return nil, knowledgeOut{}, err
-		}
-		// The version read by the guard becomes the precondition, so an
-		// entry curated in the window between the two is a conflict rather
-		// than a clobber — the surface has no If-Match channel of its own,
-		// but the check can supply one.
-		write, notes, err := in.toKnowledge()
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
@@ -341,18 +334,15 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		v, err := okf.ViewOf(k)
-		if err != nil {
-			return nil, knowledgeOut{}, err
-		}
-		return nil, knowledgeOut{Knowledge: v, Notes: notes}, nil
+		out, err := view(k, notes)
+		return nil, out, err
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "delete_knowledge",
 		Annotations: destructive,
 		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
-			"create_knowledge on the same id revives it. Entries a human has ruled on — verified, " +
+			"put_knowledge on the same id revives it. Entries a human has ruled on — verified, " +
 			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
 			"entry and recreating it would erase the record of why it was turned down.",
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in getIn) (*mcp.CallToolResult, deleteOut, error) {
@@ -377,7 +367,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"deliberately, when the entry's body references one you need to see (a dashboard's " +
 			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
 			"if you learn something from one, write it back into the entry's body with " +
-			"update_knowledge so the knowledge becomes searchable text.",
+			"put_knowledge so the knowledge becomes searchable text.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
 		att, data, err := svc.Attachment(ctx, in.ID, in.Name)
 		if err != nil {
@@ -456,7 +446,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 // deployment. The service refuses these operations anyway (that is the
 // guarantee); removing them here is what stops an agent from wasting a
 // turn discovering it.
-var writeTools = []string{"create_knowledge", "update_knowledge", "delete_knowledge", "report_outcome"}
+var writeTools = []string{"put_knowledge", "delete_knowledge", "report_outcome"}
 
 // Tool annotations let clients apply auto-approval policies without reading
 // prose. readOnlyHint here describes the knowledge domain: search/get
@@ -495,7 +485,7 @@ type searchIn struct {
 	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
 	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
-	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by any frontmatter key, exactly: {\"owner\": \"finance\"} finds entries whose frontmatter says owner is finance, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. It carries the keys ochakai does not name — a producer's own, or one a later OKF version added — and only those: type, status, tags, sources and stale_after are refused here, because ochakai reads them through columns of its own that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm). Ask those with the field of that name, on this tool or on search_knowledge"`
+	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds entries whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_knowledge"`
 	Rejected *bool             `json:"rejected,omitempty" jsonschema:"true to list only entries a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected entries stay out of results"`
 	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string            `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
@@ -508,7 +498,7 @@ type searchIn struct {
 type searchOut struct {
 	Hits []domain.SearchHit `json:"hits"`
 	// Cursor is present only when a listing has more behind this page;
-	// its absence is the end (design doc 0049 §2.3 — no total is given).
+	// its absence is the end (design doc 0050 §2.3 — no total is given).
 	Cursor string `json:"cursor,omitempty"`
 }
 
@@ -523,7 +513,7 @@ type contextIn struct {
 	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
 	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
-	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by any frontmatter key, exactly: {\"owner\": \"finance\"} finds entries whose frontmatter says owner is finance, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. It carries the keys ochakai does not name — a producer's own, or one a later OKF version added — and only those: type, status, tags, sources and stale_after are refused here, because ochakai reads them through columns of its own that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm). Ask those with the field of that name, on this tool or on search_knowledge"`
+	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds entries whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_knowledge"`
 	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
 	Limit    int               `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
@@ -552,7 +542,7 @@ const defaultContextBudget = 12000
 func contextHint(truncated int) string {
 	hint := "After acting on this knowledge, call report_outcome (worked/failed) on the entries you " +
 		"used — failed reports are how stale verified knowledge gets caught. If this session " +
-		"produced reusable knowledge, write it back with create_knowledge as a draft; search " +
+		"produced reusable knowledge, write it back with put_knowledge as a draft; search " +
 		"statuses=[\"rejected\"] first so you do not re-propose something already turned down."
 	if truncated > 0 {
 		hint += fmt.Sprintf(" %d entries did not fit the budget and are listed under \"outline\" — "+
@@ -608,6 +598,16 @@ type deleteOut struct {
 // It is also the shape an LLM handles best: frontmatter and markdown is
 // what the entries it reads look like, so editing one means returning it
 // changed rather than translating it into a schema and back.
+// view renders one entry as a tool's answer, with any notes the parse
+// produced. Every write path ends the same way, so it is written once.
+func view(k *domain.Knowledge, notes []string) (knowledgeOut, error) {
+	v, err := okf.ViewOf(k)
+	if err != nil {
+		return knowledgeOut{}, err
+	}
+	return knowledgeOut{Knowledge: v, Notes: notes}, nil
+}
+
 type writeIn struct {
 	ID       string `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
 	Document string `json:"document" jsonschema:"the entry as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — recommended: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; defaults to draft — whether anyone confirmed the entry is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified} — the material this derives from), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other entries with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the entry's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) are ignored if present, so a document read back from ochakai can be edited and returned as-is"`

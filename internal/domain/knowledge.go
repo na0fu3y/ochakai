@@ -333,6 +333,35 @@ func ValidOutcome(o string) bool {
 	return false
 }
 
+// QueueCounts is how much work each review queue is holding — the three
+// listing feeds that a curator is meant to empty, counted rather than
+// listed (design doc 0049). Each field is the size of a feed that
+// already exists:
+//
+//   - Drafts — sort=usage with status=draft: what agents proposed,
+//     waiting to be published or turned down. Verifying does not empty
+//     it: confirming and publishing are different acts (design doc 0043
+//     §3.2), so a draft leaves by an edit or a rejection.
+//   - ReportedWrong — sort=failed: entries whose failure reports are
+//     still unanswered.
+//   - PastExpiry — sort=stale_after: entries past the expiry their own
+//     author declared.
+//
+// The verification-age feed (sort=verified_at) is deliberately absent:
+// it ranks every verified entry rather than holding the ones that need
+// something, so a count of it is the size of the knowledge base and
+// never reaches zero. A number nobody can drive down is not a queue.
+type QueueCounts struct {
+	Drafts        int64 `json:"drafts"`
+	ReportedWrong int64 `json:"reported_wrong"`
+	PastExpiry    int64 `json:"past_expiry"`
+}
+
+// Total is how much work is waiting across all three queues. An entry
+// can sit in more than one, so this counts places in queues rather than
+// distinct entries — which is what a reviewer works through anyway.
+func (q QueueCounts) Total() int64 { return q.Drafts + q.ReportedWrong + q.PastExpiry }
+
 // Usage aggregates how often a knowledge entry was actually used, and
 // how often users reported it worked or failed.
 type Usage struct {
@@ -675,6 +704,43 @@ var EnvelopeKeys = []string{
 	"sources", "usage_window",
 	"status", "status_note", "stale_after",
 	"runtime", "parameters", "computation", "executor", "attester",
+}
+
+// FilterOwnedKeys names, for each OKF key ochakai reads through a column
+// of its own, the filter that owns the question — the one a frontmatter
+// filter must not answer a second time (design doc 0047 §2.1). The column
+// and the jsonb path do not say the same thing (a document that writes no
+// status reads as stable to `status=`, since that is OKF's default, and as
+// nothing to `fm.status`), and a caller cannot see which one it got.
+var FilterOwnedKeys = map[string]string{
+	"type":        "type=",
+	"status":      "status=",
+	"tags":        "tag=",
+	"sources":     "source=URI",
+	"stale_after": "sort=stale_after",
+}
+
+// AskableFrontmatterKeys returns the frontmatter keys a filter may name,
+// sorted: every key OKF defines, less the ones a filter of their own
+// already asks (design doc 0047 §2). A producer's extension key is not
+// here — it is stored and handed back exactly as written (SPEC §4.1), but
+// the query vocabulary is OKF's.
+//
+// It is derived from EnvelopeKeys rather than written out, which is what
+// makes the query surface additive: the day OKF adds a key and that list
+// learns its spelling, the key is askable — no column and no migration,
+// because the whole frontmatter is already indexed (design doc 0046
+// §3.11). Every surface describes itself from this, so no help text can
+// promise a key the server refuses.
+func AskableFrontmatterKeys() []string {
+	out := make([]string, 0, len(EnvelopeKeys))
+	for _, k := range EnvelopeKeys {
+		if FilterOwnedKeys[k] == "" {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Verified reports whether anyone has confirmed this entry — SPEC §5.3's

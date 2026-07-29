@@ -15,7 +15,7 @@ import (
 
 // A listing walked one page at a time must hand back exactly the listing
 // read in one go — same entries, same order, no gap at a page boundary
-// and no entry seen twice (design doc 0049 §2.1). That is the whole
+// and no entry seen twice (design doc 0050 §2.1). That is the whole
 // promise of a keyset cursor, and it is the one that breaks quietly: an
 // off-by-one in the "strictly after" predicate loses or repeats the row
 // on the seam, which no single-page test can see.
@@ -171,7 +171,7 @@ func TestListingsWalkToTheEndIntegration(t *testing.T) {
 	// A cursor names the listing it came from: the keys are that
 	// listing's ordering columns, so one from another feed is not a
 	// position here, and answering with something would be worse than
-	// refusing (design doc 0049 §2.1).
+	// refusing (design doc 0050 §2.1).
 	usage, err := svc.SearchOrList(ctx, "", "usage", "", filter(), 1)
 	if err != nil {
 		t.Fatal(err)

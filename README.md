@@ -273,7 +273,12 @@ something a reviewer can finish rather than a ledger that only grows.
 A third feed, *stale* (`sort=stale_after`), lists entries past the expiry
 their own author declared — that one clears by editing the entry to
 re-declare the date, since the date is a claim the writer made rather
-than something the server observed. And when a cited document changes,
+than something the server observed. Whether any of the three is holding
+anything is one call — `ochakai queues`, and the Review tab's badge —
+so a queue going quiet stops looking like a queue being empty; with
+`--exit-code` it is a cron job away from telling your team
+(design doc [0049](docs/design/0049-queue-counts.md)).
+And when a cited document changes,
 `?source=<uri>` answers the other direction: every entry derived from it,
 straight from the source's own line on the entry page. One
 self-contained page, no build step; deliberately **not** a BI tool — no
@@ -380,8 +385,7 @@ And it stays small by refusing things:
 | `search_knowledge` | Cross-type search; verified entries rank higher |
 | `get_knowledge` | Fetch one entry as an OKF document, with its links and attachment metadata |
 | `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
-| `create_knowledge` | Write learnings back (agents create drafts) |
-| `update_knowledge` | Update; every change is kept as a revision |
+| `put_knowledge` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
 | `delete_knowledge` | Soft-delete (history retained) |
 | `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |

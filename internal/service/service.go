@@ -151,18 +151,18 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 	switch ruling {
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"(get_knowledge) before proposing this again. If you disagree, create_knowledge a new " +
+			"(get_knowledge) before proposing this again. If you disagree, put_knowledge a new " +
 			"entry at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
-			"re-verification feed. If you have something better, create_knowledge it at a " +
+			"re-verification feed. If you have something better, put_knowledge it at a " +
 			"different id and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
-			"reviving, create_knowledge a draft at a different id that says why."
+			"reviving, put_knowledge a draft at a different id that says why."
 	default:
 		return fmt.Errorf("%w: %s is a live %s entry. Nobody has ruled on it: "+
-			"update_knowledge replaces it in place", err, id, k.Status)
+			"put_knowledge replaces it in place", err, id, k.Status)
 	}
 	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, ruling, instead)
 }
@@ -331,14 +331,14 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	switch ruling {
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
-			"re-verification feed. If you have something better, create_knowledge a new draft."
+			"re-verification feed. If you have something better, put_knowledge a new draft."
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"before proposing this again. If you disagree, create_knowledge a new entry at a " +
+			"before proposing this again. If you disagree, put_knowledge a new entry at a " +
 			"different id and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
-			"reviving, create_knowledge a draft that says why."
+			"reviving, put_knowledge a draft that says why."
 	default:
 		return &k.ContentHash, nil
 	}
@@ -379,13 +379,13 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
 			"(search_knowledge with rejected=true) before proposing this again. If you disagree, " +
-			"create_knowledge a new entry at a different id and let a human judge it."
+			"put_knowledge a new entry at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
 			"different id and let a human judge it against the history this id still holds."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
-			"reviving, create_knowledge a draft at a different id that says why."
+			"reviving, put_knowledge a draft at a different id that says why."
 	default:
 		return nil
 	}
@@ -963,7 +963,7 @@ func jsonSize(v any) int {
 //
 // cursor resumes a listing where the previous page ended, and is refused
 // on a search: a listing has a total order to resume from, a ranking has
-// a window (design doc 0049 §2.2).
+// a window (design doc 0050 §2.2).
 func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, f store.Filter, limit int) (*Listing, error) {
 	if sort != "" {
 		if !domain.ValidListSort(sort) {
@@ -995,26 +995,18 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 // the filter already says what is wanted.
 const sortBySource = "source"
 
-// namedFilter maps the frontmatter keys ochakai reads through a column
-// of its own onto the filter that asks about them. A "fm." parameter
-// naming one of these is refused rather than answered (design doc 0047):
-// the column and the jsonb path do not answer the same question, and the
-// caller cannot see which one they got.
-//
-// Only keys with a filter beside them are listed. The boundary is "the
-// key already has a way to ask", not "ochakai knows the key" — refusing
-// one with nothing to point at would take away the only way to ask it.
-var namedFilter = map[string]string{
-	"type":        "type=",
-	"status":      "status=",
-	"tags":        "tag=",
-	"sources":     "source=URI",
-	"stale_after": "sort=stale_after",
-}
+// askableKeys are the frontmatter keys "fm." answers, and askableHint is
+// the list a refusal shows. Both come from the domain vocabulary, so the
+// server, the OpenAPI text, the MCP schemas and the CLI help cannot
+// disagree about what is askable.
+var (
+	askableKeys = domain.AskableFrontmatterKeys()
+	askableHint = strings.Join(askableKeys, ", ")
+)
 
 // checkedFilter returns f with its path scopes normalized, rejecting one
-// that could not lead an id, and refuses a frontmatter filter that
-// shadows a named one. Every surface hands its filter through here — the
+// that could not lead an id, and refuses a frontmatter filter naming a key
+// "fm." does not answer. Every surface hands its filter through here — the
 // contract lives on the server (design doc 0015 §2), so REST, MCP and the
 // CLI cannot disagree about whether "teams/growth/" is the same scope as
 // "teams/growth", nor about which spellings of a question exist.
@@ -1027,12 +1019,17 @@ var namedFilter = map[string]string{
 // none returns the whole base — reading is bounded by who can reach the
 // service, not by what they ask for (design doc 0002, and 0041 §4).
 func checkedFilter(f store.Filter) (store.Filter, error) {
-	// Sorted, so a request naming two of them reports the same one every
+	// Sorted, so a request naming two bad keys reports the same one every
 	// time rather than whichever the map handed over first.
 	for _, key := range slices.Sorted(maps.Keys(f.Frontmatter)) {
-		if use, ok := namedFilter[key]; ok {
+		if use, ok := domain.FilterOwnedKeys[key]; ok {
 			return f, Invalidf("fm.%s is not a filter: ochakai reads %s through a column of its own, "+
 				"which does not answer what the frontmatter says — use %s", key, key, use)
+		}
+		if !slices.Contains(askableKeys, key) {
+			return f, Invalidf("fm.%s is not a filter: OKF does not define %q, and the filter "+
+				"vocabulary is OKF's — a producer's own key is stored and handed back exactly as "+
+				"written, not asked for. Askable: %s", key, key, askableHint)
 		}
 	}
 	if len(f.Prefixes) == 0 {
@@ -1079,7 +1076,7 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 //
 // Every mode pages: each has a total order ending in the id, so a cursor
 // carries a position in it and the caller walks past the cap instead of
-// stopping at it (design doc 0049 §2.1). One row beyond the page is read
+// stopping at it (design doc 0050 §2.1). One row beyond the page is read
 // to tell a full page from the last one — without it, a listing whose
 // length happens to equal the limit would hand out a cursor onto nothing.
 func (s *Service) list(ctx context.Context, sort, cursor string, f store.Filter, limit int) (*Listing, error) {
@@ -1131,6 +1128,27 @@ func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, aft
 		hits[i] = domain.SearchHit{Summary: domain.SummaryOf(&entries[i])}
 	}
 	return hits, nil
+}
+
+// Queues counts the review queues rather than listing them (design doc
+// 0049): how many drafts are waiting, how many failure reports are still
+// unanswered, how many entries are past the expiry their author
+// declared. It is the three feeds of list, measured — the answer to "is
+// there anything to do", which nothing until now could give without
+// paging through the work itself.
+//
+// Only the path scopes are honored from the filter, so a team can ask
+// about its own subtree (design doc 0041). Nothing else narrows it: a
+// count that took every filter would be a query language over a number,
+// and the feed itself is where a reviewer goes once the answer is "yes".
+// No usage is recorded, for the reason list gives — asking how long the
+// queue is must not inflate the signal the queue ranks by.
+func (s *Service) Queues(ctx context.Context, f store.Filter) (domain.QueueCounts, error) {
+	f, err := checkedFilter(store.Filter{Prefixes: f.Prefixes})
+	if err != nil {
+		return domain.QueueCounts{}, err
+	}
+	return s.Store.QueueCounts(ctx, f)
 }
 
 // Revisions returns an entry's change history, newest first — the
