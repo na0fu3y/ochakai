@@ -153,12 +153,15 @@ it believed it was replacing. The human surfaces are unrestricted
 
 **An entry is an OKF document** — YAML frontmatter, then a markdown
 body — and that is the stored form, the wire form, and the export form
-alike (design doc [0043](design/0043-document-first.md)). The database
-columns beside it are an index derived from the document, used to sort
-and filter; where the two could disagree the document is right. Keys OKF
-does not define are kept exactly where their writer put them, at the top
-level and inside a `sources` entry, a parameter, the executor or the
-attester, because a key discarded on the way in is a key no later
+alike (design doc [0046](design/0046-bundle-address-space.md) §2.2,
+which carries design doc 0043's *the document is the only truth*
+forward and takes it down to the byte level: what a write stores is the
+bytes it received, and the canonical form is derived from them). The
+database columns beside it are an index derived from the document, used
+to sort and filter; where the two could disagree the document is right.
+Keys OKF does not define are kept exactly where their writer put them,
+at the top level and inside a `sources` entry, a parameter, the executor
+or the attester, because a key discarded on the way in is a key no later
 release can recover.
 
 An entry's version is the hash of the document as stored, which a read
@@ -202,8 +205,7 @@ everything they could already reach.
 **Types are an open set with a recommended vocabulary.** The spellings
 are the OKF knowledge-catalog vocabulary verbatim — `Attested
 Computation`, not a slug — so a bundle's types survive a round-trip with
-no translation layer in between (design doc
-[0023](design/0023-okf-type-vocabulary.md)). What earns a place in the
+no translation layer in between, and what earns a place in the
 recommended eleven is SPEC §4.1's one demand of a producer — that the
 spelling be descriptive and self-explanatory — read against the spellings
 OKF itself supplies, in the spec's own examples and in its reference
@@ -217,7 +219,8 @@ may be verified and a `stable` entry unverified. "Considered and turned
 down" is a third thing again, a ruling rather than a stage: a rejection
 carries who ruled, when, and why, and it is the record most stores lack —
 an agent can check it before re-proposing the same thing (design doc
-[0043](design/0043-document-first.md) §§3.2-3.3).
+[0046](design/0046-bundle-address-space.md) §2.4, which inherits design
+doc 0043 §§3.2-3.3 unchanged).
 
 **Relationships come from the prose.** There is no links field. A
 markdown link in the body — `[revenue](/metrics/revenue.md)` or a
@@ -278,13 +281,17 @@ infrastructure (design doc [0001](design/0001-architecture.md) §4).
 There is no Redis, no separate vector database, and no search cluster.
 Migrations ship in the binary.
 
-Attachment *bytes* are the exception: they live in Cloud Storage and are
-fetched on demand, with the entry keeping only the metadata (design doc
-[0013](design/0013-attachment-files-gcs-only.md)). Accepted formats are
-the intersection of what Claude can read and what Gemini can embed —
-PNG, JPEG, WebP, PDF, plain text — sniffed from the bytes rather than
-trusted from a filename. With `OCHAKAI_GCS_BUCKET` unset the instance
-stores markdown entries only and attach operations return an error.
+Non-markdown *bytes* are the exception: they live in Cloud Storage and
+are fetched on demand, with the database keeping what addresses them
+(design doc [0046](design/0046-bundle-address-space.md) §3.2, which
+keeps design doc 0013's judgment — GCS for non-markdown, one object up
+to 5 MiB, and the media type sniffed from the bytes rather than trusted
+from a filename). With `OCHAKAI_GCS_BUCKET` unset the instance stores
+markdown entries only and a non-markdown write is refused. What `attach`
+accepts today is narrower than what a bundle may carry — PNG, JPEG,
+WebP, PDF, plain text, the intersection of what Claude can read and what
+Gemini can embed — because that operation is one of the ones 0046 §3.5
+folds into the bundle address, and the fold is still landing.
 Attachments travel through OKF bundles as plain files beside their entry.
 
 Usage recording is deliberately off the read path: events are buffered in
@@ -341,7 +348,7 @@ never a second copy of the knowledge (design doc
 [0033](design/0033-context-hits-are-a-ranking.md)). Search hits are the
 same kind of thing: a row names an entry and says what ranked it, and the
 document is one fetch away by id (design doc
-[0043](design/0043-document-first.md) §3.5).
+[0046](design/0046-bundle-address-space.md) §3.5).
 
 ## The write-back and verification loop
 
