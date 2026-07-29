@@ -57,6 +57,117 @@ last entry.
   two commands with one capability, not two different acts. CLI commands
   go 27 → 25, and [docs/surface.md](docs/surface.md)'s ceiling with them.
 
+- **BREAKING** — the word for the unit of knowledge, `concept`, now runs
+  through **everything a reader meets** rather than the MCP tool names
+  alone (design doc
+  [0054 §3.6](docs/design/0054-concept-is-the-okf-word.md), revised by
+  [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md)): the
+  README and docs, the examples and deploy guides, the CLI's help and
+  output, the web UI's labels, the tool and schema descriptions an agent
+  is handed, the OpenAPI descriptions, and the server's error text.
+
+  Renaming the tools alone had left `get_concept` describing itself as
+  "Fetch one entry", the English documentation saying `entry` 287 times
+  against `concept` 6, and the web UI labelling its own button "New
+  entry". The translation table 0054 set out to remove had moved rather
+  than gone.
+
+  The line is words a reader meets versus identifiers. The `entries`
+  JSON key stays — naming the array in a response is a different
+  question from naming the unit — and so do Go type names, database
+  columns, and "entry" in its other English senses (a catalog entry, a
+  `sources` entry, a changelog entry). **Nothing on the wire moves**;
+  only a script matching on help or error text sees this.
+
+### Fixed
+
+- `ochakai reject` is named in `ochakai help` and in the CLI reference's
+  command list. It has shipped, run and carried its own `-h` text since
+  the ruling existed, but the one place a reader looks for the commands
+  never listed it, so half of review was reachable only by already
+  knowing it was there. The guard that should have caught it compared
+  the dispatch table against a list written out in the test — a copy of
+  the help rather than a reading of it — and now reads the help itself,
+  in both directions.
+
+## [0.16.1] - 2026-07-30
+
+### Fixed
+
+- **Upgrading to 0.16.0 fails on any instance that holds a file**, and
+  fails in the worst place: migration `0029_files_become_objects.sql`
+  moves the attachment rows into `object`, where a file has no concept
+  id, but it did so *before* replacing the haystack trigger that 0016
+  put on the table. The old trigger computed `ochakai_search_text(NULL,
+  …)`, which is NULL, and the column is `NOT NULL` — so the first file
+  to move aborted the migration with
+
+  ```
+  migration 0029_files_become_objects.sql: ERROR: null value in column
+  "search_text" of relation "object" violates not-null constraint
+  ```
+
+  and the server exited. By then `0022`–`0028` had applied, so the
+  running 0.15.0 binary was looking for a `knowledge` table that had been
+  renamed out from under it and answered 500 to everything: **a failed
+  upgrade took the deployment down rather than leaving it where it
+  started.** An instance with no files migrated cleanly, which is why
+  nothing caught it — the statement order is only reachable when there is
+  a row to move.
+
+  The functions, the triggers and the two indexes are now established
+  before the rows move, which is the order the migration's own comments
+  describe. Nothing else about it changes: the same objects end up in the
+  same shape, so an instance that already applied `0029` successfully is
+  unaffected and re-runs nothing.
+
+  **If you hit this**: deploy 0.16.1 and start it. Migration `0029`
+  re-runs from the beginning — it never committed — and `0030`–`0033`
+  follow. There is nothing to undo by hand and no need to restore a
+  backup.
+
+  `TestMigrationFilesBecomeObjects` applies the migration to a base
+  seeded with two files, one at its entry's canonical `<id>/<name>` and
+  one an import placed elsewhere in the bundle, and checks the
+  attribution and the filename haystack that follow.
+
+## [0.16.0] - 2026-07-30
+
+This release carries [0046](docs/design/0046-bundle-address-space.md)'s
+fold from end to end, and the fold moved some things more than once
+before it settled. **Entries below are in landing order, newest first,
+so where an early one names a spelling a later one changed, the later
+one is what shipped.** The whole of what moved between `0.15.0` and here:
+
+```
+REST
+  GET|PUT|DELETE /api/v1/knowledge/{id}          →  the same three on /api/v1/bundle/{id}.md
+  GET|PUT|DELETE /api/v1/attachments/{id}/{name} →  the same three on /api/v1/bundle/{path}
+  GET    /api/v1/knowledge?q=…                   →  GET  /api/v1/search?q=…
+  GET    /api/v1/backlinks/{id}                  →  GET  /api/v1/search?links_to={id}
+  GET    /api/v1/export                          →  GET  /api/v1/bundle/ + Accept: application/gzip
+  GET    /api/v1/bundle/{id}/log.md as JSON      →  GET  /api/v1/bundle/{id}.md?history
+  POST   /api/v1/verify/{id}                     →  POST /api/v1/review/{id} {"ruling":"verified"}
+  POST   /api/v1/reject/{id}                     →  POST /api/v1/review/{id} {"ruling":"rejected"}
+  DELETE /api/v1/reject/{id}                     →  POST /api/v1/review/{id} {"ruling":"withdrawn"}
+
+MCP
+  search_knowledge     →  search_concepts        create_knowledge  ┐
+  get_knowledge        →  get_concept            update_knowledge  ┴→  put_concept
+  delete_knowledge     →  delete_concept
+  get_knowledge_usage  →  get_concept_usage
+
+CLI
+  ochakai create  ┐
+  ochakai update  ┴→  ochakai put [--only-if-new]
+```
+
+REST goes from 19 operations to 11, MCP stays at 8 tools, the CLI goes
+from 28 commands to 27 ([docs/surface.md](docs/surface.md)). Nothing
+that could be asked before cannot be asked now.
+
+### Added
+
 - **BREAKING** — the three faces a human rules from become one,
   `POST /api/v1/review/{id}`, taking `ruling` in the body (design doc
   [0055](docs/design/0055-one-ruling-one-face.md)):
@@ -79,31 +190,49 @@ last entry.
   deliberately *not* folded in — a human's ruling and a machine's
   observation land on opposite surfaces.
 
-  **`ochakai verify` and `ochakai reject` are unchanged as commands**, as
-  is every MCP tool. No stored data, ledger, export form or trust
-  derivation moves. Clients calling REST directly rewrite three calls,
-  each a one-liner. (The flag and the revision `change` value for taking
-  a rejection back became `withdraw` — see below.)
+  **`ochakai verify` and `ochakai reject [--lift]` are unchanged**, as is
+  every MCP tool. No stored data, ledger, export form, revision `change`
+  value or trust derivation moves. Clients calling REST directly rewrite
+  three calls, each a one-liner.
 
-- **BREAKING** — `GET /api/v1/queues` is gone; its three numbers are the
-  `queues` key of `GET /api/v1/stats`, which they already were (design
-  doc [0049 §3.1](docs/design/0049-queue-counts.md), revised before
-  release). The endpoint returned what the stats response already
-  carried, under the same key and from the same query; the only thing it
-  could do that stats could not was scope the counts to a subtree.
+- **Something to tell you the review queue is not empty** (design doc
+  [0049](docs/design/0049-queue-counts.md)). **`ochakai queues`** counts
+  the three feeds a curator empties — drafts waiting to be published or
+  turned down, entries whose failure reports are unanswered, entries past
+  the expiry their author declared — instead of listing them. The three
+  numbers are the `queues` key of `GET /api/v1/stats`; they get no
+  address of their own, because that address would return what the stats
+  response already carries, under the same key and from the same query
+  (§3.1, revised before release).
 
-  So **`prefix` moved to `GET /api/v1/stats`** — and got wider there.
-  Every number keyed by an entry now honors it (`entries`, `queues`,
-  `review`, `outcomes`), where before a team on a shared deployment could
-  count its own review queue but not its own knowledge. `misses` is never
-  scoped and cannot be: a search that found nothing found it nowhere, so
-  there is no id to scope by (design doc
+  The queues were emptiable already; nothing said they were not empty,
+  and a review queue going quiet looked exactly like one with nothing in
+  it. Each printed line carries the command that lists that queue, and
+  `ochakai queues --exit-code` exits **2** while any of them is
+  non-empty, so a scheduled CI job goes red on work nobody picked up —
+  1 stays "the command failed", so an unreachable server cannot be read
+  as "nothing to do". The web UI shows the same counts on its Review
+  tab. [docs/guides/operating.md](docs/guides/operating.md) has the cron
+  recipe.
+
+  Scoping the counts to a subtree is what the endpoint of its own would
+  have been for, so **`prefix` landed on `GET /api/v1/stats`** instead —
+  and got wider there. Every number keyed by an entry honors it
+  (`entries`, `queues`, `review`, `outcomes`), where a team on a shared
+  deployment would otherwise have been able to count its own review queue
+  but not its own knowledge. `misses` is never scoped and cannot be: a
+  search that found nothing found it nowhere, so there is no id to scope
+  by (design doc
   [0051 §3.7](docs/design/0051-instance-metrics-and-search-misses.md)).
+  `ochakai stats` takes `--prefix`.
 
-  **`ochakai queues` went the same way** (design doc
-  [0056 §3.2](docs/design/0056-one-question-one-command.md)): its two
-  properties are now `ochakai stats`'s. `ochakai stats` gains `--prefix`
-  and `--exit-code`.
+  ochakai delivers nothing itself: no mail, no chat, no webhooks, no
+  address book, and no scheduler inside the server. The verification-age
+  feed is deliberately uncounted — it ranks every verified entry, so its
+  size is the size of the knowledge base and nobody can drive it to
+  zero. MCP gets no tool for it: an agent's ends of the loop are
+  drafting and reporting outcomes, both of which lengthen a queue rather
+  than read it.
 
 - **BREAKING** — the five MCP tools carrying `knowledge` are renamed to
   OKF's word for the unit of knowledge, `concept` (design doc
@@ -116,18 +245,6 @@ last entry.
   delete_knowledge      →  delete_concept
   get_knowledge_usage   →  get_concept_usage
   ```
-
-  The same word now runs through **everything a reader meets**: the
-  README and docs, the CLI's help and output, the web UI's labels, the
-  tool and schema descriptions an agent is handed, the OpenAPI
-  descriptions, and the server's error text. Renaming the tools alone
-  had left `get_concept` describing itself as "Fetch one entry" and the
-  documentation saying `entry` 287 times against `concept` 6 — the
-  translation table had moved rather than gone. The line is words a
-  reader meets versus identifiers: the `entries` JSON key, Go type
-  names, database columns and "entry" in its other English senses (a
-  catalog entry, a `sources` entry, a changelog entry) are unchanged, so
-  nothing on the wire moves.
 
   OKF SPEC §2 defines a **concept** as "a single unit of knowledge within
   a bundle", and a **concept ID** as its path without `.md`. ochakai's own
@@ -187,9 +304,9 @@ last entry.
   GET /api/v1/export?attachments=false   →  GET /api/v1/bundle/?attachments=false + the same header
   ```
 
-  **This completes §3.5's fold: REST is 14 operations, from 19.** The
-  address space is the bundle, and what is not an object of it — a
-  ranking, a judgment, a measurement — is addressed outside it.
+  **This completes §3.5's fold.** The address space is the bundle, and
+  what is not an object of it — a ranking, a judgment, a measurement —
+  is addressed outside it.
 
   The archive gains a scope it did not have: **any path is a subtree**.
   `GET /api/v1/bundle/metrics/` with the header archives `metrics/` and
@@ -237,8 +354,6 @@ last entry.
   already gets it inside `get_context`, which follows it when packing
   companions (design docs 0015 §3.1, 0046 §3.14).
 
-  The REST surface goes from 16 operations to 15 (docs/surface.md).
-
 - **BREAKING** — `GET|PUT|DELETE /api/v1/knowledge/{id}` is retired, and
   `GET /api/v1/knowledge` is now `GET /api/v1/search` (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.5). A concept is
@@ -268,10 +383,7 @@ last entry.
   collection nor addressable as one.
 
   The CLI, the MCP tools and the web UI are unchanged — they speak this
-  for you. A direct REST caller edits the URL. The REST surface goes from
-  19 operations to 16 (docs/surface.md); `/api/v1/backlinks/{id}` and
-  `/api/v1/export`, which §3.5 also folds, keep working until their
-  successors exist.
+  for you. A direct REST caller edits the URL.
 
 - **Which agent, at which build, wrote this** (design doc
   [0052](docs/design/0052-producer-beside-the-actor.md)). An actor now
@@ -323,32 +435,6 @@ last entry.
   Every file an entry shows carries its `path`, so a client that reads
   an entry has the address of each of its files without composing one.
 
-- **Something to tell you the review queue is not empty** (design doc
-  [0049](docs/design/0049-queue-counts.md)). `GET /api/v1/queues` and
-  `ochakai queues` count the three feeds a curator empties — drafts
-  waiting to be published or turned down, entries whose failure reports
-  are unanswered, entries past the expiry their author declared —
-  instead of listing them. `--prefix` scopes the counts to a subtree, and nothing else
-  filters them: which entries is the feed's question.
-
-  The queues were emptiable already; nothing said they were not empty,
-  and a review queue going quiet looked exactly like one with nothing in
-  it. Each printed line carries the command that lists that queue, and
-  `ochakai queues --exit-code` exits **2** while any of them is
-  non-empty, so a scheduled CI job goes red on work nobody picked up —
-  1 stays "the command failed", so an unreachable server cannot be read
-  as "nothing to do". The web UI shows the same counts on its Review
-  tab. [docs/guides/operating.md](docs/guides/operating.md) has the cron
-  recipe.
-
-  ochakai delivers nothing itself: no mail, no chat, no webhooks, no
-  address book, and no scheduler inside the server. The verification-age
-  feed is deliberately uncounted — it ranks every verified entry, so its
-  size is the size of the knowledge base and nobody can drive it to
-  zero. MCP does not get the endpoint: an agent's ends of the loop are
-  drafting and reporting outcomes, both of which lengthen a queue rather
-  than read it.
-
 - **BREAKING** — a file reports the path it lives at. `okf_path` is gone
   from the wire and from the attach call; `Attachment` carries `path`
   instead (design doc
@@ -369,8 +455,9 @@ last entry.
   something else.
 
 - **BREAKING** — the MCP write face is one tool. `create_knowledge` and
-  `update_knowledge` are `put_knowledge`: it creates when the id is free
-  and replaces when it is taken (design doc
+  `update_knowledge` are one `put_concept` (spelled `put_knowledge` until
+  0054 renamed the five, above): it creates when the id is free and
+  replaces when it is taken (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.14).
 
   The two tools asked the agent a question the document does not answer.
@@ -389,7 +476,7 @@ last entry.
   (issue #272), and the surface is eight tools.
 - **A listing walks past the limit** (design doc
   [0050](docs/design/0050-listings-page-rankings-do-not.md)). Every
-  listing mode of `GET /api/v1/knowledge` — the four `sort` feeds and the
+  listing mode of `GET /api/v1/search` — the four `sort` feeds and the
   `source` lookup — answers with a `cursor` when more entries follow, and
   takes it back as `?cursor=` to continue. The feeds are ledgers a
   reviewer works through, and one that stopped at 1000 with no way
@@ -412,11 +499,11 @@ last entry.
   end of the listing; an exact count over a filtered feed costs a second
   scan of it, and a cursor is a position rather than a snapshot — the
   feeds are live, so an entry that moves while you walk may be missed or
-  seen twice. Counting the three review queues is `GET /api/v1/queues`
-  above, on an address of its own: count once, or walk — they are
-  different questions.
+  seen twice. Counting the three review queues is the `queues` key of
+  `GET /api/v1/stats`, above: count once, or walk — they are different
+  questions.
 
-  On the surfaces: MCP's `search_knowledge` takes and returns `cursor`;
+  On the surfaces: MCP's `search_concepts` takes and returns `cursor`;
   `ochakai search --cursor` resumes a listing and prints the way on to
   stderr, leaving stdout one hit per line (the command does not walk the
   pages for you — `--limit` is your bound); and the web UI's review queue
@@ -475,9 +562,9 @@ last entry.
   `GET /api/v1/stats?days=30` answers the question nothing answered
   before: entries by lifecycle and by trust tier, how many were created
   and verified in the window, what callers reported, and the most-asked
-  questions that came back empty. It carries the three queue depths of
-  `/api/v1/queues` beside them, from that endpoint's own query — the
-  place 0049 §3.1 kept for exactly this. It is computed on demand — no
+  questions that came back empty. It carries the three queue depths
+  beside them, under `queues` — the place 0049 §3.1 kept for exactly
+  this, and the only address they have. It is computed on demand — no
   rollup table, no scheduler — and a window longer than the 180-day
   retention is a 400 rather than a quietly short answer.
 
@@ -621,17 +708,6 @@ last entry.
   The summary line now carries the note count on both paths
   (`… 0 skipped, 0 notes`), because a count that only appears in the
   scrollback is a count nobody reads.
-
-### Fixed
-
-- `ochakai reject` is named in `ochakai help` and in the CLI reference's
-  command list. It has shipped, run and carried its own `-h` text since
-  the ruling existed, but the one place a reader looks for the commands
-  never listed it, so half of review was reachable only by already
-  knowing it was there. The guard that should have caught it compared
-  the dispatch table against a list written out in the test — a copy of
-  the help rather than a reading of it — and now reads the help itself,
-  in both directions.
 
 ### Security
 
@@ -983,32 +1059,21 @@ last entry.
   nothing would query. Refilling them stays `ochakai reembed`, because
   that spends money; until it runs, search answers lexically.
 
-- **The published contract says which address to build on.** While
-  [0046](docs/design/0046-bundle-address-space.md) §3.5's fold is in
-  flight, three addresses answer for the same object, and
-  `api/openapi.yaml` did not say which one survives it.
-  `/api/v1/bundle/{path}` does. The operations it replaces —
-  `GET|PUT|DELETE /api/v1/knowledge/{id}` and
-  `GET|PUT|DELETE /api/v1/attachments/{path}` — are now marked
-  `deprecated`, each naming the bundle call that answers the same
-  question. Nothing is removed and no behaviour changes: a removal
-  arrives in a minor release with a changelog entry, as
-  [the compatibility policy](docs/compatibility.md) says, not after a
-  deprecation window.
-
-  `/api/v1/knowledge` (the list), `/api/v1/backlinks/{id}` and
-  `/api/v1/export` are retired by the same section but carry no mark:
-  their successors are not built yet, so they are still the only way to
-  ask what they answer. The document says so rather than leaving a
-  reader to find out.
-
-  Two things that read as holes are closed with it. The `501` on
-  `PUT /api/v1/bundle/{path}` now says what it is — writing a file needs
-  GCS (design doc 0013), and a concept is unaffected — rather than
+- **The published contract closes two holes it had been carrying.** The
+  `501` on `PUT /api/v1/bundle/{path}` says what it is — writing a file
+  needs GCS (design doc 0013), and a concept is unaffected — rather than
   standing unexplained where a "not built yet" placeholder used to be.
-  And `/api/v1/export`'s recipe for writing your own importer no longer
-  sends the reader to a `POST /api/v1/knowledge` that does not exist:
-  it is one PUT per bundle member, at the path it arrived at.
+  And the recipe for writing your own importer no longer sends the
+  reader to a `POST` that never existed: it is one PUT per bundle
+  member, at the path it arrived at.
+
+  While [0046](docs/design/0046-bundle-address-space.md) §3.5's fold ran,
+  the spec marked the second spellings `deprecated` so a reader knew
+  which address survives. The fold finished inside this release, so the
+  marks went with the addresses: what `api/openapi.yaml` declares is what
+  answers, and there is no deprecation window here — a removal arrives in
+  a minor release with a changelog entry, as
+  [the compatibility policy](docs/compatibility.md) says.
 
 - **A file is an object in the bundle** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.3, 3.13). Migration
@@ -1023,14 +1088,13 @@ last entry.
   every write, the way its links have been since 0024, and the two halves
   of the derivation are one predicate every read goes through.
 
-  Nothing on the wire moves: a file is still fetched, attached and
-  detached by `(entry, filename)`, and `okf_path` still reports a file
-  that lives somewhere other than the canonical `<id>/<name>` — derived
-  now from the path rather than stored beside it. Two behaviours follow
-  from the derivation rather than from a column, and both are what the
-  design asks for: moving an entry carries the files under its namespace
-  with it, and attaching a file at a path the entry's body says nothing
-  about stores it at `<id>/<name>` instead of orphaning it.
+  The wire caught up with it later in this release — a file is read and
+  written at its own bundle path, and `path` replaced `okf_path`
+  (above). Two behaviours follow from the derivation rather than from a
+  column, and both are what the design asks for: moving an entry carries
+  the files under its namespace with it, and attaching a file at a path
+  the entry's body says nothing about stores it at `<id>/<name>` instead
+  of orphaning it.
 
   Operators: `attachment` and `attachment_embedding` keep their rows —
   the read paths move in this release and the tables go in a later one,
@@ -2047,7 +2111,9 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/na0fu3y/ochakai/compare/v0.16.0...v0.16.1
+[0.16.0]: https://github.com/na0fu3y/ochakai/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/na0fu3y/ochakai/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/na0fu3y/ochakai/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/na0fu3y/ochakai/compare/v0.12.1...v0.13.0

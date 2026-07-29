@@ -34,9 +34,13 @@ if the proposal is concrete.
   0.15.0 extended the same habit to the documentation: the CLI reference is
   generated from the commands' own help and the shell completions are read
   from their FlagSets, so both fail CI rather than drifting quietly. Prose the
-  checks do not reach is where the drift now shows up — the OpenAPI examples
-  still teach the vocabulary 0038 retired, because the guard reads the `Type:`
-  schema block and never the examples (issue #222).
+  checks do not reach is where the drift shows up, so the habit reached the
+  prose too: the vocabulary guard reads the whole OpenAPI document rather than
+  only its `Type:` schema block (issue #222), a guard fails a tree that teaches
+  a retired spelling (issue #275), and another fails a contract that names an
+  address its own `paths` does not declare. Each of those was written after a
+  release review found the drift by hand, which is where the next one will
+  come from as well.
 - **Make the project legible to somebody who has not read it.** An audit of
   what a newcomer can learn from this repository found the writing good and
   the way in poor. Most of what it raised has landed: the quick start loads a
@@ -50,8 +54,10 @@ if the proposal is concrete.
   [troubleshooting](docs/guides/troubleshooting.md) and an
   [operating guide](docs/guides/operating.md). What is left is
   [open as issues](https://github.com/na0fu3y/ochakai/issues) rather than a
-  paragraph here: the compatibility policy the wire surfaces actually follow
-  is still unwritten (issue #215), and the two ways in that are missing for
+  paragraph here. The compatibility policy the wire surfaces actually follow
+  has since been written down
+  ([docs/compatibility.md](docs/compatibility.md), issue #215); what is left is
+  the two ways in that are missing for
   somebody with no shell or no map — an installable bundle for desktop MCP
   clients (issue #213) and a guided `ochakai tutorial` (issue #212, which
   needs a design doc before code, and may be the first command whose purpose

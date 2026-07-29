@@ -399,6 +399,29 @@ For the shape of the system rather than the history of it, read
   *For a user:* sending `links` on write is ignored; write a markdown link
   in the body instead.
 
+- **[0057 Concept is the word a reader meets too](0057-concept-is-the-word-a-reader-meets.md)**
+  — *Accepted. BREAKING (wording only).* Completes 0054. That record
+  counted the spellings left *on the wire* and concluded only the tool
+  names still said `knowledge`; what the count missed was the English a
+  user reads. Right after 0.16.0 shipped the rename, the documentation
+  said `entry` 287 times against `concept` 6, `get_concept` described
+  itself as "Fetch one entry", `docs/knowledge.md` opened with "An entry
+  is an OKF v0.2 document", and the web UI's button read "New entry".
+  The translation table 0054 set out to remove had moved from the tool
+  names to the documentation — to the place a newcomer reads first. So
+  every word a reader meets becomes `concept`: README, docs, examples
+  and deploy guides, the CLI's help and output, the web UI's labels and
+  tooltips, the MCP tool and jsonschema descriptions, the OpenAPI
+  descriptions, and the server's error text. **The line is words a
+  reader meets versus identifiers**: the `entries` JSON key names an
+  array in a response rather than the unit, so it stays, as do Go type
+  names (0054 §3.4), database columns, the immutable Japanese records,
+  and "entry" in its other English senses — a catalog entry, a `sources`
+  entry, a changelog entry, the web UI's `.tree-entry` class.
+  *For a user:* nothing on the wire moves — same calls, same arguments,
+  same responses, same stored form. Only a script matching on help or
+  error text sees this.
+
 - **[0054 The unit of knowledge is called a concept](0054-concept-is-the-okf-word.md)**
   — *Accepted.* Renames the five MCP tools carrying `knowledge` to OKF
   SPEC §2's word: `search_concepts`, `get_concept`, `put_concept`,
@@ -414,22 +437,9 @@ For the shape of the system rather than the history of it, read
   the argument against — a tool name is what tells an unfamiliar agent
   what the server is for — and why shipping both names (13 tools) was
   refused.
-  *Revised before release:* counting only the spellings on the wire
-  missed the ones a reader meets. Right after the rename the English
-  documentation said `entry` 287 times and `concept` 6, and
-  `get_concept`'s own description read "Fetch one entry" — the
-  translation table had moved, not gone. §3.6 extends the word to every
-  piece of English a user reads: README, docs, examples, the CLI's help
-  and output, the web UI's labels, the MCP tool and schema descriptions,
-  the OpenAPI descriptions and the server's error text. The line is
-  *words a reader meets* versus *identifiers*: the `entries` JSON key,
-  Go type names, database columns and "entry" in its other English
-  senses (a catalog entry, a `sources` entry, a changelog entry) all
-  stay.
   *For a user:* breaking for any client that names these tools in its
   configuration; a client that only reads the advertised list needs
-  nothing. The prose change breaks nothing — only scripts matching on
-  help or error text see it.
+  nothing. §3.5's "MCP only" was later completed by 0057.
 
 ## Attachments
 

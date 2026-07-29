@@ -5,9 +5,12 @@ CLI から `ochakai backlinks` を廃し、`ochakai search --links-to <id>`
 一本にする — [0046](0046-bundle-address-space.md) §3.5 が REST の
 `GET /api/v1/backlinks/{id}` を畳んだときに残った、CLI 側の第二の
 住所である。同じ理由で `ochakai queues` を `ochakai stats` に畳み
-([0049](0049-queue-counts.md) §3.4 を言い直す)、却下を取り消す綴りを
-`withdraw` 一語にする([0055](0055-one-ruling-one-face.md) §3.4 の
-`--lift` と §5 が据え置いたリビジョン値 `unreject` を言い直す)。
+([0049](0049-queue-counts.md) §§3.4-3.5 を改訂する)、却下を取り消す
+綴りを `withdraw` 一語にする([0055](0055-one-ruling-one-face.md) §3.4
+の `--lift` と §5 が据え置いたリビジョン値 `unreject` を改訂する)。
+四つとも 0.16.0 でリリース済みなので、どれも差し替えではなく改訂で
+あり、新しい番号を取る([0048](0048-decision-records-for-wire-contracts.md)
+§2.3)。
 [0015](0015-surface-consistency.md) §2 の「CLI は完全性の面」に 1 行
 足す — 完全性とは**能力**の完全性であって、REST 操作との一対一でも、
 畳まれた面をコマンドとして保存することでもない。記録される内容・
@@ -25,7 +28,7 @@ Date: 2026-07-29
 | CLI コマンド | 同じ答えを返すもの | ワイヤ上の面 |
 |---|---|---|
 | `ochakai backlinks <id>` | `ochakai search --links-to <id>` | 無い(0046 §3.5 が畳んだ) |
-| `ochakai queues` | `ochakai stats` | 無い(0049 §3.1 がリリース前に畳んだ) |
+| `ochakai queues` | `ochakai stats` | 無い(0049 §3.1 が畳んだ) |
 
 どちらも**ヘルプ自身がそう書いている**。`backlinks` の説明は
 「Same question as `ochakai search --links-to <id>`, which is where it
@@ -126,9 +129,9 @@ ochakai backlinks metrics/revenue     →  ochakai search --links-to metrics/rev
 読む行数ではなくコマンド名と、そこにぶら下がる二つ目の説明と、
 二つ目のキーの綴りだった。**
 
-`ochakai queues` はどのリリースにも乗っていない
-([0048](0048-decision-records-for-wire-contracts.md) §2.3 の意味で
-「依存できた人がいない」)。
+`ochakai queues` は 0.16.0 に乗っている。0.x の間は破壊的変更が minor
+で入る([docs/compatibility.md](../compatibility.md))ので、畳むなら
+いまである — 一つ上のリリースを跨ぐたびに、説明し続ける年数が増える。
 
 ### 3.3 却下の取り消しは `withdraw` 一語
 
@@ -192,7 +195,7 @@ ochakai backlinks metrics/revenue     →  ochakai search --links-to metrics/rev
 - **`ochakai backlinks` は消える**(unknown command)。移行は 1 行:
   `ochakai search --links-to <id>`。
 - **`ochakai queues` は消える。** `ochakai stats`(必要なら
-  `--exit-code`)。どのリリースにも乗っていない。
+  `--exit-code`)。0.16.0 に乗っていたので、これは破壊的変更である。
 - **`ochakai reject --lift` は `--withdraw` になる。**
 - **リビジョンの `change` の値 `unreject` は `withdraw` になる** —
   応答の enum と、マイグレーションで既存行の両方。この値で分岐している

@@ -31,7 +31,7 @@ info:
     Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
     changelog entry, not after a deprecation window.
-  version: 0.15.0
+  version: 0.16.1
   license:
     name: MIT
 servers:
@@ -52,7 +52,7 @@ paths:
       description: >
         Rejected concepts are excluded unless rejected=true is passed (so
         agents can check for already-rejected proposals). Whether a concept
-        was confirmed is asked with verified, independently of the status
+        was confirmed is asked with trust, independently of the status
         filter — status is the lifecycle value alone (design doc 0043
         §§3.2-3.3).
         With sort=verified_at the endpoint lists concepts by verification age

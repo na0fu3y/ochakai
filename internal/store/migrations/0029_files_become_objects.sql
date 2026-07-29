@@ -37,44 +37,6 @@ ALTER TABLE object ADD COLUMN IF NOT EXISTS files      jsonb  NOT NULL DEFAULT '
 -- NULLs repeat and would refuse a second empty string.
 ALTER TABLE object ALTER COLUMN id DROP NOT NULL;
 
--- Where each file lands. Its own path when it has one and nothing is
--- there already, and the canonical <id>/<name> otherwise: an imported
--- bundle's file goes back where it came from (design doc 0046 §3.2, so
--- the bundle round-trips), while a collision moves the loser rather than
--- dropping it (§3.13 — losing one of two files is the worse answer).
-CREATE TEMP TABLE object_from_attachment ON COMMIT DROP AS
-SELECT a.knowledge_id, a.name, a.sha256, b.media_type, b.size,
-       a.created_by_kind, a.created_by_name, a.created_at,
-       CASE
-           WHEN a.okf_path <> ''
-            AND NOT EXISTS (SELECT 1 FROM object o WHERE o.path = a.okf_path)
-            AND (SELECT count(*) FROM attachment x WHERE x.okf_path = a.okf_path) = 1
-           THEN a.okf_path
-           ELSE a.knowledge_id || '/' || a.name
-       END AS path
-  FROM attachment a
-  JOIN blob b ON b.sha256 = a.sha256;
-
--- Attribution first, while the object table still says what was there
--- before this migration ran: every file whose path is not the entry's
--- own <id>/<name> is named by the entry it belonged to.
-UPDATE object o SET files = COALESCE((
-    SELECT jsonb_agg(DISTINCT m.path)
-      FROM object_from_attachment m
-     WHERE m.knowledge_id = o.id
-       AND m.path <> m.knowledge_id || '/' || m.name
-), '[]'::jsonb)
-WHERE EXISTS (SELECT 1 FROM object_from_attachment m WHERE m.knowledge_id = o.id);
-
-INSERT INTO object (path, type, title, body, blob_hash, size, media_type,
-                    created_by_kind, created_by_name, updated_by_kind, updated_by_name,
-                    created_at, updated_at, content_changed_at)
-SELECT m.path, '', '', '', m.sha256, m.size, m.media_type,
-       m.created_by_kind, m.created_by_name, m.created_by_kind, m.created_by_name,
-       m.created_at, m.created_at, m.created_at
-  FROM object_from_attachment m
-ON CONFLICT (path) DO NOTHING;
-
 -- Everything that reads entries reads them by their concept id, and a
 -- file has none: the partial index keeps those reads on an index that
 -- holds only concepts, so a bundle full of files costs them nothing.
@@ -89,7 +51,10 @@ CREATE INDEX IF NOT EXISTS object_files ON object USING gin (files);
 --
 -- A file row has no id, and 0016's trigger would compute NULL for it and
 -- fail the NOT NULL — a file is found by its path, not by a haystack, so
--- it gets an empty one and returns early.
+-- it gets an empty one and returns early. This has to be in place
+-- *before* the rows below move, or the first file inserted on a base
+-- that has any is the one that fails the migration and leaves the
+-- schema half-changed.
 CREATE OR REPLACE FUNCTION ochakai_knowledge_search_text() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -133,7 +98,9 @@ END $$;
 
 -- Two triggers rather than one: a DELETE trigger's WHEN condition may
 -- not mention NEW, so the condition is written against the row each
--- event actually has.
+-- event actually has. They are in place before the move as well, so the
+-- entries that own the arriving files have their haystacks recomputed by
+-- the same path a later write would take.
 DROP TRIGGER IF EXISTS object_file_search_text ON object;
 DROP TRIGGER IF EXISTS object_file_written ON object;
 DROP TRIGGER IF EXISTS object_file_removed ON object;
@@ -141,6 +108,44 @@ CREATE TRIGGER object_file_written AFTER INSERT OR UPDATE ON object
     FOR EACH ROW WHEN (NEW.id IS NULL) EXECUTE FUNCTION ochakai_file_search_text();
 CREATE TRIGGER object_file_removed AFTER DELETE ON object
     FOR EACH ROW WHEN (OLD.id IS NULL) EXECUTE FUNCTION ochakai_file_search_text();
+
+-- Where each file lands. Its own path when it has one and nothing is
+-- there already, and the canonical <id>/<name> otherwise: an imported
+-- bundle's file goes back where it came from (design doc 0046 §3.2, so
+-- the bundle round-trips), while a collision moves the loser rather than
+-- dropping it (§3.13 — losing one of two files is the worse answer).
+CREATE TEMP TABLE object_from_attachment ON COMMIT DROP AS
+SELECT a.knowledge_id, a.name, a.sha256, b.media_type, b.size,
+       a.created_by_kind, a.created_by_name, a.created_at,
+       CASE
+           WHEN a.okf_path <> ''
+            AND NOT EXISTS (SELECT 1 FROM object o WHERE o.path = a.okf_path)
+            AND (SELECT count(*) FROM attachment x WHERE x.okf_path = a.okf_path) = 1
+           THEN a.okf_path
+           ELSE a.knowledge_id || '/' || a.name
+       END AS path
+  FROM attachment a
+  JOIN blob b ON b.sha256 = a.sha256;
+
+-- Attribution first, while the object table still says what was there
+-- before this migration ran: every file whose path is not the entry's
+-- own <id>/<name> is named by the entry it belonged to.
+UPDATE object o SET files = COALESCE((
+    SELECT jsonb_agg(DISTINCT m.path)
+      FROM object_from_attachment m
+     WHERE m.knowledge_id = o.id
+       AND m.path <> m.knowledge_id || '/' || m.name
+), '[]'::jsonb)
+WHERE EXISTS (SELECT 1 FROM object_from_attachment m WHERE m.knowledge_id = o.id);
+
+INSERT INTO object (path, type, title, body, blob_hash, size, media_type,
+                    created_by_kind, created_by_name, updated_by_kind, updated_by_name,
+                    created_at, updated_at, content_changed_at)
+SELECT m.path, '', '', '', m.sha256, m.size, m.media_type,
+       m.created_by_kind, m.created_by_name, m.created_by_kind, m.created_by_name,
+       m.created_at, m.created_at, m.created_at
+  FROM object_from_attachment m
+ON CONFLICT (path) DO NOTHING;
 
 -- The old attachment trigger has nothing left to fire on: nothing writes
 -- the attachment table now. It goes with the table, a release from now.
