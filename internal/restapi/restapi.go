@@ -702,7 +702,7 @@ func Handler(svc *service.Service) http.Handler {
 	// id is the address (design doc 0017), so the move carries revisions,
 	// usage, and attachments along and rewrites inbound references (link
 	// targets, attrs.model) so nothing breaks (design doc 0021). Its own
-	// top-level path for the same reason /usage and /revisions have one:
+	// top-level path for the same reason /usage and /review have one:
 	// a suffix after the hierarchical {id...} wildcard could be confused
 	// with an ID segment.
 	mux.HandleFunc("POST /api/v1/move", func(w http.ResponseWriter, r *http.Request) {

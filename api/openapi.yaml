@@ -65,8 +65,8 @@ paths:
         (report_outcome failed) are still unanswered, worst first, and each
         hit carries its usage totals — the re-verification feed. An entry
         drops out once it is verified after its last failure report
-        (POST /api/v1/verify/{id}), so a base that is kept up shows an
-        empty feed.
+        (POST /api/v1/review/{id} with ruling: verified), so a base that
+        is kept up shows an empty feed.
         With sort=stale_after it lists entries whose author declared a
         stale_after that has now passed, most overdue first — the feed for
         knowledge dated by whoever wrote it (design doc 0037 §2.1).
@@ -1137,7 +1137,7 @@ paths:
         fresh id: a live or soft-deleted entry there already owns that
         address and its history — free an id held by a deleted entry with
         DELETE ...?purge=true. Lives at its own top-level path for the
-        same reason /usage and /revisions do — a suffix after the
+        same reason /usage and /review do — a suffix after the
         hierarchical id could be confused with an ID segment.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
@@ -1972,7 +1972,8 @@ components:
         anything but unverified. Append-only and plural: re-checking an
         entry adds a row rather than replacing one, so the record answers
         "how often, and by whom" and not just "when last".
-        Written by POST /api/v1/verify/{id}, never from a payload.
+        Written by POST /api/v1/review/{id} with ruling: verified, never
+        from a payload.
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
@@ -1981,8 +1982,8 @@ components:
       description: >
         This instance's ruling that an entry was not accepted — the memory
         that stops an agent re-proposing knowledge a human already turned
-        down. One live ruling per entry; POST /api/v1/reject/{id} records
-        it and DELETE lifts it.
+        down. One live ruling per entry; POST /api/v1/review/{id} records
+        it with ruling: rejected and lifts it with ruling: withdrawn.
         It is not a lifecycle value: a rejection is a judgment about the
         concept rather than a stage of it, and it could not round-trip as
         a status because export had to fold it onto deprecated, which
@@ -2173,14 +2174,16 @@ components:
           description: >
             Every recorded confirmation, oldest first. Absent means
             unverified, which is SPEC §5.3's own signal. Written by
-            POST /api/v1/verify/{id}: this is an instance ledger, and
+            POST /api/v1/review/{id} with ruling: verified: this is an
+            instance ledger, and
             import reads only whether a bundle's `verified` key was
             present (design docs 0009, 0043 §3.2).
         rejection:
           allOf: [{ $ref: "#/components/schemas/Rejection" }]
           description: >
             The live ruling, absent when there is none. Written by
-            POST /api/v1/reject/{id} and cleared by DELETE.
+            POST /api/v1/review/{id} with ruling: rejected, and cleared
+            by ruling: withdrawn.
     View:
       type: object
       description: >
