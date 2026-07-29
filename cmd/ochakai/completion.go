@@ -80,8 +80,7 @@ _ochakai() {
     'browse:list one level of the ID hierarchy (folder view)'
     'context:the one-call read before a data question (full entries)'
     'get:print one entry as an OKF document'
-    'create:create an entry from OKF markdown or JSON'
-    'update:replace an entry (kept as a revision)'
+    'put:write an entry from OKF markdown or JSON, creating or replacing'
     'verify:append a verification (also re-affirms a verified entry)'
     'reject:record that an entry was reviewed and not accepted'
     'delete:soft-delete an entry'
@@ -172,11 +171,8 @@ _ochakai() {
     report)
       _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
       ;;
-    create)
-      _arguments '-f[input file]:file:_files' '--json[print the entry as JSON]' '--url[server URL]:url:'
-      ;;
-    update)
-      _arguments '-f[input file]:file:_files' '--if-match[update only if the entry still has this version (updated_at)]:version:' '--json[print the entry as JSON]' '--url[server URL]:url:'
+    put)
+      _arguments '-f[input file]:file:_files' '--only-if-new[write only if the id is free]' '--if-match[write only if the entry still has this version]:version:' '--json[print the entry as JSON]' '--url[server URL]:url:'
       ;;
     verify)
       _arguments '--json[print the entry as JSON]' '--url[server URL]:url:'
@@ -235,7 +231,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search queues browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search queues browse context get put verify reject delete purge reembed move attach detach usage stats report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -263,8 +259,7 @@ _ochakai() {
         return
       fi
       opts="--note --json --url" ;;
-    create)        opts="-f --json --url" ;;
-    update)        opts="-f --if-match --json --url" ;;
+    put)           opts="-f --only-if-new --if-match --json --url" ;;
     verify)        opts="--json --url" ;;
     reject)        opts="--note --lift --json --url" ;;
     delete|purge|detach|move) opts="--url" ;;
@@ -303,8 +298,7 @@ complete -c ochakai -n __fish_use_subcommand -a queues -d 'how much work each re
 complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
 complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full entries)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
-complete -c ochakai -n __fish_use_subcommand -a create -d 'create an entry from OKF markdown or JSON'
-complete -c ochakai -n __fish_use_subcommand -a update -d 'replace an entry (kept as a revision)'
+complete -c ochakai -n __fish_use_subcommand -a put -d 'write an entry from OKF markdown or JSON, creating or replacing'
 complete -c ochakai -n __fish_use_subcommand -a verify -d 'append a verification (also re-affirms a verified entry)'
 complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that an entry was reviewed and not accepted'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete an entry'
@@ -330,12 +324,12 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get put verify reject delete purge reembed move attach detach usage stats report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get create update verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get put verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
@@ -362,8 +356,9 @@ complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
-complete -c ochakai -n '__fish_seen_subcommand_from create update' -s f -r -F -d 'input file'
-complete -c ochakai -n '__fish_seen_subcommand_from update' -l if-match -x -d 'update only if the entry still has this version (updated_at)'
+complete -c ochakai -n '__fish_seen_subcommand_from put' -s f -r -F -d 'input file'
+complete -c ochakai -n '__fish_seen_subcommand_from put' -l only-if-new -d 'write only if the id is free'
+complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the entry still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

@@ -21,12 +21,12 @@ func TestUsageAddressesEntriesByPath(t *testing.T) {
 	}
 }
 
-// Guard: every `ochakai create` we ship names the entry's id. The id is an
+// Guard: every `ochakai put` we ship names the entry's id. The id is an
 // argument and an OKF document carries none (design doc 0017), so a
 // flags-only invocation is one an agent following our own instructions
 // cannot complete — it fails on the server with a format complaint about
 // an id it was never told to pass.
-func TestShippedCreateExamplesPassAnID(t *testing.T) {
+func TestShippedPutExamplesPassAnID(t *testing.T) {
 	for _, f := range []string{
 		"../../README.md",
 		"../../CONTRIBUTING.md",
@@ -39,18 +39,18 @@ func TestShippedCreateExamplesPassAnID(t *testing.T) {
 			t.Fatalf("read %s: %v", f, err)
 		}
 		for _, line := range strings.Split(string(content), "\n") {
-			_, rest, found := strings.Cut(line, "ochakai create")
+			_, rest, found := strings.Cut(line, "ochakai put")
 			if !found {
 				continue
 			}
 			rest = strings.TrimLeft(rest, " ")
-			// `ochakai create -h` prints the help that explains the id; it is
+			// `ochakai put -h` prints the help that explains the id; it is
 			// the one invocation that needs none.
 			if strings.HasPrefix(rest, "-h") || strings.HasPrefix(rest, "--help") {
 				continue
 			}
 			if rest == "" || strings.HasPrefix(rest, "-") {
-				t.Errorf("%s documents `ochakai create` without an id: %s", f, strings.TrimSpace(line))
+				t.Errorf("%s documents `ochakai put` without an id: %s", f, strings.TrimSpace(line))
 			}
 		}
 	}

@@ -135,12 +135,12 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "queues", "browse", "context", "get", "create", "update", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "stats", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
+	for _, name := range []string{"search", "queues", "browse", "context", "get", "put", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "stats", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 28 {
+	if len(clientCommands) != 27 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest
@@ -353,10 +353,10 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 	}
 }
 
-// `ochakai update --if-match` sends the version as the If-Match header,
+// `ochakai put --if-match` sends the version as the If-Match header,
 // and a 412 comes back as an actionable conflict message (re-read, redo,
 // retry) rather than the raw server error.
-func TestUpdateIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
+func TestPutIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 	var gotIfMatch string
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +371,7 @@ func TestUpdateIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 	if err := os.WriteFile(doc, []byte("---\ntype: metric\ntitle: 売上\n---\n\nbody\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := cmdUpdate(context.Background(), []string{"metrics/revenue",
+	err := cmdPut(context.Background(), []string{"metrics/revenue",
 		"-f", doc, "--if-match", "2026-07-01T00:00:00.123456789Z", "--url", srv.URL})
 	if gotIfMatch != `"2026-07-01T00:00:00.123456789Z"` {
 		t.Errorf("If-Match on the wire = %q", gotIfMatch)

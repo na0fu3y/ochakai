@@ -20,6 +20,35 @@ last entry.
 
 ### Added
 
+- **BREAKING** — `ochakai create` and `ochakai update` are one command,
+  `ochakai put` (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.14):
+
+  ```
+  ochakai create <id> -f entry.md          →  ochakai put <id> -f entry.md --only-if-new
+  ochakai update <id> -f entry.md          →  ochakai put <id> -f entry.md
+  ochakai update <id> --if-match <version> →  ochakai put <id> --if-match <version>
+  ```
+
+  The wire has been create-or-replace since 0043 §3.5 — a write states
+  what the entry should say, and whether the id was free is a
+  precondition rather than a different act. The CLI kept two commands
+  over one endpoint, so a writer had to answer a question the format does
+  not ask, and guessing wrong meant a 409 or an overwrite. `--only-if-new`
+  is the `If-None-Match: *` that `create` always sent; without it, `put`
+  writes.
+
+  Output still distinguishes the three outcomes: `created`, `updated`,
+  `unchanged`. The CLI goes from 28 commands to 27 (docs/surface.md).
+
+  **Two renames 0046 §3.14 called for were not taken**, and the record
+  now says so: `browse` and `delete` keep their names rather than
+  becoming `ls` and `rm`, and `attach` / `detach` are not absorbed. The
+  reasons are in §3.14 — this project's CLI vocabulary is `verify` /
+  `reject` / `queues` rather than unix's, and absorbing the file commands
+  would split the CLI between path-taking and id-taking commands, which
+  is the split §3.5 just removed from REST.
+
 - **BREAKING** — `GET /api/v1/export` is retired. An archive is the
   bundle at a path, so it is a representation of that path (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.5):

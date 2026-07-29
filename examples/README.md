@@ -8,7 +8,7 @@
 - **[claude-code/](claude-code)** — the recall and write-back loop as Claude Code
   instructions and hooks.
 - **[golden-query.md](golden-query.md)** — one entry on its own, for
-  `ochakai create -f`.
+  `ochakai put -f`.
 
 ## demo/: a knowledge base you can import
 

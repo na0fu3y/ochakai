@@ -17,7 +17,7 @@ Seed it and poke around:
 
 ```sh
 export OCHAKAI_URL=http://localhost:8080
-go run ./cmd/ochakai create queries/monthly-revenue -f examples/golden-query.md
+go run ./cmd/ochakai put queries/monthly-revenue -f examples/golden-query.md
 go run ./cmd/ochakai search "revenue"
 ```
 

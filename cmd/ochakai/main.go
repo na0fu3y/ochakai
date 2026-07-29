@@ -92,8 +92,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
-  create [id] [-f file]   create an entry from OKF markdown or JSON
-  update <id>             replace an entry (every change kept as a revision)
+  put <id> [-f file]      write an entry from OKF markdown or JSON, creating
+                          or replacing (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified entry too)
   delete <id>             soft-delete an entry (history retained)
   purge <id>              hard-delete a soft-deleted entry, freeing its id
