@@ -51,7 +51,7 @@ to you — and note that `purge` deliberately does not reclaim GCS blobs
 ```sh
 ochakai export ./knowledge          # a directory
 ochakai export - > okf.tar.gz       # or a stream
-ochakai export --no-attachments -   # entries only; bytes are already in GCS
+ochakai export --no-attachments -   # concepts only; bytes are already in GCS
 ```
 
 The bundle is an OKF v0.2 directory: one markdown file per concept with

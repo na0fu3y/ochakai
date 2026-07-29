@@ -79,27 +79,27 @@ prose, so ochakai stores no relationship type of its own (design doc
 [0024](design/0024-links-from-body.md)). Links inside fenced code blocks
 (``` or ~~~) and inline `` `code spans` `` are examples, not edges, and are
 skipped — indented code is not detected, so a link four spaces deep is read
-as prose. Renaming an entry rewrites the links pointing at it, prose
+as prose. Renaming a concept rewrites the links pointing at it, prose
 included.
 
 ## Attachments
 
-Entries can carry file attachments — the dashboard screenshot behind an
-insight, the ER diagram behind a table entry, the seeds.txt or spec PDF
+Concepts can carry file attachments — the dashboard screenshot behind an
+insight, the ER diagram behind a table concept, the seeds.txt or spec PDF
 behind a dataset. Accepted formats are the intersection of what Claude reads
 and what Gemini embeds (png/jpeg/webp, pdf, plain text — sniffed from the
 bytes). Attachments are searchable: filenames match in every search, and
 contents join hybrid search wherever embeddings are enabled — text with any
 embedding model, images and PDFs with `gemini-embedding-2` — and a hit is
-always the owning entry (design doc
+always the owning concept (design doc
 [0020](design/0020-attachment-search.md)). Attachment bytes live in GCS and
 are fetched on demand, and attachments round-trip through OKF bundles as
-plain files next to their entry.
+plain files next to their concept.
 
 ## Trust travels with the knowledge
 
 OKF v0.2's schema is ochakai's schema: every key the spec defines is a
-first-class field, so an exported entry carries its provenance, trust and
+first-class field, so an exported concept carries its provenance, trust and
 lifecycle (SPEC §5) where a consumer that has never heard of ochakai will
 look for them.
 

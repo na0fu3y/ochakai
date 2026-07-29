@@ -60,8 +60,8 @@ last entry.
 - **BREAKING** — the word for the unit of knowledge, `concept`, now runs
   through **everything a reader meets** rather than the MCP tool names
   alone (design doc
-  [0054 §3.6](docs/design/0054-concept-is-the-okf-word.md), revised by
-  [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md)): the
+  [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md), which
+  completes [0054](docs/design/0054-concept-is-the-okf-word.md)): the
   README and docs, the examples and deploy guides, the CLI's help and
   output, the web UI's labels, the tool and schema descriptions an agent
   is handed, the OpenAPI descriptions, and the server's error text.

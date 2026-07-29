@@ -128,7 +128,7 @@ jobs:
                   "$OCHAKAI_URL/api/v1/usage/$id" >/dev/null
               else
                 # record the re-verification, appending to the ledger
-                # (which takes the entry out of both feeds)
+                # (which takes the concept out of both feeds)
                 curl -s -X POST -H "Authorization: Bearer $TOKEN" \
                   -H 'Content-Type: application/json' \
                   -d '{"ruling":"verified"}' \

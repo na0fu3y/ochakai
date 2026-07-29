@@ -267,7 +267,7 @@ markdown file without one is not a concept, and is kept as a file),
 reserved index.md / log.md files are skipped, keys the format does
 not define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical
 to what is stored are left untouched and reported as unchanged;
-entries the server rejects as invalid — e.g. one whose type is not a
+concepts the server rejects as invalid — e.g. one whose type is not a
 single line — are skipped and reported).
 Files referenced by a concept's body markdown links become its
 attachments, wherever they sit in the bundle (their location is
@@ -384,7 +384,7 @@ Usage: ochakai purge [flags] <id>
 Hard-delete an already soft-deleted concept: the concept, its revisions,
 usage, and attachment metadata are erased and the id is freed for a
 move. History is gone — `ochakai delete` first, then purge. A live
-entry is refused.
+concept is refused.
 
 Flags:
   -url ochakai use
@@ -468,7 +468,7 @@ Rejected concepts are hidden from search unless asked for
 was already turned down before making it again.
 It does not edit the concept: the lifecycle status and the ETag stay put.
 A rejection is this instance's ruling, so an exported bundle carries the
-entry's real status rather than folding the ruling onto deprecated.
+concept's real status rather than folding the ruling onto deprecated.
 Use --withdraw to take one back — the wire calls that ruling
 `withdrawn`, and so does the revision it writes.
 
@@ -624,11 +624,11 @@ the questions that came back empty, most-asked first — the list of what
 to write next.
 
 The three queue lines — drafts waiting to be published or turned down,
-entries whose failure reports are unanswered, concepts past the expiry
+concepts whose failure reports are unanswered, concepts past the expiry
 their author declared — carry the command that lists that queue, with
 the scope you asked under, so the next step is the text on the line.
 The verification-age feed is not one of them: it ranks every verified
-entry rather than holding the ones that need something, so its size is
+concept rather than holding the ones that need something, so its size is
 the size of the knowledge base and never reaches zero.
 With --exit-code the command exits 2 while any of the three is
 non-empty and 0 when all are, which is how a scheduled job goes red on

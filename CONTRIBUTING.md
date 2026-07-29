@@ -94,7 +94,7 @@ ids from `internal/testdb`.Unique**, which appends a run-unique number
 and registers the sweep that removes every row written under it. A test
 that rolls its own token instead leaves its rows behind, and the corpus
 grows until a bounded ranking assertion somewhere else stops finding its
-own entry — a failure that reads as a search bug in whatever change
+own concept — a failure that reads as a search bug in whatever change
 happens to cross the threshold. `TestNoTestRollsItsOwnNamespace` fails
 on a hand-rolled one.
 
