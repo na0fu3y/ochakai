@@ -6,8 +6,14 @@ and what it refuses to do. It is deliberately short; the manual is here.
 ## For someone evaluating ochakai
 
 - [FAQ](faq.md) — can it run outside Google Cloud, does anything leave
-  your project, how it differs from RAG and from a memory layer, what an
-  agent may do to verified knowledge, and what leaving looks like.
+  your project, how it differs from RAG, from a memory layer and from a
+  markdown vault, what an agent may do to verified knowledge, and what
+  leaving looks like.
+- [Positioning](positioning.md) — every "why not just use X?" in one
+  place: semantic layers, catalogs, memory layers, RAG, the verified-query
+  store inside an AI-analyst product, and a markdown vault with an MCP
+  server. Includes where ochakai loses, and who should pick something
+  else.
 - [Architecture](architecture.md) — how the pieces fit, what the data
   model is, and why there is no authorization layer. English summary of
   the decision records.
