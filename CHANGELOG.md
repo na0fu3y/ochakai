@@ -20,6 +20,32 @@ last entry.
 
 ### Added
 
+- **Something to tell you the review queue is not empty** (design doc
+  [0049](docs/design/0049-queue-counts.md)). `GET /api/v1/queues` and
+  `ochakai queues` count the three feeds a curator empties — drafts
+  waiting to be published or turned down, entries whose failure reports
+  are unanswered, entries past the expiry their author declared —
+  instead of listing them. `--prefix` scopes the counts to a subtree, and nothing else
+  filters them: which entries is the feed's question.
+
+  The queues were emptiable already; nothing said they were not empty,
+  and a review queue going quiet looked exactly like one with nothing in
+  it. Each printed line carries the command that lists that queue, and
+  `ochakai queues --exit-code` exits **2** while any of them is
+  non-empty, so a scheduled CI job goes red on work nobody picked up —
+  1 stays "the command failed", so an unreachable server cannot be read
+  as "nothing to do". The web UI shows the same counts on its Review
+  tab. [docs/guides/operating.md](docs/guides/operating.md) has the cron
+  recipe.
+
+  ochakai delivers nothing itself: no mail, no chat, no webhooks, no
+  address book, and no scheduler inside the server. The verification-age
+  feed is deliberately uncounted — it ranks every verified entry, so its
+  size is the size of the knowledge base and nobody can drive it to
+  zero. MCP does not get the endpoint: an agent's ends of the loop are
+  drafting and reporting outcomes, both of which lengthen a queue rather
+  than read it.
+
 - **BREAKING** — a file reports the path it lives at. `okf_path` is gone
   from the wire and from the attach call; `Attachment` carries `path`
   instead (design doc

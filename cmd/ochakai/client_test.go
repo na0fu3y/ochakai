@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"net/http"
@@ -127,12 +128,12 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
+	for _, name := range []string{"search", "queues", "browse", "context", "get", "create", "update", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 26 {
+	if len(clientCommands) != 27 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest
@@ -419,5 +420,59 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	last := got.Observed.LastVerified()
 	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
 		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
+	}
+}
+
+// TestQueuesPrintsEachQueueWithTheCommandThatListsIt pins the two halves
+// of what makes `queues` a nudge rather than a statistic: every line
+// carries the command that opens that queue (with the scope it was asked
+// under), and --exit-code turns "somebody owes a review" into an exit
+// status a scheduler can watch (design doc 0049).
+func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
+	var gotPrefixes []string
+	counts := domain.QueueCounts{Drafts: 3, ReportedWrong: 1, PastExpiry: 0}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
+		gotPrefixes = r.URL.Query()["prefix"]
+		_ = json.NewEncoder(w).Encode(map[string]any{"queues": counts})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	orig := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	queuesErr := cmdQueues(context.Background(), []string{"--prefix", "teams/growth", "--exit-code", "--url", srv.URL})
+	pw.Close()
+	os.Stdout = orig
+	out, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(queuesErr, errWorkPending) {
+		t.Errorf("--exit-code with 4 waiting = %v, want errWorkPending (exit 2)", queuesErr)
+	}
+	if len(gotPrefixes) != 1 || gotPrefixes[0] != "teams/growth" {
+		t.Errorf("server saw prefix %v, want [teams/growth]", gotPrefixes)
+	}
+	for _, want := range []string{
+		"3\tdrafts\tochakai search --sort usage --status draft --prefix teams/growth\n",
+		"1\treported wrong\tochakai search --sort failed --prefix teams/growth\n",
+		"0\tpast expiry\tochakai search --sort stale_after --prefix teams/growth\n",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output misses %q:\n%s", want, out)
+		}
+	}
+
+	// All three empty is the case the whole command exists to make
+	// visible: it prints the zeros and exits 0, so a quiet queue and an
+	// empty one stop looking alike.
+	counts = domain.QueueCounts{}
+	if err := cmdQueues(context.Background(), []string{"--exit-code", "--url", srv.URL}); err != nil {
+		t.Errorf("--exit-code on an empty base = %v, want nil (exit 0)", err)
 	}
 }

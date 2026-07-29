@@ -333,6 +333,35 @@ func ValidOutcome(o string) bool {
 	return false
 }
 
+// QueueCounts is how much work each review queue is holding — the three
+// listing feeds that a curator is meant to empty, counted rather than
+// listed (design doc 0049). Each field is the size of a feed that
+// already exists:
+//
+//   - Drafts — sort=usage with status=draft: what agents proposed,
+//     waiting to be published or turned down. Verifying does not empty
+//     it: confirming and publishing are different acts (design doc 0043
+//     §3.2), so a draft leaves by an edit or a rejection.
+//   - ReportedWrong — sort=failed: entries whose failure reports are
+//     still unanswered.
+//   - PastExpiry — sort=stale_after: entries past the expiry their own
+//     author declared.
+//
+// The verification-age feed (sort=verified_at) is deliberately absent:
+// it ranks every verified entry rather than holding the ones that need
+// something, so a count of it is the size of the knowledge base and
+// never reaches zero. A number nobody can drive down is not a queue.
+type QueueCounts struct {
+	Drafts        int64 `json:"drafts"`
+	ReportedWrong int64 `json:"reported_wrong"`
+	PastExpiry    int64 `json:"past_expiry"`
+}
+
+// Total is how much work is waiting across all three queues. An entry
+// can sit in more than one, so this counts places in queues rather than
+// distinct entries — which is what a reviewer works through anyway.
+func (q QueueCounts) Total() int64 { return q.Drafts + q.ReportedWrong + q.PastExpiry }
+
 // Usage aggregates how often a knowledge entry was actually used, and
 // how often users reported it worked or failed.
 type Usage struct {

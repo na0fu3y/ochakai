@@ -13,7 +13,8 @@
      action and tree drag & drop), the draft review queue (sort=usage),
      the two feeds that empty by verifying — reported wrong (sort=failed)
      and verification age (sort=verified_at), reachable from the review
-     queue and #/search/reported-wrong — and OKF export.
+     queue and #/search/reported-wrong — how much each queue is holding
+     (design doc 0049) — and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -94,6 +95,14 @@
   }
   .topnav a:hover { color: var(--text); text-decoration: none; }
   .topnav a.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+  /* How much is waiting, on the tab that leads to it (design doc 0049).
+     Absent rather than zero when there is nothing: a badge that is always
+     there is scenery, and the point is to be noticed. */
+  .topnav .waiting {
+    margin-left: .4rem; border-radius: 999px; padding: .02rem .42rem;
+    font-size: .72rem; font-weight: 700;
+    background: var(--accent-weak); color: var(--accent-strong);
+  }
   /* Narrow screens: brand + actions on the first row, nav tabs on their own row. */
   @media (max-width: 800px) {
     .topbar { flex-wrap: wrap; height: auto; padding-top: .55rem; gap: .5rem .8rem; }
@@ -447,7 +456,7 @@
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
     <a href="#/search" data-route="search">Search</a>
-    <a href="#/review" data-route="review">Review</a>
+    <a href="#/review" data-route="review">Review<span class="waiting" id="nav-waiting" hidden></span></a>
   </nav>
   <span class="spacer"></span>
 </header>
@@ -1846,15 +1855,59 @@ async function applyStatus(id, status) {
 // tenth re-check are the same call.
 async function verifyEntry(id) {
   await api('/api/v1/verify/' + idPath(id), { method: 'POST' });
+  refreshQueues();
   return true;
 }
 async function rejectEntry(id, note) {
   await api('/api/v1/reject/' + idPath(id), { method: 'POST', body: { note } });
+  refreshQueues();
   return true;
 }
 async function liftRejection(id) {
   await api('/api/v1/reject/' + idPath(id), { method: 'DELETE' });
+  refreshQueues();
   return true;
+}
+
+/* ============================== review queues ============================== */
+
+// How much work the three queues hold, as one call rather than three
+// listings (design doc 0049). The web UI is where the reviewing happens,
+// so the count belongs on the tab that leads to it: a queue going quiet
+// and a queue being empty look identical until somebody opens it.
+//
+// Refreshed at boot, when the review queue is opened, and after every
+// ruling or save — verifying, rejecting and editing are what move a
+// count (each queue empties differently: design doc 0049 §1).
+let waiting = null;
+
+async function refreshQueues() {
+  try {
+    waiting = (await api('/api/v1/queues')).queues;
+  } catch {
+    waiting = null; // a nudge that cannot load must not become an error banner
+  }
+  const badge = $('#nav-waiting');
+  const total = waiting ? waiting.drafts + waiting.reported_wrong + waiting.past_expiry : 0;
+  badge.textContent = total;
+  badge.hidden = !total;
+  badge.title = total ? `${total} waiting: ${waiting.drafts} drafts, ${waiting.reported_wrong} reported wrong, ${waiting.past_expiry} past their expiry` : '';
+  const strip = $('#queue-strip');
+  if (strip) strip.innerHTML = queueStrip();
+}
+
+// The same three numbers as links into the feed each one counts. Zero is
+// worth printing here (unlike on the tab): on the review page it is the
+// answer to "is there anything else", and it is an answer nothing gave
+// before.
+function queueStrip() {
+  if (!waiting) return '';
+  return [
+    ['#/review', waiting.drafts, waiting.drafts === 1 ? 'draft' : 'drafts'],
+    ['#/search/reported-wrong', waiting.reported_wrong, 'reported wrong'],
+    ['#/search/stale', waiting.past_expiry, 'past expiry'],
+  ].map(([href, n, label]) =>
+    `<a class="badge${n ? ' draft' : ''}" href="${href}">${n} ${label}</a>`).join(' ');
 }
 
 /* ============================== review queue ============================== */
@@ -1882,9 +1935,12 @@ function viewReview() {
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
         stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
+      <span class="grow"></span>
+      <span id="queue-strip" style="display:flex;gap:.35rem">${queueStrip()}</span>
     </div>
     <div id="review-results"><div class="empty">…</div></div>`;
   $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
+  refreshQueues();
   runReview();
 }
 
@@ -2107,6 +2163,7 @@ async function viewEditor(id, prefix = '') {
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
       refreshTree();
+      refreshQueues(); // an edit is what clears the past-expiry queue (design doc 0037 §2.2)
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
@@ -2135,6 +2192,7 @@ $('#side-toggle').addEventListener('click', () => {
 });
 
 refreshTree();
+refreshQueues();
 route();
 </script>
 </body>

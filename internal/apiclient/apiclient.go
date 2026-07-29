@@ -191,6 +191,21 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	return out.Hits, err
 }
 
+// Queues returns how much work each review queue is holding — the three
+// feeds counted rather than listed (design doc 0049). Prefixes scopes it
+// to a subtree, as it scopes a search.
+func (c *Client) Queues(ctx context.Context, prefixes []string) (domain.QueueCounts, error) {
+	q := url.Values{}
+	for _, p := range prefixes {
+		q.Add("prefix", p)
+	}
+	var out struct {
+		Queues domain.QueueCounts `json:"queues"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/queues", q, nil, &out)
+	return out.Queues, err
+}
+
 // ContextResult mirrors the /api/v1/context response: the ranking plus
 // the full entries behind the top hits, expanded one hop through links.
 // Hits carries the ranking only — the knowledge travels once, in Entries

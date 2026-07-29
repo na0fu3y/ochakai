@@ -27,6 +27,7 @@ import (
 
 var clientCommands = map[string]func(context.Context, []string) error{
 	"search":    cmdSearch,
+	"queues":    cmdQueues,
 	"browse":    cmdBrowse,
 	"context":   cmdContext,
 	"get":       cmdGet,
@@ -56,12 +57,18 @@ var clientCommands = map[string]func(context.Context, []string) error{
 }
 
 // runClient dispatches a client command and maps errors to exit codes:
-// 0 success, 1 error.
+// 0 success, 1 error, 2 "the command ran and the answer is no"
+// (`queues --exit-code` with work waiting). Two codes rather than one
+// because a scheduled job must not read "the server is unreachable" as
+// "the queues are empty" — both are non-zero, and only one of them means
+// somebody has reviewing to do.
 func runClient(name string, args []string) int {
 	err := clientCommands[name](context.Background(), args)
 	switch {
 	case err == nil, errors.Is(err, flag.ErrHelp):
 		return 0
+	case errors.Is(err, errWorkPending):
+		return 2
 	case errors.Is(err, errReported):
 		return 1
 	}
@@ -71,6 +78,11 @@ func runClient(name string, args []string) int {
 
 // errReported means the FlagSet already printed the problem.
 var errReported = errors.New("usage error")
+
+// errWorkPending is not a failure: the command did what it was asked and
+// is reporting the answer through the exit status, the way `git diff
+// --exit-code` and `grep -q` do. Nothing is printed for it.
+var errWorkPending = errors.New("work is waiting")
 
 // helpOutput is where a command's own help goes. It is os.Stderr, which
 // is where the flag package would have put it anyway; naming it is what
@@ -316,6 +328,58 @@ func cmdSearch(ctx context.Context, args []string) error {
 			line += " — " + h.Description
 		}
 		fmt.Println(line)
+	}
+	return nil
+}
+
+func cmdQueues(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"queues",
+		"Usage: ochakai queues [flags]\n\nPrint how much work each review queue is holding: drafts waiting to be\npublished or turned down, entries whose failure reports are unanswered,\nentries past the expiry their author declared. One line per queue —\ncount, name, and the command that lists it — so the next step is the\ntext on the line.\nThe verification-age feed is not here: it ranks every verified entry\nrather than holding the ones that need something, so its size is the\nsize of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any queue is non-empty and\n0 when all three are, which is how a scheduled job goes red on work\nnobody has picked up. An error still exits 1, so \"unreachable\" cannot\nbe read as \"nothing to do\".",
+		"  ochakai queues\n  ochakai queues --prefix teams/growth      # our subtree only\n  ochakai queues --json | jq .queues.drafts\n  ochakai queues --exit-code                # in CI: red while somebody owes a review\n")
+	var prefixes repeated
+	fs.Var(&prefixes, "prefix", "count only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)")
+	exitCode := fs.Bool("exit-code", false, "exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		fs.Usage()
+		return errReported
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	counts, err := c.Queues(ctx, prefixes)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		if err := printJSON(map[string]any{"queues": counts}); err != nil {
+			return err
+		}
+	} else {
+		scope := ""
+		for _, p := range prefixes {
+			scope += " --prefix " + p
+		}
+		for _, q := range []struct {
+			count int64
+			name  string
+			lists string
+		}{
+			{counts.Drafts, "drafts", "--sort usage --status draft"},
+			{counts.ReportedWrong, "reported wrong", "--sort failed"},
+			{counts.PastExpiry, "past expiry", "--sort stale_after"},
+		} {
+			fmt.Printf("%d\t%s\tochakai search %s%s\n", q.count, q.name, q.lists, scope)
+		}
+	}
+	if *exitCode && counts.Total() > 0 {
+		return errWorkPending
 	}
 	return nil
 }

@@ -23,6 +23,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
+  queues                  how much work each review queue is holding
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
@@ -433,6 +434,41 @@ Flags:
 Examples:
   ochakai delete terms/obsolete-kpi
   ochakai purge terms/obsolete-kpi
+```
+
+## ochakai queues
+
+```
+Usage: ochakai queues [flags]
+
+Print how much work each review queue is holding: drafts waiting to be
+published or turned down, entries whose failure reports are unanswered,
+entries past the expiry their author declared. One line per queue —
+count, name, and the command that lists it — so the next step is the
+text on the line.
+The verification-age feed is not here: it ranks every verified entry
+rather than holding the ones that need something, so its size is the
+size of the knowledge base and never reaches zero.
+With --exit-code the command exits 2 while any queue is non-empty and
+0 when all three are, which is how a scheduled job goes red on work
+nobody has picked up. An error still exits 1, so "unreachable" cannot
+be read as "nothing to do".
+
+Flags:
+  -exit-code
+    	exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI
+  -json
+    	print the raw JSON response
+  -prefix path
+    	count only entries under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai queues
+  ochakai queues --prefix teams/growth      # our subtree only
+  ochakai queues --json | jq .queues.drafts
+  ochakai queues --exit-code                # in CI: red while somebody owes a review
 ```
 
 ## ochakai reembed

@@ -1991,6 +1991,77 @@ paths:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/queues:
+    get:
+      operationId: getQueues
+      summary: How much work each review queue is holding
+      description: >
+        The three listing feeds of GET /api/v1/knowledge, counted rather
+        than listed (design doc 0049): drafts waiting to be published or
+        turned down (sort=usage with status=draft), entries whose failure
+        reports are still unanswered (sort=failed), and entries past the
+        expiry their author declared (sort=stale_after). The feeds answer "what is
+        waiting"; this answers "is anything", which is the question a
+        scheduled job can ask cheaply — and the one nothing could answer
+        without paging through the work itself.
+
+        The verification-age feed (sort=verified_at) has no count here.
+        It ranks every verified entry rather than holding the ones that
+        need something, so its size is the size of the knowledge base and
+        never reaches zero; a number nobody can drive down is not a
+        queue.
+
+        Counts respect nothing but prefix. Every other filter is a
+        question about which entries, and once the answer here is "yes"
+        the feed itself is where that question is asked. Rejected and
+        soft-deleted entries are excluded, exactly as the feeds exclude
+        them. An entry can sit in more than one queue and is counted in
+        each.
+      parameters:
+        - name: prefix
+          in: query
+          description: >
+            Count only what lives under this path, e.g. teams/growth —
+            matched on segment boundaries, repeatable and OR-ed, as on
+            search (design doc 0041). This is how a team asks about its
+            own queue on a deployment it shares.
+          schema: { type: array, items: { type: string } }
+          explode: true
+      responses:
+        "200":
+          description: The queue sizes.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queues: { $ref: "#/components/schemas/QueueCounts" }
+              examples:
+                work:
+                  summary: GET /api/v1/queues
+                  description: >
+                    Something to review, one entry reported wrong and not
+                    yet re-verified, nothing overdue.
+                  value:
+                    queues:
+                      drafts: 12
+                      reported_wrong: 1
+                      past_expiry: 0
+                empty:
+                  summary: A base that is kept up
+                  description: >
+                    All three at zero is the honest answer, and the one a
+                    quiet review queue could not be told apart from
+                    before this existed.
+                  value:
+                    queues:
+                      drafts: 0
+                      reported_wrong: 0
+                      past_expiry: 0
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/export:
     get:
       operationId: exportOKF
@@ -2592,6 +2663,32 @@ components:
         worked: { type: integer, description: Outcome reports saying the entry led to a correct result. }
         failed: { type: integer, description: Outcome reports saying the entry led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
+    QueueCounts:
+      type: object
+      description: >
+        The size of each queue a curator is meant to empty. Each one is a
+        feed that already exists, and every count has a way to be driven
+        to zero: rule on the draft, verify the entry that was reported
+        wrong, edit the one whose expiry passed.
+      properties:
+        drafts:
+          type: integer
+          description: >
+            Drafts waiting to be published or turned down — GET
+            /api/v1/knowledge?sort=usage&status=draft. Verifying does not
+            empty this one: confirming and publishing are different acts,
+            so a draft leaves when it is edited to another status or
+            rejected (design doc 0043 §3.2).
+        reported_wrong:
+          type: integer
+          description: Entries whose failure reports are still unanswered — sort=failed. Verifying takes one out.
+        past_expiry:
+          type: integer
+          description: >
+            Entries past the stale_after their author declared —
+            sort=stale_after. Verifying does not clear this one: the date
+            is the writer's declaration, so the entry leaves when someone
+            edits it (design doc 0037 §2.2).
     SearchHit:
       description: >
         One search or listing result: the projection plus what ranked it.

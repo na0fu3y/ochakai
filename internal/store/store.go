@@ -2041,6 +2041,35 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain
 	return pgx.CollectRows(rows, scanUsageHit)
 }
 
+// QueueCounts counts the three review queues in one pass: how many
+// entries each of ListByUsage's draft feed, ListByFailed and
+// ListByStaleAfter would return (design doc 0049). The predicates are
+// the feeds' own, spelled once more here rather than shared, because a
+// count and a listing want different queries — the alternative was
+// fetching up to a thousand rows three times to measure them.
+//
+// The filter is the same one the feeds take, so a count is scoped by
+// prefix the way the listings are: a team asks about its own subtree.
+func (s *Store) QueueCounts(ctx context.Context, f Filter) (domain.QueueCounts, error) {
+	where, args := f.buildWhere("k.")
+	// "Today" is UTC for the same reason ListByStaleAfter says so: a bare
+	// date needs no timezone, and current_date would take one from the
+	// session.
+	q := fmt.Sprintf(`
+		SELECT
+			count(*) FILTER (WHERE k.status = 'draft'),
+			count(*) FILTER (WHERE u.failed > 0
+				AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)),
+			count(*) FILTER (WHERE k.stale_after IS NOT NULL
+				AND k.stale_after <= (now() AT TIME ZONE 'UTC')::date)
+		FROM object k`+usageLateral+`
+		WHERE %[1]s`, where, lastVerifiedAt("k"))
+	var c domain.QueueCounts
+	err := s.pool.QueryRow(ctx, q, args...).
+		Scan(&c.Drafts, &c.ReportedWrong, &c.PastExpiry)
+	return c, err
+}
+
 // scanUsageHit reads a knowledge row followed by its usage totals (the
 // ListByUsage projection). Score stays 0 — this is a listing, not a search.
 func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {

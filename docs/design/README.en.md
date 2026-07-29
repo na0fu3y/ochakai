@@ -466,9 +466,9 @@ For the shape of the system rather than the history of it, read
 ## The verification loop and usage measurement
 
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
-  *Accepted; 0037 later added a third feed, and 0043 turns verify's record
+  *Accepted; 0037 later added a third feed, 0043 turns verify's record
   into an append to a verification ledger, so re-verification accumulates
-  as history.* Adds the `sort=failed`
+  as history, and 0049 counts the three queues.* Adds the `sort=failed`
   re-verification feed of entries agents reported wrong, worst first, and
   `POST /api/v1/verify/{id}` so that re-checking can be recorded — an
   unchanged PUT writes nothing and therefore cannot express "I looked
@@ -484,6 +484,24 @@ For the shape of the system rather than the history of it, read
   that batch.
   *For a user:* usage counts lag reads by seconds and can be lost in a
   crash; the knowledge itself never is.
+
+- **[0049 Counting the review queues](0049-queue-counts.md)** —
+  *Accepted.* Adds `GET /api/v1/queues` and `ochakai queues`: the three
+  feeds a curator empties — drafts waiting to be published or turned
+  down, entries whose failure reports are unanswered, entries past the
+  expiry their author declared — as counts rather than listings, scoped by `prefix` and
+  nothing else. 0025 made the queues emptiable; nothing told anyone they
+  were not empty, and a review queue going quiet looked exactly like one
+  being empty. The canary feed (`sort=verified_at`) is deliberately not
+  counted: it ranks every verified entry, so its size is the size of the
+  knowledge base and nobody can drive it to zero. Delivery is refused —
+  no mail, no chat, no webhooks, no address book, no scheduler inside the
+  server: `--exit-code` exits 2 while any queue is non-empty, and the
+  operator's own cron or CI is what pushes.
+  *For a user:* `ochakai queues` says whether anybody owes a review, and
+  each line carries the command that lists that queue; the web UI shows
+  the same counts on its Review tab. MCP does not get it — an agent's
+  ends of the loop are drafting and reporting outcomes.
 
 ## Concurrency and deletion
 
