@@ -618,6 +618,7 @@ last entry.
 
 ### Fixed
 
+<<<<<<< HEAD
 - **BREAKING** — **an object's history is at the object's address**, and
   a `log.md`'s two representations say the same thing (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.5, 3.8):
@@ -651,6 +652,20 @@ last entry.
 
   **This raises `docs/surface.md`'s PARAM ceiling from 18 to 19.** Said
   out loud, which is what the ceiling is for.
+=======
+- **One spelling decides what is reserved.** "Is this index.md or
+  log.md" was answered in four places — `domain.ReservedBundleName`,
+  which folded case, and three inline comparisons that did not (the
+  bundle address's write refusal, the import skip, and a copy in
+  `internal/okf` with no callers). The halves of one address disagreed:
+  at `Index.md` a concept was accepted and a file was refused with
+  "index.md and log.md are generated rather than stored". OKF SPEC §3.1
+  reserves exactly the two spellings it writes, so that is what
+  `ReservedBundleName` answers now, and it is the only one that answers.
+  `Index.md` is a file OKF says nothing about, and a bundle that carried
+  one gets it back (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2).
+>>>>>>> claude/index-md-lists-files
 
 - **The archive carries the history.** Design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.8 ends "the history

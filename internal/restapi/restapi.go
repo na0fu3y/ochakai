@@ -419,7 +419,7 @@ func Handler(svc *service.Service) http.Handler {
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
-			if _, base := splitReserved(path); isReserved(base) {
+			if _, base := splitReserved(path); domain.ReservedBundleName(base) {
 				writeJSON(w, http.StatusConflict, map[string]string{
 					"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)", base),
 				})
@@ -933,12 +933,6 @@ func splitReserved(path string) (dir, base string) {
 		return path[:i], path[i+1:]
 	}
 	return "", path
-}
-
-// isReserved reports whether a bundle path's last segment is one of the
-// two filenames OKF reserves (SPEC §3.1) — the generated ones.
-func isReserved(base string) bool {
-	return base == "index.md" || base == "log.md"
 }
 
 // wantsJSON reports whether the caller asked for the structured form of
