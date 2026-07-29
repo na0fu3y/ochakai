@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -187,4 +188,93 @@ func TestOneSpellingDecidesWhatIsReserved(t *testing.T) {
 	if !found {
 		t.Errorf("%s no longer spells the reserved names: this check now guards nothing", decides)
 	}
+}
+
+// An address the contract mentions but does not declare: everything
+// matching /api/v1/... in api/openapi.yaml, minus what its own `paths`
+// covers.
+var wireAddressRe = regexp.MustCompile(`/api/v1/[A-Za-z0-9_.{}/-]*`)
+
+// pastTense are the words that turn a retired address into history. A
+// removal cannot be explained without spelling what was removed, so the
+// signal cannot be the address — it has to be the tense around it.
+var pastTense = []string{"gone", "retired", "replaced", "used to", "was", "were", "old"}
+
+// Guard: the contract names no address it does not have, except to say
+// that address is gone.
+//
+// TestRetiredSpellingsAreNotTaught reads the tree for a list of literals
+// somebody has to remember to extend, and 0055's fold showed what that
+// costs: `POST /api/v1/verify/{id}` and `POST /api/v1/reject/{id}`
+// became one `POST /api/v1/review/{id}`, and four schema descriptions in
+// api/openapi.yaml went on saying a verification is "written by POST
+// /api/v1/verify/{id}" and a rejection is "cleared by DELETE". Every
+// counter in surface_test.go agreed the surface was 11 operations — the
+// endpoints were gone from `paths`, which is all those checks read —
+// while the prose beside them documented three addresses that answer
+// 404. It is the mistake issue #275 found in comments, one file over.
+//
+// Here nothing has to be remembered: `paths` is the list of addresses
+// that exist, so the list of addresses that do not is whatever else the
+// file says. The tense is what tells them apart — the four stale lines
+// were all in the present, and every note that records a removal was
+// already in the past.
+func TestContractNamesNoAddressItDoesNotHave(t *testing.T) {
+	spec := readWireSpec(t)
+	// A declared path matches by its static head: {path...} and {id...}
+	// are wildcards, and prose spells them filled in ("/api/v1/bundle/"
+	// is the root archive, "/api/v1/usage/queries/x" one entry's usage).
+	prefixes := make([]string, 0, 2*len(spec.Paths))
+	for path := range spec.Paths {
+		head, _, _ := strings.Cut(path, "{")
+		prefixes = append(prefixes, head, strings.TrimSuffix(head, "/"))
+	}
+	const contract = "../../api/openapi.yaml"
+	content, err := os.ReadFile(contract)
+	if err != nil {
+		t.Fatalf("read %s: %v", contract, err)
+	}
+	lines := strings.Split(string(content), "\n")
+	checked := 0
+	for i, line := range lines {
+		for _, mention := range wireAddressRe.FindAllString(line, -1) {
+			address := strings.TrimRight(mention, ".,;:)`")
+			if hasAnyPrefix(address, prefixes) {
+				continue
+			}
+			checked++
+			// A description wraps, so the sentence that says "gone" can
+			// sit a line or two above the address it is about.
+			if saysPast(lines[max(0, i-2) : i+1]) {
+				continue
+			}
+			t.Errorf("%s:%d names %s, which the contract does not declare — "+
+				"say it in the past tense if it is history, or fix the line\n\t%s",
+				contract, i+1, address, strings.TrimSpace(line))
+		}
+	}
+	if checked == 0 {
+		t.Log("the contract mentions no retired address: nothing to tell apart today")
+	}
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func saysPast(lines []string) bool {
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		for _, word := range pastTense {
+			if strings.Contains(lower, word) {
+				return true
+			}
+		}
+	}
+	return false
 }

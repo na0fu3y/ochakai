@@ -1,9 +1,10 @@
 // Package mcpserver exposes ochakai's MCP tools over streamable HTTP.
 // Tool names follow verb_object so they stay unambiguous next to other MCP
 // servers' tools (design doc §4). The REST API (internal/restapi) is a
-// superset of these tools: same operations plus bulk export/import and
-// the human-facing browse/revisions/backlinks endpoints (design doc
-// 0015 keeps those off MCP — agents use search/get_context; tool
+// superset of these tools: the same operations plus the archive of a
+// bundle path, the derived index.md and log.md, the reverse lookup
+// (search's links_to=), the human's ruling and file writes (design doc
+// 0015 §3.1 keeps those off MCP — agents use search/get_context; tool
 // schemas cost agent context, so the tool count is a budget).
 package mcpserver
 
