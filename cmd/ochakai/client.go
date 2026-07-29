@@ -31,8 +31,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"browse":    cmdBrowse,
 	"context":   cmdContext,
 	"get":       cmdGet,
-	"create":    cmdCreate,
-	"update":    cmdUpdate,
+	"put":       cmdPut,
 	"verify":    cmdVerify,
 	"reject":    cmdReject,
 	"delete":    cmdDelete,
@@ -785,7 +784,7 @@ func cmdBacklinks(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
-		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai update`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as attachment metadata\ndoes; --download saves the attachment files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
+		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge entry as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as attachment metadata\ndoes; --download saves the attachment files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
 		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n")
 	asJSON := fs.Bool("json", false, "print the whole read as JSON (document, summary, observed) instead of the document alone")
 	download := fs.String("download", "", "save the entry's attachments into this directory")
@@ -824,7 +823,7 @@ func cmdGet(ctx context.Context, args []string) error {
 		return err
 	}
 	// stdout stays the document and nothing else, so `ochakai get | …
-	// | ochakai update` is one pipe. What this instance observed is not
+	// | ochakai put` is one pipe. What this instance observed is not
 	// part of the document (design docs 0009, 0043 §3.5), so it goes
 	// where the attachment hints already go.
 	prov := "created by " + k.Observed.CreatedBy.String()
@@ -929,13 +928,30 @@ func cmdDetach(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdCreate(ctx context.Context, args []string) error {
+// cmdPut writes an entry, whether or not one was there. The wire has
+// been create-or-replace since design doc 0043 §3.5 — a PUT states what
+// the entry should say, and whether the id was free is a precondition
+// rather than a different act — but the CLI kept `create` and `update`,
+// so a caller had to answer a question the format does not ask. Two
+// commands, one endpoint, and a writer who guessed wrong got 409 or
+// clobbered something.
+//
+// The preconditions are where existence is expressed, as on the wire:
+// --only-if-new is If-None-Match "*" (what `create` always sent), and
+// --if-match is the version `update` took. Neither is the default,
+// because "write this" is what most callers mean.
+//
+// Named `put` and not `write` or `set`: it is the method it sends, and
+// this CLI is a thin client of the REST API (design docs 0004, 0007).
+func cmdPut(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
-		"create",
-		"Usage: ochakai create [flags] [id]\n\nCreate a knowledge entry from -f or stdin. Input is an OKF document\n(--- frontmatter with type, markdown body — the format `ochakai get`\nprints; title is optional, the id's last segment is the display name\nwhen it is absent) or JSON (see api/openapi.yaml). The id is the\nentry's path; pass it as the argument (it overrides an id in the\ninput, and OKF documents carry none — the path is the id). Entries\ndefault to draft; provenance is recorded from your Google identity.",
-		"  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai create insights/revenue-seasonality-v2\n  ochakai create runbook/restore -f entry.md\n")
+		"put",
+		"Usage: ochakai put [flags] <id>\n\nWrite a knowledge entry from -f or stdin, creating it or replacing\nwhat is there. Input is an OKF document (--- frontmatter with type,\nmarkdown body — the format `ochakai get` prints; title is optional,\nthe id's last segment is the display name when it is absent) or JSON\n(see api/openapi.yaml). The id is the entry's path; pass it as the\nargument (it overrides an id in the input, and OKF documents carry\nnone — the path is the id). New entries default to draft; provenance\nis recorded from your Google identity. Every change is kept as a\nrevision server-side.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the entry still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.",
+		"  ochakai put runbook/restore -f entry.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n")
 	file := fs.String("f", "", "input file (default: stdin)")
-	asJSON := fs.Bool("json", false, "print the created entry as JSON")
+	onlyIfNew := fs.Bool("only-if-new", false, "write only if the id is free; a taken id fails instead of being replaced")
+	ifMatch := fs.String("if-match", "", "write only if the entry still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does")
+	asJSON := fs.Bool("json", false, "print the written entry as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -957,7 +973,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 	// inputs can get one. Saying so here beats the server's `invalid id ""`,
 	// which describes the id format and not the missing argument.
 	if k.ID == "" {
-		return errors.New("no id: pass the entry's path as the argument (e.g. `ochakai create queries/monthly-revenue -f entry.md`)")
+		return errors.New("no id: pass the entry's path as the argument (e.g. `ochakai put queries/monthly-revenue -f entry.md`)")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -967,18 +983,26 @@ func cmdCreate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	// If-None-Match "*": create means create. A PUT with no precondition
-	// would replace an entry that is already there, which is what
-	// `ochakai update` is for.
-	created, _, _, notes, err := c.Put(ctx, k.ID, doc, "", true)
+	written, created, changed, notes, err := c.Put(ctx, k.ID, doc, *ifMatch, *onlyIfNew)
 	if err != nil {
+		var apiErr *apiclient.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
+			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, redo the edit, and retry with the new content_hash", k.ID, k.ID)
+		}
 		return err
 	}
-	reportNotes(okf.NoteStoredClaim(notes, claimed, created.Document))
+	reportNotes(okf.NoteStoredClaim(notes, claimed, written.Document))
 	if *asJSON {
-		return printJSON(created)
+		return printJSON(written)
 	}
-	fmt.Printf("created %s (%s)\n", created.URI(), created.Summary.Status)
+	switch {
+	case created:
+		fmt.Printf("created %s (%s)\n", written.URI(), written.Summary.Status)
+	case !changed:
+		fmt.Printf("unchanged %s (%s)\n", written.URI(), written.Summary.Status)
+	default:
+		fmt.Printf("updated %s (%s)\n", written.URI(), written.Summary.Status)
+	}
 	return nil
 }
 
@@ -1000,51 +1024,6 @@ func reportNotes(notes []string) {
 	}
 }
 
-func cmdUpdate(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"update",
-		"Usage: ochakai update [flags] <id>\n\nReplace a knowledge entry from -f or stdin (OKF document or JSON;\nthe id comes from the argument, the type from the input). Every\nchange is kept as a revision server-side. With --if-match the update\nis conditional: it lands only if the entry still has the version you\nread, and fails instead of overwriting someone else's edit.",
-		"  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue\n  ochakai update metrics/revenue -f revenue.md\n  ochakai update metrics/revenue -f revenue.md --if-match \"$(ochakai get metrics/revenue --json | jq -r .summary.content_hash)\"\n")
-	file := fs.String("f", "", "input file (default: stdin)")
-	ifMatch := fs.String("if-match", "", "update only if the entry still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does")
-	asJSON := fs.Bool("json", false, "print the updated entry as JSON")
-	id, _, err := idArgs(fs, args, 1)
-	if err != nil {
-		return err
-	}
-	k, claimed, err := readEntry(*file)
-	if err != nil {
-		return err
-	}
-	k.ID = id
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	doc, err := documentOf(k)
-	if err != nil {
-		return err
-	}
-	updated, _, changed, notes, err := c.Put(ctx, id, doc, *ifMatch, false)
-	if err != nil {
-		var apiErr *apiclient.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
-			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, redo the edit, and retry with the new content_hash", id, id)
-		}
-		return err
-	}
-	reportNotes(okf.NoteStoredClaim(notes, claimed, updated.Document))
-	if *asJSON {
-		return printJSON(updated)
-	}
-	if !changed {
-		fmt.Printf("unchanged %s (%s)\n", updated.URI(), updated.Summary.Status)
-		return nil
-	}
-	fmt.Printf("updated %s (%s)\n", updated.URI(), updated.Summary.Status)
-	return nil
-}
-
 // cmdVerify records a verification. Re-verifying an entry that is already
 // verified is the point as much as promoting a draft: it is how a review
 // feed empties (design doc 0025 §6), and `update` cannot express it —
@@ -1052,7 +1031,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`update` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.",
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the entry as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes an entry out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the entry: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.\nVerifying a rejected entry lifts the rejection.",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
 	asJSON := fs.Bool("json", false, "print the verified entry as JSON")
 	id, _, err := idArgs(fs, args, 1)

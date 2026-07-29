@@ -27,8 +27,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
-  create [id] [-f file]   create an entry from OKF markdown or JSON
-  update <id>             replace an entry (every change kept as a revision)
+  put <id> [-f file]      write an entry from OKF markdown or JSON, creating
+                          or replacing (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified entry too)
   delete <id>             soft-delete an entry (history retained)
   purge <id>              hard-delete a soft-deleted entry, freeing its id
@@ -196,32 +196,6 @@ Examples:
   ochakai context "activation rate" --prefix teams/growth --prefix company
 ```
 
-## ochakai create
-
-```
-Usage: ochakai create [flags] [id]
-
-Create a knowledge entry from -f or stdin. Input is an OKF document
-(--- frontmatter with type, markdown body — the format `ochakai get`
-prints; title is optional, the id's last segment is the display name
-when it is absent) or JSON (see api/openapi.yaml). The id is the
-entry's path; pass it as the argument (it overrides an id in the
-input, and OKF documents carry none — the path is the id). Entries
-default to draft; provenance is recorded from your Google identity.
-
-Flags:
-  -f string
-    	input file (default: stdin)
-  -json
-    	print the created entry as JSON
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai create insights/revenue-seasonality-v2
-  ochakai create runbook/restore -f entry.md
-```
-
 ## ochakai delete
 
 ```
@@ -281,7 +255,7 @@ Usage: ochakai get [flags] <id>
 
 Print one knowledge entry as an OKF document (YAML frontmatter +
 markdown body), and nothing else, so the output round-trips through
-`ochakai update`. Who wrote and confirmed it is an observation rather
+`ochakai put`. Who wrote and confirmed it is an observation rather
 than part of the document, so it goes to stderr, as attachment metadata
 does; --download saves the attachment files themselves (an agent can
 then read them from disk). --json prints the whole read instead: the
@@ -441,6 +415,42 @@ Flags:
 Examples:
   ochakai delete terms/obsolete-kpi
   ochakai purge terms/obsolete-kpi
+```
+
+## ochakai put
+
+```
+Usage: ochakai put [flags] <id>
+
+Write a knowledge entry from -f or stdin, creating it or replacing
+what is there. Input is an OKF document (--- frontmatter with type,
+markdown body — the format `ochakai get` prints; title is optional,
+the id's last segment is the display name when it is absent) or JSON
+(see api/openapi.yaml). The id is the entry's path; pass it as the
+argument (it overrides an id in the input, and OKF documents carry
+none — the path is the id). New entries default to draft; provenance
+is recorded from your Google identity. Every change is kept as a
+revision server-side.
+With --only-if-new the write lands only if the id is free, and fails
+instead of replacing. With --if-match it lands only if the entry still
+has the version you read, and fails instead of overwriting someone
+else's edit.
+
+Flags:
+  -f string
+    	input file (default: stdin)
+  -if-match version
+    	write only if the entry still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does
+  -json
+    	print the written entry as JSON
+  -only-if-new
+    	write only if the id is free; a taken id fails instead of being replaced
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai put runbook/restore -f entry.md
+  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new
 ```
 
 ## ochakai queues
@@ -712,33 +722,6 @@ Examples:
   claude mcp add --transport http ochakai http://127.0.0.1:8098/mcp
 ```
 
-## ochakai update
-
-```
-Usage: ochakai update [flags] <id>
-
-Replace a knowledge entry from -f or stdin (OKF document or JSON;
-the id comes from the argument, the type from the input). Every
-change is kept as a revision server-side. With --if-match the update
-is conditional: it lands only if the entry still has the version you
-read, and fails instead of overwriting someone else's edit.
-
-Flags:
-  -f string
-    	input file (default: stdin)
-  -if-match version
-    	update only if the entry still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting an entry does not move it: only an edit does
-  -json
-    	print the updated entry as JSON
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai get metrics/revenue | $EDITOR /dev/stdin | ochakai update metrics/revenue
-  ochakai update metrics/revenue -f revenue.md
-  ochakai update metrics/revenue -f revenue.md --if-match "$(ochakai get metrics/revenue --json | jq -r .summary.content_hash)"
-```
-
 ## ochakai usage
 
 ```
@@ -793,7 +776,7 @@ are the same command, and re-checking is what takes an entry out of
 both review feeds (--sort verified_at, --sort failed).
 It does not edit the entry: the lifecycle status and the ETag stay put,
 because confirming knowledge and publishing it are different acts. Use
-`update` to move a draft to stable.
+`put` to move a draft to stable.
 Verifying a rejected entry lifts the rejection.
 
 Flags:

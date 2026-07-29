@@ -110,14 +110,13 @@ verify・reject(2)・usage(2)・reembed で 12 操作。残る 2 つは §3.5 �
 - `report_outcome`
 - `search_knowledge`
 
-## CLI (28)
+## CLI (27)
 
 - `ochakai attach`
 - `ochakai backlinks`
 - `ochakai browse`
 - `ochakai completion`
 - `ochakai context`
-- `ochakai create`
 - `ochakai delete`
 - `ochakai detach`
 - `ochakai export`
@@ -127,6 +126,7 @@ verify・reject(2)・usage(2)・reembed で 12 操作。残る 2 つは §3.5 �
 - `ochakai mcp-stdio`
 - `ochakai move`
 - `ochakai purge`
+- `ochakai put`
 - `ochakai queues`
 - `ochakai reembed`
 - `ochakai reject`
@@ -135,7 +135,6 @@ verify・reject(2)・usage(2)・reembed で 12 操作。残る 2 つは §3.5 �
 - `ochakai search`
 - `ochakai stats`
 - `ochakai ui`
-- `ochakai update`
 - `ochakai usage`
 - `ochakai use`
 - `ochakai verify`

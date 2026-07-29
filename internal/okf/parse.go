@@ -12,7 +12,7 @@ import (
 
 // Parse is the inverse of Document: it reads an OKF concept document
 // (YAML frontmatter + markdown body) into a knowledge entry, so
-// `ochakai get` output round-trips through `ochakai update`. Server-owned
+// `ochakai get` output round-trips through `ochakai put`. Server-owned
 // keys (generated, verified, created_by, rejected_*, and their v0.1
 // spellings) never reach a ledger — provenance comes from authentication,
 // never from the payload (design doc 0009) — but they are not thrown away

@@ -450,10 +450,33 @@ human-reviewed`** を出す。検証台帳(0043 §3.2)から導く: `human:` の
 
 - **REST = yes。** 唯一の契約。§3.5 の 8 面。`openapi.yaml` は
   `bundle` の 3 メソッドと、表現ごとのスキーマを記述する。
-- **CLI = yes。** `ochakai get` / `put`(旧 `update`)/ `rm` はパスを取る。
-  `ochakai ls`(旧 `browse`)は生成された `index.md`、`ochakai log` は
-  `log.md` を出す。`attach` / `detach` は `put` / `rm` に吸収される。
+- **CLI = yes。** `ochakai put`(旧 `create` + `update`)は 1 本になる —
+  ワイヤが create-or-replace である以上(0043 §3.5)、存在の有無は
+  precondition であって別の行為ではなく、2 本あることは呼び手に
+  フォーマットが訊いていない問いを答えさせていた。`--only-if-new` が
+  `create` の送っていた `If-None-Match: *`、`--if-match` が `update` の
+  取っていた版である。`ochakai log` は `log.md` を出す。
   `export` / `import` はほぼ恒等の tar 転送になる。
+
+  **実装時に採らなかったものが 2 つある**(0048 §2.3 に従い、本節を直接
+  直してある)。
+
+  1. **`ls` / `rm` という綴りは採らない。** `browse` と `delete` のまま
+     である。0049 §3.4 が `ochakai status` を退けたのと同じ理由で —
+     このプロジェクトの語彙は `verify` / `reject` / `queues` であって
+     unix の習慣ではなく、片方だけを unix 風にすると CLI の中に由来の
+     違う 2 つの語彙が並ぶ。改名は利用者が打つものを変える支払いであり、
+     ここではその対価が「他所の慣習に似ること」しかなかった。
+  2. **`attach` / `detach` は吸収しない。** 吸収するには
+     `get` / `put` / `delete` の引数をバンドルパス(`<id>.md`)に変える
+     必要があり、そうすると **id を取るコマンド**(`verify` / `reject` /
+     `usage` / `report` / `move` / `revisions`)と**パスを取るコマンド**が
+     CLI の中で割れる。REST では `bundle/{path}` と `verify/{id}` が
+     別の**住所**なので割れても筋が通るが、CLI では同じエントリを
+     指す 2 つの綴りになる — §3.5 が REST から取り除いたものそのものが
+     CLI に現れる。`.md` が全呼び出しと全ドキュメント例に付く支払いも、
+     1 の改名より大きい。ファイルを 1 本の書き込み面に畳むなら、
+     引数の形をどうするかを先に決める別の記録が要る。
 - **MCP = yes。** ツールは 8 本: `search_knowledge` / `get_context` /
   `get_knowledge` / `put_knowledge`(`{path, document}`)/ `report_outcome` /
   `delete_knowledge` / `get_knowledge_usage` / `get_attachment`。

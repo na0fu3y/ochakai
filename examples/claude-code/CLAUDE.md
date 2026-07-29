@@ -34,7 +34,7 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
 - `ochakai attach <id> <file>` — attach a file to an entry
   (png/jpeg/webp, pdf, plain text; reference it from the body so the
   caption is searchable). If you learn something by looking at an
-  attachment, write it into the body with `ochakai update` — knowledge
+  attachment, write it into the body with `ochakai put` — knowledge
   locked in pixels is invisible to search.
 - `ochakai report <id> worked|failed [--note "what went wrong"]`
   — after acting on knowledge (running an attested computation, running SQL you
@@ -42,8 +42,8 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
   flag verified entries for re-verification, so the next agent doesn't
   trust a stale entry blind. Always report `failed` when a verified entry
   led you to a wrong number.
-- `ochakai create <id> -f entry.md` — write a learning back (OKF markdown
-  as printed by `get`, or JSON; see `ochakai create -h`). The id is the
+- `ochakai put <id> -f entry.md` — write a learning back (OKF markdown
+  as printed by `get`, or JSON; see `ochakai put -h`). The id is the
   entry's path (`queries/sales/monthly-revenue`) and it is an argument:
   an OKF document does not carry one. Entries start as `draft`; your
   identity is recorded as provenance automatically.
