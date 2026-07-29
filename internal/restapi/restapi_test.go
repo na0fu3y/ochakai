@@ -90,6 +90,45 @@ func TestBadRequestValidation(t *testing.T) {
 	}
 }
 
+// TestReviewRefusesRulingsItCannotRecord pins the two ways a ruling is
+// refused before any store access (design doc 0055 §§3.2-3.3): a value
+// outside the vocabulary, and a note where nothing can carry one.
+//
+// A note is the case worth a test. Dropping it would be the quiet
+// failure: a reviewer who wrote down why, and finds later that nowhere
+// kept it, is worse off than one told at the time. It belongs to
+// `rejected` alone — a verification says the entry is right as it
+// stands, and anything more to say about it belongs in the entry.
+//
+// These live here rather than beside the integration test because the
+// checked server validates every request against the spec, and a request
+// meant to be refused is one the spec is right to reject.
+func TestReviewRefusesRulingsItCannotRecord(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct {
+		name, body, wantSubstr string
+	}{
+		{"unknown ruling", `{"ruling":"approved"}`, "ruling must be"},
+		{"no ruling", `{}`, "ruling must be"},
+		{"note on a verification", `{"ruling":"verified","note":"looks right"}`, "carries no note"},
+		{"note on a withdrawal", `{"ruling":"withdrawn","note":"changed my mind"}`, "carries no note"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/review/metrics/revenue", strings.NewReader(c.body))
+			req.Header.Set("Content-Type", "application/json")
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("POST %s = %d, want 400 (body: %s)", c.body, rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), c.wantSubstr) {
+				t.Errorf("POST %s body %q does not mention %q", c.body, rec.Body, c.wantSubstr)
+			}
+		})
+	}
+}
+
 // TestBundleAddressesRefuseByPath pins the one refusal that is a
 // property of the address rather than of what is stored at it: the two
 // names OKF reserves per directory are generated from the bundle, so a

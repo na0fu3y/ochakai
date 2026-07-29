@@ -390,7 +390,7 @@ knowledge has stopped being true (design doc
 
 | Feed | What it lists | What empties it |
 |---|---|---|
-| `sort=verified_at` | Verified entries by verification age, oldest first | Re-verifying — `POST /api/v1/verify/{id}` appends to the entry's ledger |
+| `sort=verified_at` | Verified entries by verification age, oldest first | Re-verifying — `POST /api/v1/review/{id}` with `ruling: verified` appends to the entry's ledger |
 | `sort=failed` | Entries with unanswered `failed` outcome reports, worst first | Re-verifying, same call |
 | `sort=stale_after` | Entries past the expiry their own author declared | Editing the entry to re-declare the date |
 

@@ -74,7 +74,7 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 			t.Fatalf("RecordMiss: %v", err)
 		}
 	}
-	mid, err := s.Stats(ctx, since)
+	mid, err := s.Stats(ctx, since, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.Stats(ctx, since)
+	got, err := s.Stats(ctx, since, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	// A window that starts after everything does not see any of it: the
 	// flow numbers answer for the window they were asked about, and
 	// nothing can be recorded in the future.
-	empty, err := s.Stats(ctx, time.Now().Add(time.Hour))
+	empty, err := s.Stats(ctx, time.Now().Add(time.Hour), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := s.Stats(ctx, time.Now().Add(-time.Hour))
+	st, err := s.Stats(ctx, time.Now().Add(-time.Hour), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

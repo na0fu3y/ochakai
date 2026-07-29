@@ -224,7 +224,7 @@ jobs:
       - run: |
           TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
           waiting=$(curl -sf -H "Authorization: Bearer $TOKEN" \
-            "$OCHAKAI_URL/api/v1/queues" | jq '.queues | add')
+            "$OCHAKAI_URL/api/v1/stats" | jq '.queues | add')
           echo "review queue: $waiting waiting"
           [ "$waiting" -eq 0 ] || { echo "::error::$waiting waiting for review"; exit 1; }
 ```

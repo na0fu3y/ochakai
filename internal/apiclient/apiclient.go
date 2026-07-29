@@ -226,16 +226,19 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 // Queues returns how much work each review queue is holding — the three
 // feeds counted rather than listed (design doc 0049). Prefixes scopes it
 // to a subtree, as it scopes a search.
+//
+// It reads the stats face, which carries the same three numbers from the
+// same query: GET /api/v1/queues was a second address over them and is
+// gone (design doc 0049 §3.1). The convenience stays here rather than at
+// the endpoint, which is where a convenience belongs — `ochakai queues`
+// and the web UI's banner both want the three numbers alone, and neither
+// is a reason for the server to offer a second way to ask.
 func (c *Client) Queues(ctx context.Context, prefixes []string) (domain.QueueCounts, error) {
-	q := url.Values{}
-	for _, p := range prefixes {
-		q.Add("prefix", p)
+	st, err := c.Stats(ctx, 0, prefixes)
+	if err != nil {
+		return domain.QueueCounts{}, err
 	}
-	var out struct {
-		Queues domain.QueueCounts `json:"queues"`
-	}
-	err := c.doJSON(ctx, http.MethodGet, "/api/v1/queues", q, nil, &out)
-	return out.Queues, err
+	return st.Queues, nil
 }
 
 // ContextResult mirrors the /api/v1/context response: the ranking plus
@@ -447,42 +450,44 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
 }
 
-// Verify appends a verification against the entry as it stands (POST
-// /api/v1/verify/{id}). The first confirmation and the tenth re-check are
-// the same call — the re-check is what takes an entry out of the review
-// feeds (design doc 0025 §6), and Update cannot do it. It does not touch
-// the document, so the entry's status and ETag do not move.
-func (c *Client) Verify(ctx context.Context, id string) (*domain.View, error) {
-	var k domain.View
-	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/verify/", id), nil, nil, &k); err != nil {
-		return nil, err
-	}
-	return &k, nil
-}
-
-// Reject records that the entry was turned down, with an optional reason
-// (POST /api/v1/reject/{id}). Like Verify it is a ruling, not an edit:
-// the document keeps its lifecycle status, and the entry drops out of
-// searches that did not ask for rejected ones (design doc 0043 §3.3).
-func (c *Client) Reject(ctx context.Context, id, note string) (*domain.View, error) {
+// review records one human ruling on the entry (POST
+// /api/v1/review/{id}) — the one face that used to be three (design doc
+// 0055 §3.1). None of the three rulings edits the entry: the document,
+// its lifecycle status and its ETag all stay put, because ruling on
+// knowledge and publishing it are different acts (design doc 0043
+// §§3.2-3.3).
+func (c *Client) review(ctx context.Context, id, ruling, note string) (*domain.View, error) {
 	var k domain.View
 	body := struct {
-		Note string `json:"note"`
-	}{Note: note}
-	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/reject/", id), nil, body, &k); err != nil {
+		Ruling string `json:"ruling"`
+		Note   string `json:"note,omitempty"`
+	}{Ruling: ruling, Note: note}
+	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/review/", id), nil, body, &k); err != nil {
 		return nil, err
 	}
 	return &k, nil
 }
 
-// LiftRejection withdraws a ruling (DELETE /api/v1/reject/{id}). A 404
-// when the entry carries no rejection.
+// Verify appends a verification against the entry as it stands. The first
+// confirmation and the tenth re-check are the same call — the re-check is
+// what takes an entry out of the review feeds (design doc 0025 §6), and
+// Update cannot do it.
+func (c *Client) Verify(ctx context.Context, id string) (*domain.View, error) {
+	return c.review(ctx, id, "verified", "")
+}
+
+// Reject records that the entry was turned down, with an optional reason.
+// The entry drops out of searches that did not ask for rejected ones
+// (design doc 0043 §3.3).
+func (c *Client) Reject(ctx context.Context, id, note string) (*domain.View, error) {
+	return c.review(ctx, id, "rejected", note)
+}
+
+// LiftRejection withdraws a rejection. A 404 when the entry carries none:
+// lifting nothing is a mistake worth reporting. Nothing is deleted — the
+// verifications stay, and the withdrawal is its own row in the history.
 func (c *Client) LiftRejection(ctx context.Context, id string) (*domain.View, error) {
-	var k domain.View
-	if err := c.doJSON(ctx, http.MethodDelete, escapedPath("/api/v1/reject/", id), nil, nil, &k); err != nil {
-		return nil, err
-	}
-	return &k, nil
+	return c.review(ctx, id, "withdrawn", "")
 }
 
 // Purge hard-deletes an entry that is already soft-deleted, freeing its
@@ -576,11 +581,16 @@ func (c *Client) ReportOutcome(ctx context.Context, id, outcome, note string) (*
 // Stats fetches the instance's view of the improvement loop
 // (GET /api/v1/stats): what the base is made of, what review did in the
 // last days days, what callers reported, and what they searched for and
-// did not find. days 0 leaves the server's default (30).
-func (c *Client) Stats(ctx context.Context, days int) (*domain.Stats, error) {
-	var q url.Values
+// did not find. days 0 leaves the server's default (30), and prefixes
+// scopes every number keyed by an entry to those subtrees — the misses
+// excepted, which belong to no subtree (design doc 0051 §3.7).
+func (c *Client) Stats(ctx context.Context, days int, prefixes []string) (*domain.Stats, error) {
+	q := url.Values{}
 	if days != 0 {
-		q = url.Values{"days": {strconv.Itoa(days)}}
+		q.Set("days", strconv.Itoa(days))
+	}
+	for _, p := range prefixes {
+		q.Add("prefix", p)
 	}
 	var st domain.Stats
 	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/stats", q, nil, &st); err != nil {

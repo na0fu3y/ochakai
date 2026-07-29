@@ -41,7 +41,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	t.Cleanup(func() { deleteMisses(ctx, t, dbURL, nonsense) })
 
 	since := time.Now().Add(-time.Hour)
-	before, err := s.Stats(ctx, since)
+	before, err := s.Stats(ctx, since, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.Stats(ctx, since)
+	got, err := s.Stats(ctx, since, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	if n := countMisses(ctx, t, dbURL, nonsense); n != 2 {
 		t.Errorf("the question was recorded %d times, want 2 (the search and the context call)", n)
 	}
-	if on, err := svc.Stats(ctx, 1); err != nil {
+	if on, err := svc.Stats(ctx, 1, nil); err != nil {
 		t.Fatal(err)
 	} else if !on.Misses.Recording {
 		t.Error("misses.recording is false on a deployment that records them")
@@ -89,7 +89,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	if err := s.FlushUsage(ctx); err != nil {
 		t.Fatal(err)
 	}
-	after, err := off.Stats(ctx, 1)
+	after, err := off.Stats(ctx, 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestStatsWindowIsBounded(t *testing.T) {
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler)}
 
 	for _, days := range []int{-1, maxStatsWindow + 1} {
-		_, err := svc.Stats(ctx, days)
+		_, err := svc.Stats(ctx, days, nil)
 		var invalid *InvalidInputError
 		if err == nil || !errors.As(err, &invalid) {
 			t.Errorf("Stats(%d) = %v, want an invalid-input error", days, err)
@@ -128,7 +128,7 @@ func TestStatsWindowIsBounded(t *testing.T) {
 			t.Errorf("Stats(%d) does not say what the limit is: %v", days, err)
 		}
 	}
-	st, err := svc.Stats(ctx, 0)
+	st, err := svc.Stats(ctx, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
