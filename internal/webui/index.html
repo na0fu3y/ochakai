@@ -1391,6 +1391,21 @@ function dirCard(prefix, d) {
   </article>`;
 }
 
+// fileCard is one file object sitting in this directory — the third
+// thing an index.md lists (design doc 0046 §3.7). It links to the
+// object's own address, because that is where the bytes are; a file
+// belongs to no entry unless one shows it.
+function fileCard(f) {
+  const href = BASE + '/api/v1/bundle/' + idPath(f.path);
+  return `<article class="card">
+    <div class="head">
+      <span class="type-ico">📄</span>
+      <a class="title mono" href="${href}" target="_blank" rel="noopener">${esc(f.name)}</a>
+      <span class="meta">${esc(f.media_type || '')} · ${fmtSize(f.size)}</span>
+    </div>
+  </article>`;
+}
+
 // loadDirIndex fetches one browse level and renders it into container
 // (which the caller seeded with a placeholder). Entry cards reuse the
 // search result card — browse entries carry no attrs/attachments, so
@@ -1401,10 +1416,11 @@ async function loadDirIndex(container, prefix, emptyText) {
     if (!container.isConnected) return; // navigated away while loading
     const dirs = (res.dirs || []).map(d => dirCard(prefix, d)).join('');
     const entries = (res.entries || []).map(hitCard).join('');
+    const files = (res.files || []).map(fileCard).join('');
     const note = res.truncated
       ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
          better split into subdirectories.</div>` : '';
-    container.innerHTML = (dirs + entries + note) || `<div class="empty">${emptyText}</div>`;
+    container.innerHTML = (dirs + entries + files + note) || `<div class="empty">${emptyText}</div>`;
   } catch (e) {
     if (!container.isConnected) return;
     container.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;

@@ -64,49 +64,49 @@ func TestIntegrationBrowse(t *testing.T) {
 
 	// The root is the top-level segments of the shared test DB; our
 	// directory must be there with its subtree count.
-	rootDirs, _, _, err := s.Browse(ctx, "")
+	root, err := s.Browse(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	rootCounts := map[string]int{}
-	for _, d := range rootDirs {
+	for _, d := range root.Dirs {
 		rootCounts[d.Name] = d.Count
 	}
 	if rootCounts["it-br-sales"] != 2 || rootCounts["it-br_x"] != 1 {
 		t.Errorf("root dir counts wrong: %v", rootCounts)
 	}
 
-	dirs, entries, truncated, err := s.Browse(ctx, "it-br-sales/")
+	lvl, err := s.Browse(ctx, "it-br-sales/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if truncated {
+	if lvl.Truncated {
 		t.Error("small listing must not truncate")
 	}
-	if len(dirs) != 1 || dirs[0].Name != "regions" || dirs[0].Count != 1 {
-		t.Errorf("dirs = %+v, want regions(1)", dirs)
+	if len(lvl.Dirs) != 1 || lvl.Dirs[0].Name != "regions" || lvl.Dirs[0].Count != 1 {
+		t.Errorf("dirs = %+v, want regions(1)", lvl.Dirs)
 	}
-	if len(entries) != 1 || entries[0].ID != "it-br-sales/monthly" || entries[0].Type != domain.TypeComputations ||
-		entries[0].Title != "t:it-br-sales/monthly" || entries[0].Description != "d:it-br-sales/monthly" ||
-		entries[0].Status != domain.StatusStable {
-		t.Errorf("entries = %+v", entries)
+	if e := lvl.Entries; len(e) != 1 || e[0].ID != "it-br-sales/monthly" || e[0].Type != domain.TypeComputations ||
+		e[0].Title != "t:it-br-sales/monthly" || e[0].Description != "d:it-br-sales/monthly" ||
+		e[0].Status != domain.StatusStable {
+		t.Errorf("entries = %+v", lvl.Entries)
 	}
 
 	// The underscore ID lives in its own directory, not under it-br-sales.
-	dirs, entries, _, err = s.Browse(ctx, "it-br_x/")
+	lvl, err = s.Browse(ctx, "it-br_x/")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(dirs) != 0 || len(entries) != 1 || entries[0].ID != "it-br_x/deep" {
-		t.Errorf("underscore prefix: dirs=%+v entries=%+v", dirs, entries)
+	if len(lvl.Dirs) != 0 || len(lvl.Entries) != 1 || lvl.Entries[0].ID != "it-br_x/deep" {
+		t.Errorf("underscore prefix: dirs=%+v entries=%+v", lvl.Dirs, lvl.Entries)
 	}
 
 	// Root level: the rejected entry is invisible.
-	_, entries, _, err = s.Browse(ctx, "")
+	lvl, err = s.Browse(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range entries {
+	for _, e := range lvl.Entries {
 		if e.ID == "it-br-rejected" {
 			t.Error("rejected entry visible in browse")
 		}

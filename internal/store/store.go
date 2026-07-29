@@ -1414,22 +1414,27 @@ type LogRow struct {
 // starts_with, not LIKE: a path may contain "_", which LIKE reads as a
 // wildcard (browse.go says the same about ids).
 func (s *Store) ListRevisionsUnder(ctx context.Context, prefix string, limit int) ([]LogRow, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT r.path, COALESCE(k.title, ''), r.change,
-		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_by_producer, r.changed_at
-		 FROM knowledge_revision r
-		 LEFT JOIN object k ON k.path = r.path
-		 WHERE $1 = '' OR r.path = $1 || '.md' OR starts_with(r.path, $1 || '/')
-		 ORDER BY r.changed_at DESC, r.path, r.rev DESC LIMIT $2`,
-		prefix, limit)
+	rows, err := s.pool.Query(ctx, revisionsUnderSQL, prefix, limit)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (LogRow, error) {
-		var l LogRow
-		return l, row.Scan(&l.Path, &l.Title, &l.Change,
-			&l.ChangedBy.Kind, &l.ChangedBy.Name, &l.ChangedBy.Via, &l.ChangedBy.Producer, &l.ChangedAt)
-	})
+	return pgx.CollectRows(rows, scanLogRow)
+}
+
+// revisionsUnderSQL is the query behind both callers: the read at a
+// log.md address and the export writing the same file from a snapshot.
+// One statement, because two that drifted would be two histories.
+const revisionsUnderSQL = `SELECT r.path, COALESCE(k.title, ''), r.change,
+	        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_by_producer, r.changed_at
+	 FROM knowledge_revision r
+	 LEFT JOIN object k ON k.path = r.path
+	 WHERE $1 = '' OR r.path = $1 || '.md' OR starts_with(r.path, $1 || '/')
+	 ORDER BY r.changed_at DESC, r.path, r.rev DESC LIMIT $2`
+
+func scanLogRow(row pgx.CollectableRow) (LogRow, error) {
+	var l LogRow
+	return l, row.Scan(&l.Path, &l.Title, &l.Change,
+		&l.ChangedBy.Kind, &l.ChangedBy.Name, &l.ChangedBy.Via, &l.ChangedBy.Producer, &l.ChangedAt)
 }
 
 func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {

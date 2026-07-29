@@ -82,7 +82,11 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 			return
 		}
 	}
-	indexes := okf.Indexes(rows) // also sorts rows by id
+	// The generated index.md files list the concepts and the files that
+	// sit beside them (design doc 0046 §3.7). With ?attachments=false
+	// there are no file bytes to carry, and an index naming files the
+	// archive does not contain would describe a bundle nobody received.
+	indexes := okf.Indexes(rows, atts) // also sorts rows by id
 	ids := make([]string, len(rows))
 	for i := range rows {
 		ids[i] = rows[i].ID
@@ -120,6 +124,31 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	for _, path := range indexPaths {
 		if err := add(path, indexes[path]); err != nil {
 			fail("index "+path, err)
+			return
+		}
+		// The other file OKF reserves, beside the one that names the
+		// directory's contents (design doc 0046 §3.8). This is what
+		// makes the history portable: an archive that carried the
+		// bundle but not what happened to it left the ledger reachable
+		// only from the instance that holds it, and a purge (0031) is
+		// the only thing that ever removes a row from it.
+		//
+		// One query per directory, bounded the same way the address is,
+		// so a log.md in an archive says what the one at its address
+		// says. Against a file's bytes — a round trip to GCS each — the
+		// cost of these does not register.
+		//
+		// An import never reads them back (§2.3): the history of what
+		// happened here is this instance's observation, published the
+		// way generated and verified are (design doc 0009).
+		dir := strings.TrimSuffix(strings.TrimSuffix(path, "index.md"), "/")
+		log, err := snap.RevisionsUnder(r.Context(), dir, service.MaxLogLines)
+		if err != nil {
+			fail("history "+dir, err)
+			return
+		}
+		if err := add(strings.TrimSuffix(path, "index.md")+"log.md", service.RenderLog(dir, log)); err != nil {
+			fail("log "+dir, err)
 			return
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -562,6 +563,26 @@ func getJSON(t *testing.T, url string, v any) {
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		t.Fatalf("GET %s: decode: %v", url, err)
 	}
+}
+
+// getMarkdown fetches a generated file as the file it is — no Accept,
+// which is what a browser or a curl sends and what the reserved paths
+// answer with (design doc 0046 §§3.7-3.8).
+func getMarkdown(t *testing.T, url string) string {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s = %d: %s", url, resp.StatusCode, body)
+	}
+	return string(body)
 }
 
 // POST /api/v1/review/{id} {"ruling":"verified"} records a verification
@@ -1861,5 +1882,167 @@ func TestRESTIntegrationPurgeOnAFileRemovesIt(t *testing.T) {
 	got.Body.Close()
 	if got.StatusCode != http.StatusNotFound {
 		t.Errorf("the file is still there after the purge: %d", got.StatusCode)
+	}
+}
+
+// A directory's index.md lists the files in it, in both of its
+// representations and in the archive (design doc 0046 §3.7). A file is
+// an object in the bundle, not a property of an entry (§3.3), so a
+// listing that showed only concepts described a directory that was not
+// there — and the archive's index.md and the generated one have to say
+// the same thing, or a bundle's navigation depends on which asked.
+func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := fmt.Sprintf("restfiles%d", time.Now().UnixNano())
+	id := typ + "/revenue"
+	loose := typ + "/seed-data.csv"
+	removeEntries(t, srv, id)
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+loose, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+loose,
+		bytes.NewReader([]byte("region,orders\napac,12\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err = http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing the file = %d", resp.StatusCode)
+	}
+
+	// JSON: the third kind, beside dirs and entries.
+	var listing service.BrowseResult
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
+	if len(listing.Files) != 1 || listing.Files[0].Name != "seed-data.csv" ||
+		listing.Files[0].Path != loose || listing.Files[0].MediaType == "" {
+		t.Errorf("files in the listing = %+v", listing.Files)
+	}
+	if len(listing.Entries) != 1 {
+		t.Errorf("entries in the listing = %+v", listing.Entries)
+	}
+
+	// Markdown: the same listing, in the shape the format has a place for.
+	generated := getMarkdown(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md")
+	if !strings.Contains(generated, "## Files") || !strings.Contains(generated, "[seed-data.csv](seed-data.csv)") {
+		t.Errorf("the generated index.md does not list the file:\n%s", generated)
+	}
+
+	// And the archive's copy of that same file says the same thing.
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var archived string
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hdr.Name == typ+"/index.md" {
+			b, err := io.ReadAll(tr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			archived = string(b)
+		}
+	}
+	if archived != generated {
+		t.Errorf("the archive's index.md and the generated one differ:\n--- archive ---\n%s\n--- generated ---\n%s",
+			archived, generated)
+	}
+}
+
+// The archive carries the other file OKF reserves (design doc 0046
+// §3.8). An export that held the bundle but not what happened to it left
+// the ledger readable only from the instance that holds it, and a purge
+// is the only thing that ever removes a row from it (0031) — so the
+// history was portable in the record and not in the artifact.
+//
+// The copy in the archive is the copy at the address: one renderer, one
+// bound, so a reader extracting the bundle and a reader calling the
+// endpoint are not reading two different histories.
+func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := fmt.Sprintf("restlog%d", time.Now().UnixNano())
+	id := typ + "/revenue"
+	removeEntries(t, srv, id)
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	archived := map[string]string{}
+	resp, err := getArchive(t, srv.URL+"/api/v1/bundle/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		archived[hdr.Name] = string(b)
+	}
+
+	// One beside every index.md, the root's included.
+	for path := range archived {
+		if !strings.HasSuffix(path, "index.md") {
+			continue
+		}
+		if _, ok := archived[strings.TrimSuffix(path, "index.md")+"log.md"]; !ok {
+			t.Errorf("%s has no log.md beside it", path)
+		}
+	}
+	if got := archived[typ+"/log.md"]; !strings.Contains(got, "**Create**") ||
+		!strings.Contains(got, "[Revenue](/"+id+".md)") {
+		t.Errorf("the directory's history does not record the write:\n%s", got)
+	}
+	if root := archived["log.md"]; !strings.Contains(root, "# Update Log") {
+		t.Errorf("the root history is not titled as one:\n%s", root)
+	}
+
+	// And it is the same document the address serves.
+	if served := getMarkdown(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md"); served != archived[typ+"/log.md"] {
+		t.Errorf("the archived history and the served one differ:\n--- archive ---\n%s\n--- served ---\n%s",
+			archived[typ+"/log.md"], served)
 	}
 }

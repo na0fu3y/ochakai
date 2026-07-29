@@ -655,3 +655,44 @@ func TestDocumentOmitsAnUnnamedProducer(t *testing.T) {
 		t.Errorf("document carries an empty producer key:\n%s", doc)
 	}
 }
+
+// The generated index.md lists the files sitting in a directory beside
+// the concepts (design doc 0046 §3.7), under a heading — a subdirectory
+// line ends in "/" and a concept line does not, so those two read as one
+// list, and a file line would not.
+//
+// A file in a directory that holds no concept is not listed anywhere:
+// the index.md tree is navigation between concept documents, and there
+// is no index.md in such a directory to list it in. It is in the archive
+// at its own path either way (§3.2), which is what the promise is.
+func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
+	entries := sample()
+	files := []domain.Attachment{
+		{Name: "chart.png", Path: "insights/chart.png", MediaType: "image/png", Size: 2048},
+		{Name: "orders.csv", Path: "seeds/orders.csv", MediaType: "text/csv", Size: 12},
+	}
+	idx := Indexes(entries, files)
+
+	got := string(idx["insights/index.md"])
+	if !strings.Contains(got, "## Files") {
+		t.Errorf("no Files heading:\n%s", got)
+	}
+	if !strings.Contains(got, "[chart.png](chart.png) - image/png, 2.0 kB") {
+		t.Errorf("the file is not listed as a file:\n%s", got)
+	}
+	// The concepts are still there, above it.
+	if !strings.Contains(got, "revenue-seasonality.md") {
+		t.Errorf("the concepts went missing:\n%s", got)
+	}
+	if _, ok := idx["seeds/index.md"]; ok {
+		t.Error("a directory of pure data got an index.md, which nothing links to")
+	}
+
+	// A bundle with no loose files renders exactly as it did before the
+	// section existed: no heading, no blank section.
+	for path, doc := range Indexes(entries, nil) {
+		if strings.Contains(string(doc), "Files") {
+			t.Errorf("%s carries a Files section with no files:\n%s", path, doc)
+		}
+	}
+}

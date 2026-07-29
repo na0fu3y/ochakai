@@ -3009,16 +3009,16 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 			t.Errorf("search returned a non-entry: %q", h.ID)
 		}
 	}
-	dirs, entries, _, err := s.Browse(ctx, base)
+	lvl, err := s.Browse(ctx, base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range entries {
+	for _, e := range lvl.Entries {
 		if e.ID != id {
 			t.Errorf("browse listed a non-entry: %q", e.ID)
 		}
 	}
-	for _, d := range dirs {
+	for _, d := range lvl.Dirs {
 		if d.Name == "seeds" && d.Count != 0 {
 			t.Errorf("a directory of files counts as %d entries", d.Count)
 		}

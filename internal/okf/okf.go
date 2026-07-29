@@ -260,22 +260,35 @@ var reservedKeys = func() map[string]bool {
 // sorting entries by id on the way (Bundle's ordering). Split out so a
 // streaming exporter can render one concept document at a time — the
 // indexes need every id, but only the ids.
-func Indexes(entries []domain.Knowledge) map[string][]byte {
+//
+// files are the bundle's file objects, listed in the directory each one
+// sits in (design doc 0046 §3.7). A file in a directory that holds no
+// concept is not listed: the index.md tree is navigation between concept
+// documents, and OKF says nothing about a directory of pure data, so
+// there is no index.md there to list it in. The file is in the archive
+// either way, at its own path — what enters the bundle leaves it (§3.2).
+func Indexes(entries []domain.Knowledge, files []domain.Attachment) map[string][]byte {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	root := &dir{}
 	for _, k := range entries {
 		root.insert(strings.Split(k.ID, "/"), k)
 	}
-	files := map[string][]byte{}
-	root.writeIndexes(files, "")
-	return files
+	sorted := append([]domain.Attachment(nil), files...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })
+	for _, f := range sorted {
+		root.insertFile(strings.Split(f.Path, "/"), f)
+	}
+	out := map[string][]byte{}
+	root.writeIndexes(out, "")
+	return out
 }
 
 // dir is one directory level of a bundle, used to generate index.md files.
 type dir struct {
 	subdirs map[string]*dir
-	entries []dirEntry // concepts directly in this directory, in bundle order
-	count   int        // concepts in this directory and below
+	entries []dirEntry          // concepts directly in this directory, in bundle order
+	files   []domain.Attachment // file objects directly in this directory, by path
+	count   int                 // concepts in this directory and below
 }
 
 type dirEntry struct {
@@ -298,6 +311,21 @@ func (d *dir) insert(segs []string, k domain.Knowledge) {
 		d.subdirs[segs[0]] = sub
 	}
 	sub.insert(segs[1:], k)
+}
+
+// insertFile files one file object under the directory it sits in, if
+// that directory is in the tree. It creates none: a directory exists
+// here because a concept put it there, and count stays the number of
+// concepts beneath — a subdirectory line saying "4 concepts" for four
+// data files would misdescribe every directory that has both.
+func (d *dir) insertFile(segs []string, f domain.Attachment) {
+	if len(segs) == 1 {
+		d.files = append(d.files, f)
+		return
+	}
+	if sub := d.subdirs[segs[0]]; sub != nil {
+		sub.insertFile(segs[1:], f)
+	}
 }
 
 // subdirNames lists subdirectories alphabetically — every level the
@@ -338,8 +366,12 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 	// a read generates one directory, and a bundle whose index.md
 	// changed shape depending on which asked would be two formats
 	// (design doc 0046 §3.7).
+	var fileLines []IndexLine
+	for _, f := range d.files {
+		fileLines = append(fileLines, FileIndexLine(f.Name, f.MediaType, f.Size))
+	}
 	files[prefix+"index.md"] = IndexDocument(strings.TrimSuffix(prefix, "/"),
-		[]IndexSection{{Lines: dirs}, {Lines: concepts}})
+		[]IndexSection{{Lines: dirs}, {Lines: concepts}, {Heading: FileSection, Lines: fileLines}})
 	for name, sub := range d.subdirs {
 		sub.writeIndexes(files, prefix+name+"/")
 	}

@@ -414,7 +414,7 @@ func cmdQueues(ctx context.Context, args []string) error {
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"browse",
-		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design docs\n0014 and 0017, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their entry\ncounts; with a prefix, the subdirectories and entries directly under\nit. Directories print as \"name/\tcount\", entries as\n\"segment\ttype\tstatus\ttitle\". Rejected entries are hidden, as in search.",
+		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design docs\n0014 and 0017, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their entry\ncounts; with a prefix, the subdirectories and entries directly under\nit. Directories print as \"name/\tcount\", entries as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected entries are hidden, as in\nsearch.",
 		"  ochakai browse\n  ochakai browse queries\n  ochakai browse ga4/tables\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
@@ -450,6 +450,13 @@ func cmdBrowse(ctx context.Context, args []string) error {
 			seg = strings.TrimPrefix(seg, prefix+"/")
 		}
 		fmt.Printf("%s\t%s\t%s\t%s\n", seg, e.Type, e.Status, domain.DisplayTitle(e.Title, e.ID))
+	}
+	// The files in the directory, after the concepts and marked as what
+	// they are: a file is an object in the bundle (design doc 0046 §3.3)
+	// and has no type or status to print, so the column that would hold
+	// them holds what it does have.
+	for _, f := range res.Files {
+		fmt.Printf("%s\tfile\t%s\t%d\n", f.Name, f.MediaType, f.Size)
 	}
 	if res.Truncated {
 		fmt.Fprintln(os.Stderr, "note: showing the first 1000 entries at this level (server cap)")
