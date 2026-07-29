@@ -788,7 +788,7 @@ func cmdGet(ctx context.Context, args []string) error {
 			return err
 		}
 		for _, att := range k.Attachments {
-			data, _, err := c.Attachment(ctx, id, att.Name)
+			data, _, err := c.Attachment(ctx, att.Path)
 			if err != nil {
 				return fmt.Errorf("attachment %s: %w", att.Name, err)
 			}
@@ -891,10 +891,23 @@ func cmdDetach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Detach(ctx, id, rest[0]); err != nil {
+	// The file is at <id>/<name> unless the entry's body puts it
+	// elsewhere; read the entry and detach whichever one carries the
+	// name, so the command means the same thing for both (design doc
+	// 0046 §3.3).
+	path := id + "/" + rest[0]
+	if k, err := c.Get(ctx, id); err == nil {
+		for _, a := range k.Attachments {
+			if a.Name == rest[0] && a.Path != "" {
+				path = a.Path
+				break
+			}
+		}
+	}
+	if err := c.Detach(ctx, path); err != nil {
 		return err
 	}
-	fmt.Printf("detached %s/%s\n", id, rest[0])
+	fmt.Printf("detached %s\n", path)
 	return nil
 }
 

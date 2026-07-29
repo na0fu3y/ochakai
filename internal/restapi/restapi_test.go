@@ -150,7 +150,7 @@ func TestAttachWithoutBlobStore(t *testing.T) {
 	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut,
-		"/api/v1/attachments/insights/revenue/weekly.png", bytes.NewReader(png)))
+		"/api/v1/bundle/insights/revenue/weekly.png", bytes.NewReader(png)))
 	if rec.Code != http.StatusNotImplemented {
 		t.Fatalf("PUT attachment without GCS = %d, want 501 (body: %s)", rec.Code, rec.Body)
 	}
@@ -169,8 +169,8 @@ func TestOversizedBodies(t *testing.T) {
 		size              int
 		wantSubstr        string
 	}{
-		{"attachment", http.MethodPut, "/api/v1/attachments/insights/revenue/weekly.png",
-			domain.MaxAttachmentSize + 1, "attachment exceeds"},
+		{"attachment", http.MethodPut, "/api/v1/bundle/insights/revenue/weekly.png",
+			domain.MaxAttachmentSize + 1, "object exceeds"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

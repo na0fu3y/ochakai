@@ -348,7 +348,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	}
 
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("hit thumbnail bytes")...)
-	attURL := srv.URL + "/api/v1/attachments/" + typ + "/reading/weekly.png"
+	attURL := srv.URL + "/api/v1/bundle/" + typ + "/reading/weekly.png"
 	req, _ := http.NewRequest(http.MethodPut, attURL, bytes.NewReader(png))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1235,7 +1235,7 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 		{"seeds.zip", "application/zip", append([]byte("PK\x03\x04"), make([]byte, 16)...), false},
 		{"shot.gif", "image/gif", append([]byte("GIF89a"), make([]byte, 16)...), true},
 	} {
-		attURL := srv.URL + "/api/v1/attachments/" + id + "/" + tc.name
+		attURL := srv.URL + "/api/v1/bundle/" + id + "/" + tc.name
 		req, _ := http.NewRequest(http.MethodPut, attURL, bytes.NewReader(tc.data))
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
