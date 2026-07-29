@@ -142,21 +142,33 @@ For the shape of the system rather than the history of it, read
 
 ## The knowledge model — structure, ids, types, names, links
 
-- **[0047 `fm.` carries the keys ochakai does not name](0047-fm-carries-unnamed-keys.md)**
-  — *Accepted; amends 0046 §3.11, whose "the named filters become sugar
-  over the frontmatter expression" is not what shipped, and adds one
-  deliberate omission to 0015 §3.* The typed columns stay — they are the
-  better index — so `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+- **[0047 The filter vocabulary is the keys OKF defines](0047-fm-carries-okf-keys.md)**
+  — *Accepted; amends 0046 §3.11 on two counts and adds one deliberate
+  omission to 0015 §3. It replaces, rather than supersedes, the first
+  edition of the same number — `fm.` has not reached a release, and 0048
+  §2.3 says an unreleased decision is revised in place. This is the first
+  use of that rule.* First, the typed columns stay — they are the better
+  index — so `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
   `fm.stale_after` are refused with 400 instead of answering a different
   question than the filter of the same name. The difference was real and
   invisible: `status=stable` matches a document that says nothing, because
   OKF's default is stable, and `fm.status=stable` never did — which after
-  0046 §3.9 is every entry an agent wrote without saying `draft`. The
-  boundary is "the key already has a way to ask", not "ochakai knows the
-  key", so a key with a projection but no filter is still queryable.
-  *For a user:* the refusal names the filter to use, so the next request
-  is the right one; `fm.` stays on REST, MCP and the CLI, and stays off
-  the web UI, whose filters show the values you can pick.
+  0046 §3.9 is every entry an agent wrote without saying `draft`. Second,
+  `fm.` is closed to the keys OKF defines. A producer's own key is stored
+  and handed back exactly as written (SPEC §4.1, §11 — this changes what
+  is *askable*, never what is *stored*), but it is not part of the query
+  vocabulary: an open vocabulary leaves a caller unable to tell an empty
+  result from a misspelled key, and leaves the list of what can be asked
+  unwritable in the OpenAPI, the MCP schemas and the CLI help — so an
+  agent guesses. The askable list is derived from `domain.EnvelopeKeys`,
+  which is what keeps 0046 §3.11's purpose: the day OKF adds a key and
+  that list learns the spelling, it is queryable with no column and no
+  migration, because the whole frontmatter is already indexed as jsonb.
+  *For a user:* `fm.resource`, `fm.runtime`, `fm.status_note`,
+  `fm.usage_window`, `fm.title` and the rest of OKF's own keys work; a
+  refusal either names the filter to use or lists what can be asked, so
+  the next request is the right one. `fm.` stays on REST, MCP and the CLI,
+  and stays off the web UI, whose filters show the values you can pick.
 
 - **[0046 The bundle is the address space](0046-bundle-address-space.md)**
   — *Accepted; the current record for OKF compatibility, superseding 0043,

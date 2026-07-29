@@ -803,11 +803,16 @@ const documentMediaType = "text/markdown; charset=utf-8"
 // number with room for the envelope rather than a new policy.
 const maxDocument = 5 << 20
 
-// frontmatterFilter reads the "fm." query parameters — `?fm.question=…`,
-// `?fm.owner=finance` — into the filter that asks the frontmatter index
+// frontmatterFilter reads the "fm." query parameters — `?fm.resource=…`,
+// `?fm.runtime=sql` — into the filter that asks the frontmatter index
 // (design doc 0046 §3.11). The prefix is what keeps the surface
-// additive: a key the spec adds later needs no parameter of its own, and
-// none of the ones ochakai already names can be shadowed by one.
+// additive: a key OKF adds later needs no parameter of its own, and none
+// of the ones ochakai already names can be shadowed by one.
+//
+// Which keys are answered is the service's call (checkedFilter): OKF's
+// own, less the ones a named filter asks. Reading them all here and
+// refusing there keeps the refusal in the one place all three surfaces
+// pass through (design doc 0015 §2).
 //
 // A repeated parameter keeps its last value. The pairs are AND-ed, and
 // "the same key twice" is a contradiction rather than a question, so

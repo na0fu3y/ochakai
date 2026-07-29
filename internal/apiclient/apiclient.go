@@ -142,7 +142,8 @@ type SearchParams struct {
 	// still hides rejected entries — asking for them is opt-in, which is
 	// how an agent checks whether a proposal was already turned down.
 	Trust []string
-	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
+	// Which keys those are is the server's answer (design doc 0047).
 	FM       map[string]string
 	Rejected *bool
 	Limit    int
@@ -217,7 +218,8 @@ type ContextParams struct {
 	// SearchParams. Rejected has no counterpart here: a context pack never
 	// carries knowledge somebody turned down.
 	Trust []string
-	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
+	// Which keys those are is the server's answer (design doc 0047).
 	FM       map[string]string
 	Limit    int
 	MinScore float64
