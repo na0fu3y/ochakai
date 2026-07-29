@@ -164,11 +164,20 @@ func ValidBundlePath(p string) bool {
 
 // ReservedBundleName reports whether a filename is one OKF reserves per
 // directory: index.md and log.md, which ochakai generates from the
-// bundle rather than storing (design doc 0046 §§3.7-3.8).
+// bundle rather than storing (design doc 0046 §§3.7-3.8). It is the one
+// place that decides — a reservation answered differently in two places
+// is a path one half accepts and the other refuses.
+//
+// Exactly those two spellings, as SPEC §3.1 writes them. Folding case
+// looks like the safer reading and is not: "Index.md" is a file OKF says
+// nothing about, and refusing it would drop it from a bundle that
+// carried it (design doc 0046 §3.2) while ValidID went on accepting the
+// concept id "Index" — the address would take a concept and refuse a
+// file. Two objects whose paths differ only by case do collide when a
+// bundle is extracted on a case-insensitive filesystem, but that is true
+// of "Revenue.md" beside "revenue.md" as well: it is a property of
+// bundles, not of these two names, and the place to notice it is the
+// export rather than here.
 func ReservedBundleName(name string) bool {
-	switch strings.ToLower(name) {
-	case "index.md", "log.md":
-		return true
-	}
-	return false
+	return name == "index.md" || name == "log.md"
 }

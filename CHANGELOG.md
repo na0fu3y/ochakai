@@ -618,6 +618,19 @@ last entry.
 
 ### Fixed
 
+- **One spelling decides what is reserved.** "Is this index.md or
+  log.md" was answered in four places — `domain.ReservedBundleName`,
+  which folded case, and three inline comparisons that did not (the
+  bundle address's write refusal, the import skip, and a copy in
+  `internal/okf` with no callers). The halves of one address disagreed:
+  at `Index.md` a concept was accepted and a file was refused with
+  "index.md and log.md are generated rather than stored". OKF SPEC §3.1
+  reserves exactly the two spellings it writes, so that is what
+  `ReservedBundleName` answers now, and it is the only one that answers.
+  `Index.md` is a file OKF says nothing about, and a bundle that carried
+  one gets it back (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2).
+
 - `api/openapi.yaml` stopped promising fields the server never sent, and
   started declaring things it did. The contract test validates requests
   and responses against the spec, but JSON Schema only checks what is
