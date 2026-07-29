@@ -657,6 +657,24 @@ func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
 	}
 	ctx := context.Background()
 	s := scopedStore(ctx, t, fmt.Sprintf("embed_dim_%d", time.Now().UnixNano()))
+	// The vector tables are created outside the versioned migrations, and
+	// 0010/0011/0013 probe for them with an *unqualified* `to_regclass`,
+	// which walks the whole search path: with none in this schema they
+	// would find public's already-migrated table and try to rename a
+	// `type` column that has not existed there since 0011. Pre-create the
+	// pre-0010 shape here, as TestMigrateConcurrent does for the same
+	// reason — with the vector column those migrations do not touch, so
+	// what comes out the far end is exactly what migrateEmbedding builds
+	// at dim 4 and this test can then resize.
+	if _, err := s.pool.Exec(ctx, `CREATE TABLE knowledge_embedding (
+		type       text NOT NULL,
+		id         text NOT NULL,
+		model      text NOT NULL,
+		embedding  vector(4) NOT NULL,
+		updated_at timestamptz NOT NULL DEFAULT now(),
+		PRIMARY KEY (type, id))`); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Migrate(ctx, 4); err != nil {
 		t.Fatal(err)
 	}
