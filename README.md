@@ -621,7 +621,10 @@ gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai
 
 [docs/architecture.md](docs/architecture.md) is the English overview: how
 the pieces fit, what the data model is, and why there is no authorization
-layer.
+layer. [docs/surface.md](docs/surface.md) is the shorter question — what
+ochakai is for and how big it is allowed to get: seven conditions, and
+every endpoint, tool, command and variable that serves one of them,
+counted.
 
 Underneath it, the decisions themselves live in
 [docs/design](docs/design) as numbered, immutable decision records — the

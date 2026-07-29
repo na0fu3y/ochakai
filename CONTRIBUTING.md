@@ -107,14 +107,21 @@ to it. It is not part of this repository's own setup.
 ## Proposing a feature
 
 The default answer is no, and [docs/surface.md](docs/surface.md) is where
-that is made concrete. It counts every REST operation, MCP tool and CLI
-command in one place — what somebody using ochakai actually pays for —
-and `cmd/ochakai/surface_test.go` fails when the count and the build
-disagree, so an addition arrives as a heading moving from `(19)` to
-`(20)` rather than as a few lines buried in a spec.
+that is made concrete. It counts every REST operation, MCP tool, CLI
+command and environment variable in one place — what somebody using
+ochakai actually pays for — and `cmd/ochakai/surface_test.go` fails when
+the count and the build disagree, so an addition arrives as a heading
+moving from `(19)` to `(20)` rather than as a few lines buried in a spec.
 
-A PR that widens a surface answers three questions in its description:
-who actually got stuck and on what, whether an existing surface already
+The same document opens with the seven conditions ochakai exists to
+satisfy. **A proposal that serves none of them is a no before the
+questions start**, and that is the cheapest place to find out. If it does
+serve one, saying which is where the description begins — serving a
+condition is necessary, not sufficient, since every condition has
+infinitely many mechanisms that would serve it.
+
+From there a PR that widens a surface answers three questions: who
+actually got stuck and on what, whether an existing surface already
 covers it (if it does, don't add), and what can be folded away in
 exchange. The test holds the arithmetic; those answers are the part
 review spends time on.
@@ -191,8 +198,10 @@ Two decisions worth knowing before proposing features:
 ## Pull requests
 
 - Keep PRs small and focused; include tests for behavior changes.
-- A PR that widens a surface updates [docs/surface.md](docs/surface.md)
-  and answers its three questions in the description.
+- A PR that widens a surface — a REST operation, an MCP tool, a CLI
+  command, an environment variable — names which of
+  [docs/surface.md](docs/surface.md)'s seven conditions it serves, updates
+  the count there, and answers the three questions in the description.
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml) — keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
   in sync (wire compatibility is pinned by tests). The REST half is

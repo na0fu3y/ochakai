@@ -2,15 +2,42 @@
 
 ochakai を使う人が払うのは実装の行数ではなく**表面**である — 呼べる
 エンドポイント、エージェントのコンテキストを消費するツールスキーマ、
-覚えなければならないコマンド。この文書はその全部を一箇所で数える。
+覚えなければならないコマンド、設定を間違えられる環境変数。この文書は
+その全部を一箇所で数え、**何のための表面か**を先に決めている。
 
 数えるだけで、止めはしない。止めるのは人で、この文書がするのは
 **表面が増えたことを diff に出す**ことである。エンドポイントを一本足す
 変更は [api/openapi.yaml](../api/openapi.yaml) の数十行の差分に埋もれる
 が、ここでは `## REST (19)` が `(20)` に変わる一行として出る。
-`cmd/ochakai/surface_test.go` が下の三つの節を実物と突き合わせ、
+`cmd/ochakai/surface_test.go` が下の四つの節を実物と突き合わせ、
 食い違えば CI が落ちる([0035](design/0035-verifiability.md):
 規約を信じるのではなく、外から不変条件を読む)。
+
+## 七つの条件
+
+数える前に、**何のための表面かを決めておく**。ochakai が満たそうと
+しているのは次の七つで、これで全部である。
+
+| id | 条件 |
+|---|---|
+| C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0046](design/0046-bundle-address-space.md)) |
+| C2 | Google Cloud、secret なし — Cloud Run IAM と Cloud SQL IAM で、トークンもパスワードも置かない([0002](design/0002-authn-authz.md)・[0003](design/0003-gcp-only.md)) |
+| C3 | 形式は Open Knowledge Format v0.2 — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0036](design/0036-okf-schema-first.md)・[0046](design/0046-bundle-address-space.md)) |
+| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0004](design/0004-cli.md)・[0007](design/0007-api-only-cli.md)) |
+| C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0015](design/0015-surface-consistency.md)・[0039](design/0039-mcp-stdio-bridge.md)) |
+| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0001](design/0001-architecture.md)・[0015](design/0015-surface-consistency.md)) |
+| C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0025](design/0025-closing-the-loop.md)・[0029](design/0029-usage-recording-off-the-read-path.md)・[0049](design/0049-queue-counts.md)・[0051](design/0051-instance-metrics-and-search-misses.md)) |
+
+**どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
+逆は成り立たない — 条件に当たることは必要条件であって十分条件では
+ない。「C7 に当たる」は足す理由にならず(C7 に当たる機構は無限にある)、
+落ちなかったものが次の三つの問いに進む。
+
+七つは互いに独立ではない(C4 は C2 の secret-zero に支えられ、C5 と C6
+は同じナレッジを別の口から出す)。それでよい — これは分類ではなく、
+**「足さない」と言うための共通の物差し**である。八つめを足すのは製品を
+別のものにする決定であり、表面を一つ足すのとは桁が違う。ここに行を
+足す PR は、そう扱われる。
 
 ## 足す前に答える三つの問い
 
@@ -105,6 +132,30 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `ochakai use`
 - `ochakai verify`
 - `ochakai whoami`
+
+## ENV (16)
+
+環境変数も表面である — デプロイする人が読み、間違えられる。No FDE(C4)
+を掲げる以上、**設定の数は「自分で立ち上げられるか」に直接効く**。
+非テストの Go ソースから読み戻すので、`os.Getenv` を一つ足せばここも
+動く。
+
+- `OCHAKAI_DATABASE_URL`
+- `OCHAKAI_DB_IAM_AUTH`
+- `OCHAKAI_DELEGATING_CALLERS`
+- `OCHAKAI_EMBEDDINGS`
+- `OCHAKAI_EMBEDDING_DIM`
+- `OCHAKAI_GCS_BUCKET`
+- `OCHAKAI_IAP_AUDIENCE`
+- `OCHAKAI_INSECURE_DEV`
+- `OCHAKAI_PRODUCER`
+- `OCHAKAI_PUBLIC_READ_ONLY`
+- `OCHAKAI_READ_ONLY`
+- `OCHAKAI_RECORD_MISSES`
+- `OCHAKAI_URL`
+- `OCHAKAI_VERTEX_LOCATION`
+- `OCHAKAI_VERTEX_MODEL`
+- `OCHAKAI_VERTEX_PROJECT`
 
 ## 数えていないもの
 

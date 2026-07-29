@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -201,4 +203,48 @@ func TestSurfaceDocCountsCLICommands(t *testing.T) {
 		t.Fatal("no client commands: this check now guards nothing")
 	}
 	compareSurface(t, "CLI", commands)
+}
+
+// Configuration is surface for the same reason a command is: somebody
+// deploying reads it, and can set it wrong. A project whose fourth
+// condition is "no forward-deployed engineer" pays for every knob in
+// exactly that currency, so the variables are counted beside the calls.
+//
+// They are read from the shipped source rather than from a list here: a
+// variable exists the moment something asks the environment for it, and
+// a second list would be one more thing to keep true. Test files are
+// skipped — a variable only a test sets is not something a user
+// configures.
+func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
+	varRe := regexp.MustCompile(`"(OCHAKAI_[A-Z_]+)"`)
+	seen := map[string]bool{}
+	for _, root := range []string{"../../internal", "../../cmd"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range varRe.FindAllStringSubmatch(string(content), -1) {
+				seen[m[1]] = true
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("no OCHAKAI_* variables found: this check now guards nothing")
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	compareSurface(t, "ENV", names)
 }
