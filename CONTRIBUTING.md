@@ -88,6 +88,16 @@ docker run -d --rm -p 55433:5432 -e POSTGRES_PASSWORD=t -e POSTGRES_USER=t -e PO
 OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go test ./internal/store/
 ```
 
+The database is shared: CI runs one container for a whole run, and by
+hand you keep one up across sessions. So **an integration test takes its
+ids from `internal/testdb`.Unique**, which appends a run-unique number
+and registers the sweep that removes every row written under it. A test
+that rolls its own token instead leaves its rows behind, and the corpus
+grows until a bounded ranking assertion somewhere else stops finding its
+own entry — a failure that reads as a search bug in whatever change
+happens to cross the threshold. `TestNoTestRollsItsOwnNamespace` fails
+on a hand-rolled one.
+
 `--db` prefers Docker, because `pgvector/pgvector:pg17` is the database
 CI runs. Where Docker cannot serve one — no daemon, or a network that
 will not let the image be pulled — it builds a throwaway cluster out of

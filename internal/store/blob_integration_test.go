@@ -3,13 +3,13 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // GCS-only blob storage (design doc 0013): attachment bytes live only in
@@ -160,7 +160,7 @@ func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
 	s.UseBlobStore(newFakeBlobStore())
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	id := fmt.Sprintf("it-attach-race-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "it-attach-race-")
 	defer func() {
 		_, _ = s.pool.Exec(ctx, `DELETE FROM attachment WHERE knowledge_id = $1`, id)
 		for _, table := range []string{"knowledge_revision", "object"} {

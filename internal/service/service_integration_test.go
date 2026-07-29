@@ -16,6 +16,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // A document that is reformatted but says the same thing is a change to
@@ -40,7 +41,7 @@ func TestReformattingIsAChangeToTheFileOnlyIntegration(t *testing.T) {
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler)}
 	author := domain.Actor{Kind: domain.ActorHuman, Name: "author"}
 	editor := domain.Actor{Kind: domain.ActorHuman, Name: "editor"}
-	id := fmt.Sprintf("svcit-reformat-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "svcit-reformat-")
 
 	put := func(doc string, actor domain.Actor) (*domain.Knowledge, bool) {
 		t.Helper()
@@ -138,7 +139,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
 	// The ID is unique per run: entries stay live after the test, and the
 	// service layer has no hard delete to clean up with.
-	id := fmt.Sprintf("svcit-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "svcit-")
 
 	entry := func() *domain.Knowledge {
 		return &domain.Knowledge{
@@ -227,7 +228,7 @@ func TestUpdateIfMatchIntegration(t *testing.T) {
 	}
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler)}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
-	id := fmt.Sprintf("svcit-ifmatch-%d", time.Now().UnixNano())
+	id := testdb.Unique(t, "svcit-ifmatch-")
 
 	mk := func(body string) *domain.Knowledge {
 		return &domain.Knowledge{Type: domain.TypeMetrics, ID: id, Title: "売上",
@@ -326,7 +327,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	}
 
 	t.Run("drafts stay writable", func(t *testing.T) {
-		id := "queries/" + uid("guard-draft")
+		id := "queries/" + uid(t, "guard-draft")
 		k, err := svc.Create(ctx, &domain.Knowledge{Type: domain.TypeMetrics, ID: id, Title: "draft"}, actor)
 		if err != nil {
 			t.Fatal(err)
@@ -353,7 +354,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	}
 	for _, tc := range rulings {
 		t.Run(string(tc.ruling)+" is refused", func(t *testing.T) {
-			id := "queries/" + uid("guard-"+string(tc.ruling))
+			id := "queries/" + uid(t, "guard-"+string(tc.ruling))
 			k, err := svc.Create(ctx, &domain.Knowledge{
 				Type: domain.TypeMetrics, ID: id, Title: string(tc.ruling),
 			}, actor)
@@ -395,7 +396,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// entry, so without the guard an agent could delete it and recreate it
 	// as a draft, taking the reason for the rejection with it.
 	t.Run("a rejection cannot be laundered into a draft", func(t *testing.T) {
-		id := "queries/" + uid("guard-launder")
+		id := "queries/" + uid(t, "guard-launder")
 		k, err := svc.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeMetrics, ID: id, Title: "rejected proposal",
 			StatusNote: "duplicate of an existing golden query",
@@ -432,7 +433,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		}
 		for _, tc := range rulings {
 			status, wantAdvice := tc.ruling, tombAdvice[tc.ruling]
-			id := "queries/" + uid("guard-tomb-"+string(status))
+			id := "queries/" + uid(t, "guard-tomb-"+string(status))
 			k, err := svc.Create(ctx, &domain.Knowledge{
 				Type: domain.TypeMetrics, ID: id, Title: "ruled on then deleted",
 			}, actor)
@@ -465,7 +466,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// A draft tombstone is not a ruling: reviving an abandoned draft is
 	// what create-on-a-deleted-id is for.
 	t.Run("a draft tombstone stays revivable", func(t *testing.T) {
-		id := "queries/" + uid("guard-tomb-draft")
+		id := "queries/" + uid(t, "guard-tomb-draft")
 		if _, err := svc.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeMetrics, ID: id, Title: "abandoned draft"}, actor); err != nil {
 			t.Fatal(err)
@@ -486,10 +487,10 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// A free id is not a refusal, and neither is a live one: Create's own
 	// ErrAlreadyExists covers that case.
 	t.Run("free and live ids are untouched", func(t *testing.T) {
-		if err := svc.RefuseIfRevivingCurated(ctx, "queries/"+uid("guard-tomb-free")); err != nil {
+		if err := svc.RefuseIfRevivingCurated(ctx, "queries/"+uid(t, "guard-tomb-free")); err != nil {
 			t.Errorf("free id: %v", err)
 		}
-		id := "queries/" + uid("guard-tomb-live")
+		id := "queries/" + uid(t, "guard-tomb-live")
 		k, err := svc.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeMetrics, ID: id, Title: "live"}, actor)
 		if err != nil {
@@ -523,7 +524,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		}{{"", func(*testing.T, *domain.Knowledge) {}, nil}}, rulings...)
 		for _, tc := range cases {
 			status, wantAdvice := tc.ruling, liveAdvice[tc.ruling]
-			id := "queries/" + uid("guard-live-"+string(status)+"x")
+			id := "queries/" + uid(t, "guard-live-"+string(status)+"x")
 			k, err := svc.Create(ctx, &domain.Knowledge{
 				Type: domain.TypeMetrics, ID: id, Title: "ruled on"}, actor)
 			if err != nil {
@@ -567,7 +568,7 @@ func TestReembedIntegration(t *testing.T) {
 		t.Errorf("without an embedder: got %v, want an UnsupportedError naming the setting", err)
 	}
 	svc.Embedder = embedder
-	id := "insights/" + uid("reembed")
+	id := "insights/" + uid(t, "reembed")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeInsights, ID: id, Title: "reembed me", Body: "text",
 	}, actor); err != nil {
@@ -636,7 +637,7 @@ func TestReembedIntegration(t *testing.T) {
 func TestReembedReportsWhatIsLeft(t *testing.T) {
 	ctx := context.Background()
 	actor := domain.Actor{Kind: "human", Name: "test"}
-	svc := newEmbeddingService(t, ctx, uid("m"))
+	svc := newEmbeddingService(t, ctx, uid(t, "m"))
 	model := svc.Embedder.Model()
 
 	// Entries written before a provider was configured: created with no
@@ -644,7 +645,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	// semantic search on an existing corpus leaves behind.
 	svc.Embedder = nil
 	for i := range 3 {
-		id := "insights/" + uid("missing")
+		id := "insights/" + uid(t, "missing")
 		if _, err := svc.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeInsights, ID: id, Title: fmt.Sprintf("filler %d", i),
 		}, actor); err != nil {
@@ -793,7 +794,7 @@ func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
 			}},
 	} {
 		t.Run(tc.what, func(t *testing.T) {
-			id := uid("stampit")
+			id := uid(t, "stampit")
 			if _, err := svc.Create(ctx, &domain.Knowledge{
 				Type: domain.TypeTerms, ID: id, Title: id,
 			}, actor); err != nil {
@@ -837,7 +838,7 @@ func TestUpdatedByFollowsContentIntegration(t *testing.T) {
 	editor := domain.Actor{Kind: "human", Name: "tanaka"}
 	reviewer := domain.Actor{Kind: "human", Name: "na0"}
 
-	id := uid("generated-by")
+	id := uid(t, "generated-by")
 	k, err := svc.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeTerms, ID: id, Title: id, Body: "First.",
 		StaleAfter: "2026-12-31",
@@ -909,7 +910,7 @@ func TestStaleAfterValidationIntegration(t *testing.T) {
 	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	_, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerms, ID: uid("bad-stale"), Title: "x", StaleAfter: "30 days",
+		Type: domain.TypeTerms, ID: uid(t, "bad-stale"), Title: "x", StaleAfter: "30 days",
 	}, actor)
 	var invalid *InvalidInputError
 	if !errors.As(err, &invalid) {
@@ -947,7 +948,7 @@ func TestOKFFamilyValidationIntegration(t *testing.T) {
 			Type: domain.TypeTerms, Attrs: map[string]any{"sources": []any{}}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			k.ID, k.Title = uid("okf-invalid"), "x"
+			k.ID, k.Title = uid(t, "okf-invalid"), "x"
 			var invalid *InvalidInputError
 			if _, err := svc.Create(ctx, k, actor); !errors.As(err, &invalid) {
 				t.Fatalf("create with %s: %v, want an invalid-input error", name, err)
@@ -958,14 +959,14 @@ func TestOKFFamilyValidationIntegration(t *testing.T) {
 	// The runtime requirement is scoped to the one type SPEC §10.2 puts it
 	// on; no other type gains a required field (design doc 0036 §5).
 	if _, err := svc.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerms, ID: uid("no-runtime-ok"), Title: "x",
+		Type: domain.TypeTerms, ID: uid(t, "no-runtime-ok"), Title: "x",
 	}, actor); err != nil {
 		t.Fatalf("a Glossary Term must not need a runtime: %v", err)
 	}
 
 	// A full contract round-trips through the database intact, including
 	// the zero usage_count that means "counted, and never used".
-	id := uid("okf-full")
+	id := uid(t, "okf-full")
 	zero := 0
 	want := &domain.Knowledge{
 		Type: domain.TypeComputations, ID: id, Title: "x", Runtime: "bigquery",

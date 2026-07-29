@@ -462,7 +462,10 @@ func TestSurfaceDocCountsCLICommands(t *testing.T) {
 // variable exists the moment something asks the environment for it, and
 // a second list would be one more thing to keep true. Test files are
 // skipped — a variable only a test sets is not something a user
-// configures.
+// configures — and so is internal/testdb, which is a test file by every
+// measure except its name: nothing outside a _test.go imports it, and
+// the only variable it reads is the one that says where the test
+// database is. TestNothingShipsTestSupport keeps that true.
 func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 	varRe := regexp.MustCompile(`"(OCHAKAI_[A-Z_]+)"`)
 	seen := map[string]bool{}
@@ -470,6 +473,9 @@ func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
+			}
+			if d.IsDir() && d.Name() == testSupportPkg {
+				return fs.SkipDir
 			}
 			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
@@ -495,4 +501,99 @@ func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 		names = append(names, name)
 	}
 	compareSurface(t, "ENV", names)
+}
+
+// testSupportPkg is the one package under internal that ships with the
+// tests rather than with the program.
+const testSupportPkg = "testdb"
+
+// The exception TestSurfaceDocCountsEnvironmentVariables makes for
+// internal/testdb holds only while that package is what it says it is.
+// A guard with a named exception is a place to hide something, so the
+// exception is checked rather than trusted (design doc 0035): nothing
+// the program ships may import it.
+func TestNothingShipsTestSupport(t *testing.T) {
+	imported := false
+	for _, path := range repoTextFiles(t) {
+		if filepath.Ext(path) != ".go" {
+			continue
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if !strings.Contains(string(content), "internal/"+testSupportPkg+`"`) {
+			continue
+		}
+		imported = true
+		t.Errorf("%s imports internal/%s, which ships with the tests: "+
+			"the environment-variable count skips that package, so anything it reads "+
+			"would be a knob nobody counts", path, testSupportPkg)
+	}
+	if imported {
+		return
+	}
+	// And it is imported by tests, or the exception guards nothing.
+	found, err := filepath.Glob("../../internal/*/*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range found {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(content), "internal/"+testSupportPkg+`"`) {
+			return
+		}
+	}
+	t.Errorf("no test imports internal/%s: the exception in the environment-variable "+
+		"count now covers a package nothing uses", testSupportPkg)
+}
+
+// A test that builds its own run-unique id builds one nothing gives
+// back. That is how the shared test database grew: every integration
+// test wrote under `fmt.Sprintf("name%d", time.Now().UnixNano())`, which
+// collides with nobody and is cleaned up by nobody, so the corpus grew
+// by seventy entries a run until a bounded ranking assertion tipped over
+// and read as a search bug (issue #278, twice).
+//
+// internal/testdb.Unique is the same token with the sweep attached. This
+// reads the tree for the shape it replaced, because nothing else would
+// notice the next one: the hand-rolled version works perfectly, right up
+// until the run that pushes somebody else's entry out of a top-ten.
+func TestNoTestRollsItsOwnNamespace(t *testing.T) {
+	unique := regexp.MustCompile(`time\.Now\(\)\.UnixNano\(\)`)
+	// Where a unique number is not an address: a model name, a query
+	// nobody else asks. Those leave no row keyed by an id, so testdb has
+	// nothing to sweep and no claim on them.
+	allowed := map[string]bool{
+		"internal/store/stats_integration_test.go":        true, // a search query, not an id
+		"internal/service/attachment_integration_test.go": true, // an embedding model name
+	}
+	found, checked := false, 0
+	paths, err := filepath.Glob("../../internal/*/*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		checked++
+		rel := filepath.ToSlash(strings.TrimPrefix(filepath.ToSlash(path), "../../"))
+		if !unique.Match(content) {
+			continue
+		}
+		found = true
+		if allowed[rel] {
+			continue
+		}
+		t.Errorf("%s builds a run-unique token by hand — use testdb.Unique, "+
+			"which is the same token with the sweep that gives it back", rel)
+	}
+	if checked == 0 || !found {
+		t.Error("no test builds a run-unique token: this check now guards nothing")
+	}
 }

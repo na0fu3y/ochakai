@@ -3,13 +3,12 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // One address space, two kinds of object (design doc 0046 §§3.1, 3.5),
@@ -46,7 +45,7 @@ func newObjectPathStore(t *testing.T) (*Store, context.Context, string) {
 	}
 	// A run-unique root keeps reruns and the other tests sharing this
 	// database out of the assertions, and lets the cleanup be a prefix.
-	root := fmt.Sprintf("it-op%d", time.Now().UnixNano())
+	root := testdb.Unique(t, "it-op")
 	t.Cleanup(func() {
 		for _, q := range []string{
 			`DELETE FROM object WHERE starts_with(path, $1)`,

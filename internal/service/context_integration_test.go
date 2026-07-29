@@ -10,11 +10,11 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // newIntegrationService dials the test database, skipping without
@@ -39,9 +39,11 @@ func newIntegrationService(t *testing.T, ctx context.Context) *Service {
 }
 
 // uid returns a run-unique slug token, so reruns against a shared test
-// database never collide on primary keys.
-func uid(prefix string) string {
-	return fmt.Sprintf("%s%d", prefix, time.Now().UnixNano())
+// database never collide on primary keys — and, since testdb owns it,
+// so the rows written under it go away when the test ends.
+func uid(t *testing.T, name string) string {
+	t.Helper()
+	return testdb.Unique(t, name)
 }
 
 // TestContextIntegration exercises the one-call context pack end to end:
@@ -53,7 +55,7 @@ func TestContextIntegration(t *testing.T) {
 	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	id := uid("ctxit")
+	id := uid(t, "ctxit")
 	metricID, queryID, insightID, rejectedID := "metrics/"+id+"-revenue", "queries/"+id+"-monthly", "insights/"+id+"-reading", "insights/"+id+"-rejected"
 	entries := []*domain.Knowledge{
 		{Type: domain.TypeMetrics, ID: metricID, Title: id + "-revenue metric",
@@ -121,7 +123,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	id := uid("usgit")
+	id := uid(t, "usgit")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeTerms, ID: id, Title: id + " term"}, actor); err != nil {
 		t.Fatal(err)
@@ -155,7 +157,7 @@ func TestDeleteIntegration(t *testing.T) {
 	svc := newIntegrationService(t, ctx)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 
-	id := uid("delit")
+	id := uid(t, "delit")
 	if _, err := svc.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeTerms, ID: id, Title: "to delete"}, actor); err != nil {
 		t.Fatal(err)
@@ -182,7 +184,7 @@ func TestContextBudgetIntegration(t *testing.T) {
 
 	// The shared test database carries other tests' entries, and fuzzy
 	// search does not respect test boundaries — assert over our own ids.
-	id := uid("budgetit")
+	id := uid(t, "budgetit")
 	mine := map[string]bool{}
 	for i := range 4 {
 		k := &domain.Knowledge{
