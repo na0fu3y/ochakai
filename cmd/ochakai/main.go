@@ -95,6 +95,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   put <id> [-f file]      write an entry from OKF markdown or JSON, creating
                           or replacing (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified entry too)
+  reject <id>             record a rejection and why (--lift withdraws it)
   delete <id>             soft-delete an entry (history retained)
   purge <id>              hard-delete a soft-deleted entry, freeing its id
   reembed                 embed entries missing a vector for the current model

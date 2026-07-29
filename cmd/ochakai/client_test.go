@@ -132,16 +132,45 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 	}
 }
 
-// Guard: the client dispatch table and domain types stay in sync with the
-// commands documented in usage().
-func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "queues", "browse", "context", "get", "put", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "stats", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
-		if _, ok := clientCommands[name]; !ok {
-			t.Errorf("missing client command %q", name)
+// Guard: `ochakai help` names every command the binary dispatches, and no
+// others. The earlier form of this test compared the dispatch table
+// against a list written out here — a copy of usage() rather than a
+// reading of it, which is how `reject` came to run without ever being
+// named in the help. docs/cli.md renders the same text, so a command
+// missing here is missing from the reference too.
+func TestUsageNamesEveryCommand(t *testing.T) {
+	var b strings.Builder
+	usage(&b)
+
+	documented := map[string]bool{}
+	for _, line := range strings.Split(b.String(), "\n") {
+		// Command lines are indented two spaces; a description
+		// continued on the next line is indented to its column.
+		if !strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "   ") {
+			continue
+		}
+		if f := strings.Fields(line); len(f) > 0 {
+			documented[f[0]] = true
 		}
 	}
-	if len(clientCommands) != 27 {
-		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
+
+	// These three are how the binary is run rather than something
+	// ochakai knows, so they are not client commands and docs/surface.md
+	// does not count them either.
+	for _, name := range []string{"serve", "serve-ui", "version"} {
+		if !documented[name] {
+			t.Errorf("usage() no longer documents %q", name)
+		}
+		delete(documented, name)
+	}
+	for name := range clientCommands {
+		if !documented[name] {
+			t.Errorf("`ochakai %s` runs, but `ochakai help` never names it", name)
+		}
+		delete(documented, name)
+	}
+	for name := range documented {
+		t.Errorf("usage() documents %q, which the binary does not dispatch", name)
 	}
 	_ = domain.Types // keep the import honest
 }
