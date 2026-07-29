@@ -557,12 +557,41 @@ For the shape of the system rather than the history of it, read
   the way on to stderr and does not walk the pages for you), and the web
   UI's "load more", which now appends a page instead of asking for 1000.
 
+- **[0055 One ruling, one face](0055-one-ruling-one-face.md)** —
+  *Accepted. BREAKING.* Replaces `POST /api/v1/verify/{id}` (0025 §6)
+  and `POST` / `DELETE /api/v1/reject/{id}` (0043 §3.3) with one
+  `POST /api/v1/review/{id}` taking `ruling: verified | rejected |
+  withdrawn` in the body. The three shared every structural property —
+  each appends to a ledger, none touches the document, its lifecycle
+  status or its ETag, each is recorded against the caller's identity,
+  and each is on the human surfaces and off MCP — and differed only in
+  the value written, which is one operation with a parameter rather than
+  three operations. `withdrawn` is not a DELETE because nothing is
+  deleted: verifications are append-only, a rejection is the one live
+  ruling, and lifting it adds a row the revision log has always called
+  `unreject`. A note belongs to `rejected` alone; carrying one on a
+  verification would be a new thing to say rather than the same three
+  said once, so it is a 400. `report_outcome` is deliberately *not*
+  folded in — a human's ruling and a machine's observation land on
+  opposite surfaces (0015 §3.4), so they cannot share one.
+  *For a user:* REST clients rewrite three calls, each a one-liner.
+  `ochakai verify` and `ochakai reject --lift` are unchanged, MCP is
+  unchanged, and no stored data, ledger, export or trust derivation
+  moves.
+
 - **[0049 Counting the review queues](0049-queue-counts.md)** —
-  *Accepted.* Adds `GET /api/v1/queues` and `ochakai queues`: the three
-  feeds a curator empties — drafts waiting to be published or turned
-  down, entries whose failure reports are unanswered, entries past the
-  expiry their author declared — as counts rather than listings, scoped by `prefix` and
-  nothing else. 0025 made the queues emptiable; nothing told anyone they
+  *Accepted; revised before release (0048 §2.3) once 0051 made the
+  standalone endpoint a second address for a key it already carried.*
+  Adds `ochakai queues` and the three counts a curator empties — drafts
+  waiting to be published or turned down, entries whose failure reports
+  are unanswered, entries past the expiry their author declared — as
+  counts rather than listings, scoped by `prefix` and nothing else. The
+  counts are answered by `GET /api/v1/stats` under its `queues` key:
+  §3.1 kept a sibling slot for the instance metrics, 0051 filled it from
+  the stats side, and at that point a face returning only the three
+  numbers had no capability of its own. `prefix` was the single
+  exception, so it moved to `stats` — where it now narrows every number
+  keyed by an entry, not just the three. 0025 made the queues emptiable; nothing told anyone they
   were not empty, and a review queue going quiet looked exactly like one
   being empty. The canary feed (`sort=verified_at`) is deliberately not
   counted: it ranks every verified entry, so its size is the size of the
@@ -578,8 +607,9 @@ For the shape of the system rather than the history of it, read
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
   *Accepted; 0037 later added a third feed, 0043 turns verify's record
   into an append to a verification ledger, so re-verification accumulates
-  as history, 0049 counts the three queues, and 0050 gives the feeds a
-  cursor.* Adds the `sort=failed`
+  as history, 0049 counts the three queues, 0050 gives the feeds a
+  cursor, and 0055 respells verify as `POST /api/v1/review/{id}` with
+  `ruling: verified`.* Adds the `sort=failed`
   re-verification feed of entries agents reported wrong, worst first, and
   `POST /api/v1/verify/{id}` so that re-checking can be recorded — an
   unchanged PUT writes nothing and therefore cannot express "I looked
@@ -610,7 +640,11 @@ For the shape of the system rather than the history of it, read
   `GET /api/v1/stats` answers the rest: entries by lifecycle and trust
   tier, what review did in a window, what callers reported, and the
   most-asked unanswered questions. It carries 0049's three queue counts
-  beside them, from that face's own query rather than a second one.
+  beside them, from that face's own query rather than a second one — and
+  since the same-day revision it is the only face that answers them.
+  `prefix` scopes everything keyed by an entry; `misses` alone is never
+  scoped, because a search that found nothing found it nowhere and there
+  is no id to scope by.
   Computed on demand with no rollup, and refusing a window longer than
   the retention rather than quietly answering with less. A miss is
   defined as zero hits and never as a low score, because ochakai's scores

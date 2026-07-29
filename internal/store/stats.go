@@ -28,26 +28,47 @@ const missQueryLimit = 10
 // (§3.6). What that costs is that nothing answers for the time before the
 // raw events were pruned; the window the service accepts is capped at the
 // retention for exactly that reason.
-func (s *Store) Stats(ctx context.Context, since time.Time) (*domain.Stats, error) {
+//
+// prefixes scopes the answer to one or more subtrees, exactly as it
+// scopes a search (design doc 0041): a team on a shared deployment asks
+// about its own knowledge. Everything keyed by an entry honors it —
+// what the base is made of, what review did, what came back, what is
+// waiting. Misses do not, and cannot: a search that found nothing found
+// it nowhere, so there is no id to scope by and the questions this base
+// could not answer stay the instance's (design doc 0051 §3.7).
+func (s *Store) Stats(ctx context.Context, since time.Time, prefixes []string) (*domain.Stats, error) {
 	st := &domain.Stats{
 		Entries: domain.StatsEntries{
 			Status: zeroed(domain.Statuses),
 			Trust:  zeroed(domain.Trusts),
 		},
 	}
-	if err := s.statsEntries(ctx, st, since); err != nil {
+	if err := s.statsEntries(ctx, st, since, prefixes); err != nil {
 		return nil, err
 	}
-	if err := s.statsReview(ctx, st, since); err != nil {
+	if err := s.statsReview(ctx, st, since, prefixes); err != nil {
 		return nil, err
 	}
-	if err := s.statsOutcomes(ctx, st, since); err != nil {
+	if err := s.statsOutcomes(ctx, st, since, prefixes); err != nil {
 		return nil, err
 	}
 	if err := s.statsMisses(ctx, st, since); err != nil {
 		return nil, err
 	}
 	return st, nil
+}
+
+// statsScope is the subtree condition ready to splice into a WHERE, with
+// the argument that goes with it. Every stats query takes `since` as $1,
+// so the prefixes are always $2 and the clause is written into the query
+// rather than appended — each of these ends in a GROUP BY or an ORDER BY
+// that has to stay last.
+func statsScope(column string, prefixes []string) (string, []any) {
+	cond, args := prefixScope(column, prefixes, 2)
+	if cond == "" {
+		return "", nil
+	}
+	return " AND " + cond, args
 }
 
 // zeroed builds the tally for a vocabulary with every value present at 0,
@@ -68,7 +89,8 @@ func zeroed[T ~string](values []T) map[string]int64 {
 // (buildWhere) and as SPEC §5.3 defines them: a person makes it
 // human-reviewed, any other confirmation machine-confirmed, none
 // unverified.
-func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.Time) error {
+func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.Time, prefixes []string) error {
+	scope, scopeArgs := statsScope("k.id", prefixes)
 	// The tiers are spelled from the domain vocabulary rather than
 	// written out here, so the tally cannot answer in a vocabulary the
 	// filters have moved on from.
@@ -85,9 +107,10 @@ func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.T
 			count(*) FILTER (WHERE k.created_at >= $1) AS created,
 			count(*) AS n
 		FROM object k
-		WHERE k.deleted_at IS NULL AND k.id IS NOT NULL
+		WHERE k.deleted_at IS NULL AND k.id IS NOT NULL%s
 		GROUP BY 1, 2, 3`,
-		domain.ActorHuman, domain.TrustHuman, domain.TrustMachine, domain.TrustUnverified), since)
+		domain.ActorHuman, domain.TrustHuman, domain.TrustMachine, domain.TrustUnverified, scope),
+		append([]any{since}, scopeArgs...)...)
 	if err != nil {
 		return fmt.Errorf("stats: entries: %w", err)
 	}
@@ -117,21 +140,24 @@ func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.T
 // QueueCounts what is waiting for it now — the queues are design doc
 // 0049's face and its query, borrowed rather than recomputed here. Two
 // counts of one queue are two chances to disagree about it.
-func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Time) error {
+func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Time, prefixes []string) error {
+	scope, scopeArgs := statsScope("v.id", prefixes)
 	// Verifications of entries that still exist: the ledger keeps rows
 	// for purged ids, and a count including them would say review
 	// happened on a base that no longer has it.
-	if err := s.pool.QueryRow(ctx, `
+	if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
 		SELECT count(*) FROM knowledge_verification v
 		WHERE v.at >= $1
-			AND EXISTS (SELECT 1 FROM object k WHERE k.id = v.id AND k.deleted_at IS NULL)`,
-		since).Scan(&st.Review.Verifications); err != nil {
+			AND EXISTS (SELECT 1 FROM object k WHERE k.id = v.id AND k.deleted_at IS NULL)%s`, scope),
+		append([]any{since}, scopeArgs...)...).Scan(&st.Review.Verifications); err != nil {
 		return fmt.Errorf("stats: verifications: %w", err)
 	}
 
-	// Unscoped, unlike the queues face itself: this is the instance's
-	// picture, and a prefix would make it one team's.
-	queues, err := s.QueueCounts(ctx, Filter{})
+	// The queue depths are design doc 0049's answer, borrowed rather than
+	// recomputed: two counts of one queue are two chances to disagree
+	// about it. They are scoped like everything else here now that this
+	// is the only face that carries them (design doc 0049 §3.1).
+	queues, err := s.QueueCounts(ctx, Filter{Prefixes: prefixes})
 	if err != nil {
 		return fmt.Errorf("stats: queues: %w", err)
 	}
@@ -145,12 +171,21 @@ func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Ti
 //
 // Reports about entries that have since been deleted are counted: the
 // report happened, and the question here is how much evidence came back,
-// not what it is attached to today.
-func (s *Store) statsOutcomes(ctx context.Context, st *domain.Stats, since time.Time) error {
-	rows, err := s.pool.Query(ctx, `
+// not what it is attached to today. That is why the subtree scope reads
+// the event's own id rather than joining the entries — a join would
+// quietly drop the deleted ones the moment a prefix was given, making the
+// scoped answer mean something the unscoped one does not.
+func (s *Store) statsOutcomes(ctx context.Context, st *domain.Stats, since time.Time, prefixes []string) error {
+	// The events are $1/$2 here, so the scope takes $3 rather than the
+	// $2 statsScope assumes.
+	scope, scopeArgs := prefixScope("knowledge_id", prefixes, 3)
+	if scope != "" {
+		scope = " AND " + scope
+	}
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT event, count(*) FROM knowledge_event
-		WHERE at >= $1 AND event = ANY($2) GROUP BY 1`,
-		since, []string{domain.EventWorked, domain.EventFailed})
+		WHERE at >= $1 AND event = ANY($2)%s GROUP BY 1`, scope),
+		append([]any{since, []string{domain.EventWorked, domain.EventFailed}}, scopeArgs...)...)
 	if err != nil {
 		return fmt.Errorf("stats: outcomes: %w", err)
 	}

@@ -11,7 +11,7 @@
 // One object has one address: /api/v1/bundle/{path}, a concept at
 // <id>.md (design doc 0046 §3.5). What is not an object of the bundle is
 // addressed outside it — a ranking at /api/v1/search, a judgment at
-// /api/v1/verify or /api/v1/reject, a measurement at /api/v1/usage.
+// /api/v1/review, a measurement at /api/v1/usage.
 package restapi
 
 import (
@@ -500,63 +500,75 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	// GET /api/v1/queues?prefix=... — the three review queues as counts
-	// (design doc 0049). The feeds under /api/v1/search answer "what
-	// is waiting"; this answers "is anything", which is the question a
-	// scheduled job can ask cheaply and a human can be told the answer
-	// to. prefix scopes it to a subtree, as it scopes the feeds.
-	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
-		counts, err := svc.Queues(r.Context(), store.Filter{Prefixes: r.URL.Query()["prefix"]})
-		if err != nil {
-			writeError(w, err)
+	// POST /api/v1/review/{id...} {"ruling": ...} — a human's ruling on
+	// the entry (design doc 0055 §3.1). It replaced three endpoints:
+	// POST /api/v1/verify/{id}, POST /api/v1/reject/{id} and DELETE
+	// /api/v1/reject/{id}.
+	//
+	// The three shared every structural property. Each appends to a
+	// ledger and leaves the document alone — the lifecycle status, the
+	// updated_at and the ETag all stay put, because ruling on knowledge
+	// and publishing it are different acts (0043 §§3.2-3.3). Each is
+	// recorded against the caller's identity, each answers with the
+	// entry, and each is on the human surfaces and off MCP, because a
+	// ruling is what a person does. What differed between them was the
+	// value written. That is one operation with a parameter, spelled as
+	// three because they arrived at three different times.
+	//
+	// "withdrawn" is the DELETE, said as what it is: nothing is deleted.
+	// Verifications are an append-only ledger and a rejection is the one
+	// live ruling (0043 §3.3), so withdrawing it clears that ruling and
+	// leaves the history — which is exactly what the revision log has
+	// always called `unreject`.
+	//
+	// The note belongs to "rejected" alone. Carrying one on a
+	// verification would be a new thing to say rather than the same three
+	// said once, and the default answer to that is no (docs/surface.md).
+	//
+	// "verified" is why a ruling face has to exist at all rather than
+	// being sugar over PUT: re-affirming an entry that was already
+	// verified is the same act as verifying it the first time, and PUT
+	// writes nothing when the content is unchanged, which left both
+	// review feeds without an exit (design doc 0025 §6).
+	//
+	// It lives at a top-level path for the reason /usage does — a
+	// "/review" suffix after the hierarchical {id...} would be
+	// indistinguishable from an ID segment.
+	mux.HandleFunc("POST /api/v1/review/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Ruling string `json:"ruling"`
+			Note   string `json:"note"`
+		}
+		if !readJSON(w, r, &in) {
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"queues": counts})
-	})
-
-	// POST /api/v1/verify/{id...} — record a verification against the
-	// entry as it stands. Promoting a draft and re-affirming an entry that
-	// was already verified are the same act, and this is the only way to
-	// express the second one: PUT carries the stored verified_at over and
-	// writes nothing at all when the content is unchanged, which left both
-	// review feeds without an exit (design doc 0025 §6). Lives outside
-	// /knowledge/ for the same reason /usage does — a "/verify" suffix
-	// would be indistinguishable from an ID segment.
-	mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		k, err := svc.Verify(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
+		id, actor := r.PathValue("id"), httpauth.Actor(r.Context())
+		var k *domain.Knowledge
+		var err error
+		switch in.Ruling {
+		case "verified":
+			if in.Note != "" {
+				writeError(w, service.Invalidf(
+					`a verification carries no note: "%s" says the entry is right as it stands, and `+
+						`anything to say about it belongs in the entry. Use ruling=rejected to record a reason`,
+					in.Ruling))
+				return
+			}
+			k, err = svc.Verify(r.Context(), id, actor)
+		case "rejected":
+			k, err = svc.Reject(r.Context(), id, in.Note, actor)
+		case "withdrawn":
+			if in.Note != "" {
+				writeError(w, service.Invalidf(
+					`withdrawing a rejection carries no note: it removes a ruling rather than making one`))
+				return
+			}
+			k, err = svc.LiftRejection(r.Context(), id, actor)
+		default:
+			writeError(w, service.Invalidf(
+				`ruling must be "verified", "rejected" or "withdrawn", not %q`, in.Ruling))
 			return
 		}
-		w.Header().Set("ETag", etagOf(k))
-		writeView(w, http.StatusOK, k)
-	})
-
-	// POST /api/v1/reject/{id...} — record that a reviewer turned the
-	// entry down, with the reason in the body. A ruling rather than an
-	// edit: the document keeps its lifecycle status, so this is not a PUT
-	// (design doc 0043 §3.3). DELETE lifts it. Lives outside /knowledge/
-	// for the same reason /verify and /usage do — a "/reject" suffix would
-	// be indistinguishable from an ID segment.
-	mux.HandleFunc("POST /api/v1/reject/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Note string `json:"note"`
-		}
-		// A bare POST with no body is a rejection with no reason given.
-		if r.ContentLength != 0 && !readJSON(w, r, &body) {
-			return
-		}
-		k, err := svc.Reject(r.Context(), r.PathValue("id"), body.Note, httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		w.Header().Set("ETag", etagOf(k))
-		writeView(w, http.StatusOK, k)
-	})
-
-	mux.HandleFunc("DELETE /api/v1/reject/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		k, err := svc.LiftRejection(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -597,19 +609,28 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	})
 
-	// GET /api/v1/stats?days=30 — the instance's own view of the loop
-	// (design doc 0051): what the base is made of, what review did
-	// lately, what callers reported, and what they searched for and did
-	// not find. Every other measurement here is per entry; this is the
-	// only face that answers a question about the base as a whole, which
-	// is what running an improvement loop needs.
+	// GET /api/v1/stats?days=30&prefix=... — the instance's own view of
+	// the loop (design doc 0051): what the base is made of, what review
+	// did lately, what callers reported, what is waiting, and what they
+	// searched for and did not find. Every other measurement here is per
+	// entry; this is the only face that answers a question about the base
+	// as a whole, which is what running an improvement loop needs.
+	//
+	// GET /api/v1/queues was a second face over the third of those
+	// answers, and is gone (design doc 0049 §3.1): it returned the queue
+	// depths this response already carried, under the same key, and the
+	// one thing it could do that this could not was scope them to a
+	// subtree. So the scope moved here instead, where it now narrows
+	// every number keyed by an entry rather than only the three — a team
+	// on a shared deployment could count its own queue and could not
+	// count its own knowledge.
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
 		days, err := queryInt(r.URL.Query(), "days")
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		st, err := svc.Stats(r.Context(), days)
+		st, err := svc.Stats(r.Context(), days, r.URL.Query()["prefix"])
 		if err != nil {
 			writeError(w, err)
 			return

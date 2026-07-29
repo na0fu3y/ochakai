@@ -1905,17 +1905,17 @@ async function applyStatus(id, status) {
 // §§3.2-3.3). Verifying is an append, so the first confirmation and the
 // tenth re-check are the same call.
 async function verifyEntry(id) {
-  await api('/api/v1/verify/' + idPath(id), { method: 'POST' });
+  await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'verified' } });
   refreshQueues();
   return true;
 }
 async function rejectEntry(id, note) {
-  await api('/api/v1/reject/' + idPath(id), { method: 'POST', body: { note } });
+  await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'rejected', note } });
   refreshQueues();
   return true;
 }
 async function liftRejection(id) {
-  await api('/api/v1/reject/' + idPath(id), { method: 'DELETE' });
+  await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'withdrawn' } });
   refreshQueues();
   return true;
 }
@@ -1934,7 +1934,9 @@ let waiting = null;
 
 async function refreshQueues() {
   try {
-    waiting = (await api('/api/v1/queues')).queues;
+    // The queue depths live on the stats face; the address they had of
+    // their own is gone (design doc 0049 §3.1).
+    waiting = (await api('/api/v1/stats')).queues;
   } catch {
     waiting = null; // a nudge that cannot load must not become an error banner
   }

@@ -1161,27 +1161,6 @@ func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, aft
 	return hits, nil
 }
 
-// Queues counts the review queues rather than listing them (design doc
-// 0049): how many drafts are waiting, how many failure reports are still
-// unanswered, how many entries are past the expiry their author
-// declared. It is the three feeds of list, measured — the answer to "is
-// there anything to do", which nothing until now could give without
-// paging through the work itself.
-//
-// Only the path scopes are honored from the filter, so a team can ask
-// about its own subtree (design doc 0041). Nothing else narrows it: a
-// count that took every filter would be a query language over a number,
-// and the feed itself is where a reviewer goes once the answer is "yes".
-// No usage is recorded, for the reason list gives — asking how long the
-// queue is must not inflate the signal the queue ranks by.
-func (s *Service) Queues(ctx context.Context, f store.Filter) (domain.QueueCounts, error) {
-	f, err := checkedFilter(store.Filter{Prefixes: f.Prefixes})
-	if err != nil {
-		return domain.QueueCounts{}, err
-	}
-	return s.Store.QueueCounts(ctx, f)
-}
-
 // Revisions returns an entry's change history, newest first — the
 // audit surface behind "every change kept as a revision". Not a search:
 // no usage is recorded (auditing an entry is not using it).
@@ -1298,7 +1277,13 @@ const (
 // days <= 0 means the default. A window past the retention is refused
 // rather than clamped: a caller asking for a year and receiving six
 // months' worth, silently, would read the answer as a year.
-func (s *Service) Stats(ctx context.Context, days int) (*domain.Stats, error) {
+//
+// prefixes scopes it to one or more subtrees (design doc 0041), which is
+// how a team on a shared deployment asks about its own knowledge — and
+// what let GET /api/v1/queues be folded into this face rather than
+// dropped (design doc 0049 §3.1). Only the misses ignore it: a question
+// that found nothing found it nowhere, so there is no id to scope by.
+func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*domain.Stats, error) {
 	if days == 0 {
 		days = defaultStatsWindow
 	}
@@ -1306,8 +1291,12 @@ func (s *Service) Stats(ctx context.Context, days int) (*domain.Stats, error) {
 		return nil, Invalidf("days must be between 1 and %d: raw events and misses are pruned after %d days, "+
 			"so nothing answers for the time before that", maxStatsWindow, maxStatsWindow)
 	}
+	f, err := checkedFilter(store.Filter{Prefixes: prefixes})
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
-	st, err := s.Store.Stats(ctx, now.AddDate(0, 0, -days))
+	st, err := s.Store.Stats(ctx, now.AddDate(0, 0, -days), f.Prefixes)
 	if err != nil {
 		return nil, err
 	}

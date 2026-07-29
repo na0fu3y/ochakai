@@ -33,9 +33,9 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 	for _, w := range []struct{ method, path, body, mediaType string }{
 		{http.MethodPut, "/api/v1/bundle/m.md", doc, "text/markdown"},
 		{http.MethodDelete, "/api/v1/bundle/m.md", "", ""},
-		{http.MethodPost, "/api/v1/verify/m", "", ""},
-		{http.MethodPost, "/api/v1/reject/m", `{"note":"no"}`, "application/json"},
-		{http.MethodDelete, "/api/v1/reject/m", "", ""},
+		{http.MethodPost, "/api/v1/review/m", `{"ruling":"verified"}`, "application/json"},
+		{http.MethodPost, "/api/v1/review/m", `{"ruling":"rejected","note":"no"}`, "application/json"},
+		{http.MethodPost, "/api/v1/review/m", `{"ruling":"withdrawn"}`, "application/json"},
 		{http.MethodPost, "/api/v1/usage/m", `{"outcome":"worked"}`, "application/json"},
 		{http.MethodPost, "/api/v1/move", `{"from":"m","to":"n"}`, "application/json"},
 		{http.MethodPost, "/api/v1/reembed", "", ""},

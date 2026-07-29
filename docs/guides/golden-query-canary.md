@@ -66,7 +66,7 @@ canonicalize a run against. ochakai takes no part in this step.
 
 - **It ran clean**: record the re-verification —
   `ochakai verify queries/<id>` (REST:
-  `POST /api/v1/verify/queries/<id>`). The caller and the current time
+  `POST /api/v1/review/queries/<id>` with `{"ruling":"verified"}`). The caller and the current time
   are appended to the entry's verification ledger, so the entry moves to
   the back of the next `sort=verified_at` feed — and the ledger says how
   often it has been checked, not only when last. An `update` cannot say
@@ -130,7 +130,9 @@ jobs:
                 # record the re-verification, appending to the ledger
                 # (which takes the entry out of both feeds)
                 curl -s -X POST -H "Authorization: Bearer $TOKEN" \
-                  "$OCHAKAI_URL/api/v1/verify/$id" >/dev/null
+                  -H 'Content-Type: application/json' \
+                  -d '{"ruling":"verified"}' \
+                  "$OCHAKAI_URL/api/v1/review/$id" >/dev/null
               fi
             done
 ```

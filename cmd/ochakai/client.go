@@ -616,8 +616,10 @@ func cmdStats(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"stats",
 		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one entry; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue numbers are the ones `ochakai queues` prints; that is\nthe command with the next step on each line and the --exit-code a\nscheduled job goes red on. This one is the whole picture, not the\nnudge.",
-		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --json | jq .misses.queries\n")
+		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --prefix teams/growth       # our subtree only\n  ochakai stats --json | jq .misses.queries\n")
 	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
+	var prefixes repeated
+	fs.Var(&prefixes, "prefix", "measure only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := parseArgs(fs, args); err != nil {
 		return err
@@ -626,7 +628,7 @@ func cmdStats(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	st, err := c.Stats(ctx, *days)
+	st, err := c.Stats(ctx, *days, prefixes)
 	if err != nil {
 		return err
 	}

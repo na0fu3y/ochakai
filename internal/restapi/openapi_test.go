@@ -77,8 +77,7 @@ func TestOpenAPISpecIsValid(t *testing.T) {
 // id — or, for attachments, an id followed by a filename.
 var idAddressed = []string{
 	"/api/v1/bundle/",
-	"/api/v1/verify/",
-	"/api/v1/reject/",
+	"/api/v1/review/",
 	"/api/v1/usage/",
 }
 
