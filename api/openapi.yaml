@@ -31,7 +31,7 @@ info:
     Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
     changelog entry, not after a deprecation window.
-  version: 0.16.0
+  version: 0.16.1
   license:
     name: MIT
 servers:

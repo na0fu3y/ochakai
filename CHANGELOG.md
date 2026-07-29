@@ -18,6 +18,47 @@ last entry.
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-07-30
+
+### Fixed
+
+- **Upgrading to 0.16.0 fails on any instance that holds a file**, and
+  fails in the worst place: migration `0029_files_become_objects.sql`
+  moves the attachment rows into `object`, where a file has no concept
+  id, but it did so *before* replacing the haystack trigger that 0016
+  put on the table. The old trigger computed `ochakai_search_text(NULL,
+  …)`, which is NULL, and the column is `NOT NULL` — so the first file
+  to move aborted the migration with
+
+  ```
+  migration 0029_files_become_objects.sql: ERROR: null value in column
+  "search_text" of relation "object" violates not-null constraint
+  ```
+
+  and the server exited. By then `0022`–`0028` had applied, so the
+  running 0.15.0 binary was looking for a `knowledge` table that had been
+  renamed out from under it and answered 500 to everything: **a failed
+  upgrade took the deployment down rather than leaving it where it
+  started.** An instance with no files migrated cleanly, which is why
+  nothing caught it — the statement order is only reachable when there is
+  a row to move.
+
+  The functions, the triggers and the two indexes are now established
+  before the rows move, which is the order the migration's own comments
+  describe. Nothing else about it changes: the same objects end up in the
+  same shape, so an instance that already applied `0029` successfully is
+  unaffected and re-runs nothing.
+
+  **If you hit this**: deploy 0.16.1 and start it. Migration `0029`
+  re-runs from the beginning — it never committed — and `0030`–`0033`
+  follow. There is nothing to undo by hand and no need to restore a
+  backup.
+
+  `TestMigrationFilesBecomeObjects` applies the migration to a base
+  seeded with two files, one at its entry's canonical `<id>/<name>` and
+  one an import placed elsewhere in the bundle, and checks the
+  attribution and the filename haystack that follow.
+
 ## [0.16.0] - 2026-07-30
 
 This release carries [0046](docs/design/0046-bundle-address-space.md)'s
@@ -1998,7 +2039,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/na0fu3y/ochakai/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/na0fu3y/ochakai/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/na0fu3y/ochakai/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/na0fu3y/ochakai/compare/v0.13.0...v0.14.0
