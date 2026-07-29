@@ -65,8 +65,9 @@ last entry.
   **`ochakai queues` is unchanged**, including `--exit-code`; it reads
   the stats face now. `ochakai stats` gains `--prefix`.
 
-- **BREAKING** — the five MCP tools carrying `knowledge` are renamed to
-  OKF's word for the unit of knowledge, `concept` (design doc
+- **BREAKING** — the MCP surface calls its two kinds of object what OKF
+  and the bundle call them, `concept` and `file` — six tool names, two
+  response keys and one argument (design doc
   [0054](docs/design/0054-concept-is-the-okf-word.md)):
 
   ```
@@ -75,6 +76,11 @@ last entry.
   put_knowledge         →  put_concept
   delete_knowledge      →  delete_concept
   get_knowledge_usage   →  get_concept_usage
+  get_attachment        →  get_file
+
+  get_concept / put_concept result:  {"knowledge": …}   →  {"concept": …}
+  get_file result:                   {"attachment": …}  →  {"file": …}
+  report_outcome argument:           target             →  id
   ```
 
   OKF SPEC §2 defines a **concept** as "a single unit of knowledge within
@@ -86,16 +92,29 @@ last entry.
   and the last double vocabulary.
 
   Search alone is plural: `concept` is countable, a search returns many
-  and the rest act on one. `get_context`, `report_outcome` and
-  `get_attachment` keep their names — none of them names the unit. **The
-  tool count stays at 8**, and no argument, response or capability
-  changes.
+  and the rest act on one. `get_context` and `report_outcome` keep their
+  names — neither names the unit. `attachment` went the same way as
+  `knowledge`: 0046 §2.1 dissolved "an attachment" as a kind of object
+  and REST folded both kinds onto one address, so `get_attachment` was
+  named from a model that no longer exists — its own description already
+  said "one file of the bundle". A concept's `attachments` metadata is
+  **unchanged**: that is derived attribution ("which files does this
+  concept's body point at"), not "a file of the bundle", and the two
+  being one word was the problem.
 
-  Breaking for a client that names these tools in its configuration — an
-  allow-list, a hook, a prompt. A client that reads the advertised tool
-  list needs nothing. Shipping both names was refused: tool schemas are
-  paid for out of the agent's context, and 8 tools would have become 13
-  (0054 §4).
+  **`ochakai://` now addresses either kind**, and `resources/read`
+  resolves a concept first and a file otherwise — the order
+  `GET /api/v1/bundle/{path}` already uses. `get_file` embeds a file
+  under `ochakai://<path>`, and that URI used to come back not-found
+  from the same server that wrote it (0054 §3.4). The resource template
+  is `ochakai://{+address}`, named `object`.
+
+  **The tool count stays at 8** and no capability changes. Breaking for
+  a client that names these tools in its configuration — an allow-list,
+  a hook, a prompt — or reads the structured result's key. A client that
+  reads the advertised tool list and the content blocks needs nothing.
+  Shipping both names was refused: tool schemas are paid for out of the
+  agent's context, and 8 tools would have become 14 (0054 §4).
 
 - **BREAKING** — `ochakai create` and `ochakai update` are one command,
   `ochakai put` (design doc

@@ -189,37 +189,49 @@ func TestSearchSortValidation(t *testing.T) {
 	}
 }
 
-// TestParseKnowledgeURI pins the URI parser feeding the resource
-// template: the id is everything after the scheme (slashes are path
-// separators), and malformed URIs are rejected before any store lookup.
-func TestParseKnowledgeURI(t *testing.T) {
+// TestParseObjectURI pins the URI parser feeding the resource template:
+// the address is everything after the scheme (slashes are path
+// separators), it covers both kinds of object — a concept by its id, a
+// file by its path — and malformed URIs are rejected before any store
+// lookup.
+func TestParseObjectURI(t *testing.T) {
 	cases := []struct {
-		uri string
-		id  string
-		ok  bool
+		uri     string
+		address string
+		ok      bool
 	}{
 		{"ochakai://metrics/revenue", "metrics/revenue", true},
 		{"ochakai://queries/sales/top-customers", "queries/sales/top-customers", true},
 		{"ochakai://tables/GA_sessions_2017", "tables/GA_sessions_2017", true},
-		{"ochakai://overview", "overview", true}, // root-level ids are entries too
-		{"ochakai://", "", false},                // empty id
-		{"ochakai://metrics/", "", false},        // empty segment
-		{"ochakai:///revenue", "", false},        // empty segment
+		{"ochakai://overview", "overview", true}, // root-level ids are concepts too
+		// A file is addressed by its path, extension included: this is
+		// the URI get_file mints for the blob it embeds, and it has to
+		// come back to the object it named.
+		{"ochakai://metrics/revenue/chart.png", "metrics/revenue/chart.png", true},
+		{"ochakai://seeds/regions.csv", "seeds/regions.csv", true},
+		{"ochakai://", "", false},         // empty address
+		{"ochakai://metrics/", "", false}, // empty segment
+		{"ochakai:///revenue", "", false}, // empty segment
+		// OKF generates these two per directory rather than storing
+		// them, so neither is an object anything can read here.
+		{"ochakai://metrics/index.md", "", false},
+		{"ochakai://log.md", "", false},
 		{"file:///metrics/revenue", "", false},
 		{"metrics/revenue", "", false},
 	}
 	for _, c := range cases {
-		id, ok := parseKnowledgeURI(c.uri)
-		if id != c.id || ok != c.ok {
-			t.Errorf("parseKnowledgeURI(%q) = (%q, %v), want (%q, %v)",
-				c.uri, id, ok, c.id, c.ok)
+		address, ok := parseObjectURI(c.uri)
+		if address != c.address || ok != c.ok {
+			t.Errorf("parseObjectURI(%q) = (%q, %v), want (%q, %v)",
+				c.uri, address, ok, c.address, c.ok)
 		}
 	}
 }
 
-// TestResourceTemplateAdvertised pins that entries are addressable as MCP
-// resources via the ochakai:// template — and that we advertise only the
-// template, not an enumeration of every entry (resources/list stays empty).
+// TestResourceTemplateAdvertised pins that the bundle's objects are
+// addressable as MCP resources via the ochakai:// template — and that we
+// advertise only the template, not an enumeration of every object
+// (resources/list stays empty).
 func TestResourceTemplateAdvertised(t *testing.T) {
 	cs := connect(t)
 	ctx := context.Background()
@@ -232,10 +244,10 @@ func TestResourceTemplateAdvertised(t *testing.T) {
 		t.Fatalf("got %d resource templates, want 1", len(tmpls.ResourceTemplates))
 	}
 	rt := tmpls.ResourceTemplates[0]
-	// {+id} (reserved expansion) is what lets the slash-separated id match;
-	// a plain {id} would stop at the first slash.
-	if rt.URITemplate != "ochakai://{+id}" {
-		t.Errorf("URITemplate = %q, want ochakai://{+id}", rt.URITemplate)
+	// {+address} (reserved expansion) is what lets the slash-separated
+	// address match; a plain {address} would stop at the first slash.
+	if rt.URITemplate != "ochakai://{+address}" {
+		t.Errorf("URITemplate = %q, want ochakai://{+address}", rt.URITemplate)
 	}
 	if rt.MIMEType != "text/markdown" {
 		t.Errorf("MIMEType = %q, want text/markdown", rt.MIMEType)
@@ -282,7 +294,7 @@ func TestToolAnnotations(t *testing.T) {
 		"search_concepts":   {readOnly: true},
 		"get_context":       {readOnly: true},
 		"get_concept":       {readOnly: true},
-		"get_attachment":    {readOnly: true},
+		"get_file":          {readOnly: true},
 		"get_concept_usage": {readOnly: true},
 		"put_concept":       {destructive: &no},
 		"delete_concept":    {destructive: &yes},
@@ -317,7 +329,7 @@ func TestToolAnnotations(t *testing.T) {
 	}
 }
 
-// TestReportOutcomeValidation pins the tool's input checks: a target
+// TestReportOutcomeValidation pins the tool's input checks: an id
 // that is not a valid entry id and an unknown outcome are tool errors
 // (not transport failures), and both fire before any store access.
 func TestReportOutcomeValidation(t *testing.T) {
@@ -327,8 +339,8 @@ func TestReportOutcomeValidation(t *testing.T) {
 		args       map[string]any
 		wantSubstr string
 	}{
-		{"bad target", map[string]any{"target": "queries/", "outcome": "worked"}, "invalid target"},
-		{"bad outcome", map[string]any{"target": "queries/q", "outcome": "misleading"}, "invalid outcome"},
+		{"bad id", map[string]any{"id": "queries/", "outcome": "worked"}, "invalid id"},
+		{"bad outcome", map[string]any{"id": "queries/q", "outcome": "misleading"}, "invalid outcome"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -743,7 +755,7 @@ func TestOneWriteFace(t *testing.T) {
 	// saving was in the merge above.
 	want := []string{
 		"search_concepts", "get_context", "get_concept", "put_concept", "report_outcome",
-		"delete_concept", "get_concept_usage", "get_attachment",
+		"delete_concept", "get_concept_usage", "get_file",
 	}
 	for _, w := range want {
 		if !names[w] {

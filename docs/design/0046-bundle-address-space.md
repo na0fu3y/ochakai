@@ -36,6 +36,11 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 アドレス空間そのものは動いていない。§3.4 の「verify・reject は ETag を
 動かさない」はそのまま — その共有性質こそ、三つを一つに畳んでよいと
 0055 が読んだ根拠である。
+§3.14 の MCP のツール表は [0054](0054-concept-is-the-okf-word.md) が
+言い直した — 8 本のうち 6 本が `concept` / `file` の綴りになり
+(`get_attachment` は `get_file`)、`ochakai://` は concept の id と
+ファイルのパスの両方を指すようになった。載る面と載らない面、引数の形、
+本数はどれも動いていない。
 §2.4 が継承する 0043 §3.8 のうち「`<producer>/<version>` 形式は使わない」は
 [0052](0052-producer-beside-the-actor.md) が改訂した — actor の綴りが
 `human:` / `process:` の 2 つであることは変わらず、producer は actor の

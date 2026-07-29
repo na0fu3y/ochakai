@@ -168,25 +168,34 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"re-proposing similar knowledge. Knowledge is co-owned by humans and agents.",
 	})
 
-	// Expose entries as MCP resources so clients can @-mention them by their
-	// canonical ochakai:// URI. Only the template is advertised — enumerating
-	// every entry in resources/list would flood the client, so discovery stays
-	// with search_concepts/get_context and the URI is the addressing scheme.
-	// {+id} (RFC 6570 reserved expansion) lets the slash-separated id match;
-	// a plain {id} would stop at the first slash.
+	// Expose the bundle's objects as MCP resources so clients can
+	// @-mention them by their canonical ochakai:// URI. Only the template
+	// is advertised — enumerating every object in resources/list would
+	// flood the client, so discovery stays with search_concepts/get_context
+	// and the URI is the addressing scheme. {+address} (RFC 6570 reserved
+	// expansion) lets the slash-separated address match; a plain {address}
+	// would stop at the first slash.
+	//
+	// One scheme, both kinds of object. get_file mints
+	// ochakai://<file path> for the blob it embeds — a URI is not
+	// optional in an embedded resource, so the only choice is whether
+	// the one handed out works, and it did not: this handler read every
+	// address as a concept id, so the file URI the server itself had
+	// just written came back not-found (design doc 0054 §3.4).
 	s.AddResourceTemplate(&mcp.ResourceTemplate{
-		Name:     "concept",
-		Title:    "Concept",
+		Name:     "object",
+		Title:    "Bundle object",
 		MIMEType: "text/markdown",
-		Description: "A single knowledge entry as an OKF document: YAML frontmatter (title, " +
-			"status, provenance, type-specific attrs) followed by the markdown body and its " +
-			"links. Address by canonical URI — the scheme plus the entry's id (its path), " +
-			"e.g. ochakai://metrics/revenue or ochakai://queries/sales/top-customers. Discover " +
-			"URIs with search_concepts or get_context; get_concept returns the same entry " +
-			"as JSON.",
-		URITemplate: "ochakai://{+id}",
+		Description: "One object of the bundle. A concept is an OKF document — YAML frontmatter " +
+			"(title, status, provenance, type-specific attrs) followed by the markdown body and " +
+			"its links — addressed by the scheme plus its id, e.g. ochakai://metrics/revenue or " +
+			"ochakai://queries/sales/top-customers. Any other object is a file, addressed by its " +
+			"bundle path, e.g. ochakai://metrics/revenue/chart.png. Discover addresses with " +
+			"search_concepts or get_context; get_concept returns the same concept as JSON, and " +
+			"get_file the same file.",
+		URITemplate: "ochakai://{+address}",
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		id, ok := parseKnowledgeURI(req.Params.URI)
+		address, ok := parseObjectURI(req.Params.URI)
 		if !ok {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
@@ -194,24 +203,44 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, err
 		}
-		k, err := svc.Get(ctx, id)
+		// A concept answers first, and anything else is a file — the
+		// order the bundle address resolves in (design doc 0046 §3.5,
+		// internal/restapi). A concept's address is its id, so the two
+		// kinds cannot collide on one URI unless a producer named a file
+		// exactly as a concept, and then the concept wins on both
+		// surfaces alike.
+		k, err := svc.Get(ctx, address)
+		if err == nil {
+			doc, err := okf.Document(k)
+			if err != nil {
+				return nil, err
+			}
+			return &mcp.ReadResourceResult{
+				Contents: []*mcp.ResourceContents{{
+					URI:      req.Params.URI,
+					MIMEType: "text/markdown",
+					Text:     string(doc),
+				}},
+			}, nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
+		att, data, err := svc.GetFile(ctx, address)
 		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
+			// A deployment with no bucket holds no files, so an address
+			// that is not a concept is not an object here — the address
+			// is what the client asked about, and "files need GCS" is an
+			// answer to a question it did not ask.
+			var unsupported *service.UnsupportedError
+			if errors.Is(err, store.ErrNotFound) || errors.As(err, &unsupported) {
 				return nil, mcp.ResourceNotFoundError(req.Params.URI)
 			}
 			return nil, err
 		}
-		doc, err := okf.Document(k)
-		if err != nil {
-			return nil, err
-		}
-		return &mcp.ReadResourceResult{
-			Contents: []*mcp.ResourceContents{{
-				URI:      req.Params.URI,
-				MIMEType: "text/markdown",
-				Text:     string(doc),
-			}},
-		}, nil
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{
+			fileContents(req.Params.URI, att.MediaType, data),
+		}}, nil
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -287,19 +316,19 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_concept",
 		Annotations: readOnly,
-		Description: "Get one knowledge entry by id, including its full markdown body, structured attrs, " +
+		Description: "Get one concept by id, including its full markdown body, structured attrs, " +
 			"links, and attachment metadata (files the body references: images, PDFs, plain-text data — " +
-			"fetch bytes with get_attachment).",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
+			"fetch bytes with get_file).",
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, conceptOut, error) {
 		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
-			return nil, knowledgeOut{}, err
+			return nil, conceptOut{}, err
 		}
 		v, err := okf.ViewOf(k)
 		if err != nil {
-			return nil, knowledgeOut{}, err
+			return nil, conceptOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: v}, nil
+		return nil, conceptOut{Concept: v}, nil
 	}))
 
 	// put_concept is the one write face (design doc 0046 §3.14). It was
@@ -312,7 +341,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "put_concept",
 		Annotations: nonDestructive,
-		Description: "Write a knowledge entry: create it if the id is free, replace it if it is taken. " +
+		Description: "Write a concept: create it if the id is free, replace it if it is taken. " +
 			"Write back what you learned: metric caveats, confirmed answers, glossary terms. " +
 			"Write status: draft unless you are recording something already agreed — a document that " +
 			"names no status reads as stable (OKF SPEC §5.4). Your identity is recorded as created_by, " +
@@ -346,10 +375,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"An id whose entry was deleted can be reused, which revives it as your draft — unless a human had " +
 			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
 			"different id instead.",
-	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
+	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, conceptOut, error) {
 		write, notes, claimed, err := in.toKnowledge()
 		if err != nil {
-			return nil, knowledgeOut{}, err
+			return nil, conceptOut{}, err
 		}
 		// Whether the id is taken decides which guard applies, not which
 		// tool the agent should have called. Creating on a soft-deleted
@@ -362,17 +391,17 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if errors.Is(err, store.ErrNotFound) {
 			k, err := svc.CreateKeepingCurated(ctx, write, actor)
 			if err != nil {
-				return nil, knowledgeOut{}, err
+				return nil, conceptOut{}, err
 			}
 			out, err := view(k, okf.NoteClaim(notes, claimed, k))
 			return nil, out, err
 		}
 		if err != nil {
-			return nil, knowledgeOut{}, err
+			return nil, conceptOut{}, err
 		}
 		k, _, err := svc.Update(ctx, write, actor, version)
 		if err != nil {
-			return nil, knowledgeOut{}, err
+			return nil, conceptOut{}, err
 		}
 		out, err := view(k, okf.NoteClaim(notes, claimed, k))
 		return nil, out, err
@@ -381,7 +410,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "delete_concept",
 		Annotations: destructive,
-		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
+		Description: "Soft-delete a concept. History is retained as revisions; " +
 			"put_concept on the same id revives it. Entries a human has ruled on — verified, " +
 			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
 			"entry and recreating it would erase the record of why it was turned down.",
@@ -399,23 +428,24 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_attachment",
+		Name:        "get_file",
 		Annotations: readOnly,
-		Description: "Fetch one file of the bundle by its path (get_concept lists the files an " +
-			"entry shows under \"attachments\", each with its path: images, PDFs, plain-text data " +
-			"files, anything a producer put there). Returns the file as content plus its metadata. Attachments are context-heavy — fetch them " +
-			"deliberately, when the entry's body references one you need to see (a dashboard's " +
-			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
-			"if you learn something from one, write it back into the entry's body with " +
+		Description: "Fetch one file of the bundle by its path (get_concept lists the files a " +
+			"concept shows under \"attachments\", each with its path: images, PDFs, plain-text data " +
+			"files, anything a producer put there). Returns the file as content plus its metadata. Files are context-heavy — fetch them " +
+			"deliberately, when the concept's body references one you need to see (a dashboard's " +
+			"normal shape, an ER diagram, a seeds file). ochakai never interprets files; " +
+			"if you learn something from one, write it back into the concept's body with " +
 			"put_concept so the knowledge becomes searchable text.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in fileIn) (*mcp.CallToolResult, fileOut, error) {
 		att, data, err := svc.GetFile(ctx, in.Path)
 		if err != nil {
-			return nil, attachmentOut{}, err
+			return nil, fileOut{}, err
 		}
 		// The content block matches the media type (design doc 0013):
 		// images as image content, plain text inline, PDFs as an embedded
-		// blob resource.
+		// blob resource — at the file's own address, which resources/read
+		// now answers (design doc 0054 §3.4).
 		var content mcp.Content
 		switch {
 		case strings.HasPrefix(att.MediaType, "image/"):
@@ -423,20 +453,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		case att.MediaType == "text/plain":
 			content = &mcp.TextContent{Text: string(data)}
 		default:
-			content = &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
-				URI:      "ochakai://" + att.Path,
-				MIMEType: att.MediaType,
-				Blob:     data,
-			}}
+			content = &mcp.EmbeddedResource{
+				Resource: fileContents(uriScheme+att.Path, att.MediaType, data),
+			}
 		}
 		res := &mcp.CallToolResult{Content: []mcp.Content{content}}
-		return res, attachmentOut{Attachment: *att}, nil
+		return res, fileOut{File: *att}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_concept_usage",
 		Annotations: readOnly,
-		Description: "Usage totals for one knowledge entry: how often it appeared in search results, " +
+		Description: "Usage totals for one concept: how often it appeared in search results, " +
 			"was fetched individually, and how it was reported to have worked, with last_used_at. " +
 			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
 			"and a staleness signal for verified entries that stopped being used.",
@@ -458,9 +486,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"against verified entries flag them for re-verification. Your identity is recorded " +
 			"with each report. Returns the entry's updated usage totals.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
-		id := strings.TrimPrefix(in.Target, uriScheme)
+		id := strings.TrimPrefix(in.ID, uriScheme)
 		if !domain.ValidID(id) {
-			return nil, usageOut{}, fmt.Errorf("invalid target %q (want the entry's id, e.g. queries/monthly-revenue)", in.Target)
+			return nil, usageOut{}, fmt.Errorf("invalid id %q (want the concept's id, e.g. queries/monthly-revenue)", in.ID)
 		}
 		u, err := svc.ReportOutcome(ctx, id, in.Outcome, in.Note)
 		if err != nil {
@@ -502,16 +530,36 @@ var (
 
 func boolPtr(b bool) *bool { return &b }
 
-// parseKnowledgeURI extracts the entry id from a canonical knowledge URI
-// (ochakai://<id>). ok is false when the URI lacks the scheme or what
-// follows is not a valid id (empty, or with an empty/invalid segment) —
-// malformed URIs are rejected before any store lookup.
-func parseKnowledgeURI(uri string) (id string, ok bool) {
-	id, found := strings.CutPrefix(uri, uriScheme)
-	if !found || !domain.ValidID(id) {
+// parseObjectURI extracts the address of a bundle object from a
+// canonical URI (ochakai://<address>): a concept's id, or a file's
+// bundle path. ok is false when the URI lacks the scheme or what follows
+// can address nothing — empty, an empty or invalid segment, or one of
+// the two filenames OKF generates rather than stores. Malformed URIs are
+// rejected before any store lookup.
+//
+// ValidBundlePath is the rule that covers both kinds: an id is a path
+// with ".md" removed (design doc 0017), so every id it accepts is a path
+// it accepts. What the two differ on is the reserved-name check, and
+// each one refuses what it should — ValidID refuses a concept named
+// "index" or "log", ValidBundlePath refuses a file at "index.md" or
+// "log.md", and neither is an object anyone can read here.
+func parseObjectURI(uri string) (address string, ok bool) {
+	address, found := strings.CutPrefix(uri, uriScheme)
+	if !found || !domain.ValidBundlePath(address) {
 		return "", false
 	}
-	return id, true
+	return address, true
+}
+
+// fileContents is one file as resource contents: text inline when it is
+// text, bytes otherwise. resources/read and the blob get_file embeds
+// return the same object at the same address, so the shape is decided in
+// one place.
+func fileContents(uri, mediaType string, data []byte) *mcp.ResourceContents {
+	if mediaType == "text/plain" {
+		return &mcp.ResourceContents{URI: uri, MIMEType: mediaType, Text: string(data)}
+	}
+	return &mcp.ResourceContents{URI: uri, MIMEType: mediaType, Blob: data}
 }
 
 // The jsonschema tags spell out the numeric contracts (defaults, maxima,
@@ -595,8 +643,12 @@ type getIn struct {
 	ID string `json:"id" jsonschema:"the entry's id — its path: slug segments separated by / (e.g. metrics/revenue, ga4/tables/orders)"`
 }
 
-type knowledgeOut struct {
-	Knowledge domain.View `json:"knowledge"`
+// conceptOut is one concept as a tool's answer. The key is the word the
+// tool's own name uses: a client reading get_concept's result out of
+// "knowledge" had to hold both spellings of one thing, which is what
+// design doc 0054 set out to remove and reached only the tool names.
+type conceptOut struct {
+	Concept domain.View `json:"concept"`
 	// Notes carry what the server read differently than the document
 	// wrote it — a reinterpretation is never silent (design doc 0036
 	// §3.4), and an agent that gets one back can fix the document rather
@@ -604,12 +656,12 @@ type knowledgeOut struct {
 	Notes []string `json:"notes,omitempty"`
 }
 
-type attachmentIn struct {
-	Path string `json:"path" jsonschema:"the file's bundle path, from the path field of an entry's attachments metadata (e.g. metrics/revenue/chart.png)"`
+type fileIn struct {
+	Path string `json:"path" jsonschema:"the file's bundle path, from the path field of a concept's attachments metadata (e.g. metrics/revenue/chart.png)"`
 }
 
-type attachmentOut struct {
-	Attachment domain.Attachment `json:"attachment"`
+type fileOut struct {
+	File domain.Attachment `json:"file"`
 }
 
 type usageOut struct {
@@ -617,7 +669,10 @@ type usageOut struct {
 }
 
 type outcomeIn struct {
-	Target  string `json:"target" jsonschema:"the id of the entry the outcome is about (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
+	// ID, not "target": get_concept_usage asks about the same concept at
+	// the same address and calls it id, and one thing addressed by two
+	// words on two adjacent tools is a translation the agent pays for.
+	ID      string `json:"id" jsonschema:"the id of the concept the outcome is about (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
 	Outcome string `json:"outcome" jsonschema:"\"worked\" = acting on the entry gave a correct result; \"failed\" = it gave a wrong or unusable one"`
 	Note    string `json:"note,omitempty" jsonschema:"optional context recorded with the report: what was run, what went wrong (max 2000 bytes)"`
 }
@@ -639,12 +694,12 @@ type deleteOut struct {
 // changed rather than translating it into a schema and back.
 // view renders one entry as a tool's answer, with any notes the parse
 // produced. Every write path ends the same way, so it is written once.
-func view(k *domain.Knowledge, notes []string) (knowledgeOut, error) {
+func view(k *domain.Knowledge, notes []string) (conceptOut, error) {
 	v, err := okf.ViewOf(k)
 	if err != nil {
-		return knowledgeOut{}, err
+		return conceptOut{}, err
 	}
-	return knowledgeOut{Knowledge: v, Notes: notes}, nil
+	return conceptOut{Concept: v, Notes: notes}, nil
 }
 
 type writeIn struct {

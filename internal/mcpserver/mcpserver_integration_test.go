@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -117,7 +118,7 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	sw.set("human:carol@example.co.jp")
 	res, err = cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "report_outcome",
-		Arguments: map[string]any{"target": id, "outcome": "failed", "note": "did not run"},
+		Arguments: map[string]any{"id": id, "outcome": "failed", "note": "did not run"},
 	})
 	if err != nil {
 		t.Fatalf("report_outcome: %v", err)
@@ -243,4 +244,125 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 			t.Errorf("the refusal does not mention %q: %s", want, said)
 		}
 	}
+}
+
+// memBlobStore is a minimal in-memory blob.Store, so a file can be read
+// back without GCS.
+type memBlobStore map[string][]byte
+
+func (m memBlobStore) Put(_ context.Context, sum, _ string, data []byte) error {
+	if _, ok := m[sum]; !ok {
+		m[sum] = append([]byte(nil), data...)
+	}
+	return nil
+}
+
+func (m memBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
+	data, ok := m[sum]
+	if !ok {
+		return nil, fmt.Errorf("mem blob store: %s not found", sum)
+	}
+	return data, nil
+}
+
+// ochakai:// addresses an object of the bundle, and resources/read
+// answers for either kind (design doc 0054 §3.4): a concept by its id,
+// any other object by its path. The file half is the one that was
+// broken — get_file embeds a file under ochakai://<path>, and reading
+// that URI back went through a concept lookup that could only miss, so
+// the server handed out an address it refused itself.
+//
+// The resolution order is the bundle address's own: a concept first, a
+// file otherwise.
+func TestIntegrationResourceReadsEitherKindOfObject(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.UseBlobStore(memBlobStore{})
+	cfg := &config.Config{InsecureDev: true}
+	svc := &service.Service{Store: s, Config: cfg, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
+	id := testdb.Unique(t, "mcpres") + "/revenue"
+	if _, err := svc.Create(httpauth.WithActor(ctx, actor),
+		&domain.Knowledge{ID: id, Type: "Metric", Title: "Revenue", Body: "Net revenue."}, actor); err != nil {
+		t.Fatal(err)
+	}
+	filePath := id + "/chart.png"
+	if _, err := s.PutFile(ctx, filePath, "image/png", []byte("PNG bytes"), actor); err != nil {
+		t.Fatal(err)
+	}
+
+	cs := connectTo(t, ctx, svc)
+
+	t.Run("concept by id", func(t *testing.T) {
+		res, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "ochakai://" + id})
+		if err != nil {
+			t.Fatalf("ReadResource: %v", err)
+		}
+		if len(res.Contents) != 1 {
+			t.Fatalf("got %d contents, want 1", len(res.Contents))
+		}
+		got := res.Contents[0]
+		if got.MIMEType != "text/markdown" {
+			t.Errorf("MIMEType = %q, want text/markdown", got.MIMEType)
+		}
+		if !strings.Contains(got.Text, "Net revenue.") {
+			t.Errorf("the concept's document did not come back: %q", got.Text)
+		}
+	})
+
+	t.Run("file by path", func(t *testing.T) {
+		uri := "ochakai://" + filePath
+		res, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
+		if err != nil {
+			t.Fatalf("ReadResource(%q): %v — this is the URI get_file hands out", uri, err)
+		}
+		if len(res.Contents) != 1 {
+			t.Fatalf("got %d contents, want 1", len(res.Contents))
+		}
+		got := res.Contents[0]
+		if got.URI != uri {
+			t.Errorf("URI = %q, want %q", got.URI, uri)
+		}
+		if got.MIMEType != "image/png" {
+			t.Errorf("MIMEType = %q, want image/png", got.MIMEType)
+		}
+		if string(got.Blob) != "PNG bytes" {
+			t.Errorf("blob = %q, want the file's bytes", got.Blob)
+		}
+	})
+
+	t.Run("neither", func(t *testing.T) {
+		_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "ochakai://" + id + "/nothing.png"})
+		if err == nil {
+			t.Error("ReadResource succeeded on an address holding no object")
+		}
+	})
+}
+
+// connectTo dials an in-memory session against one service, for the
+// tests that need a store behind the tools.
+func connectTo(t *testing.T, ctx context.Context, svc *service.Service) *mcp.ClientSession {
+	t.Helper()
+	ct, st := mcp.NewInMemoryTransports()
+	if _, err := newServer(svc, "test").Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { cs.Close() })
+	return cs
 }

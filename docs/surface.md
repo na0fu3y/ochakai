@@ -191,18 +191,24 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ## MCP (8)
 
 - `delete_concept`
-- `get_attachment`
 - `get_concept`
 - `get_concept_usage`
 - `get_context`
+- `get_file`
 - `put_concept`
 - `report_outcome`
 - `search_concepts`
 
-8 本のまま、[0054](design/0054-concept-is-the-okf-word.md) が 5 本を
-改名した — 知識の単位は OKF SPEC §2 の語で **concept** であり、文書が
-既にその語で書いていたのにツール名だけが `knowledge` を名乗っていた。
-能力も引数も応答も変わらない。
+8 本のまま、[0054](design/0054-concept-is-the-okf-word.md) が 6 本を
+改名した — オブジェクトの 2 種は OKF SPEC §2 の **concept** と
+[0046](design/0046-bundle-address-space.md) §2.1 の **file** であり、
+文書も REST も既にその語で書いていたのに、ツールだけが `knowledge` と
+`attachment` を名乗っていた。能力は変わらない。応答のキーと
+`report_outcome` の引数名も同じ語に揃い(`knowledge` → `concept`、
+`attachment` → `file`、`target` → `id`)、`ochakai://` はどちらの
+オブジェクトも指せるようになった — ツールが渡す URI をリソースとして
+読み返せないのは、住所が 2 種類あったからではなく、片方しか解決して
+いなかったからである(0054 §§3.3-3.4)。
 
 ## CLI (27)
 

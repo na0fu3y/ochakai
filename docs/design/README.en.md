@@ -395,21 +395,32 @@ For the shape of the system rather than the history of it, read
   *For a user:* sending `links` on write is ignored; write a markdown link
   in the body instead.
 
-- **[0054 The unit of knowledge is called a concept](0054-concept-is-the-okf-word.md)**
-  — *Accepted.* Renames the five MCP tools carrying `knowledge` to OKF
-  SPEC §2's word: `search_concepts`, `get_concept`, `put_concept`,
-  `delete_concept`, `get_concept_usage`. Once 0046 §3.5's fold was done,
-  those tool names were the only `knowledge` left on the wire — REST and
-  the CLI carry none, and both the design records and the code comments
-  already said "concept". It is the third application of "when ochakai's
-  spelling and OKF's disagree, OKF wins" (after 0023 and 0038), and the
-  last of the double vocabularies. Search alone is plural because
-  `concept` is countable. The tool count stays at 8 and no argument,
-  response or capability changes; `get_attachment` is a different
-  question and `domain.Knowledge` is internal, so both stay. §4 records
-  the argument against — a tool name is what tells an unfamiliar agent
-  what the server is for — and why shipping both names (13 tools) was
-  refused.
+- **[0054 MCP calls its objects concepts and files](0054-concept-is-the-okf-word.md)**
+  — *Accepted.* **Breaking.** Folds the double vocabulary out of the MCP
+  surface: six tool names (`search_concepts`, `get_concept`,
+  `put_concept`, `delete_concept`, `get_concept_usage`, `get_file`), two
+  response keys (`knowledge` → `concept`, `attachment` → `file`) and one
+  argument (`report_outcome`'s `target` → `id`) become OKF SPEC §2's
+  `concept` and 0046 §2.1's `file`. Once 0046 §3.5's fold was done, those
+  names were the only `knowledge` left on the wire — REST and the CLI
+  carry none, and both the design records and the code comments already
+  said "concept". It is the third application of "when ochakai's spelling
+  and OKF's disagree, OKF wins" (after 0023 and 0038). Search alone is
+  plural because `concept` is countable. `ochakai://` becomes the address
+  of a bundle object: `resources/read` resolves a concept first and a
+  file otherwise, the order `/api/v1/bundle/{path}` already uses — which
+  fixes a URI the server minted in `get_file` and could not read back.
+  The tool count stays at 8 and no capability changes; a concept's
+  `attachments` projection is derived attribution and stays as it is, and
+  `domain.Knowledge` is internal, so it stays too. §4 records the
+  argument against — a tool name is what tells an unfamiliar agent what
+  the server is for — and why shipping both names (14 tools), folding
+  `get_file` into `get_concept`, and spelling every URI as a bundle path
+  were all refused. This record replaces its own first version, which
+  deferred `get_attachment` as "a different question" (0048 §2.3).
+  *For a user:* rename the tools in any client that names them, read
+  `concept`/`file` where the result said `knowledge`/`attachment`, and
+  send `id` to `report_outcome`.
   *For a user:* breaking for any client that names these tools in its
   configuration; a client that only reads the advertised list needs
   nothing.

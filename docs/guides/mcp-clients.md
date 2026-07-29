@@ -45,8 +45,8 @@ is worth an issue.
 |---|---|
 | `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
 | `search_concepts` | Cross-type search; verified entries rank higher |
-| `get_concept` | Fetch one entry as an OKF document, with its links and attachment metadata |
-| `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
+| `get_concept` | Fetch one concept as an OKF document, with its links and attachment metadata |
+| `get_file` | Fetch one file of the bundle by its path (dashboard screenshots, ER diagrams, seeds files) |
 | `put_concept` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
 | `delete_concept` | Soft-delete (history retained) |
 | `get_concept_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |

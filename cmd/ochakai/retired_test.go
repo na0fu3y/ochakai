@@ -49,6 +49,16 @@ var retiredSpellings = []retiredSpelling{
 		forms:   []string{"](ochakai://", "<ochakai://"},
 		instead: "[text](/metrics/revenue.md) or [text](./revenue.md), the SPEC §6 forms (design doc 0046 §3.6)",
 	},
+	{
+		// The MCP tools are named for the two kinds of object there are,
+		// in the words OKF and the bundle use for them. A client that
+		// calls one of these gets "unknown tool".
+		forms: []string{
+			"search_knowledge", "get_knowledge", "put_knowledge",
+			"delete_knowledge", "get_attachment",
+		},
+		instead: "search_concepts / get_concept / put_concept / delete_concept / get_concept_usage / get_file (design doc 0054 §3.1)",
+	},
 }
 
 // Guard: the spellings the project retired do not grow back in the prose
