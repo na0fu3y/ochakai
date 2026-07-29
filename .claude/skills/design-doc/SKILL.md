@@ -118,6 +118,14 @@ step 6 says what the record decided. Spend the attention there.
 
 ## Surface consistency
 
+Start from no. [docs/surface.md](../../../docs/surface.md) counts every
+REST operation, MCP tool and CLI command, and a change that widens one
+answers its three questions in the PR: who actually got stuck, whether an
+existing surface already covers it, and what can be folded away in
+exchange. `cmd/ochakai/surface_test.go` fails until the document matches
+what the build offers — the failure prints the section as it should read,
+so the bookkeeping is free and the judgment is the part to spend on.
+
 If the change adds or changes a feature, [0015](../../../docs/design/0015-surface-consistency.md)
 requires the PR to state, per surface, where it lands — **including the
 deliberate omissions**:
