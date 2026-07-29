@@ -26,7 +26,7 @@ nothing to opt out of. The only hosts it ever contacts are Google Cloud
 APIs in your own project: Cloud SQL always, GCS if you set
 `OCHAKAI_GCS_BUCKET`, and Vertex AI where semantic search is enabled —
 which, running on Google Cloud, is the default (design doc
-[0049](design/0049-embeddings-by-default.md)). `OCHAKAI_EMBEDDINGS=off`
+[0053](design/0053-embeddings-by-default.md)). `OCHAKAI_EMBEDDINGS=off`
 declines it, and so does simply not granting `roles/aiplatform.user`;
 either way an instance then talks to its database and nothing else.
 
@@ -60,7 +60,7 @@ knowledge here.
 Usually yes, which is why you get them without asking: running on Google
 Cloud, ochakai finds its own project and turns hybrid search on, provided
 its service identity may call Vertex AI (design doc
-[0049](design/0049-embeddings-by-default.md)). They earn their keep when
+[0053](design/0053-embeddings-by-default.md)). They earn their keep when
 your knowledge base is in Japanese, when questions arrive as sentences
 rather than keywords, or when you attach images and PDFs you want
 searchable by content.
@@ -79,15 +79,15 @@ index — about 16 ms across 5000 entries.
 
 ### Can an agent overwrite or delete knowledge a human verified?
 
-Not over MCP. `create_knowledge`, `update_knowledge` and
-`delete_knowledge` all refuse an entry a human has ruled on — verified,
-rejected or deprecated — and the refusal says what to do instead:
+Not over MCP. `put_knowledge` and `delete_knowledge` both refuse an entry
+a human has ruled on — verified, rejected or deprecated — and the refusal
+says what to do instead:
 
 > cannot update metrics/revenue from this surface: it is verified, and
 > this surface has no If-Match precondition to replace curated knowledge
 > safely. If it is wrong, say so with report_outcome failed — that puts it
 > in the re-verification feed. If you have something better,
-> create_knowledge a new draft. A human changes curated entries from the
+> put_knowledge a new draft. A human changes curated entries from the
 > web UI or CLI.
 
 This is not authorization — a human on the same deployment can edit

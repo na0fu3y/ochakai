@@ -25,7 +25,7 @@ entirely the Cloud SQL instance):
 
 Vertex AI embeddings (§4) are **on by default**, matching the server:
 the module grants `roles/aiplatform.user` and enables the API, and ochakai
-finds its own project from there (design doc 0049). Off by default: private
+finds its own project from there (design doc 0053). Off by default: private
 IP (§2b), GCS attachments (§4b), the IAP-fronted web UI (§5b).
 
 ### No password, anywhere

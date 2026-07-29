@@ -35,7 +35,7 @@ The supported runtime is Google Cloud: Cloud Run for the process, Cloud
 SQL for the database, and Vertex AI for embeddings — which is on by
 default there rather than optional (design docs
 [0003](design/0003-gcp-only.md),
-[0049](design/0049-embeddings-by-default.md)). That decision superseded an earlier
+[0053](design/0053-embeddings-by-default.md)). That decision superseded an earlier
 "runs anywhere" position, and it was made for a reason worth knowing
 before you adopt: the identity model — no tokens, no passwords, no
 secrets — is built entirely on Google Cloud's IAM, and keeping a non-GCP
@@ -121,11 +121,22 @@ The consequences to plan around:
   same thing from an IAP-signed JWT, so browser edits are attributed to
   the person signed in (design doc
   [0032](design/0032-webui-iap-identity.md)).
-- **Provenance is never read from a payload.** Import ignores the
-  provenance keys in a bundle's frontmatter entirely. Provenance is what
-  this instance observed, not what a document claims about itself
-  (design docs [0009](design/0009-provenance-portability.md),
-  [0035](design/0035-verifiability.md)).
+- **The identity says who, not what.** An agent that writes under a
+  person's own credentials — an MCP client, a CLI in a script — records
+  that person, and the record then reads as if they wrote the prose.
+  `X-Ochakai-Producer: insightflow/1.4.0` (or, on MCP, the client's
+  `initialize` info) names the software; it is recorded beside the actor
+  and never in place of it, because it is the one thing here the caller
+  declares about itself rather than something authentication observed
+  (design doc [0052](design/0052-producer-beside-the-actor.md)).
+- **Provenance is never read from a payload.** Import puts nothing from a
+  bundle's frontmatter into a ledger, and nothing there moves the trust
+  tier. Provenance is what this instance observed, not what a document
+  claims about itself (design docs
+  [0009](design/0009-provenance-portability.md),
+  [0035](design/0035-verifiability.md)). What the document does claim is
+  kept, plainly labelled as a claim, rather than thrown away — see the
+  data model below.
 
 A deployment can be made **read-only** with `OCHAKAI_READ_ONLY=true`
 (design doc [0040](design/0040-read-only-mode.md)). This is not
@@ -155,12 +166,15 @@ it believed it was replacing. The human surfaces are unrestricted
 
 **An entry is an OKF document** — YAML frontmatter, then a markdown
 body — and that is the stored form, the wire form, and the export form
-alike (design doc [0043](design/0043-document-first.md)). The database
-columns beside it are an index derived from the document, used to sort
-and filter; where the two could disagree the document is right. Keys OKF
-does not define are kept exactly where their writer put them, at the top
-level and inside a `sources` entry, a parameter, the executor or the
-attester, because a key discarded on the way in is a key no later
+alike (design doc [0046](design/0046-bundle-address-space.md) §2.2,
+which carries design doc 0043's *the document is the only truth*
+forward and takes it down to the byte level: what a write stores is the
+bytes it received, and the canonical form is derived from them). The
+database columns beside it are an index derived from the document, used
+to sort and filter; where the two could disagree the document is right.
+Keys OKF does not define are kept exactly where their writer put them,
+at the top level and inside a `sources` entry, a parameter, the executor
+or the attester, because a key discarded on the way in is a key no later
 release can recover.
 
 An entry's version is the hash of the document as stored, which a read
@@ -174,7 +188,14 @@ What this instance *observed* about an entry travels beside the document
 rather than inside it: who created it, who last changed it, every
 recorded confirmation, and a live rejection if there is one. A bundle
 carries knowledge; provenance is an observation, and import never reads
-it back (design doc [0009](design/0009-provenance-portability.md)).
+it into a ledger (design doc
+[0009](design/0009-provenance-portability.md)). What a document says
+about *itself* — the `generated` and `verified` a bundle from another
+instance arrives with — is a claim, and a claim is neither believed nor
+thrown away: it is kept under a `received` key in the stored document
+and reported on the way in, while the trust tier and the `trust=` filter
+go on answering from this instance's ledger alone (design doc
+[0046](design/0046-bundle-address-space.md) §2.2).
 
 **Identity is a path.** An entry's id is its address and its bundle
 location: `queries/sales/monthly-revenue` is one entry, and the
@@ -204,8 +225,7 @@ everything they could already reach.
 **Types are an open set with a recommended vocabulary.** The spellings
 are the OKF knowledge-catalog vocabulary verbatim — `Attested
 Computation`, not a slug — so a bundle's types survive a round-trip with
-no translation layer in between (design doc
-[0023](design/0023-okf-type-vocabulary.md)). What earns a place in the
+no translation layer in between, and what earns a place in the
 recommended eleven is SPEC §4.1's one demand of a producer — that the
 spelling be descriptive and self-explanatory — read against the spellings
 OKF itself supplies, in the spec's own examples and in its reference
@@ -219,7 +239,8 @@ may be verified and a `stable` entry unverified. "Considered and turned
 down" is a third thing again, a ruling rather than a stage: a rejection
 carries who ruled, when, and why, and it is the record most stores lack —
 an agent can check it before re-proposing the same thing (design doc
-[0043](design/0043-document-first.md) §§3.2-3.3).
+[0046](design/0046-bundle-address-space.md) §2.4, which inherits design
+doc 0043 §§3.2-3.3 unchanged).
 
 **Relationships come from the prose.** There is no links field. A
 markdown link in the body — `[revenue](/metrics/revenue.md)` or a
@@ -280,13 +301,17 @@ infrastructure (design doc [0001](design/0001-architecture.md) §4).
 There is no Redis, no separate vector database, and no search cluster.
 Migrations ship in the binary.
 
-Attachment *bytes* are the exception: they live in Cloud Storage and are
-fetched on demand, with the entry keeping only the metadata (design doc
-[0013](design/0013-attachment-files-gcs-only.md)). Accepted formats are
-the intersection of what Claude can read and what Gemini can embed —
-PNG, JPEG, WebP, PDF, plain text — sniffed from the bytes rather than
-trusted from a filename. With `OCHAKAI_GCS_BUCKET` unset the instance
-stores markdown entries only and attach operations return an error.
+Non-markdown *bytes* are the exception: they live in Cloud Storage and
+are fetched on demand, with the database keeping what addresses them
+(design doc [0046](design/0046-bundle-address-space.md) §3.2, which
+keeps design doc 0013's judgment — GCS for non-markdown, one object up
+to 5 MiB, and the media type sniffed from the bytes rather than trusted
+from a filename). With `OCHAKAI_GCS_BUCKET` unset the instance stores
+markdown entries only and a non-markdown write is refused. What `attach`
+accepts today is narrower than what a bundle may carry — PNG, JPEG,
+WebP, PDF, plain text, the intersection of what Claude can read and what
+Gemini can embed — because that operation is one of the ones 0046 §3.5
+folds into the bundle address, and the fold is still landing.
 Attachments travel through OKF bundles as plain files beside their entry.
 
 Usage recording is deliberately off the read path: events are buffered in
@@ -327,7 +352,7 @@ key to hold, fused with the lexical ranking by reciprocal rank fusion —
 is **on by default where ochakai runs on Google Cloud**: it reads its own
 project from the metadata server, and whether it may call Vertex AI there
 is IAM's answer rather than a setting, asked once at startup (design doc
-[0049](design/0049-embeddings-by-default.md)). A deployment that cannot
+[0053](design/0053-embeddings-by-default.md)). A deployment that cannot
 call it, or that says `OCHAKAI_EMBEDDINGS=off`, runs lexical-only.
 Vectors are written when an entry is written, so a base loaded before
 embeddings were reachable — or a changed model — leaves older entries
@@ -346,7 +371,7 @@ never a second copy of the knowledge (design doc
 [0033](design/0033-context-hits-are-a-ranking.md)). Search hits are the
 same kind of thing: a row names an entry and says what ranked it, and the
 document is one fetch away by id (design doc
-[0043](design/0043-document-first.md) §3.5).
+[0046](design/0046-bundle-address-space.md) §3.5).
 
 ## The write-back and verification loop
 

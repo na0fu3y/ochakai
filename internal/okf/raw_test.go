@@ -1,12 +1,25 @@
 package okf
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
+
+// asStored is the step every write path takes between parsing a document
+// and storing it: a claim that says exactly what this instance observed
+// about the entry is not a claim at all, but ochakai's own export form
+// handed back to it (design doc 0046 §2.2). A parse cannot make that call
+// — it has no entry to compare against — so the tests that state a
+// round-trip property make it here.
+func asStored(k, observed *domain.Knowledge) {
+	if IsObservation(k.Attrs[ClaimKey], observed) {
+		DropClaim(k)
+	}
+}
 
 func testEntry() *domain.Knowledge {
 	at := time.Date(2026, 7, 28, 4, 12, 0, 0, time.UTC)
@@ -106,13 +119,77 @@ func TestServerKeysRoundTrip(t *testing.T) {
 	if got := string(StripServerKeys(out)); got != stored {
 		t.Errorf("round trip:\n--- want ---\n%s\n--- got ---\n%s", stored, got)
 	}
-	// And what comes back parses as the same entry it went in as.
+	// And what comes back parses as the same entry it went in as. The
+	// parse alone cannot know the keys are ours — it keeps them as a
+	// claim (design doc 0046 §2.2) — so the round trip closes where the
+	// entry is at hand: the claim is recognized as this instance's own
+	// observation, and taking it off leaves the stored bytes.
 	d, _, err := Parse(out)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !IsObservation(d.Attrs[ClaimKey], testEntry()) {
+		t.Fatalf("our own export form was read as a foreign claim: %#v", d.Attrs[ClaimKey])
+	}
+	DropClaim(&d.Knowledge)
 	if d.Doc != stored {
 		t.Errorf("re-parsing the export form stored %q, want %q", d.Doc, stored)
+	}
+	if d.Attrs != nil {
+		t.Errorf("dropping the claim left attrs behind: %#v", d.Attrs)
+	}
+}
+
+// A document from somewhere else is the other half: nothing about it is
+// this instance's observation, so what it says about itself is kept —
+// under a key that cannot collide with what this instance appends, and
+// out of every ledger.
+func TestForeignTrustFamilyBecomesAClaim(t *testing.T) {
+	in := "---\ntype: Metric\ntitle: Revenue\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n- by: human:ceo@example.co.jp\n  at: 2026-07-02T00:00:00Z\n" +
+		"created_by: human:sato@example.co.jp\n---\n\n本文。\n"
+	d, _, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"generated", "verified", "created_by"}; !slices.Equal(d.Claimed, want) {
+		t.Errorf("Claimed = %v, want %v", d.Claimed, want)
+	}
+	// Nothing about the entry itself moved: the ledger stays empty and
+	// the claim is an ordinary key of the stored document.
+	if len(d.Verifications) != 0 || d.CreatedBy != (domain.Actor{}) {
+		t.Errorf("a document's claim reached a ledger: %+v", d.Knowledge)
+	}
+	claim, ok := d.Attrs[ClaimKey].(map[string]any)
+	if !ok {
+		t.Fatalf("no claim was kept: %#v", d.Attrs)
+	}
+	if got := claim["created_by"]; got != "human:sato@example.co.jp" {
+		t.Errorf("claim.created_by = %#v", got)
+	}
+	if !strings.Contains(d.Doc, "received:") || strings.Contains(d.Doc, "\ncreated_by:") {
+		t.Errorf("the stored document did not move the trust family:\n%s", d.Doc)
+	}
+	// It is not this instance's observation, whatever this instance holds.
+	if IsObservation(d.Attrs[ClaimKey], testEntry()) {
+		t.Error("a foreign claim was mistaken for our own observation")
+	}
+	// And the export form carries both without colliding: one `verified`
+	// for the ledger, one under the claim.
+	out, err := WithServerKeys([]byte(d.Doc), testEntry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _, err := Parse(out)
+	if err != nil {
+		t.Fatalf("the export form of an entry with a claim no longer parses: %v\n%s", err, out)
+	}
+	if back.Doc != d.Doc {
+		t.Errorf("a claim did not survive the export form:\n--- want ---\n%s\n--- got ---\n%s", d.Doc, back.Doc)
+	}
+	if len(back.Claimed) != 0 {
+		t.Errorf("a recorded claim was overwritten by the instance's own keys: %v", back.Claimed)
 	}
 }
 
@@ -139,6 +216,9 @@ func FuzzServerKeyRoundTrip(f *testing.F) {
 	f.Add("---\ntype: Metric\ntags:\n- a\n---\n\nbody\n")
 	f.Add("---\n# comment\ntype: Metric\n\ntitle: x\n---\n")
 	f.Add("---\ntype: Metric\ngenerated: {by: x}\n---\n")
+	f.Add("---\ntype: Metric\ngenerated: {by: x}\nverified: [{by: human:y, at: 2026-07-01T00:00:00Z}]\n---\n")
+	f.Add("---\ntype: Metric\nreceived:\n  verified:\n  - by: human:x\n---\n") // a claim already recorded
+	f.Add("---\ntype: Metric\nreceived: not a mapping\ncreated_by: human:x\n---\n")
 	f.Add("---\n---\nbody only\n")
 	f.Add("not a document at all\n")
 
@@ -158,12 +238,14 @@ func FuzzServerKeyRoundTrip(f *testing.F) {
 		if got := string(StripServerKeys(out)); got != stored {
 			t.Errorf("round trip lost bytes:\n--- stored ---\n%q\n--- back ---\n%q", stored, got)
 		}
-		// And the export form is still a document that reads the same.
+		// And the export form is still a document that reads the same —
+		// once the entry it belongs to says the claim in it is its own
+		// observation, which is what a write path has and a parse does not.
 		back, _, err := Parse(out)
 		if err != nil {
 			t.Fatalf("the export form no longer parses: %v\n%s", err, out)
 		}
-		if back.Doc != stored {
+		if asStored(&back.Knowledge, testEntry()); back.Doc != stored {
 			t.Errorf("re-parsing the export form stored %q, want %q", back.Doc, stored)
 		}
 	})

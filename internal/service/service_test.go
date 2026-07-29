@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -91,23 +92,23 @@ func TestSearchOrListValidation(t *testing.T) {
 	ctx := context.Background()
 	var inputErr *InvalidInputError
 
-	_, err := s.SearchOrList(ctx, "", "created_at", store.Filter{}, 0)
+	_, err := s.SearchOrList(ctx, "", "created_at", "", store.Filter{}, 0)
 	if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "invalid sort") {
 		t.Errorf("unknown sort: got %v, want an invalid-sort InvalidInputError", err)
 	}
 	for _, sort := range domain.ListSorts {
-		_, err := s.SearchOrList(ctx, "revenue", sort, store.Filter{}, 0)
+		_, err := s.SearchOrList(ctx, "revenue", sort, "", store.Filter{}, 0)
 		if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "cannot be combined") {
 			t.Errorf("sort=%s with a query: got %v, want a cannot-be-combined InvalidInputError", sort, err)
 		}
 	}
-	if _, err := s.SearchOrList(ctx, "  ", "", store.Filter{}, 0); !errors.As(err, &inputErr) ||
+	if _, err := s.SearchOrList(ctx, "  ", "", "", store.Filter{}, 0); !errors.As(err, &inputErr) ||
 		!strings.Contains(err.Error(), "needs a query") {
 		t.Errorf("neither query nor sort: got %v, want a needs-a-query InvalidInputError", err)
 	}
 	// The way out of that error is a listing mode, so the message has to
 	// name all of them. It named three for as long as there were three.
-	_, err = s.SearchOrList(ctx, "", "", store.Filter{}, 0)
+	_, err = s.SearchOrList(ctx, "", "", "", store.Filter{}, 0)
 	for _, sort := range domain.ListSorts {
 		if !strings.Contains(err.Error(), sort) {
 			t.Errorf("the needs-a-query message never mentions sort=%s: %v", sort, err)
@@ -648,7 +649,7 @@ func TestCheckedFilterRejectsImpossiblePaths(t *testing.T) {
 	}
 }
 
-// The "fm." prefix carries the keys ochakai does not name, and only
+// The "fm." prefix carries the OKF keys nothing else asks about, and only
 // those (design doc 0047). A key with a column behind it answers a
 // different question through the column than through the jsonb path —
 // `status=stable` matches a document that says nothing, `fm.status`
@@ -664,19 +665,67 @@ func TestCheckedFilterRefusesFrontmatterKeysWithAFilter(t *testing.T) {
 		}
 		// The refusal is only useful if it names the filter to use, so
 		// the caller's next request is the right one.
-		if !strings.Contains(err.Error(), namedFilter[key]) {
-			t.Errorf("fm.%s error = %q, want it to name %q", key, err, namedFilter[key])
+		if !strings.Contains(err.Error(), domain.FilterOwnedKeys[key]) {
+			t.Errorf("fm.%s error = %q, want it to name %q", key, err, domain.FilterOwnedKeys[key])
 		}
 	}
-	// A key nobody named is the whole point of the prefix, and passes
-	// through untouched — including one that merely resembles a named
-	// filter, since a producer may have written it.
-	for _, key := range []string{"owner", "question", "tag", "source", "status_note", "Status"} {
+	// An OKF key with no filter of its own is what the prefix is for, and
+	// passes through untouched.
+	for _, key := range domain.AskableFrontmatterKeys() {
 		f, err := checkedFilter(store.Filter{Frontmatter: map[string]string{key: "x"}})
 		if err != nil {
 			t.Errorf("fm.%s: %v, want it answered", key, err)
 		} else if f.Frontmatter[key] != "x" {
 			t.Errorf("fm.%s was dropped from the filter", key)
 		}
+	}
+}
+
+// The filter vocabulary is OKF's (design doc 0047 §2.2). A producer's own
+// key is stored and handed back exactly as written — SPEC §4.1 requires
+// that, and design doc 0046 §3.2 keeps it — but it is not something to
+// ask for, so naming one is a refusal rather than a query that quietly
+// finds nothing. A wrong answer that looks like a valid one is the shape
+// this whole vocabulary exists to avoid.
+func TestCheckedFilterRefusesKeysOKFDoesNotDefine(t *testing.T) {
+	// "tag" and "source" are the singular spellings a producer may well
+	// have written; "Status" differs from an OKF key only in case. None
+	// of them is an OKF key, so all three land here rather than being
+	// second-guessed into the filter beside them.
+	for _, key := range []string{"owner", "question", "tag", "source", "Status", "attrs"} {
+		var invalid *InvalidInputError
+		_, err := checkedFilter(store.Filter{Frontmatter: map[string]string{key: "x"}})
+		if !errors.As(err, &invalid) {
+			t.Errorf("fm.%s error = %v, want an InvalidInputError", key, err)
+			continue
+		}
+		// The refusal lists what can be asked, so the caller does not
+		// have to go and read a document to find out.
+		if !strings.Contains(err.Error(), "resource") {
+			t.Errorf("fm.%s error = %q, want it to list the askable keys", key, err)
+		}
+	}
+}
+
+// Every askable key is an OKF envelope key, and no key with a filter of
+// its own is askable. The two lists are derived from one, so this holds
+// the derivation rather than a transcription of it — the day OKF adds a
+// key, EnvelopeKeys is the only place that has to learn the spelling
+// (design doc 0046 §3.11).
+func TestAskableKeysAreTheOKFKeysWithNoFilterOfTheirOwn(t *testing.T) {
+	askable := domain.AskableFrontmatterKeys()
+	if !slices.IsSorted(askable) {
+		t.Errorf("askable keys = %v, want them sorted", askable)
+	}
+	for _, key := range askable {
+		if !slices.Contains(domain.EnvelopeKeys, key) {
+			t.Errorf("askable key %q is not an OKF envelope key", key)
+		}
+		if use, ok := domain.FilterOwnedKeys[key]; ok {
+			t.Errorf("askable key %q is already asked by %s", key, use)
+		}
+	}
+	if got, want := len(askable), len(domain.EnvelopeKeys)-len(domain.FilterOwnedKeys); got != want {
+		t.Errorf("askable keys = %d, want %d", got, want)
 	}
 }

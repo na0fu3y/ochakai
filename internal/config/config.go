@@ -65,14 +65,27 @@ type Config struct {
 	// attachments are unsupported — markdown entries only.
 	GCSBucket string
 
+	// RecordMisses keeps the searches that found nothing, with the query
+	// as it was typed (design doc 0051 §3.4). It is the one thing
+	// ochakai stores that a caller did not choose to curate, so it has
+	// an off switch — OCHAKAI_RECORD_MISSES=false — and it is off by
+	// construction on a public deployment, which reads no identity and
+	// would be keeping strangers' questions where every other stranger
+	// can read them.
+	//
+	// Default on: the list of unanswered questions is what tells a
+	// curator what to write next, and a measurement nobody switches on
+	// is a measurement nobody has.
+	RecordMisses bool
+
 	// Embedding is nil when semantic search is off. It is filled from
 	// OCHAKAI_VERTEX_PROJECT here, and by EnableDiscoveredEmbedding when
 	// the deployment is running on Google Cloud and did not name a
-	// project — semantic search is the default there (design doc 0049).
+	// project — semantic search is the default there (design doc 0053).
 	Embedding *EmbeddingConfig
 
 	// EmbeddingsOff says the deployment refuses semantic search it would
-	// otherwise get (OCHAKAI_EMBEDDINGS=off, design doc 0049 §2.4). It
+	// otherwise get (OCHAKAI_EMBEDDINGS=off, design doc 0053 §2.4). It
 	// is not the same as an absent OCHAKAI_VERTEX_PROJECT, which now
 	// means "discover it": this is the one way to run lexical-only on
 	// Google Cloud, and it is what a deployment sets when it wants no
@@ -94,7 +107,7 @@ type EmbeddingConfig struct {
 	// deployment that named the project asked for semantic search and is
 	// told when it is not there, while a discovered one is a default and
 	// falls back to lexical search rather than refusing to start
-	// (design doc 0049 §2.3).
+	// (design doc 0053 §2.3).
 	Discovered bool
 }
 
@@ -118,6 +131,9 @@ func FromEnv() (*Config, error) {
 		ReadOnly:    os.Getenv("OCHAKAI_READ_ONLY") == "true",
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
+		// The only default-on boolean here, so the only one read as
+		// "anything but false": an operator turning it off writes false.
+		RecordMisses: os.Getenv("OCHAKAI_RECORD_MISSES") != "false",
 	}
 	if os.Getenv("OCHAKAI_PUBLIC_READ_ONLY") == "true" {
 		// The implication is applied here, not checked here: there is no
@@ -127,6 +143,11 @@ func FromEnv() (*Config, error) {
 		// not turn writes back on.
 		cfg.PublicReadOnly = true
 		cfg.ReadOnly = true
+		// Same shape, same reason: a public deployment reads no identity
+		// (0042 §2.2), so it does not keep what its callers typed either
+		// — and OCHAKAI_RECORD_MISSES=true alongside does not turn it
+		// back on (design doc 0051 §3.4).
+		cfg.RecordMisses = false
 	}
 	if cfg.PublicReadOnly && cfg.InsecureDev {
 		// Both make every caller anonymous, but insecure dev also lets
@@ -148,7 +169,7 @@ func FromEnv() (*Config, error) {
 		// Not a boolean, and guessing at one is the wrong way to be
 		// wrong: a deployment that spelled the refusal "false" and got
 		// semantic search would be paying Vertex AI for every write it
-		// asked not to make (design doc 0049 §2.4).
+		// asked not to make (design doc 0053 §2.4).
 		return nil, fmt.Errorf("OCHAKAI_EMBEDDINGS is %q; it takes \"on\" or \"off\"", v)
 	}
 	if !cfg.EmbeddingsOff {
@@ -166,7 +187,7 @@ func FromEnv() (*Config, error) {
 
 // EnableDiscoveredEmbedding turns semantic search on for a project
 // nobody configured — the deployment is running on Google Cloud, and
-// that is where embeddings are the default (design doc 0049 §2.1). The
+// that is where embeddings are the default (design doc 0053 §2.1). The
 // model, location and dimension come from the environment either way:
 // what discovery supplies is the project, not the choice of model.
 //
@@ -208,7 +229,7 @@ func embeddingFromEnv(project string, discovered bool) (*EmbeddingConfig, error)
 //
 // It says where ochakai runs, not what it may do there: whether the
 // service identity can call Vertex AI is IAM's answer, given once the
-// first embedding is attempted (design doc 0049 §2.3).
+// first embedding is attempted (design doc 0053 §2.3).
 func DiscoverVertexProject(ctx context.Context) string {
 	if !metadata.OnGCE() {
 		return ""

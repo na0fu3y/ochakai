@@ -6,7 +6,7 @@ Status: Accepted(2026-07-14 の議論で主要論点を決定)。§3 の共通�
 インスタンス台帳の裁定になる)。§9.1 の一覧面と検索フィルタの語彙は
 [0046](0046-bundle-address-space.md) が `GET /api/v1/search` と trust tier に
 言い直した。§4 の「埋め込みは設定した場合にのみ有効化される」は
-[0049](0049-embeddings-by-default.md) が改訂し、Google Cloud の上では既定で
+[0053](0053-embeddings-by-default.md) が改訂し、Google Cloud の上では既定で
 有効になった(ドライバと「解釈をしない」性質はそのまま)
 Date: 2026-07-14
 

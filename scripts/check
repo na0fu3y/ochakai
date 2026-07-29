@@ -21,6 +21,7 @@ set -eu
 cd "$(git rev-parse --show-toplevel)"
 
 want_db=no
+skipped_store=no
 steps=""
 for arg in "$@"; do
 	case $arg in
@@ -106,6 +107,7 @@ run_core() {
 	step "go test -race"
 	if [ -z "${OCHAKAI_TEST_DATABASE_URL:-}" ]; then
 		echo "check: OCHAKAI_TEST_DATABASE_URL unset — store tests will skip (see --db)" >&2
+		skipped_store=yes
 	fi
 	# -count=1 for the same reason CI passes it: the store tests talk to
 	# Postgres, which the test cache cannot see.
@@ -146,4 +148,11 @@ for s in $steps; do
 	esac
 done
 
-step "ok"
+# What the last line says is what gets remembered, and CI runs these steps
+# against a database while a local run without --db does not. "ok" alone
+# would let a run that never touched the store read as the run CI will do.
+if [ "$skipped_store" = yes ]; then
+	step "ok — store tests skipped (rerun with --db; CI runs them)"
+else
+	step "ok"
+fi

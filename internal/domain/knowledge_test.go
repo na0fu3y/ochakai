@@ -397,3 +397,54 @@ func TestTypesHintCoversEveryBuiltin(t *testing.T) {
 		t.Error("Attested Computation should be a recommended type (design doc 0036 §3.6)")
 	}
 }
+
+// SPEC §7's third actor form, as ochakai admits it: software and version,
+// told apart from the two identity forms by the slash it uses and the
+// colon it must not (design doc 0052 §3.2).
+func TestValidProducer(t *testing.T) {
+	for _, s := range []string{
+		"insightflow/1.4.0",
+		"claude-code/2026.07",     // no version grammar is imposed
+		"ochakai/v0.15.0-3-gabc1", // nor is semver
+		"x/y",
+	} {
+		if !ValidProducer(s) {
+			t.Errorf("ValidProducer(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{
+		"",
+		"insightflow",               // no version
+		"insightflow/",              // empty version
+		"/1.4.0",                    // empty producer
+		"a/b/c",                     // two slashes
+		"insight flow/1.4.0",        // whitespace
+		"insightflow/1.4.0\n",       // control character
+		"process:insightflow/1.4.0", // would read as SPEC §7's identity form
+		strings.Repeat("x", MaxProducer) + "/1",
+	} {
+		if ValidProducer(s) {
+			t.Errorf("ValidProducer(%q) = true, want false", s)
+		}
+	}
+}
+
+// Provenance reads as one sentence on every surface, and each clause is
+// dropped when there is nothing to say (design docs 0027, 0052 §3.5).
+func TestActorString(t *testing.T) {
+	for _, tc := range []struct {
+		a    Actor
+		want string
+	}{
+		{Actor{Kind: ActorHuman, Name: "tanaka@example.co.jp"}, "human:tanaka@example.co.jp"},
+		{Actor{Kind: ActorProcess, Name: "sa@example.iam.gserviceaccount.com", Producer: "insightflow/1.4.0"},
+			"process:sa@example.iam.gserviceaccount.com using insightflow/1.4.0"},
+		{Actor{Kind: ActorHuman, Name: "tanaka@example.co.jp", Via: "process:app@example.iam.gserviceaccount.com",
+			Producer: "insightflow/1.4.0"},
+			"human:tanaka@example.co.jp via process:app@example.iam.gserviceaccount.com using insightflow/1.4.0"},
+	} {
+		if got := tc.a.String(); got != tc.want {
+			t.Errorf("Actor%+v.String() = %q, want %q", tc.a, got, tc.want)
+		}
+	}
+}

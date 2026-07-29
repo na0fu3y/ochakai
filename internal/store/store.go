@@ -85,6 +85,7 @@ type Store struct {
 	// once more before flushWG releases (see New/Close, usage.go).
 	usageMu   sync.Mutex
 	usageBuf  []usageEvent
+	missBuf   []missEvent
 	flushStop chan struct{}
 	flushWG   sync.WaitGroup
 }
@@ -178,11 +179,13 @@ type Filter struct {
 	Trust    []domain.Trust
 	Rejected *bool
 
-	// Frontmatter narrows by any frontmatter key, which is what makes the
-	// query surface additive: a key OKF adds in a later version — or one
-	// a producer invented — is askable the day somebody writes it, with
-	// no column and no release (design doc 0046 §3.11). Every pair must
-	// match (AND), matching a scalar exactly or a list by membership.
+	// Frontmatter narrows by a frontmatter key read out of the jsonb
+	// index, which is what keeps the query surface additive: a key OKF
+	// adds in a later version is askable with no column and no migration
+	// (design doc 0046 §3.11). Which keys those are is the service's
+	// question, not the store's — OKF's own, less the ones a named filter
+	// answers (design doc 0047). Every pair must match (AND), matching a
+	// scalar exactly or a list by membership.
 	// Values are text, and a value that spells a number or a boolean
 	// matches the typed frontmatter as well as the text: YAML types what
 	// it parses, so `required: true` is indexed as a boolean and would
@@ -197,8 +200,8 @@ type Filter struct {
 
 const knowledgeCols = `type, id, title, description, resource, tags, status, status_note, stale_after,
 	sources, usage_window, runtime, parameters, computation, executor, attester,
-	created_by_kind, created_by_name, created_by_via,
-	updated_by_kind, updated_by_name, updated_by_via,
+	created_by_kind, created_by_name, created_by_via, created_by_producer,
+	updated_by_kind, updated_by_name, updated_by_via, updated_by_producer,
 	links, attrs, body, created_at, updated_at, content_changed_at, doc, frontmatter, content_hash`
 
 // ledgerCols is the two instance ledgers — verifications and the
@@ -214,11 +217,11 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 // like a valid one.
 func ledgerCols(alias string) string {
 	return `(SELECT jsonb_agg(jsonb_build_object(
-			'by', jsonb_build_object('kind', v.by_kind, 'name', v.by_name, 'via', v.by_via),
+			'by', jsonb_build_object('kind', v.by_kind, 'name', v.by_name, 'via', v.by_via, 'producer', v.by_producer),
 			'at', v.at) ORDER BY v.seq)
 		FROM knowledge_verification v WHERE v.id = ` + alias + `.id),
 		(SELECT jsonb_build_object(
-			'by', jsonb_build_object('kind', r.by_kind, 'name', r.by_name, 'via', r.by_via),
+			'by', jsonb_build_object('kind', r.by_kind, 'name', r.by_name, 'via', r.by_via, 'producer', r.by_producer),
 			'at', r.at, 'note', r.note)
 		FROM knowledge_rejection r WHERE r.id = ` + alias + `.id)`
 }
@@ -228,6 +231,28 @@ func ledgerCols(alias string) string {
 // that used to read a verified_at column read this instead.
 func lastVerifiedAt(alias string) string {
 	return `(SELECT max(v.at) FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
+}
+
+// unansweredFailure is what puts an entry in the re-verification feed: it
+// has failure reports, and none of them has been answered by a
+// verification since (design doc 0025 §6.2). Needs usageLateral joined as
+// u. Written once because the instance stats count the same feed, and a
+// queue whose depth disagrees with the queue is worse than no depth at
+// all (design doc 0051 §3.5).
+func unansweredFailure(alias string) string {
+	v := lastVerifiedAt(alias)
+	return `u.failed > 0 AND (` + v + ` IS NULL OR u.last_failed_at > ` + v + `)`
+}
+
+// pastExpiry is what puts an entry in the stale_after feed: the writer
+// declared an expiry and it has passed (design doc 0037 §2.1). "Today" is
+// UTC, spelled out rather than left to current_date — the column is a
+// bare date so staleness needs no timezone (design doc 0036 §3.9), and
+// current_date would hand that decision to whatever TimeZone the database
+// session happens to carry, making the same entry stale on one deployment
+// and not on another.
+func pastExpiry(prefix string) string {
+	return prefix + `stale_after IS NOT NULL AND ` + prefix + `stale_after <= (now() AT TIME ZONE 'UTC')::date`
 }
 
 // withoutDoc drops the stored document from a column list. A read does
@@ -376,8 +401,8 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 	var verifications, rejection []byte
 	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote, &staleAfter,
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
-		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via,
-		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via,
+		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via, &k.CreatedBy.Producer,
+		&k.UpdatedBy.Kind, &k.UpdatedBy.Name, &k.UpdatedBy.Via, &k.UpdatedBy.Producer,
 		&links, &attrs, &k.Body, &k.CreatedAt, &k.UpdatedAt, &k.ContentChangedAt}
 	if withDoc {
 		dests = append(dests, &k.Doc)
@@ -509,21 +534,23 @@ func scanKnowledgeDoc(row pgx.CollectableRow) (domain.Knowledge, error) {
 	return k, finish()
 }
 
-func actorFrom(kind, name *string, via string) *domain.Actor {
+func actorFrom(kind, name *string, via, producer string) *domain.Actor {
 	if kind == nil || name == nil {
 		return nil
 	}
-	return &domain.Actor{Kind: *kind, Name: *name, Via: via}
+	return &domain.Actor{Kind: *kind, Name: *name, Via: via, Producer: producer}
 }
 
 // actorPtrs splits an optional actor into its columns. Kind and name are
-// nullable together (no actor at all); via is a plain column because an
-// absent delegation and an empty one are the same thing.
-func actorPtrs(a *domain.Actor) (kind, name *string, via string) {
+// nullable together (no actor at all); via and producer are plain columns
+// because an absent delegation and an empty one are the same thing, and so
+// are an unnamed producer and an empty one (design docs 0027 §5.3, 0052
+// §3.4).
+func actorPtrs(a *domain.Actor) (kind, name *string, via, producer string) {
 	if a == nil {
-		return nil, nil, ""
+		return nil, nil, "", ""
 	}
-	return &a.Kind, &a.Name, a.Via
+	return &a.Kind, &a.Name, a.Via, a.Producer
 }
 
 // queryKnowledge runs a query selecting knowledgeCols and collects the
@@ -683,8 +710,8 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 		args := []any{
 			k.Type, k.ID, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
-			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via,
-			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
+			k.CreatedBy.Kind, k.CreatedBy.Name, k.CreatedBy.Via, k.CreatedBy.Producer,
+			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via, k.UpdatedBy.Producer,
 			j.links, j.attrs, k.Body, k.CreatedAt, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash,
 		}
 		// The path is the row's key (design doc 0046 §3.1) and the id is
@@ -768,7 +795,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		cond := ""
 		args := []any{k.ID, k.Type, k.Title, k.Description, k.Resource, k.Tags, k.Status, k.StatusNote, staleAfter,
 			j.sources, j.usageWindow, k.Runtime, j.parameters, k.Computation, j.executor, j.attester,
-			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via,
+			k.UpdatedBy.Kind, k.UpdatedBy.Name, k.UpdatedBy.Via, k.UpdatedBy.Producer,
 			j.links, j.attrs, k.Body, k.UpdatedAt, k.ContentChangedAt, doc, fm, hash, bodyFiles(k)}
 		if ifMatch != nil {
 			args = append(args, *ifMatch)
@@ -777,9 +804,9 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		tag, err := tx.Exec(ctx, `UPDATE object SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
-			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19,
-			links=$20, attrs=$21, body=$22, updated_at=$23, content_changed_at=$24,
-			doc=$25, frontmatter=$26, content_hash=$27, files=$28
+			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19, updated_by_producer=$20,
+			links=$21, attrs=$22, body=$23, updated_at=$24, content_changed_at=$25,
+			doc=$26, frontmatter=$27, content_hash=$28, files=$29
 			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
@@ -838,12 +865,12 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 		var at time.Time
 		// The EXISTS guard makes the insert and the liveness check one
 		// statement, closing the race with a concurrent delete.
-		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, at)
+		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, by_producer, at)
 			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
-				$2, $3, $4, now()
+				$2, $3, $4, $5, now()
 			WHERE EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)
 			RETURNING at`,
-			id, actor.Kind, actor.Name, actor.Via).Scan(&at)
+			id, actor.Kind, actor.Name, actor.Via, actor.Producer).Scan(&at)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -877,13 +904,13 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 func (s *Store) Reject(ctx context.Context, id string, actor domain.Actor, note string) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `INSERT INTO knowledge_rejection (id, by_kind, by_name, by_via, at, note)
-			SELECT $1, $2, $3, $4, now(), $5
+		tag, err := tx.Exec(ctx, `INSERT INTO knowledge_rejection (id, by_kind, by_name, by_via, by_producer, at, note)
+			SELECT $1, $2, $3, $4, $5, now(), $6
 			WHERE EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)
 			ON CONFLICT (id) DO UPDATE SET
 				by_kind=EXCLUDED.by_kind, by_name=EXCLUDED.by_name, by_via=EXCLUDED.by_via,
-				at=EXCLUDED.at, note=EXCLUDED.note`,
-			id, actor.Kind, actor.Name, actor.Via, note)
+				by_producer=EXCLUDED.by_producer, at=EXCLUDED.at, note=EXCLUDED.note`,
+			id, actor.Kind, actor.Name, actor.Via, actor.Producer, note)
 		if err != nil {
 			return err
 		}
@@ -995,12 +1022,12 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			return ErrNotDeleted
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO knowledge_purge
-			(id, type, title, revisions, purged_by_kind, purged_by_name, purged_by_via)
+			(id, type, title, revisions, purged_by_kind, purged_by_name, purged_by_via, purged_by_producer)
 			SELECT k.id, k.type, k.title,
 			       (SELECT count(*) FROM knowledge_revision r WHERE r.id = k.id),
-			       $2, $3, $4
+			       $2, $3, $4, $5
 			  FROM object k WHERE k.id = $1`,
-			id, actor.Kind, actor.Name, actor.Via); err != nil {
+			id, actor.Kind, actor.Name, actor.Via, actor.Producer); err != nil {
 			return err
 		}
 		for _, q := range []string{
@@ -1083,10 +1110,10 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// exactly as in SoftDelete: the Get above ran outside this
 		// transaction.
 		tag, err := tx.Exec(ctx,
-			`UPDATE object SET id=$2, path=$7, updated_at=$3, content_changed_at=$3,
-			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6
+			`UPDATE object SET id=$2, path=$8, updated_at=$3, content_changed_at=$3,
+			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6, updated_by_producer=$7
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via, domain.ConceptPath(newID))
+			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer, domain.ConceptPath(newID))
 		if isUniqueViolation(err) {
 			// The probe above found the destination free, but it took no
 			// lock — a create can land on newID in the window. The primary
@@ -1267,10 +1294,10 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		r.ContentHash = hash
 		tag, err := tx.Exec(ctx,
 			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
-			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8,
-			 doc=$9, content_hash=$10, content_changed_at=$11, frontmatter=$12
+			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8, updated_by_producer=$9,
+			 doc=$10, content_hash=$11, content_changed_at=$12, frontmatter=$13
 			 WHERE id=$1 AND deleted_at IS NULL`,
-			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, doc, hash,
+			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer, doc, hash,
 			r.ContentChangedAt, fm)
 		if err != nil {
 			return err
@@ -1303,7 +1330,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 // trail is most interesting exactly when the entry is gone.
 func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_at, doc
+		`SELECT rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_by_producer, changed_at, doc
 		 FROM knowledge_revision WHERE id=$1 ORDER BY rev DESC LIMIT $2`,
 		id, limit)
 	if err != nil {
@@ -1311,7 +1338,8 @@ func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]doma
 	}
 	revs, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Revision, error) {
 		var r domain.Revision
-		return r, row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedBy.Via, &r.ChangedAt, &r.Document)
+		return r, row.Scan(&r.Rev, &r.Change, &r.ChangedBy.Kind, &r.ChangedBy.Name, &r.ChangedBy.Via,
+			&r.ChangedBy.Producer, &r.ChangedAt, &r.Document)
 	})
 	if err != nil {
 		return nil, err
@@ -1349,7 +1377,7 @@ type LogRow struct {
 func (s *Store) ListRevisionsUnder(ctx context.Context, prefix string, limit int) ([]LogRow, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT r.id, COALESCE(k.title, ''), r.change,
-		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_at
+		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_by_producer, r.changed_at
 		 FROM knowledge_revision r
 		 LEFT JOIN object k ON k.id = r.id
 		 WHERE $1 = '' OR r.id = $1 OR r.id LIKE $2
@@ -1361,7 +1389,7 @@ func (s *Store) ListRevisionsUnder(ctx context.Context, prefix string, limit int
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (LogRow, error) {
 		var l LogRow
 		return l, row.Scan(&l.ID, &l.Title, &l.Change,
-			&l.ChangedBy.Kind, &l.ChangedBy.Name, &l.ChangedBy.Via, &l.ChangedAt)
+			&l.ChangedBy.Kind, &l.ChangedBy.Name, &l.ChangedBy.Via, &l.ChangedBy.Producer, &l.ChangedAt)
 	})
 }
 
@@ -1376,9 +1404,10 @@ func (s *Store) addRevision(ctx context.Context, tx pgx.Tx, k *domain.Knowledge,
 	// A revision is an event about an object, so the ledger counts by
 	// path (design doc 0046 §3.1): when a file's create and delete land
 	// here too, they share one history with the concept beside them.
-	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision (path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
-		VALUES ($1, $2, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $3, $4, $5, $6, $7)`,
-		domain.ConceptPath(k.ID), k.ID, change, actor.Kind, actor.Name, actor.Via, string(doc))
+	_, err = tx.Exec(ctx, `INSERT INTO knowledge_revision
+		(path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_by_producer, doc)
+		VALUES ($1, $2, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $3, $4, $5, $6, $7, $8)`,
+		domain.ConceptPath(k.ID), k.ID, change, actor.Kind, actor.Name, actor.Via, actor.Producer, string(doc))
 	return err
 }
 
@@ -1921,15 +1950,94 @@ func sourceContainment(resource string) []byte {
 	return b
 }
 
+// After is the position a listing resumes from: the values of the
+// ordering columns for the last row handed out, in the order they are
+// ordered by, with the id last (design doc 0050 §2.1). A nil element is
+// SQL NULL — the never-verified entries at the tail of an ASC NULLS LAST
+// order. Nil After is the first page.
+//
+// The values travel as text and are cast back per column, which is what
+// lets the same shape carry a timestamp, a date and a count.
+type After struct {
+	Keys []*string
+	ID   string
+}
+
+// orderCol describes one column of a listing's ORDER BY, so the same
+// keyset predicate can be built for every feed rather than once per
+// feed. cast is the type the cursor's text is compared as.
+type orderCol struct {
+	expr string
+	cast string
+	desc bool
+	// null marks a column ordered ASC NULLS LAST — the one nullable
+	// position any of the feeds has (verification age).
+	null bool
+}
+
+// keysetAfter renders "strictly after this position" for an ORDER BY of
+// cols followed by idExpr, appending the cursor's values to args. It
+// returns "" when there is no position to resume from, so the caller can
+// AND it in unconditionally.
+//
+// The predicate is the lexicographic comparison spelled out rather than
+// PostgreSQL's row constructor: a row comparison cannot express one
+// column descending beside another ascending, and every feed here mixes
+// the two (most-failed first, fewest corroborations first).
+func keysetAfter(cols []orderCol, idExpr string, a *After, args *[]any) (string, error) {
+	if a == nil {
+		return "", nil
+	}
+	if len(a.Keys) != len(cols) {
+		return "", fmt.Errorf("cursor carries %d keys, this listing orders by %d", len(a.Keys), len(cols))
+	}
+	// Built from the id outwards: the innermost term is "same on every
+	// key, later id", and each column wraps it with "strictly after on
+	// this key, or equal on it and after by everything below".
+	*args = append(*args, a.ID)
+	pred := fmt.Sprintf("%s > $%d", idExpr, len(*args))
+	for i := len(cols) - 1; i >= 0; i-- {
+		c, v := cols[i], a.Keys[i]
+		var strict, eq string
+		if v == nil {
+			// Nothing sorts after a NULL in ASC NULLS LAST, so the walk
+			// can only continue among the other NULLs, by id.
+			if !c.null {
+				return "", fmt.Errorf("cursor holds no value for %s, which is never null", c.expr)
+			}
+			strict, eq = "false", c.expr+" IS NULL"
+		} else {
+			*args = append(*args, *v)
+			ref := fmt.Sprintf("$%d::%s", len(*args), c.cast)
+			op := ">"
+			if c.desc {
+				op = "<"
+			}
+			strict = fmt.Sprintf("%s %s %s", c.expr, op, ref)
+			if c.null {
+				// A NULL sorts after every value, so it is after this one.
+				strict = fmt.Sprintf("(%s OR %s IS NULL)", strict, c.expr)
+			}
+			eq = fmt.Sprintf("%s = %s", c.expr, ref)
+		}
+		pred = fmt.Sprintf("(%s OR (%s AND %s))", strict, eq, pred)
+	}
+	return " AND " + pred, nil
+}
+
 // ListBySource lists the entries a filter matches, by id. It exists for
 // the source lookup: "what cites this resource" is a question with no
 // text to rank by, so it lists rather than searches (design doc 0037
 // §2.3). Ordered by id because the answer is a set — a stable, readable
 // order beats a relevance score nothing computed.
-func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+func (s *Store) ListBySource(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		ORDER BY id LIMIT %d`, where, limit), args...)
+	keyset, err := keysetAfter(nil, "id", after, &args)
+	if err != nil {
+		return nil, err
+	}
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s%s
+		ORDER BY id LIMIT %d`, where, keyset, limit), args...)
 }
 
 // ListByStaleAfter returns the entries whose declared expiry has passed,
@@ -1944,25 +2052,31 @@ func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain
 // is the writer's declaration, not something the server observed, so
 // clearing it means editing the entry to re-declare an expiry
 // (design doc 0037 §2.2).
-func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	// "Today" is UTC, spelled out rather than left to current_date. The
-	// column is a bare date so that staleness needs no timezone (design
-	// doc 0036 §3.9), and current_date would hand that decision to
-	// whatever TimeZone the database session happens to carry — the same
-	// entry would be stale on one deployment and not on another.
+	keyset, err := keysetAfter(
+		[]orderCol{{expr: "stale_after", cast: "date"}}, "id", after, &args)
+	if err != nil {
+		return nil, err
+	}
 	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		AND stale_after IS NOT NULL AND stale_after <= (now() AT TIME ZONE 'UTC')::date
-		ORDER BY stale_after ASC, id LIMIT %d`, where, limit), args...)
+		AND `+pastExpiry("")+`%s
+		ORDER BY stale_after ASC, id LIMIT %d`, where, keyset, limit), args...)
 }
 
 // ListByVerifiedAt returns filtered entries ordered by verification age,
 // oldest first (never-verified entries last). This is the feed for golden
 // query canary runs: "which verified queries have gone longest unchecked".
-func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		ORDER BY `+lastVerifiedAt("object")+` ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
+	keyset, err := keysetAfter(
+		[]orderCol{{expr: lastVerifiedAt("object"), cast: "timestamptz", null: true}},
+		"id", after, &args)
+	if err != nil {
+		return nil, err
+	}
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s%s
+		ORDER BY `+lastVerifiedAt("object")+` ASC NULLS LAST, id LIMIT %d`, where, keyset, limit), args...)
 }
 
 // usageLateral aggregates a knowledge entry's per-event running totals
@@ -1988,14 +2102,21 @@ const usageLateral = `
 // the top, and never-used drafts (search_hits 0) sinking oldest-first to
 // the bottom for inventory. Each hit carries its usage totals so the
 // caller renders the signal without a per-entry round trip. Score is 0.
-func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	keyset, err := keysetAfter([]orderCol{
+		{expr: "u.search_hits", cast: "bigint", desc: true},
+		{expr: "k.created_at", cast: "timestamptz"},
+	}, "k.id", after, &args)
+	if err != nil {
+		return nil, err
+	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
-		WHERE %s
-		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, limit)
+		WHERE %s%s
+		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, keyset, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -2022,21 +2143,53 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 // fewest corroborating "worked" reports, then verification age (oldest
 // first, never-verified last), then id. Each hit carries its usage totals
 // so the reviewer sees the worked/failed evidence inline; score is 0.
-func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	keyset, err := keysetAfter([]orderCol{
+		{expr: "u.failed", cast: "bigint", desc: true},
+		{expr: "u.worked", cast: "bigint"},
+		{expr: lastVerifiedAt("k"), cast: "timestamptz", null: true},
+	}, "k.id", after, &args)
+	if err != nil {
+		return nil, err
+	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
-		WHERE %s AND u.failed > 0
-			AND (%[2]s IS NULL OR u.last_failed_at > %[2]s)
+		WHERE %s AND `+unansweredFailure("k")+`%[4]s
 		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
-		where, lastVerifiedAt("k"), limit)
+		where, lastVerifiedAt("k"), limit, keyset)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, scanUsageHit)
+}
+
+// QueueCounts counts the three review queues in one pass: how many
+// entries each of ListByUsage's draft feed, ListByFailed and
+// ListByStaleAfter would return (design doc 0049). A count and a listing
+// want different queries — measuring three feeds by fetching a thousand
+// rows from each is not measuring — but they must not want different
+// *predicates*: those are the feeds' own (unansweredFailure, pastExpiry),
+// so a queue's depth cannot come to mean something other than the queue.
+//
+// The filter is the same one the feeds take, so a count is scoped by
+// prefix the way the listings are: a team asks about its own subtree.
+func (s *Store) QueueCounts(ctx context.Context, f Filter) (domain.QueueCounts, error) {
+	where, args := f.buildWhere("k.")
+	q := fmt.Sprintf(`
+		SELECT
+			count(*) FILTER (WHERE k.status = 'draft'),
+			count(*) FILTER (WHERE `+unansweredFailure("k")+`),
+			count(*) FILTER (WHERE `+pastExpiry("k.")+`)
+		FROM object k`+usageLateral+`
+		WHERE %[1]s`, where)
+	var c domain.QueueCounts
+	err := s.pool.QueryRow(ctx, q, args...).
+		Scan(&c.Drafts, &c.ReportedWrong, &c.PastExpiry)
+	return c, err
 }
 
 // scanUsageHit reads a knowledge row followed by its usage totals (the

@@ -50,43 +50,32 @@ const attributedTo = `f.id IS NULL AND f.deleted_at IS NULL
 const fileCols = `f.path, f.media_type, f.size, f.blob_hash,
 	f.created_by_kind, f.created_by_name, f.created_at`
 
-// asAttachment renders one file object the way the surfaces name it.
-// ownerID decides whether the path is the canonical <id>/<name>, in
-// which case there is no okf_path to report: okf_path means "this file
-// is not where ochakai would have put it" (design doc 0013), and after
-// 0046 §3.3 that is a fact about the path rather than a stored column.
-func asAttachment(ownerID, path, mediaType string, size int64, hash string,
+// asAttachment renders one file object the way the surfaces name it: at
+// its path, with the last segment as the name every surface calls it by.
+func asAttachment(path, mediaType string, size int64, hash string,
 	by domain.Actor, at time.Time,
 ) domain.Attachment {
-	name := path[strings.LastIndex(path, "/")+1:]
-	okfPath := path
-	if path == ownerID+"/"+name {
-		okfPath = ""
-	}
 	return domain.Attachment{
-		Name: name, MediaType: mediaType, Size: size, SHA256: hash,
-		OKFPath: okfPath, CreatedBy: by, CreatedAt: at,
+		Name: path[strings.LastIndex(path, "/")+1:], MediaType: mediaType,
+		Size: size, SHA256: hash, Path: path, CreatedBy: by, CreatedAt: at,
 	}
 }
 
-// scanFile pairs fileCols with asAttachment, for the reads that know
-// whose file it is.
-func scanFile(ownerID string) func(pgx.CollectableRow) (domain.Attachment, error) {
-	return func(row pgx.CollectableRow) (domain.Attachment, error) {
-		var path, mediaType, hash string
-		var size int64
-		var by domain.Actor
-		var at time.Time
-		if err := row.Scan(&path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
-			return domain.Attachment{}, err
-		}
-		return asAttachment(ownerID, path, mediaType, size, hash, by, at), nil
+// scanFile pairs fileCols with asAttachment.
+func scanFile(row pgx.CollectableRow) (domain.Attachment, error) {
+	var path, mediaType, hash string
+	var size int64
+	var by domain.Actor
+	var at time.Time
+	if err := row.Scan(&path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
+		return domain.Attachment{}, err
 	}
+	return asAttachment(path, mediaType, size, hash, by, at), nil
 }
 
 // filePath is where a file with this name, written against this entry,
-// lives: the path it arrived at when the entry's own body points there,
-// and the canonical <id>/<name> otherwise.
+// lives: the path it names when the entry's own body points there, and
+// the canonical <id>/<name> otherwise.
 //
 // The body is what decides, because the body is what attributes the file
 // (design doc 0046 §3.3). A caller naming a path the entry says nothing
@@ -94,13 +83,13 @@ func scanFile(ownerID string) func(pgx.CollectableRow) (domain.Attachment, error
 // moment it lands, and one no export would put back where it was asked
 // for. Under the entry's own namespace it needs no mention: the path
 // says whose it is.
-func filePath(k *domain.Knowledge, name, okfPath string) string {
+func filePath(k *domain.Knowledge, name, at string) string {
 	canonical := k.ID + "/" + name
-	if okfPath == "" || okfPath == canonical {
+	if at == "" || at == canonical {
 		return canonical
 	}
-	if slices.Contains(domain.FilesFromBody(k.ID, k.Body), okfPath) {
-		return okfPath
+	if slices.Contains(domain.FilesFromBody(k.ID, k.Body), at) {
+		return at
 	}
 	return canonical
 }
@@ -110,14 +99,14 @@ func filePath(k *domain.Knowledge, name, okfPath string) string {
 // (domain.DetectAttachmentMediaType). Attach and detach count as changes
 // to the entry: updated_at is bumped and a revision (with the attachment
 // list in the snapshot) is recorded.
-func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, okfPath string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
 	sum := sha256.Sum256(data)
 	att := &domain.Attachment{
 		Name:      name,
 		MediaType: mediaType,
 		Size:      int64(len(data)),
 		SHA256:    hex.EncodeToString(sum[:]),
-		OKFPath:   okfPath,
+		Path:      at,
 		CreatedBy: actor,
 		CreatedAt: time.Now().UTC(),
 	}
@@ -135,7 +124,7 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, okfPath 
 		if err != nil {
 			return err
 		}
-		path := filePath(k, name, okfPath)
+		path := filePath(k, name, at)
 		// The blob row is metadata only now — the object row carries the
 		// media type and size a read answers with — but it stays the
 		// registry of which content exists, and a revision names bytes by
@@ -203,7 +192,7 @@ func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.Attach
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanFile(id))
+	return pgx.CollectRows(rows, scanFile)
 }
 
 // ListAttachmentsBatch returns file metadata for a set of entries in one
@@ -229,7 +218,7 @@ func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[str
 		if err := rows.Scan(&owner, &path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
 			return nil, err
 		}
-		out[owner] = append(out[owner], asAttachment(owner, path, mediaType, size, hash, by, at))
+		out[owner] = append(out[owner], asAttachment(path, mediaType, size, hash, by, at))
 	}
 	return out, rows.Err()
 }
@@ -250,7 +239,7 @@ func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain
 	if err != nil {
 		return nil, err
 	}
-	att, err := pgx.CollectExactlyOneRow(rows, scanFile(id))
+	att, err := pgx.CollectExactlyOneRow(rows, scanFile)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -274,7 +263,7 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 		if err != nil {
 			return err
 		}
-		path := filePath(k, att.Name, att.OKFPath)
+		path := filePath(k, att.Name, att.Path)
 		tag, err := tx.Exec(ctx, `DELETE FROM object WHERE path=$1 AND id IS NULL`, path)
 		if err != nil {
 			return err
@@ -346,7 +335,7 @@ func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.Atta
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanFile(id))
+	return pgx.CollectRows(rows, scanFile)
 }
 
 // PutFile writes a file object at a bundle path, replacing whatever file
@@ -399,7 +388,7 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 	}
 	return &domain.Attachment{
 		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
-		Size: int64(len(data)), SHA256: hash, OKFPath: p,
+		Size: int64(len(data)), SHA256: hash, Path: p,
 		CreatedBy: actor, CreatedAt: at,
 	}, nil
 }
@@ -434,7 +423,7 @@ func (s *Store) GetFileMeta(ctx context.Context, p string) (*domain.Attachment, 
 	if err != nil {
 		return nil, err
 	}
-	a.Name, a.OKFPath, a.CreatedAt = p[strings.LastIndex(p, "/")+1:], p, at
+	a.Name, a.Path, a.CreatedAt = p[strings.LastIndex(p, "/")+1:], p, at
 	return &a, nil
 }
 
@@ -459,8 +448,8 @@ func (s *Store) DeleteFile(ctx context.Context, p string, actor domain.Actor) er
 // is the whole of what happened.
 func (s *Store) addFileRevision(ctx context.Context, tx pgx.Tx, p, change string, actor domain.Actor) error {
 	_, err := tx.Exec(ctx, `INSERT INTO knowledge_revision
-		(path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
-		VALUES ($1, NULL, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $2, $3, $4, $5, '')`,
-		p, change, actor.Kind, actor.Name, actor.Via)
+		(path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_by_producer, doc)
+		VALUES ($1, NULL, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $2, $3, $4, $5, $6, '')`,
+		p, change, actor.Kind, actor.Name, actor.Via, actor.Producer)
 	return err
 }

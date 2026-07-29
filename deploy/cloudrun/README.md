@@ -274,7 +274,7 @@ reaching the app.
 ## 4. Hybrid semantic search (Vertex AI, on by default)
 
 On Cloud Run, ochakai asks the metadata server which project it is
-running in and turns semantic search on with it (design doc 0049) —
+running in and turns semantic search on with it (design doc 0053) —
 there is no variable to set, and authentication is the service identity
 via ADC, so there are still no API keys.
 
@@ -358,7 +358,7 @@ are in a space nothing queries any more (design doc 0020).
 
 If the new model also changes `OCHAKAI_EMBEDDING_DIM`, ochakai rebuilds
 the vector tables at the new width on the next start and logs that it
-did (design doc 0049 §3). Nothing you curated is involved: a vector is
+did (design doc 0053 §3). Nothing you curated is involved: a vector is
 derived from the object it describes, and the old ones were in a space
 nothing would query. What it costs is the calls to refill them, so
 refilling stays yours to ask for:

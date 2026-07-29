@@ -409,7 +409,7 @@ const unreadableRevision = "---\ntype: Reference\nstatus: deprecated\n---\n\n" +
 // be migrated at all: a deployment that asked for semantic search by name
 // is told either way, while one that got it as the default of running on
 // Google Cloud carries on lexical-only rather than refusing to serve
-// knowledge over an index it never asked for (design doc 0049 §2.3).
+// knowledge over an index it never asked for (design doc 0053 §2.3).
 var ErrEmbeddingUnavailable = errors.New("vector storage for semantic search is unavailable")
 
 // migrateEmbedding sets up pgvector storage. Runs only when an embedding
@@ -463,7 +463,7 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 // instead, and told the operator to run `DROP TABLE knowledge_embedding,
 // attachment_embedding` by hand. That refusal is why the feature read as
 // advanced: the one operational hazard in the product was a schema change
-// the product would not perform (design doc 0049 §3).
+// the product would not perform (design doc 0053 §3).
 //
 // It performs it now, because of what these tables are. **A vector is
 // derived, not recorded**: every one of them can be recomputed from the
@@ -475,7 +475,7 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 //
 // What it does cost is those calls, so it says so rather than doing it
 // quietly, and leaves the refill to `ochakai reembed`: search stays
-// lexical until somebody spends that money deliberately (0049 §3.2).
+// lexical until somebody spends that money deliberately (0053 §3.2).
 func (s *Store) resizeVectorSpace(ctx context.Context, dim int) error {
 	var stored int
 	// to_regclass rather than a cast: the cast raises when the table is

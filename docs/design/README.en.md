@@ -38,10 +38,10 @@ For the shape of the system rather than the history of it, read
   source of the usage telemetry and outcome reporting that later records
   build on.
   *For a user:* interpretation is your agent's job by design. (§4's
-  opt-in embeddings were made the default on Google Cloud by 0049.)
+  opt-in embeddings were made the default on Google Cloud by 0053.)
 
 - **[0003 Google Cloud only](0003-gcp-only.md)** — *Accepted; "optionally
-  Vertex AI" became a default-path dependency in 0049.* Supports
+  Vertex AI" became a default-path dependency in 0053.* Supports
   Cloud Run + Cloud SQL (optionally Vertex AI) and nothing else,
   overturning 0001's portability stance. Removed in 0.3.0: `OCHAKAI_AUTH`,
   the static-token client mode, CORS configuration, and the embedding
@@ -50,8 +50,8 @@ For the shape of the system rather than the history of it, read
   *For a user:* portability is promised for your data (OKF export), not
   for the runtime; there is no supported deployment elsewhere.
 
-- **[0049 Embeddings are the default, and a vector space is
-  disposable](0049-embeddings-by-default.md)** — *Accepted; revises 0001
+- **[0053 Embeddings are the default, and a vector space is
+  disposable](0053-embeddings-by-default.md)** — *Accepted; revises 0001
   §4's opt-in embeddings and adds Vertex AI to 0003's default path.*
   Running on Google Cloud, ochakai asks the metadata server which project
   it is in and turns semantic search on with it — no variable to set. What
@@ -154,35 +154,69 @@ For the shape of the system rather than the history of it, read
   *For a user:* an application embedding ochakai can attribute writes to
   its real users instead of collapsing them into one service account.
 
+- **[0052 The self-declaration goes beside the
+  actor](0052-producer-beside-the-actor.md)** — *Accepted; revises 0043
+  §3.8's "the `<producer>/<version>` form stays unused", which 0046 §2.4
+  had carried forward unchanged.* SPEC §7's third actor form names
+  software where the other two name an identity, and a ochakai write
+  always has an authenticated identity behind it — so the producer is
+  recorded in a fourth actor field rather than in the actor's place, the
+  same composition 0027 chose for delegation. It arrives on
+  `X-Ochakai-Producer`, or from MCP's initialize `clientInfo`, or from
+  `OCHAKAI_PRODUCER` for the CLI; a malformed value is a 400, not a
+  silent drop. The actor kinds stay `human:` / `process:` and the trust
+  tier is untouched — SPEC §5.3 reads the `human:` prefix alone. The web
+  UI sends none: a person editing by hand runs no producer.
+  *For a user:* "which agent, at which build, drafted this" is finally in
+  the record — visible on every provenance line, in `log.md`, and on the
+  `producer` key of an exported document — so a model upgrade can be
+  judged against the drafts that followed it. Import still reads none of
+  it back: a bundle's producer has nothing vouching for it.
+
 - **[0009 OKF/Git round-trips and who owns
   provenance](0009-provenance-portability.md)** — *Proposed; its
   world-view was settled by 0036 §2.2 and carried into the stored shape
-  by 0043.* Provenance is what an instance
+  by 0043, and 0046 §2.2 narrowed "never read back" to "never believed".*
+  Provenance is what an instance
   observed, not a portable attribute, so bundles carry knowledge only and
   exported `created_by` / `verified_by` are historical reference that
-  import never reads back. A `--preserve-provenance` flag is refused:
-  with no authorization mechanism, it would let anyone self-assert
-  provenance and destroy the anchor 0002 depends on.
+  import never reads into a ledger. A `--preserve-provenance` flag is
+  refused: with no authorization mechanism, it would let anyone
+  self-assert provenance and destroy the anchor 0002 depends on. What
+  0046 §2.2 changed is only that the assertion is kept as a claim
+  instead of being destroyed — nothing derives trust from it.
   *For a user:* migrating to a new instance records the importer, so run
   migrations under a dedicated identity.
 
 ## The knowledge model — structure, ids, types, names, links
 
-- **[0047 `fm.` carries the keys ochakai does not name](0047-fm-carries-unnamed-keys.md)**
-  — *Accepted; amends 0046 §3.11, whose "the named filters become sugar
-  over the frontmatter expression" is not what shipped, and adds one
-  deliberate omission to 0015 §3.* The typed columns stay — they are the
-  better index — so `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
+- **[0047 The filter vocabulary is the keys OKF defines](0047-fm-carries-okf-keys.md)**
+  — *Accepted; amends 0046 §3.11 on two counts and adds one deliberate
+  omission to 0015 §3. It replaces, rather than supersedes, the first
+  edition of the same number — `fm.` has not reached a release, and 0048
+  §2.3 says an unreleased decision is revised in place. This is the first
+  use of that rule.* First, the typed columns stay — they are the better
+  index — so `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
   `fm.stale_after` are refused with 400 instead of answering a different
   question than the filter of the same name. The difference was real and
   invisible: `status=stable` matches a document that says nothing, because
   OKF's default is stable, and `fm.status=stable` never did — which after
-  0046 §3.9 is every entry an agent wrote without saying `draft`. The
-  boundary is "the key already has a way to ask", not "ochakai knows the
-  key", so a key with a projection but no filter is still queryable.
-  *For a user:* the refusal names the filter to use, so the next request
-  is the right one; `fm.` stays on REST, MCP and the CLI, and stays off
-  the web UI, whose filters show the values you can pick.
+  0046 §3.9 is every entry an agent wrote without saying `draft`. Second,
+  `fm.` is closed to the keys OKF defines. A producer's own key is stored
+  and handed back exactly as written (SPEC §4.1, §11 — this changes what
+  is *askable*, never what is *stored*), but it is not part of the query
+  vocabulary: an open vocabulary leaves a caller unable to tell an empty
+  result from a misspelled key, and leaves the list of what can be asked
+  unwritable in the OpenAPI, the MCP schemas and the CLI help — so an
+  agent guesses. The askable list is derived from `domain.EnvelopeKeys`,
+  which is what keeps 0046 §3.11's purpose: the day OKF adds a key and
+  that list learns the spelling, it is queryable with no column and no
+  migration, because the whole frontmatter is already indexed as jsonb.
+  *For a user:* `fm.resource`, `fm.runtime`, `fm.status_note`,
+  `fm.usage_window`, `fm.title` and the rest of OKF's own keys work; a
+  refusal either names the filter to use or lists what can be asked, so
+  the next request is the right one. `fm.` stays on REST, MCP and the CLI,
+  and stays off the web UI, whose filters show the values you can pick.
 
 - **[0046 The bundle is the address space](0046-bundle-address-space.md)**
   — *Accepted; the current record for OKF compatibility, superseding 0043,
@@ -204,11 +238,18 @@ For the shape of the system rather than the history of it, read
   keep only SPEC §6's forms, so `ochakai://` leaves the bundle. Trust is
   SPEC §5.3's three tiers rather than a boolean, and the index is the
   frontmatter as `jsonb`, so a key the spec adds is queryable with no
-  migration.
+  migration. The one exception to storing the bytes as received is the
+  trust family, which cannot stay where it was because export writes the
+  instance's own `generated` / `verified` under the same names — but
+  §2.2 keeps what it said: a document's own trust family is a **claim**,
+  stored under `received`, held out of every ledger and out of the trust
+  tier, and reported rather than dropped in silence.
   *For a user:* REST collapses to `/api/v1/bundle/{path}` plus search,
   context, the ledgers and move; MCP is five tools; an entry written
   without a `status` reads as OKF's default (`stable`) and is unverified
-  until the ledger says otherwise.
+  until the ledger says otherwise; a document imported from another
+  instance keeps who it says generated and confirmed it, as a claim
+  nothing derives trust from.
 
 - **[0043 The document is the truth](0043-document-first.md)** —
   *Superseded by 0046, which keeps its world-view, status vocabulary,
@@ -458,8 +499,9 @@ For the shape of the system rather than the history of it, read
 
 - **[0015 Surface consistency](0015-surface-consistency.md)** —
   *Accepted; §4's verify-as-sugar judgment was overturned by 0025 §6, its
-  surface table restated by 0046 §3.14, and one omission — `fm.` is not on
-  the web UI — added to §3 by 0047 §4.*
+  surface table restated by 0046 §3.14, and two omissions added to §3 —
+  `fm.` is not on the web UI (0047 §4), and neither is the producer
+  declaration (0052 §3.3).*
   Fixes what each surface is for and, more usefully, what each deliberately
   omits. REST is the contract; MCP's tool count is a context budget, so
   browse, revisions, backlinks, attachment writes, bulk export/import,
@@ -479,10 +521,46 @@ For the shape of the system rather than the history of it, read
 
 ## The verification loop and usage measurement
 
+- **[0050 Listings page, rankings do
+  not](0050-listings-page-rankings-do-not.md)** — *Accepted.* The listing
+  modes — every `sort` feed, and the `source` lookup — take an opaque
+  keyset `cursor` and return one when more entries follow, so a review
+  queue is walked to its end instead of stopping at the limit. A search
+  refuses a cursor with a 400: relevance is a fused window rather than an
+  order to resume from, so a ranking has no page two, and the way past 50
+  hits is a narrower question. No total count comes back either — the
+  absence of a cursor is the end of the listing, and an exact count over a
+  filtered feed costs a second scan of it. A cursor is a position, not a
+  snapshot: the feeds are live, so an entry that moves while you walk may
+  be missed or seen twice.
+  *For a user:* pass the cursor back with the same sort and filters —
+  REST `?cursor=`, MCP's `cursor`, `ochakai search --cursor` (which prints
+  the way on to stderr and does not walk the pages for you), and the web
+  UI's "load more", which now appends a page instead of asking for 1000.
+
+- **[0049 Counting the review queues](0049-queue-counts.md)** —
+  *Accepted.* Adds `GET /api/v1/queues` and `ochakai queues`: the three
+  feeds a curator empties — drafts waiting to be published or turned
+  down, entries whose failure reports are unanswered, entries past the
+  expiry their author declared — as counts rather than listings, scoped by `prefix` and
+  nothing else. 0025 made the queues emptiable; nothing told anyone they
+  were not empty, and a review queue going quiet looked exactly like one
+  being empty. The canary feed (`sort=verified_at`) is deliberately not
+  counted: it ranks every verified entry, so its size is the size of the
+  knowledge base and nobody can drive it to zero. Delivery is refused —
+  no mail, no chat, no webhooks, no address book, no scheduler inside the
+  server: `--exit-code` exits 2 while any queue is non-empty, and the
+  operator's own cron or CI is what pushes.
+  *For a user:* `ochakai queues` says whether anybody owes a review, and
+  each line carries the command that lists that queue; the web UI shows
+  the same counts on its Review tab. MCP does not get it — an agent's
+  ends of the loop are drafting and reporting outcomes.
+
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
-  *Accepted; 0037 later added a third feed, and 0043 turns verify's record
+  *Accepted; 0037 later added a third feed, 0043 turns verify's record
   into an append to a verification ledger, so re-verification accumulates
-  as history.* Adds the `sort=failed`
+  as history, 0049 counts the three queues, and 0050 gives the feeds a
+  cursor.* Adds the `sort=failed`
   re-verification feed of entries agents reported wrong, worst first, and
   `POST /api/v1/verify/{id}` so that re-checking can be recorded — an
   unchanged PUT writes nothing and therefore cannot express "I looked
@@ -498,6 +576,32 @@ For the shape of the system rather than the history of it, read
   that batch.
   *For a user:* usage counts lag reads by seconds and can be lost in a
   crash; the knowledge itself never is.
+
+- **[0051 Recording the questions nothing answered, and measuring the loop
+  at the instance](0051-instance-metrics-and-search-misses.md)** —
+  *Accepted; fills the place 0049 §3.1 kept for these metrics, extends
+  0029's buffering and 180-day pruning to a fact that hangs off no entry,
+  and makes 0042's public posture keep no query text.*
+  Two gaps, one record. A search that returned nothing was discarded
+  entirely, because every measurement here is keyed by a knowledge id and
+  a miss has none — yet what somebody asked for and did not find is the
+  one list that says what to write next. It is now a row of its own,
+  buffered off the read path like a usage event and pruned on the same
+  schedule. And a queue depth cannot say what went *through* it, so
+  `GET /api/v1/stats` answers the rest: entries by lifecycle and trust
+  tier, what review did in a window, what callers reported, and the
+  most-asked unanswered questions. It carries 0049's three queue counts
+  beside them, from that face's own query rather than a second one.
+  Computed on demand with no rollup, and refusing a window longer than
+  the retention rather than quietly answering with less. A miss is
+  defined as zero hits and never as a low score, because ochakai's scores
+  are uncalibrated across search modes.
+  *For a user:* `ochakai stats` (one number per line, made for cron;
+  `ochakai queues` stays the nudge with the exit code), loop tiles beside
+  the queue strip on the web UI's review page, and no MCP tool — an agent
+  that searched and found nothing already knows. Storing query text is
+  new, so it has an off switch (`OCHAKAI_RECORD_MISSES=false`) and is off
+  entirely on a public deployment, which reads no identity either.
 
 ## Concurrency and deletion
 

@@ -66,7 +66,7 @@ if the proposal is concrete.
   That is fine at the scale a curated knowledge base reaches, and embeddings
   are the answer — which is why they stopped being opt-in: running on Google
   Cloud, ochakai turns them on by itself
-  ([0049](docs/design/0049-embeddings-by-default.md)). A better lexical index
+  ([0053](docs/design/0053-embeddings-by-default.md)). A better lexical index
   has not been designed, and nothing here promises one.
 
 Beyond that this roadmap is thin, and honestly so. Work has been arriving from

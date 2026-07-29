@@ -81,7 +81,7 @@ locals {
     # No OCHAKAI_VERTEX_PROJECT when embeddings are on: ochakai discovers
     # the project it runs in, and a discovered project is the mode that
     # falls back to lexical search instead of refusing to start (design
-    # doc 0049 §2.3). That matters here, because the pgvector extension
+    # doc 0053 §2.3). That matters here, because the pgvector extension
     # is a documented manual bootstrap step below — an apply that lands
     # before somebody ran it should degrade, not fail to serve.
     var.enable_vertex_embeddings ? {} : { OCHAKAI_EMBEDDINGS = "off" },
@@ -311,7 +311,7 @@ resource "google_sql_user" "ochakai_run" {
 # --- 4. Vertex AI embeddings (on by default) ------------------------------
 #
 # This grant is the switch. ochakai asks for embeddings by itself where it
-# runs on Google Cloud; whether it gets them is IAM's answer (0049 §2.2).
+# runs on Google Cloud; whether it gets them is IAM's answer (0053 §2.2).
 
 resource "google_project_iam_member" "ochakai_vertex" {
   count = var.enable_vertex_embeddings ? 1 : 0

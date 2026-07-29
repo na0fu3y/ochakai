@@ -21,6 +21,7 @@ func TestParseRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%s): %v", want.URI(), err)
 		}
+		asStored(&got.Knowledge, &want)
 		// The id is the entry's path, not part of the document (design doc
 		// 0016): the exported frontmatter carries no id key, and the parsed
 		// document leaves ID for the caller's address to fill in.
@@ -291,9 +292,11 @@ func TestParseStatusMapping(t *testing.T) {
 	}
 }
 
-// A v0.1 document keeps importing: the renamed keys are read (and, being
-// server-owned, ignored) rather than landing in attrs where a re-export
-// would write them beside their v0.2 replacements (SPEC §13.1).
+// A v0.1 document keeps importing: the renamed keys are read as the
+// document's claim rather than landing in attrs at top level, where a
+// re-export would write them beside their v0.2 replacements (SPEC §13.1).
+// Kept, though — a retired spelling is still what the producer wrote, and
+// dropping it would be the one loss no later release can undo.
 func TestParseV01Document(t *testing.T) {
 	k, _, err := Parse([]byte(`---
 type: Insight
@@ -317,17 +320,23 @@ Body.
 	if k.Status != domain.StatusDraft || !k.Verified {
 		t.Errorf("status = %q verified = %v", k.Status, k.Verified)
 	}
-	if len(k.Attrs) != 0 {
-		t.Errorf("v0.1 trust keys must not become attrs: %v", k.Attrs)
+	claim, _ := k.Attrs[ClaimKey].(map[string]any)
+	if len(k.Attrs) != 1 || len(claim) != 4 {
+		t.Errorf("v0.1 trust keys must be a claim and nothing else: %v", k.Attrs)
 	}
 	doc, err := Document(&k.Knowledge)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, gone := range []string{"timestamp:", "verified_by:", "verified_at:"} {
+	// Not at top level, where they would contradict the v0.2 keys this
+	// instance appends: a claim is nested, so the two never compete.
+	for _, gone := range []string{"\ntimestamp:", "\nverified_by:", "\nverified_at:"} {
 		if strings.Contains(string(doc), gone) {
-			t.Errorf("re-export wrote the v0.1 key %q:\n%s", gone, doc)
+			t.Errorf("re-export wrote the v0.1 key %q at top level:\n%s", gone, doc)
 		}
+	}
+	if !strings.Contains(string(doc), "verified_at: ") {
+		t.Errorf("the v0.1 claim was dropped instead of kept:\n%s", doc)
 	}
 }
 

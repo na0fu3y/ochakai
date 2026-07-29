@@ -17,10 +17,15 @@ type Attachment struct {
 	MediaType string `json:"media_type"`
 	Size      int64  `json:"size"`
 	SHA256    string `json:"sha256"`
-	// OKFPath is the bundle path a foreign import carried this file at;
-	// export writes it back there so body links keep working. Empty for
-	// attachments born in ochakai (exported to "<type>/<id>/<name>").
-	OKFPath   string    `json:"okf_path,omitempty"`
+	// Path is where the file lives in the bundle — its address, and the
+	// whole of what "where it came from" used to mean. A file imported
+	// from a foreign layout is at the path it arrived at, and one born
+	// here is at "<id>/<name>"; okf_path reported the difference between
+	// those two cases, which the path itself states (design doc 0046
+	// §3.3). Name is the last segment, kept beside it the way a concept
+	// keeps its id beside its path: derived, and what every surface
+	// calls the file.
+	Path      string    `json:"path"`
 	CreatedBy Actor     `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 }

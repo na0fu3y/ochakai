@@ -39,7 +39,7 @@ func TestGCSBucket(t *testing.T) {
 
 // Semantic search is the default where ochakai runs on Google Cloud, so
 // the absence of OCHAKAI_VERTEX_PROJECT is no longer the off switch —
-// OCHAKAI_EMBEDDINGS=off is (design doc 0049 §2.4). A deployment that
+// OCHAKAI_EMBEDDINGS=off is (design doc 0053 §2.4). A deployment that
 // wants no Vertex AI call made on its behalf must be able to say so and
 // be believed, so a spelling that is not "on" or "off" is refused rather
 // than read as one of them.
@@ -153,5 +153,42 @@ func TestPublicReadOnlyDefaultsOff(t *testing.T) {
 	}
 	if cfg.PublicReadOnly || cfg.ReadOnly {
 		t.Errorf("public=%v read_only=%v, want both off", cfg.PublicReadOnly, cfg.ReadOnly)
+	}
+}
+
+// Misses are recorded unless the operator says otherwise: a measurement
+// nobody switches on is a measurement nobody has (design doc 0051 §3.4).
+// It is the only default-on boolean here, so it is the only one that
+// reads anything but "true" as on.
+func TestRecordMissesDefaultsOn(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.RecordMisses {
+		t.Error("misses are not recorded by default")
+	}
+	t.Setenv("OCHAKAI_RECORD_MISSES", "false")
+	if cfg, err = FromEnv(); err != nil {
+		t.Fatal(err)
+	} else if cfg.RecordMisses {
+		t.Error("OCHAKAI_RECORD_MISSES=false did not turn recording off")
+	}
+}
+
+// A public deployment reads no identity, so it keeps no query text
+// either — and asking for it back is not a way out, exactly as with
+// read-only (design doc 0051 §3.4).
+func TestPublicReadOnlyKeepsNoQueries(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")
+	t.Setenv("OCHAKAI_RECORD_MISSES", "true")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RecordMisses {
+		t.Error("a public deployment is keeping what its callers typed")
 	}
 }

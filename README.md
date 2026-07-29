@@ -275,7 +275,12 @@ something a reviewer can finish rather than a ledger that only grows.
 A third feed, *stale* (`sort=stale_after`), lists entries past the expiry
 their own author declared — that one clears by editing the entry to
 re-declare the date, since the date is a claim the writer made rather
-than something the server observed. And when a cited document changes,
+than something the server observed. Whether any of the three is holding
+anything is one call — `ochakai queues`, and the Review tab's badge —
+so a queue going quiet stops looking like a queue being empty; with
+`--exit-code` it is a cron job away from telling your team
+(design doc [0049](docs/design/0049-queue-counts.md)).
+And when a cited document changes,
 `?source=<uri>` answers the other direction: every entry derived from it,
 straight from the source's own line on the entry page. One
 self-contained page, no build step; deliberately **not** a BI tool — no
@@ -382,8 +387,7 @@ And it stays small by refusing things:
 | `search_knowledge` | Cross-type search; verified entries rank higher |
 | `get_knowledge` | Fetch one entry as an OKF document, with its links and attachment metadata |
 | `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
-| `create_knowledge` | Write learnings back (agents create drafts) |
-| `update_knowledge` | Update; every change is kept as a revision |
+| `put_knowledge` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
 | `delete_knowledge` | Soft-delete (history retained) |
 | `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
@@ -503,7 +507,7 @@ sources:
     author: human:jsmith@example.co.jp
     last_modified: "2026-06-15"
 usage_window: { from: "2026-06-01", to: "2026-06-30" }
-generated: { by: process:analyst@example.iam.gserviceaccount.com, at: 2026-07-26T04:12:00Z }
+generated: { by: process:analyst@example.iam.gserviceaccount.com, producer: insightflow/1.4.0, at: 2026-07-26T04:12:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
 status: stable                 # draft | stable | deprecated
@@ -514,7 +518,11 @@ stale_after: "2026-12-31"      # advisory: re-check on and after this day
 markdown footnote in the body can attribute a single claim to it.
 `generated` is who the content stands by and when it last changed;
 `verified` is who confirmed it — absent means unverified, and a `human:`
-entry is what makes it human-reviewed (SPEC §5.3). ochakai holds these
+entry is what makes it human-reviewed (SPEC §5.3). The `producer` beside
+`by` is the software that made the write, as the caller declared it
+(`<producer>/<version>`, SPEC §7): it says *what* wrote, never *who*, so
+it sits next to the authenticated identity rather than in it (design doc
+[0052](docs/design/0052-producer-beside-the-actor.md)). ochakai holds these
 the way the spec defines them: `status` is the lifecycle value alone
 (`draft`, `stable`, `deprecated`) and `verified` is a ledger of every
 confirmation, so the two signals stay independent. A draft somebody
@@ -558,7 +566,7 @@ is fine at the scale a curated knowledge base reaches and does not stay
 fine forever. `gemini-embedding-001` handles Japanese well, and where
 embeddings are reachable — on Google Cloud, that is the default and takes
 no configuration (design doc
-[0049](docs/design/0049-embeddings-by-default.md)) — ranking comes from
+[0053](docs/design/0053-embeddings-by-default.md)) — ranking comes from
 rank fusion across both halves rather than from term overlap alone.
 
 Scores are not comparable across the two modes and are not calibrated:
@@ -577,13 +585,15 @@ back fits what you asked for.
 | `OCHAKAI_DATABASE_URL` | Cloud SQL connection string (required) |
 | `OCHAKAI_DB_IAM_AUTH` | `true` enables Cloud SQL IAM database authentication: the connection password is a short-lived IAM token, so the connection string carries no secret |
 | `OCHAKAI_GCS_BUCKET` | Bucket for attachment bytes (auth is ADC — no keys). Default: unset — the instance stores markdown entries only and attach operations return an error |
-| `OCHAKAI_EMBEDDINGS` | `off` runs lexical-only on a deployment that would otherwise get hybrid semantic search. Running on Google Cloud, ochakai reads its own project from the metadata server and turns embeddings on with it — there is nothing to set, and whether it can actually call Vertex AI is decided by IAM (`roles/aiplatform.user`) rather than by configuration, asked once at startup (design doc [0049](docs/design/0049-embeddings-by-default.md)). Off Google Cloud there is no metadata server and nothing is enabled. Takes `on` or `off`; any other spelling is a startup error rather than a guess. Default: on where it is discovered |
+| `OCHAKAI_EMBEDDINGS` | `off` runs lexical-only on a deployment that would otherwise get hybrid semantic search. Running on Google Cloud, ochakai reads its own project from the metadata server and turns embeddings on with it — there is nothing to set, and whether it can actually call Vertex AI is decided by IAM (`roles/aiplatform.user`) rather than by configuration, asked once at startup (design doc [0053](docs/design/0053-embeddings-by-default.md)). Off Google Cloud there is no metadata server and nothing is enabled. Takes `on` or `off`; any other spelling is a startup error rather than a guess. Default: on where it is discovered |
 | `OCHAKAI_VERTEX_PROJECT` | Names the Vertex AI project explicitly — for a project other than the one ochakai runs in, or for running it outside Google Cloud. A deployment that names one has asked for semantic search: if Vertex AI or pgvector is not there it refuses to start, where a discovered one falls back to lexical search. Auth is ADC — no API keys |
 | `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` / `OCHAKAI_EMBEDDING_DIM` | Embedding details (defaults: `us-central1`, `gemini-embedding-001`, 768). For image/PDF attachment search set model `gemini-embedding-2` with location `global` (or `us`/`eu`). Vectors are written when an entry is written, so a base loaded before embeddings were reachable — or a changed model — leaves entries unembedded until you run `ochakai reembed` (design doc 0020). Dimensions above 2000 exceed pgvector's indexing limit, so those deployments fall back to an exact scan. Changing `OCHAKAI_EMBEDDING_DIM` on a base that already holds vectors rebuilds the vector tables at the new width on the next start: a vector is derived from the entry it describes, so nothing curated is lost, and `ochakai reembed` refills them |
 | `OCHAKAI_DELEGATING_CALLERS` | Comma-separated caller identities allowed to forward an end user's identity with `X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp` (`*` for any authenticated caller). For applications that embed ochakai and serve many people — without it, every one of their users collapses into the application's one service account. Both identities are recorded (`human:tanaka@… via process:app-sa@…`), never just the forwarded one. Default: empty, delegation off; a header from an unlisted caller is a 403, not a silent downgrade (design doc 0027) |
+| `OCHAKAI_PRODUCER` | `ochakai` CLI only: the software running the CLI, as `<producer>/<version>` — e.g. `claude-code/2026.07`. It goes out as `X-Ochakai-Producer` and is recorded **beside** the actor (`human:tanaka@… using claude-code/2026.07`), never in its place, so an agent shelling out to the CLI stops writing under the operator's name alone. Any authenticated caller may send the header — it names the caller's own build, not somebody else's identity, so no allowlist gates it — and a malformed value is a 400, not a silent drop. On the MCP surface the same value is taken from the client's `initialize` info when the header is absent. Default: unset, nothing declared (design doc [0052](docs/design/0052-producer-beside-the-actor.md)) |
 | `OCHAKAI_IAP_AUDIENCE` | `ochakai serve-ui` only: the IAP JWT audience to verify, which turns browser edits from `process:<webui-sa>` into the person signed in (`human:tanaka@… via process:<webui-sa>`). Requires the webui's service account in the server's `OCHAKAI_DELEGATING_CALLERS`. Once set, a request IAP did not sign is refused rather than recorded as the service account. Default: empty, per-user provenance off (design doc 0032) |
 | `OCHAKAI_READ_ONLY` | `true` makes the deployment serve knowledge without changing it: every write is a 403, MCP does not offer the write tools at all, and the web UI stops drawing buttons that would only fail. For a reference-only instance or freezing a base during a migration; a *public* demo needs `OCHAKAI_PUBLIC_READ_ONLY` below, because read-only alone still refuses anonymous callers. It is not authorization — it does not look at the caller, and it refuses the operator too (design doc [0040](docs/design/0040-read-only-mode.md)). Usage telemetry still records, being the server's own observation. Default: off |
 | `OCHAKAI_PUBLIC_READ_ONLY` | `true` is the posture for a deployment anyone may reach — a demo, or a reference-only copy handed out. It **reads no identity at all**: the `Authorization` header is ignored (without Cloud Run IAM in front nothing verified its signature, so believing it would let any caller name any person), delegation is ignored, every caller is `human:anonymous`, and nobody is refused. It **implies** `OCHAKAI_READ_ONLY` and cannot be separated from it — not recording who asked is only defensible because nothing is written, so a publicly readable *and writable* ochakai is not a configuration this program accepts (design doc [0042](docs/design/0042-public-read-only.md)). Setting it together with `OCHAKAI_INSECURE_DEV` is refused at startup. Default: off |
+| `OCHAKAI_RECORD_MISSES` | `false` stops ochakai keeping the searches that found nothing. A miss is the one thing here that a caller typed rather than curated, so it has a switch: with it off, `ochakai stats` reports `misses -` rather than zero, and the rest of the loop is measured as before. A public deployment (`OCHAKAI_PUBLIC_READ_ONLY`) keeps none either way — it reads no identity, so it does not collect what strangers asked for. Kept 180 days, like the raw usage events (design doc [0051](docs/design/0051-instance-metrics-and-search-misses.md)). Default: on |
 | `OCHAKAI_INSECURE_DEV` | Local development only: disables auth, everything acts as human:anonymous |
 | `PORT` | Listen port (default `8080`) |
 

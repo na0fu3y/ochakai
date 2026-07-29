@@ -224,7 +224,7 @@ variable "enable_vertex_embeddings" {
     Search is hybrid (trigram + vector, reciprocal rank fusion) using Vertex AI
     embeddings through the service identity — no API keys. On by default: this
     grants roles/aiplatform.user and enables the API, and ochakai finds the
-    project it runs in by itself (design doc 0049). It is what makes search work
+    project it runs in by itself (design doc 0053). It is what makes search work
     on a Japanese knowledge base, where the trigram index degrades to a scan.
 
     Set it to false to run lexical-only: the role is not granted and
@@ -249,7 +249,7 @@ variable "vertex_location" {
 }
 
 variable "embedding_dim" {
-  description = "OCHAKAI_EMBEDDING_DIM. Leave null for the default (768). Changing this on a base that already holds vectors rebuilds the vector tables at the new width on the next start — nothing curated is lost, since a vector is derived, but search is lexical-only until `ochakai reembed` refills them (design doc 0049 §3)."
+  description = "OCHAKAI_EMBEDDING_DIM. Leave null for the default (768). Changing this on a base that already holds vectors rebuilds the vector tables at the new width on the next start — nothing curated is lost, since a vector is derived, but search is lexical-only until `ochakai reembed` refills them (design doc 0053 §3)."
   type        = number
   default     = null
 }

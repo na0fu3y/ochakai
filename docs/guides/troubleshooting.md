@@ -152,7 +152,7 @@ what turns browser edits into `human:you via process:webui-sa` (design doc
 the vector tables at the new width and says so in the log: the old
 vectors were in a space nothing would query, and a vector is derived from
 the entry it describes, so nothing curated is lost (design doc
-[0049](../design/0049-embeddings-by-default.md) §3). The tables come back
+[0053](../design/0053-embeddings-by-default.md) §3). The tables come back
 empty on purpose — run `ochakai reembed` to refill them, which is the
 step that spends money. Ranking is lexical-only until it finishes.
 

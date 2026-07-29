@@ -646,7 +646,7 @@ func TestIntegrationVectorIndexes(t *testing.T) {
 // outright because the query vector cannot be compared against it.
 // Startup used to refuse and hand the operator a DROP TABLE; it performs
 // the rebuild itself now, because a vector is derived and `reembed`
-// refills it (design doc 0049 §3).
+// refills it (design doc 0053 §3).
 //
 // Scoped to its own schema: this one is destructive by design, and the
 // other store tests share the database.

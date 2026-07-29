@@ -88,6 +88,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
+  queues                  how much work each review queue is holding
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
@@ -101,6 +102,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
+  stats                   show the loop for the whole base (review queues, gaps)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
@@ -155,7 +157,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if err := st.Migrate(ctx, embedDim); err != nil {
 		// A database that cannot hold vectors is not a reason to refuse
 		// to serve knowledge, unless this deployment asked for semantic
-		// search by name (design doc 0049 §2.3). Everything else the
+		// search by name (design doc 0053 §2.3). Everything else the
 		// migration does has already run — the vector schema is the last
 		// step — so there is nothing to redo here.
 		if cfg.Embedding == nil || !cfg.Embedding.Discovered ||
@@ -171,7 +173,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 // semanticSearch builds the embedder behind hybrid search, and decides
 // whether this deployment has one at all.
 //
-// Embeddings are the default on Google Cloud (design doc 0049 §2.1): a
+// Embeddings are the default on Google Cloud (design doc 0053 §2.1): a
 // deployment that names no project gets the one it is running in, and
 // whether it may call Vertex AI there is IAM's answer rather than a
 // setting — so the answer is asked for, once, with a probe. A deployment

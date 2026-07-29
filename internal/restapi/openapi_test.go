@@ -81,7 +81,7 @@ var idAddressed = []string{
 	"/api/v1/usage/",
 	"/api/v1/bundle/",
 	"/api/v1/backlinks/",
-	"/api/v1/attachments/",
+	"/api/v1/bundle/",
 }
 
 // forSpecRouting collapses a multi-segment id down to one segment so the
@@ -117,9 +117,7 @@ func forSpecRouting(p string) string {
 // `{type: string, format: binary}` asserts nothing about the bytes,
 // which is the whole point of a file.
 func carriesOpaqueBytes(r *http.Request) bool {
-	return r.Method == http.MethodPut &&
-		(strings.HasPrefix(r.URL.Path, "/api/v1/attachments/") ||
-			strings.HasPrefix(r.URL.Path, "/api/v1/bundle/"))
+	return r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/bundle/")
 }
 
 // sniffedResponse reports whether a response's media type was decided by

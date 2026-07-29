@@ -1,13 +1,13 @@
-# ochakai 設計ドキュメント 0049: 埋め込みは既定であり、ベクトル空間は捨ててよい
+# ochakai 設計ドキュメント 0053: 埋め込みは既定であり、ベクトル空間は捨ててよい
 
-Status: Accepted(2026-07-28)。[0001](0001-architecture.md) §4 の
+Status: Accepted(2026-07-29)。[0001](0001-architecture.md) §4 の
 「埋め込みは設定した場合にのみ有効化される」を改訂し、**Google Cloud の
 上では既定で有効**にする。[0003](0003-gcp-only.md) の前提に Vertex AI を
 **既定パスの依存**として加える(secret-zero は保たれる — Vertex AI も
 IAM である)。次元変更時の手作業の `DROP TABLE` を廃し、製品が行う。
 検索の姿と添付の扱いは変えない — [0020](0020-attachment-search.md) と
 [0046](0046-bundle-address-space.md) はそのまま
-Date: 2026-07-28
+Date: 2026-07-29
 
 ## 1. 問題: この製品でいちばん効く機能が、いちばん奥に置いてある
 
