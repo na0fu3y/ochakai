@@ -1428,11 +1428,12 @@ const (
 )
 
 // Reembed fills in the vectors that entry writes never produced. Vectors
-// are written on create and update only, so a base loaded before
-// OCHAKAI_VERTEX_PROJECT was set has none, and hybrid search silently
-// stays lexical-only until every entry happens to be rewritten. Switching
-// models has the same shape: the old vectors are in a space nothing
-// queries any more (design doc 0020).
+// are written on create and update only, so a base loaded before semantic
+// search was reachable has none, and hybrid search silently stays
+// lexical-only until every entry happens to be rewritten. Switching models
+// has the same shape: the old vectors are in a space nothing queries any
+// more (design doc 0020), as does a changed dimension, which rebuilds the
+// tables empty (design doc 0053 §3).
 //
 // Failures are counted, not fatal: one entry the provider chokes on must
 // not strand the rest of the corpus.
@@ -1441,7 +1442,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 		return nil, err
 	}
 	if s.Embedder == nil {
-		return nil, Unsupportedf("semantic search is not configured: set OCHAKAI_VERTEX_PROJECT")
+		return nil, Unsupportedf("semantic search is not enabled on this deployment: it is the default on Google Cloud once the service identity may call Vertex AI (design doc 0053)")
 	}
 	if limit <= 0 || limit > maxReembedPass {
 		limit = defaultReembedPass

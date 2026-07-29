@@ -1,6 +1,9 @@
 # ochakai 設計ドキュメント 0003: Google Cloud 前提化
 
-Status: Accepted(2026-07-16)
+Status: Accepted(2026-07-16)。「任意で Vertex AI」は
+[0053](0053-embeddings-by-default.md) が既定パスの依存に変えた — Google Cloud
+の上では埋め込みが既定になる。secret-zero は変わらない(Vertex AI の認証も
+ADC / IAM である)
 Date: 2026-07-16
 
 ## 1. 決定

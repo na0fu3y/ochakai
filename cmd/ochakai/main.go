@@ -135,18 +135,13 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		return nil, nil, err
 	}
 	st.UseLogger(log)
+	embedder, err := semanticSearch(ctx, cfg, log)
+	if err != nil {
+		return nil, nil, err
+	}
 	embedDim := 0
-	var embedder embed.Embedder
 	if cfg.Embedding != nil {
 		embedDim = cfg.Embedding.Dim
-		v, err := embed.NewVertex(ctx, cfg.Embedding.Project, cfg.Embedding.Location, cfg.Embedding.Model, cfg.Embedding.Dim)
-		if err != nil {
-			return nil, nil, err
-		}
-		embedder = v
-		log.Info("semantic search enabled", "model", cfg.Embedding.Model, "dim", cfg.Embedding.Dim)
-	} else {
-		log.Info("semantic search disabled; using lexical search only")
 	}
 	// Attachment bytes live only on GCS (design doc 0013).
 	if cfg.GCSBucket != "" {
@@ -160,10 +155,76 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		log.Info("attachments disabled (no OCHAKAI_GCS_BUCKET); markdown entries only")
 	}
 	if err := st.Migrate(ctx, embedDim); err != nil {
-		return nil, nil, err
+		// A database that cannot hold vectors is not a reason to refuse
+		// to serve knowledge, unless this deployment asked for semantic
+		// search by name (design doc 0053 §2.3). Everything else the
+		// migration does has already run — the vector schema is the last
+		// step — so there is nothing to redo here.
+		if cfg.Embedding == nil || !cfg.Embedding.Discovered ||
+			!errors.Is(err, store.ErrEmbeddingUnavailable) {
+			return nil, nil, err
+		}
+		log.Warn("semantic search is off: this database cannot hold vectors", "err", err)
+		embedder, cfg.Embedding = nil, nil
 	}
 	return &service.Service{Store: st, Embedder: embedder, Config: cfg, Log: log}, cfg, nil
 }
+
+// semanticSearch builds the embedder behind hybrid search, and decides
+// whether this deployment has one at all.
+//
+// Embeddings are the default on Google Cloud (design doc 0053 §2.1): a
+// deployment that names no project gets the one it is running in, and
+// whether it may call Vertex AI there is IAM's answer rather than a
+// setting — so the answer is asked for, once, with a probe. A deployment
+// that named its project asked for semantic search and is told when it
+// cannot have it; a discovered one falls back to lexical search, which is
+// what it would have had before this was the default.
+func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (embed.Embedder, error) {
+	if cfg.Embedding == nil && !cfg.EmbeddingsOff {
+		if project := config.DiscoverVertexProject(ctx); project != "" {
+			if err := cfg.EnableDiscoveredEmbedding(project); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if cfg.Embedding == nil {
+		if cfg.EmbeddingsOff {
+			log.Info("semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only")
+		} else {
+			log.Info("semantic search disabled; using lexical search only")
+		}
+		return nil, nil
+	}
+
+	v, err := embed.NewVertex(ctx, cfg.Embedding.Project, cfg.Embedding.Location, cfg.Embedding.Model, cfg.Embedding.Dim)
+	if err == nil && cfg.Embedding.Discovered {
+		// One embedding of one word, bounded so a cold start is not held
+		// up by an unreachable API. Without it a deployment whose service
+		// account was never granted roles/aiplatform.user would log a
+		// failure on every write forever.
+		probe, cancel := context.WithTimeout(ctx, vertexProbeTimeout)
+		defer cancel()
+		_, err = v.Embed(probe, embed.TaskQuery, []string{"ochakai"})
+	}
+	if err != nil {
+		if !cfg.Embedding.Discovered {
+			return nil, err
+		}
+		log.Warn("semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on",
+			"project", cfg.Embedding.Project, "err", err)
+		cfg.Embedding = nil
+		return nil, nil
+	}
+	log.Info("semantic search enabled", "model", cfg.Embedding.Model, "dim", cfg.Embedding.Dim,
+		"project", cfg.Embedding.Project, "discovered", cfg.Embedding.Discovered)
+	return v, nil
+}
+
+// vertexProbeTimeout bounds the one call that decides whether a
+// discovered deployment has semantic search. Cloud Run's startup
+// allowance is not the place to wait out an API that is not answering.
+const vertexProbeTimeout = 10 * time.Second
 
 func serve(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

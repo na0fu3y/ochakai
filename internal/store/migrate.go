@@ -400,11 +400,31 @@ const unreadableRevision = "---\ntype: Reference\nstatus: deprecated\n---\n\n" +
 	"This revision was written in a shape this release cannot read, and its\n" +
 	"content did not survive the move to document storage (design doc 0043 §3.9).\n"
 
+// ErrEmbeddingUnavailable reports that the vector storage behind
+// semantic search could not be set up — the pgvector extension is not
+// there and this role may not create it, or the tables and indexes were
+// refused. Everything else about the database is fine.
+//
+// It exists so a caller can tell that apart from a database that cannot
+// be migrated at all: a deployment that asked for semantic search by name
+// is told either way, while one that got it as the default of running on
+// Google Cloud carries on lexical-only rather than refusing to serve
+// knowledge over an index it never asked for (design doc 0053 §2.3).
+var ErrEmbeddingUnavailable = errors.New("vector storage for semantic search is unavailable")
+
 // migrateEmbedding sets up pgvector storage. Runs only when an embedding
 // provider is configured, keeping plain PostgreSQL sufficient by default.
+//
+// It is the last thing Migrate does, so a caller that decides to carry on
+// without semantic search has a fully migrated database already.
 func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 	if _, err := s.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
-		return fmt.Errorf("pgvector extension is required for semantic search (create it as the admin user, or unset OCHAKAI_VERTEX_PROJECT): %w", err)
+		return fmt.Errorf("%w: pgvector is required for semantic search, and this role may not create it (create it as the admin user, or set OCHAKAI_EMBEDDINGS=off): %w", ErrEmbeddingUnavailable, err)
+	}
+	// Before the tables are ensured, because CREATE TABLE IF NOT EXISTS
+	// would keep a column of the old width and say nothing.
+	if err := s.resizeVectorSpace(ctx, dim); err != nil {
+		return err
 	}
 	if _, err := s.pool.Exec(ctx, fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS knowledge_embedding (
@@ -413,7 +433,7 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 			embedding  vector(%d) NOT NULL,
 			updated_at timestamptz NOT NULL DEFAULT now()
 		)`, dim)); err != nil {
-		return fmt.Errorf("create knowledge_embedding: %w", err)
+		return fmt.Errorf("%w: create knowledge_embedding: %w", ErrEmbeddingUnavailable, err)
 	}
 	// Attachment vectors (design doc 0020): one row per embedded
 	// attachment, mapped back to the owning entry at search time.
@@ -426,28 +446,37 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 			updated_at   timestamptz NOT NULL DEFAULT now(),
 			PRIMARY KEY (knowledge_id, name)
 		)`, dim)); err != nil {
-		return fmt.Errorf("create attachment_embedding: %w", err)
-	}
-	if err := s.checkEmbeddingDim(ctx, dim); err != nil {
-		return err
+		return fmt.Errorf("%w: create attachment_embedding: %w", ErrEmbeddingUnavailable, err)
 	}
 	return s.migrateVectorIndexes(ctx, dim)
 }
 
-// checkEmbeddingDim refuses to serve when the configured dimension is not
-// the one the vector columns were created with.
+// resizeVectorSpace rebuilds the vector tables when the configured
+// dimension is not the one their columns were created with.
 //
-// CREATE TABLE IF NOT EXISTS keeps the old column, so changing
-// OCHAKAI_EMBEDDING_DIM on a base that already has vectors used to start
-// cleanly and break everything downstream: every embedding write fails
-// with a warning nobody reads, and every search fails outright, because
-// the query vector cannot be compared against a column of another width.
-// `ochakai reembed`, which the deploy guide points at for a model change,
-// fails on every entry for the same reason. There is no recovery this can
-// perform on its own — the old vectors are in a space nothing queries any
-// more, and dropping them is the operator's call — so it says exactly
-// that and stops.
-func (s *Store) checkEmbeddingDim(ctx context.Context, dim int) error {
+// CREATE TABLE IF NOT EXISTS keeps the old column, so a changed dimension
+// used to start cleanly and break everything downstream: every embedding
+// write fails on the width, every search fails outright because the query
+// vector cannot be compared against a column of another width, and
+// `ochakai reembed` — the thing the deploy guide points at for a model
+// change — fails on every entry for the same reason. Startup refused
+// instead, and told the operator to run `DROP TABLE knowledge_embedding,
+// attachment_embedding` by hand. That refusal is why the feature read as
+// advanced: the one operational hazard in the product was a schema change
+// the product would not perform (design doc 0053 §3).
+//
+// It performs it now, because of what these tables are. **A vector is
+// derived, not recorded**: every one of them can be recomputed from the
+// object it describes, which is why they live outside the versioned
+// migrations, why `reembed` exists, and why a model change already leaves
+// them behind without anybody calling that data loss. Dropping a space
+// nothing queries costs the embedding calls to refill it, and nothing
+// else — the knowledge is in `object`, untouched.
+//
+// What it does cost is those calls, so it says so rather than doing it
+// quietly, and leaves the refill to `ochakai reembed`: search stays
+// lexical until somebody spends that money deliberately (0053 §3.2).
+func (s *Store) resizeVectorSpace(ctx context.Context, dim int) error {
 	var stored int
 	// to_regclass rather than a cast: the cast raises when the table is
 	// absent, and "absent" is the one case with nothing to disagree about.
@@ -464,11 +493,14 @@ func (s *Store) checkEmbeddingDim(ctx context.Context, dim int) error {
 	if stored == dim {
 		return nil
 	}
-	return fmt.Errorf("knowledge_embedding.embedding is vector(%d) but OCHAKAI_EMBEDDING_DIM is %d: "+
-		"the stored vectors are in a space nothing would query, so writes and searches would both fail. "+
-		"Set OCHAKAI_EMBEDDING_DIM back to %d, or drop the old vectors and rebuild them "+
-		"(DROP TABLE knowledge_embedding, attachment_embedding; restart; ochakai reembed)",
-		stored, dim, stored)
+	if _, err := s.pool.Exec(ctx,
+		`DROP TABLE IF EXISTS knowledge_embedding, attachment_embedding`); err != nil {
+		return fmt.Errorf("%w: drop the vector tables of the previous dimension: %w",
+			ErrEmbeddingUnavailable, err)
+	}
+	s.log.Warn("the embedding dimension changed; the old vectors were in a space nothing would query and have been dropped. Search is lexical until `ochakai reembed` rebuilds them",
+		"stored", stored, "configured", dim)
+	return nil
 }
 
 // hnswMaxDim is pgvector's indexing limit for the vector type. Above it
