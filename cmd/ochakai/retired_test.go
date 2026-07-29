@@ -145,3 +145,46 @@ func repoTextFiles(t *testing.T) []string {
 	}
 	return out
 }
+
+// A reservation answered in two places is a path one half accepts and
+// the other refuses, which is what the four spellings of "is this
+// index.md or log.md" had become: domain.ReservedBundleName folded case
+// while restapi, okf and the import skip each compared the two literals
+// inline, and okf's copy had no callers at all. The address took a
+// concept at "Index.md" and refused a file there.
+//
+// domain.ReservedBundleName is the only one now. This reads the tree for
+// the shape that grew the others — a comparison against the reserved
+// filenames written out by hand — because nothing else would notice a
+// fifth appearing beside it. Prose may name them; only code that decides
+// is a hit, which is what the quotes around the literal pick out.
+func TestOneSpellingDecidesWhatIsReserved(t *testing.T) {
+	forms := []string{`== "index.md"`, `== "log.md"`, `!= "index.md"`, `!= "log.md"`,
+		`"index.md", "log.md"`, `"log.md", "index.md"`}
+	const decides = "internal/domain/attachment.go" // where the decision lives
+	found := false
+	for _, path := range repoTextFiles(t) {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if filepath.Ext(path) != ".go" {
+			continue
+		}
+		rel := filepath.ToSlash(strings.TrimPrefix(filepath.ToSlash(path), "../../"))
+		for _, form := range forms {
+			if !strings.Contains(string(content), form) {
+				continue
+			}
+			if rel == decides {
+				found = true
+				continue
+			}
+			t.Errorf("%s decides what is reserved by comparing %s — call domain.ReservedBundleName instead",
+				rel, form)
+		}
+	}
+	if !found {
+		t.Errorf("%s no longer spells the reserved names: this check now guards nothing", decides)
+	}
+}

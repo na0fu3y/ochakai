@@ -116,14 +116,3 @@ func LogDocument(title string, lines []LogLine) []byte {
 	}
 	return []byte(b.String())
 }
-
-// ReservedName reports whether a bundle path's last segment is one of the
-// two names SPEC §3.1 reserves. Both are derived here, so a write to one
-// is refused and a read of one is generated.
-func ReservedName(path string) bool {
-	base := path
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		base = path[i+1:]
-	}
-	return base == "index.md" || base == "log.md"
-}
