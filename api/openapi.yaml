@@ -532,6 +532,23 @@ paths:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "501":
+          description: >
+            A file was asked for on an instance that holds no files
+            (no OCHAKAI_GCS_BUCKET, design doc 0013). Only for a path
+            that is not a concept's: at `<id>.md` the answer is the
+            concept's own 404, because what was asked about is the
+            concept and not the deployment.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              example:
+                error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
         "404":
           description: No object at this path.
           headers:
@@ -543,7 +560,7 @@ paths:
                 properties:
                   error: { type: string }
               example:
-                error: knowledge not found
+                error: no object at this path
     put:
       operationId: putBundleFile
       summary: Write one object of the bundle

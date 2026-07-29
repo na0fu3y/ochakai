@@ -159,7 +159,8 @@ func Handler(svc *service.Service) http.Handler {
 			// is answered by the entry surface's own writer, so one
 			// address serves both kinds and neither has a shape of its
 			// own here.
-			if id, ok := strings.CutSuffix(path, ".md"); ok {
+			id, isMarkdown := strings.CutSuffix(path, ".md")
+			if isMarkdown {
 				k, err := svc.Get(r.Context(), id)
 				if err == nil {
 					w.Header().Set("ETag", etagOf(k))
@@ -180,7 +181,7 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			att, data, err := svc.GetFile(r.Context(), path)
 			if err != nil {
-				writeError(w, err)
+				writeError(w, missingObject(err, isMarkdown))
 				return
 			}
 			w.Header().Set("ETag", `"`+att.SHA256+`"`)
@@ -254,7 +255,7 @@ func Handler(svc *service.Service) http.Handler {
 					err = svc.Delete(r.Context(), id, actor)
 				}
 				if errors.Is(err, store.ErrNotFound) && !purge {
-					err = svc.DeleteFile(r.Context(), path, actor)
+					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
 				}
 				if err != nil {
 					writeError(w, err)
@@ -960,6 +961,29 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusNotImplemented
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// missingObject reports what a read or delete that fell through to the
+// file half should say about a markdown path.
+//
+// A `.md` path is a concept's address first (design doc 0046 §3.5); the
+// file lookup behind it is §3.2's accommodation for a markdown document
+// that carries no type. When this instance holds no files at all — no
+// GCS (design doc 0013) — that accommodation is simply unavailable, and
+// answering 501 would reply to a question about a concept with news
+// about the deployment. There is no object at the path: 404.
+//
+// It matters because the bundle path is now a concept's only address:
+// without this, every 404 for a soft-deleted or never-written concept
+// became a 501 on an instance without GCS, which is most of them.
+// A path that is not markdown keeps the 501 — there, "this instance
+// cannot hold files" is exactly the answer to what was asked.
+func missingObject(err error, markdown bool) error {
+	var unsupported *service.UnsupportedError
+	if markdown && errors.As(err, &unsupported) {
+		return store.ErrNotFound
+	}
+	return err
 }
 
 // etagOf renders the entry's version as an ETag: the hash of its
