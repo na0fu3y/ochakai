@@ -296,6 +296,21 @@ func Handler(svc *service.Service) http.Handler {
 			writeBundleArchive(w, r, svc, scope)
 			return
 		}
+		// ?history is the log.md of one object, at the object's own
+		// address (design doc 0046 §3.5). It is where a concept's
+		// history belongs: <id>/log.md put it inside a directory named
+		// after the concept — a directory that need not exist — and
+		// took the only spelling the *subtree* history had for its JSON,
+		// which is why asking a directory or the root for one was a 404.
+		//
+		// A file has a history too (§3.1), and this addresses it the
+		// same way: the ledger is keyed by path, so "what happened to
+		// this object" is one question with one answer whichever kind
+		// it is.
+		if r.URL.Query().Has("history") {
+			writeObjectHistory(w, r, svc, path)
+			return
+		}
 		dir, base := splitReserved(path)
 		switch base {
 		case "index.md":
@@ -321,12 +336,16 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 			if wantsJSON(r) {
-				rows, err := svc.Revisions(r.Context(), dir, limit)
+				// The same changes the document lists, structured. The
+				// two representations of one address say one thing,
+				// which is what put the per-object ledger at ?history
+				// above rather than here.
+				rows, err := svc.LogRows(r.Context(), dir, limit)
 				if err != nil {
 					writeError(w, err)
 					return
 				}
-				writeJSON(w, http.StatusOK, map[string]any{"revisions": rows})
+				writeJSON(w, http.StatusOK, changeLog{Changes: asChanges(rows)})
 				return
 			}
 			doc, err := svc.LogDocument(r.Context(), dir, limit)
@@ -768,6 +787,79 @@ func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, pag
 		body["cursor"] = page.Cursor
 	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+// changeLog is the JSON representation of a generated log.md: the same
+// changes the document lists, in the same order, without the prose
+// (design doc 0046 §3.8). A web UI's history panel reads this rather
+// than parsing markdown; it is not a second surface.
+type changeLog struct {
+	Changes []change `json:"changes"`
+}
+
+// change is one line of that history. It names the object by its path,
+// because a revision is an event about an object (design doc 0046 §3.1)
+// and a file has no concept id — the same reason the ledger is keyed by
+// path. Title is the object's as it stands, absent for a file and for a
+// concept that has since been purged.
+type change struct {
+	Path      string       `json:"path"`
+	Title     string       `json:"title,omitempty"`
+	Change    string       `json:"change"`
+	ChangedBy domain.Actor `json:"changed_by"`
+	ChangedAt time.Time    `json:"changed_at"`
+}
+
+func asChanges(rows []store.LogRow) []change {
+	out := make([]change, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, change{
+			Path: r.Path, Title: r.Title, Change: r.Change,
+			ChangedBy: r.ChangedBy, ChangedAt: r.ChangedAt,
+		})
+	}
+	return out
+}
+
+// writeObjectHistory answers ?history: the log.md of the one object at
+// this path, as the document (SPEC §9) or — with an explicit JSON
+// Accept — its ledger rows, each carrying the entry as it stood after
+// the change. The documents are the reason this representation exists:
+// a diff between two revisions is a text diff, which is what
+// `ochakai revisions --json` and the web UI's history panel are for.
+//
+// A file's revisions carry no document, because a file has none. Its
+// history is the record that it was written and removed, which is the
+// whole of what happened.
+func writeObjectHistory(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) {
+	limit, err := queryInt(r.URL.Query(), "limit")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// A concept's revisions carry the document it was; asked as JSON,
+	// that is the point of the representation — a diff between two
+	// revisions is a text diff. A file's carry none, because a file has
+	// none, so its rows are the shape a directory's history has.
+	if id, isMarkdown := strings.CutSuffix(path, ".md"); isMarkdown && wantsJSON(r) {
+		revs, err := svc.Revisions(r.Context(), id, limit)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
+		return
+	}
+	rows, err := svc.ObjectHistory(r.Context(), path, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, changeLog{Changes: asChanges(rows)})
+		return
+	}
+	writeMarkdown(w, service.RenderLog(path, rows))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

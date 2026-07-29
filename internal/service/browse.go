@@ -153,6 +153,27 @@ func (s *Service) LogDocument(ctx context.Context, prefix string, limit int) ([]
 	return RenderLog(prefix, rows), nil
 }
 
+// LogRows is LogDocument's listing without the rendering: the same
+// changes under the same path, for the caller that wants to draw its
+// own history rather than read OKF's (design doc 0046 §3.8).
+//
+// The structured form of a generated file is the same thing the file
+// says — that is what "two representations at one address" means. It
+// used to be the ledger of the *one concept* named by the directory,
+// which made the JSON at a directory or at the root a 404 while the
+// markdown beside it answered; the per-object ledger has its own
+// address now (§3.5's `?history`).
+func (s *Service) LogRows(ctx context.Context, prefix string, limit int) ([]store.LogRow, error) {
+	prefix, err := normalizePrefix(prefix)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > MaxLogLines {
+		limit = MaxLogLines
+	}
+	return s.Store.ListRevisionsUnder(ctx, prefix, limit)
+}
+
 // RenderLog is the log.md of one directory, given the ledger rows under
 // it. Split from the read above because the export renders the same
 // file from a snapshot of its own (design doc 0046 §3.8), and a log.md
@@ -174,6 +195,25 @@ func RenderLog(prefix string, rows []store.LogRow) []byte {
 		title = prefix
 	}
 	return okf.LogDocument(title, lines)
+}
+
+// ObjectHistory is the changes to the one object at a bundle path — the
+// ledger behind ?history (design doc 0046 §3.5), for a file as much as
+// for a concept. ErrNotFound when nothing ever happened at the path,
+// because a history of an object that never existed is not an empty
+// history.
+func (s *Service) ObjectHistory(ctx context.Context, path string, limit int) ([]store.LogRow, error) {
+	if limit <= 0 || limit > MaxLogLines {
+		limit = MaxLogLines
+	}
+	rows, err := s.Store.ListRevisionsAt(ctx, domain.Normalize(path), limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, store.ErrNotFound
+	}
+	return rows, nil
 }
 
 // MaxLogLines bounds a generated history the way the tree listing is

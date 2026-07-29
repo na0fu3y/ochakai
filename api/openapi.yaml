@@ -493,9 +493,18 @@ paths:
         (default and maximum 1000).
 
         The representation follows Accept. `application/json` returns the
-        listing or the revisions; anything else returns the file the path
+        listing or the changes; anything else returns the file the path
         names. Two representations of one thing, at one address — the
-        JSON is what a web UI's tree needs, not a second surface.
+        JSON is what a web UI's tree needs, not a second surface, and it
+        says what the document says.
+
+        **`?history` is the log.md of the one object at this path**
+        (design doc 0046 §3.5) — the history of a concept or of a file,
+        because a revision is an event about an object and the ledger is
+        keyed by path. As JSON a concept's carries each revision's whole
+        document, so a diff between two revisions is a text diff; a
+        file's carries the changes alone, having no document to carry.
+        404 when nothing ever happened at the path.
 
         PUT and DELETE against the two reserved names are 409: a
         generated file is not one anybody writes.
@@ -516,9 +525,20 @@ paths:
             than in the path — as with the slashes above, the prose is as
             precise as the format allows.
           schema: { type: string }
+        - name: history
+          in: query
+          description: >
+            The log.md of the object at this path rather than the object
+            itself — its own changes, newest first (design doc 0046
+            §3.5). Presence is the whole of it — `?history` — and a
+            value is ignored, the way `Accept` decides a representation
+            without being asked a question. A directory's history is the
+            reserved `log.md` beside it.
+          schema: { type: string }
+          allowEmptyValue: true
         - name: limit
           in: query
-          description: log.md only — maximum entries (default and max 1000).
+          description: log.md and ?history only — maximum entries (default and max 1000).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
         - name: attachments
@@ -573,6 +593,7 @@ paths:
                   - $ref: "#/components/schemas/View"
                   - $ref: "#/components/schemas/BundleListing"
                   - $ref: "#/components/schemas/BundleLog"
+                  - $ref: "#/components/schemas/ObjectHistory"
               examples:
                 root:
                   summary: "GET /api/v1/bundle/index.md (Accept: application/json)"
@@ -2490,6 +2511,37 @@ components:
         publishes, newest first, bounded by `limit`. It is an instance
         ledger rather than knowledge: an import never reads it back, the
         same way it never reads back `generated` (design doc 0009).
+
+        Each row names the object by its **path**: a revision is an event
+        about an object (design doc 0046 §3.1), and a file has no concept
+        id — a history keyed on the id would leave every attach and
+        detach out of the one it belongs in.
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/Change" }
+    Change:
+      type: object
+      description: >
+        One line of a directory's update history: what happened to which
+        object, when, and by whom. The document each revision holds is
+        deliberately not here — a directory's history carrying every past
+        version of every entry under it would be the knowledge base
+        several times over. `?history` on the object is where those are.
+      properties:
+        path: { type: string, description: The object's bundle path. }
+        title: { type: string, description: "The object's title as it stands; absent for a file and for a concept since purged." }
+        change: { type: string, enum: [create, update, verify, reject, unreject, delete, move, attach, detach] }
+        changed_by: { $ref: "#/components/schemas/Actor" }
+        changed_at: { type: string, format: date-time }
+    ObjectHistory:
+      type: object
+      description: >
+        `?history` on a concept's own address: its revisions, newest
+        first, each carrying the whole entry as it stood, as an OKF
+        document — so a diff between two revisions is a text diff
+        (design doc 0046 §3.5).
       required: [revisions]
       properties:
         revisions:

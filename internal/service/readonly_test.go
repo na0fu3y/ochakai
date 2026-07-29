@@ -39,6 +39,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		"GetFile":         true,
 		"FillAttachments": true, "RefuseIfCurated": true,
 		"RefuseIfRevivingCurated": true, "Close": true,
+		"LogRows": true, "ObjectHistory": true,
 	}
 	// Zero arguments of the right type for each parameter, so every method
 	// can be called far enough to hit (or miss) the guard.

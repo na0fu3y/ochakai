@@ -142,8 +142,13 @@ func TestBrowseReadsTheDirectorysIndex(t *testing.T) {
 func TestRevisionsHitsCanonicalPathAndSendsLimit(t *testing.T) {
 	var got url.Values
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/bundle/queries/sales/monthly-revenue/log.md" {
+		// The object's own address, with ?history — not a log.md inside
+		// a directory named after the concept (design doc 0046 §3.5).
+		if r.URL.Path != "/api/v1/bundle/queries/sales/monthly-revenue.md" {
 			t.Errorf("path = %s", r.URL.Path)
+		}
+		if !r.URL.Query().Has("history") {
+			t.Errorf("query = %s, want ?history", r.URL.RawQuery)
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"revisions": []domain.Revision{
