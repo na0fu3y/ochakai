@@ -17,7 +17,7 @@ import (
 )
 
 // A search that finds nothing is recorded as a question this base could
-// not answer (design doc 0049 §3.1) — through the service, so every
+// not answer (design doc 0051 §3.1) — through the service, so every
 // surface is covered by the one place they all search through. A search
 // that finds something is not: only the absence is news.
 func TestSearchMissesAreRecordedIntegration(t *testing.T) {

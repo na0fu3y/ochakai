@@ -80,7 +80,7 @@ func TestPublicReadOnlyDefaultsOff(t *testing.T) {
 }
 
 // Misses are recorded unless the operator says otherwise: a measurement
-// nobody switches on is a measurement nobody has (design doc 0049 §3.4).
+// nobody switches on is a measurement nobody has (design doc 0051 §3.4).
 // It is the only default-on boolean here, so it is the only one that
 // reads anything but "true" as on.
 func TestRecordMissesDefaultsOn(t *testing.T) {
@@ -102,7 +102,7 @@ func TestRecordMissesDefaultsOn(t *testing.T) {
 
 // A public deployment reads no identity, so it keeps no query text
 // either — and asking for it back is not a way out, exactly as with
-// read-only (design doc 0049 §3.4).
+// read-only (design doc 0051 §3.4).
 func TestPublicReadOnlyKeepsNoQueries(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
 	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")

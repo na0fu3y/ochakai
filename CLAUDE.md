@@ -26,7 +26,10 @@ promise about decisions somebody could be depending on.
 When one is needed, it lands in the same PR as the change and the index
 stays truthful — the `design-doc` skill has the full procedure (new
 number, older docs' `Status:` headers, the index entry, and why amendment
-chains get a replacement instead).
+chains get a replacement instead). The bookkeeping half of it is checked:
+`cmd/ochakai/designdocs_test.go` fails on a record missing from an index,
+an index that disagrees with a record's `Status:` header about whether it
+is current, or a supersession recorded at only one end.
 
 ## Checks and conventions
 

@@ -1103,6 +1103,95 @@ func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
+// A document written somewhere else says who generated and confirmed it.
+// That is a claim, not this instance's observation — so it reaches no
+// ledger and no trust tier, and it is not destroyed either: it is kept
+// under `received` and reported (design doc 0046 §2.2, issue #292).
+func TestRESTIntegrationForeignTrustFamilyIsKeptAsAClaim(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	id := fmt.Sprintf("restclaim%d/revenue", time.Now().UnixNano())
+	removeEntries(t, srv, id)
+
+	// The export form of another instance: a human wrote it there, and a
+	// different human confirmed it there.
+	const written = "---\ntype: Metric\ntitle: 売上\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n  - by: human:ceo@example.co.jp\n    at: 2026-07-02T00:00:00Z\n" +
+		"created_by: human:sato@example.co.jp\n---\n\n受注合計。\n"
+
+	resp := putDoc(t, srv.URL, id, []byte(written), true)
+	var created domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	// Nothing was applied in silence: SPEC §11 wants the reinterpretation
+	// said out loud, and this is the one that used to be mute.
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 1 ||
+		!strings.Contains(notes[0], "received") {
+		t.Errorf("Ochakai-Note = %q, want one note naming the claim", notes)
+	}
+	// The claim is in the stored bytes, where a later release can still
+	// find it, and out of the keys this instance owns.
+	if !strings.Contains(created.Document, "received:") ||
+		!strings.Contains(created.Document, "human:ceo@example.co.jp") {
+		t.Errorf("the claim was not kept:\n%s", created.Document)
+	}
+	if strings.Contains(created.Document, "\ncreated_by:") ||
+		strings.Contains(created.Document, "\nverified:") {
+		t.Errorf("a claim was left where this instance's own keys go:\n%s", created.Document)
+	}
+	// And nowhere else. The entry is unverified here, by the importer.
+	if created.Summary.Trust != domain.TrustUnverified {
+		t.Errorf("trust = %q, want unverified: a claim is not a confirmation", created.Summary.Trust)
+	}
+	if len(created.Observed.Verified) != 0 {
+		t.Errorf("a claim reached the ledger: %+v", created.Observed.Verified)
+	}
+	if created.Observed.CreatedBy.Name == "sato@example.co.jp" {
+		t.Errorf("a claim became this instance's created_by: %+v", created.Observed.CreatedBy)
+	}
+
+	// Importing the same foreign document again writes nothing: the claim
+	// it carries is the claim already recorded, so a recurring sync does
+	// not churn revisions.
+	resp = putDoc(t, srv.URL, id, []byte(written), false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("re-importing = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+
+	// The export form carries both — the claim and this instance's own
+	// observation — and sending it back is still not a change.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req.Header.Set("Accept", "text/markdown")
+	mdResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, _ := io.ReadAll(mdResp.Body)
+	mdResp.Body.Close()
+	for _, want := range []string{"received:", "generated:", "created_by:"} {
+		if !strings.Contains(string(served), want) {
+			t.Errorf("the export form is missing %q:\n%s", want, served)
+		}
+	}
+	resp = putDoc(t, srv.URL, id, served, false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") != "true" {
+		t.Errorf("sending back the export form = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 0 {
+		t.Errorf("our own export form was reported as a claim: %q", notes)
+	}
+}
+
 // A bundle carries what it carries (design doc 0046 §3.2): the write
 // path refuses no media type, and the delivery rule is what keeps the
 // dangerous ones from running. This is the pair #280 could only test one
@@ -1321,7 +1410,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	}
 }
 
-// The instance stats on the wire (design doc 0049), which also brings
+// The instance stats on the wire (design doc 0051), which also brings
 // them under the contract check (design doc 0035 §3.2): the tally counts
 // the entry this test just wrote, the search that found nothing is
 // counted as a question, and a window past the retention is refused
@@ -1350,7 +1439,7 @@ func TestRESTIntegrationStats(t *testing.T) {
 	}
 
 	// A search nothing answers. Recording is off the read path, so the
-	// count only moves after a flush (design docs 0029, 0049 §3.2).
+	// count only moves after a flush (design docs 0029, 0051 §3.2).
 	nonsense := "qqzzxx" + root
 	var hits struct {
 		Hits []domain.SearchHit `json:"hits"`
@@ -1398,5 +1487,179 @@ func deleteMisses(t *testing.T, query string) {
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `DELETE FROM search_miss WHERE query = $1`, query); err != nil {
 		t.Errorf("cleaning up misses: %v", err)
+	}
+}
+
+// A listing on the wire pages: the response carries a cursor while there
+// is more behind it, passing that cursor back continues the same order,
+// and the last page carries none — which is the only signal a caller gets
+// that the listing ended (design doc 0050 §§2.1, 2.3). A search refuses
+// the parameter with a 400, because a ranking has no page two (§2.2).
+func TestRESTIntegrationListingsPage(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	// A run-unique root, as the other REST integration tests do it: the
+	// feed below is filtered to this test's own entries, so a shared test
+	// database cannot change what the walk should see.
+	root := fmt.Sprintf("page%d", time.Now().UnixNano())
+	var ids []string
+	for i := range 5 {
+		id := fmt.Sprintf("%s/e%d", root, i)
+		doc := docFrom(t, map[string]any{
+			"type": "Insight", "id": id, "title": "draft " + id,
+			"status": "draft", "tags": []string{root},
+			"stale_after": fmt.Sprintf("2020-01-%02d", i+1),
+		})
+		resp := putDoc(t, srv.URL, id, doc, true)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s: status %d", id, resp.StatusCode)
+		}
+		ids = append(ids, id)
+	}
+	removeEntries(t, srv, ids...)
+
+	page := func(query string) (hits []string, cursor string) {
+		t.Helper()
+		resp, err := http.Get(srv.URL + "/api/v1/knowledge?" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET ?%s: status %d", query, resp.StatusCode)
+		}
+		var got struct {
+			Hits   []domain.SearchHit `json:"hits"`
+			Cursor string             `json:"cursor"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		for _, h := range got.Hits {
+			hits = append(hits, h.ID)
+		}
+		return hits, got.Cursor
+	}
+
+	feed := "sort=stale_after&tag=" + root
+	whole, cursor := page(feed + "&limit=50")
+	if len(whole) != len(ids) {
+		t.Fatalf("the feed read whole = %v, want the %d entries this test wrote", whole, len(ids))
+	}
+	if cursor != "" {
+		t.Errorf("a listing that ended carried a cursor: %q", cursor)
+	}
+
+	var walked []string
+	cursor = ""
+	for range len(ids) + 2 {
+		q := feed + "&limit=2"
+		if cursor != "" {
+			q += "&cursor=" + url.QueryEscape(cursor)
+		}
+		var got []string
+		got, cursor = page(q)
+		walked = append(walked, got...)
+		if cursor == "" {
+			break
+		}
+	}
+	if !slices.Equal(walked, whole) {
+		t.Errorf("walking the feed in pages of 2 saw %v, reading it whole saw %v", walked, whole)
+	}
+
+	// A ranking has no next page, and saying so is a client error rather
+	// than a cursor quietly ignored.
+	resp, err := http.Get(srv.URL + "/api/v1/knowledge?q=" + root + "&cursor=" + url.QueryEscape(cursorOf(t, page, feed)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("a cursor on a search: status %d, want 400", resp.StatusCode)
+	}
+}
+
+// cursorOf reads the first page of a listing for a cursor to reuse.
+func cursorOf(t *testing.T, page func(string) ([]string, string), feed string) string {
+	t.Helper()
+	_, cursor := page(feed + "&limit=1")
+	if cursor == "" {
+		t.Fatal("the feed ended after one entry; the test set never reached the store")
+	}
+	return cursor
+}
+
+// GET /api/v1/queues answers "is there anything to do" with the sizes of
+// the three feeds a curator empties (design doc 0049), and the answer
+// moves as the work is done: a failure report puts an entry in, the
+// verification that answers it takes the entry out. The prefix scope is
+// what keeps this test's numbers its own, and it is also the only filter
+// the endpoint takes.
+func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	root := fmt.Sprintf("queuesit%d", time.Now().UnixNano())
+	draft := root + "/proposals/margin"
+	broken := root + "/queries/revenue"
+	expired := root + "/insights/seasonality"
+	removeEntries(t, srv, draft, broken, expired)
+
+	create := func(id string, entry map[string]any) {
+		resp := putDoc(t, srv.URL, id, docFrom(t, entry), true)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("create %s = %d: %s", id, resp.StatusCode, b)
+		}
+	}
+	create(draft, map[string]any{"type": "Insight", "id": draft, "title": "Gross margin", "status": "draft"})
+	create(broken, map[string]any{"type": "Metric", "id": broken, "title": "Monthly revenue"})
+	create(expired, map[string]any{"type": "Insight", "id": expired, "title": "Seasonality",
+		"stale_after": time.Now().UTC().AddDate(0, 0, -1).Format(domain.DateLayout)})
+
+	counts := func() domain.QueueCounts {
+		t.Helper()
+		var out struct {
+			Queues domain.QueueCounts `json:"queues"`
+		}
+		getJSON(t, srv.URL+"/api/v1/queues?prefix="+root, &out)
+		return out.Queues
+	}
+	if got, want := counts(), (domain.QueueCounts{Drafts: 1, PastExpiry: 1}); got != want {
+		t.Fatalf("queues = %+v, want %+v", got, want)
+	}
+
+	// A failure report against the untouched entry: now something is
+	// reported wrong.
+	report, _ := json.Marshal(map[string]string{"outcome": "failed", "note": "double counts split shipments"})
+	resp, err := http.Post(srv.URL+"/api/v1/usage/"+broken, "application/json", bytes.NewReader(report))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got, want := counts(), (domain.QueueCounts{Drafts: 1, ReportedWrong: 1, PastExpiry: 1}); got != want {
+		t.Fatalf("queues after a failure report = %+v, want %+v", got, want)
+	}
+
+	// Verifying is the answer to that report, and the queue must shorten
+	// — a queue nobody can empty stops being read (design doc 0025 §6.1).
+	resp, err = http.Post(srv.URL+"/api/v1/verify/"+broken, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got, want := counts(), (domain.QueueCounts{Drafts: 1, PastExpiry: 1}); got != want {
+		t.Errorf("queues after the re-verification = %+v, want %+v", got, want)
+	}
+
+	// Out of scope is out of the count: another prefix sees none of this.
+	var elsewhere struct {
+		Queues domain.QueueCounts `json:"queues"`
+	}
+	getJSON(t, srv.URL+"/api/v1/queues?prefix="+root+"x", &elsewhere)
+	if elsewhere.Queues != (domain.QueueCounts{}) {
+		t.Errorf("a neighbouring prefix counted %+v, want all zero", elsewhere.Queues)
 	}
 }

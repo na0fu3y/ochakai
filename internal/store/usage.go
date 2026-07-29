@@ -31,7 +31,7 @@ type usageEvent struct {
 }
 
 // missEvent is one buffered search that found nothing: what was asked, by
-// whom, when (design doc 0049 §3.1). It rides the same buffer and the
+// whom, when (design doc 0051 §3.1). It rides the same buffer and the
 // same flush as the usage events because it is the same kind of fact —
 // the server's own observation of a read, worth losing before a read is
 // (0029 §3.1).
@@ -65,7 +65,7 @@ func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Act
 }
 
 // RecordMiss buffers one search that returned nothing, and returns
-// immediately (design doc 0049 §3.2). Same contract as RecordEvents: the
+// immediately (design doc 0051 §3.2). Same contract as RecordEvents: the
 // row is written by the background flush loop, and the error says only
 // that the buffer was full, never that the search failed.
 func (s *Store) RecordMiss(ctx context.Context, query string, actor domain.Actor) error {
@@ -222,7 +222,7 @@ func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Ac
 //
 // Search misses are pruned on the same schedule and to the same day, and
 // nothing survives them — unlike a usage event, a miss has no running
-// total, so the window is the whole memory (design doc 0049 §3.3). That
+// total, so the window is the whole memory (design doc 0051 §3.3). That
 // is what /api/v1/stats caps its own window at.
 func (s *Store) maybePruneEvents(ctx context.Context) {
 	now := time.Now().Unix()

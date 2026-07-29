@@ -11,7 +11,7 @@ import (
 )
 
 // A miss buffers off the read path like a usage event, and lands as its
-// own row (design doc 0049 §3.2); the stats then read it back as a
+// own row (design doc 0051 §3.2); the stats then read it back as a
 // count and as the list of what to write next.
 //
 // The rest of the tally is asserted as a delta rather than as an
@@ -155,9 +155,9 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	}
 }
 
-// The two review queues are counted with the feeds' own predicates, so a
-// depth reported by the stats cannot mean something different from the
-// feed a reviewer then opens (design doc 0049 §3.5).
+// The queue depths the stats carry are design doc 0049's, counted with
+// the feeds' own predicates — so a depth cannot come to mean something
+// other than the feed a reviewer then opens (design doc 0051 §3.5).
 func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
 	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
 	if dbURL == "" {
@@ -207,11 +207,11 @@ func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
 	// depth has to land between them: the test database is shared, so a
 	// neighbour may join or leave a queue in the meantime, and only a
 	// predicate that disagrees with the feed's can fall outside.
-	failedBefore, err := s.ListByFailed(ctx, Filter{}, 1000)
+	failedBefore, err := s.ListByFailed(ctx, Filter{}, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	staleBefore, err := s.ListByStaleAfter(ctx, Filter{}, 1000)
+	staleBefore, err := s.ListByStaleAfter(ctx, Filter{}, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,11 +219,11 @@ func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	failedAfter, err := s.ListByFailed(ctx, Filter{}, 1000)
+	failedAfter, err := s.ListByFailed(ctx, Filter{}, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	staleAfter, err := s.ListByStaleAfter(ctx, Filter{}, 1000)
+	staleAfter, err := s.ListByStaleAfter(ctx, Filter{}, nil, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,10 +234,10 @@ func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
 			t.Errorf("%s = %d, the feed held %d then %d", name, got, a, b)
 		}
 	}
-	between(t, "needs_review", st.Review.NeedsReview, len(failedBefore), len(failedAfter))
-	between(t, "past_expiry", st.Review.PastExpiry, len(staleBefore), len(staleAfter))
-	if st.Review.NeedsReview == 0 || st.Review.PastExpiry == 0 {
-		t.Errorf("the entries this test just made are in neither queue: %+v", st.Review)
+	between(t, "queues.reported_wrong", st.Queues.ReportedWrong, len(failedBefore), len(failedAfter))
+	between(t, "queues.past_expiry", st.Queues.PastExpiry, len(staleBefore), len(staleAfter))
+	if st.Queues.ReportedWrong == 0 || st.Queues.PastExpiry == 0 {
+		t.Errorf("the entries this test just made are in neither queue: %+v", st.Queues)
 	}
 }
 

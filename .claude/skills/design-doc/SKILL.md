@@ -104,6 +104,18 @@ amendment stacked on the same doc, do not add another diff. Write a full
 replacement that states the area's whole current picture, and mark the
 older docs **Superseded**.
 
+## What the checks hold, and what they cannot
+
+`cmd/ochakai/designdocs_test.go` fails when steps 4-6 are half done: a
+record with no entry in either index, an index that still lists a
+superseded record as current (or retires one that is still standing), a
+supersession written at only one end. Run `go test ./cmd/ochakai/` before
+opening the PR and those come back as sentences, not review comments.
+
+No test reads step 5's judgment — whether the opening table's row points
+at the doc somebody should actually read now — or whether the summary in
+step 6 says what the record decided. Spend the attention there.
+
 ## Surface consistency
 
 If the change adds or changes a feature, [0015](../../../docs/design/0015-surface-consistency.md)

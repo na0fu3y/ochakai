@@ -1,5 +1,5 @@
 -- A question nobody could answer is a fact worth keeping
--- (design doc 0049 §3.1).
+-- (design doc 0051 §3.1).
 --
 -- Every other measurement in this database hangs off a knowledge id:
 -- knowledge_event and knowledge_usage both key on the entry that was

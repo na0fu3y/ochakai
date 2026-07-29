@@ -76,6 +76,7 @@ _ochakai() {
   local -a commands
   commands=(
     'search:search knowledge; verified entries rank higher'
+    'queues:how much work each review queue is holding'
     'browse:list one level of the ID hierarchy (folder view)'
     'context:the one-call read before a data question (full entries)'
     'get:print one entry as an OKF document'
@@ -120,10 +121,11 @@ _ochakai() {
         '*--prefix[only entries under this path]:prefix:' \
         '--source[only entries citing this resource]:source:' \
         '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
-        '*--fm[filter by a frontmatter key=value]:fm:' \
+        '*--fm[filter by an OKF frontmatter key=value]:fm:' \
         '--rejected[only entries a human turned down]' \
         '--sort[list instead of searching: by verification age, demand, failed reports, or declared expiry]:sort:(verified_at usage failed stale_after)' \
         '--limit[max results]:limit:' \
+        '--cursor[resume a listing where the last page ended]:cursor:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
       ;;
@@ -134,7 +136,7 @@ _ochakai() {
         '*--tag[filter by tag]:tag:' \
         '*--prefix[only entries under this path]:prefix:' \
         '*--trust[filter by who confirmed the entry (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
-        '*--fm[filter by a frontmatter key=value]:fm:' \
+        '*--fm[filter by an OKF frontmatter key=value]:fm:' \
         '--limit[max full entries]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
         '--min-score[drop hits below this score]:min-score:' \
@@ -152,6 +154,13 @@ _ochakai() {
       ;;
     browse)
       _arguments '--json[print the raw JSON response]' '--url[server URL]:url:'
+      ;;
+    queues)
+      _arguments \
+        '*--prefix[count only entries under this path]:prefix:' \
+        '--exit-code[exit 2 while any queue is non-empty]' \
+        '--json[print the raw JSON response]' \
+        '--url[server URL]:url:'
       ;;
     revisions|backlinks)
       _arguments '--limit[max results]:limit:' '--json[print the raw JSON response]' '--url[server URL]:url:'
@@ -225,7 +234,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search queues browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions backlinks export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -238,7 +247,8 @@ _ochakai() {
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --trust --fm --rejected --sort --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --trust --fm --rejected --sort --limit --cursor --json --url" ;;
+    queues)        opts="--prefix --exit-code --json --url" ;;
     browse)        opts="--json --url" ;;
     context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
     get)           opts="--json --download --url" ;;
@@ -288,6 +298,7 @@ const fishCompletionTmpl = `# fish completion for ochakai — ochakai completion
 complete -c ochakai -f
 
 complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified entries rank higher'
+complete -c ochakai -n __fish_use_subcommand -a queues -d 'how much work each review queue is holding'
 complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
 complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full entries)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one entry as an OKF document'
@@ -318,12 +329,12 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get create update verify reject delete purge reembed move attach detach usage stats report revisions log backlinks export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search browse context get create update verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search queues browse context get create update verify reject reembed attach usage stats report revisions backlinks whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
@@ -335,10 +346,13 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context' -l status -x
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l sort -x -a 'verified_at usage failed stale_after' -d 'list instead of searching: by verification age, demand, failed reports, or declared expiry'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l prefix -x -d 'only entries under this path'
+complete -c ochakai -n '__fish_seen_subcommand_from queues' -l prefix -x -d 'count only entries under this path'
+complete -c ochakai -n '__fish_seen_subcommand_from queues' -l exit-code -d 'exit 2 while any queue is non-empty'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l source -x -d 'only entries citing this resource'
 complete -c ochakai -n '__fish_seen_subcommand_from search context' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the entry (OKF SPEC §5.3)'
-complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 'filter by a frontmatter key=value'
+complete -c ochakai -n '__fish_seen_subcommand_from search context' -l fm -x -d 'filter by an OKF frontmatter key=value'
 complete -c ochakai -n '__fish_seen_subcommand_from search' -l rejected -d 'only entries a human turned down'
+complete -c ochakai -n '__fish_seen_subcommand_from search' -l cursor -x -d 'resume a listing where the last page ended'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l lift -d 'withdraw the rejection'
 complete -c ochakai -n '__fish_seen_subcommand_from search context revisions log backlinks' -l limit -x -d 'max results'

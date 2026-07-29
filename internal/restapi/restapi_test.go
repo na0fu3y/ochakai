@@ -63,14 +63,18 @@ func TestBadRequestValidation(t *testing.T) {
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
 		{"bad min_score", "/api/v1/context?q=x&min_score=high", "invalid min_score"},
 		{"bad index prefix", "/api/v1/bundle/..%2Fescape/index.md", "invalid prefix"},
-		// "fm." carries the keys ochakai does not name (design doc
-		// 0047). The five it does are refused on every surface that
-		// takes a filter, searching or listing, before any store access.
+		// "fm." carries the OKF keys nothing else asks about (design
+		// doc 0047). The five with a column behind them, and every key
+		// OKF does not define, are refused on both surfaces that take a
+		// filter, searching or listing, before any store access.
 		{"fm.status", "/api/v1/knowledge?q=x&fm.status=stable", "use status="},
 		{"fm.tags while listing", "/api/v1/knowledge?sort=usage&fm.tags=core", "use tag="},
 		{"fm.sources", "/api/v1/knowledge?q=x&fm.sources=bq://t", "use source=URI"},
 		{"fm.stale_after", "/api/v1/knowledge?q=x&fm.stale_after=2026-12-31", "use sort=stale_after"},
 		{"fm.type on a context pack", "/api/v1/context?q=x&fm.type=Metric", "use type="},
+		{"producer key", "/api/v1/knowledge?q=x&fm.owner=finance", "OKF does not define"},
+		{"producer key while listing", "/api/v1/knowledge?sort=usage&fm.owner=finance", "OKF does not define"},
+		{"producer key on a context pack", "/api/v1/context?q=x&fm.owner=finance", "OKF does not define"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

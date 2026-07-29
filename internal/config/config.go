@@ -63,7 +63,7 @@ type Config struct {
 	GCSBucket string
 
 	// RecordMisses keeps the searches that found nothing, with the query
-	// as it was typed (design doc 0049 §3.4). It is the one thing
+	// as it was typed (design doc 0051 §3.4). It is the one thing
 	// ochakai stores that a caller did not choose to curate, so it has
 	// an off switch — OCHAKAI_RECORD_MISSES=false — and it is off by
 	// construction on a public deployment, which reads no identity and
@@ -126,7 +126,7 @@ func FromEnv() (*Config, error) {
 		// Same shape, same reason: a public deployment reads no identity
 		// (0042 §2.2), so it does not keep what its callers typed either
 		// — and OCHAKAI_RECORD_MISSES=true alongside does not turn it
-		// back on (design doc 0049 §3.4).
+		// back on (design doc 0051 §3.4).
 		cfg.RecordMisses = false
 	}
 	if cfg.PublicReadOnly && cfg.InsecureDev {

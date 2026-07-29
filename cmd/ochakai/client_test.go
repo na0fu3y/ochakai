@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"net/http"
@@ -65,16 +66,23 @@ func TestCmdSearchNeedsQueryOrSort(t *testing.T) {
 }
 
 func TestDecodeEntryDetectsFormat(t *testing.T) {
-	fromJSON, err := decodeEntry([]byte(`{"type":"metric","id":"revenue","title":"売上"}`))
+	fromJSON, _, err := decodeEntry([]byte(`{"type":"metric","id":"revenue","title":"売上"}`))
 	if err != nil || fromJSON.ID != "revenue" {
 		t.Fatalf("json: %v, %+v", err, fromJSON)
 	}
-	fromOKF, err := decodeEntry([]byte("\n---\ntype: metric\nid: revenue\ntitle: 売上\n---\n\nbody\n"))
+	fromOKF, _, err := decodeEntry([]byte("\n---\ntype: metric\nid: revenue\ntitle: 売上\n---\n\nbody\n"))
 	if err != nil || fromOKF.ID != "revenue" || fromOKF.Body != "body" {
 		t.Fatalf("okf: %v, %+v", err, fromOKF)
 	}
-	if _, err := decodeEntry([]byte("plain text")); err == nil {
+	if _, _, err := decodeEntry([]byte("plain text")); err == nil {
 		t.Error("garbage decoded without error")
+	}
+	// A document that says who generated and confirmed it is naming a
+	// claim, not this instance's provenance (design doc 0046 §2.2): the
+	// keys come back so the write can report what it kept.
+	_, claimed, err := decodeEntry([]byte("---\ntype: metric\ngenerated:\n  by: human:sato\n---\n"))
+	if err != nil || len(claimed) != 1 || claimed[0] != "generated" {
+		t.Fatalf("claimed = %v, err = %v", claimed, err)
 	}
 }
 
@@ -127,12 +135,12 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 // Guard: the client dispatch table and domain types stay in sync with the
 // commands documented in usage().
 func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "browse", "context", "get", "create", "update", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "stats", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
+	for _, name := range []string{"search", "queues", "browse", "context", "get", "create", "update", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "stats", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
 		if _, ok := clientCommands[name]; !ok {
 			t.Errorf("missing client command %q", name)
 		}
 	}
-	if len(clientCommands) != 27 {
+	if len(clientCommands) != 28 {
 		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
 	}
 	_ = domain.Types // keep the import honest
@@ -419,5 +427,133 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	last := got.Observed.LastVerified()
 	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
 		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
+	}
+}
+
+// TestQueuesPrintsEachQueueWithTheCommandThatListsIt pins the two halves
+// of what makes `queues` a nudge rather than a statistic: every line
+// carries the command that opens that queue (with the scope it was asked
+// under), and --exit-code turns "somebody owes a review" into an exit
+// status a scheduler can watch (design doc 0049).
+func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
+	var gotPrefixes []string
+	counts := domain.QueueCounts{Drafts: 3, ReportedWrong: 1, PastExpiry: 0}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
+		gotPrefixes = r.URL.Query()["prefix"]
+		_ = json.NewEncoder(w).Encode(map[string]any{"queues": counts})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	orig := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	queuesErr := cmdQueues(context.Background(), []string{"--prefix", "teams/growth", "--exit-code", "--url", srv.URL})
+	pw.Close()
+	os.Stdout = orig
+	out, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(queuesErr, errWorkPending) {
+		t.Errorf("--exit-code with 4 waiting = %v, want errWorkPending (exit 2)", queuesErr)
+	}
+	if len(gotPrefixes) != 1 || gotPrefixes[0] != "teams/growth" {
+		t.Errorf("server saw prefix %v, want [teams/growth]", gotPrefixes)
+	}
+	for _, want := range []string{
+		"3\tdrafts\tochakai search --sort usage --status draft --prefix teams/growth\n",
+		"1\treported wrong\tochakai search --sort failed --prefix teams/growth\n",
+		"0\tpast expiry\tochakai search --sort stale_after --prefix teams/growth\n",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output misses %q:\n%s", want, out)
+		}
+	}
+
+	// All three empty is the case the whole command exists to make
+	// visible: it prints the zeros and exits 0, so a quiet queue and an
+	// empty one stop looking alike.
+	counts = domain.QueueCounts{}
+	if err := cmdQueues(context.Background(), []string{"--exit-code", "--url", srv.URL}); err != nil {
+		t.Errorf("--exit-code on an empty base = %v, want nil (exit 0)", err)
+	}
+}
+
+// A bundle from another instance arrives with a trust family. The import
+// parses it, so the move to a claim happens here rather than on the
+// server (design doc 0046 §2.2) — and the note has to follow the claim,
+// which means asking what was actually stored. A claim the server kept is
+// reported and counts against --strict; one it dropped as its own
+// observation coming home is neither.
+func TestImportReportsAKeptClaim(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const foreign = "---\ntype: metric\ntitle: Foreign\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n  - by: human:ceo@example.co.jp\n    at: 2026-07-02T00:00:00Z\n" +
+		"---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "foreign.md"), []byte(foreign), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// keep says whether this server stores the claim or recognizes it as
+	// what it already observed; both answers travel back the same way, in
+	// the stored document.
+	run := func(t *testing.T, keep bool) string {
+		t.Helper()
+		mux := http.NewServeMux()
+		mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			if !keep {
+				body = []byte(strings.Split(string(body), "received:")[0] + "---\n\nbody\n")
+			}
+			_ = json.NewEncoder(w).Encode(domain.View{Document: string(body)})
+		})
+		mux.HandleFunc("POST /api/v1/verify/{id...}", func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(domain.View{})
+		})
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+
+		orig, origErr := os.Stdout, os.Stderr
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stdout, os.Stderr = pw, pw
+		importErr := cmdImport(context.Background(), []string{dir, "--url", srv.URL})
+		pw.Close()
+		os.Stdout, os.Stderr = orig, origErr
+		out, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if importErr != nil {
+			t.Fatalf("cmdImport: %v\noutput:\n%s", importErr, out)
+		}
+		return string(out)
+	}
+
+	kept := run(t, true)
+	if !strings.Contains(kept, "note: generated, verified is not") &&
+		!strings.Contains(kept, "note: generated, verified are not") {
+		t.Errorf("a kept claim was not reported:\n%s", kept)
+	}
+	if !strings.Contains(kept, "1 notes)") {
+		t.Errorf("a kept claim did not reach the summary count:\n%s", kept)
+	}
+
+	// The same bundle against a server that recognizes the keys as its own
+	// is the Git review loop (design doc 0009 §3.2), which must stay quiet.
+	dropped := run(t, false)
+	if strings.Contains(dropped, "note:") || !strings.Contains(dropped, "0 notes)") {
+		t.Errorf("our own export form coming home was reported as a claim:\n%s", dropped)
 	}
 }

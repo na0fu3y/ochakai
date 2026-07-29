@@ -13,7 +13,9 @@
      action and tree drag & drop), the draft review queue (sort=usage),
      the two feeds that empty by verifying — reported wrong (sort=failed)
      and verification age (sort=verified_at), reachable from the review
-     queue and #/search/reported-wrong — and OKF export.
+     queue and #/search/reported-wrong — how much each queue is holding
+     (design doc 0049), how the loop is going and what it could not
+     answer (design doc 0051) — and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -94,6 +96,14 @@
   }
   .topnav a:hover { color: var(--text); text-decoration: none; }
   .topnav a.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+  /* How much is waiting, on the tab that leads to it (design doc 0049).
+     Absent rather than zero when there is nothing: a badge that is always
+     there is scenery, and the point is to be noticed. */
+  .topnav .waiting {
+    margin-left: .4rem; border-radius: 999px; padding: .02rem .42rem;
+    font-size: .72rem; font-weight: 700;
+    background: var(--accent-weak); color: var(--accent-strong);
+  }
   /* Narrow screens: brand + actions on the first row, nav tabs on their own row. */
   @media (max-width: 800px) {
     .topbar { flex-wrap: wrap; height: auto; padding-top: .55rem; gap: .5rem .8rem; }
@@ -447,7 +457,7 @@
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
     <a href="#/search" data-route="search">Search</a>
-    <a href="#/review" data-route="review">Review</a>
+    <a href="#/review" data-route="review">Review<span class="waiting" id="nav-waiting" hidden></span></a>
   </nav>
   <span class="spacer"></span>
 </header>
@@ -774,7 +784,6 @@ function route() {
       explore.ageFeed = rest[0] === 'verification-age';
       explore.expiredFeed = rest[0] === 'stale';
       explore.source = '';
-      explore.feedAll = false;
     } else if (rest[0] === 'in') {
       // Search scoped to a directory — where the tree's "Search here"
       // lands. A route rather than a click handler so it is a real link:
@@ -788,7 +797,6 @@ function route() {
       explore.source = decodeURIComponent(rest.slice(1).join('/'));
       explore.q = '';
       explore.failedFeed = explore.ageFeed = explore.expiredFeed = false;
-      explore.feedAll = false;
     } else if (rest.length === 0) {
       explore.source = '';
     }
@@ -815,7 +823,10 @@ view.addEventListener('click', e => {
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false, verified: false, rejected: false };
+// loaded and cursor are the listing walk: the hits already on screen and
+// where the next page resumes, both reset by any change that restarts the
+// listing (design doc 0050 §2.1).
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false, rejected: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -919,7 +930,6 @@ function viewExplore() {
       const on = $(sel).checked;
       for (const [, k] of feeds) explore[k] = false;
       explore[key] = on;
-      explore.feedAll = false;
       viewExplore();
     });
   }
@@ -940,7 +950,9 @@ function debounce(fn, ms) {
 // detected below by the top score, where no useful floor exists.
 const WEAK_SCORE = 0.15;
 
-async function runSearch() {
+// append reads the next page of a feed and keeps what is already on
+// screen; every other call starts the listing over.
+async function runSearch(append = false) {
   const out = $('#results');
   if (!out) return;
   const p = new URLSearchParams();
@@ -973,10 +985,13 @@ async function runSearch() {
   // they are looking at, while "my scope and the shared one at once" is
   // the agent's question, asked in one call through REST or MCP.
   if (explore.prefix) p.append('prefix', explore.prefix);
-  // Search caps at 50 server-side; the feeds page larger (100, expandable
-  // to the server max of 1000 via the load-more note).
-  const limit = isFeed ? (explore.feedAll ? 1000 : 100) : 50;
+  // Search caps at 50 server-side; a feed reads 100 at a time and walks
+  // the rest with a cursor (design doc 0050 §2.1), so "load more" appends
+  // a page instead of asking for a bigger one.
+  const limit = isFeed ? 100 : 50;
   p.set('limit', String(limit));
+  if (append && explore.cursor) p.set('cursor', explore.cursor);
+  else { explore.loaded = []; explore.cursor = ''; }
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
   // A scope narrows every result below it, so it is stated above them
   // rather than only in the filter bar — which collapses on narrow
@@ -994,9 +1009,13 @@ async function runSearch() {
     runSearch();
   });
   try {
-    const { hits } = await api('/api/v1/knowledge?' + p);
+    const page = await api('/api/v1/knowledge?' + p);
     if (my !== runSearch._seq || out !== $('#results')) return; // stale response
-    if (!hits || !hits.length) {
+    // The cursor is the server's word for "there is more"; its absence
+    // ends the listing, and no count comes with either (0050 §2.3).
+    const hits = explore.loaded = explore.loaded.concat(page.hits || []);
+    explore.cursor = page.cursor || '';
+    if (!hits.length) {
       out.innerHTML = scopeNote + `<div class="empty">No knowledge found${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
       wireScope();
       return;
@@ -1021,16 +1040,18 @@ async function runSearch() {
       html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
         barely related, probably noise</summary>${weak.map(hitCard).join('')}</details>`;
     }
-    if (hits.length >= limit) {
-      html += isFeed && !explore.feedAll
-        ? `<div class="truncation-note">Showing the first ${limit} entries ·
-             <a href="#" id="feed-more">load up to 1000</a></div>`
-        : `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
-             (server cap) — narrow with filters or a more specific query.</div>`;
+    if (explore.cursor) {
+      html += `<div class="truncation-note">Showing ${hits.length} entries ·
+           <a href="#" id="feed-more">load more</a></div>`;
+    } else if (!isFeed && hits.length >= limit) {
+      // A search does not page: 50 is the whole contract, and the way on
+      // is a narrower question rather than a next page (0050 §2.2).
+      html += `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
+           (server cap) — narrow with filters or a more specific query.</div>`;
     }
     out.innerHTML = scopeNote + html;
     wireScope();
-    $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); explore.feedAll = true; runSearch(); });
+    $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
     out.innerHTML = `<div class="error-banner">Search failed: ${esc(e.message)}</div>`;
@@ -1550,7 +1571,7 @@ async function viewDetail(id) {
   const resolveFile = ref => {
     const p = normalize(ref.startsWith('/') ? ref : (docDir ? docDir + '/' : '') + ref);
     const canonical = a => entry.id + '/' + a.name;
-    let hit = atts.find(a => p === (a.okf_path || canonical(a)) || p === canonical(a));
+    let hit = atts.find(a => p === a.path || p === canonical(a));
     // Forgiving fallback: names are unique within the entry, so a filename
     // match resolves references written against a layout we don't know.
     hit = hit || atts.find(a => a.name === ref.split('/').pop());
@@ -1846,15 +1867,59 @@ async function applyStatus(id, status) {
 // tenth re-check are the same call.
 async function verifyEntry(id) {
   await api('/api/v1/verify/' + idPath(id), { method: 'POST' });
+  refreshQueues();
   return true;
 }
 async function rejectEntry(id, note) {
   await api('/api/v1/reject/' + idPath(id), { method: 'POST', body: { note } });
+  refreshQueues();
   return true;
 }
 async function liftRejection(id) {
   await api('/api/v1/reject/' + idPath(id), { method: 'DELETE' });
+  refreshQueues();
   return true;
+}
+
+/* ============================== review queues ============================== */
+
+// How much work the three queues hold, as one call rather than three
+// listings (design doc 0049). The web UI is where the reviewing happens,
+// so the count belongs on the tab that leads to it: a queue going quiet
+// and a queue being empty look identical until somebody opens it.
+//
+// Refreshed at boot, when the review queue is opened, and after every
+// ruling or save — verifying, rejecting and editing are what move a
+// count (each queue empties differently: design doc 0049 §1).
+let waiting = null;
+
+async function refreshQueues() {
+  try {
+    waiting = (await api('/api/v1/queues')).queues;
+  } catch {
+    waiting = null; // a nudge that cannot load must not become an error banner
+  }
+  const badge = $('#nav-waiting');
+  const total = waiting ? waiting.drafts + waiting.reported_wrong + waiting.past_expiry : 0;
+  badge.textContent = total;
+  badge.hidden = !total;
+  badge.title = total ? `${total} waiting: ${waiting.drafts} drafts, ${waiting.reported_wrong} reported wrong, ${waiting.past_expiry} past their expiry` : '';
+  const strip = $('#queue-strip');
+  if (strip) strip.innerHTML = queueStrip();
+}
+
+// The same three numbers as links into the feed each one counts. Zero is
+// worth printing here (unlike on the tab): on the review page it is the
+// answer to "is there anything else", and it is an answer nothing gave
+// before.
+function queueStrip() {
+  if (!waiting) return '';
+  return [
+    ['#/review', waiting.drafts, waiting.drafts === 1 ? 'draft' : 'drafts'],
+    ['#/search/reported-wrong', waiting.reported_wrong, 'reported wrong'],
+    ['#/search/stale', waiting.past_expiry, 'past expiry'],
+  ].map(([href, n, label]) =>
+    `<a class="badge${n ? ' draft' : ''}" href="${href}">${n} ${label}</a>`).join(' ');
 }
 
 /* ============================== review queue ============================== */
@@ -1863,7 +1928,9 @@ async function liftRejection(id) {
 // inventory case (nobody's finding it; a candidate to drop). Sort=usage
 // already sinks these to the bottom; the toggle isolates them.
 const STALE_DAYS = 14;
-const review = { staleOnly: false, all: false };
+// loaded and cursor walk the draft queue a page at a time (design doc
+// 0050 §2.1): the queue is a ledger, so it has an end rather than a cap.
+const review = { staleOnly: false, loaded: [], cursor: '' };
 
 function viewReview() {
   view.innerHTML = `
@@ -1883,14 +1950,17 @@ function viewReview() {
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
         stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
+      <span class="grow"></span>
+      <span id="queue-strip" style="display:flex;gap:.35rem">${queueStrip()}</span>
     </div>
     <div id="review-results"><div class="empty">…</div></div>`;
   $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
+  refreshQueues();
   runReview();
   loadLoopStats();
 }
 
-// The loop as the instance sees it (design doc 0049), on the page where
+// The loop as the instance sees it (design doc 0051), on the page where
 // the person who runs it already is. Four numbers and the questions that
 // came back empty — not a dashboard: what a curator can act on this
 // morning, which is what the queues below are for.
@@ -1936,28 +2006,33 @@ function isStaleDraft(h) {
   return ((h.usage && h.usage.search_hits) || 0) === 0 && age !== null && age >= STALE_DAYS;
 }
 
-async function runReview() {
+// append reads the next page of the queue and keeps the cards already on
+// screen; every other call starts it over.
+async function runReview(append = false) {
   const out = $('#review-results');
   if (!out) return;
   const my = runReview._seq = (runReview._seq || 0) + 1;
-  const limit = review.all ? 1000 : 100;
+  const limit = 100;
+  let url = '/api/v1/knowledge?sort=usage&status=draft&limit=' + limit;
+  if (append && review.cursor) url += '&cursor=' + encodeURIComponent(review.cursor);
+  else { review.loaded = []; review.cursor = ''; }
   try {
-    const { hits } = await api('/api/v1/knowledge?sort=usage&status=draft&limit=' + limit);
+    const page = await api(url);
     if (my !== runReview._seq || out !== $('#review-results')) return; // stale response
-    let list = hits || [];
+    const hits = review.loaded = review.loaded.concat(page.hits || []);
+    review.cursor = page.cursor || '';
+    let list = hits;
     if (review.staleOnly) list = list.filter(isStaleDraft);
     if (!list.length) {
       out.innerHTML = `<div class="empty">${review.staleOnly ? 'No stale drafts — nothing gathering dust.' : 'No drafts awaiting review.'}</div>`;
       return;
     }
     out.innerHTML = list.map(reviewCard).join('')
-      + ((hits || []).length >= limit
-        ? (review.all
-          ? `<div class="truncation-note">Showing the first ${limit} drafts (server cap).</div>`
-          : `<div class="truncation-note">Showing the first ${limit} drafts ·
-               <a href="#" id="review-more">load up to 1000</a></div>`)
+      + (review.cursor
+        ? `<div class="truncation-note">Showing ${list.length} drafts ·
+             <a href="#" id="review-more">load more</a></div>`
         : '');
-    $('#review-more')?.addEventListener('click', e => { e.preventDefault(); review.all = true; runReview(); });
+    $('#review-more')?.addEventListener('click', e => { e.preventDefault(); runReview(true); });
     wireReviewActions(out);
   } catch (e) {
     if (my !== runReview._seq || out !== $('#review-results')) return;
@@ -2150,6 +2225,7 @@ async function viewEditor(id, prefix = '') {
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
       refreshTree();
+      refreshQueues(); // an edit is what clears the past-expiry queue (design doc 0037 §2.2)
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
@@ -2178,6 +2254,7 @@ $('#side-toggle').addEventListener('click', () => {
 });
 
 refreshTree();
+refreshQueues();
 route();
 </script>
 </body>

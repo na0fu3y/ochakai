@@ -16,7 +16,7 @@ import (
 // count beside it says how much is behind the list.
 const missQueryLimit = 10
 
-// Stats computes the instance-level view of the loop (design doc 0049
+// Stats computes the instance-level view of the loop (design doc 0051
 // §3.5). since bounds every flow number — what was created, verified,
 // reported and missed after it — while the state numbers describe the
 // base as it stands.
@@ -113,10 +113,10 @@ func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.T
 	return rows.Err()
 }
 
-// statsReview counts what review did in the window and what is waiting
-// for it now. The two queues are counted with the feeds' own predicates
-// (unansweredFailure, pastExpiry), so a depth reported here cannot mean
-// something different from the feed a reviewer then opens.
+// statsReview counts what review did in the window, and asks
+// QueueCounts what is waiting for it now — the queues are design doc
+// 0049's face and its query, borrowed rather than recomputed here. Two
+// counts of one queue are two chances to disagree about it.
 func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Time) error {
 	// Verifications of entries that still exist: the ledger keeps rows
 	// for purged ids, and a count including them would say review
@@ -129,21 +129,13 @@ func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Ti
 		return fmt.Errorf("stats: verifications: %w", err)
 	}
 
-	// Both queues are counted through the default filter — live, not
-	// rejected — which is the population the feeds themselves list.
-	where, args := Filter{}.buildWhere("k.")
-	if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT count(*) FROM object k`+usageLateral+`
-		WHERE %s AND `+unansweredFailure("k"), where), args...).Scan(&st.Review.NeedsReview); err != nil {
-		return fmt.Errorf("stats: needs_review: %w", err)
+	// Unscoped, unlike the queues face itself: this is the instance's
+	// picture, and a prefix would make it one team's.
+	queues, err := s.QueueCounts(ctx, Filter{})
+	if err != nil {
+		return fmt.Errorf("stats: queues: %w", err)
 	}
-
-	where, args = Filter{}.buildWhere("")
-	if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT count(*) FROM object WHERE %s AND `+pastExpiry(""), where),
-		args...).Scan(&st.Review.PastExpiry); err != nil {
-		return fmt.Errorf("stats: past_expiry: %w", err)
-	}
+	st.Queues = queues
 	return nil
 }
 

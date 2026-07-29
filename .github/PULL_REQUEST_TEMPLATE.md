@@ -21,7 +21,9 @@ context, including the store integration test and the fuzz targets).
 ## Design docs
 
 - [ ] Alters an accepted decision? A new numbered doc under `docs/design` is in
-      this PR, the `Status:` header of every doc it supersedes or amends links
-      to it, and `docs/design/README.md` is updated — or: it does not, and this
-      box is not applicable
+      this PR — or: it does not, and this box is not applicable. The index
+      entries, the `Status:` headers at both ends and the two indexes agreeing
+      about them are checked by `cmd/ochakai/designdocs_test.go`; what is left
+      for a human is whether the index's opening table still points at the doc
+      to read now, and whether the English summary says what was decided
 - [ ] Commit messages and code comments are in English

@@ -4,7 +4,7 @@ import "time"
 
 // Stats is the instance's own view of the improvement loop: what the
 // knowledge base is made of now, what moved through it lately, and what
-// was asked for and not found (design doc 0049 §3.5).
+// was asked for and not found (design doc 0051 §3.5).
 //
 // Every other measurement in ochakai is per entry — how often this one
 // was searched, fetched, reported worked. Those are counters, and a loop
@@ -17,6 +17,11 @@ import "time"
 // which: a *state* is how things stand right now (how many entries, how
 // many are waiting for review), and a *flow* is what happened inside
 // WindowDays (how many were created, verified, reported on, missed).
+//
+// The queue depths are 0049's, carried here rather than counted again:
+// that record kept the place for these metrics as siblings of its own
+// answer (§3.1), and a second count of the same queue is a second thing
+// to be wrong.
 type Stats struct {
 	// At is when the server computed this — the answers are not a
 	// snapshot of one instant, since each is its own query.
@@ -24,7 +29,14 @@ type Stats struct {
 	// WindowDays is how far back the flow numbers reach.
 	WindowDays int `json:"window_days"`
 
-	Entries  StatsEntries  `json:"entries"`
+	Entries StatsEntries `json:"entries"`
+	// Queues is what design doc 0049's GET /api/v1/queues returns, under
+	// the key it returns it under: how much each review queue is
+	// holding, right now. It travels here as a sibling of the rest
+	// because 0049 §3.1 kept the place for it, and it is counted by that
+	// face's own query — the same three numbers, from one implementation,
+	// unscoped by any prefix.
+	Queues   QueueCounts   `json:"queues"`
 	Review   StatsReview   `json:"review"`
 	Outcomes StatsOutcomes `json:"outcomes"`
 	Misses   StatsMisses   `json:"misses"`
@@ -49,21 +61,17 @@ type StatsEntries struct {
 	Created int64 `json:"created"`
 }
 
-// StatsReview is the human side of the loop: what has been confirmed
-// lately, and how much is waiting.
+// StatsReview is the human side of the loop as a flow: what review did
+// inside the window. How much is waiting for it is Queues, which is a
+// state and belongs to design doc 0049.
 type StatsReview struct {
 	// Verifications is how many verifications were recorded in the
 	// window — the ledger's own rows (design doc 0043 §3.2), so
 	// re-verifying an entry counts each time, and an entry verified
 	// twice counts twice. This is the number that answers "how much
-	// moved through review last week".
+	// moved through review last week", which a queue depth cannot: a
+	// queue says how much is left, never how much went through.
 	Verifications int64 `json:"verifications"`
-	// NeedsReview is how many entries the re-verification feed holds
-	// right now (sort=failed): failure reports nobody has answered.
-	NeedsReview int64 `json:"needs_review"`
-	// PastExpiry is how many entries are past the expiry their author
-	// declared (sort=stale_after).
-	PastExpiry int64 `json:"past_expiry"`
 }
 
 // StatsOutcomes is what callers reported back in the window — the
@@ -75,7 +83,7 @@ type StatsOutcomes struct {
 
 // StatsMisses is what was asked for and not found in the window: the
 // questions this knowledge base could not answer, which is the list of
-// what to write next (design doc 0049 §2).
+// what to write next (design doc 0051 §2).
 type StatsMisses struct {
 	// Recording says whether this deployment keeps misses at all. False
 	// makes Count and Queries meaningless rather than zero — a public

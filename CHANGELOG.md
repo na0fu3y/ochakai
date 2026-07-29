@@ -20,9 +20,142 @@ last entry.
 
 ### Added
 
+- **Something to tell you the review queue is not empty** (design doc
+  [0049](docs/design/0049-queue-counts.md)). `GET /api/v1/queues` and
+  `ochakai queues` count the three feeds a curator empties — drafts
+  waiting to be published or turned down, entries whose failure reports
+  are unanswered, entries past the expiry their author declared —
+  instead of listing them. `--prefix` scopes the counts to a subtree, and nothing else
+  filters them: which entries is the feed's question.
+
+  The queues were emptiable already; nothing said they were not empty,
+  and a review queue going quiet looked exactly like one with nothing in
+  it. Each printed line carries the command that lists that queue, and
+  `ochakai queues --exit-code` exits **2** while any of them is
+  non-empty, so a scheduled CI job goes red on work nobody picked up —
+  1 stays "the command failed", so an unreachable server cannot be read
+  as "nothing to do". The web UI shows the same counts on its Review
+  tab. [docs/guides/operating.md](docs/guides/operating.md) has the cron
+  recipe.
+
+  ochakai delivers nothing itself: no mail, no chat, no webhooks, no
+  address book, and no scheduler inside the server. The verification-age
+  feed is deliberately uncounted — it ranks every verified entry, so its
+  size is the size of the knowledge base and nobody can drive it to
+  zero. MCP does not get the endpoint: an agent's ends of the loop are
+  drafting and reporting outcomes, both of which lengthen a queue rather
+  than read it.
+
+- **BREAKING** — a file reports the path it lives at. `okf_path` is gone
+  from the wire and from the attach call; `Attachment` carries `path`
+  instead (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.3).
+
+  `okf_path` meant "this file is not where ochakai would have put it" —
+  a second identity for one object, and one that could disagree with the
+  row it described. Since files became objects at paths, where a file
+  lives is simply its address: a file written through
+  `/api/v1/attachments/{id}/{name}` is at `<id>/<name>`, and one written
+  at its own bundle path is there. `name` stays beside `path` as the last
+  segment, the way a concept keeps its id beside its path.
+
+  The `?okf_path=` parameter on attach is gone with it. A file that
+  belongs elsewhere in the bundle is written at the path it belongs at
+  (`PUT /api/v1/bundle/{path}`), which is what `ochakai import` now does
+  — where a file lives is an address, not an annotation on a write to
+  something else.
+
+- **BREAKING** — the MCP write face is one tool. `create_knowledge` and
+  `update_knowledge` are `put_knowledge`: it creates when the id is free
+  and replaces when it is taken (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.14).
+
+  The two tools asked the agent a question the document does not answer.
+  A write states what the entry should say, and whether the id was
+  already taken is not part of that statement — the same reasoning that
+  gave REST one `PUT` instead of a POST beside it. The guards are
+  unchanged and still apply to the half they belong to: reviving a
+  curated tombstone is refused on the create side, replacing an entry a
+  human ruled on is refused on the other, and both refusals still name
+  the way forward.
+
+  It is also where the tool budget actually is. The whole surface is
+  33.5 KB of JSON schema; this merge saves about 6 KB of it, which is
+  nearly twice what dropping `delete_knowledge`, `get_knowledge_usage`
+  and `get_attachment` would have bought — so those three stay
+  (issue #272), and the surface is eight tools.
+- **A listing walks past the limit** (design doc
+  [0050](docs/design/0050-listings-page-rankings-do-not.md)). Every
+  listing mode of `GET /api/v1/knowledge` — the four `sort` feeds and the
+  `source` lookup — answers with a `cursor` when more entries follow, and
+  takes it back as `?cursor=` to continue. The feeds are ledgers a
+  reviewer works through, and one that stopped at 1000 with no way
+  forward was indistinguishable from one that was finished.
+
+  The cursor is opaque and keyset, like `reembed`'s: it carries a
+  position in that listing's order, so paging costs the same on page 40
+  as on page 1, and it names the listing it came from — one from another
+  feed is a 400 rather than a page starting somewhere surprising. Pass it
+  back with the same `sort` and the same filters; changing them mid-walk
+  asks a new question from an old position.
+
+  **A search still does not page.** `q` with `cursor` is a 400: a
+  relevance ranking is a fused window rather than an order to resume
+  from, so there is no honest page two, and 50 hits remain the whole
+  contract for a search. The way past them is a narrower question —
+  which is what the filters are for.
+
+  No total count comes with a page either. The absence of a cursor is the
+  end of the listing; an exact count over a filtered feed costs a second
+  scan of it, and a cursor is a position rather than a snapshot — the
+  feeds are live, so an entry that moves while you walk may be missed or
+  seen twice. Counting the three review queues is `GET /api/v1/queues`
+  above, on an address of its own: count once, or walk — they are
+  different questions.
+
+  On the surfaces: MCP's `search_knowledge` takes and returns `cursor`;
+  `ochakai search --cursor` resumes a listing and prints the way on to
+  stderr, leaving stdout one hit per line (the command does not walk the
+  pages for you — `--limit` is your bound); and the web UI's review queue
+  and feeds now have a "load more" that appends a page, replacing the
+  "load up to 1000" note that was the cap made visible.
+
+- **A document's own `generated` and `verified` are kept as a claim**
+  instead of being destroyed (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §2.2). A bundle from
+  another instance — or from any OKF producer — says who generated the
+  content and who confirmed it. Those keys reached no ledger, which is
+  right, and were also cut out of the stored bytes, which was not: the
+  fact that a named person confirmed something somewhere else was gone,
+  and no later release could get it back.
+
+  They now travel under a `received` key in the stored document:
+  `received.verified` is always somebody else's assertion, `verified` is
+  always this instance's ledger, and the export form carries both
+  without them colliding. The write reports what it did, so nothing is
+  reinterpreted in silence (SPEC §11) — an `Ochakai-Note` on REST, a
+  `notes` entry on MCP, a `note:` line and a bump in the summary count
+  on `ochakai import`, which also means `--strict` now fails a
+  cross-instance sync rather than passing it as clean.
+
+  **Nothing derives trust from a claim.** The trust tier, `?trust=` and
+  `observed` answer from this instance's ledger exactly as before, and
+  an imported entry is still unverified until somebody here verifies it
+  — design doc [0009](docs/design/0009-provenance-portability.md)'s
+  reason for refusing to *believe* a payload stands untouched; only the
+  part that discarded it is gone. A claim is an ordinary key of the
+  stored document — it reads back out of `content`, and no listing,
+  ranking or filter surface answers from it.
+
+  Round trips are unchanged. The export form of an entry, sent back —
+  `get` → edit → `PUT`, or `export` → review → `import`, the Git review
+  loop — carries a trust family that says exactly what this instance
+  observed, which is recognized as its own and taken back off. The same
+  bytes are stored, no revision is written, and no note is printed.
+
 - **A search that finds nothing is recorded, and the loop is measured at
   the instance** (design doc
-  [0049](docs/design/0049-instance-metrics-and-search-misses.md)).
+  [0051](docs/design/0051-instance-metrics-and-search-misses.md)).
 
   Everything ochakai measured was per entry — how often this one was
   searched, fetched, reported worked — and a search that returned no
@@ -38,17 +171,20 @@ last entry.
 
   `GET /api/v1/stats?days=30` answers the question nothing answered
   before: entries by lifecycle and by trust tier, how many were created
-  and verified in the window, what callers reported, how deep the two
-  review queues are, and the most-asked questions that came back empty.
-  It is computed on demand — no rollup table, no scheduler — and a
-  window longer than the 180-day retention is a 400 rather than a
-  quietly short answer.
+  and verified in the window, what callers reported, and the most-asked
+  questions that came back empty. It carries the three queue depths of
+  `/api/v1/queues` beside them, from that endpoint's own query — the
+  place 0049 §3.1 kept for exactly this. It is computed on demand — no
+  rollup table, no scheduler — and a window longer than the 180-day
+  retention is a 400 rather than a quietly short answer.
 
   `ochakai stats` prints it one number per line, so cron and `diff` can
-  do the rest; the web UI's review page carries four tiles and the list
-  of unanswered questions. MCP does not get a tool: an agent that
-  searched and found nothing already knows, and its search is what the
-  miss was recorded from.
+  do the rest — `ochakai queues` stays the nudge, with the next command
+  on each line and the exit code; this is the whole picture. The web
+  UI's review page carries four tiles and the list of unanswered
+  questions beside the queue strip. MCP does not get a tool: an agent
+  that searched and found nothing already knows, and its search is what
+  the miss was recorded from.
 
   Storing what a caller typed is new here, so it has an off switch —
   `OCHAKAI_RECORD_MISSES=false` — and a public deployment
@@ -104,17 +240,17 @@ last entry.
   It says what `ochakai revisions` says, in the format a bundle carries
   — which is what makes a history portable.
 
-- **Any frontmatter key is a filter**: `?fm.owner=finance` on REST,
-  `fm: {owner: finance}` on MCP, `--fm owner=finance` on the CLI (design
-  doc [0046](docs/design/0046-bundle-address-space.md) §3.11). It matches
-  a scalar exactly or a member of a list, and repeating it with different
+- **An OKF frontmatter key is a filter**: `?fm.resource=bq://p.d.t` on
+  REST, `fm: {resource: "bq://p.d.t"}` on MCP, `--fm resource=bq://p.d.t`
+  on the CLI (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.11). It matches a
+  scalar exactly or a member of a list, and repeating it with different
   keys ANDs them.
 
   The whole frontmatter is now indexed as `jsonb`, so a key OKF adds in a
-  later version — or one a producer invented — is askable the day
-  somebody writes it, with no column, no migration and no release.
-  Storage became additive when the document became the stored form;
-  querying did not follow until now.
+  later version is askable as soon as ochakai knows the spelling — no
+  column, no migration, and no data to move. Storage became additive when
+  the document became the stored form; querying did not follow until now.
 
   A value is text, and one that spells a number or a boolean matches the
   typed value the document wrote as well: YAML types frontmatter, so
@@ -129,18 +265,32 @@ last entry.
   negation and boolean expressions are the doorway to a query language,
   and what ochakai returns is knowledge rather than rows.
 
+  **The filter vocabulary is OKF's** (design doc
+  [0047](docs/design/0047-fm-carries-okf-keys.md)). `fm.` asks the OKF
+  keys nothing else asks about — `attester`, `computation`,
+  `description`, `executor`, `id`, `parameters`, `resource`, `runtime`,
+  `status_note`, `title`, `usage_window` — and every surface lists them,
+  so the OpenAPI text, the MCP tool schemas and `--help` say exactly what
+  the server accepts.
+
+  A key a producer invented is **stored and handed back exactly as
+  written** and always will be (OKF SPEC §4.1 requires it, §11 forbids
+  rejecting a document for carrying one), but naming it in a filter is a
+  400 listing what can be asked. An open vocabulary cannot tell you
+  whether zero results means "no entry says that" or "the producer
+  spelled it `team`, not `owner`" — and there is no way to write down
+  what is askable, so an agent that sees only a tool schema guesses.
+
   The typed columns stay where they are — they are the same values with
   better indexes (trigram over the text, a date for `stale_after`, an
   array for tags) — so `type`, `status`, `tag`, `source` and
-  `stale_after` keep answering from them. Because they do, `fm.type`,
-  `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after` are refused
-  with a 400 naming the filter to use instead (design doc
-  [0047](docs/design/0047-fm-carries-unnamed-keys.md)). A column and a
-  jsonb path do not answer the same question — `status=stable` matches a
-  document that says nothing, since OKF's default is stable, while
-  `fm.status=stable` never would — and which of the two you got would
-  have depended on how you spelled the key. The prefix carries the keys
-  ochakai does not name, and only those.
+  `stale_after` keep answering from them, and `fm.type`, `fm.status`,
+  `fm.tags`, `fm.sources` and `fm.stale_after` are refused with a 400
+  naming the filter to use instead. A column and a jsonb path do not
+  answer the same question — `status=stable` matches a document that says
+  nothing, since OKF's default is stable, while `fm.status=stable` never
+  would — and which of the two you got would have depended on how you
+  spelled the key.
 
   Migration 0027 adds the column and a GIN index and backfills from each
   stored document; no timestamp moves and no hash changes, since indexing
@@ -255,6 +405,33 @@ last entry.
   a write that only repeats it is still a no-op.
 
 ### Changed
+
+- **The published contract says which address to build on.** While
+  [0046](docs/design/0046-bundle-address-space.md) §3.5's fold is in
+  flight, three addresses answer for the same object, and
+  `api/openapi.yaml` did not say which one survives it.
+  `/api/v1/bundle/{path}` does. The operations it replaces —
+  `GET|PUT|DELETE /api/v1/knowledge/{id}` and
+  `GET|PUT|DELETE /api/v1/attachments/{path}` — are now marked
+  `deprecated`, each naming the bundle call that answers the same
+  question. Nothing is removed and no behaviour changes: a removal
+  arrives in a minor release with a changelog entry, as
+  [the compatibility policy](docs/compatibility.md) says, not after a
+  deprecation window.
+
+  `/api/v1/knowledge` (the list), `/api/v1/backlinks/{id}` and
+  `/api/v1/export` are retired by the same section but carry no mark:
+  their successors are not built yet, so they are still the only way to
+  ask what they answer. The document says so rather than leaving a
+  reader to find out.
+
+  Two things that read as holes are closed with it. The `501` on
+  `PUT /api/v1/bundle/{path}` now says what it is — writing a file needs
+  GCS (design doc 0013), and a concept is unaffected — rather than
+  standing unexplained where a "not built yet" placeholder used to be.
+  And `/api/v1/export`'s recipe for writing your own importer no longer
+  sends the reader to a `POST /api/v1/knowledge` that does not exist:
+  it is one PUT per bundle member, at the path it arrived at.
 
 - **A file is an object in the bundle** (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.3, 3.13). Migration

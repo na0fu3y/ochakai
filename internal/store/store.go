@@ -179,11 +179,13 @@ type Filter struct {
 	Trust    []domain.Trust
 	Rejected *bool
 
-	// Frontmatter narrows by any frontmatter key, which is what makes the
-	// query surface additive: a key OKF adds in a later version — or one
-	// a producer invented — is askable the day somebody writes it, with
-	// no column and no release (design doc 0046 §3.11). Every pair must
-	// match (AND), matching a scalar exactly or a list by membership.
+	// Frontmatter narrows by a frontmatter key read out of the jsonb
+	// index, which is what keeps the query surface additive: a key OKF
+	// adds in a later version is askable with no column and no migration
+	// (design doc 0046 §3.11). Which keys those are is the service's
+	// question, not the store's — OKF's own, less the ones a named filter
+	// answers (design doc 0047). Every pair must match (AND), matching a
+	// scalar exactly or a list by membership.
 	// Values are text, and a value that spells a number or a boolean
 	// matches the typed frontmatter as well as the text: YAML types what
 	// it parses, so `required: true` is indexed as a boolean and would
@@ -236,7 +238,7 @@ func lastVerifiedAt(alias string) string {
 // verification since (design doc 0025 §6.2). Needs usageLateral joined as
 // u. Written once because the instance stats count the same feed, and a
 // queue whose depth disagrees with the queue is worse than no depth at
-// all (design doc 0049 §3.5).
+// all (design doc 0051 §3.5).
 func unansweredFailure(alias string) string {
 	v := lastVerifiedAt(alias)
 	return `u.failed > 0 AND (` + v + ` IS NULL OR u.last_failed_at > ` + v + `)`
@@ -1944,15 +1946,94 @@ func sourceContainment(resource string) []byte {
 	return b
 }
 
+// After is the position a listing resumes from: the values of the
+// ordering columns for the last row handed out, in the order they are
+// ordered by, with the id last (design doc 0050 §2.1). A nil element is
+// SQL NULL — the never-verified entries at the tail of an ASC NULLS LAST
+// order. Nil After is the first page.
+//
+// The values travel as text and are cast back per column, which is what
+// lets the same shape carry a timestamp, a date and a count.
+type After struct {
+	Keys []*string
+	ID   string
+}
+
+// orderCol describes one column of a listing's ORDER BY, so the same
+// keyset predicate can be built for every feed rather than once per
+// feed. cast is the type the cursor's text is compared as.
+type orderCol struct {
+	expr string
+	cast string
+	desc bool
+	// null marks a column ordered ASC NULLS LAST — the one nullable
+	// position any of the feeds has (verification age).
+	null bool
+}
+
+// keysetAfter renders "strictly after this position" for an ORDER BY of
+// cols followed by idExpr, appending the cursor's values to args. It
+// returns "" when there is no position to resume from, so the caller can
+// AND it in unconditionally.
+//
+// The predicate is the lexicographic comparison spelled out rather than
+// PostgreSQL's row constructor: a row comparison cannot express one
+// column descending beside another ascending, and every feed here mixes
+// the two (most-failed first, fewest corroborations first).
+func keysetAfter(cols []orderCol, idExpr string, a *After, args *[]any) (string, error) {
+	if a == nil {
+		return "", nil
+	}
+	if len(a.Keys) != len(cols) {
+		return "", fmt.Errorf("cursor carries %d keys, this listing orders by %d", len(a.Keys), len(cols))
+	}
+	// Built from the id outwards: the innermost term is "same on every
+	// key, later id", and each column wraps it with "strictly after on
+	// this key, or equal on it and after by everything below".
+	*args = append(*args, a.ID)
+	pred := fmt.Sprintf("%s > $%d", idExpr, len(*args))
+	for i := len(cols) - 1; i >= 0; i-- {
+		c, v := cols[i], a.Keys[i]
+		var strict, eq string
+		if v == nil {
+			// Nothing sorts after a NULL in ASC NULLS LAST, so the walk
+			// can only continue among the other NULLs, by id.
+			if !c.null {
+				return "", fmt.Errorf("cursor holds no value for %s, which is never null", c.expr)
+			}
+			strict, eq = "false", c.expr+" IS NULL"
+		} else {
+			*args = append(*args, *v)
+			ref := fmt.Sprintf("$%d::%s", len(*args), c.cast)
+			op := ">"
+			if c.desc {
+				op = "<"
+			}
+			strict = fmt.Sprintf("%s %s %s", c.expr, op, ref)
+			if c.null {
+				// A NULL sorts after every value, so it is after this one.
+				strict = fmt.Sprintf("(%s OR %s IS NULL)", strict, c.expr)
+			}
+			eq = fmt.Sprintf("%s = %s", c.expr, ref)
+		}
+		pred = fmt.Sprintf("(%s OR (%s AND %s))", strict, eq, pred)
+	}
+	return " AND " + pred, nil
+}
+
 // ListBySource lists the entries a filter matches, by id. It exists for
 // the source lookup: "what cites this resource" is a question with no
 // text to rank by, so it lists rather than searches (design doc 0037
 // §2.3). Ordered by id because the answer is a set — a stable, readable
 // order beats a relevance score nothing computed.
-func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+func (s *Store) ListBySource(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		ORDER BY id LIMIT %d`, where, limit), args...)
+	keyset, err := keysetAfter(nil, "id", after, &args)
+	if err != nil {
+		return nil, err
+	}
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s%s
+		ORDER BY id LIMIT %d`, where, keyset, limit), args...)
 }
 
 // ListByStaleAfter returns the entries whose declared expiry has passed,
@@ -1967,20 +2048,31 @@ func (s *Store) ListBySource(ctx context.Context, f Filter, limit int) ([]domain
 // is the writer's declaration, not something the server observed, so
 // clearing it means editing the entry to re-declare an expiry
 // (design doc 0037 §2.2).
-func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
+	keyset, err := keysetAfter(
+		[]orderCol{{expr: "stale_after", cast: "date"}}, "id", after, &args)
+	if err != nil {
+		return nil, err
+	}
 	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		AND `+pastExpiry("")+`
-		ORDER BY stale_after ASC, id LIMIT %d`, where, limit), args...)
+		AND `+pastExpiry("")+`%s
+		ORDER BY stale_after ASC, id LIMIT %d`, where, keyset, limit), args...)
 }
 
 // ListByVerifiedAt returns filtered entries ordered by verification age,
 // oldest first (never-verified entries last). This is the feed for golden
 // query canary runs: "which verified queries have gone longest unchecked".
-func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, limit int) ([]domain.Knowledge, error) {
+func (s *Store) ListByVerifiedAt(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
-	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s
-		ORDER BY `+lastVerifiedAt("object")+` ASC NULLS LAST, id LIMIT %d`, where, limit), args...)
+	keyset, err := keysetAfter(
+		[]orderCol{{expr: lastVerifiedAt("object"), cast: "timestamptz", null: true}},
+		"id", after, &args)
+	if err != nil {
+		return nil, err
+	}
+	return s.queryKnowledge(ctx, fmt.Sprintf(`SELECT `+knowledgeSelect+` FROM object WHERE %s%s
+		ORDER BY `+lastVerifiedAt("object")+` ASC NULLS LAST, id LIMIT %d`, where, keyset, limit), args...)
 }
 
 // usageLateral aggregates a knowledge entry's per-event running totals
@@ -2006,14 +2098,21 @@ const usageLateral = `
 // the top, and never-used drafts (search_hits 0) sinking oldest-first to
 // the bottom for inventory. Each hit carries its usage totals so the
 // caller renders the signal without a per-entry round trip. Score is 0.
-func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	keyset, err := keysetAfter([]orderCol{
+		{expr: "u.search_hits", cast: "bigint", desc: true},
+		{expr: "k.created_at", cast: "timestamptz"},
+	}, "k.id", after, &args)
+	if err != nil {
+		return nil, err
+	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
-		WHERE %s
-		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, limit)
+		WHERE %s%s
+		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, keyset, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -2040,20 +2139,53 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, limit int) ([]domain.
 // fewest corroborating "worked" reports, then verification age (oldest
 // first, never-verified last), then id. Each hit carries its usage totals
 // so the reviewer sees the worked/failed evidence inline; score is 0.
-func (s *Store) ListByFailed(ctx context.Context, f Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	keyset, err := keysetAfter([]orderCol{
+		{expr: "u.failed", cast: "bigint", desc: true},
+		{expr: "u.worked", cast: "bigint"},
+		{expr: lastVerifiedAt("k"), cast: "timestamptz", null: true},
+	}, "k.id", after, &args)
+	if err != nil {
+		return nil, err
+	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
-		WHERE %s AND `+unansweredFailure("k")+`
+		WHERE %s AND `+unansweredFailure("k")+`%[4]s
 		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
-		where, lastVerifiedAt("k"), limit)
+		where, lastVerifiedAt("k"), limit, keyset)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, scanUsageHit)
+}
+
+// QueueCounts counts the three review queues in one pass: how many
+// entries each of ListByUsage's draft feed, ListByFailed and
+// ListByStaleAfter would return (design doc 0049). A count and a listing
+// want different queries — measuring three feeds by fetching a thousand
+// rows from each is not measuring — but they must not want different
+// *predicates*: those are the feeds' own (unansweredFailure, pastExpiry),
+// so a queue's depth cannot come to mean something other than the queue.
+//
+// The filter is the same one the feeds take, so a count is scoped by
+// prefix the way the listings are: a team asks about its own subtree.
+func (s *Store) QueueCounts(ctx context.Context, f Filter) (domain.QueueCounts, error) {
+	where, args := f.buildWhere("k.")
+	q := fmt.Sprintf(`
+		SELECT
+			count(*) FILTER (WHERE k.status = 'draft'),
+			count(*) FILTER (WHERE `+unansweredFailure("k")+`),
+			count(*) FILTER (WHERE `+pastExpiry("k.")+`)
+		FROM object k`+usageLateral+`
+		WHERE %[1]s`, where)
+	var c domain.QueueCounts
+	err := s.pool.QueryRow(ctx, q, args...).
+		Scan(&c.Drafts, &c.ReportedWrong, &c.PastExpiry)
+	return c, err
 }
 
 // scanUsageHit reads a knowledge row followed by its usage totals (the
