@@ -612,10 +612,15 @@ func TestRESTIntegrationEveryRulingIsAccepted(t *testing.T) {
 
 	typ := testdb.Unique(t, "restit")
 	id := typ + "/ruled-on"
+	removeEntries(t, srv, id)
 	putDoc(t, srv.URL, id, docFrom(t, map[string]any{"type": typ, "id": id}), true).Body.Close()
 
 	// In this order the three are legal back to back: a rejection to
 	// stand up, then a withdrawal to take it back, then a verification.
+	// What a ruling outside the list does is restapi_test.go's
+	// TestReviewRefusesRulingsItCannotRecord — a body the spec refuses is
+	// one this suite cannot send, because every request here is validated
+	// against api/openapi.yaml before it is answered.
 	for _, ruling := range []string{"rejected", "withdrawn", "verified"} {
 		if !slices.Contains(domain.Rulings, ruling) {
 			t.Fatalf("this test rules %q, which domain.Rulings no longer names", ruling)
@@ -630,17 +635,9 @@ func TestRESTIntegrationEveryRulingIsAccepted(t *testing.T) {
 			t.Errorf("ruling %q = %d: %s", ruling, resp.StatusCode, body)
 		}
 	}
-	for _, unknown := range []string{"approved", "deprecated", ""} {
-		if slices.Contains(domain.Rulings, unknown) {
-			continue // it became a ruling; the loop above covers it
-		}
-		resp, err := postRuling(srv.URL, id, `{"ruling":"`+unknown+`"}`)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("ruling %q = %d, want 400", unknown, resp.StatusCode)
+	for _, ruling := range domain.Rulings {
+		if !slices.Contains([]string{"rejected", "withdrawn", "verified"}, ruling) {
+			t.Errorf("domain.Rulings names %q, which this test never sends", ruling)
 		}
 	}
 }
