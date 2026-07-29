@@ -385,12 +385,12 @@ And it stays small by refusing things:
 | Tool | Description |
 |---|---|
 | `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
-| `search_knowledge` | Cross-type search; verified entries rank higher |
-| `get_knowledge` | Fetch one entry as an OKF document, with its links and attachment metadata |
+| `search_concepts` | Cross-type search; verified entries rank higher |
+| `get_concept` | Fetch one entry as an OKF document, with its links and attachment metadata |
 | `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
-| `put_knowledge` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
-| `delete_knowledge` | Soft-delete (history retained) |
-| `get_knowledge_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
+| `put_concept` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
+| `delete_concept` | Soft-delete (history retained) |
+| `get_concept_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
 | `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
 
 Every one of these is a knowledge operation: ochakai never executes SQL
@@ -404,8 +404,8 @@ Every entry is also an **MCP resource** addressable by its canonical URI —
 or `ochakai://queries/sales/top-customers`. Clients that
 support resource references (`@`-mentions) can pull an entry in as an OKF
 document — frontmatter and body — without a tool call; discovery
-stays with `get_context`/`search_knowledge`. Read tools carry `readOnly`
-annotations and `delete_knowledge` a `destructive` one, so client
+stays with `get_context`/`search_concepts`. Read tools carry `readOnly`
+annotations and `delete_concept` a `destructive` one, so client
 auto-approval policies work without parsing descriptions.
 
 `import` is the one place the CLI is more than a thin client: there is no

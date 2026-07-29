@@ -152,18 +152,18 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 	switch ruling {
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"(get_knowledge) before proposing this again. If you disagree, put_knowledge a new " +
+			"(get_concept) before proposing this again. If you disagree, put_concept a new " +
 			"entry at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
-			"re-verification feed. If you have something better, put_knowledge it at a " +
+			"re-verification feed. If you have something better, put_concept it at a " +
 			"different id and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
-			"reviving, put_knowledge a draft at a different id that says why."
+			"reviving, put_concept a draft at a different id that says why."
 	default:
 		return fmt.Errorf("%w: %s is a live %s entry. Nobody has ruled on it: "+
-			"put_knowledge replaces it in place", err, id, k.Status)
+			"put_concept replaces it in place", err, id, k.Status)
 	}
 	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, ruling, instead)
 }
@@ -341,14 +341,14 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	switch ruling {
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
-			"re-verification feed. If you have something better, put_knowledge a new draft."
+			"re-verification feed. If you have something better, put_concept a new draft."
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"before proposing this again. If you disagree, put_knowledge a new entry at a " +
+			"before proposing this again. If you disagree, put_concept a new entry at a " +
 			"different id and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
-			"reviving, put_knowledge a draft that says why."
+			"reviving, put_concept a draft that says why."
 	default:
 		return &k.ContentHash, nil
 	}
@@ -388,14 +388,14 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	switch ruling {
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"(search_knowledge with rejected=true) before proposing this again. If you disagree, " +
-			"put_knowledge a new entry at a different id and let a human judge it."
+			"(search_concepts with rejected=true) before proposing this again. If you disagree, " +
+			"put_concept a new entry at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
 			"different id and let a human judge it against the history this id still holds."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
-			"reviving, put_knowledge a draft at a different id that says why."
+			"reviving, put_concept a draft at a different id that says why."
 	default:
 		return nil
 	}
@@ -968,7 +968,7 @@ func jsonSize(v any) int {
 }
 
 // SearchOrList answers the query surface REST (GET /api/v1/search) and
-// MCP (search_knowledge) both expose, so the two cannot drift: one place
+// MCP (search_concepts) both expose, so the two cannot drift: one place
 // decides whether a request searches or lists, validates the mode, and
 // runs it. A sort mode names one of the listing feeds (see list); with no
 // sort, a source filter and no query is the reverse lookup; otherwise it

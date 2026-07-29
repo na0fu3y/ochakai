@@ -20,6 +20,38 @@ last entry.
 
 ### Added
 
+- **BREAKING** — the five MCP tools carrying `knowledge` are renamed to
+  OKF's word for the unit of knowledge, `concept` (design doc
+  [0054](docs/design/0054-concept-is-the-okf-word.md)):
+
+  ```
+  search_knowledge      →  search_concepts
+  get_knowledge         →  get_concept
+  put_knowledge         →  put_concept
+  delete_knowledge      →  delete_concept
+  get_knowledge_usage   →  get_concept_usage
+  ```
+
+  OKF SPEC §2 defines a **concept** as "a single unit of knowledge within
+  a bundle", and a **concept ID** as its path without `.md`. ochakai's own
+  design records and code comments have said "concept" since 0046; once
+  §3.5's fold finished, these tool names were the only place on the wire
+  still saying `knowledge` — REST and the CLI carry none. It is the third
+  time this project has chosen OKF's spelling over its own (0023, 0038),
+  and the last double vocabulary.
+
+  Search alone is plural: `concept` is countable, a search returns many
+  and the rest act on one. `get_context`, `report_outcome` and
+  `get_attachment` keep their names — none of them names the unit. **The
+  tool count stays at 8**, and no argument, response or capability
+  changes.
+
+  Breaking for a client that names these tools in its configuration — an
+  allow-list, a hook, a prompt. A client that reads the advertised tool
+  list needs nothing. Shipping both names was refused: tool schemas are
+  paid for out of the agent's context, and 8 tools would have become 13
+  (0054 §4).
+
 - **BREAKING** — `ochakai create` and `ochakai update` are one command,
   `ochakai put` (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.14):

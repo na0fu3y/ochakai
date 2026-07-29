@@ -395,6 +395,25 @@ For the shape of the system rather than the history of it, read
   *For a user:* sending `links` on write is ignored; write a markdown link
   in the body instead.
 
+- **[0054 The unit of knowledge is called a concept](0054-concept-is-the-okf-word.md)**
+  — *Accepted.* Renames the five MCP tools carrying `knowledge` to OKF
+  SPEC §2's word: `search_concepts`, `get_concept`, `put_concept`,
+  `delete_concept`, `get_concept_usage`. Once 0046 §3.5's fold was done,
+  those tool names were the only `knowledge` left on the wire — REST and
+  the CLI carry none, and both the design records and the code comments
+  already said "concept". It is the third application of "when ochakai's
+  spelling and OKF's disagree, OKF wins" (after 0023 and 0038), and the
+  last of the double vocabularies. Search alone is plural because
+  `concept` is countable. The tool count stays at 8 and no argument,
+  response or capability changes; `get_attachment` is a different
+  question and `domain.Knowledge` is internal, so both stay. §4 records
+  the argument against — a tool name is what tells an unfamiliar agent
+  what the server is for — and why shipping both names (13 tools) was
+  refused.
+  *For a user:* breaking for any client that names these tools in its
+  configuration; a client that only reads the advertised list needs
+  nothing.
+
 ## Attachments
 
 - **[0008 Image attachments](0008-image-attachments.md)** — *Superseded by

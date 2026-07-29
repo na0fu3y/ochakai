@@ -101,14 +101,19 @@ verify・reject(2)・usage(2)・reembed で 12 操作。残る 2 つは §3.5 �
 
 ## MCP (8)
 
-- `delete_knowledge`
+- `delete_concept`
 - `get_attachment`
+- `get_concept`
+- `get_concept_usage`
 - `get_context`
-- `get_knowledge`
-- `get_knowledge_usage`
-- `put_knowledge`
+- `put_concept`
 - `report_outcome`
-- `search_knowledge`
+- `search_concepts`
+
+8 本のまま、[0054](design/0054-concept-is-the-okf-word.md) が 5 本を
+改名した — 知識の単位は OKF SPEC §2 の語で **concept** であり、文書が
+既にその語で書いていたのにツール名だけが `knowledge` を名乗っていた。
+能力も引数も応答も変わらない。
 
 ## CLI (27)
 

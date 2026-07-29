@@ -26,7 +26,7 @@ func remoteMCP(t *testing.T) (base string, tools []string) {
 	type args struct {
 		Q string `json:"q" jsonschema:"a query"`
 	}
-	mcp.AddTool(s, &mcp.Tool{Name: "search_knowledge", Description: "search"},
+	mcp.AddTool(s, &mcp.Tool{Name: "search_concepts", Description: "search"},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in args) (*mcp.CallToolResult, any, error) {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "hit:" + in.Q}}}, nil, nil
 		})
@@ -37,7 +37,7 @@ func remoteMCP(t *testing.T) (base string, tools []string) {
 
 	srv := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, nil))
 	t.Cleanup(srv.Close)
-	return srv.URL, []string{"get_context", "search_knowledge"}
+	return srv.URL, []string{"get_context", "search_concepts"}
 }
 
 // The bridge carries whatever the remote offers. It must not hold a copy
@@ -79,7 +79,7 @@ func TestBridgePassesMessagesThrough(t *testing.T) {
 
 	// A call has to survive the round trip too, arguments and all.
 	out, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "search_knowledge",
+		Name:      "search_concepts",
 		Arguments: map[string]any{"q": "revenue"},
 	})
 	if err != nil {

@@ -159,7 +159,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"After acting on knowledge (running an attested computation, writing SQL from a metric definition), report " +
 			"whether it actually worked with report_outcome — failed reports are how stale " +
 			"verified knowledge gets caught. " +
-			"Write learnings back with put_knowledge; leave new entries as drafts for a human to " +
+			"Write learnings back with put_concept; leave new entries as drafts for a human to " +
 			"confirm — status is how ready an entry is (draft, stable, deprecated), and whether " +
 			"anyone checked it is recorded separately, by whoever checked it. Knowledge that was " +
 			"reviewed and not accepted is marked rejected by a human, with the reason; " +
@@ -170,18 +170,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	// Expose entries as MCP resources so clients can @-mention them by their
 	// canonical ochakai:// URI. Only the template is advertised — enumerating
 	// every entry in resources/list would flood the client, so discovery stays
-	// with search_knowledge/get_context and the URI is the addressing scheme.
+	// with search_concepts/get_context and the URI is the addressing scheme.
 	// {+id} (RFC 6570 reserved expansion) lets the slash-separated id match;
 	// a plain {id} would stop at the first slash.
 	s.AddResourceTemplate(&mcp.ResourceTemplate{
-		Name:     "knowledge",
-		Title:    "Knowledge entry",
+		Name:     "concept",
+		Title:    "Concept",
 		MIMEType: "text/markdown",
 		Description: "A single knowledge entry as an OKF document: YAML frontmatter (title, " +
 			"status, provenance, type-specific attrs) followed by the markdown body and its " +
 			"links. Address by canonical URI — the scheme plus the entry's id (its path), " +
 			"e.g. ochakai://metrics/revenue or ochakai://queries/sales/top-customers. Discover " +
-			"URIs with search_knowledge or get_context; get_knowledge returns the same entry " +
+			"URIs with search_concepts or get_context; get_concept returns the same entry " +
 			"as JSON.",
 		URITemplate: "ochakai://{+id}",
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -214,7 +214,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	})
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "search_knowledge",
+		Name:        "search_concepts",
 		Annotations: readOnly,
 		Description: "Search the knowledge base across all types (recommended: " + domain.TypesHint() + "; custom types welcome). " +
 			"Verified entries rank higher. Filter with types/statuses/tags. Returns scored hits. " +
@@ -258,9 +258,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"base (verified entries rank higher), returns the full entries behind the top hits, " +
 			"and expands one hop through links so the insight explaining a metric and the " +
 			"computation answering the question arrive together. Prefer this over search+get chains; " +
-			"fall back to search_knowledge/get_knowledge for precise lookups. \"entries\" is the " +
+			"fall back to search_concepts/get_concept for precise lookups. \"entries\" is the " +
 			"knowledge; \"hits\" is only the ranking behind it. Entries that do not fit the byte " +
-			"budget are listed under \"outline\" — fetch any of them by id with get_knowledge.",
+			"budget are listed under \"outline\" — fetch any of them by id with get_concept.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in contextIn) (*mcp.CallToolResult, contextOut, error) {
 		budget := in.Budget
 		if budget <= 0 {
@@ -284,7 +284,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_knowledge",
+		Name:        "get_concept",
 		Annotations: readOnly,
 		Description: "Get one knowledge entry by id, including its full markdown body, structured attrs, " +
 			"links, and attachment metadata (files the body references: images, PDFs, plain-text data — " +
@@ -301,7 +301,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		return nil, knowledgeOut{Knowledge: v}, nil
 	}))
 
-	// put_knowledge is the one write face (design doc 0046 §3.14). It was
+	// put_concept is the one write face (design doc 0046 §3.14). It was
 	// create_knowledge and update_knowledge, which asked the agent a
 	// question the document does not answer: a write states what the
 	// entry should say, and whether an id was already taken is not part
@@ -309,7 +309,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	// agent's context than the three this surface was going to drop put
 	// together — the merge is where the saving actually was.
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "put_knowledge",
+		Name:        "put_concept",
 		Annotations: nonDestructive,
 		Description: "Write a knowledge entry: create it if the id is free, replace it if it is taken. " +
 			"Write back what you learned: metric caveats, confirmed answers, glossary terms. " +
@@ -317,12 +317,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"names no status reads as stable (OKF SPEC §5.4). Your identity is recorded as created_by, " +
 			"and the entry stays unverified until a person confirms it. " +
 			"The document you send is the whole entry: a key you leave out is cleared, so on a replace, " +
-			"get_knowledge first, change what you mean to change, and send the rest back as it came. " +
+			"get_concept first, change what you mean to change, and send the rest back as it came. " +
 			"Every change is kept as a revision; a write identical to the stored content writes nothing. " +
 			"Before writing something new, search with rejected=true to avoid re-proposing knowledge " +
 			"that was already rejected (the ruling records why). " +
 			"Entries a human has ruled on — verified, rejected, or deprecated — cannot be replaced from " +
-			"this surface: if a verified entry is wrong, report_outcome failed; otherwise put_knowledge " +
+			"this surface: if a verified entry is wrong, report_outcome failed; otherwise put_concept " +
 			"a better draft at a different id and let a human promote it. " +
 			"status is the lifecycle only — draft, stable, deprecated (OKF SPEC §5.4). Whether anyone " +
 			"has confirmed the entry is not yours to set: it comes from the verification ledger, and " +
@@ -378,10 +378,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "delete_knowledge",
+		Name:        "delete_concept",
 		Annotations: destructive,
 		Description: "Soft-delete a knowledge entry. History is retained as revisions; " +
-			"put_knowledge on the same id revives it. Entries a human has ruled on — verified, " +
+			"put_concept on the same id revives it. Entries a human has ruled on — verified, " +
 			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
 			"entry and recreating it would erase the record of why it was turned down.",
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in getIn) (*mcp.CallToolResult, deleteOut, error) {
@@ -400,13 +400,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_attachment",
 		Annotations: readOnly,
-		Description: "Fetch one file of the bundle by its path (get_knowledge lists the files an " +
+		Description: "Fetch one file of the bundle by its path (get_concept lists the files an " +
 			"entry shows under \"attachments\", each with its path: images, PDFs, plain-text data " +
 			"files, anything a producer put there). Returns the file as content plus its metadata. Attachments are context-heavy — fetch them " +
 			"deliberately, when the entry's body references one you need to see (a dashboard's " +
 			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
 			"if you learn something from one, write it back into the entry's body with " +
-			"put_knowledge so the knowledge becomes searchable text.",
+			"put_concept so the knowledge becomes searchable text.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
 		att, data, err := svc.GetFile(ctx, in.Path)
 		if err != nil {
@@ -433,7 +433,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_knowledge_usage",
+		Name:        "get_concept_usage",
 		Annotations: readOnly,
 		Description: "Usage totals for one knowledge entry: how often it appeared in search results, " +
 			"was fetched individually, and how it was reported to have worked, with last_used_at. " +
@@ -453,7 +453,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
 			"write-back loop. After running an attested computation or SQL you wrote from an entry, report worked " +
 			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
-			"Reports feed the entry's usage totals (get_knowledge_usage), where failed counts " +
+			"Reports feed the entry's usage totals (get_concept_usage), where failed counts " +
 			"against verified entries flag them for re-verification. Your identity is recorded " +
 			"with each report. Returns the entry's updated usage totals.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
@@ -485,7 +485,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 // deployment. The service refuses these operations anyway (that is the
 // guarantee); removing them here is what stops an agent from wasting a
 // turn discovering it.
-var writeTools = []string{"put_knowledge", "delete_knowledge", "report_outcome"}
+var writeTools = []string{"put_concept", "delete_concept", "report_outcome"}
 
 // Tool annotations let clients apply auto-approval policies without reading
 // prose. readOnlyHint here describes the knowledge domain: search/get
@@ -524,7 +524,7 @@ type searchIn struct {
 	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
 	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
-	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds entries whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_knowledge"`
+	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds entries whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_concepts"`
 	Rejected *bool             `json:"rejected,omitempty" jsonschema:"true to list only entries a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected entries stay out of results"`
 	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string            `json:"source,omitempty" jsonschema:"only entries citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
@@ -552,11 +552,11 @@ type contextIn struct {
 	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
 	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed an entry is a separate question — use verified"`
 	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the entry: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable entry unverified"`
-	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds entries whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_knowledge"`
+	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds entries whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_concepts"`
 	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only entries addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: an entry in scope that cites a term outside it still arrives with that term"`
 	Limit    int               `json:"limit,omitempty" jsonschema:"max primary entries: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	Budget   int               `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the entries plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Entries past it are listed under \"outline\" with their size, fetchable by id with get_knowledge, and those rows count against the same budget. Raise it when you need whole entries, lower it when context is tight"`
+	Budget   int               `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the entries plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Entries past it are listed under \"outline\" with their size, fetchable by id with get_concept, and those rows count against the same budget. Raise it when you need whole entries, lower it when context is tight"`
 }
 
 type contextOut struct {
@@ -581,11 +581,11 @@ const defaultContextBudget = 12000
 func contextHint(truncated int) string {
 	hint := "After acting on this knowledge, call report_outcome (worked/failed) on the entries you " +
 		"used — failed reports are how stale verified knowledge gets caught. If this session " +
-		"produced reusable knowledge, write it back with put_knowledge as a draft; search " +
+		"produced reusable knowledge, write it back with put_concept as a draft; search " +
 		"statuses=[\"rejected\"] first so you do not re-propose something already turned down."
 	if truncated > 0 {
 		hint += fmt.Sprintf(" %d entries did not fit the budget and are listed under \"outline\" — "+
-			"fetch any of them by id with get_knowledge.", truncated)
+			"fetch any of them by id with get_concept.", truncated)
 	}
 	return hint
 }
