@@ -142,13 +142,27 @@ type SearchParams struct {
 	// still hides rejected entries — asking for them is opt-in, which is
 	// how an agent checks whether a proposal was already turned down.
 	Trust []string
-	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
+	// Which keys those are is the server's answer (design doc 0047).
 	FM       map[string]string
 	Rejected *bool
 	Limit    int
+	// Cursor resumes a listing where the previous page ended: pass back
+	// the Cursor of that page, with the same Sort and filters (design doc
+	// 0050 §2.1). The server refuses it beside a Query — a search is
+	// bounded by Limit, and a ranking has no page to resume from.
+	Cursor string
 }
 
-func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit, error) {
+// SearchResult is one page of the query surface. Cursor is set only when
+// a listing has more entries behind this page; a search never sets it,
+// and no total count comes with either (design doc 0050 §2.3).
+type SearchResult struct {
+	Hits   []domain.SearchHit `json:"hits"`
+	Cursor string             `json:"cursor,omitempty"`
+}
+
+func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, error) {
 	q := url.Values{}
 	if p.Query != "" {
 		q.Set("q", p.Query)
@@ -183,11 +197,27 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
 	}
-	var out struct {
-		Hits []domain.SearchHit `json:"hits"`
+	if p.Cursor != "" {
+		q.Set("cursor", p.Cursor)
 	}
+	var out SearchResult
 	err := c.doJSON(ctx, http.MethodGet, "/api/v1/knowledge", q, nil, &out)
-	return out.Hits, err
+	return &out, err
+}
+
+// Queues returns how much work each review queue is holding — the three
+// feeds counted rather than listed (design doc 0049). Prefixes scopes it
+// to a subtree, as it scopes a search.
+func (c *Client) Queues(ctx context.Context, prefixes []string) (domain.QueueCounts, error) {
+	q := url.Values{}
+	for _, p := range prefixes {
+		q.Add("prefix", p)
+	}
+	var out struct {
+		Queues domain.QueueCounts `json:"queues"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/queues", q, nil, &out)
+	return out.Queues, err
 }
 
 // ContextResult mirrors the /api/v1/context response: the ranking plus
@@ -217,7 +247,8 @@ type ContextParams struct {
 	// SearchParams. Rejected has no counterpart here: a context pack never
 	// carries knowledge somebody turned down.
 	Trust []string
-	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
+	// Which keys those are is the server's answer (design doc 0047).
 	FM       map[string]string
 	Limit    int
 	MinScore float64
@@ -453,15 +484,10 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 
 // Attach uploads data as an attachment of the entry (PUT
 // /api/v1/attachments/{id}/{name}), replacing any attachment of
-// the same name. okfPath preserves a foreign bundle location for
-// round-trips; "" for attachments born here. The server sniffs the media
-// type from the bytes.
-func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
-	var q url.Values
-	if okfPath != "" {
-		q = url.Values{"okf_path": {okfPath}}
-	}
-	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), q,
+// the same name. The file lands at <id>/<name>; one that lives elsewhere
+// in the bundle is written with PutBundleFile, at the path it lives at.
+func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.Attachment, error) {
+	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err

@@ -349,7 +349,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	advice := map[domain.Ruling]string{
 		domain.RulingVerified:   "report_outcome failed",
 		domain.RulingRejected:   "the reason",
-		domain.RulingDeprecated: "create_knowledge",
+		domain.RulingDeprecated: "put_knowledge",
 	}
 	for _, tc := range rulings {
 		t.Run(string(tc.ruling)+" is refused", func(t *testing.T) {
@@ -514,7 +514,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			domain.RulingRejected:   "the reason",
 			domain.RulingVerified:   "report_outcome failed",
 			domain.RulingDeprecated: "no longer recommended",
-			"":                      "update_knowledge",
+			"":                      "put_knowledge",
 		}
 		cases := append([]struct {
 			ruling domain.Ruling

@@ -95,8 +95,9 @@ func yamlScalar(v any) any {
 // (design doc 0043 §2.2), and a filter that could match on one would be
 // asking the index about provenance, which is the ledgers' answer. The
 // claim under ClaimKey is not one of them — it is an ordinary key of the
-// stored document, and asking the index what a document claimed is not
-// asking it what this instance observed.
+// stored document, and indexing what a document said about itself is not
+// indexing what this instance observed. Nothing queries it: `fm.` names
+// the keys OKF defines (design doc 0047), and this is ochakai's own.
 //
 // A document whose frontmatter will not parse yields an empty map rather
 // than an error. Storing an entry never depends on being able to index

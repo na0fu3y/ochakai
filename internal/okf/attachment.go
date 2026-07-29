@@ -27,15 +27,17 @@ import (
 //     for an entry in the bundle, attaches to that entry. Data files next
 //     to a concept document — a seeds.txt, an expected-results CSV —
 //     round-trip without requiring a body link.
-//   - A foreign file goes back where it came from: okf_path (recorded on
-//     import) wins over the canonical layout, so body links that use the
-//     original location keep working byte-for-byte.
+//   - A foreign file goes back where it came from, because that is where
+//     it is: a file's path is its address (design doc 0046 §3.3), so
+//     body links that use the original location keep working
+//     byte-for-byte without a second field recording the difference.
 
-// AttachmentPath returns the bundle path for one attachment: its
-// preserved foreign location if it has one, else the canonical layout.
+// AttachmentPath returns the bundle path for one attachment. It is the
+// attachment's own path, and falls back to the canonical layout for a
+// caller that composed one in memory without a path.
 func AttachmentPath(id string, att *domain.Attachment) string {
-	if att.OKFPath != "" {
-		return att.OKFPath
+	if att.Path != "" {
+		return att.Path
 	}
 	return id + "/" + att.Name
 }

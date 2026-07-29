@@ -40,15 +40,15 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 			{Summary: domain.Summary{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"}, Score: 0.9},
 		}})
 	})
-	hits, err := c.Search(context.Background(), SearchParams{
+	page, err := c.Search(context.Background(), SearchParams{
 		Query: "revenue", Types: []string{"metrics", "terms"}, Statuses: []string{"stable"},
 		Tags: []string{"core"}, Limit: 5,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(hits) != 1 || hits[0].ID != "revenue" || hits[0].Score != 0.9 {
-		t.Errorf("hits = %+v", hits)
+	if len(page.Hits) != 1 || page.Hits[0].ID != "revenue" || page.Hits[0].Score != 0.9 {
+		t.Errorf("hits = %+v", page.Hits)
 	}
 	if got.Get("q") != "revenue" || len(got["type"]) != 2 || got.Get("status") != "stable" ||
 		got.Get("tag") != "core" || got.Get("limit") != "5" || got.Has("sort") {
@@ -65,12 +65,12 @@ func TestSearchSortSendsSortParam(t *testing.T) {
 			{Type: domain.TypeComputations, ID: "monthly-revenue", Title: "月次売上"},
 		}})
 	})
-	hits, err := c.Search(context.Background(), SearchParams{Sort: "verified_at", Limit: 100})
+	page, err := c.Search(context.Background(), SearchParams{Sort: "verified_at", Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(hits) != 1 || hits[0].ID != "monthly-revenue" || hits[0].Score != 0 {
-		t.Errorf("hits = %+v", hits)
+	if len(page.Hits) != 1 || page.Hits[0].ID != "monthly-revenue" || page.Hits[0].Score != 0 {
+		t.Errorf("hits = %+v", page.Hits)
 	}
 	if got.Get("sort") != "verified_at" || got.Get("limit") != "100" || got.Has("q") {
 		t.Errorf("query = %v", got)
@@ -88,15 +88,15 @@ func TestSearchUsageSortDecodesUsage(t *testing.T) {
 				Usage: &domain.Usage{SearchHits: 7, Fetches: 2}},
 		}})
 	})
-	hits, err := c.Search(context.Background(), SearchParams{Sort: "usage", Statuses: []string{"draft"}})
+	page, err := c.Search(context.Background(), SearchParams{Sort: "usage", Statuses: []string{"draft"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Get("sort") != "usage" || got.Get("status") != "draft" || got.Has("q") {
 		t.Errorf("query = %v", got)
 	}
-	if len(hits) != 1 || hits[0].Usage == nil || hits[0].Usage.SearchHits != 7 {
-		t.Errorf("usage did not decode: %+v", hits)
+	if len(page.Hits) != 1 || page.Hits[0].Usage == nil || page.Hits[0].Usage.SearchHits != 7 {
+		t.Errorf("usage did not decode: %+v", page.Hits)
 	}
 }
 
@@ -361,14 +361,16 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 	}
 }
 
-func TestAttachSendsBytesAndOKFPath(t *testing.T) {
+// A file goes to the address it lives at, with nothing beside it saying
+// where it really lives (design doc 0046 §3.3).
+func TestAttachSendsBytesToTheAddress(t *testing.T) {
 	body := []byte("attachment bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/attachments/insights/sales/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		if r.URL.Query().Get("okf_path") != "images/weekly.png" {
-			t.Errorf("okf_path = %q", r.URL.Query().Get("okf_path"))
+		if r.URL.RawQuery != "" {
+			t.Errorf("the write carries a parameter: %q", r.URL.RawQuery)
 		}
 		got, _ := io.ReadAll(r.Body)
 		if string(got) != string(body) {
@@ -376,7 +378,7 @@ func TestAttachSendsBytesAndOKFPath(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.Attachment{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
 	})
-	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", "images/weekly.png", body)
+	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", body)
 	if err != nil {
 		t.Fatal(err)
 	}

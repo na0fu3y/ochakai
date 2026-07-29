@@ -27,6 +27,7 @@ import (
 
 var clientCommands = map[string]func(context.Context, []string) error{
 	"search":    cmdSearch,
+	"queues":    cmdQueues,
 	"browse":    cmdBrowse,
 	"context":   cmdContext,
 	"get":       cmdGet,
@@ -56,12 +57,18 @@ var clientCommands = map[string]func(context.Context, []string) error{
 }
 
 // runClient dispatches a client command and maps errors to exit codes:
-// 0 success, 1 error.
+// 0 success, 1 error, 2 "the command ran and the answer is no"
+// (`queues --exit-code` with work waiting). Two codes rather than one
+// because a scheduled job must not read "the server is unreachable" as
+// "the queues are empty" — both are non-zero, and only one of them means
+// somebody has reviewing to do.
 func runClient(name string, args []string) int {
 	err := clientCommands[name](context.Background(), args)
 	switch {
 	case err == nil, errors.Is(err, flag.ErrHelp):
 		return 0
+	case errors.Is(err, errWorkPending):
+		return 2
 	case errors.Is(err, errReported):
 		return 1
 	}
@@ -71,6 +78,11 @@ func runClient(name string, args []string) int {
 
 // errReported means the FlagSet already printed the problem.
 var errReported = errors.New("usage error")
+
+// errWorkPending is not a failure: the command did what it was asked and
+// is reporting the answer through the exit status, the way `git diff
+// --exit-code` and `grep -q` do. Nothing is printed for it.
+var errWorkPending = errors.New("work is waiting")
 
 // helpOutput is where a command's own help goes. It is os.Stderr, which
 // is where the flag package would have put it anyway; naming it is what
@@ -206,6 +218,14 @@ func statusList() string {
 // to the second vocabulary OKF gives ochakai).
 func trustList() string { return strings.ReplaceAll(domain.TrustsHint(), ", ", "|") }
 
+// fmUsage describes --fm from the vocabulary the server enforces, so the
+// help cannot promise a key a request would be refused for (design doc
+// 0047 §2).
+var fmUsage = "filter by an OKF frontmatter `key=value`, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (" +
+	strings.Join(domain.AskableFrontmatterKeys(), ", ") + "); a value spelling a number or a boolean matches the typed one too " +
+	"(--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and " +
+	"type, status, tags, sources and stale_after have filters of their own that answer from a column instead"
+
 // fmPairs turns repeated --fm key=value flags into the map the API takes.
 // A flag with no "=" is a mistake worth naming: silently ignoring it
 // would answer a narrower question than the caller asked, without saying
@@ -237,7 +257,7 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -248,10 +268,11 @@ func cmdSearch(ctx context.Context, args []string) error {
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
-	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
+	fs.Var(&fm, "fm", fmUsage)
 	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
+	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -271,18 +292,18 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	hits, err := c.Search(ctx, apiclient.SearchParams{
+	page, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
 		Source: *source, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
-		Trust: trust, Rejected: optBool(*rejected), FM: pairs,
+		Trust: trust, Rejected: optBool(*rejected), FM: pairs, Cursor: *cursor,
 	})
 	if err != nil {
 		return err
 	}
 	if *asJSON {
-		return printJSON(map[string]any{"hits": hits})
+		return printJSON(page)
 	}
-	for _, h := range hits {
+	for _, h := range page.Hits {
 		lead := fmt.Sprintf("%.3f", h.Score)
 		switch *sortBy {
 		case "verified_at":
@@ -308,6 +329,66 @@ func cmdSearch(ctx context.Context, args []string) error {
 			line += " — " + h.Description
 		}
 		fmt.Println(line)
+	}
+	// The way on, on stderr: stdout stays one hit per line, so a pipe
+	// reads the same whether or not there is another page (design doc
+	// 0050 §4). The command does not walk the pages itself — --limit is
+	// the bound the caller set, and a listing that grew past it on its
+	// own would surprise whoever piped it into head.
+	if page.Cursor != "" {
+		fmt.Fprintf(os.Stderr, "note: more entries — rerun with --cursor %s\n", page.Cursor)
+	}
+	return nil
+}
+
+func cmdQueues(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"queues",
+		"Usage: ochakai queues [flags]\n\nPrint how much work each review queue is holding: drafts waiting to be\npublished or turned down, entries whose failure reports are unanswered,\nentries past the expiry their author declared. One line per queue —\ncount, name, and the command that lists it — so the next step is the\ntext on the line.\nThe verification-age feed is not here: it ranks every verified entry\nrather than holding the ones that need something, so its size is the\nsize of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any queue is non-empty and\n0 when all three are, which is how a scheduled job goes red on work\nnobody has picked up. An error still exits 1, so \"unreachable\" cannot\nbe read as \"nothing to do\".",
+		"  ochakai queues\n  ochakai queues --prefix teams/growth      # our subtree only\n  ochakai queues --json | jq .queues.drafts\n  ochakai queues --exit-code                # in CI: red while somebody owes a review\n")
+	var prefixes repeated
+	fs.Var(&prefixes, "prefix", "count only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)")
+	exitCode := fs.Bool("exit-code", false, "exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		fs.Usage()
+		return errReported
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	counts, err := c.Queues(ctx, prefixes)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		if err := printJSON(map[string]any{"queues": counts}); err != nil {
+			return err
+		}
+	} else {
+		scope := ""
+		for _, p := range prefixes {
+			scope += " --prefix " + p
+		}
+		for _, q := range []struct {
+			count int64
+			name  string
+			lists string
+		}{
+			{counts.Drafts, "drafts", "--sort usage --status draft"},
+			{counts.ReportedWrong, "reported wrong", "--sort failed"},
+			{counts.PastExpiry, "past expiry", "--sort stale_after"},
+		} {
+			fmt.Printf("%d\t%s\tochakai search %s%s\n", q.count, q.name, q.lists, scope)
+		}
+	}
+	if *exitCode && counts.Total() > 0 {
+		return errWorkPending
 	}
 	return nil
 }
@@ -371,7 +452,7 @@ func cmdContext(ctx context.Context, args []string) error {
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
-	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
+	fs.Var(&fm, "fm", fmUsage)
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
@@ -728,7 +809,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 		if attName == "" {
 			attName = filepath.Base(file)
 		}
-		att, err := c.Attach(ctx, id, attName, "", data)
+		att, err := c.Attach(ctx, id, attName, data)
 		if err != nil {
 			return fmt.Errorf("%s: %w", file, err)
 		}
@@ -1254,17 +1335,14 @@ func cmdImport(ctx context.Context, args []string) error {
 			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 			continue
 		}
-		// A file already at the canonical layout needs no okf_path — the
-		// preserved-location rule is for foreign layouts only.
-		okfPath := a.Path
-		if okfPath == a.ID+"/"+a.Name {
-			okfPath = ""
-		}
-		if _, err := c.Attach(ctx, a.ID, a.Name, okfPath, a.Data); err != nil {
-			return fmt.Errorf("attach %s/%s: %w", a.ID, a.Name, err)
+		// At the path the bundle carried it at, which is the whole of
+		// what preserving a foreign location means now (design doc 0046
+		// §3.3): the entry claims it because its body points there.
+		if err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
+			return fmt.Errorf("write %s: %w", a.Path, err)
 		}
 		attached++
-		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
+		fmt.Printf("attached %s (%s)\n", a.Path, a.ID)
 	}
 	// The files that belong to no entry, at the paths they arrived at.
 	// A bundle carries more than its concepts, and what enters it leaves

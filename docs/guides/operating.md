@@ -166,6 +166,59 @@ system — but in rough order of what actually costs you something:
 4. **A sustained stream of `usage flush failed`**, as a database-health
    signal rather than for the statistics themselves.
 
+### Knowing there is reviewing to do
+
+The list above is about the deployment. The other thing worth watching is
+the knowledge, and it fails silently: a review queue nobody opens looks
+exactly like a review queue with nothing in it.
+
+`ochakai queues` is the whole answer (design doc
+[0049](../design/0049-queue-counts.md)). It prints the three queues a
+curator empties, each line carrying the command that lists it:
+
+```console
+$ ochakai queues
+12	drafts	ochakai search --sort usage --status draft
+1	reported wrong	ochakai search --sort failed
+0	past expiry	ochakai search --sort stale_after
+```
+
+`--exit-code` turns that into something a scheduler watches: **2 while
+any queue is non-empty, 0 when all three are** — and 1 stays what it
+always was, an error, so an unreachable server cannot be read as "nothing
+to do". `--prefix teams/growth` scopes it, which is how one team on a
+shared deployment asks about its own queue.
+
+That is enough for a weekly nudge through whatever channel your team
+already watches for red builds — no address list, no secret, nothing new
+to run:
+
+```yaml
+name: ochakai-review-queue
+on:
+  schedule:
+    - cron: "0 0 * * 1" # Mondays, 09:00 JST
+jobs:
+  queues:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # Workload Identity Federation (keyless)
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.REVIEWER_SA }}
+      - run: |
+          TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
+          waiting=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+            "$OCHAKAI_URL/api/v1/queues" | jq '.queues | add')
+          echo "review queue: $waiting waiting"
+          [ "$waiting" -eq 0 ] || { echo "::error::$waiting waiting for review"; exit 1; }
+```
+
+ochakai delivers nothing itself — no mail, no chat, no webhooks (design
+doc 0049 §4). The job above is the delivery, and it is yours.
+
 ## Capacity
 
 ### What is known
