@@ -32,7 +32,7 @@ func newTestPair(t *testing.T, h http.HandlerFunc) *Client {
 func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 	var got url.Values
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/knowledge" {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/search" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		got = r.URL.Query()
@@ -272,7 +272,7 @@ func TestPutSendsADocumentAndDelete204(t *testing.T) {
 				Summary: domain.Summary{Type: domain.TypeMetrics, ID: "metrics/revenue",
 					Title: "売上", Status: domain.StatusDraft}})
 		case http.MethodDelete:
-			if r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
+			if r.URL.Path != "/api/v1/bundle/metrics/revenue.md" {
 				t.Errorf("path = %s", r.URL.Path)
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -484,7 +484,7 @@ func TestPutSendsIfMatchAndMapsConflict(t *testing.T) {
 	const stale = "0000000000000000000000000000000000000000000000000000000000000000"
 	var got []string
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/knowledge/metrics/revenue" {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/bundle/metrics/revenue.md" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		v, sent := r.Header["If-Match"]

@@ -11,17 +11,23 @@ info:
     their own web UIs. ochakai executes no SQL and uses no LLM.
 
 
-    **Which address to build on.** A concept and a file are both objects
-    of one bundle, and `/api/v1/bundle/{path}` is the address that says
-    so (design doc 0046 §3.5). Several older addresses still answer for
-    the same objects and are on their way out; where a replacement is
-    already serving, the operation below is marked `deprecated` and names
-    it. `/api/v1/knowledge` (the list), `/api/v1/backlinks/{id}` and
-    `/api/v1/export` are retired by the same section, but their
-    successors — a ranking face at `/api/v1/search` with `links_to=`, and
-    a subtree under `Accept: application/gzip` — are not built yet, so
-    they are the only way to ask those questions today and carry no such
-    mark. Every interface is unstable while the major version is 0
+    **One address for an object.** A concept and a file are both objects
+    of one bundle, and `/api/v1/bundle/{path}` is where they live — a
+    concept at `<id>.md` (design doc 0046 §3.5). The second spelling,
+    `/api/v1/knowledge/{id}`, is gone: it read, wrote and deleted exactly
+    what the bundle address does, one suffix away.
+
+    What is not an object of the bundle does not live there. A ranking is
+    ochakai's own rather than something the bundle holds, so the list
+    face is `/api/v1/search` — the old spelling `/api/v1/knowledge` made
+    it look like the collection its own detail address indexed into, and
+    it is neither. Two addresses named by §3.5 are still their old
+    selves: `/api/v1/backlinks/{id}` (a `links_to=` filter on search) and
+    `/api/v1/export` (a subtree under `Accept: application/gzip`). Their
+    successors are not built, so they carry no deprecation mark and are
+    the only way to ask those questions today.
+
+    Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
     changelog entry, not after a deprecation window.
   version: 0.15.0
@@ -38,7 +44,7 @@ servers:
 # every call; it is declared below (components/parameters/OnBehalfOf)
 # on the operations that record provenance.
 paths:
-  /api/v1/knowledge:
+  /api/v1/search:
     get:
       operationId: searchKnowledge
       summary: Search knowledge (lexical, plus hybrid vector search when configured)
@@ -252,7 +258,7 @@ paths:
                       on the last page, and on every search.
               examples:
                 search:
-                  summary: GET /api/v1/knowledge?q=monthly+revenue&limit=3
+                  summary: GET /api/v1/search?q=monthly+revenue&limit=3
                   description: >
                     A hit names an entry and says what ranked it; it does
                     not hand the entry over. Read the ones worth reading
@@ -319,7 +325,7 @@ paths:
                         updated_at: "2026-07-21T06:14:55.402881Z"
                         score: 0.43
                 usageFeed:
-                  summary: GET /api/v1/knowledge?sort=usage&status=draft
+                  summary: GET /api/v1/search?sort=usage&status=draft
                   description: >
                     The draft review feed. A listing ranks by demand rather
                     than by text, so every hit carries score 0 and the usage
@@ -402,10 +408,9 @@ paths:
         reserves per directory — which are generated from the bundle
         rather than stored in it (§§3.7-3.8).
 
-        A concept answers exactly as `GET /api/v1/knowledge/{id}` does,
-        the same View or the same document under `Accept: text/markdown`,
-        with the same ETag. One object, two addresses, one answer: an
-        address is not a second surface.
+        A concept answers with a View, or with the document itself
+        under `Accept: text/markdown`, and carries the ETag to echo back
+        in `If-Match` on a later write.
 
         A file answers with its bytes, its content hash as the ETag, a
         `304` when `If-None-Match` matches it, and the headers that
@@ -527,6 +532,23 @@ paths:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "501":
+          description: >
+            A file was asked for on an instance that holds no files
+            (no OCHAKAI_GCS_BUCKET, design doc 0013). Only for a path
+            that is not a concept's: at `<id>.md` the answer is the
+            concept's own 404, because what was asked about is the
+            concept and not the deployment.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              example:
+                error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
         "404":
           description: No object at this path.
           headers:
@@ -538,7 +560,7 @@ paths:
                 properties:
                   error: { type: string }
               example:
-                error: knowledge not found
+                error: no object at this path
     put:
       operationId: putBundleFile
       summary: Write one object of the bundle
@@ -546,10 +568,15 @@ paths:
         Stores the request body at the path (design doc 0046 §3.5). What
         it becomes is decided by the bytes, not by a parameter:
 
-        A markdown path whose document carries a `type` is a concept, and
-        the write is exactly `PUT /api/v1/knowledge/{id}` — the same
-        preconditions (`If-Match`, `If-None-Match: *`), the same
-        `Ochakai-Unchanged`, the same answer. Anything else is a file,
+        A markdown path whose document carries a `type` is a concept.
+        The write is create-or-replace and states what the concept should
+        say; existence is expressed by the preconditions instead
+        (`If-None-Match: *` for "only if the path is free", `If-Match` for
+        "only if it still says this" — design doc 0030), and a body that
+        matched what was stored answers `Ochakai-Unchanged`. A JSON body
+        is a 415 naming the document form: the frontmatter is the
+        metadata and the markdown is the body, and there is no typed
+        write surface beside the format. Anything else is a file,
         including a markdown document with no `type`: SPEC §11 makes the
         key what a concept has, and a bundle that carried a typeless
         markdown file gets it back rather than losing it (§3.2).
@@ -592,6 +619,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "412": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
         "409":
           description: A generated file is not one anybody writes.
@@ -609,15 +637,36 @@ paths:
       operationId: deleteBundleFile
       summary: Delete one object of the bundle
       description: >
-        Removes the object at the path: a concept is soft-deleted, as
-        `DELETE /api/v1/knowledge/{id}` does, and a file is removed (its
-        bytes stay, named by the revisions that came before). index.md
-        and log.md are 409 for the same reason PUT gives.
+        Removes the object at the path: a concept is soft-deleted — it
+        disappears from reads, its history stays, and writing the same
+        path revives it — and a file is removed (its bytes stay, named by
+        the revisions that came before). index.md and log.md are 409 for
+        the same reason PUT gives.
+
+        With `purge=true` a concept that is *already* soft-deleted is
+        hard-deleted instead: concept, revisions, usage and file metadata
+        erased, the path freed for a move. Two calls, deliberately: the
+        first is reversible, the second is not. Purging a live concept is
+        a 409; delete it first. Content-addressed bytes are left in the
+        blob store and nothing reclaims them afterwards. The purge itself
+        is recorded — who destroyed which id, and how much history went
+        with it — in the one table a purge does not touch (design doc
+        0031). A file has no tombstone, so the parameter is a concept's.
+      parameters:
+        - name: purge
+          in: query
+          description: >
+            Hard-delete an already soft-deleted concept. `true` or
+            `false`; anything else is a 400 rather than a soft delete,
+            because a 204 for a value meant as a purge would report a
+            path freed that is not.
+          schema: { type: boolean, default: false }
       responses:
         "204":
           description: Deleted.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409":
@@ -715,7 +764,7 @@ paths:
           in: query
           description: >
             Only entries addressed under this path, repeatable and OR-ed —
-            the same subtree filter GET /api/v1/knowledge takes (design doc
+            the same subtree filter GET /api/v1/search takes (design doc
             0041). It scopes the search that picks the hits, not the link
             expansion: an entry inside the scope that cites a glossary term
             outside it still arrives with the term, which is the reason
@@ -942,487 +991,6 @@ paths:
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
-  /api/v1/knowledge/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: >
-          The entry's id — its bundle path. Slashes are real path
-          separators (GET /api/v1/knowledge/queries/sales/monthly-revenue).
-        schema: { type: string }
-    get:
-      operationId: getKnowledge
-      summary: Get one knowledge entry
-      deprecated: true
-      description: >
-        Build on `GET /api/v1/bundle/{id}.md`, which answers exactly this
-        — the same View, the same document under `Accept: text/markdown`,
-        the same ETag — at the address a concept has in the bundle. This
-        one is retired by design doc 0046 §3.5.
-
-        Answers a View by default: the entry's document as it was
-        written, the projection to read it by, and what this instance
-        observed about it (design docs 0043 §3.5, 0046 §2.2). Comments,
-        key order and quoting style are the writer's, and stay theirs.
-
-        With "Accept: text/markdown" it answers a document instead — the
-        export form, keys the server owns included, which is what a
-        reader of a bundle sees. Either text can be edited and sent
-        straight back to PUT; the export form has server-owned keys to
-        ignore and the View's document does not.
-      responses:
-        "200":
-          description: The entry.
-          headers:
-            ETag: { $ref: "#/components/headers/ETag" }
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            text/markdown:
-              schema: { type: string }
-            application/json:
-              schema: { $ref: "#/components/schemas/View" }
-              examples:
-                metric:
-                  summary: GET /api/v1/knowledge/metrics/revenue
-                  description: >
-                    A verified entry. `document` is the whole of what the
-                    entry says — the citations under sources with the
-                    window their usage_count was counted over, the
-                    declared expiry, the producer keys inline where their
-                    writer put them, the body. `summary` is the index over
-                    it that listing surfaces sort by, and `observed` is
-                    what this instance recorded happening to it. The ETag
-                    header carries summary.content_hash, quoted, for a
-                    later If-Match.
-                  value:
-                    id: metrics/revenue
-                    document: |
-                      ---
-                      type: Metric
-                      resource: bigquery://example-analytics.shop.orders
-                      title: Revenue
-                      description: Net revenue from completed orders, excluding tax and shipping.
-                      tags:
-                          - finance
-                          - core
-                      sources:
-                          - resource: https://wiki.example.co.jp/finance/revenue-recognition
-                            id: revenue-policy
-                            title: Revenue recognition policy (FY2026)
-                            author: human:finance@example.co.jp
-                            usage_count: 24
-                            last_modified: "2026-05-30"
-                          - resource: bigquery://example-analytics.shop.orders
-                            id: orders-schema
-                            title: shop.orders table schema
-                            last_modified: "2026-06-18"
-                            usage_window:
-                                from: "2026-01-01"
-                                to: "2026-06-30"
-                      usage_window:
-                          from: "2026-06-01"
-                          to: "2026-06-30"
-                      status: stable
-                      stale_after: "2026-12-31"
-                      unit: JPY
-                      grain: order
-                      ---
-
-                      Revenue is the sum of `net_amount` over every
-                      [completed order](/glossary/completed-order.md) in
-                      [shop.orders](/tables/shop-orders.md). Tax and shipping
-                      are excluded.
-
-                      A refund is subtracted in the month it settles, not the
-                      month of the order it reverses[^revenue-policy].
-
-                      ![Revenue, 2026 H1](revenue/revenue-2026h1.png)
-
-                      [^revenue-policy]: Revenue recognition policy (FY2026).
-                    summary:
-                      id: metrics/revenue
-                      type: Metric
-                      title: Revenue
-                      description: Net revenue from completed orders, excluding tax and shipping.
-                      resource: bigquery://example-analytics.shop.orders
-                      tags: [finance, core]
-                      status: stable
-                      stale_after: "2026-12-31"
-                      trust: human-reviewed
-                      verified_at: "2026-07-14T02:33:41.019778Z"
-                      rejected: false
-                      links:
-                        - { target: glossary/completed-order, text: completed order }
-                        - { target: tables/shop-orders, text: shop.orders }
-                      content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
-                      created_at: "2026-06-02T04:11:38.201044Z"
-                      updated_at: "2026-07-14T02:33:41.019778Z"
-                    observed:
-                      created_by: { kind: human, name: tanaka@example.co.jp }
-                      generated:
-                        by: { kind: human, name: tanaka@example.co.jp }
-                        at: "2026-07-14T02:33:41.019778Z"
-                      verified:
-                        - by: { kind: human, name: sato@example.co.jp }
-                          at: "2026-07-14T02:33:41.019778Z"
-                    attachments:
-                      - name: revenue-2026h1.png
-                        media_type: image/png
-                        size: 48213
-                        sha256: 9f2c1d0a7b3e5648c1d9f0a2b7e4c8d63f5a1b2c9e0d7a4f6b3c8e1d5a0f7b29
-                        created_by: { kind: human, name: tanaka@example.co.jp }
-                        created_at: "2026-06-02T04:20:11.663210Z"
-                delegated:
-                  summary: An entry written through an application acting for a person
-                  description: >
-                    The end user forwarded with X-Ochakai-On-Behalf-Of is the
-                    actor; the application that forwarded them is kept as via
-                    (design doc 0027), never dropped. It is an observation,
-                    so it is in `observed` and not in the document — a
-                    bundle carries knowledge, not who this instance saw
-                    write it (design doc 0009).
-                  value:
-                    id: insights/revenue-seasonality
-                    document: |
-                      ---
-                      type: Insight
-                      title: Reading revenue month over month
-                      description: Why a December spike and a January drop are normal.
-                      tags:
-                          - finance
-                      status: draft
-                      stale_after: "2027-01-31"
-                      ---
-
-                      [Revenue](/metrics/revenue.md) is seasonal: December runs
-                      well above the trailing median and January falls back
-                      below it.
-                    summary:
-                      id: insights/revenue-seasonality
-                      type: Insight
-                      title: Reading revenue month over month
-                      description: Why a December spike and a January drop are normal.
-                      tags: [finance]
-                      status: draft
-                      stale_after: "2027-01-31"
-                      trust: unverified
-                      rejected: false
-                      links:
-                        - { target: metrics/revenue, text: Revenue }
-                      content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
-                      created_at: "2026-07-21T06:14:55.402881Z"
-                      updated_at: "2026-07-21T06:14:55.402881Z"
-                    observed:
-                      created_by:
-                        kind: human
-                        name: tanaka@example.co.jp
-                        via: process:insightflow@example.iam.gserviceaccount.com
-                      generated:
-                        by:
-                          kind: human
-                          name: tanaka@example.co.jp
-                          via: process:insightflow@example.iam.gserviceaccount.com
-                        at: "2026-07-21T06:14:55.402881Z"
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404":
-          description: Error.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-              examples:
-                notFound:
-                  summary: No live entry at that id
-                  description: >
-                    A soft-deleted entry reads as missing here; its history is
-                    still in the log.md of the directory it was in.
-                  value:
-                    error: knowledge not found
-    put:
-      operationId: putKnowledge
-      summary: Write a knowledge entry from an OKF document
-      deprecated: true
-      description: >
-        Build on `PUT /api/v1/bundle/{id}.md`, which writes exactly this
-        — the same document, the same preconditions, the same answer.
-        This one is retired by design doc 0046 §3.5.
-
-        The body is an OKF document — YAML frontmatter, then markdown —
-        which is what an entry is (design doc 0043 §3.5): the path is the
-        address, the document is what the entry says, and there is no
-        typed JSON write surface beside it to drift from the format. A
-        JSON body is a 415 naming the document form.
-        It is create-or-replace, and a full replacement: what the document
-        omits is cleared, so send the entry as it should end up. A PUT
-        states what the entry should say; whether an entry already held
-        the id is not something the writer of a document is saying
-        anything about, which is why there is no separate create. The
-        preconditions are where existence is expressed — If-None-Match "*"
-        writes only if the id is free (an occupied one is a 409), and
-        If-Match a version writes only if the entry still says that.
-        A 201 means the entry was created, a 200 that it was replaced.
-        Keys the server owns (generated, verified, created_by,
-        rejected_by, rejected_at) never reach a ledger, so a document
-        read back from ochakai can be edited and sent as it came. They
-        are not discarded either: unless they say exactly what this
-        instance already observed about the entry, they are kept under a
-        `received` key as the document's own claim (design doc 0046
-        §2.2) and reported as an Ochakai-Note. Nothing derives trust
-        from a claim — the trust tier and ?trust= answer from this
-        instance's ledger, as before. Values read differently than they
-        were written come back as Ochakai-Note headers rather than being
-        applied in silence.
-      parameters:
-        - $ref: "#/components/parameters/IfMatch"
-        - name: If-None-Match
-          in: header
-          required: false
-          description: >
-            "*" writes only if the id is free; an occupied id is a 409.
-            Any other value is ignored — ochakai has no conditional read,
-            and a caller that means "only if absent" says "*".
-          schema: { type: string, enum: ["*"] }
-        - $ref: "#/components/parameters/OnBehalfOf"
-        - $ref: "#/components/parameters/Producer"
-      requestBody:
-        required: true
-        content:
-          text/markdown:
-            schema:
-              type: string
-              description: >
-                An OKF document: YAML frontmatter, `---`, then markdown.
-                The frontmatter keys ochakai reads are `type` (required,
-                one line — see the Type schema for the recommended
-                vocabulary), `title` (the id's last segment is the name
-                without one), `description`, `tags`, `resource` (the
-                underlying asset's URI), `status` (see the Status schema;
-                `draft` by default — whether anybody confirmed the entry
-                is a separate ruling and not the writer's to declare),
-                `status_note`, `stale_after` (YYYY-MM-DD), `sources` (a
-                list of `{resource, id, title, author, usage_count,
-                last_modified, usage_window}` — the material this entry
-                derives from, SPEC §5.1), `usage_window` (`{from, to}`),
-                and for an Attested Computation `runtime` (required
-                there), `parameters` (a list of `{name, type,
-                required}`), `computation`, `executor` (`{resource,
-                receipt}`) and `attester` (`{resource}`) — SPEC §10.2,
-                which ochakai records and never runs.
-
-                Producer-defined keys (SPEC §4.1) go at the top level
-                beside these, and inside a `sources` entry, a parameter,
-                the executor or the attester; all of them are kept
-                exactly as written (design doc 0043 §3.6). Link to
-                another entry with a markdown link to its path in the
-                body — [revenue](/metrics/revenue.md) — and the link
-                becomes an edge, and a backlink the other way.
-            example: |
-              ---
-              type: Metric
-              title: Revenue
-              description: Net revenue, refunds excluded.
-              tags:
-                  - finance
-              sources:
-                  - resource: https://wiki.example/finance/revenue-recognition
-                    id: rev-rec
-              status: stable
-              stale_after: "2027-06-30"
-              ---
-
-              Net of refunds, per [revenue recognition](/policies/revenue-recognition.md).
-      responses:
-        "201":
-          description: The id was free, so the entry was created.
-          headers:
-            ETag: { $ref: "#/components/headers/ETag" }
-            Ochakai-Note: { $ref: "#/components/headers/Note" }
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/View" }
-            text/markdown:
-              schema: { type: string }
-        # If-None-Match "*" was sent and the id is taken. Without that
-        # precondition the write would have replaced the entry.
-        "409": { $ref: "#/components/responses/Error" }
-        "200":
-          description: Replaced, or unchanged (see the Ochakai-Unchanged header).
-          headers:
-            ETag: { $ref: "#/components/headers/ETag" }
-            Ochakai-Unchanged:
-              description: >
-                Set to "true" when the payload matched the stored content
-                exactly, so nothing was written — no revision, no
-                updated_at bump. Absent on a real update.
-              schema: { type: string, enum: ["true"] }
-            Ochakai-Note: { $ref: "#/components/headers/Note" }
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            text/markdown:
-              schema: { type: string }
-            application/json:
-              schema: { $ref: "#/components/schemas/View" }
-              examples:
-                updated:
-                  summary: The replacement above, as stored
-                  description: >
-                    observed.generated.by is now the caller who made this
-                    edit, while observed.created_by still names whoever
-                    wrote the entry. The verifications ledger is untouched
-                    — a PUT edits the document and rules on nothing;
-                    POST /api/v1/verify/{id} is what confirms an entry.
-                    `document` comes back as it was written — the bytes
-                    that were stored (design doc 0046 §2.2), with no
-                    server-owned keys to strip before the next edit.
-                  value:
-                    id: metrics/revenue
-                    document: |
-                      ---
-                      type: Metric
-                      resource: bigquery://example-analytics.shop.orders
-                      title: Revenue
-                      description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
-                      tags:
-                          - finance
-                          - core
-                      sources:
-                          - resource: https://wiki.example.co.jp/finance/revenue-recognition
-                            id: revenue-policy
-                            title: Revenue recognition policy (FY2027)
-                            author: human:finance@example.co.jp
-                            usage_count: 31
-                            last_modified: "2026-07-20"
-                      usage_window:
-                          from: "2026-07-01"
-                          to: "2026-07-31"
-                      status: stable
-                      stale_after: "2027-12-31"
-                      unit: JPY
-                      grain: order
-                      ---
-
-                      Revenue is the sum of `net_amount` over every
-                      [completed order](/glossary/completed-order.md) in
-                      [shop.orders](/tables/shop-orders.md). Tax, shipping, and
-                      gift wrapping are excluded.
-
-                      A refund is subtracted in the month it settles, not the
-                      month of the order it reverses[^revenue-policy].
-
-                      [^revenue-policy]: Revenue recognition policy (FY2027).
-                    summary:
-                      id: metrics/revenue
-                      type: Metric
-                      title: Revenue
-                      description: Net revenue from completed orders, excluding tax, shipping, and gift wrapping.
-                      resource: bigquery://example-analytics.shop.orders
-                      tags: [finance, core]
-                      status: stable
-                      stale_after: "2027-12-31"
-                      trust: human-reviewed
-                      verified_at: "2026-07-14T02:33:41.019778Z"
-                      rejected: false
-                      links:
-                        - { target: glossary/completed-order, text: completed order }
-                        - { target: tables/shop-orders, text: shop.orders }
-                      content_hash: e2740b18a95c6d3f0b47e18c25da936f4b0c8e71d5a29f63b0c847e1da395f26
-                      created_at: "2026-06-02T04:11:38.201044Z"
-                      updated_at: "2026-07-27T00:18:52.640117Z"
-                    observed:
-                      created_by: { kind: human, name: tanaka@example.co.jp }
-                      generated:
-                        by: { kind: human, name: sato@example.co.jp }
-                        at: "2026-07-27T00:18:52.640117Z"
-                      verified:
-                        - by: { kind: human, name: sato@example.co.jp }
-                          at: "2026-07-14T02:33:41.019778Z"
-        "400":
-          description: >
-            The document could not be parsed, or says something invalid.
-            A version is opaque, so an If-Match value has no format to be
-            malformed in: one that matches nothing is a 412.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-              examples:
-                invalidStaleAfter:
-                  summary: A stale_after that is not an absolute date
-                  value:
-                    error: invalid stale_after "30d" (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/Error" }
-        "412":
-          description: >
-            The If-Match precondition failed: the entry changed since it
-            was read. Nothing was written — re-read the entry, redo the
-            edit, and retry with the new version.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-              examples:
-                staleVersion:
-                  summary: Someone else wrote the entry since it was read
-                  description: >
-                    GET the entry again, reapply the edit to what is there
-                    now, and retry with the ETag from that read.
-                  value:
-                    error: knowledge changed since it was read
-    delete:
-      operationId: deleteKnowledge
-      summary: Soft-delete a knowledge entry (history retained)
-      deprecated: true
-      description: >
-        The soft delete is `DELETE /api/v1/bundle/{id}.md`; build on
-        that. `purge=true` has no bundle-address form yet — design doc
-        0046 §3.5 gives it one and it is not built — so a purge is still
-        asked for here. This one is retired by the same section.
-
-        Soft-deletes by default: the entry disappears from reads, its
-        history stays, and creating the same id revives it. With
-        `purge=true` the entry is hard-deleted instead — entry,
-        revisions, usage, and attachment metadata erased, the id freed
-        for a move. Two calls, deliberately: the first is reversible, the
-        second is not. Purging a live entry is a 409; delete it first.
-        Content-addressed attachment bytes are left in the blob store, as
-        detaching leaves them; nothing reclaims them afterwards. The purge
-        itself is recorded — who destroyed which id, and how much history
-        went with it — in the one table a purge does not touch.
-      parameters:
-        - name: purge
-          in: query
-          description: >
-            Hard-delete an already soft-deleted entry. `true` or `false`;
-            anything else is a 400 rather than a soft delete, because a
-            204 for a value meant as a purge would report an id freed
-            that is not.
-          schema: { type: boolean, default: false }
-        - $ref: "#/components/parameters/OnBehalfOf"
-        - $ref: "#/components/parameters/Producer"
-      responses:
-        "204":
-          description: Deleted.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/Error" }
-        "409": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveKnowledge
@@ -2008,7 +1576,7 @@ paths:
       operationId: getQueues
       summary: How much work each review queue is holding
       description: >
-        The three listing feeds of GET /api/v1/knowledge, counted rather
+        The three listing feeds of GET /api/v1/search, counted rather
         than listed (design doc 0049): drafts waiting to be published or
         turned down (sort=usage with status=draft), entries whose failure
         reports are still unanswered (sort=failed), and entries past the
@@ -2812,7 +2380,7 @@ components:
           type: integer
           description: >
             Drafts waiting to be published or turned down — GET
-            /api/v1/knowledge?sort=usage&status=draft. Verifying does not
+            /api/v1/search?sort=usage&status=draft. Verifying does not
             empty this one: confirming and publishing are different acts,
             so a draft leaves when it is edited to another status or
             rejected (design doc 0043 §3.2).

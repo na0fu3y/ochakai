@@ -1,11 +1,16 @@
 // Package restapi serves /api/v1 so users can build their own web UIs
-// (the bundled one lives in internal/webui). It is a superset of the MCP tools:
-// the same knowledge/search/usage operations plus the bulk export
+// (the bundled one lives in internal/webui). It is a superset of the MCP
+// tools: the same read, write and usage operations plus the bulk export
 // endpoint that makes no sense as an agent tool call, and human-facing
 // endpoints (the reserved bundle files, backlinks) that stay off MCP by
 // design (agents get search/get_context instead; design doc 0015 records
 // the per-surface policy). The CLI covers this whole surface; the spec is
 // committed at api/openapi.yaml.
+//
+// One object has one address: /api/v1/bundle/{path}, a concept at
+// <id>.md (design doc 0046 §3.5). What is not an object of the bundle is
+// addressed outside it — a ranking at /api/v1/search, a judgment at
+// /api/v1/verify or /api/v1/reject, a measurement at /api/v1/usage.
 package restapi
 
 import (
@@ -36,7 +41,18 @@ const exportBatch = 100
 func Handler(svc *service.Service) http.Handler {
 	mux := http.NewServeMux()
 
-	// GET /api/v1/knowledge?q=...&type=...&status=...&tag=...&source=...&prefix=...&limit=...
+	// GET /api/v1/search?q=...&type=...&status=...&tag=...&source=...&prefix=...&limit=...
+	//
+	// Named for what it returns rather than for what it returns them
+	// from. Every other read in this file answers with an object of the
+	// bundle at the address it lives at; this one answers with a
+	// *ranking*, which is ochakai's own and is nowhere in the bundle
+	// (design doc 0046 §3.5, the same posture as 0033). Under the old
+	// spelling /api/v1/knowledge it looked like the collection that
+	// /api/v1/knowledge/{id} indexed into, and that reading was wrong in
+	// both directions: the ranking is not the collection, and the
+	// collection is addressed as the bundle.
+	//
 	// With sort=verified_at, lists by verification age (oldest first)
 	// instead of searching — the feed for canary runs.
 	// source narrows to the entries citing one resource — the reverse of
@@ -47,7 +63,7 @@ func Handler(svc *service.Service) http.Handler {
 	// cursor walks a listing past the limit — a listing has a total order
 	// to resume from, a search has a ranking window and refuses it
 	// (design doc 0050).
-	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
 		if err != nil {
@@ -143,7 +159,8 @@ func Handler(svc *service.Service) http.Handler {
 			// is answered by the entry surface's own writer, so one
 			// address serves both kinds and neither has a shape of its
 			// own here.
-			if id, ok := strings.CutSuffix(path, ".md"); ok {
+			id, isMarkdown := strings.CutSuffix(path, ".md")
+			if isMarkdown {
 				k, err := svc.Get(r.Context(), id)
 				if err == nil {
 					w.Header().Set("ETag", etagOf(k))
@@ -164,7 +181,7 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			att, data, err := svc.GetFile(r.Context(), path)
 			if err != nil {
-				writeError(w, err)
+				writeError(w, missingObject(err, isMarkdown))
 				return
 			}
 			w.Header().Set("ETag", `"`+att.SHA256+`"`)
@@ -180,7 +197,18 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// PUT and DELETE /api/v1/bundle/{path...} — the write face of the one
-	// address space (design doc 0046 §3.5).
+	// address space (design doc 0046 §3.5), and now the only one: the
+	// second spelling of a concept's address, /api/v1/knowledge/{id}, is
+	// gone. It read, wrote and deleted exactly what this face does, one
+	// suffix away, which meant a client had to know which of two names
+	// ochakai preferred for the same object and an id was a bundle path
+	// with the `.md` filed off.
+	//
+	// A PUT is create-or-replace, and states what the object should say.
+	// Whether something already held the address is not part of that
+	// statement, so there is no POST beside it: existence is expressed by
+	// the preconditions (0030), If-None-Match "*" for "only if free" and
+	// If-Match for "only if it still says this".
 	//
 	// The reserved names are the one refusal the address itself makes:
 	// they are generated from the bundle rather than stored in it, so a
@@ -207,18 +235,48 @@ func Handler(svc *service.Service) http.Handler {
 			// one gets it back (design doc 0046 §3.2).
 			id, isMarkdown := strings.CutSuffix(path, ".md")
 			if r.Method == http.MethodDelete {
-				err := store.ErrNotFound
-				if isMarkdown {
+				// ?purge=true hard-deletes a concept that is already
+				// soft-deleted, freeing its id (a tombstone still owns
+				// the primary key, so a move onto it fails). Two calls,
+				// deliberately: the first is reversible, the second is
+				// not. Not on MCP — destroying history is a human
+				// decision (design docs 0015, 0031). A file has no
+				// tombstone to purge, so the parameter is a concept's.
+				purge, err := queryBool(r.URL.Query(), "purge", false)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				err = store.ErrNotFound
+				switch {
+				case isMarkdown && purge:
+					err = svc.Purge(r.Context(), id, actor)
+				case isMarkdown:
 					err = svc.Delete(r.Context(), id, actor)
 				}
-				if errors.Is(err, store.ErrNotFound) {
-					err = svc.DeleteFile(r.Context(), path, actor)
+				if errors.Is(err, store.ErrNotFound) && !purge {
+					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
 				}
 				if err != nil {
 					writeError(w, err)
 					return
 				}
 				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			// At a concept's address the body is an OKF document, which
+			// is what a concept is (design doc 0043 §3.5). JSON there is
+			// the one wrong guess worth naming: there is no typed write
+			// surface beside the format, and stored as bytes it would
+			// carry no `type` and be kept as a *file* called `x.md` —
+			// the silent wrong outcome. Only at a `.md` path: JSON at
+			// any other path is a caller storing a JSON file, which is
+			// an object of the bundle like any other.
+			if mt := r.Header.Get("Content-Type"); isMarkdown && strings.HasPrefix(mt, "application/json") {
+				writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
+					"error": "a concept is written as an OKF document (Content-Type: text/markdown), " +
+						"not as JSON: the frontmatter is the metadata and the markdown is the body",
+				})
 				return
 			}
 			body, ok := readBody(w, r, maxDocument, fmt.Sprintf("object exceeds %d bytes", maxDocument))
@@ -288,7 +346,7 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// GET /api/v1/queues?prefix=... — the three review queues as counts
-	// (design doc 0049). The feeds under /api/v1/knowledge answer "what
+	// (design doc 0049). The feeds under /api/v1/search answer "what
 	// is waiting"; this answers "is anything", which is the question a
 	// scheduled job can ask cheaply and a human can be told the answer
 	// to. prefix scopes it to a subtree, as it scopes the feeds.
@@ -299,52 +357,6 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"queues": counts})
-	})
-
-	// {id...} because the id is the entry's full bundle path (design doc
-	// 0016) — the wildcard captures every segment.
-	mux.HandleFunc("GET /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		k, err := svc.Get(r.Context(), r.PathValue("id"))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// The ETag is the entry's version: a client can echo it in If-Match
-		// on a later PUT to update only if nothing changed meanwhile.
-		w.Header().Set("ETag", etagOf(k))
-		if wantsDocument(r) {
-			writeDocument(w, http.StatusOK, k)
-			return
-		}
-		writeView(w, http.StatusOK, k)
-	})
-
-	// PUT /api/v1/knowledge/{id...} — the one way to write knowledge. The
-	// body is an OKF document, which is what an entry is (design doc 0043
-	// §3.5): the path is the address, the frontmatter and body are what it
-	// says, and there is no typed JSON write surface beside it to drift
-	// from the format.
-	//
-	// It is create-or-replace. A PUT states what the entry should say, and
-	// whether an entry already held the id is not something the writer of
-	// a document is saying anything about — so a separate POST would only
-	// make the caller answer a question it does not have to ask. The
-	// preconditions are where existence is expressed: If-None-Match "*"
-	// means "only if the id is free", If-Match a version means "only if it
-	// still says this".
-	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		if mt := r.Header.Get("Content-Type"); strings.HasPrefix(mt, "application/json") {
-			writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
-				"error": "knowledge is written as an OKF document (Content-Type: text/markdown), " +
-					"not as JSON: the frontmatter is the metadata and the markdown is the body",
-			})
-			return
-		}
-		body, ok := readBody(w, r, maxDocument, fmt.Sprintf("document exceeds %d bytes", maxDocument))
-		if !ok {
-			return
-		}
-		putEntry(w, r, svc, r.PathValue("id"), body, httpauth.Actor(r.Context()))
 	})
 
 	// POST /api/v1/verify/{id...} — record a verification against the
@@ -481,29 +493,6 @@ func Handler(svc *service.Service) http.Handler {
 	// and the address said so by putting the entry's id in front of a
 	// filename. Whether an entry shows a file is now a question its body
 	// answers, so the address that asserted it had nothing left to say.
-
-	// DELETE soft-deletes; ?purge=true hard-deletes an entry that is
-	// already soft-deleted, freeing its id (a tombstone still owns the
-	// primary key, so a move onto it fails). Two calls, deliberately: the
-	// first is reversible, the second is not. Not on MCP — destroying
-	// history is a human decision (design doc 0015).
-	mux.HandleFunc("DELETE /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		purge, err := queryBool(r.URL.Query(), "purge", false)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		if purge {
-			err = svc.Purge(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
-		} else {
-			err = svc.Delete(r.Context(), r.PathValue("id"), httpauth.Actor(r.Context()))
-		}
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
 
 	// POST /api/v1/move {"from": ..., "to": ...} — rename an entry: the
 	// id is the address (design doc 0017), so the move carries revisions,
@@ -972,6 +961,29 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusNotImplemented
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// missingObject reports what a read or delete that fell through to the
+// file half should say about a markdown path.
+//
+// A `.md` path is a concept's address first (design doc 0046 §3.5); the
+// file lookup behind it is §3.2's accommodation for a markdown document
+// that carries no type. When this instance holds no files at all — no
+// GCS (design doc 0013) — that accommodation is simply unavailable, and
+// answering 501 would reply to a question about a concept with news
+// about the deployment. There is no object at the path: 404.
+//
+// It matters because the bundle path is now a concept's only address:
+// without this, every 404 for a soft-deleted or never-written concept
+// became a 501 on an instance without GCS, which is most of them.
+// A path that is not markdown keeps the 501 — there, "this instance
+// cannot hold files" is exactly the answer to what was asked.
+func missingObject(err error, markdown bool) error {
+	var unsupported *service.UnsupportedError
+	if markdown && errors.As(err, &unsupported) {
+		return store.ErrNotFound
+	}
+	return err
 }
 
 // etagOf renders the entry's version as an ETag: the hash of its

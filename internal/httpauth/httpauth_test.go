@@ -70,7 +70,7 @@ func TestCloudRunIAMPrefersServerlessHeader(t *testing.T) {
 		got = Actor(r.Context())
 	}))
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/search", nil)
 	r.Header.Set("Authorization", "Bearer "+fakeIDToken(`{"email":"forged@example.com"}`))
 	r.Header.Set("X-Serverless-Authorization", "Bearer "+fakeIDToken(`{"email":"real@example.com"}`))
 	w := httptest.NewRecorder()
@@ -88,7 +88,7 @@ func TestCloudRunIAMRejectsMissingToken(t *testing.T) {
 	cfg := &config.Config{}
 	h := Middleware(cfg, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/search", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", w.Code)
 	}
@@ -101,7 +101,7 @@ func TestInsecureDevActsAsAnonymous(t *testing.T) {
 		got = Actor(r.Context())
 	}))
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil))
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/search", nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
 	}
@@ -247,7 +247,7 @@ func TestMiddlewareRejectsInTheAPIErrorEnvelope(t *testing.T) {
 		t.Error("a rejected request must not reach the handler")
 	}))
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/knowledge", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/search", nil)
 	r.Header.Set("X-Serverless-Authorization", "Bearer "+fakeIDToken(`{"email":"stranger@example.iam.gserviceaccount.com"}`))
 	r.Header.Set(OnBehalfOfHeader, "human:tanaka@example.co.jp")
 	w := httptest.NewRecorder()

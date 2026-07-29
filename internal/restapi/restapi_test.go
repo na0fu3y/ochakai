@@ -51,13 +51,13 @@ func TestBadRequestValidation(t *testing.T) {
 	cases := []struct {
 		name, url, wantSubstr string
 	}{
-		{"invalid sort", "/api/v1/knowledge?sort=created_at", "invalid sort"},
-		{"neither q nor sort", "/api/v1/knowledge", "needs a query"},
-		{"whitespace query", "/api/v1/knowledge?q=%20%09", "needs a query"},
-		{"sort with query", "/api/v1/knowledge?sort=verified_at&q=revenue", "cannot be combined"},
-		{"usage sort with query", "/api/v1/knowledge?sort=usage&q=revenue", "cannot be combined"},
-		{"failed sort with query", "/api/v1/knowledge?sort=failed&q=revenue", "cannot be combined"},
-		{"bad search limit", "/api/v1/knowledge?limit=abc", "invalid limit"},
+		{"invalid sort", "/api/v1/search?sort=created_at", "invalid sort"},
+		{"neither q nor sort", "/api/v1/search", "needs a query"},
+		{"whitespace query", "/api/v1/search?q=%20%09", "needs a query"},
+		{"sort with query", "/api/v1/search?sort=verified_at&q=revenue", "cannot be combined"},
+		{"usage sort with query", "/api/v1/search?sort=usage&q=revenue", "cannot be combined"},
+		{"failed sort with query", "/api/v1/search?sort=failed&q=revenue", "cannot be combined"},
+		{"bad search limit", "/api/v1/search?limit=abc", "invalid limit"},
 		{"bad log limit", "/api/v1/bundle/metrics/log.md?limit=abc", "invalid limit"},
 		{"bad backlinks limit", "/api/v1/backlinks/metrics/revenue?limit=1.5", "invalid limit"},
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
@@ -67,13 +67,13 @@ func TestBadRequestValidation(t *testing.T) {
 		// doc 0047). The five with a column behind them, and every key
 		// OKF does not define, are refused on both surfaces that take a
 		// filter, searching or listing, before any store access.
-		{"fm.status", "/api/v1/knowledge?q=x&fm.status=stable", "use status="},
-		{"fm.tags while listing", "/api/v1/knowledge?sort=usage&fm.tags=core", "use tag="},
-		{"fm.sources", "/api/v1/knowledge?q=x&fm.sources=bq://t", "use source=URI"},
-		{"fm.stale_after", "/api/v1/knowledge?q=x&fm.stale_after=2026-12-31", "use sort=stale_after"},
+		{"fm.status", "/api/v1/search?q=x&fm.status=stable", "use status="},
+		{"fm.tags while listing", "/api/v1/search?sort=usage&fm.tags=core", "use tag="},
+		{"fm.sources", "/api/v1/search?q=x&fm.sources=bq://t", "use source=URI"},
+		{"fm.stale_after", "/api/v1/search?q=x&fm.stale_after=2026-12-31", "use sort=stale_after"},
 		{"fm.type on a context pack", "/api/v1/context?q=x&fm.type=Metric", "use type="},
-		{"producer key", "/api/v1/knowledge?q=x&fm.owner=finance", "OKF does not define"},
-		{"producer key while listing", "/api/v1/knowledge?sort=usage&fm.owner=finance", "OKF does not define"},
+		{"producer key", "/api/v1/search?q=x&fm.owner=finance", "OKF does not define"},
+		{"producer key while listing", "/api/v1/search?sort=usage&fm.owner=finance", "OKF does not define"},
 		{"producer key on a context pack", "/api/v1/context?q=x&fm.owner=finance", "OKF does not define"},
 	}
 	for _, c := range cases {
@@ -226,7 +226,7 @@ func TestETagRoundTrip(t *testing.T) {
 		t.Fatalf("etagOf = %s", etag)
 	}
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/bundle/metrics/x.md", nil)
 	req.Header.Set("If-Match", etag)
 	got := parseIfMatch(req)
 	if got == nil || *got != hash {
@@ -262,7 +262,7 @@ func TestETagRoundTrip(t *testing.T) {
 func TestOversizedDocumentIsTooLarge(t *testing.T) {
 	h := Handler(&service.Service{})
 	body := "---\ntype: Metric\n---\n\n" + strings.Repeat("a", 6<<20)
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/bundle/metrics/x.md", strings.NewReader(body))
 	req.Header.Set("Content-Type", "text/markdown")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
@@ -281,7 +281,7 @@ func TestOversizedDocumentIsTooLarge(t *testing.T) {
 // frontmatter.
 func TestJSONWriteSaysToSendADocument(t *testing.T) {
 	h := Handler(&service.Service{})
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/knowledge/metrics/x",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/bundle/metrics/x.md",
 		strings.NewReader(`{"type":"Metric","id":"metrics/x"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -304,9 +304,9 @@ func TestBooleanQueryParamsRejectUnreadableValues(t *testing.T) {
 	cases := []struct {
 		name, method, url, wantSubstr string
 	}{
-		{"purge=1", http.MethodDelete, "/api/v1/knowledge/metrics/revenue?purge=1", "invalid purge"},
-		{"purge=True", http.MethodDelete, "/api/v1/knowledge/metrics/revenue?purge=True", "invalid purge"},
-		{"purge=yes", http.MethodDelete, "/api/v1/knowledge/metrics/revenue?purge=yes", "invalid purge"},
+		{"purge=1", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=1", "invalid purge"},
+		{"purge=True", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=True", "invalid purge"},
+		{"purge=yes", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?purge=yes", "invalid purge"},
 		{"attachments=0", http.MethodGet, "/api/v1/export?attachments=0", "invalid attachments"},
 	}
 	for _, c := range cases {
@@ -320,5 +320,29 @@ func TestBooleanQueryParamsRejectUnreadableValues(t *testing.T) {
 				t.Errorf("body %q does not mention %q", rec.Body, c.wantSubstr)
 			}
 		})
+	}
+}
+
+// A concept's address is a bundle path now, and the read behind it falls
+// through to the file half when no concept is there. On an instance
+// without GCS that half cannot answer at all, and it says so with a 501
+// — which turned every 404 for a soft-deleted or never-written concept
+// into "this deployment does not do files". The path decides which
+// answer is the honest one.
+func TestMissingObjectAnswersAboutTheObjectNotTheDeployment(t *testing.T) {
+	noFiles := service.Unsupportedf("files are not supported without GCS")
+	if got := missingObject(noFiles, true); !errors.Is(got, store.ErrNotFound) {
+		t.Errorf("a markdown path with nothing at it = %v, want a 404: the question was "+
+			"about a concept, and the deployment's file support is not an answer to it", got)
+	}
+	if got := missingObject(noFiles, false); !errors.Is(got, noFiles) {
+		t.Errorf("a file path on an instance that holds no files = %v, want the 501 kept: "+
+			"there, what the deployment cannot do is exactly what was asked", got)
+	}
+	// Anything else travels unchanged, in both shapes.
+	for _, markdown := range []bool{true, false} {
+		if got := missingObject(store.ErrNotFound, markdown); !errors.Is(got, store.ErrNotFound) {
+			t.Errorf("markdown=%v: a plain 404 became %v", markdown, got)
+		}
 	}
 }

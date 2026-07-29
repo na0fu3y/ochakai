@@ -96,7 +96,7 @@ func removeEntries(t *testing.T, srv *httptest.Server, ids ...string) {
 	t.Cleanup(func() {
 		for _, id := range ids {
 			for _, q := range []string{"", "?purge=true"} {
-				req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id+q, nil)
+				req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md"+q, nil)
 				resp, err := http.DefaultClient.Do(req)
 				if err != nil {
 					t.Errorf("cleaning up %s%s: %v", id, q, err)
@@ -137,7 +137,7 @@ func TestRESTIntegration(t *testing.T) {
 	// to read it by, and what this instance observed (design doc 0043
 	// §3.5).
 	var got domain.View
-	getJSON(t, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", &got)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/sales/orders.md", &got)
 	// The document named no status, so it reads as OKF's default rather
 	// than as a draft — and nobody has confirmed it, which is what the
 	// trust tier says (design doc 0046 §§3.9-3.10).
@@ -311,7 +311,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 
 	// Delete, then the entry is gone.
-	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/sales/orders", nil)
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+typ+"/sales/orders.md", nil)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -320,7 +320,7 @@ func TestRESTIntegration(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("delete status = %d", resp.StatusCode)
 	}
-	resp, err = http.Get(srv.URL + "/api/v1/knowledge/" + typ + "/sales/orders")
+	resp, err = http.Get(srv.URL + "/api/v1/bundle/" + typ + "/sales/orders.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	var hits struct {
 		Hits []domain.SearchHit `json:"hits"`
 	}
-	getJSON(t, srv.URL+"/api/v1/knowledge?sort=verified_at&type="+typ, &hits)
+	getJSON(t, srv.URL+"/api/v1/search?sort=verified_at&type="+typ, &hits)
 	if len(hits.Hits) != 1 || len(hits.Hits[0].Attachments) != 1 ||
 		hits.Hits[0].Attachments[0].Name != "weekly.png" ||
 		hits.Hits[0].Attachments[0].MediaType != "image/png" {
@@ -446,7 +446,7 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	// the shared test database: other packages' tests scan all live
 	// attachments (the export snapshot) and resolve bytes from their own
 	// blob stores, while this test's bytes live only in this process.
-	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+typ+"/reading", nil)
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+typ+"/reading.md", nil)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -500,7 +500,7 @@ func docFrom(t *testing.T, entry map[string]any) []byte {
 // is what the tests that used to POST mean.
 func putDoc(t *testing.T, base, id string, doc []byte, onlyIfAbsent bool) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPut, base+"/api/v1/knowledge/"+id, bytes.NewReader(doc))
+	req, err := http.NewRequest(http.MethodPut, base+"/api/v1/bundle/"+id+".md", bytes.NewReader(doc))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +642,7 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	}
 
 	// Leave nothing live behind: the test database is shared (CONTRIBUTING).
-	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -852,7 +852,7 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 
 	search := func(query string) []string {
 		t.Helper()
-		resp, err := http.Get(srv.URL + "/api/v1/knowledge?" + query)
+		resp, err := http.Get(srv.URL + "/api/v1/search?" + query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -895,7 +895,7 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 	}
 
 	// A scope that cannot lead an id is a 400, not a silent everything.
-	resp, err := http.Get(srv.URL + "/api/v1/knowledge?q=" + root + "&prefix=" + url.QueryEscape("a//b"))
+	resp, err := http.Get(srv.URL + "/api/v1/search?q=" + root + "&prefix=" + url.QueryEscape("a//b"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -980,7 +980,7 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	// A document ochakai wrote can be edited and sent back as it came:
 	// the keys the server owns are ignored rather than refused, which is
 	// what makes get → edit → put a loop a human can run.
-	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/bundle/"+id+".md", nil)
 	req.Header.Set("Accept", "text/markdown")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1012,7 +1012,7 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 	}
 
 	// A stale version is refused and writes nothing.
-	req, _ = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/knowledge/"+id, strings.NewReader(doc))
+	req, _ = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+id+".md", strings.NewReader(doc))
 	req.Header.Set("Content-Type", "text/markdown")
 	req.Header.Set("If-Match", `"`+created.Summary.ContentHash+`"`)
 	resp, err = http.DefaultClient.Do(req)
@@ -1060,7 +1060,7 @@ func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 	}
 
 	var read domain.View
-	getJSON(t, srv.URL+"/api/v1/knowledge/"+id, &read)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &read)
 	if read.Document != written {
 		t.Errorf("the read rewrote the document:\n got %q\nwant %q", read.Document, written)
 	}
@@ -1079,7 +1079,7 @@ func TestRESTIntegrationDocumentSurvivesTheRoundTrip(t *testing.T) {
 
 	// The markdown representation is the same bytes with this instance's
 	// observations appended — the export form, not a second document.
-	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/bundle/"+id+".md", nil)
 	req.Header.Set("Accept", "text/markdown")
 	mdResp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1168,7 +1168,7 @@ func TestRESTIntegrationForeignTrustFamilyIsKeptAsAClaim(t *testing.T) {
 
 	// The export form carries both — the claim and this instance's own
 	// observation — and sending it back is still not a change.
-	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/knowledge/"+id, nil)
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/bundle/"+id+".md", nil)
 	req.Header.Set("Accept", "text/markdown")
 	mdResp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1210,7 +1210,7 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 	// blob fake. A defer rather than t.Cleanup — cleanups run after this
 	// function's defers, by which time the server is closed.
 	defer func() {
-		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
 		if resp, err := http.DefaultClient.Do(req); err == nil {
 			resp.Body.Close()
 		}
@@ -1278,7 +1278,7 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 	// And the entry carries all four: no cap on how many objects a
 	// directory of the bundle may hold.
 	var view domain.View
-	getJSON(t, srv.URL+"/api/v1/knowledge/"+id, &view)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &view)
 	if len(view.Attachments) != 4 {
 		t.Errorf("the entry carries %d files, want 4 — nothing caps how many", len(view.Attachments))
 	}
@@ -1298,7 +1298,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	id := typ + "/revenue"
 	bundle := srv.URL + "/api/v1/bundle/"
 	defer func() {
-		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/knowledge/"+id, nil)
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
 		if resp, err := http.DefaultClient.Do(req); err == nil {
 			resp.Body.Close()
 		}
@@ -1317,8 +1317,8 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 		return resp
 	}
 
-	// A concept, written at the path it lives at. It is the entry
-	// surface's write: same status, same ETag, same View.
+	// A concept, written at the path it lives at — which is now the only
+	// place it can be written (design doc 0046 §3.5).
 	doc := fmt.Sprintf("---\ntype: %s\ntitle: 売上\n---\n\n![chart](revenue/chart.png)\n", typ)
 	resp := put(t, id+".md", []byte(doc))
 	var view domain.View
@@ -1333,7 +1333,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	if etag == "" {
 		t.Error("no ETag on a concept written through the bundle address")
 	}
-	// The same bytes again write nothing, exactly as on the entry surface.
+	// The same bytes again write nothing.
 	resp = put(t, id+".md", []byte(doc))
 	resp.Body.Close()
 	if resp.Header.Get("Ochakai-Unchanged") != "true" {
@@ -1364,7 +1364,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	}
 	// It is attributed to the entry that shows it, without anybody
 	// having said so (design doc 0046 §3.3).
-	getJSON(t, srv.URL+"/api/v1/knowledge/"+id, &read)
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &read)
 	if len(read.Attachments) != 1 || read.Attachments[0].Name != "chart.png" {
 		t.Errorf("the entry does not carry the file its body shows: %+v", read.Attachments)
 	}
@@ -1385,15 +1385,18 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	if string(got) != string(notes) {
 		t.Errorf("the typeless markdown file came back as %q", got)
 	}
-	// It is not an entry: nothing lists it, and the concept surface does
-	// not know it.
-	resp, err = http.Get(srv.URL + "/api/v1/knowledge/" + typ + "/notes")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("a typeless markdown file answers the entry surface: %d", resp.StatusCode)
+	// It is not a concept, and the way to see that is what lists it —
+	// nothing does. There is no second surface left to ask: the concept
+	// address /api/v1/knowledge/{id} is gone (design doc 0046 §3.5), so
+	// "the concept surface 404s for it" is no longer a question anybody
+	// can put. index.md lists the concepts at a level, and this file is
+	// not among them.
+	var listing service.BrowseResult
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
+	for _, e := range listing.Entries {
+		if e.ID == typ+"/notes" || e.ID == typ+"/notes.md" {
+			t.Errorf("a typeless markdown file is listed as a concept: %+v", e)
+		}
 	}
 
 	// Delete reaches both kinds.
@@ -1444,7 +1447,7 @@ func TestRESTIntegrationStats(t *testing.T) {
 	var hits struct {
 		Hits []domain.SearchHit `json:"hits"`
 	}
-	getJSON(t, srv.URL+"/api/v1/knowledge?q="+nonsense, &hits)
+	getJSON(t, srv.URL+"/api/v1/search?q="+nonsense, &hits)
 	if len(hits.Hits) != 0 {
 		t.Fatalf("the nonsense query matched %d entries", len(hits.Hits))
 	}
@@ -1521,7 +1524,7 @@ func TestRESTIntegrationListingsPage(t *testing.T) {
 
 	page := func(query string) (hits []string, cursor string) {
 		t.Helper()
-		resp, err := http.Get(srv.URL + "/api/v1/knowledge?" + query)
+		resp, err := http.Get(srv.URL + "/api/v1/search?" + query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1571,7 +1574,7 @@ func TestRESTIntegrationListingsPage(t *testing.T) {
 
 	// A ranking has no next page, and saying so is a client error rather
 	// than a cursor quietly ignored.
-	resp, err := http.Get(srv.URL + "/api/v1/knowledge?q=" + root + "&cursor=" + url.QueryEscape(cursorOf(t, page, feed)))
+	resp, err := http.Get(srv.URL + "/api/v1/search?q=" + root + "&cursor=" + url.QueryEscape(cursorOf(t, page, feed)))
 	if err != nil {
 		t.Fatal(err)
 	}

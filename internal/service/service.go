@@ -967,7 +967,7 @@ func jsonSize(v any) int {
 	return len(b)
 }
 
-// SearchOrList answers the query surface REST (GET /api/v1/knowledge) and
+// SearchOrList answers the query surface REST (GET /api/v1/search) and
 // MCP (search_knowledge) both expose, so the two cannot drift: one place
 // decides whether a request searches or lists, validates the mode, and
 // runs it. A sort mode names one of the listing feeds (see list); with no

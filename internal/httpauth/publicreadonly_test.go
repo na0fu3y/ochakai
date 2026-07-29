@@ -73,7 +73,7 @@ func TestPublicReadOnlyRefusesNobody(t *testing.T) {
 		}))
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/knowledge?q=revenue", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/search?q=revenue", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("anonymous read = %d, want 200", rec.Code)
 	}

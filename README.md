@@ -67,16 +67,17 @@ toolchain-free, take a
 or talk to the API directly, since that is all the CLI does:
 
 ```sh
-curl -X PUT http://localhost:8080/api/v1/knowledge/metrics/revenue \
+curl -X PUT http://localhost:8080/api/v1/bundle/metrics/revenue.md \
   -H 'content-type: text/markdown' \
   --data-binary $'---\ntype: Metric\n---\n\nCompleted orders only, net of refunds.\n'
 ```
 
 Knowledge is written as an OKF document — the frontmatter is the
-metadata, the markdown is the body, and the path is the address. It is
-the same text `ochakai get` prints and an export writes, so reading an
-entry, editing it and sending it back is one loop with no translation in
-it.
+metadata, the markdown is the body, and the path is the address: a
+concept lives in the bundle at its id plus `.md`, which is the same place
+an export writes it and the same place `ochakai get` reads it from. So
+reading an entry, editing it and sending it back is one loop with no
+translation in it.
 
 ## Quick start
 
@@ -92,7 +93,7 @@ works too:
 ```sh
 export OCHAKAI_URL=http://localhost:8080
 go run ./cmd/ochakai import examples/demo
-curl 'http://localhost:8080/api/v1/knowledge?q=revenue'
+curl 'http://localhost:8080/api/v1/search?q=revenue'
 ```
 
 [examples/demo](examples/demo) is a knowledge base rather than a sample

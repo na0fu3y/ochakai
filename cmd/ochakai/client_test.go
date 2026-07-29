@@ -238,7 +238,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		// The payload is a document now (design doc 0043 §3.5), and the
 		// import loop makes one call per entry rather than create-then-
 		// update: whether the id was free is not something a bundle says.
@@ -253,7 +253,8 @@ func TestImportReportsUnchanged(t *testing.T) {
 			return
 		}
 		k := d.Knowledge
-		k.ID = r.PathValue("id")
+		// A concept lives at its id plus `.md` (design doc 0046 §3.5).
+		k.ID = strings.TrimSuffix(r.PathValue("path"), ".md")
 		if k.ID == "metrics/same" {
 			w.Header().Set("Ochakai-Unchanged", "true")
 		}
@@ -310,7 +311,7 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 
 	puts := 0
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		puts++
 		body, _ := io.ReadAll(r.Body)
 		d, _, err := okf.Parse(body)
@@ -320,7 +321,8 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 			return
 		}
 		k := d.Knowledge
-		k.ID = r.PathValue("id")
+		// A concept lives at its id plus `.md` (design doc 0046 §3.5).
+		k.ID = strings.TrimSuffix(r.PathValue("path"), ".md")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(k)
 	})
@@ -357,7 +359,7 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 func TestUpdateIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 	var gotIfMatch string
 	mux := http.NewServeMux()
-	mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		gotIfMatch = r.Header.Get("If-Match")
 		w.WriteHeader(http.StatusPreconditionFailed)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge changed since it was read"})
@@ -509,7 +511,7 @@ func TestImportReportsAKeptClaim(t *testing.T) {
 	run := func(t *testing.T, keep bool) string {
 		t.Helper()
 		mux := http.NewServeMux()
-		mux.HandleFunc("PUT /api/v1/knowledge/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
 			if !keep {
 				body = []byte(strings.Split(string(body), "received:")[0] + "---\n\nbody\n")
