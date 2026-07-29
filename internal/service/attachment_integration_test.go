@@ -132,9 +132,15 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	}, actor); err != nil {
 		t.Fatal(err)
 	}
-	// Leave no live attachments behind: the store package's blob test
-	// resolves every live attachment against its own blob fake.
-	defer func() { _ = s.SoftDelete(ctx, id, actor) }()
+	// Leave no live files behind: another package's whole-bundle export
+	// resolves every live file against its own blob fake. Purge, not a
+	// soft delete — a file is an object with a life of its own (design
+	// doc 0046 §3.3), so deleting the entry leaves the files in its
+	// namespace exactly where they are.
+	defer func() {
+		_ = s.SoftDelete(ctx, id, actor)
+		_ = s.Purge(ctx, id, actor)
+	}()
 
 	// Company for the target: same type, no overlap with the query in
 	// either half of search. They are in the vector list (it returns the
@@ -257,7 +263,15 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	if _, err := svc.Create(ctx, &domain.Knowledge{Type: typ, ID: id, Title: "host"}, actor); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+	// Purge, not delete: a file is an object with a life of its own
+	// (design doc 0046 §3.3), so a soft-deleted entry leaves the files
+	// in its namespace live — and the whole-bundle export another
+	// package runs then resolves their bytes against a blob fake it
+	// does not have.
+	t.Cleanup(func() {
+		_ = svc.Delete(ctx, id, actor)
+		_ = svc.Purge(ctx, id, actor)
+	})
 	for _, name := range []string{"a.txt", "b.txt"} {
 		if _, err := svc.PutFile(ctx, id+"/"+name, []byte("some text for "+name), actor); err != nil {
 			t.Fatal(err)

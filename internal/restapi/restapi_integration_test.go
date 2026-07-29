@@ -1234,15 +1234,20 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 
 	typ := fmt.Sprintf("restany%d", time.Now().UnixNano())
 	id := typ + "/diagram"
-	// Soft-delete at the end, like every other test that holds live
-	// files: the shared test database is scanned whole by the export and
-	// by the re-embed backlog, and those resolve bytes against their own
-	// blob fake. A defer rather than t.Cleanup — cleanups run after this
-	// function's defers, by which time the server is closed.
+	// Purge at the end, like every other test that holds live files: the
+	// shared test database is scanned whole by the export and by the
+	// re-embed backlog, and those resolve bytes against their own blob
+	// fake. Purge rather than a soft delete, because a file is an object
+	// with a life of its own (design doc 0046 §3.3) — deleting the entry
+	// leaves the files in its namespace exactly where they are, and the
+	// archive carries them. A defer rather than t.Cleanup — cleanups run
+	// after this function's defers, by which time the server is closed.
 	defer func() {
-		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
-		if resp, err := http.DefaultClient.Do(req); err == nil {
-			resp.Body.Close()
+		for _, q := range []string{"", "?purge=true"} {
+			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md"+q, nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
 		}
 	}()
 	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
@@ -1747,4 +1752,114 @@ func getArchive(t *testing.T, url, query string) (*http.Response, error) {
 	}
 	req.Header.Set("Accept", "application/gzip")
 	return http.DefaultClient.Do(req)
+}
+
+// What enters the bundle leaves it (design doc 0046 §3.2), including a
+// file that belongs to no entry: a producer's seed data in a shared
+// directory, or a file whose concept has since been deleted. The archive
+// is the copy this endpoint exists to hand back, and it used to be built
+// from the files *attributed* to a live entry — so those came back
+// missing, silently, from the one place a knowledge base is a backup.
+func TestRESTIntegrationTheArchiveCarriesAFileNothingOwns(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	root := fmt.Sprintf("restloose%d", time.Now().UnixNano())
+	loose := root + "/seed-data.csv"
+	// A defer rather than t.Cleanup: cleanups run after this function's
+	// defers, by which time the server is closed.
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+loose, nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+loose,
+		bytes.NewReader([]byte("region,orders\napac,12\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing a file nothing owns = %d", resp.StatusCode)
+	}
+
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("archive status = %d", resp.StatusCode)
+	}
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hdr.Name == loose {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the archive does not carry %s: a file that entered the bundle did not leave it", loose)
+	}
+}
+
+// ?purge=true names something only a concept has — a tombstone still
+// holding an id. A file has none, and its one delete is already the
+// irreversible one, so the parameter is nothing to refuse over. What it
+// must not do is answer 404 for a file that is right there: a caller
+// scripting "remove this permanently" would read that as done.
+func TestRESTIntegrationPurgeOnAFileRemovesIt(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	path := fmt.Sprintf("restpurge%d/seed.csv", time.Now().UnixNano())
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+path,
+		bytes.NewReader([]byte("a,b\n1,2\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing the file = %d", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+path+"?purge=true", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE ?purge=true on a file = %d, want 204", resp.StatusCode)
+	}
+	got, err := http.Get(srv.URL + "/api/v1/bundle/" + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Body.Close()
+	if got.StatusCode != http.StatusNotFound {
+		t.Errorf("the file is still there after the purge: %d", got.StatusCode)
+	}
 }

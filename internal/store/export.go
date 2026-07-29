@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -96,35 +95,42 @@ func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.
 	return pgx.CollectRows(rows, scanKnowledgeDoc)
 }
 
-// AttachmentMeta returns every live entry's attachment metadata, ordered
-// by owning entry then name; the bytes are fetched one at a time as the
-// archive is written (design doc 0013). An entry with attachments in a
+// FileMeta returns the metadata of every file the archive at prefix has
+// to carry, in path order; the bytes are fetched one at a time as the
+// archive is written (design doc 0013). A bundle holding files in a
 // deployment that has no blob store is an error, not an empty archive.
+//
+// What it has to carry is every file *at* a path under the prefix —
+// attributed to an entry or not. A file is an object in the bundle
+// (design doc 0046 §§2.1, 3.3), not a property of an entry, and what
+// enters the bundle leaves it (§3.2): selecting by attribution would
+// hand back an archive missing the producer's seed data and every file
+// whose entry has since been deleted, silently, in the one endpoint
+// that exists to be a backup.
+//
+// The second half of the predicate is for a subtree archive only: a file
+// an in-scope entry's body points at travels with the entry even when it
+// lives outside the subtree, because the body link would otherwise
+// dangle in the copy. At the root the first half already holds
+// everything.
 //
 // Blobs live in GCS, outside this snapshot: a blob deleted mid-export
 // still fails when it is reached. The metadata being consistent is what
 // makes that failure visible as a missing file rather than as an archive
 // quietly disagreeing with its own index.
-func (e *ExportSnapshot) AttachmentMeta(ctx context.Context, prefix string) ([]ExportAttachment, error) {
-	rows, err := e.tx.Query(ctx, `SELECT k.id, `+fileCols+`
-		FROM object k JOIN object f ON `+attributedTo+`
-		WHERE k.id IS NOT NULL AND k.deleted_at IS NULL`+underPrefix("k.", "$1")+`
-		ORDER BY k.id, f.path`, prefix)
+func (e *ExportSnapshot) FileMeta(ctx context.Context, prefix string) ([]domain.Attachment, error) {
+	rows, err := e.tx.Query(ctx, `SELECT `+fileCols+`
+		FROM object f
+		WHERE f.id IS NULL AND f.deleted_at IS NULL
+		  AND ($1 = '' OR starts_with(f.path, $1 || '/')
+		       OR EXISTS (SELECT 1 FROM object k
+		                   WHERE k.id IS NOT NULL AND k.deleted_at IS NULL
+		                     AND `+attributedTo+underPrefix("k.", "$1")+`))
+		ORDER BY f.path`, prefix)
 	if err != nil {
 		return nil, err
 	}
-	atts, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ExportAttachment, error) {
-		var a ExportAttachment
-		var path, mediaType, hash string
-		var size int64
-		var by domain.Actor
-		var at time.Time
-		if err := row.Scan(&a.ID, &path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
-			return a, err
-		}
-		a.Att = asAttachment(path, mediaType, size, hash, by, at)
-		return a, nil
-	})
+	atts, err := pgx.CollectRows(rows, scanFile)
 	if err != nil {
 		return nil, err
 	}

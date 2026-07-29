@@ -725,6 +725,15 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			ON CONFLICT (id) DO UPDATE SET `+knowledgeExcluded+`, files=EXCLUDED.files, deleted_at=NULL
 			WHERE object.deleted_at IS NOT NULL`+revive,
 			args...)
+		// A file can already hold the path (design doc 0046 §3.5: one
+		// address space, two kinds of object). ON CONFLICT names the id
+		// and a file has none, so the primary key on the path is what
+		// stops it — and the caller has to read the same "something is
+		// already there" it reads for a live entry, not a 500 with a
+		// constraint name in it.
+		if isUniqueViolation(err) {
+			return fmt.Errorf("%w: %s is a file", ErrAlreadyExists, domain.ConceptPath(k.ID))
+		}
 		if err != nil {
 			return err
 		}
@@ -1031,7 +1040,15 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			return err
 		}
 		for _, q := range []string{
-			`DELETE FROM object f WHERE f.id IS NULL AND f.path LIKE $1 || '/%'`,
+			// starts_with, not LIKE: an id may contain "_", which LIKE
+			// reads as a wildcard, and this statement deletes. Purging
+			// "sales_2024" would have taken every file under
+			// "salesX2024/" with it.
+			`DELETE FROM object f WHERE f.id IS NULL AND starts_with(f.path, $1 || '/')`,
+			// The files' own history goes with the files: purge destroys
+			// the record (design doc 0031), and a ledger row pointing at
+			// a path nothing holds is not a record of anything.
+			`DELETE FROM knowledge_revision WHERE id IS NULL AND starts_with(path, $1 || '/')`,
 			`DELETE FROM attachment WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_usage WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_event WHERE knowledge_id=$1`,
@@ -1135,16 +1152,27 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			// concept is gone. Only the files — a concept under there has
 			// an id, an address and a history of its own, and moves when
 			// somebody moves it.
+			//
+			// starts_with, not LIKE, for the reason browsing gives: an id
+			// may contain "_", which LIKE reads as a wildcard. Moving
+			// "sales_2024" would have dragged every file under
+			// "salesX2024/" along with it.
 			`UPDATE object SET path = $2 || substr(path, length($1) + 1)
-			 WHERE id IS NULL AND path LIKE $1 || '/%'`,
+			 WHERE id IS NULL AND starts_with(path, $1 || '/')`,
 			// The naming follows the files it names.
 			`UPDATE object SET files = (
 			     SELECT COALESCE(jsonb_agg(
-			         CASE WHEN x LIKE $1 || '/%' THEN $2 || substr(x, length($1) + 1) ELSE x END), '[]'::jsonb)
+			         CASE WHEN starts_with(x, $1 || '/') THEN $2 || substr(x, length($1) + 1) ELSE x END), '[]'::jsonb)
 			       FROM jsonb_array_elements_text(files) x)
 			 WHERE id IS NOT NULL
-			   AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(files) x WHERE x LIKE $1 || '/%')`,
+			   AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(files) x WHERE starts_with(x, $1 || '/'))`,
 			`UPDATE knowledge_revision SET id=$2, path=$2 || '.md' WHERE id=$1`,
+			// A file's history is keyed by its path, so it moves when the
+			// file does — otherwise the log of the directory it arrived
+			// in would be silent about how it got there, and the one it
+			// left would go on reporting a file that is not there.
+			`UPDATE knowledge_revision SET path = $2 || substr(path, length($1) + 1)
+			 WHERE id IS NULL AND starts_with(path, $1 || '/')`,
 			`UPDATE knowledge_verification SET id=$2 WHERE id=$1`,
 			`UPDATE knowledge_rejection SET id=$2 WHERE id=$1`,
 			`UPDATE attachment SET knowledge_id=$2 WHERE knowledge_id=$1`,
@@ -1358,8 +1386,13 @@ func (s *Store) ListRevisions(ctx context.Context, id string, limit int) ([]doma
 // of every entry in a directory would be the whole knowledge base
 // several times over, and what log.md publishes is what changed and by
 // whom (design doc 0046 §3.8).
+//
+// The row is keyed by the object's path, because that is what a
+// revision is an event about (design doc 0046 §3.1) and because a file
+// has no concept id — a log that keyed on the id would leave every
+// attach and detach out of the history it belongs in.
 type LogRow struct {
-	ID        string
+	Path      string
 	Title     string
 	Change    string
 	ChangedBy domain.Actor
@@ -1367,28 +1400,34 @@ type LogRow struct {
 }
 
 // ListRevisionsUnder returns the newest changes anywhere under a path
-// prefix, newest first. An empty prefix is the whole bundle.
+// prefix, newest first — concepts and files alike, which is the whole
+// point of one ledger keyed by path. An empty prefix is the whole
+// bundle.
 //
 // The title comes from the entry as it stands rather than from the
 // revision: a log names what changed, and naming it by a title it has
 // since stopped having would send a reader looking for something that is
 // not there. An entry that has since been purged keeps its history and
-// loses its title, which is why the join is left.
+// loses its title, which is why the join is left. A file has no title
+// and is named by its path.
+//
+// starts_with, not LIKE: a path may contain "_", which LIKE reads as a
+// wildcard (browse.go says the same about ids).
 func (s *Store) ListRevisionsUnder(ctx context.Context, prefix string, limit int) ([]LogRow, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT r.id, COALESCE(k.title, ''), r.change,
+		`SELECT r.path, COALESCE(k.title, ''), r.change,
 		        r.changed_by_kind, r.changed_by_name, r.changed_by_via, r.changed_by_producer, r.changed_at
 		 FROM knowledge_revision r
-		 LEFT JOIN object k ON k.id = r.id
-		 WHERE $1 = '' OR r.id = $1 OR r.id LIKE $2
-		 ORDER BY r.changed_at DESC, r.id, r.rev DESC LIMIT $3`,
-		prefix, prefix+"/%", limit)
+		 LEFT JOIN object k ON k.path = r.path
+		 WHERE $1 = '' OR r.path = $1 || '.md' OR starts_with(r.path, $1 || '/')
+		 ORDER BY r.changed_at DESC, r.path, r.rev DESC LIMIT $2`,
+		prefix, limit)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (LogRow, error) {
 		var l LogRow
-		return l, row.Scan(&l.ID, &l.Title, &l.Change,
+		return l, row.Scan(&l.Path, &l.Title, &l.Change,
 			&l.ChangedBy.Kind, &l.ChangedBy.Name, &l.ChangedBy.Via, &l.ChangedBy.Producer, &l.ChangedAt)
 	})
 }

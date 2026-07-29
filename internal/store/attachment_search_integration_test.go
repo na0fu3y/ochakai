@@ -52,13 +52,28 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 	for _, del := range []string{
 		`DELETE FROM attachment_embedding WHERE knowledge_id LIKE 'it-attsearch%'`,
 		`DELETE FROM attachment WHERE knowledge_id LIKE 'it-attsearch%'`,
-		`DELETE FROM object WHERE id LIKE 'it-attsearch%'`,
+		// Files are objects with paths, not properties of an entry
+		// (design doc 0046 §3.3): deleting the concepts leaves them
+		// live, and the whole-bundle export another package runs then
+		// resolves their bytes against a blob fake it does not have.
+		`DELETE FROM object WHERE id LIKE 'it-attsearch%' OR starts_with(path, 'it-attsearch')`,
 		`DELETE FROM knowledge_revision WHERE id LIKE 'it-attsearch%'`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
 			t.Fatal(err)
 		}
 	}
+	// And again on the way out, inside the lock this test holds: the
+	// files would otherwise outlive it, and another package's
+	// whole-bundle export would resolve their bytes against a blob fake
+	// it does not have. Deferred rather than t.Cleanup so it runs before
+	// the pool closes.
+	defer func() {
+		if _, err := s.pool.Exec(ctx,
+			`DELETE FROM object WHERE id LIKE 'it-attsearch%' OR starts_with(path, 'it-attsearch')`); err != nil {
+			t.Errorf("cleaning up: %v", err)
+		}
+	}()
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	a := &domain.Knowledge{
