@@ -29,7 +29,11 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 [0048](0048-decision-records-for-wire-contracts.md) §2.3 に従い
 番号を足さずに本ドキュメントを直接直した(未リリースの決定)。
 §2.2 の改訂は「サーバー所有キーを捨てる」を「主張として残す」に変えた
-(issue #292)
+(issue #292)。
+§2.4 が継承する 0043 §3.8 のうち「`<producer>/<version>` 形式は使わない」は
+[0052](0052-producer-beside-the-actor.md) が改訂した — actor の綴りが
+`human:` / `process:` の 2 つであることは変わらず、producer は actor の
+隣の `Actor.producer` に記録される
 Date: 2026-07-28
 
 ## 1. 目的

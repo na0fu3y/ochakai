@@ -539,9 +539,14 @@ function fmtDate(s) {
 // written by a person through an embedded application must not read like
 // one they wrote themselves (design doc 0027). This is the curation
 // surface, so it is where the distinction has to be visible.
+// The producer is shown for the same reason and with the same care: it is
+// what the caller said it was running, so a reviewer deciding whether to
+// trust a draft can see that a model wrote it — and which build (design
+// doc 0052).
 function actorStr(a) {
   if (!a || !a.name) return '';
-  return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name + (a.via ? ' via ' + a.via : '');
+  return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name +
+    (a.via ? ' via ' + a.via : '') + (a.producer ? ' using ' + a.producer : '');
 }
 // The ledgers a read carries beside the document (design doc 0043
 // §§3.2-3.3). Verification is plural and stored oldest-first, so the

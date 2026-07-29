@@ -3024,6 +3024,126 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	}
 }
 
+// Every actor a surface reads back carries its producer, through creation,
+// update, verification, rejection and the revision ledger (design doc
+// 0052 §3.4). The identity beside it never moves: the self-declaration is
+// admissible precisely because the authenticated name stays in the row.
+func TestIntegrationProducerRidesEveryActor(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	const id = "it-producer"
+	cleanup := func() {
+		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_verification WHERE id = $1`, id)
+		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_rejection WHERE id = $1`, id)
+	}
+	cleanup()
+	defer cleanup()
+
+	agent := domain.Actor{
+		Kind: domain.ActorHuman, Name: "tanaka@example.co.jp",
+		Via:      "process:insightflow@example.iam.gserviceaccount.com",
+		Producer: "insightflow/1.4.0",
+	}
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeInsights, ID: id, Title: "producer",
+		Status: domain.StatusDraft, CreatedBy: agent, UpdatedBy: agent,
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+
+	k, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.CreatedBy != agent || k.UpdatedBy != agent {
+		t.Errorf("created_by / updated_by = %+v / %+v, want %+v", k.CreatedBy, k.UpdatedBy, agent)
+	}
+	want := "human:tanaka@example.co.jp via process:insightflow@example.iam.gserviceaccount.com" +
+		" using insightflow/1.4.0"
+	if k.CreatedBy.String() != want {
+		t.Errorf("rendered = %q, want %q", k.CreatedBy.String(), want)
+	}
+
+	// A later write declares its own producer, or none. The entry's
+	// creation keeps saying what wrote it.
+	editor := domain.Actor{Kind: domain.ActorProcess, Name: "sync@example.iam.gserviceaccount.com",
+		Producer: "ochakai-cli/0.15.0"}
+	k.Title = "producer, edited"
+	k.UpdatedBy = editor // what the service sets when a write changes content
+	if err := s.Update(ctx, k, editor, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CreatedBy.Producer != agent.Producer {
+		t.Errorf("update rewrote created_by_producer: %+v", got.CreatedBy)
+	}
+	if got.UpdatedBy.Producer != editor.Producer {
+		t.Errorf("updated_by producer = %q, want %q", got.UpdatedBy.Producer, editor.Producer)
+	}
+
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
+	if _, err := s.Verify(ctx, id, human); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A person who declared nothing records nothing — the field is not
+	// inherited from the entry or from an earlier write.
+	if last := got.LastVerified(); last == nil || last.By.Producer != "" {
+		t.Errorf("verification producer = %+v, want empty", last)
+	}
+
+	rejecter := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp", Producer: "ochakai-webui/0.15.0"}
+	if _, err := s.Reject(ctx, id, rejecter, "not yet"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Rejection == nil || got.Rejection.By.Producer != rejecter.Producer {
+		t.Errorf("rejection = %+v, want the producer carried", got.Rejection)
+	}
+
+	revs, err := s.ListRevisions(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) == 0 {
+		t.Fatal("no revisions")
+	}
+	if create := revs[len(revs)-1]; create.ChangedBy.Producer != agent.Producer {
+		t.Errorf("revision changed_by lost the producer: %+v", create.ChangedBy)
+	}
+
+	log, err := s.ListRevisionsUnder(ctx, id, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(log) == 0 || log[len(log)-1].ChangedBy.Producer != agent.Producer {
+		t.Errorf("log row lost the producer: %+v", log)
+	}
+}
+
 // A file's path is the whole of where it lives (design doc 0046 §3.3).
 // It used to take two fields: a name, and an okf_path that said "not
 // where ochakai would have put it" — a second identity for the same

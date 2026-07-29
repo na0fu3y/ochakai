@@ -119,6 +119,14 @@ The consequences to plan around:
   same thing from an IAP-signed JWT, so browser edits are attributed to
   the person signed in (design doc
   [0032](design/0032-webui-iap-identity.md)).
+- **The identity says who, not what.** An agent that writes under a
+  person's own credentials — an MCP client, a CLI in a script — records
+  that person, and the record then reads as if they wrote the prose.
+  `X-Ochakai-Producer: insightflow/1.4.0` (or, on MCP, the client's
+  `initialize` info) names the software; it is recorded beside the actor
+  and never in place of it, because it is the one thing here the caller
+  declares about itself rather than something authentication observed
+  (design doc [0052](design/0052-producer-beside-the-actor.md)).
 - **Provenance is never read from a payload.** Import puts nothing from a
   bundle's frontmatter into a ledger, and nothing there moves the trust
   tier. Provenance is what this instance observed, not what a document

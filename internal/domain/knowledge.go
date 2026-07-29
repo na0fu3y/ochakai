@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
@@ -388,20 +389,34 @@ type Usage struct {
 // wrote with their own credentials must stay distinguishable, or the
 // delegation becomes indistinguishable from a forgery. Empty for the
 // ordinary case, where the caller acted as itself.
+//
+// Producer names the software that made this write, in SPEC §7's
+// "<producer>/<version>" form, and is the one field here the caller
+// declares about itself rather than something authentication observed
+// (design doc 0052). It sits beside Kind/Name for the same reason Via
+// does: a self-declared name put in place of an authenticated one would
+// make "who wrote this" answerable by anyone, while one recorded next to
+// it is always attributable to a caller Google verified. Empty when the
+// caller named no producer.
 type Actor struct {
-	Kind string `json:"kind"` // "human" | "process"
-	Name string `json:"name"`
-	Via  string `json:"via,omitempty"` // the delegating caller's identity, "" when there is none
+	Kind     string `json:"kind"` // "human" | "process"
+	Name     string `json:"name"`
+	Via      string `json:"via,omitempty"`      // the delegating caller's identity, "" when there is none
+	Producer string `json:"producer,omitempty"` // "<producer>/<version>", self-declared, "" when unnamed
 }
 
 // String renders an actor the way every surface shows provenance:
 // "human:tanaka@example.co.jp", or "human:tanaka@example.co.jp via
 // process:insightflow@example.iam.gserviceaccount.com" when the write came
-// through a delegating application.
+// through a delegating application, with " using insightflow/1.4.0"
+// appended when the caller named the software it was running.
 func (a Actor) String() string {
 	s := a.Kind + ":" + a.Name
 	if a.Via != "" {
 		s += " via " + a.Via
+	}
+	if a.Producer != "" {
+		s += " using " + a.Producer
 	}
 	return s
 }
@@ -414,14 +429,48 @@ func (a Actor) String() string {
 // tier. A distinction that costs conformance and buys nothing is not one
 // worth keeping.
 //
-// SPEC §7's third form, "<producer>/<version>", stays unused: ochakai's
-// non-human writers are IAM service accounts, which have no version, and
-// inventing one would make the provenance say something the server never
-// observed.
+// SPEC §7's third form, "<producer>/<version>", is not a kind: it names
+// software where the other two name an identity, and an ochakai write
+// always has an authenticated identity behind it. It is recorded in
+// Actor.Producer instead, beside the actor rather than in its place
+// (design doc 0052).
 const (
 	ActorHuman   = "human"
 	ActorProcess = "process"
 )
+
+// MaxProducer bounds the producer string so a provenance column cannot be
+// filled with arbitrary bulk — the same reason the delegation header is
+// bounded (design doc 0027 §5.1).
+const MaxProducer = 128
+
+// ValidProducer reports whether s is SPEC §7's "<producer>/<version>"
+// form: exactly one slash, both halves non-empty, no whitespace, and
+// short enough to be a name rather than a payload.
+//
+// A colon is refused because SPEC §7 tells its three actor forms apart by
+// exactly that character — "human:x" and "process:x" against
+// "<producer>/<version>". A producer holding one would read as an
+// identity to anything applying the convention, which is the single
+// confusion this field must never create.
+//
+// The version half is not parsed further. SPEC §7 says nothing about how
+// a version is spelled, and a store that insisted on semver would refuse
+// "claude-code/2026.07" or a git sha — provenance records what the writer
+// called itself, and inventing a grammar for it would only make honest
+// writers unrecordable (design doc 0052 §3.2).
+func ValidProducer(s string) bool {
+	if s == "" || len(s) > MaxProducer || !utf8.ValidString(s) {
+		return false
+	}
+	name, version, ok := strings.Cut(s, "/")
+	if !ok || name == "" || version == "" || strings.Contains(version, "/") {
+		return false
+	}
+	return !strings.ContainsFunc(s, func(r rune) bool {
+		return r == ':' || unicode.IsSpace(r) || unicode.IsControl(r)
+	})
+}
 
 // Verification is one recorded confirmation that an entry was checked —
 // one element of OKF's verified list (SPEC §5.2), and under §5.3 the only

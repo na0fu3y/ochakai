@@ -101,7 +101,11 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := domain.Actor{Kind: domain.ActorHuman, Name: "bob@example.co.jp", Via: "human:anonymous"}
+	// The producer is the session's clientInfo — that one is a property of
+	// the connection, not of the call, so unlike the identity it is the
+	// same for alice's call and bob's (design doc 0052 §3.3).
+	want := domain.Actor{Kind: domain.ActorHuman, Name: "bob@example.co.jp", Via: "human:anonymous",
+		Producer: "host/0"}
 	if k.CreatedBy != want {
 		t.Errorf("created_by = %+v, want %+v (actor pinned to the session initializer?)", k.CreatedBy, want)
 	}

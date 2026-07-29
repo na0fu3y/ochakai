@@ -448,8 +448,8 @@ func (s *Store) DeleteFile(ctx context.Context, p string, actor domain.Actor) er
 // is the whole of what happened.
 func (s *Store) addFileRevision(ctx context.Context, tx pgx.Tx, p, change string, actor domain.Actor) error {
 	_, err := tx.Exec(ctx, `INSERT INTO knowledge_revision
-		(path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, doc)
-		VALUES ($1, NULL, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $2, $3, $4, $5, '')`,
-		p, change, actor.Kind, actor.Name, actor.Via)
+		(path, id, rev, change, changed_by_kind, changed_by_name, changed_by_via, changed_by_producer, doc)
+		VALUES ($1, NULL, (SELECT COALESCE(MAX(rev), 0) + 1 FROM knowledge_revision WHERE path=$1), $2, $3, $4, $5, $6, '')`,
+		p, change, actor.Kind, actor.Name, actor.Via, actor.Producer)
 	return err
 }

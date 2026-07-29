@@ -20,6 +20,40 @@ last entry.
 
 ### Added
 
+- **Which agent, at which build, wrote this** (design doc
+  [0052](docs/design/0052-producer-beside-the-actor.md)). An actor now
+  carries a fourth field, `producer` — OKF SPEC §7's
+  `<producer>/<version>` form, e.g. `insightflow/1.4.0`. It arrives on
+  `X-Ochakai-Producer`, or, on MCP, from the `clientInfo` the protocol
+  already carries at `initialize`, or from `OCHAKAI_PRODUCER` for the
+  CLI. Any authenticated caller may send it: unlike a delegated identity
+  it names nobody but the caller, so no allowlist gates it. A malformed
+  value is a 400, not a silent drop.
+
+  It is recorded **beside** the authenticated actor and never in its
+  place. This is the one value ochakai records that the caller declares
+  about itself, and a self-declared name put where `created_by` goes
+  would make "who wrote this" answerable by anyone — the composition is
+  the same one delegation already uses (0027). So provenance now reads
+  `human:tanaka@… via process:app-sa@… using insightflow/1.4.0` on every
+  surface: the CLI's provenance lines, the web UI, `log.md`, and a
+  `producer` key beside `by` and `via` in an exported document's
+  `generated` / `verified`. Import reads none of it back, as with the
+  rest of the trust family.
+
+  Without it, an agent writing under a person's own credentials — an MCP
+  client, a CLI in a script — left a record saying a person wrote the
+  prose, and a model upgrade could not be judged against the drafts that
+  followed it. Nothing is backfilled: no past write declared a producer,
+  and stamping one now would invent an observation the server never made.
+
+  `ochakai whoami` prints the producer this shell declares, so a value
+  that is wrong is visible before it is recorded a thousand times.
+
+  The actor kinds are unchanged (`human` / `process`), and so is the
+  trust tier — SPEC §5.3 reads the `human:` prefix alone. The web UI
+  sends no producer: a person editing by hand runs none.
+
 - **BREAKING** — `GET|PUT|DELETE /api/v1/attachments/{id}/{name}` is
   retired. A file is read, written and deleted at the path it lives at:
   `/api/v1/bundle/{path}` (design doc

@@ -1188,6 +1188,7 @@ paths:
             and a caller that means "only if absent" says "*".
           schema: { type: string, enum: ["*"] }
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
         content:
@@ -1412,6 +1413,7 @@ paths:
             that is not.
           schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       responses:
         "204":
           description: Deleted.
@@ -1439,6 +1441,7 @@ paths:
         hierarchical id could be confused with an ID segment.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
         content:
@@ -1557,6 +1560,7 @@ paths:
         hierarchical id could be confused with an ID segment.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       responses:
         "200":
           description: The verified entry.
@@ -1642,6 +1646,7 @@ paths:
         keeping. Not an MCP tool.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       requestBody:
         required: false
         description: Omit the body entirely to reject without a stated reason.
@@ -1720,6 +1725,7 @@ paths:
         mistake worth reporting rather than a silent success.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       responses:
         "200":
           description: The entry, with no rejection.
@@ -1782,6 +1788,7 @@ paths:
         report; the optional note travels with the raw event.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
         content:
@@ -2290,6 +2297,28 @@ components:
         Honored on every call; declared on the operations that record
         provenance.
       schema: { type: string, maxLength: 320 }
+    Producer:
+      name: X-Ochakai-Producer
+      in: header
+      required: false
+      description: >
+        The software the caller is running, in OKF SPEC §7's
+        "<producer>/<version>" form — e.g. "insightflow/1.4.0" (design doc
+        0052). One slash, both halves non-empty, no whitespace, no colon
+        (the character §7 tells "human:"/"process:" apart by), at most 128
+        bytes; a malformed value is a 400, not a silent drop.
+        It is recorded as Actor.producer, beside the authenticated actor
+        and never in place of it: this is the one value here the caller
+        declares about itself, and a self-declared name is only meaningful
+        while the identity that vouches for it stays in the record. No
+        allowlist gates it — unlike a delegated identity it names nobody
+        but the caller, and the caller is authenticated.
+        Trust is unaffected: SPEC §5.3 reads the actor's human: prefix,
+        which this does not touch.
+        Honored on every call; declared on the operations that record
+        provenance. Ignored on a public read-only deployment, where no
+        caller is authenticated (design doc 0042).
+      schema: { type: string, maxLength: 128 }
   responses:
     Error:
       description: Error.
@@ -2431,6 +2460,19 @@ components:
             Absent when the caller acted as itself. Recorded rather than
             replaced: a write made through an application must stay
             distinguishable from one the person made directly.
+          type: string
+        producer:
+          description: >
+            The software that made this write, as the caller declared it
+            with X-Ochakai-Producer — OKF SPEC §7's
+            "<producer>/<version>" form, e.g. "insightflow/1.4.0" (design
+            doc 0052). Absent when the caller named none.
+            It is the one field of an actor that is self-declared rather
+            than observed from authentication, which is exactly why it
+            sits beside kind/name instead of in them: read it as "what
+            this caller says it was running", and read kind/name as who
+            Google verified. Trust tier is unaffected — SPEC §5.3 derives
+            it from the human: prefix alone.
           type: string
     Link:
       type: object

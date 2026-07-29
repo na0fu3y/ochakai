@@ -809,7 +809,8 @@ Usage: ochakai whoami [flags]
 Print which server client commands target and where that choice came
 from (--url / $OCHAKAI_URL / `ochakai use`), the identity your
 credentials present (the server's actor resolution is authoritative),
-and whether the server is reachable.
+the producer $OCHAKAI_PRODUCER declares for writes from this shell, if
+any, and whether the server is reachable.
 
 Flags:
   -json
