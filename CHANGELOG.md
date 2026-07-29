@@ -705,6 +705,44 @@ last entry.
   A bundle with no loose files exports byte-for-byte as it did — the
   heading appears only where there is something under it.
 
+- **The archive carries the history.** Design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.8 ends "the history
+  becomes portable", and the archive carried the `index.md` of every
+  directory and no `log.md`: the ledger was readable only by calling the
+  instance that holds it, and a purge
+  ([0031](docs/design/0031-purge.md)) is the only thing that ever
+  removes a row from it. A `log.md` is written beside every `index.md`
+  now — the root's included — from the same renderer and the same
+  1000-line bound as the address, so a reader extracting the bundle and
+  a reader calling `GET /api/v1/bundle/{dir}/log.md` are not reading two
+  different histories, and from the export's own snapshot, so it
+  describes the same instant as the documents beside it.
+
+  An import still never reads one back (§2.3): what happened here is
+  this instance's observation, published the way `generated` and
+  `verified` are ([0009](docs/design/0009-provenance-portability.md)).
+
+- **A directory's `index.md` lists the files in it** (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.7). §3.7 names
+  three sections — subdirectories, concepts, files — and only the first
+  two were rendered, so a file at a path no concept shows was stored,
+  served at its own address, carried in the archive, and invisible in
+  the bundle's own navigation. It is listed now, under a `## Files`
+  heading, in all three places that render a listing: the generated
+  `index.md`, its JSON representation (`files[]`, so a web UI's
+  directory page can show them), and the copy the archive carries — the
+  same renderer, so a bundle's navigation does not depend on which asked.
+  `ochakai browse` prints them after the entries.
+
+  A subdirectory line still counts **concepts**, and a directory holding
+  nothing but files is still not a subdirectory: OKF's §8 listing is
+  navigation between concept documents, and a count mixing the kinds
+  would misdescribe every directory that has both. Asked about directly,
+  such a directory lists what it holds.
+
+  A bundle with no loose files exports byte-for-byte as it did — the
+  heading appears only where there is something under it.
+
 - `api/openapi.yaml` stopped promising fields the server never sent, and
   started declaring things it did. The contract test validates requests
   and responses against the spec, but JSON Schema only checks what is
