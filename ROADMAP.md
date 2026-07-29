@@ -13,6 +13,12 @@ The project is maintained by one person and stays small by refusing things, so
 the last section is the load-bearing one: knowing what ochakai will not do is
 more useful than a list of what it might.
 
+What those refusals are measured against is written down in
+[docs/surface.md](docs/surface.md): seven conditions ochakai exists to satisfy,
+and every surface that serves them, counted. A request that serves none of the
+seven is one this project will decline — it is fairer to say so up front than
+to leave it open.
+
 Priorities are open to input. Say what you need in
 [Discussions](https://github.com/na0fu3y/ochakai/discussions), or open an issue
 if the proposal is concrete.

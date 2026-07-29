@@ -35,11 +35,21 @@ is current, or a supersession recorded at only one end.
 
 What ochakai costs the person using it is its **surface** — the endpoints
 they can call, the tool schemas that spend their agent's context, the
-commands they have to learn — not the code behind it.
-[docs/surface.md](docs/surface.md) counts all three in one place, and
-`cmd/ochakai/surface_test.go` fails when the count and the build
-disagree, so an addition shows up as a heading moving from `(19)` to
-`(20)` instead of disappearing into a spec diff.
+commands they have to learn, the variables they have to set — not the
+code behind it. [docs/surface.md](docs/surface.md) counts all four in one
+place, and `cmd/ochakai/surface_test.go` fails when the count and the
+build disagree, so an addition shows up as a heading moving from `(19)`
+to `(20)` instead of disappearing into a spec diff.
+
+That document opens with the **seven conditions** ochakai exists to
+satisfy — the knowledge stays the user's, Google Cloud with no secrets,
+OKF v0.2, no forward-deployed engineer, usable from Claude Code, a small
+embeddable REST API, a measurable improvement loop. Read them before
+proposing anything a user would touch. **A proposal that serves none of
+the seven is one to decline**, and saying so is the more useful answer;
+naming which one it serves is where a proposal that survives begins.
+Serving a condition is necessary and not sufficient — every condition has
+infinitely many mechanisms that would serve it.
 
 **The default answer to a new feature is no.** Before writing code that
 widens a surface, answer that document's three questions in the PR
