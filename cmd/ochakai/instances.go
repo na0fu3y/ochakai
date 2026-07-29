@@ -172,7 +172,7 @@ func cmdUse(_ context.Context, args []string) error {
 func cmdWhoami(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
 		"whoami",
-		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nand whether the server is reachable.",
+		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nthe producer $OCHAKAI_PRODUCER declares for writes from this shell, if\nany, and whether the server is reachable.",
 		"  ochakai whoami\n  ochakai whoami --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := exactArgs(fs, args, 0); err != nil {
@@ -186,11 +186,12 @@ func cmdWhoami(ctx context.Context, args []string) error {
 		URL      string `json:"url"`
 		Source   string `json:"source"`
 		Identity string `json:"identity,omitempty"`
+		Producer string `json:"producer,omitempty"`
 		Auth     string `json:"auth,omitempty"`
 		Error    string `json:"error,omitempty"`
 		Health   string `json:"health"`
 		Mode     string `json:"mode,omitempty"`
-	}{URL: *target, Source: urlSource(fs)}
+	}{URL: *target, Source: urlSource(fs), Producer: os.Getenv("OCHAKAI_PRODUCER")}
 
 	c, err := newClient(ctx, *target)
 	if err != nil {
@@ -227,6 +228,12 @@ func cmdWhoami(ctx context.Context, args []string) error {
 			fmt.Printf("identity:  error: %s\n", report.Error)
 		} else {
 			fmt.Printf("identity:  %s (%s)\n", report.Identity, report.Auth)
+		}
+		if report.Producer != "" {
+			// What the writes from this shell will say made them
+			// (design doc 0052). A declaration nobody can see is one
+			// nobody notices is wrong.
+			fmt.Printf("producer:  %s\n", report.Producer)
 		}
 		fmt.Printf("health:    %s\n", report.Health)
 		if report.Mode != "" {

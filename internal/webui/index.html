@@ -13,7 +13,9 @@
      action and tree drag & drop), the draft review queue (sort=usage),
      the two feeds that empty by verifying — reported wrong (sort=failed)
      and verification age (sort=verified_at), reachable from the review
-     queue and #/search/reported-wrong — and OKF export.
+     queue and #/search/reported-wrong — how much each queue is holding
+     (design doc 0049), how the loop is going and what it could not
+     answer (design doc 0051) — and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
 <html lang="en">
@@ -94,6 +96,14 @@
   }
   .topnav a:hover { color: var(--text); text-decoration: none; }
   .topnav a.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+  /* How much is waiting, on the tab that leads to it (design doc 0049).
+     Absent rather than zero when there is nothing: a badge that is always
+     there is scenery, and the point is to be noticed. */
+  .topnav .waiting {
+    margin-left: .4rem; border-radius: 999px; padding: .02rem .42rem;
+    font-size: .72rem; font-weight: 700;
+    background: var(--accent-weak); color: var(--accent-strong);
+  }
   /* Narrow screens: brand + actions on the first row, nav tabs on their own row. */
   @media (max-width: 800px) {
     .topbar { flex-wrap: wrap; height: auto; padding-top: .55rem; gap: .5rem .8rem; }
@@ -447,7 +457,7 @@
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
     <a href="#/search" data-route="search">Search</a>
-    <a href="#/review" data-route="review">Review</a>
+    <a href="#/review" data-route="review">Review<span class="waiting" id="nav-waiting" hidden></span></a>
   </nav>
   <span class="spacer"></span>
 </header>
@@ -532,7 +542,7 @@ function fmtDate(s) {
 // The producer is shown for the same reason and with the same care: it is
 // what the caller said it was running, so a reviewer deciding whether to
 // trust a draft can see that a model wrote it — and which build (design
-// doc 0049).
+// doc 0052).
 function actorStr(a) {
   if (!a || !a.name) return '';
   return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name +
@@ -779,7 +789,6 @@ function route() {
       explore.ageFeed = rest[0] === 'verification-age';
       explore.expiredFeed = rest[0] === 'stale';
       explore.source = '';
-      explore.feedAll = false;
     } else if (rest[0] === 'in') {
       // Search scoped to a directory — where the tree's "Search here"
       // lands. A route rather than a click handler so it is a real link:
@@ -793,7 +802,6 @@ function route() {
       explore.source = decodeURIComponent(rest.slice(1).join('/'));
       explore.q = '';
       explore.failedFeed = explore.ageFeed = explore.expiredFeed = false;
-      explore.feedAll = false;
     } else if (rest.length === 0) {
       explore.source = '';
     }
@@ -820,7 +828,10 @@ view.addEventListener('click', e => {
 /* ============================== explore ============================== */
 
 // Filter state survives navigation within the session.
-const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, feedAll: false, verified: false, rejected: false };
+// loaded and cursor are the listing walk: the hits already on screen and
+// where the next page resumes, both reset by any change that restarts the
+// listing (design doc 0050 §2.1).
+const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false, rejected: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -924,7 +935,6 @@ function viewExplore() {
       const on = $(sel).checked;
       for (const [, k] of feeds) explore[k] = false;
       explore[key] = on;
-      explore.feedAll = false;
       viewExplore();
     });
   }
@@ -945,7 +955,9 @@ function debounce(fn, ms) {
 // detected below by the top score, where no useful floor exists.
 const WEAK_SCORE = 0.15;
 
-async function runSearch() {
+// append reads the next page of a feed and keeps what is already on
+// screen; every other call starts the listing over.
+async function runSearch(append = false) {
   const out = $('#results');
   if (!out) return;
   const p = new URLSearchParams();
@@ -978,10 +990,13 @@ async function runSearch() {
   // they are looking at, while "my scope and the shared one at once" is
   // the agent's question, asked in one call through REST or MCP.
   if (explore.prefix) p.append('prefix', explore.prefix);
-  // Search caps at 50 server-side; the feeds page larger (100, expandable
-  // to the server max of 1000 via the load-more note).
-  const limit = isFeed ? (explore.feedAll ? 1000 : 100) : 50;
+  // Search caps at 50 server-side; a feed reads 100 at a time and walks
+  // the rest with a cursor (design doc 0050 §2.1), so "load more" appends
+  // a page instead of asking for a bigger one.
+  const limit = isFeed ? 100 : 50;
   p.set('limit', String(limit));
+  if (append && explore.cursor) p.set('cursor', explore.cursor);
+  else { explore.loaded = []; explore.cursor = ''; }
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
   // A scope narrows every result below it, so it is stated above them
   // rather than only in the filter bar — which collapses on narrow
@@ -999,9 +1014,13 @@ async function runSearch() {
     runSearch();
   });
   try {
-    const { hits } = await api('/api/v1/knowledge?' + p);
+    const page = await api('/api/v1/knowledge?' + p);
     if (my !== runSearch._seq || out !== $('#results')) return; // stale response
-    if (!hits || !hits.length) {
+    // The cursor is the server's word for "there is more"; its absence
+    // ends the listing, and no count comes with either (0050 §2.3).
+    const hits = explore.loaded = explore.loaded.concat(page.hits || []);
+    explore.cursor = page.cursor || '';
+    if (!hits.length) {
       out.innerHTML = scopeNote + `<div class="empty">No knowledge found${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
       wireScope();
       return;
@@ -1026,16 +1045,18 @@ async function runSearch() {
       html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
         barely related, probably noise</summary>${weak.map(hitCard).join('')}</details>`;
     }
-    if (hits.length >= limit) {
-      html += isFeed && !explore.feedAll
-        ? `<div class="truncation-note">Showing the first ${limit} entries ·
-             <a href="#" id="feed-more">load up to 1000</a></div>`
-        : `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
-             (server cap) — narrow with filters or a more specific query.</div>`;
+    if (explore.cursor) {
+      html += `<div class="truncation-note">Showing ${hits.length} entries ·
+           <a href="#" id="feed-more">load more</a></div>`;
+    } else if (!isFeed && hits.length >= limit) {
+      // A search does not page: 50 is the whole contract, and the way on
+      // is a narrower question rather than a next page (0050 §2.2).
+      html += `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
+           (server cap) — narrow with filters or a more specific query.</div>`;
     }
     out.innerHTML = scopeNote + html;
     wireScope();
-    $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); explore.feedAll = true; runSearch(); });
+    $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
     out.innerHTML = `<div class="error-banner">Search failed: ${esc(e.message)}</div>`;
@@ -1049,7 +1070,7 @@ async function runSearch() {
 function cardThumbs(h) {
   const imgs = (h.attachments || []).filter(a => (a.media_type || '').startsWith('image/')).slice(0, 4);
   if (!imgs.length) return '';
-  const src = a => BASE + '/api/v1/attachments/' + idPath(h.id) + '/' + encodeURIComponent(a.name);
+  const src = a => BASE + '/api/v1/bundle/' + idPath(a.path);
   return `<div class="thumbs">${imgs.map(a =>
     `<img src="${src(a)}" alt="${esc(a.name)}" title="${esc(a.name)}" loading="lazy">`).join('')}</div>`;
 }
@@ -1542,8 +1563,13 @@ async function viewDetail(id) {
   // (the id's parent), or bundle-root when they start with "/".
   const lastSeg = entry.id.split('/').pop();
   const docDir = entry.id.includes('/') ? entry.id.slice(0, entry.id.lastIndexOf('/')) : '';
-  const attPath = name => '/api/v1/attachments/' + idPath(entry.id) + '/' + encodeURIComponent(name);
-  const attURL = name => BASE + attPath(name);
+  // A file is addressed by the path it lives at (design doc 0046 §3.3).
+  // Writing one from here puts it at the entry's canonical <id>/<name>;
+  // reading one follows the path the entry reported, which is where an
+  // imported file actually is.
+  const attPath = path => '/api/v1/bundle/' + idPath(path);
+  const attURL = path => BASE + attPath(path);
+  const canonicalPath = name => entry.id + '/' + name;
   const normalize = p => {
     const out = [];
     for (const seg of p.split('/')) {
@@ -1555,11 +1581,11 @@ async function viewDetail(id) {
   const resolveFile = ref => {
     const p = normalize(ref.startsWith('/') ? ref : (docDir ? docDir + '/' : '') + ref);
     const canonical = a => entry.id + '/' + a.name;
-    let hit = atts.find(a => p === (a.okf_path || canonical(a)) || p === canonical(a));
+    let hit = atts.find(a => p === a.path || p === canonical(a));
     // Forgiving fallback: names are unique within the entry, so a filename
     // match resolves references written against a layout we don't know.
     hit = hit || atts.find(a => a.name === ref.split('/').pop());
-    return hit ? attURL(hit.name) : null;
+    return hit ? attURL(hit.path || canonicalPath(hit.name)) : null;
   };
   // Links to other entries, resolved the way the server derives them from
   // this same body (design doc 0024): SPEC §6's two forms, bundle-absolute
@@ -1613,8 +1639,8 @@ async function viewDetail(id) {
       const cards = atts.map(a => {
         const isImage = (a.media_type || '').startsWith('image/');
         const thumb = isImage
-          ? `<a class="thumb" href="${attURL(a.name)}" target="_blank" rel="noopener"><img src="${attURL(a.name)}" alt="${esc(a.name)}" loading="lazy"></a>`
-          : `<a class="thumb thumb-file" href="${attURL(a.name)}" target="_blank" rel="noopener">${a.media_type === 'application/pdf' ? 'PDF' : 'TXT'}</a>`;
+          ? `<a class="thumb" href="${attURL(a.path)}" target="_blank" rel="noopener"><img src="${attURL(a.path)}" alt="${esc(a.name)}" loading="lazy"></a>`
+          : `<a class="thumb thumb-file" href="${attURL(a.path)}" target="_blank" rel="noopener">${a.media_type === 'application/pdf' ? 'PDF' : 'TXT'}</a>`;
         const ref = isImage ? `![${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})` : `[${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})`;
         return `
         <div class="card att-card">
@@ -1623,7 +1649,7 @@ async function viewDetail(id) {
             <span class="mono">${esc(a.name)}</span>
             <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
             <span class="meta">body reference: <code>${ref}</code></span>
-            <button class="btn small danger write-only" data-detach="${esc(a.name)}">Detach</button>
+            <button class="btn small danger write-only" data-detach="${esc(a.path)}" data-name="${esc(a.name)}">Detach</button>
           </div>
         </div>`;
       }).join('');
@@ -1654,17 +1680,17 @@ async function viewDetail(id) {
       if (!files.length) { toast('Choose files first.'); return; }
       try {
         for (const f of files) {
-          await api(attPath(f.name), { method: 'PUT', raw: f });
+          await api(attPath(canonicalPath(f.name)), { method: 'PUT', raw: f });
         }
         toast(files.length > 1 ? `Attached ${files.length} files.` : 'Attached.');
         viewDetail(entry.id);
       } catch (e) { toast('Attach failed: ' + e.message); }
     });
     body.querySelectorAll('[data-detach]').forEach(b => b.addEventListener('click', async () => {
-      const name = b.dataset.detach;
-      if (!confirm(`Detach ${name}? The change is kept as a revision.`)) return;
+      const path = b.dataset.detach;
+      if (!confirm(`Detach ${b.dataset.name}? The change is kept as a revision.`)) return;
       try {
-        await api(attPath(name), { method: 'DELETE' });
+        await api(attPath(path), { method: 'DELETE' });
         toast('Detached.');
         viewDetail(entry.id);
       } catch (e) { toast('Detach failed: ' + e.message); }
@@ -1851,15 +1877,59 @@ async function applyStatus(id, status) {
 // tenth re-check are the same call.
 async function verifyEntry(id) {
   await api('/api/v1/verify/' + idPath(id), { method: 'POST' });
+  refreshQueues();
   return true;
 }
 async function rejectEntry(id, note) {
   await api('/api/v1/reject/' + idPath(id), { method: 'POST', body: { note } });
+  refreshQueues();
   return true;
 }
 async function liftRejection(id) {
   await api('/api/v1/reject/' + idPath(id), { method: 'DELETE' });
+  refreshQueues();
   return true;
+}
+
+/* ============================== review queues ============================== */
+
+// How much work the three queues hold, as one call rather than three
+// listings (design doc 0049). The web UI is where the reviewing happens,
+// so the count belongs on the tab that leads to it: a queue going quiet
+// and a queue being empty look identical until somebody opens it.
+//
+// Refreshed at boot, when the review queue is opened, and after every
+// ruling or save — verifying, rejecting and editing are what move a
+// count (each queue empties differently: design doc 0049 §1).
+let waiting = null;
+
+async function refreshQueues() {
+  try {
+    waiting = (await api('/api/v1/queues')).queues;
+  } catch {
+    waiting = null; // a nudge that cannot load must not become an error banner
+  }
+  const badge = $('#nav-waiting');
+  const total = waiting ? waiting.drafts + waiting.reported_wrong + waiting.past_expiry : 0;
+  badge.textContent = total;
+  badge.hidden = !total;
+  badge.title = total ? `${total} waiting: ${waiting.drafts} drafts, ${waiting.reported_wrong} reported wrong, ${waiting.past_expiry} past their expiry` : '';
+  const strip = $('#queue-strip');
+  if (strip) strip.innerHTML = queueStrip();
+}
+
+// The same three numbers as links into the feed each one counts. Zero is
+// worth printing here (unlike on the tab): on the review page it is the
+// answer to "is there anything else", and it is an answer nothing gave
+// before.
+function queueStrip() {
+  if (!waiting) return '';
+  return [
+    ['#/review', waiting.drafts, waiting.drafts === 1 ? 'draft' : 'drafts'],
+    ['#/search/reported-wrong', waiting.reported_wrong, 'reported wrong'],
+    ['#/search/stale', waiting.past_expiry, 'past expiry'],
+  ].map(([href, n, label]) =>
+    `<a class="badge${n ? ' draft' : ''}" href="${href}">${n} ${label}</a>`).join(' ');
 }
 
 /* ============================== review queue ============================== */
@@ -1868,7 +1938,9 @@ async function liftRejection(id) {
 // inventory case (nobody's finding it; a candidate to drop). Sort=usage
 // already sinks these to the bottom; the toggle isolates them.
 const STALE_DAYS = 14;
-const review = { staleOnly: false, all: false };
+// loaded and cursor walk the draft queue a page at a time (design doc
+// 0050 §2.1): the queue is a ledger, so it has an end rather than a cap.
+const review = { staleOnly: false, loaded: [], cursor: '' };
 
 function viewReview() {
   view.innerHTML = `
@@ -1884,13 +1956,59 @@ function viewReview() {
     <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying an entry empties it from both.
     A third, <a href="#/search/stale">stale</a>, lists entries past the expiry their author declared — that one is cleared by
     editing the entry, not by verifying.</p>
+    <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
         stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
+      <span class="grow"></span>
+      <span id="queue-strip" style="display:flex;gap:.35rem">${queueStrip()}</span>
     </div>
     <div id="review-results"><div class="empty">…</div></div>`;
   $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
+  refreshQueues();
   runReview();
+  loadLoopStats();
+}
+
+// The loop as the instance sees it (design doc 0051), on the page where
+// the person who runs it already is. Four numbers and the questions that
+// came back empty — not a dashboard: what a curator can act on this
+// morning, which is what the queues below are for.
+//
+// Failure to load is silent. Stats are a help, and a review queue that
+// refuses to draw because a tally is unavailable would be worse than one
+// with no tally.
+async function loadLoopStats() {
+  const out = $('#loop-stats');
+  if (!out) return;
+  let s;
+  try { s = await api('/api/v1/stats'); } catch (e) { return; }
+  if (out !== $('#loop-stats')) return;
+  const trust = s.entries?.trust || {};
+  const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
+  const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
+  out.innerHTML = `
+    <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
+      <div class="tile"><div class="num">${s.entries?.total ?? 0}</div><div class="lbl">entries</div></div>
+      <div class="tile"><div class="num">${confirmed}</div><div class="lbl">confirmed by somebody</div></div>
+      <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
+      <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
+        <div class="lbl">searches that found nothing</div></div>
+    </div>` + (gaps.length ? `
+    <details style="max-width:48rem;margin:0 0 1.2rem">
+      <summary style="cursor:pointer;color:var(--muted)">Asked for, not found — what to write next</summary>
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">Searches from the last ${s.window_days} days
+      that returned nothing, most-asked first. Not a queue anything empties: it stops appearing when the answer exists.</p>
+      ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
+        <span class="badge">${g.count}×</span>
+        <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}
+    </details>` : '');
+  // A gap is a question; clicking it asks it again, which is how a
+  // curator sees what is there before writing what is not.
+  out.querySelectorAll('[data-gap]').forEach(a => a.addEventListener('click', () => {
+    explore.q = a.dataset.gap;
+    explore.failedFeed = explore.ageFeed = explore.expiredFeed = false;
+  }));
 }
 
 function isStaleDraft(h) {
@@ -1898,28 +2016,33 @@ function isStaleDraft(h) {
   return ((h.usage && h.usage.search_hits) || 0) === 0 && age !== null && age >= STALE_DAYS;
 }
 
-async function runReview() {
+// append reads the next page of the queue and keeps the cards already on
+// screen; every other call starts it over.
+async function runReview(append = false) {
   const out = $('#review-results');
   if (!out) return;
   const my = runReview._seq = (runReview._seq || 0) + 1;
-  const limit = review.all ? 1000 : 100;
+  const limit = 100;
+  let url = '/api/v1/knowledge?sort=usage&status=draft&limit=' + limit;
+  if (append && review.cursor) url += '&cursor=' + encodeURIComponent(review.cursor);
+  else { review.loaded = []; review.cursor = ''; }
   try {
-    const { hits } = await api('/api/v1/knowledge?sort=usage&status=draft&limit=' + limit);
+    const page = await api(url);
     if (my !== runReview._seq || out !== $('#review-results')) return; // stale response
-    let list = hits || [];
+    const hits = review.loaded = review.loaded.concat(page.hits || []);
+    review.cursor = page.cursor || '';
+    let list = hits;
     if (review.staleOnly) list = list.filter(isStaleDraft);
     if (!list.length) {
       out.innerHTML = `<div class="empty">${review.staleOnly ? 'No stale drafts — nothing gathering dust.' : 'No drafts awaiting review.'}</div>`;
       return;
     }
     out.innerHTML = list.map(reviewCard).join('')
-      + ((hits || []).length >= limit
-        ? (review.all
-          ? `<div class="truncation-note">Showing the first ${limit} drafts (server cap).</div>`
-          : `<div class="truncation-note">Showing the first ${limit} drafts ·
-               <a href="#" id="review-more">load up to 1000</a></div>`)
+      + (review.cursor
+        ? `<div class="truncation-note">Showing ${list.length} drafts ·
+             <a href="#" id="review-more">load more</a></div>`
         : '');
-    $('#review-more')?.addEventListener('click', e => { e.preventDefault(); review.all = true; runReview(); });
+    $('#review-more')?.addEventListener('click', e => { e.preventDefault(); runReview(true); });
     wireReviewActions(out);
   } catch (e) {
     if (my !== runReview._seq || out !== $('#review-results')) return;
@@ -2112,6 +2235,7 @@ async function viewEditor(id, prefix = '') {
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
       refreshTree();
+      refreshQueues(); // an edit is what clears the past-expiry queue (design doc 0037 §2.2)
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
@@ -2140,6 +2264,7 @@ $('#side-toggle').addEventListener('click', () => {
 });
 
 refreshTree();
+refreshQueues();
 route();
 </script>
 </body>

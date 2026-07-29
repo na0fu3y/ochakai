@@ -400,7 +400,7 @@ func TestTypesHintCoversEveryBuiltin(t *testing.T) {
 
 // SPEC §7's third actor form, as ochakai admits it: software and version,
 // told apart from the two identity forms by the slash it uses and the
-// colon it must not (design doc 0049 §3.2).
+// colon it must not (design doc 0052 §3.2).
 func TestValidProducer(t *testing.T) {
 	for _, s := range []string{
 		"insightflow/1.4.0",
@@ -430,7 +430,7 @@ func TestValidProducer(t *testing.T) {
 }
 
 // Provenance reads as one sentence on every surface, and each clause is
-// dropped when there is nothing to say (design docs 0027, 0049 §3.5).
+// dropped when there is nothing to say (design docs 0027, 0052 §3.5).
 func TestActorString(t *testing.T) {
 	for _, tc := range []struct {
 		a    Actor

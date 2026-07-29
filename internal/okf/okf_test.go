@@ -614,7 +614,7 @@ func TestViewOfHandsBackTheStoredDocument(t *testing.T) {
 
 // The producer goes out beside by, not in it: by stays SPEC §7's actor so
 // a consumer keying trust off the human: prefix still reads it, and the
-// self-declared name is legible as its own key (design doc 0049 §3.5).
+// self-declared name is legible as its own key (design doc 0052 §3.5).
 func TestDocumentProducerIsASiblingOfBy(t *testing.T) {
 	entries := sample()
 	k := &entries[1]

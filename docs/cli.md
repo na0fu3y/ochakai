@@ -23,6 +23,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search [query]          search knowledge; verified entries rank higher
+  queues                  how much work each review queue is holding
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full entries)
   get <id>                print one entry as an OKF document
@@ -36,6 +37,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
+  stats                   show the loop for the whole base (review queues, gaps)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list an entry's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
@@ -166,7 +168,7 @@ Flags:
   -budget int
     	cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under "outline"
   -fm key=value
-    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead
+    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
   -json
     	print the raw JSON response
   -limit int
@@ -325,7 +327,12 @@ under that directory — the bundle keeps its own namespace. Works
 with any OKF bundle, not just ochakai's own.
 A file that cannot be stored at all — empty, oversized, or at a path
 ochakai cannot address — is skipped; a value read differently than
-it was written is a note and the entry still imports. Both are
+it was written is a note and the entry still imports. A document
+that says who generated or confirmed it is one of those: the keys
+are kept as the document's own claim, under `received`, and never
+become this instance's provenance — so a bundle from another
+instance imports with a note per entry, while one exported from
+here imports silently. Both are
 reported and neither fails the command, because a consumer takes the
 document rather than rejecting it. --strict is the opposite posture,
 for a sync nobody watches: a bundle that is not read exactly as
@@ -433,6 +440,41 @@ Flags:
 Examples:
   ochakai delete terms/obsolete-kpi
   ochakai purge terms/obsolete-kpi
+```
+
+## ochakai queues
+
+```
+Usage: ochakai queues [flags]
+
+Print how much work each review queue is holding: drafts waiting to be
+published or turned down, entries whose failure reports are unanswered,
+entries past the expiry their author declared. One line per queue —
+count, name, and the command that lists it — so the next step is the
+text on the line.
+The verification-age feed is not here: it ranks every verified entry
+rather than holding the ones that need something, so its size is the
+size of the knowledge base and never reaches zero.
+With --exit-code the command exits 2 while any queue is non-empty and
+0 when all three are, which is how a scheduled job goes red on work
+nobody has picked up. An error still exits 1, so "unreachable" cannot
+be read as "nothing to do".
+
+Flags:
+  -exit-code
+    	exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI
+  -json
+    	print the raw JSON response
+  -prefix path
+    	count only entries under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai queues
+  ochakai queues --prefix teams/growth      # our subtree only
+  ochakai queues --json | jq .queues.drafts
+  ochakai queues --exit-code                # in CI: red while somebody owes a review
 ```
 
 ## ochakai reembed
@@ -563,10 +605,15 @@ or with any --sort. --source narrows to the entries citing one resource
 (the reverse of sources[].resource); --prefix narrows to the entries
 living under a path, which is how a team's own knowledge is told apart
 from the company-wide vocabulary.
+A listing that has more behind it prints the way on to stderr; pass it
+back with --cursor to read the next page. A search prints none: it is
+bounded by --limit, and a ranking has no page two.
 
 Flags:
+  -cursor cursor
+    	resume a listing where the last page ended: the cursor the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit
   -fm key=value
-    	filter by a frontmatter key=value, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead
+    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
   -json
     	print the raw JSON response
   -limit int
@@ -599,6 +646,40 @@ Examples:
   ochakai search --sort stale_after                         # past their declared expiry
   ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
+```
+
+## ochakai stats
+
+```
+Usage: ochakai stats [flags]
+
+Show the improvement loop as the instance sees it: what the knowledge
+base is made of now, how much each queue is holding, what review did
+lately, what callers reported, and what they searched for and did not
+find. `usage` measures one entry; this measures the base.
+
+One line per number, so it composes: cron it and diff the output, or
+grep one line out of it for a prompt or a dashboard. The gap lines are
+the questions that came back empty, most-asked first — the list of what
+to write next.
+
+The three queue numbers are the ones `ochakai queues` prints; that is
+the command with the next step on each line and the --exit-code a
+scheduled job goes red on. This one is the whole picture, not the
+nudge.
+
+Flags:
+  -days int
+    	how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)
+  -json
+    	print JSON
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai stats
+  ochakai stats --days 7
+  ochakai stats --json | jq .misses.queries
 ```
 
 ## ochakai ui
@@ -728,7 +809,8 @@ Usage: ochakai whoami [flags]
 Print which server client commands target and where that choice came
 from (--url / $OCHAKAI_URL / `ochakai use`), the identity your
 credentials present (the server's actor resolution is authoritative),
-and whether the server is reachable.
+the producer $OCHAKAI_PRODUCER declares for writes from this shell, if
+any, and whether the server is reachable.
 
 Flags:
   -json

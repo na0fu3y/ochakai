@@ -14,8 +14,10 @@ import (
 // (YAML frontmatter + markdown body) into a knowledge entry, so
 // `ochakai get` output round-trips through `ochakai update`. Server-owned
 // keys (generated, verified, created_by, rejected_*, and their v0.1
-// spellings) are ignored — provenance comes from authentication, never
-// from the payload (design doc 0009). Links are not read here either:
+// spellings) never reach a ledger — provenance comes from authentication,
+// never from the payload (design doc 0009) — but they are not thrown away
+// either: what the document said about itself is kept as a claim under
+// ClaimKey (MoveServerKeys). Links are not read here either:
 // they are derived from the body's markdown links when the entry is
 // written (design doc 0024), so a "# Links" section is just prose that
 // happens to contain links, and is picked up as such.
@@ -34,17 +36,22 @@ func Parse(doc []byte) (d *Doc, notes []string, err error) {
 	return d, notes, nil
 }
 
-// Doc is one parsed OKF document: the knowledge it carries, plus the one
-// thing about the trust family an importer acts on.
+// Doc is one parsed OKF document: the knowledge it carries, plus what the
+// trust family it arrived with turned into.
 type Doc struct {
 	domain.Knowledge
 	// Verified reports that the document carried a verified key — or, in a
 	// v0.1 document, verified_at. Under SPEC §5.3 the presence of that key
-	// is the entire trust signal, and it is all that is read: who verified
-	// and when are this instance's observations, never a document's claim
-	// (design docs 0009, 0036 §2.2). An importer turns a true here into a
-	// verification of its own, by whoever ran the import.
+	// is the entire trust signal, and it is what decides how "stable"
+	// lands here (design doc 0036 §3.4). Who verified and when stay out of
+	// this instance's ledger: they are an assertion the document makes
+	// about itself, kept as such under ClaimKey (design doc 0046 §2.2).
 	Verified bool
+	// Claimed names the server-owned keys that moved under ClaimKey, in
+	// document order, and is empty when none did. A caller that can tell a
+	// claim from its own observation (IsObservation) reports it — SPEC §11
+	// asks a consumer to surface what it read differently than written.
+	Claimed []string
 }
 
 // yamlScalar renders decoded YAML timestamps back as text, recursing into
@@ -86,7 +93,11 @@ func yamlScalar(v any) any {
 //
 // Server-owned keys are dropped: they are not in a stored document
 // (design doc 0043 §2.2), and a filter that could match on one would be
-// asking the index about provenance, which is the ledgers' answer.
+// asking the index about provenance, which is the ledgers' answer. The
+// claim under ClaimKey is not one of them — it is an ordinary key of the
+// stored document, and indexing what a document said about itself is not
+// indexing what this instance observed. Nothing queries it: `fm.` names
+// the keys OKF defines (design doc 0047), and this is ochakai's own.
 //
 // A document whose frontmatter will not parse yields an empty map rather
 // than an error. Storing an entry never depends on being able to index
@@ -120,8 +131,10 @@ func Frontmatter(doc []byte) map[string]any {
 // usage_window, the lifecycle pair, and the Attested Computation contract)
 // \u2014 map to Knowledge fields. Server-owned keys (generated, verified,
 // created_by, rejected_*, and the v0.1 spellings timestamp / verified_by /
-// verified_at) are ignored \u2014 provenance comes from authentication (design
-// doc 0009). Everything else is a producer-defined extension key (OKF SPEC
+// verified_at) map to no field \u2014 provenance comes from authentication
+// (design doc 0009) \u2014 and move under ClaimKey, where they are the
+// document's claim rather than this instance's observation
+// (MoveServerKeys). Everything else is a producer-defined extension key (OKF SPEC
 // §4.1) and is kept as-is in attrs, so a foreign key survives a round-trip
 // at its original top-level position. A nested "attrs" map (the shape
 // older ochakai exports wrote) is folded in for backward compatibility.
@@ -133,7 +146,8 @@ func Frontmatter(doc []byte) map[string]any {
 // The one thing read out of the trust family is whether a verified key is
 // present at all: under SPEC §5.3 that, not the status, is what says a
 // concept was confirmed, so it decides how "stable" lands here (design doc
-// 0036 §3.4). Its actors and timestamps are still not read.
+// 0036 §3.4). Its actors and timestamps are still not read into a ledger:
+// they become a claim beside it, which nothing derives trust from.
 func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	s := strings.TrimPrefix(string(doc), "\ufeff")
 	// OKF specifies UTF-8 markdown but not line endings; normalize CRLF so
@@ -282,7 +296,17 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		notes = append(notes, "an Attested Computation without a runtime cannot be executed by a consumer (SPEC §10.2)")
 	}
 
-	return &Doc{Verified: hasVerified, Knowledge: domain.Knowledge{
+	// What was received, with the keys this instance owns moved under
+	// ClaimKey: the document is stored as its writer wrote it (design doc
+	// 0046 §2.2), the fields above are the index derived from it, and what
+	// the document said about who generated and confirmed it stays in the
+	// bytes as a claim rather than being destroyed.
+	stored, claimed, claim := MoveServerKeys(NormalizeText([]byte(s)))
+	if claim != nil {
+		setAttr(ClaimKey, claim)
+	}
+
+	return &Doc{Verified: hasVerified, Claimed: claimed, Knowledge: domain.Knowledge{
 		Type:        typ,
 		ID:          fm.id,
 		Title:       fm.title,
@@ -301,10 +325,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		Attester:    att,
 		Attrs:       attrs,
 		Body:        strings.TrimSpace(body),
-		// What was received, minus the keys this instance owns: the
-		// document is stored as its writer wrote it (design doc 0046
-		// §2.2), and the fields above are the index derived from it.
-		Doc: string(StripServerKeys(NormalizeText([]byte(s)))),
+		Doc:         string(stored),
 	}}, fm.typ, notes, nil
 }
 

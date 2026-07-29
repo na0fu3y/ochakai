@@ -16,7 +16,14 @@ Everything a client can touch:
 
 - **REST** — paths, request and response shapes, status codes. `0.13.0`
   moved the knowledge out of `/context`'s `hits`; `0.14.0` moved seven
-  keys out of `attrs` into envelope fields.
+  keys out of `attrs` into envelope fields. Right now several addresses
+  answer for the same object while
+  [0046](design/0046-bundle-address-space.md) §3.5's fold is in flight:
+  **build on `/api/v1/bundle/{path}`**, which is the one that survives
+  it. The addresses it replaces are marked `deprecated` in
+  [api/openapi.yaml](../api/openapi.yaml) and name their successor;
+  where no successor is serving yet, the operation says so and carries
+  no such mark.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now.
 - **The CLI** — commands, flags, and the shape of what they print.

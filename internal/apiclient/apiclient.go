@@ -48,7 +48,7 @@ func New(ctx context.Context, baseURL string) (*Client, error) {
 
 // SetProducer declares the software this client runs as, in SPEC §7's
 // "<producer>/<version>" form. It rides on every request and the server
-// records it beside the authenticated actor (design doc 0049) — it names
+// records it beside the authenticated actor (design doc 0052) — it names
 // what wrote, never who, so it neither replaces nor weakens the identity
 // the ID token carries. Unset by default: a client that has nothing to
 // declare declares nothing.
@@ -152,13 +152,27 @@ type SearchParams struct {
 	// still hides rejected entries — asking for them is opt-in, which is
 	// how an agent checks whether a proposal was already turned down.
 	Trust []string
-	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
+	// Which keys those are is the server's answer (design doc 0047).
 	FM       map[string]string
 	Rejected *bool
 	Limit    int
+	// Cursor resumes a listing where the previous page ended: pass back
+	// the Cursor of that page, with the same Sort and filters (design doc
+	// 0050 §2.1). The server refuses it beside a Query — a search is
+	// bounded by Limit, and a ranking has no page to resume from.
+	Cursor string
 }
 
-func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit, error) {
+// SearchResult is one page of the query surface. Cursor is set only when
+// a listing has more entries behind this page; a search never sets it,
+// and no total count comes with either (design doc 0050 §2.3).
+type SearchResult struct {
+	Hits   []domain.SearchHit `json:"hits"`
+	Cursor string             `json:"cursor,omitempty"`
+}
+
+func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, error) {
 	q := url.Values{}
 	if p.Query != "" {
 		q.Set("q", p.Query)
@@ -193,11 +207,27 @@ func (c *Client) Search(ctx context.Context, p SearchParams) ([]domain.SearchHit
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
 	}
-	var out struct {
-		Hits []domain.SearchHit `json:"hits"`
+	if p.Cursor != "" {
+		q.Set("cursor", p.Cursor)
 	}
+	var out SearchResult
 	err := c.doJSON(ctx, http.MethodGet, "/api/v1/knowledge", q, nil, &out)
-	return out.Hits, err
+	return &out, err
+}
+
+// Queues returns how much work each review queue is holding — the three
+// feeds counted rather than listed (design doc 0049). Prefixes scopes it
+// to a subtree, as it scopes a search.
+func (c *Client) Queues(ctx context.Context, prefixes []string) (domain.QueueCounts, error) {
+	q := url.Values{}
+	for _, p := range prefixes {
+		q.Add("prefix", p)
+	}
+	var out struct {
+		Queues domain.QueueCounts `json:"queues"`
+	}
+	err := c.doJSON(ctx, http.MethodGet, "/api/v1/queues", q, nil, &out)
+	return out.Queues, err
 }
 
 // ContextResult mirrors the /api/v1/context response: the ranking plus
@@ -227,7 +257,8 @@ type ContextParams struct {
 	// SearchParams. Rejected has no counterpart here: a context pack never
 	// carries knowledge somebody turned down.
 	Trust []string
-	// FM narrows by frontmatter key, sent as fm.<key>=<value>.
+	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
+	// Which keys those are is the server's answer (design doc 0047).
 	FM       map[string]string
 	Limit    int
 	MinScore float64
@@ -461,17 +492,12 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 	return &moved, nil
 }
 
-// Attach uploads data as an attachment of the entry (PUT
-// /api/v1/attachments/{id}/{name}), replacing any attachment of
-// the same name. okfPath preserves a foreign bundle location for
-// round-trips; "" for attachments born here. The server sniffs the media
-// type from the bytes.
-func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []byte) (*domain.Attachment, error) {
-	var q url.Values
-	if okfPath != "" {
-		q = url.Values{"okf_path": {okfPath}}
-	}
-	resp, err := c.doRaw(ctx, http.MethodPut, attachmentPath(id, name), q,
+// Attach writes data as a file of the entry, at the canonical
+// <id>/<name> (PUT /api/v1/bundle/{path}). A file that lives elsewhere
+// in the bundle is written with PutBundleFile, at the path it lives at —
+// there is one address for a file, and it is where the file is.
+func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.Attachment, error) {
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(id+"/"+name), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -484,11 +510,11 @@ func (c *Client) Attach(ctx context.Context, id, name, okfPath string, data []by
 	return &att, nil
 }
 
-// Attachment fetches one attachment's bytes and media type (GET
-// /api/v1/attachments/{id}/{name}). Full metadata travels with
-// the entry (Get → Knowledge.Attachments).
-func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, mediaType string, err error) {
-	resp, err := c.get(ctx, attachmentPath(id, name), nil)
+// Attachment fetches one file's bytes and media type by its bundle path
+// (GET /api/v1/bundle/{path}). Metadata travels with the entry that
+// shows it (Get → Knowledge.Attachments), each carrying its path.
+func (c *Client) Attachment(ctx context.Context, path string) (data []byte, mediaType string, err error) {
+	resp, err := c.get(ctx, bundlePath(path), nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -500,13 +526,13 @@ func (c *Client) Attachment(ctx context.Context, id, name string) (data []byte, 
 	return data, resp.Header.Get("Content-Type"), nil
 }
 
-// Detach removes an attachment (DELETE /api/v1/attachments/{id}/{name}).
-func (c *Client) Detach(ctx context.Context, id, name string) error {
-	return c.doJSON(ctx, http.MethodDelete, attachmentPath(id, name), nil, nil, nil)
+// Detach removes the file at a bundle path (DELETE /api/v1/bundle/{path}).
+func (c *Client) Detach(ctx context.Context, path string) error {
+	return c.doJSON(ctx, http.MethodDelete, bundlePath(path), nil, nil, nil)
 }
 
-func attachmentPath(id, name string) string {
-	return escapedPath("/api/v1/attachments/", id) + "/" + url.PathEscape(name)
+func bundlePath(p string) string {
+	return escapedPath("/api/v1/bundle/", p)
 }
 
 // Usage fetches usage totals for one entry (GET /api/v1/usage/{id}):
@@ -531,6 +557,22 @@ func (c *Client) ReportOutcome(ctx context.Context, id, outcome, note string) (*
 		return nil, err
 	}
 	return &u, nil
+}
+
+// Stats fetches the instance's view of the improvement loop
+// (GET /api/v1/stats): what the base is made of, what review did in the
+// last days days, what callers reported, and what they searched for and
+// did not find. days 0 leaves the server's default (30).
+func (c *Client) Stats(ctx context.Context, days int) (*domain.Stats, error) {
+	var q url.Values
+	if days != 0 {
+		q = url.Values{"days": {strconv.Itoa(days)}}
+	}
+	var st domain.Stats
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/stats", q, nil, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
 }
 
 // Export streams the knowledge base as an OKF tar.gz bundle. The caller
@@ -685,7 +727,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, query url.Valu
 // references, or a markdown file with no type, which the server stores
 // as a file rather than reading as a concept.
 func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) error {
-	resp, err := c.doRaw(ctx, http.MethodPut, "/api/v1/bundle/"+path, nil,
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(path), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return err

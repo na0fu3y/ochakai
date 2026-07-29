@@ -39,8 +39,8 @@ func TestReadOnlyRefusesWritesWith403(t *testing.T) {
 		{http.MethodPost, "/api/v1/usage/m", `{"outcome":"worked"}`, "application/json"},
 		{http.MethodPost, "/api/v1/move", `{"from":"m","to":"n"}`, "application/json"},
 		{http.MethodPost, "/api/v1/reembed", "", ""},
-		{http.MethodPut, "/api/v1/attachments/m/f.txt", "x", "application/json"},
-		{http.MethodDelete, "/api/v1/attachments/m/f.txt", "", ""},
+		{http.MethodPut, "/api/v1/bundle/m/f.txt", "x", "application/json"},
+		{http.MethodDelete, "/api/v1/bundle/m/f.txt", "", ""},
 	} {
 		req, err := http.NewRequest(w.method, srv.URL+w.path, strings.NewReader(w.body))
 		if err != nil {

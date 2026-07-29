@@ -27,6 +27,7 @@ import (
 
 var clientCommands = map[string]func(context.Context, []string) error{
 	"search":    cmdSearch,
+	"queues":    cmdQueues,
 	"browse":    cmdBrowse,
 	"context":   cmdContext,
 	"get":       cmdGet,
@@ -41,6 +42,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"attach":    cmdAttach,
 	"detach":    cmdDetach,
 	"usage":     cmdUsage,
+	"stats":     cmdStats,
 	"report":    cmdReport,
 	"revisions": cmdRevisions,
 	"log":       cmdLog,
@@ -56,12 +58,18 @@ var clientCommands = map[string]func(context.Context, []string) error{
 }
 
 // runClient dispatches a client command and maps errors to exit codes:
-// 0 success, 1 error.
+// 0 success, 1 error, 2 "the command ran and the answer is no"
+// (`queues --exit-code` with work waiting). Two codes rather than one
+// because a scheduled job must not read "the server is unreachable" as
+// "the queues are empty" — both are non-zero, and only one of them means
+// somebody has reviewing to do.
 func runClient(name string, args []string) int {
 	err := clientCommands[name](context.Background(), args)
 	switch {
 	case err == nil, errors.Is(err, flag.ErrHelp):
 		return 0
+	case errors.Is(err, errWorkPending):
+		return 2
 	case errors.Is(err, errReported):
 		return 1
 	}
@@ -71,6 +79,11 @@ func runClient(name string, args []string) int {
 
 // errReported means the FlagSet already printed the problem.
 var errReported = errors.New("usage error")
+
+// errWorkPending is not a failure: the command did what it was asked and
+// is reporting the answer through the exit status, the way `git diff
+// --exit-code` and `grep -q` do. Nothing is printed for it.
+var errWorkPending = errors.New("work is waiting")
 
 // helpOutput is where a command's own help goes. It is os.Stderr, which
 // is where the flag package would have put it anyway; naming it is what
@@ -166,7 +179,7 @@ func newClient(ctx context.Context, url string) (*apiclient.Client, error) {
 	// An environment variable rather than a flag: the caller that has
 	// something to declare here is an agent shelling out to the CLI, and
 	// it sets the variable once for the process instead of remembering a
-	// flag on every subcommand (design doc 0049 §3.3). A person running
+	// flag on every subcommand (design doc 0052 §3.3). A person running
 	// `ochakai` by hand is running no producer and sets nothing.
 	if p := os.Getenv("OCHAKAI_PRODUCER"); p != "" {
 		if !domain.ValidProducer(p) {
@@ -223,6 +236,14 @@ func statusList() string {
 // to the second vocabulary OKF gives ochakai).
 func trustList() string { return strings.ReplaceAll(domain.TrustsHint(), ", ", "|") }
 
+// fmUsage describes --fm from the vocabulary the server enforces, so the
+// help cannot promise a key a request would be refused for (design doc
+// 0047 §2).
+var fmUsage = "filter by an OKF frontmatter `key=value`, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (" +
+	strings.Join(domain.AskableFrontmatterKeys(), ", ") + "); a value spelling a number or a boolean matches the typed one too " +
+	"(--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and " +
+	"type, status, tags, sources and stale_after have filters of their own that answer from a column instead"
+
 // fmPairs turns repeated --fm key=value flags into the map the API takes.
 // A flag with no "=" is a mistake worth naming: silently ignoring it
 // would answer a narrower question than the caller asked, without saying
@@ -254,7 +275,7 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified entries rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists entries whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes an entry out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists entries whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the entry to re-declare an expiry.\n--source and --prefix are filters, not modes: both combine with a query\nor with any --sort. --source narrows to the entries citing one resource\n(the reverse of sources[].resource); --prefix narrows to the entries\nliving under a path, which is how a team's own knowledge is told apart\nfrom the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -265,10 +286,11 @@ func cmdSearch(ctx context.Context, args []string) error {
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
-	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
+	fs.Var(&fm, "fm", fmUsage)
 	rejected := fs.Bool("rejected", false, "only entries a human turned down — how you check whether a proposal was already rejected. Without it, rejected entries stay out of results")
 	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
+	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -288,18 +310,18 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	hits, err := c.Search(ctx, apiclient.SearchParams{
+	page, err := c.Search(ctx, apiclient.SearchParams{
 		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
 		Source: *source, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
-		Trust: trust, Rejected: optBool(*rejected), FM: pairs,
+		Trust: trust, Rejected: optBool(*rejected), FM: pairs, Cursor: *cursor,
 	})
 	if err != nil {
 		return err
 	}
 	if *asJSON {
-		return printJSON(map[string]any{"hits": hits})
+		return printJSON(page)
 	}
-	for _, h := range hits {
+	for _, h := range page.Hits {
 		lead := fmt.Sprintf("%.3f", h.Score)
 		switch *sortBy {
 		case "verified_at":
@@ -325,6 +347,66 @@ func cmdSearch(ctx context.Context, args []string) error {
 			line += " — " + h.Description
 		}
 		fmt.Println(line)
+	}
+	// The way on, on stderr: stdout stays one hit per line, so a pipe
+	// reads the same whether or not there is another page (design doc
+	// 0050 §4). The command does not walk the pages itself — --limit is
+	// the bound the caller set, and a listing that grew past it on its
+	// own would surprise whoever piped it into head.
+	if page.Cursor != "" {
+		fmt.Fprintf(os.Stderr, "note: more entries — rerun with --cursor %s\n", page.Cursor)
+	}
+	return nil
+}
+
+func cmdQueues(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"queues",
+		"Usage: ochakai queues [flags]\n\nPrint how much work each review queue is holding: drafts waiting to be\npublished or turned down, entries whose failure reports are unanswered,\nentries past the expiry their author declared. One line per queue —\ncount, name, and the command that lists it — so the next step is the\ntext on the line.\nThe verification-age feed is not here: it ranks every verified entry\nrather than holding the ones that need something, so its size is the\nsize of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any queue is non-empty and\n0 when all three are, which is how a scheduled job goes red on work\nnobody has picked up. An error still exits 1, so \"unreachable\" cannot\nbe read as \"nothing to do\".",
+		"  ochakai queues\n  ochakai queues --prefix teams/growth      # our subtree only\n  ochakai queues --json | jq .queues.drafts\n  ochakai queues --exit-code                # in CI: red while somebody owes a review\n")
+	var prefixes repeated
+	fs.Var(&prefixes, "prefix", "count only entries under this `path`, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed)")
+	exitCode := fs.Bool("exit-code", false, "exit 2 while any queue is non-empty (0 when all are empty, 1 on error) — for cron and CI")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		fs.Usage()
+		return errReported
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	counts, err := c.Queues(ctx, prefixes)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		if err := printJSON(map[string]any{"queues": counts}); err != nil {
+			return err
+		}
+	} else {
+		scope := ""
+		for _, p := range prefixes {
+			scope += " --prefix " + p
+		}
+		for _, q := range []struct {
+			count int64
+			name  string
+			lists string
+		}{
+			{counts.Drafts, "drafts", "--sort usage --status draft"},
+			{counts.ReportedWrong, "reported wrong", "--sort failed"},
+			{counts.PastExpiry, "past expiry", "--sort stale_after"},
+		} {
+			fmt.Printf("%d\t%s\tochakai search %s%s\n", q.count, q.name, q.lists, scope)
+		}
+	}
+	if *exitCode && counts.Total() > 0 {
+		return errWorkPending
 	}
 	return nil
 }
@@ -388,7 +470,7 @@ func cmdContext(ctx context.Context, args []string) error {
 	var trust repeated
 	fs.Var(&trust, "trust", "filter by who confirmed the entry: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	var fm repeated
-	fs.Var(&fm, "fm", "filter by a frontmatter `key=value`, exactly (repeatable, AND-ed) — for keys with no flag of their own, a producer's or a later OKF version's; a value spelling a number or a boolean matches the typed one too (--fm required=true); refused for type, status, tags, sources and stale_after, which have filters of their own that answer from a column instead")
+	fs.Var(&fm, "fm", fmUsage)
 	limit := fs.Int("limit", 0, "max full entries (server default 5, max 20)")
 	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing entries, --json asks the server to cap and list what did not fit under \"outline\"")
 	minScore := fs.Float64("min-score", 0, "drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)")
@@ -527,6 +609,54 @@ func cmdUsage(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("search_hits\t%d\nfetches\t%d\nworked\t%d\nfailed\t%d\nlast_used_at\t%s\n",
 		u.SearchHits, u.Fetches, u.Worked, u.Failed, last)
+	return nil
+}
+
+func cmdStats(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"stats",
+		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one entry; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue numbers are the ones `ochakai queues` prints; that is\nthe command with the next step on each line and the --exit-code a\nscheduled job goes red on. This one is the whole picture, not the\nnudge.",
+		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --json | jq .misses.queries\n")
+	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
+	asJSON := fs.Bool("json", false, "print JSON")
+	if _, err := parseArgs(fs, args); err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	st, err := c.Stats(ctx, *days)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(st)
+	}
+	// Tab-separated key/value, like `usage`: the vocabularies are printed
+	// in their own order (domain.Statuses, domain.Trusts) so a value
+	// added to either shows up here without this command being edited.
+	fmt.Printf("entries\t%d\n", st.Entries.Total)
+	for _, s := range domain.Statuses {
+		fmt.Printf("%s\t%d\n", s, st.Entries.Status[string(s)])
+	}
+	for _, t := range domain.Trusts {
+		fmt.Printf("%s\t%d\n", t, st.Entries.Trust[string(t)])
+	}
+	fmt.Printf("rejected\t%d\ndrafts\t%d\nreported_wrong\t%d\npast_expiry\t%d\nwindow_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
+		st.Entries.Rejected, st.Queues.Drafts, st.Queues.ReportedWrong, st.Queues.PastExpiry,
+		st.WindowDays, st.Entries.Created, st.Review.Verifications,
+		st.Outcomes.Worked, st.Outcomes.Failed)
+	if !st.Misses.Recording {
+		// Not zero — unknown. A deployment that keeps no questions must
+		// not read as one that was asked none.
+		fmt.Print("misses\t-\n")
+		return nil
+	}
+	fmt.Printf("misses\t%d\n", st.Misses.Count)
+	for _, q := range st.Misses.Queries {
+		fmt.Printf("gap\t%d\t%s\n", q.Count, q.Query)
+	}
 	return nil
 }
 
@@ -675,7 +805,7 @@ func cmdGet(ctx context.Context, args []string) error {
 			return err
 		}
 		for _, att := range k.Attachments {
-			data, _, err := c.Attachment(ctx, id, att.Name)
+			data, _, err := c.Attachment(ctx, att.Path)
 			if err != nil {
 				return fmt.Errorf("attachment %s: %w", att.Name, err)
 			}
@@ -745,7 +875,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 		if attName == "" {
 			attName = filepath.Base(file)
 		}
-		att, err := c.Attach(ctx, id, attName, "", data)
+		att, err := c.Attach(ctx, id, attName, data)
 		if err != nil {
 			return fmt.Errorf("%s: %w", file, err)
 		}
@@ -778,10 +908,23 @@ func cmdDetach(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Detach(ctx, id, rest[0]); err != nil {
+	// The file is at <id>/<name> unless the entry's body puts it
+	// elsewhere; read the entry and detach whichever one carries the
+	// name, so the command means the same thing for both (design doc
+	// 0046 §3.3).
+	path := id + "/" + rest[0]
+	if k, err := c.Get(ctx, id); err == nil {
+		for _, a := range k.Attachments {
+			if a.Name == rest[0] && a.Path != "" {
+				path = a.Path
+				break
+			}
+		}
+	}
+	if err := c.Detach(ctx, path); err != nil {
 		return err
 	}
-	fmt.Printf("detached %s/%s\n", id, rest[0])
+	fmt.Printf("detached %s\n", path)
 	return nil
 }
 
@@ -800,7 +943,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	k, err := readEntry(*file)
+	k, claimed, err := readEntry(*file)
 	if err != nil {
 		return err
 	}
@@ -830,7 +973,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	reportNotes(notes)
+	reportNotes(okf.NoteStoredClaim(notes, claimed, created.Document))
 	if *asJSON {
 		return printJSON(created)
 	}
@@ -868,7 +1011,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	k, err := readEntry(*file)
+	k, claimed, err := readEntry(*file)
 	if err != nil {
 		return err
 	}
@@ -889,7 +1032,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 		}
 		return err
 	}
-	reportNotes(notes)
+	reportNotes(okf.NoteStoredClaim(notes, claimed, updated.Document))
 	if *asJSON {
 		return printJSON(updated)
 	}
@@ -1145,7 +1288,7 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the entry still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per entry, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
@@ -1207,9 +1350,10 @@ func cmdImport(ctx context.Context, args []string) error {
 	}
 	// A document that carried a verified key is confirmed by whoever ran
 	// the import — the actor who put it through the review gate (design
-	// docs 0009 §3.2, 0043 §3.2). The values inside the key are never
-	// read: they are the exporting instance's observations, not claims
-	// this one can adopt.
+	// docs 0009 §3.2, 0043 §3.2). The values inside the key never become
+	// this instance's ledger: what the document said stays a claim beside
+	// it (design doc 0046 §2.2), and the verification recorded here is
+	// the importer's own.
 	confirm := func(d *okf.Doc) {
 		if !d.Verified {
 			return
@@ -1231,7 +1375,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		// replaces whatever is stored (the bundle is the source of truth
 		// for this loop), and whether the id was free is not something the
 		// bundle says anything about.
-		_, wasCreated, changed, notes, err := c.Put(ctx, k.ID, doc, "", false)
+		stored, wasCreated, changed, notes, err := c.Put(ctx, k.ID, doc, "", false)
 		if err != nil {
 			if isInvalid(err) {
 				skipEntry(k, err)
@@ -1239,6 +1383,13 @@ func cmdImport(ctx context.Context, args []string) error {
 			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
+		// The parse above already moved the document's own trust family
+		// under `received`, so the server never saw the keys and cannot
+		// report them. What it can answer is whether the claim stayed —
+		// this instance's own export form coming home is dropped instead
+		// (design doc 0046 §2.2), which is what keeps the Git review loop
+		// note-free.
+		notes = okf.NoteStoredClaim(notes, d.Claimed, stored.Document)
 		noted += len(notes)
 		reportNotes(notes)
 		if wasCreated {
@@ -1263,17 +1414,14 @@ func cmdImport(ctx context.Context, args []string) error {
 			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 			continue
 		}
-		// A file already at the canonical layout needs no okf_path — the
-		// preserved-location rule is for foreign layouts only.
-		okfPath := a.Path
-		if okfPath == a.ID+"/"+a.Name {
-			okfPath = ""
-		}
-		if _, err := c.Attach(ctx, a.ID, a.Name, okfPath, a.Data); err != nil {
-			return fmt.Errorf("attach %s/%s: %w", a.ID, a.Name, err)
+		// At the path the bundle carried it at, which is the whole of
+		// what preserving a foreign location means now (design doc 0046
+		// §3.3): the entry claims it because its body points there.
+		if err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
+			return fmt.Errorf("write %s: %w", a.Path, err)
 		}
 		attached++
-		fmt.Printf("attached %s/%s\n", a.ID, a.Name)
+		fmt.Printf("attached %s (%s)\n", a.Path, a.ID)
 	}
 	// The files that belong to no entry, at the paths they arrived at.
 	// A bundle carries more than its concepts, and what enters it leaves
@@ -1421,21 +1569,25 @@ func readBundleTarGz(r io.Reader) (map[string][]byte, error) {
 // readEntry reads a knowledge entry from path ("" or "-" = stdin) in
 // either of the interchange formats from design doc 0004 §5: an OKF
 // document (leading ---) or JSON.
-func readEntry(path string) (*domain.Knowledge, error) {
+//
+// claimed names the server-owned keys the document carried, which the
+// parse kept as its own claim rather than as provenance (design doc 0046
+// §2.2). Whether the claim survives the write is the server's answer, so
+// it travels to the call site rather than being reported here.
+func readEntry(path string) (k *domain.Knowledge, claimed []string, err error) {
 	var data []byte
-	var err error
 	if path == "" || path == "-" {
 		data, err = io.ReadAll(os.Stdin)
 	} else {
 		data, err = os.ReadFile(path)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return decodeEntry(data)
 }
 
-func decodeEntry(data []byte) (*domain.Knowledge, error) {
+func decodeEntry(data []byte) (*domain.Knowledge, []string, error) {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if bytes.HasPrefix(trimmed, []byte("---")) {
 		d, notes, err := okf.Parse(trimmed)
@@ -1443,20 +1595,20 @@ func decodeEntry(data []byte) (*domain.Knowledge, error) {
 			fmt.Fprintln(os.Stderr, "note:", n)
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// A verified key on a single-document write is not acted on: this
 		// is an edit, and confirming an entry is a separate call
 		// (ochakai verify). Only bundle import turns the key into a
 		// verification, because that is the review gate (design doc 0043
 		// §3.2).
-		return &d.Knowledge, nil
+		return &d.Knowledge, d.Claimed, nil
 	}
 	var k domain.Knowledge
 	if err := json.Unmarshal(data, &k); err != nil {
-		return nil, fmt.Errorf("input is neither an OKF document nor valid JSON: %w", err)
+		return nil, nil, fmt.Errorf("input is neither an OKF document nor valid JSON: %w", err)
 	}
-	return &k, nil
+	return &k, nil, nil
 }
 
 // extractTarGz unpacks the OKF bundle under dir, refusing entries that

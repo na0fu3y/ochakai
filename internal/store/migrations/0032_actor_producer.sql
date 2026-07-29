@@ -1,4 +1,4 @@
--- Every actor gains the software that made the write (design doc 0049).
+-- Every actor gains the software that made the write (design doc 0052).
 --
 -- SPEC §7's third actor form, "<producer>/<version>", names software
 -- where the other two name an identity. ochakai never records it *as* the

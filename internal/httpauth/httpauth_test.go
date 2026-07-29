@@ -273,7 +273,7 @@ func TestMiddlewareRejectsInTheAPIErrorEnvelope(t *testing.T) {
 // The producer rides on the actor the write is finally recorded as, and
 // never in place of it. Everything the record already said stays said:
 // the authenticated caller, and — under delegation — the person it acted
-// for (design doc 0049 §3.1).
+// for (design doc 0052 §3.1).
 func TestProducerIsRecordedBesideTheActor(t *testing.T) {
 	const sa = "insightflow@example.iam.gserviceaccount.com"
 	cfg := &config.Config{Delegators: []string{sa}}
@@ -323,7 +323,7 @@ func TestProducerIsRecordedBesideTheActor(t *testing.T) {
 
 	// A malformed value is refused rather than dropped: an integration
 	// that believes it is stamping its version must not find out at the
-	// first export that nothing was recorded (0027 §5.2, 0049 §3.2).
+	// first export that nothing was recorded (0027 §5.2, 0052 §3.2).
 	for _, bad := range []string{
 		"insightflow",                     // no version
 		"insightflow/",                    // empty version
@@ -351,7 +351,7 @@ func TestProducerIsRecordedBesideTheActor(t *testing.T) {
 
 // A public deployment authenticates nobody, so there is no name for a
 // self-declaration to hang off — the header is not read there at all
-// (design docs 0042, 0049 §3.3).
+// (design docs 0042, 0052 §3.3).
 func TestPublicReadOnlyIgnoresTheProducerHeader(t *testing.T) {
 	cfg := &config.Config{PublicReadOnly: true, ReadOnly: true}
 	h := http.Header{}

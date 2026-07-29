@@ -233,11 +233,18 @@ func TrustOf(vs []Verification) Trust {
 // OKF's default when it says nothing (SPEC §5.4). ochakai does not write
 // a status its writer left out (design doc 0046 §3.9) — absence is what
 // the document says, and applying the default is the projection's job.
-func (k *Knowledge) Lifecycle() Status {
-	if k.Status == "" {
+func (k *Knowledge) Lifecycle() Status { return LifecycleOf(k.Status) }
+
+// LifecycleOf is the same projection over a bare status value, for the
+// readers that count statuses without materializing the entries behind
+// them (the instance stats, design doc 0051 §3.5). The default lives
+// here once: a second copy is how a tally starts disagreeing with the
+// entries it is a tally of.
+func LifecycleOf(s Status) Status {
+	if s == "" {
 		return StatusStable
 	}
-	return k.Status
+	return s
 }
 
 // StatusFromOKF maps a frontmatter status onto ochakai's vocabulary,
@@ -334,6 +341,35 @@ func ValidOutcome(o string) bool {
 	return false
 }
 
+// QueueCounts is how much work each review queue is holding — the three
+// listing feeds that a curator is meant to empty, counted rather than
+// listed (design doc 0049). Each field is the size of a feed that
+// already exists:
+//
+//   - Drafts — sort=usage with status=draft: what agents proposed,
+//     waiting to be published or turned down. Verifying does not empty
+//     it: confirming and publishing are different acts (design doc 0043
+//     §3.2), so a draft leaves by an edit or a rejection.
+//   - ReportedWrong — sort=failed: entries whose failure reports are
+//     still unanswered.
+//   - PastExpiry — sort=stale_after: entries past the expiry their own
+//     author declared.
+//
+// The verification-age feed (sort=verified_at) is deliberately absent:
+// it ranks every verified entry rather than holding the ones that need
+// something, so a count of it is the size of the knowledge base and
+// never reaches zero. A number nobody can drive down is not a queue.
+type QueueCounts struct {
+	Drafts        int64 `json:"drafts"`
+	ReportedWrong int64 `json:"reported_wrong"`
+	PastExpiry    int64 `json:"past_expiry"`
+}
+
+// Total is how much work is waiting across all three queues. An entry
+// can sit in more than one, so this counts places in queues rather than
+// distinct entries — which is what a reviewer works through anyway.
+func (q QueueCounts) Total() int64 { return q.Drafts + q.ReportedWrong + q.PastExpiry }
+
 // Usage aggregates how often a knowledge entry was actually used, and
 // how often users reported it worked or failed.
 type Usage struct {
@@ -357,7 +393,7 @@ type Usage struct {
 // Producer names the software that made this write, in SPEC §7's
 // "<producer>/<version>" form, and is the one field here the caller
 // declares about itself rather than something authentication observed
-// (design doc 0049). It sits beside Kind/Name for the same reason Via
+// (design doc 0052). It sits beside Kind/Name for the same reason Via
 // does: a self-declared name put in place of an authenticated one would
 // make "who wrote this" answerable by anyone, while one recorded next to
 // it is always attributable to a caller Google verified. Empty when the
@@ -397,7 +433,7 @@ func (a Actor) String() string {
 // software where the other two name an identity, and an ochakai write
 // always has an authenticated identity behind it. It is recorded in
 // Actor.Producer instead, beside the actor rather than in its place
-// (design doc 0049).
+// (design doc 0052).
 const (
 	ActorHuman   = "human"
 	ActorProcess = "process"
@@ -422,7 +458,7 @@ const MaxProducer = 128
 // a version is spelled, and a store that insisted on semver would refuse
 // "claude-code/2026.07" or a git sha — provenance records what the writer
 // called itself, and inventing a grammar for it would only make honest
-// writers unrecordable (design doc 0049 §3.2).
+// writers unrecordable (design doc 0052 §3.2).
 func ValidProducer(s string) bool {
 	if s == "" || len(s) > MaxProducer || !utf8.ValidString(s) {
 		return false
@@ -724,6 +760,43 @@ var EnvelopeKeys = []string{
 	"sources", "usage_window",
 	"status", "status_note", "stale_after",
 	"runtime", "parameters", "computation", "executor", "attester",
+}
+
+// FilterOwnedKeys names, for each OKF key ochakai reads through a column
+// of its own, the filter that owns the question — the one a frontmatter
+// filter must not answer a second time (design doc 0047 §2.1). The column
+// and the jsonb path do not say the same thing (a document that writes no
+// status reads as stable to `status=`, since that is OKF's default, and as
+// nothing to `fm.status`), and a caller cannot see which one it got.
+var FilterOwnedKeys = map[string]string{
+	"type":        "type=",
+	"status":      "status=",
+	"tags":        "tag=",
+	"sources":     "source=URI",
+	"stale_after": "sort=stale_after",
+}
+
+// AskableFrontmatterKeys returns the frontmatter keys a filter may name,
+// sorted: every key OKF defines, less the ones a filter of their own
+// already asks (design doc 0047 §2). A producer's extension key is not
+// here — it is stored and handed back exactly as written (SPEC §4.1), but
+// the query vocabulary is OKF's.
+//
+// It is derived from EnvelopeKeys rather than written out, which is what
+// makes the query surface additive: the day OKF adds a key and that list
+// learns its spelling, the key is askable — no column and no migration,
+// because the whole frontmatter is already indexed (design doc 0046
+// §3.11). Every surface describes itself from this, so no help text can
+// promise a key the server refuses.
+func AskableFrontmatterKeys() []string {
+	out := make([]string, 0, len(EnvelopeKeys))
+	for _, k := range EnvelopeKeys {
+		if FilterOwnedKeys[k] == "" {
+			out = append(out, k)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Verified reports whether anyone has confirmed this entry — SPEC §5.3's

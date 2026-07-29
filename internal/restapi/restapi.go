@@ -16,7 +16,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,6 +44,9 @@ func Handler(svc *service.Service) http.Handler {
 	// query or with any sort. prefix narrows to the entries addressed
 	// under a path, repeatable and OR-ed, for scoping a search to a team's
 	// subtree and the shared one at once (design doc 0041).
+	// cursor walks a listing past the limit — a listing has a total order
+	// to resume from, a search has a ranking window and refuses it
+	// (design doc 0050).
 	mux.HandleFunc("GET /api/v1/knowledge", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, err := queryInt(q, "limit")
@@ -67,12 +69,12 @@ func Handler(svc *service.Service) http.Handler {
 			Rejected:    rejected,
 			Frontmatter: frontmatterFilter(q),
 		}
-		hits, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), f, limit)
+		page, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), q.Get("cursor"), f, limit)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeHits(w, r, svc, hits)
+		writeHits(w, r, svc, page)
 	})
 
 	// GET /api/v1/bundle/{path...} — the two files OKF reserves, at the
@@ -177,16 +179,14 @@ func Handler(svc *service.Service) http.Handler {
 		}
 	})
 
-	// PUT and DELETE /api/v1/bundle/{path...} — two refusals, and which
-	// one the caller gets depends on the path.
+	// PUT and DELETE /api/v1/bundle/{path...} — the write face of the one
+	// address space (design doc 0046 §3.5).
 	//
-	// The reserved names are generated from the bundle rather than stored
-	// in it, so a write is a conflict with what the address is: 409, as
-	// design doc 0046 §3.5 says. Every other path is the write face that
-	// same section describes, and it lands in a later change: 501, which
-	// is what "not built yet" means. Answering the reserved-file reason
-	// there would explain a refusal in terms of two files the caller never
-	// named.
+	// The reserved names are the one refusal the address itself makes:
+	// they are generated from the bundle rather than stored in it, so a
+	// write there is a conflict with what the address is (409). Every
+	// other path is an object, and what it becomes is decided by the
+	// bytes rather than by the caller — see below.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
@@ -285,6 +285,20 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, res)
+	})
+
+	// GET /api/v1/queues?prefix=... — the three review queues as counts
+	// (design doc 0049). The feeds under /api/v1/knowledge answer "what
+	// is waiting"; this answers "is anything", which is the question a
+	// scheduled job can ask cheaply and a human can be told the answer
+	// to. prefix scopes it to a subtree, as it scopes the feeds.
+	mux.HandleFunc("GET /api/v1/queues", func(w http.ResponseWriter, r *http.Request) {
+		counts, err := svc.Queues(r.Context(), store.Filter{Prefixes: r.URL.Query()["prefix"]})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"queues": counts})
 	})
 
 	// {id...} because the id is the entry's full bundle path (design doc
@@ -416,6 +430,26 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, u)
 	})
 
+	// GET /api/v1/stats?days=30 — the instance's own view of the loop
+	// (design doc 0051): what the base is made of, what review did
+	// lately, what callers reported, and what they searched for and did
+	// not find. Every other measurement here is per entry; this is the
+	// only face that answers a question about the base as a whole, which
+	// is what running an improvement loop needs.
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
+		days, err := queryInt(r.URL.Query(), "days")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		st, err := svc.Stats(r.Context(), days)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, st)
+	})
+
 	// GET /api/v1/backlinks/{id...} — live entries whose links point at
 	// this entry, most recently updated first. The reverse edge
 	// get_context follows when packing companions, exposed so UIs can
@@ -440,96 +474,13 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": rows})
 	})
-	// Attachments (design docs 0008, 0013): files attached to an entry
-	// (images, PDFs, plain text), bytes fetched on demand — entry reads
-	// carry metadata only. The path is
-	// /attachments/{id segments...}/{name}; the final segment is always
-	// the filename (attachment names are single segments), so the
-	// wildcard split is unambiguous. Lives outside /knowledge/ for the
-	// same reason /usage does: a suffix after a hierarchical {id...}
-	// would be unroutable.
-	attachmentRef := func(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-		id, name, ok := splitAttachmentPath(r.PathValue("path"))
-		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid attachment path (want /api/v1/attachments/{id}/{name})"})
-			return "", "", false
-		}
-		return id, name, true
-	}
-
-	mux.HandleFunc("PUT /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		data, ok := readBody(w, r, domain.MaxAttachmentSize,
-			fmt.Sprintf("attachment exceeds %d MiB", domain.MaxAttachmentSize>>20))
-		if !ok {
-			return
-		}
-		// okf_path preserves the bundle location a foreign import carried
-		// this file at, so re-export keeps the original body links working.
-		okfPath := r.URL.Query().Get("okf_path")
-		if okfPath != "" && (okfPath != path.Clean(okfPath) || okfPath == "." ||
-			strings.HasPrefix(okfPath, "/") || strings.HasPrefix(okfPath, "..")) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid okf_path (want a clean bundle-relative path)"})
-			return
-		}
-		att, err := svc.Attach(r.Context(), id, name, okfPath, data, httpauth.Actor(r.Context()))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, att)
-	})
-
-	mux.HandleFunc("GET /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		// Conditional GET before touching the blob store: bytes are
-		// content-addressed, so the hash is a perfect ETag, and the web
-		// UI re-renders the same images on every search — a 304 answered
-		// from metadata alone keeps GCS reads and egress off the bill.
-		// no-cache means "revalidate every time", which is required
-		// because the name→content mapping is mutable (replace-by-name).
-		meta, err := svc.AttachmentMeta(r.Context(), id, name)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		etag := `"` + meta.SHA256 + `"`
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Cache-Control", "private, no-cache")
-		if r.Header.Get("If-None-Match") == etag {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-		att, data, err := svc.Attachment(r.Context(), id, name)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// Re-stamp from the row the bytes came from, in case the
-		// attachment was replaced between the two reads.
-		w.Header().Set("ETag", `"`+att.SHA256+`"`)
-		w.Header().Set("Content-Type", mediaTypeHeader(att.MediaType))
-		serveDefensively(w, att.MediaType, att.Name)
-		_, _ = w.Write(data)
-	})
-
-	mux.HandleFunc("DELETE /api/v1/attachments/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id, name, ok := attachmentRef(w, r)
-		if !ok {
-			return
-		}
-		if err := svc.Detach(r.Context(), id, name, httpauth.Actor(r.Context())); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	// A file has one address, and it is the path it lives at:
+	// /api/v1/bundle/{path} reads, writes and deletes it (design doc 0046
+	// §§3.3, 3.5). /api/v1/attachments/{id}/{name} is gone with the
+	// concept it was named after — a file was something an entry *had*,
+	// and the address said so by putting the entry's id in front of a
+	// filename. Whether an entry shows a file is now a question its body
+	// answers, so the address that asserted it had nothing left to say.
 
 	// DELETE soft-deletes; ?purge=true hard-deletes an entry that is
 	// already soft-deleted, freeing its id (a tombstone still owns the
@@ -759,22 +710,28 @@ func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 // writeHits responds with a hit list, attachment metadata filled in one
 // batch — the REST list surface carries it so UIs can render image
 // previews; MCP search results stay lean (design doc 0015).
-func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, hits []domain.SearchHit) {
+// The page's cursor rides along when a listing has more behind it
+// (design doc 0050 §2.1); a search never has one.
+func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, page *service.Listing) {
 	// A row is a projection now (design doc 0043 §3.5), so the batch fill
 	// runs against stand-ins carrying only the ids and the metadata is
 	// copied back onto the rows.
-	ptrs := make([]*domain.Knowledge, len(hits))
-	for i := range hits {
-		ptrs[i] = &domain.Knowledge{ID: hits[i].ID}
+	ptrs := make([]*domain.Knowledge, len(page.Hits))
+	for i := range page.Hits {
+		ptrs[i] = &domain.Knowledge{ID: page.Hits[i].ID}
 	}
 	if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
 		writeError(w, err)
 		return
 	}
-	for i := range hits {
-		hits[i].Attachments = ptrs[i].Attachments
+	for i := range page.Hits {
+		page.Hits[i].Attachments = ptrs[i].Attachments
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
+	body := map[string]any{"hits": page.Hits}
+	if page.Cursor != "" {
+		body["cursor"] = page.Cursor
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -810,11 +767,16 @@ const documentMediaType = "text/markdown; charset=utf-8"
 // number with room for the envelope rather than a new policy.
 const maxDocument = 5 << 20
 
-// frontmatterFilter reads the "fm." query parameters — `?fm.question=…`,
-// `?fm.owner=finance` — into the filter that asks the frontmatter index
+// frontmatterFilter reads the "fm." query parameters — `?fm.resource=…`,
+// `?fm.runtime=sql` — into the filter that asks the frontmatter index
 // (design doc 0046 §3.11). The prefix is what keeps the surface
-// additive: a key the spec adds later needs no parameter of its own, and
-// none of the ones ochakai already names can be shadowed by one.
+// additive: a key OKF adds later needs no parameter of its own, and none
+// of the ones ochakai already names can be shadowed by one.
+//
+// Which keys are answered is the service's call (checkedFilter): OKF's
+// own, less the ones a named filter asks. Reading them all here and
+// refusing there keeps the refusal in the one place all three surfaces
+// pass through (design doc 0015 §2).
 //
 // A repeated parameter keeps its last value. The pairs are AND-ed, and
 // "the same key twice" is a contradiction rather than a question, so
@@ -890,9 +852,6 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	for _, n := range notes {
-		w.Header().Add("Ochakai-Note", n)
-	}
 	// The path is the address; the document carries the metadata — type
 	// included, always (no fill-in from the stored entry, design doc 0017
 	// §4.5).
@@ -915,6 +874,14 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	// Whether a trust family was a claim or this instance's own export
+	// form coming home is decided against the stored entry, so the note
+	// can only be written once the write has answered: a claim that
+	// survived it is one the document made and ochakai did not observe.
+	notes = okf.NoteClaim(notes, d.Claimed, out)
+	for _, n := range notes {
+		w.Header().Add("Ochakai-Note", n)
 	}
 	// A payload identical to the stored content wrote nothing (no
 	// revision, no version bump); the header lets clients report

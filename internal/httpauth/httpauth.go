@@ -71,7 +71,7 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 		// is what makes it safe to write nothing down about who asked.
 		// The producer header is not read either: it is admissible only
 		// because the record names the authenticated caller beside it
-		// (design doc 0049 §3.1), and here there is no such caller.
+		// (design doc 0052 §3.1), and here there is no such caller.
 		return domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"}, http.StatusOK, nil
 	}
 	actor, status, err := authenticated(cfg, h)
@@ -82,7 +82,7 @@ func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, erro
 	// finally recorded as. Under delegation that is the end user, and
 	// "human:tanaka via process:app@… using insightflow/1.4.0" says the
 	// true thing: the person acted, the application called, and this
-	// build of the application is what wrote the words (design doc 0049
+	// build of the application is what wrote the words (design doc 0052
 	// §3.3).
 	producer, err := producerFrom(h)
 	if err != nil {
@@ -126,7 +126,7 @@ func authenticated(cfg *config.Config, h http.Header) (domain.Actor, int, error)
 const OnBehalfOfHeader = "X-Ochakai-On-Behalf-Of"
 
 // ProducerHeader carries the software the caller is running, in SPEC §7's
-// "<producer>/<version>" form: "insightflow/1.4.0" (design doc 0049).
+// "<producer>/<version>" form: "insightflow/1.4.0" (design doc 0052).
 const ProducerHeader = "X-Ochakai-Producer"
 
 // producerFrom reads the caller's self-declaration of what software it is.

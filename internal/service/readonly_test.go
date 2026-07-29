@@ -26,6 +26,12 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	reads := map[string]bool{
 		"Get": true, "Search": true, "SearchOrList": true, "Context": true,
 		"Revisions": true, "Backlinks": true, "Usage": true, "Browse": true,
+		// Counting the review queues is a read of the same feeds
+		// (design doc 0049): a read-only deployment still shows how much
+		// work is waiting, it just cannot be the one to do it. Stats
+		// reads the same ledgers one instance wide (design doc 0051),
+		// and still says what it was asked for and could not answer.
+		"Queues": true, "Stats": true,
 		// The two derived files are reads of the same tree and ledger
 		// (design doc 0046 §§3.7-3.8).
 		"IndexDocument": true, "LogDocument": true,

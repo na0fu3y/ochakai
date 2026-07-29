@@ -121,13 +121,13 @@ type attester struct {
 // convention (SPEC §7) has room for exactly one of those three at a time,
 // and folding "A via B" into by would leave a string that is not an
 // actor; sibling keys keep by parseable and the human: prefix intact, so
-// trust tiers still read correctly (design docs 0027, 0036 §3.2, 0049).
+// trust tiers still read correctly (design docs 0027, 0036 §3.2, 0052).
 //
 // producer holds SPEC §7's "<producer>/<version>" form. It is a sibling
 // rather than the value of by for the same reason via is: by is the
 // authenticated identity, and moving a self-declared name into it would
 // put the one unverified thing here in the one place readers trust
-// (design doc 0049 §3.1).
+// (design doc 0052 §3.1).
 type event struct {
 	By       text `yaml:"by,omitempty"` // required by SPEC §5.2; omitted only for an entry that carries no actor at all
 	Via      text `yaml:"via,omitempty"`
@@ -349,7 +349,7 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 // §7 verbatim on both kinds — "human:tanaka@example.co.jp" and
 // "process:sync@example.iam.gserviceaccount.com" (design doc 0043 §3.8).
 // The convention's third form, "<producer>/<version>", goes out beside it
-// on the producer key when the caller named one (design doc 0049 §3.5) —
+// on the producer key when the caller named one (design doc 0052 §3.5) —
 // never in by, which is the authenticated identity.
 //
 // Like the rest of the trust family, none of this is read back on import:

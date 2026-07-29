@@ -106,6 +106,47 @@ func TestLimitContractsInSchema(t *testing.T) {
 	}
 }
 
+// TestFMSchemaListsTheAskableKeys holds the "fm" description to the
+// vocabulary the server enforces (design doc 0047 §2). An agent sees only
+// the schema, so a key promised here and refused by checkedFilter costs a
+// tool call to find out — and a key OKF adds later is only askable once
+// this text says so.
+func TestFMSchemaListsTheAskableKeys(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	tools := map[string]bool{"search_knowledge": true, "get_context": true}
+	for _, tool := range res.Tools {
+		if !tools[tool.Name] {
+			continue
+		}
+		delete(tools, tool.Name)
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s schema: %v", tool.Name, err)
+		}
+		var schema struct {
+			Properties map[string]struct {
+				Description string `json:"description"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal %s schema: %v", tool.Name, err)
+		}
+		desc := schema.Properties["fm"].Description
+		for _, key := range domain.AskableFrontmatterKeys() {
+			if !strings.Contains(desc, key) {
+				t.Errorf("%s fm description does not name the askable key %q", tool.Name, key)
+			}
+		}
+	}
+	for name := range tools {
+		t.Errorf("tool %s not found", name)
+	}
+}
+
 // TestSearchSortValidation mirrors the CLI and REST rules: a search query
 // combined with a sort mode is an error (not silently ignored), an
 // unknown sort is rejected — for verified_at, usage, and failed — and
@@ -243,8 +284,7 @@ func TestToolAnnotations(t *testing.T) {
 		"get_knowledge":       {readOnly: true},
 		"get_attachment":      {readOnly: true},
 		"get_knowledge_usage": {readOnly: true},
-		"create_knowledge":    {destructive: &no},
-		"update_knowledge":    {destructive: &no},
+		"put_knowledge":       {destructive: &no},
 		"delete_knowledge":    {destructive: &yes},
 	}
 	seen := map[string]bool{}
@@ -366,7 +406,7 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 // so this string is the only copy it will ever see.
 func TestContextHint(t *testing.T) {
 	plain := contextHint(0)
-	for _, want := range []string{"report_outcome", "create_knowledge", "rejected"} {
+	for _, want := range []string{"report_outcome", "put_knowledge", "rejected"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("hint does not mention %q: %s", want, plain)
 		}
@@ -393,12 +433,13 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 	want := map[string][]string{
-		"update_knowledge": {"verified, rejected, or deprecated", "report_outcome failed", "create_knowledge"},
+
 		"delete_knowledge": {"verified, rejected, or deprecated", "erase the record of why"},
 		// Reviving a curated tombstone is the third way to overwrite a
 		// ruling, and an agent that only learns of it from an error has
 		// already written the draft (design doc 0015 §3.1).
-		"create_knowledge": {"deleted can be reused", "verified, rejected, deprecated", "different id"},
+		"put_knowledge": {"deleted can be reused", "verified, rejected, deprecated", "different id",
+			"verified, rejected, or deprecated", "report_outcome failed"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]
@@ -571,7 +612,7 @@ func TestToolSchemasCarryTheTypeVocabulary(t *testing.T) {
 	}
 	// Only the tools that take a type: the read filters and the writes.
 	want := map[string]bool{"search_knowledge": true, "get_context": true,
-		"create_knowledge": true, "update_knowledge": true}
+		"put_knowledge": true}
 	seen := 0
 	for _, tool := range res.Tools {
 		if !want[tool.Name] {
@@ -624,7 +665,7 @@ func serverSession(t *testing.T, client *mcp.Implementation) *mcp.ServerSession 
 // MCP asks every client to name itself and its version at initialize,
 // which is SPEC §7's "<producer>/<version>" arriving for free — so an
 // agent's writes say which agent made them without anyone adding a header
-// (design doc 0049 §3.3).
+// (design doc 0052 §3.3).
 func TestRequestActorTakesTheProducerFromClientInfo(t *testing.T) {
 	ss := serverSession(t, &mcp.Implementation{Name: "claude-code", Version: "2026.07"})
 	ctx := httpauth.WithActor(context.Background(),
@@ -673,5 +714,43 @@ func TestUnspellableClientInfoIsDroppedNotRefused(t *testing.T) {
 	}
 	if actor.Producer != "" {
 		t.Errorf("producer = %q, want it dropped", actor.Producer)
+	}
+}
+
+// One write face, and the branch inside it is about the id rather than
+// about which tool the agent should have called (design doc 0046 §3.14).
+// The two tools it replaces asked a question the document does not
+// answer: a write states what the entry should say, and whether the id
+// was already taken is not part of that statement (0043 §3.5).
+func TestOneWriteFace(t *testing.T) {
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, tool := range res.Tools {
+		names[tool.Name] = true
+	}
+	for _, gone := range []string{"create_knowledge", "update_knowledge"} {
+		if names[gone] {
+			t.Errorf("%s is back; the write face is put_knowledge", gone)
+		}
+	}
+	// The eight the surface carries (design doc 0046 §3.14, issue #272).
+	// The three at the end were once slated to go, and the measurement
+	// went the other way: they are the cheapest tools here, and the
+	// saving was in the merge above.
+	want := []string{
+		"search_knowledge", "get_context", "get_knowledge", "put_knowledge", "report_outcome",
+		"delete_knowledge", "get_knowledge_usage", "get_attachment",
+	}
+	for _, w := range want {
+		if !names[w] {
+			t.Errorf("tool %s is missing", w)
+		}
+	}
+	if len(names) != len(want) {
+		t.Errorf("tools = %d, want %d: %v", len(names), len(want), names)
 	}
 }

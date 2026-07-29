@@ -151,7 +151,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 		defer func() { _ = s.SoftDelete(ctx, decoy, actor) }()
 	}
 
-	if _, err := svc.Attach(ctx, id, "expected.txt", "", []byte(content), actor); err != nil {
+	if _, err := svc.PutFile(ctx, id+"/expected.txt", []byte(content), actor); err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
 
@@ -175,10 +175,10 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	// Non-text attachments are not embeddable yet (design doc 0020 §3):
 	// attach must succeed without leaving an embedding row.
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("fake image bytes")...)
-	if _, err := svc.Attach(ctx, id, "chart.png", "", png, actor); err != nil {
+	if _, err := svc.PutFile(ctx, id+"/chart.png", png, actor); err != nil {
 		t.Fatalf("Attach png: %v", err)
 	}
-	att, data, err := svc.Attachment(ctx, id, "chart.png")
+	att, data, err := svc.GetFile(ctx, id+"/chart.png")
 	if err != nil || att.MediaType != "image/png" {
 		t.Fatalf("Attachment(chart.png) = %+v, %v", att, err)
 	}
@@ -204,7 +204,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 		stubEmbedder: emb,
 		files:        map[string][]float32{"chart.png": {0, 0, 1, 0}},
 	}, Log: slog.New(slog.DiscardHandler)}
-	if _, err := fsvc.Attach(ctx, id, "chart.png", "", png, actor); err != nil {
+	if _, err := fsvc.PutFile(ctx, id+"/chart.png", png, actor); err != nil {
 		t.Fatalf("re-attach png with file embedder: %v", err)
 	}
 	vhits, err = s.SearchVectorAttachments(ctx, []float32{0, 0, 1, 0}, "stub", store.Filter{}, 50)
@@ -259,7 +259,7 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
 	for _, name := range []string{"a.txt", "b.txt"} {
-		if _, err := svc.Attach(ctx, id, name, "", []byte("some text for "+name), actor); err != nil {
+		if _, err := svc.PutFile(ctx, id+"/"+name, []byte("some text for "+name), actor); err != nil {
 			t.Fatal(err)
 		}
 	}

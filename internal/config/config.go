@@ -62,6 +62,19 @@ type Config struct {
 	// attachments are unsupported — markdown entries only.
 	GCSBucket string
 
+	// RecordMisses keeps the searches that found nothing, with the query
+	// as it was typed (design doc 0051 §3.4). It is the one thing
+	// ochakai stores that a caller did not choose to curate, so it has
+	// an off switch — OCHAKAI_RECORD_MISSES=false — and it is off by
+	// construction on a public deployment, which reads no identity and
+	// would be keeping strangers' questions where every other stranger
+	// can read them.
+	//
+	// Default on: the list of unanswered questions is what tells a
+	// curator what to write next, and a measurement nobody switches on
+	// is a measurement nobody has.
+	RecordMisses bool
+
 	// Embedding is nil when semantic search is disabled (the default).
 	// Set OCHAKAI_VERTEX_PROJECT to enable it.
 	Embedding *EmbeddingConfig
@@ -98,6 +111,9 @@ func FromEnv() (*Config, error) {
 		ReadOnly:    os.Getenv("OCHAKAI_READ_ONLY") == "true",
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
+		// The only default-on boolean here, so the only one read as
+		// "anything but false": an operator turning it off writes false.
+		RecordMisses: os.Getenv("OCHAKAI_RECORD_MISSES") != "false",
 	}
 	if os.Getenv("OCHAKAI_PUBLIC_READ_ONLY") == "true" {
 		// The implication is applied here, not checked here: there is no
@@ -107,6 +123,11 @@ func FromEnv() (*Config, error) {
 		// not turn writes back on.
 		cfg.PublicReadOnly = true
 		cfg.ReadOnly = true
+		// Same shape, same reason: a public deployment reads no identity
+		// (0042 §2.2), so it does not keep what its callers typed either
+		// — and OCHAKAI_RECORD_MISSES=true alongside does not turn it
+		// back on (design doc 0051 §3.4).
+		cfg.RecordMisses = false
 	}
 	if cfg.PublicReadOnly && cfg.InsecureDev {
 		// Both make every caller anonymous, but insecure dev also lets
