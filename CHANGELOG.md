@@ -618,7 +618,19 @@ last entry.
 
 ### Fixed
 
-<<<<<<< HEAD
+- **One spelling decides what is reserved.** "Is this index.md or
+  log.md" was answered in four places — `domain.ReservedBundleName`,
+  which folded case, and three inline comparisons that did not (the
+  bundle address's write refusal, the import skip, and a copy in
+  `internal/okf` with no callers). The halves of one address disagreed:
+  at `Index.md` a concept was accepted and a file was refused with
+  "index.md and log.md are generated rather than stored". OKF SPEC §3.1
+  reserves exactly the two spellings it writes, so that is what
+  `ReservedBundleName` answers now, and it is the only one that answers.
+  `Index.md` is a file OKF says nothing about, and a bundle that carried
+  one gets it back (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.2).
+
 - **BREAKING** — **an object's history is at the object's address**, and
   a `log.md`'s two representations say the same thing (design doc
   [0046](docs/design/0046-bundle-address-space.md) §§3.5, 3.8):
@@ -652,58 +664,6 @@ last entry.
 
   **This raises `docs/surface.md`'s PARAM ceiling from 18 to 19.** Said
   out loud, which is what the ceiling is for.
-=======
-- **One spelling decides what is reserved.** "Is this index.md or
-  log.md" was answered in four places — `domain.ReservedBundleName`,
-  which folded case, and three inline comparisons that did not (the
-  bundle address's write refusal, the import skip, and a copy in
-  `internal/okf` with no callers). The halves of one address disagreed:
-  at `Index.md` a concept was accepted and a file was refused with
-  "index.md and log.md are generated rather than stored". OKF SPEC §3.1
-  reserves exactly the two spellings it writes, so that is what
-  `ReservedBundleName` answers now, and it is the only one that answers.
-  `Index.md` is a file OKF says nothing about, and a bundle that carried
-  one gets it back (design doc
-  [0046](docs/design/0046-bundle-address-space.md) §3.2).
->>>>>>> claude/index-md-lists-files
-
-- **The archive carries the history.** Design doc
-  [0046](docs/design/0046-bundle-address-space.md) §3.8 ends "the history
-  becomes portable", and the archive carried the `index.md` of every
-  directory and no `log.md`: the ledger was readable only by calling the
-  instance that holds it, and a purge
-  ([0031](docs/design/0031-purge.md)) is the only thing that ever
-  removes a row from it. A `log.md` is written beside every `index.md`
-  now — the root's included — from the same renderer and the same
-  1000-line bound as the address, so a reader extracting the bundle and
-  a reader calling `GET /api/v1/bundle/{dir}/log.md` are not reading two
-  different histories, and from the export's own snapshot, so it
-  describes the same instant as the documents beside it.
-
-  An import still never reads one back (§2.3): what happened here is
-  this instance's observation, published the way `generated` and
-  `verified` are ([0009](docs/design/0009-provenance-portability.md)).
-
-- **A directory's `index.md` lists the files in it** (design doc
-  [0046](docs/design/0046-bundle-address-space.md) §3.7). §3.7 names
-  three sections — subdirectories, concepts, files — and only the first
-  two were rendered, so a file at a path no concept shows was stored,
-  served at its own address, carried in the archive, and invisible in
-  the bundle's own navigation. It is listed now, under a `## Files`
-  heading, in all three places that render a listing: the generated
-  `index.md`, its JSON representation (`files[]`, so a web UI's
-  directory page can show them), and the copy the archive carries — the
-  same renderer, so a bundle's navigation does not depend on which asked.
-  `ochakai browse` prints them after the entries.
-
-  A subdirectory line still counts **concepts**, and a directory holding
-  nothing but files is still not a subdirectory: OKF's §8 listing is
-  navigation between concept documents, and a count mixing the kinds
-  would misdescribe every directory that has both. Asked about directly,
-  such a directory lists what it holds.
-
-  A bundle with no loose files exports byte-for-byte as it did — the
-  heading appears only where there is something under it.
 
 - **The archive carries the history.** Design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.8 ends "the history
