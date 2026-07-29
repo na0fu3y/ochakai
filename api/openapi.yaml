@@ -24,10 +24,9 @@ info:
     it is neither. `/api/v1/backlinks/{id}` is gone the same way: what
     points at an entry is a set of entries, so it is `links_to=` on the
     search face beside `source=`, the reverse lookup that was already
-    there. One address named by §3.5 is still its old self —
-    `/api/v1/export`, whose successor is a subtree under
-    `Accept: application/gzip` — and it carries no deprecation mark
-    because that successor is not built.
+    there. `/api/v1/export` is gone too: an archive is the bundle at a
+    path, so it is `Accept: application/gzip` on that path, and the root
+    is the whole knowledge base. §3.5's fold is complete.
 
     Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
@@ -438,6 +437,44 @@ paths:
         `Content-Security-Policy: sandbox`, and `nosniff` is always set
         (design doc 0046 §3.2).
 
+        **`Accept: application/gzip` reads the path as a subtree** and
+        streams it as an OKF bundle: a tar.gz of markdown + YAML
+        frontmatter, the generated `index.md` files, and the files
+        entries show. The root (`/api/v1/bundle/`) is the whole knowledge
+        base — this is what `GET /api/v1/export` was, at the address of
+        the thing it returns (design doc 0046 §3.5). Your knowledge is
+        yours.
+
+        Paths inside the archive are not re-rooted: an archive of
+        `metrics/` carries `metrics/revenue.md` and imports back to where
+        it came from, because this is a copy of a subtree rather than a
+        move of one.
+
+        Written as it is read — indexes first, then entries in batches,
+        then one file at a time — so the server never holds the whole
+        bundle in memory. Because the response starts before the last
+        file is read, a failure mid-archive can only truncate the stream:
+        verify a backup by reading the archive, not by the status code.
+        The server logs every such failure at error level, naming the
+        file it stopped on.
+
+        There is no matching import endpoint, and that is deliberate
+        (design doc 0015 §3.2): importing a bundle is a loop over this
+        very address, so a server-side version would add a second path to
+        the same outcome without adding a capability. To write your own
+        importer against any OKF bundle: walk the tar.gz and PUT every
+        member to `/api/v1/bundle/{path}` at the path it arrived at. One
+        address takes both kinds — the bytes decide which — so there is
+        nothing to attribute and nothing to route. `index.md` files are
+        generated and are not entries. Frontmatter keys the server owns
+        — `generated`, `verified`, `created_by`, `rejected_by`,
+        `rejected_at`, and the pre-v0.2 spellings `timestamp` /
+        `verified_by` / `verified_at` — are ignored on write; provenance
+        comes from the caller's identity (design docs 0009, 0036 §3.2).
+        The one exception is that the presence of a `verified` key
+        decides how OKF's `stable` status maps onto ochakai's (design doc
+        0036 §3.4).
+
         `index.md` is one level of the tree — the subdirectories directly
         under the path, each with the count of entries beneath, plus the
         entries at that level (design docs 0014, 0016). Rejected and
@@ -465,23 +502,44 @@ paths:
             The object's bundle path — "metrics/revenue.md",
             "metrics/revenue/chart.png", or a reserved "index.md" /
             "metrics/log.md". Slashes are real path separators.
+
+            **The empty path is the bundle itself**: `/api/v1/bundle/`
+            with `Accept: application/gzip` is the archive of everything,
+            and with `Accept: application/json` the root `index.md` is at
+            `/api/v1/bundle/index.md`. A path template parameter cannot
+            be written as empty in OpenAPI, so this is said here rather
+            than in the path — as with the slashes above, the prose is as
+            precise as the format allows.
           schema: { type: string }
         - name: limit
           in: query
           description: log.md only — maximum entries (default and max 1000).
           schema: { type: integer }
+        - name: attachments
+          in: query
+          description: >
+            `Accept: application/gzip` only — `false` archives the
+            markdown without the files entries show. Their bytes live in
+            GCS, so a periodic backup can copy them from there directly
+            instead of pulling them through here. A value that is neither
+            `true` nor `false` is a 400.
+          schema: { type: boolean, default: true }
       responses:
         "200":
           description: >
-            The object: a concept's document or View, a file's bytes, or
-            a generated file and its structured form.
+            The object: a concept's document or View, a file's bytes, a
+            generated file and its structured form, or — under
+            `Accept: application/gzip` — the subtree at this path as an
+            OKF bundle.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
             ETag: { $ref: "#/components/headers/ETag" }
             Content-Disposition:
-              description: Files only — inline for an image, a PDF or plain text; attachment otherwise (design doc 0046 §3.2).
+              description: Files and archives — inline for an image, a PDF or plain text; attachment otherwise (design doc 0046 §3.2).
               schema: { type: string }
           content:
+            application/gzip:
+              schema: { type: string, format: binary, description: The subtree at this path as an OKF bundle. }
             "*/*":
               schema: { type: string, format: binary, description: A file's bytes, under the media type sniffed when it was stored. }
             text/markdown:
@@ -1581,64 +1639,6 @@ paths:
                       drafts: 0
                       reported_wrong: 0
                       past_expiry: 0
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-  /api/v1/export:
-    get:
-      operationId: exportOKF
-      summary: Export the knowledge base as an OKF bundle
-      description: >
-        Streams a tar.gz of the whole knowledge base in Open Knowledge
-        Format (markdown + YAML frontmatter, one concept per entry, with
-        index.md files), attachment files included. Your knowledge is
-        yours.
-
-
-        Written as it is read — indexes first, then entries in batches,
-        then one attachment at a time — so the server never holds the
-        whole bundle in memory. Because the response starts before the
-        last file is read, a failure mid-export can only truncate the
-        stream: verify a backup by reading the archive, not by the status
-        code. The server logs every such failure at error level, naming
-        the file it stopped on.
-
-
-        There is no matching import endpoint, and that is deliberate
-        (design doc 0015 §3.2): importing a bundle is a loop over the
-        endpoints already here, so a server-side version would add a
-        second path to the same outcome without adding a capability.
-        To write your own importer against any OKF bundle: walk the
-        tar.gz and PUT every member to /api/v1/bundle/{path} at the path
-        it arrived at. One address takes both kinds — the bytes decide
-        which — so there is nothing to attribute and nothing to route.
-        `index.md` files are generated on export and are not entries.
-        Frontmatter keys the server owns — `generated`, `verified`,
-        `created_by`, `rejected_by`, `rejected_at`, and the pre-v0.2
-        spellings `timestamp` / `verified_by` / `verified_at` — are
-        ignored on write; provenance comes from the caller's identity
-        (design docs 0009, 0036 §3.2). The one exception is that the
-        presence of a `verified` key decides how OKF's `stable` status
-        maps onto ochakai's (design doc 0036 §3.4). `ochakai import`
-        walks the same loop, still routing a concept and an attachment
-        through the older addresses it was written against — the same
-        outcome by a longer route, until they go.
-      parameters:
-        - name: attachments
-          in: query
-          description: >
-            `false` exports the markdown only. Attachment bytes live in
-            GCS, so a periodic backup can copy them from there directly
-            instead of pulling them through this endpoint. A value that
-            is neither `true` nor `false` is a 400.
-          schema: { type: boolean, default: true }
-      responses:
-        "200":
-          description: OKF bundle.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/gzip:
-              schema: { type: string, format: binary }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/reembed:

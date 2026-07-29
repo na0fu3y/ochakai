@@ -207,7 +207,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 
 	// Export: the bundle carries the entry at its canonical path.
-	resp, err = http.Get(srv.URL + "/api/v1/export")
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestRESTIntegration(t *testing.T) {
 	// ?attachments=false skips the bytes: a CI backup can take the
 	// entries from here and the files straight from GCS, which is both
 	// cheaper and the only sane path once attachments outweigh the text.
-	resp, err = http.Get(srv.URL + "/api/v1/export?attachments=false")
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "attachments=false")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestRESTIntegration(t *testing.T) {
 		resp.Body.Close()
 	}
 	removeEntries(t, srv, planted...)
-	resp, err = http.Get(srv.URL + "/api/v1/export?attachments=false")
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "attachments=false")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1687,4 +1687,20 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 	if elsewhere.Queues != (domain.QueueCounts{}) {
 		t.Errorf("a neighbouring prefix counted %+v, want all zero", elsewhere.Queues)
 	}
+}
+
+// getArchive asks a bundle path for its OKF archive: the representation
+// an Accept header selects (design doc 0046 §3.5), which is why this is
+// not a plain http.Get.
+func getArchive(t *testing.T, url, query string) (*http.Response, error) {
+	t.Helper()
+	if query != "" {
+		url += "?" + query
+	}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Accept", "application/gzip")
+	return http.DefaultClient.Do(req)
 }

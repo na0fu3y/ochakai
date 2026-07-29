@@ -337,8 +337,11 @@ func TestExportStreamsBody(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/api/v1/export" {
+				if r.URL.Path != "/api/v1/bundle/" {
 					t.Errorf("path = %s", r.URL.Path)
+				}
+				if a := r.Header.Get("Accept"); a != "application/gzip" {
+					t.Errorf("Accept = %q, want the archive representation", a)
 				}
 				if got := r.URL.Query().Get("attachments"); got != tc.wantParam {
 					t.Errorf("attachments = %q, want %q", got, tc.wantParam)

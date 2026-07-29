@@ -416,7 +416,7 @@ is that the bundle semantics — attributing loose files to entries,
 skipping what does not belong, ignoring the frontmatter keys the server
 owns — live in the client. To load OKF bundles from something other than
 this binary, [api/openapi.yaml](api/openapi.yaml) spells out what that
-loop does under `/api/v1/export`.
+loop does, under `GET /api/v1/bundle/{path}`.
 
 The REST API (`/api/v1`) is a superset of these tools, adding bulk
 export, the human-facing reads (the bundle's `index.md` and `log.md`,

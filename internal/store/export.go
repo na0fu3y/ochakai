@@ -64,10 +64,11 @@ func (e *ExportSnapshot) Close(ctx context.Context) {
 // entry, in id order — what index.md files are built from, and the id list
 // the rest of the export walks. Never a body: the index names entries, it
 // does not carry them.
-func (e *ExportSnapshot) IndexRows(ctx context.Context) ([]domain.Knowledge, error) {
+func (e *ExportSnapshot) IndexRows(ctx context.Context, prefix string) ([]domain.Knowledge, error) {
 	rows, err := e.tx.Query(ctx,
 		`SELECT type, id, title, description FROM object
-		  WHERE deleted_at IS NULL AND id IS NOT NULL ORDER BY id`)
+		  WHERE deleted_at IS NULL AND id IS NOT NULL`+underPrefix("", "$1")+`
+		  ORDER BY id`, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -104,11 +105,11 @@ func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.
 // still fails when it is reached. The metadata being consistent is what
 // makes that failure visible as a missing file rather than as an archive
 // quietly disagreeing with its own index.
-func (e *ExportSnapshot) AttachmentMeta(ctx context.Context) ([]ExportAttachment, error) {
+func (e *ExportSnapshot) AttachmentMeta(ctx context.Context, prefix string) ([]ExportAttachment, error) {
 	rows, err := e.tx.Query(ctx, `SELECT k.id, `+fileCols+`
 		FROM object k JOIN object f ON `+attributedTo+`
-		WHERE k.id IS NOT NULL AND k.deleted_at IS NULL
-		ORDER BY k.id, f.path`)
+		WHERE k.id IS NOT NULL AND k.deleted_at IS NULL`+underPrefix("k.", "$1")+`
+		ORDER BY k.id, f.path`, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -131,4 +132,19 @@ func (e *ExportSnapshot) AttachmentMeta(ctx context.Context) ([]ExportAttachment
 		return nil, errNoBlobStore
 	}
 	return atts, nil
+}
+
+// underPrefix scopes an export to one subtree, matched on segment
+// boundaries like every other path scope (design doc 0041 §2.2): a
+// "metrics" scope covers metrics itself and everything under "metrics/",
+// and leaves "metrics-legacy/churn" alone. An empty prefix is the whole
+// bundle and adds no predicate, so the archive of everything runs the
+// query it always ran.
+//
+// The parameter is always bound, empty or not: a query text that changed
+// with the argument would be a second prepared statement for the same
+// question.
+func underPrefix(col, arg string) string {
+	return " AND (" + arg + " = '' OR " + col + "id = " + arg +
+		" OR left(" + col + "id, length(" + arg + ") + 1) = " + arg + " || '/')"
 }

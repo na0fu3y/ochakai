@@ -69,13 +69,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (15)
+## REST (14)
 
 - `DELETE /api/v1/bundle/{path}`
 - `DELETE /api/v1/reject/{id}`
 - `GET /api/v1/bundle/{path}`
 - `GET /api/v1/context`
-- `GET /api/v1/export`
 - `GET /api/v1/queues`
 - `GET /api/v1/search`
 - `GET /api/v1/stats`
@@ -87,15 +86,18 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `POST /api/v1/verify/{id}`
 - `PUT /api/v1/bundle/{path}`
 
-19 → 16 → 15。[0046 §3.5](design/0046-bundle-address-space.md) の畳み込み
-で、**消えているのは面であって能力ではない**。concept の第二の住所
-(`/api/v1/knowledge/{id}` の 3 操作)が消え、一覧は `/api/v1/search` に
-なり、`/api/v1/backlinks/{id}` は同じ面の `links_to=` フィルタになった —
-「これを指しているのは何か」は entry の集合を返す問いで、`source=` と
-同じ形の逆引きだったからである。
+19 → 14。[0046 §3.5](design/0046-bundle-address-space.md) の畳み込みが
+**完了した**。消えたのは面であって能力ではない — concept の第二の住所
+(`/api/v1/knowledge/{id}` 3 操作)、`/api/v1/backlinks/{id}`(検索の
+`links_to=` へ)、`/api/v1/export`(バンドルのパスに
+`Accept: application/gzip` で、ルートが全体)。一覧は `/api/v1/search`
+に改名した。
 
-残るは **`/api/v1/export`** 1 つ。`Accept: application/gzip` の部分木に
-吸収されると §3.5 が決めているが、後継がまだ無い。畳み終えると 14。
+**8 面**という §3.5 の数え方では、bundle(3)・search・context・move・
+verify・reject(2)・usage(2)・reembed で 12 操作。残る 2 つは §3.5 より
+後の決定で足された `queues`([0049](design/0049-queue-counts.md))と
+`stats`([0051](design/0051-instance-metrics-and-search-misses.md))で、
+どちらもループの測定である。
 
 ## MCP (8)
 

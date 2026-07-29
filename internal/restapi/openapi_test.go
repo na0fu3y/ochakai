@@ -96,7 +96,20 @@ var idAddressed = []string{
 // only as `type: string`, and any single segment satisfies that. The
 // method, query, headers, both bodies and the status code stay under the
 // spec's eye, which is the whole of what drifts.
+//
+// The bundle root is the same gap seen from the other end. "" is a
+// legal bundle path — it is the whole bundle, and GET /api/v1/bundle/
+// with Accept: application/gzip is how the archive of everything is
+// asked for (design doc 0046 §3.5) — but a path *template* parameter
+// cannot match the empty string in OpenAPI, and there is no syntax that
+// would let it. Standing one placeholder segment in keeps the request
+// under the same checks as any other, which is the point; the spec says
+// in prose that the root is spelled with an empty path, because that is
+// as precise as the format allows.
 func forSpecRouting(p string) string {
+	if p == bundlePath {
+		return bundlePath + "-"
+	}
 	for _, prefix := range idAddressed {
 		if rest, ok := strings.CutPrefix(p, prefix); ok && strings.Contains(rest, "/") {
 			return prefix + strings.ReplaceAll(rest, "/", "-")
@@ -104,6 +117,10 @@ func forSpecRouting(p string) string {
 	}
 	return p
 }
+
+// bundlePath is the address every object of the bundle lives under, and
+// with nothing after it, the bundle itself.
+const bundlePath = "/api/v1/bundle/"
 
 // carriesOpaqueBytes reports whether this request stores raw bytes: a
 // PUT of a file, whose body is the file and whose Content-Type is
@@ -115,7 +132,7 @@ func forSpecRouting(p string) string {
 // `{type: string, format: binary}` asserts nothing about the bytes,
 // which is the whole point of a file.
 func carriesOpaqueBytes(r *http.Request) bool {
-	return r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/bundle/")
+	return r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, bundlePath)
 }
 
 // sniffedResponse reports whether a response's media type was decided by

@@ -591,12 +591,17 @@ func (c *Client) Stats(ctx context.Context, days int) (*domain.Stats, error) {
 
 // Export streams the knowledge base as an OKF tar.gz bundle. The caller
 // must close the reader.
+//
+// It is a read of the bundle root asking for the archive representation
+// (design doc 0046 §3.5): an archive is the bundle at a path, so it is
+// answered at the address of that path rather than at an endpoint named
+// after downloading.
 func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, error) {
 	var q url.Values
 	if !attachments {
 		q = url.Values{"attachments": {"false"}}
 	}
-	resp, err := c.get(ctx, "/api/v1/export", q)
+	resp, err := c.doAccept(ctx, http.MethodGet, "/api/v1/bundle/", q, nil, "application/gzip")
 	if err != nil {
 		return nil, err
 	}
