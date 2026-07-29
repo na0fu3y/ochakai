@@ -20,6 +20,38 @@ last entry.
 
 ### Added
 
+- **BREAKING** — `GET /api/v1/backlinks/{id}` is retired. What points at
+  an entry is a filter on the search face now (design doc
+  [0046](docs/design/0046-bundle-address-space.md) §3.5):
+
+  ```
+  GET /api/v1/backlinks/metrics/revenue  →  GET /api/v1/search?links_to=metrics/revenue
+  ```
+
+  It is the reverse lookup `source=` already was — "what cites this
+  material" and "what points at this entry" are the same shape of
+  question, and both answer with a set of entries rather than a ranking.
+  Having one as an endpoint and the other as a filter meant the composable
+  one could be narrowed by type, status, trust or path while the other
+  could not.
+
+  What it gains: every filter, any `sort`, and a `cursor` — the endpoint
+  capped at 100 rows with no way to read the 101st. Two things change with
+  it. Rows come back in **address order** rather than most-recently-updated
+  first, which is what a listing that can be resumed costs (design doc
+  0050). And **rejected entries are excluded** unless `rejected=true`, as
+  on every other listing; the endpoint returned them.
+
+  `ochakai backlinks <id>` is unchanged as a command and asks this way
+  underneath; `ochakai search --links-to <id>` is the same question with
+  the rest of the filters available. The web UI's "linked from" is
+  unchanged. **MCP does not get `links_to`** — a tool schema is paid for
+  out of the agent's context, and an agent that wants the reverse edge
+  already gets it inside `get_context`, which follows it when packing
+  companions (design docs 0015 §3.1, 0046 §3.14).
+
+  The REST surface goes from 16 operations to 15 (docs/surface.md).
+
 - **BREAKING** — `GET|PUT|DELETE /api/v1/knowledge/{id}` is retired, and
   `GET /api/v1/knowledge` is now `GET /api/v1/search` (design doc
   [0046](docs/design/0046-bundle-address-space.md) §3.5). A concept is

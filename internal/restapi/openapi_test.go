@@ -80,7 +80,6 @@ var idAddressed = []string{
 	"/api/v1/verify/",
 	"/api/v1/reject/",
 	"/api/v1/usage/",
-	"/api/v1/backlinks/",
 }
 
 // forSpecRouting collapses a multi-segment id down to one segment so the

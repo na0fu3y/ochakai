@@ -142,6 +142,11 @@ type SearchParams struct {
 	// of sources[].resource (design doc 0037 §2.3). Composes with Query
 	// and with any Sort.
 	Source string
+	// LinksTo narrows to entries whose body links at this id — "what
+	// points at this entry", which had an endpoint of its own until
+	// design doc 0046 §3.5 folded it here. Composes with Query and with
+	// any Sort; on its own it lists in address order and pages.
+	LinksTo string
 	// Prefixes narrow to entries addressed under one of these paths
 	// (design doc 0041). Repeatable and OR-ed, matched on segment
 	// boundaries. Composes with Query and with any Sort.
@@ -191,6 +196,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 	}
 	if p.Source != "" {
 		q.Set("source", p.Source)
+	}
+	if p.LinksTo != "" {
+		q.Set("links_to", p.LinksTo)
 	}
 	for _, pre := range p.Prefixes {
 		q.Add("prefix", pre)
@@ -351,15 +359,21 @@ func reservedPath(prefix, name string) string {
 	return escapedPath("/api/v1/bundle/", strings.TrimSuffix(prefix, "/")+"/"+name)
 }
 
-// Backlinks fetches live entries whose links point at the given entry,
-// most recently updated first (GET /api/v1/backlinks/{id}).
-// limit 0 uses the server default.
+// Backlinks fetches live entries whose links point at the given entry —
+// the links_to reverse lookup on the search face, which is where the
+// question lives now (design doc 0046 §3.5). limit 0 uses the server
+// default. The rows come back in address order rather than by recency,
+// which is what a listing that can be resumed costs (design doc 0050).
 func (c *Client) Backlinks(ctx context.Context, id string, limit int) ([]domain.Summary, error) {
-	var out struct {
-		Entries []domain.Summary `json:"entries"`
+	page, err := c.Search(ctx, SearchParams{LinksTo: id, Limit: limit})
+	if err != nil {
+		return nil, err
 	}
-	err := c.doJSON(ctx, http.MethodGet, escapedPath("/api/v1/backlinks/", id), limitQuery(limit), nil, &out)
-	return out.Entries, err
+	rows := make([]domain.Summary, len(page.Hits))
+	for i, h := range page.Hits {
+		rows[i] = h.Summary
+	}
+	return rows, nil
 }
 
 // limitQuery renders an optional limit as query parameters (nil when

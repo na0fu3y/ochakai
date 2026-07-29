@@ -992,11 +992,18 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 		}
 		return s.list(ctx, sort, cursor, f, limit)
 	}
-	// A source filter with nothing to search by is the reverse lookup:
-	// "what derives from this material" has no text to rank, so it lists
-	// (design doc 0037 §2.3).
-	if strings.TrimSpace(query) == "" && f.Source != "" {
-		return s.list(ctx, sortBySource, cursor, f, limit)
+	// A reverse lookup with nothing to search by lists rather than
+	// searches: "what derives from this material" (design doc 0037 §2.3)
+	// and "what links at this entry" both have a set for an answer and no
+	// text to rank it by. Both list in address order, and the mode is
+	// named so a cursor from one cannot resume the other.
+	if strings.TrimSpace(query) == "" {
+		switch {
+		case f.Source != "":
+			return s.list(ctx, sortBySource, cursor, f, limit)
+		case f.LinksTo != "":
+			return s.list(ctx, sortByLinksTo, cursor, f, limit)
+		}
 	}
 	if cursor != "" {
 		return nil, searchBoundError()
@@ -1008,10 +1015,14 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 	return &Listing{Hits: hits}, nil
 }
 
-// sortBySource is the listing mode a source filter with no query selects.
-// Not one of domain.ListSorts: no caller can ask for it by name, because
-// the filter already says what is wanted.
-const sortBySource = "source"
+// The listing modes a reverse-lookup filter with no query selects.
+// Neither is one of domain.ListSorts: no caller can ask for them by name,
+// because the filter already says what is wanted. They are distinct so
+// that a cursor names the listing it came from.
+const (
+	sortBySource  = "source"
+	sortByLinksTo = "links_to"
+)
 
 // askableKeys are the frontmatter keys "fm." answers, and askableHint is
 // the list a refusal shows. Both come from the domain vocabulary, so the
@@ -1134,8 +1145,10 @@ func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, aft
 	switch sort {
 	case "stale_after":
 		list = s.Store.ListByStaleAfter
-	case sortBySource:
-		list = s.Store.ListBySource
+	case sortBySource, sortByLinksTo:
+		// Both reverse lookups are the same query with a different
+		// filter, in address order (design doc 0050: a listing pages).
+		list = s.Store.ListByAddress
 	}
 	entries, err := list(ctx, f, after, limit)
 	if err != nil {
@@ -1177,17 +1190,6 @@ func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain
 		limit = 50
 	}
 	return s.Store.ListRevisions(ctx, domain.Normalize(id), limit)
-}
-
-// Backlinks lists live entries whose links point at the given entry,
-// most recently updated first — the reverse edge the web UI shows as
-// "linked from" (Context already follows it when packing companions).
-// No usage is recorded: browsing an entry's neighbors is not a search.
-func (s *Service) Backlinks(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-	return s.Store.ListLinkingTo(ctx, domain.Normalize(id), limit)
 }
 
 // Usage returns usage totals for one entry (404 when the entry is gone).

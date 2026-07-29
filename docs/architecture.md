@@ -272,8 +272,10 @@ declared job.
 
 The value of writing the roles down is that it makes the omissions
 reviewable. MCP carries no `browse` (walking a tree is multi-round-trip
-exploration, the opposite of `get_context`), no `revisions` or
-`backlinks` (duplicated or too heavy in tokens), no attachment writes
+exploration, the opposite of `get_context`), no `revisions` and no
+`links_to` reverse lookup (duplicated or too heavy in tokens — an agent
+that wants what points at an entry gets it inside `get_context`, which
+follows the same edge), no attachment writes
 (base64 in a tool argument wastes tokens, and an agent's write-back
 should be searchable text), no bulk export or import, and no `verify` —
 re-verification is a human judgment. The web UI carries no outcome

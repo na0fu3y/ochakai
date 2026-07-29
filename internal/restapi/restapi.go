@@ -2,7 +2,8 @@
 // (the bundled one lives in internal/webui). It is a superset of the MCP
 // tools: the same read, write and usage operations plus the bulk export
 // endpoint that makes no sense as an agent tool call, and human-facing
-// endpoints (the reserved bundle files, backlinks) that stay off MCP by
+// endpoints (the reserved bundle files, the links_to reverse lookup)
+// that stay off MCP by
 // design (agents get search/get_context instead; design doc 0015 records
 // the per-surface policy). The CLI covers this whole surface; the spec is
 // committed at api/openapi.yaml.
@@ -57,7 +58,11 @@ func Handler(svc *service.Service) http.Handler {
 	// instead of searching — the feed for canary runs.
 	// source narrows to the entries citing one resource — the reverse of
 	// sources[].resource (design doc 0037 §2.3) — and composes with a
-	// query or with any sort. prefix narrows to the entries addressed
+	// query or with any sort. links_to is the other reverse lookup, the
+	// one /api/v1/backlinks/{id} used to be a face of its own for: what
+	// points at this entry. Neither needs a query; on their own they list
+	// in address order and page with a cursor, which backlinks could not
+	// do (design doc 0046 §3.5, 0050). prefix narrows to the entries addressed
 	// under a path, repeatable and OR-ed, for scoping a search to a team's
 	// subtree and the shared one at once (design doc 0041).
 	// cursor walks a listing past the limit — a listing has a total order
@@ -80,6 +85,7 @@ func Handler(svc *service.Service) http.Handler {
 			Statuses:    domain.ToStatuses(q["status"]),
 			Tags:        q["tag"],
 			Source:      q.Get("source"),
+			LinksTo:     q.Get("links_to"),
 			Prefixes:    q["prefix"],
 			Trust:       domain.ToTrusts(q["trust"]),
 			Rejected:    rejected,
@@ -109,9 +115,9 @@ func Handler(svc *service.Service) http.Handler {
 	// web UI's tree, which should not have to parse a document to draw a
 	// sidebar. A representation is not a second surface.
 	//
-	// PUT and DELETE are refused, for two different reasons (below). The
-	// rest of the bundle joins this address in a later change; today a
-	// path that is not one of the two reserved names is a 404 on read.
+	// Every other path is an object of the bundle — a concept at
+	// <id>.md, a file at its own path — and this is the only address any
+	// of them has (design doc 0046 §3.5).
 	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
 		dir, base := splitReserved(path)
@@ -462,30 +468,6 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, st)
 	})
 
-	// GET /api/v1/backlinks/{id...} — live entries whose links point at
-	// this entry, most recently updated first. The reverse edge
-	// get_context follows when packing companions, exposed so UIs can
-	// show "linked from" next to an entry's own links.
-	mux.HandleFunc("GET /api/v1/backlinks/{id...}", func(w http.ResponseWriter, r *http.Request) {
-		limit, err := queryInt(r.URL.Query(), "limit")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		entries, err := svc.Backlinks(r.Context(), r.PathValue("id"), limit)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		// A backlink row names an entry; it does not hand it over. The
-		// projection is what a caller needs to decide whether to follow
-		// the edge (design doc 0043 §3.5).
-		rows := make([]domain.Summary, len(entries))
-		for i := range entries {
-			rows[i] = domain.SummaryOf(&entries[i])
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"entries": rows})
-	})
 	// A file has one address, and it is the path it lives at:
 	// /api/v1/bundle/{path} reads, writes and deletes it (design doc 0046
 	// §§3.3, 3.5). /api/v1/attachments/{id}/{name} is gone with the

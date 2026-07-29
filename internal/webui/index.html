@@ -1716,7 +1716,7 @@ async function viewDetail(id) {
         <p class="provenance">${u.last_used_at ? 'last used ' + esc(fmtDate(u.last_used_at)) : 'never used'}</p>`;
     },
     linked: async () => {
-      const { entries } = await api('/api/v1/backlinks/' + idPath(entry.id) + '?limit=100');
+      const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
       return () => (entries && entries.length)
         ? `<p class="provenance" style="margin:0 0 .8rem">Entries whose links point here — the entry's own links are in the Links tab.</p>`
           + entries.map(hitCard).join('')

@@ -25,7 +25,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	// when the deployment is read-only.
 	reads := map[string]bool{
 		"Get": true, "Search": true, "SearchOrList": true, "Context": true,
-		"Revisions": true, "Backlinks": true, "Usage": true, "Browse": true,
+		"Revisions": true, "Usage": true, "Browse": true,
 		// Counting the review queues is a read of the same feeds
 		// (design doc 0049): a read-only deployment still shows how much
 		// work is waiting, it just cannot be the one to do it. Stats

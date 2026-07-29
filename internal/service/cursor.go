@@ -83,7 +83,7 @@ func decodeCursor(enc, sort string, want int) (*store.After, error) {
 	// is named back: the rest is the caller's own bytes, and quoting them
 	// says nothing true about the request.
 	if parts[1] != sort {
-		if slices.Contains(domain.ListSorts, parts[1]) || parts[1] == sortBySource {
+		if slices.Contains(domain.ListSorts, parts[1]) || parts[1] == sortBySource || parts[1] == sortByLinksTo {
 			return nil, Invalidf("cursor belongs to the %s listing; it cannot resume the %s one", parts[1], sort)
 		}
 		return nil, malformedCursor()
@@ -126,7 +126,7 @@ func cursorKeys(sort string, h domain.SearchHit) []*string {
 	case "failed":
 		u := usageOf(h)
 		return []*string{cursorCount(u.Failed), cursorCount(u.Worked), cursorTime(h.VerifiedAt)}
-	default: // sortBySource orders by id alone
+	default: // the reverse lookups order by id alone
 		return nil
 	}
 }

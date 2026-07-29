@@ -162,6 +162,12 @@ type Filter struct {
 	// about one artifact that changed, and a disjunction of containment
 	// tests would not use the GIN index.
 	Source string
+	// LinksTo narrows to entries whose body links at this id — the
+	// reverse of the edge design doc 0024 derives from the markdown,
+	// and the question the web UI asks as "linked from". Single-valued
+	// like Source and for the same reason: it is about one entry, and
+	// the answer is a set rather than a ranking.
+	LinksTo string
 	// Prefixes narrow to entries addressed under one of these paths —
 	// the id is the address (design doc 0017), so this is how a caller
 	// scopes a search to a team's subtree, the company-wide one, or both
@@ -631,21 +637,15 @@ func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge,
 	return s.getOne(ctx, id, true)
 }
 
-// ListLinkingTo returns live entries whose links point at id, most
-// recently updated first. This is the reverse edge Context needs: the
-// insight that explains a metric links to the metric, not the other way
-// round. A stored target is always the resolved id, whichever of SPEC
-// §6's two forms the body wrote it in.
-func (s *Store) ListLinkingTo(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
-	return s.listLinkingTo(ctx, id, limit, knowledgeSelect, scanKnowledge)
-}
-
-// ListLinkingToDocs is ListLinkingTo for the caller that hands the
-// entries over rather than naming them: a context pack delivers its
-// companions as documents, and a companion read without one would come
-// back rendered while the entries beside it came back as written (design
-// doc 0046 §2.2). Backlinks stays on the lighter read — a row there is a
-// projection, and the document would be paid for and dropped.
+// ListLinkingToDocs returns live entries whose links point at id, most
+// recently updated first, with their documents. It is the context pack's
+// reverse edge: a pack delivers its companions as documents, and a
+// companion read without one would come back rendered while the entries
+// beside it came back as written (design doc 0046 §2.2).
+//
+// The reverse lookup a caller can ask for is the LinksTo filter instead
+// — a row there is a projection, and the document would be paid for and
+// dropped.
 func (s *Store) ListLinkingToDocs(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
 	return s.listLinkingTo(ctx, id, limit, knowledgeSelectDoc, scanKnowledgeDoc)
 }
@@ -1853,6 +1853,15 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		args = append(args, sourceContainment(f.Source))
 		conds = append(conds, fmt.Sprintf("%ssources @> $%d", prefix, len(args)))
 	}
+	if f.LinksTo != "" {
+		// The same containment the dedicated backlinks query used before
+		// this became a filter. There is no index on links, and there was
+		// none then either: the predicate is unchanged, and what changed
+		// is that it now composes with the rest of the filter instead of
+		// living in a query of its own.
+		args = append(args, linkContainment(f.LinksTo))
+		conds = append(conds, fmt.Sprintf("%slinks @> $%d", prefix, len(args)))
+	}
 	if len(f.Prefixes) > 0 {
 		// Matching is on segment boundaries, not raw string prefixes: a
 		// path is a sequence of segments, so "metrics" covers "metrics"
@@ -1950,6 +1959,17 @@ func sourceContainment(resource string) []byte {
 	return b
 }
 
+// linkContainment builds the jsonb document that matches an entry whose
+// links name the given target — the containment the reverse lookup asks
+// with.
+func linkContainment(target string) []byte {
+	b, err := json.Marshal([]map[string]string{{"target": target}})
+	if err != nil { // a string always marshals
+		panic(fmt.Sprintf("marshalling links filter %q: %v", target, err))
+	}
+	return b
+}
+
 // After is the position a listing resumes from: the values of the
 // ordering columns for the last row handed out, in the order they are
 // ordered by, with the id last (design doc 0050 §2.1). A nil element is
@@ -2025,12 +2045,18 @@ func keysetAfter(cols []orderCol, idExpr string, a *After, args *[]any) (string,
 	return " AND " + pred, nil
 }
 
-// ListBySource lists the entries a filter matches, by id. It exists for
-// the source lookup: "what cites this resource" is a question with no
-// text to rank by, so it lists rather than searches (design doc 0037
-// §2.3). Ordered by id because the answer is a set — a stable, readable
-// order beats a relevance score nothing computed.
-func (s *Store) ListBySource(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
+// ListByAddress lists the entries a filter matches, by id. It is the
+// listing the reverse lookups take: "what cites this resource" (design
+// doc 0037 §2.3) and "what links at this entry" are both questions with
+// no text to rank by, so they list rather than search. Ordered by id
+// because the answer is a set — a stable, readable order beats a
+// relevance score nothing computed, and it is a total order, so a cursor
+// can resume it (design doc 0050).
+//
+// Named for the order and not for either filter: which entries it
+// returns is the filter's business, and it had a filter's name while
+// serving two.
+func (s *Store) ListByAddress(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
 	keyset, err := keysetAfter(nil, "id", after, &args)
 	if err != nil {

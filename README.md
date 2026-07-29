@@ -419,8 +419,8 @@ this binary, [api/openapi.yaml](api/openapi.yaml) spells out what that
 loop does under `/api/v1/export`.
 
 The REST API (`/api/v1`) is a superset of these tools, adding bulk
-export, the human-facing browse/revisions/backlinks reads, and
-attachment writes — see
+export, the human-facing reads (the bundle's `index.md` and `log.md`,
+the `links_to` reverse lookup), and file writes — see
 [api/openapi.yaml](api/openapi.yaml). To keep golden queries trustworthy
 over time, run them as canaries from your CI:
 [docs/guides/golden-query-canary.md](docs/guides/golden-query-canary.md).
