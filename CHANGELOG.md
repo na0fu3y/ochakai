@@ -615,6 +615,14 @@ last entry.
   every file under the path now, at the path it lives at, plus the files
   an in-scope entry's body points at from outside the subtree.
 
+- **`DELETE …?purge=true` at a file's path removes the file** instead of
+  answering 404. `purge` names something only a concept has — a
+  tombstone still holding an id — and the handler read the parameter as
+  "this is a concept", so a file at that path was neither purged nor
+  deleted and the caller was told there was nothing there. It was, and
+  it went on being served. A file's one delete is already the
+  irreversible one, so the parameter changes nothing at its path.
+
 - **A concept written where a file already lives is a 409.** The two
   kinds of object share one address space (0046 §3.5), and the insert
   named the concept id in its conflict clause — which a file has none

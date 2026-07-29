@@ -1775,3 +1775,47 @@ func TestRESTIntegrationTheArchiveCarriesAFileNothingOwns(t *testing.T) {
 		t.Errorf("the archive does not carry %s: a file that entered the bundle did not leave it", loose)
 	}
 }
+
+// ?purge=true names something only a concept has — a tombstone still
+// holding an id. A file has none, and its one delete is already the
+// irreversible one, so the parameter is nothing to refuse over. What it
+// must not do is answer 404 for a file that is right there: a caller
+// scripting "remove this permanently" would read that as done.
+func TestRESTIntegrationPurgeOnAFileRemovesIt(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	path := fmt.Sprintf("restpurge%d/seed.csv", time.Now().UnixNano())
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+path,
+		bytes.NewReader([]byte("a,b\n1,2\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("writing the file = %d", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+path+"?purge=true", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE ?purge=true on a file = %d, want 204", resp.StatusCode)
+	}
+	got, err := http.Get(srv.URL + "/api/v1/bundle/" + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Body.Close()
+	if got.StatusCode != http.StatusNotFound {
+		t.Errorf("the file is still there after the purge: %d", got.StatusCode)
+	}
+}

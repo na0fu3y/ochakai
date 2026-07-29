@@ -394,7 +394,13 @@ func Handler(svc *service.Service) http.Handler {
 				// deliberately: the first is reversible, the second is
 				// not. Not on MCP — destroying history is a human
 				// decision (design docs 0015, 0031). A file has no
-				// tombstone to purge, so the parameter is a concept's.
+				// tombstone to purge, so the parameter is a concept's —
+				// and a file removed with it is simply removed, because
+				// its one delete is already the irreversible one. The
+				// fall-through runs whether or not purge was asked for:
+				// answering 404 for an object that is there, because the
+				// caller named a parameter that does not apply to it,
+				// tells them it is gone when it is not.
 				purge, err := queryBool(r.URL.Query(), "purge", false)
 				if err != nil {
 					writeError(w, err)
@@ -407,7 +413,7 @@ func Handler(svc *service.Service) http.Handler {
 				case isMarkdown:
 					err = svc.Delete(r.Context(), id, actor)
 				}
-				if errors.Is(err, store.ErrNotFound) && !purge {
+				if errors.Is(err, store.ErrNotFound) {
 					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
 				}
 				if err != nil {

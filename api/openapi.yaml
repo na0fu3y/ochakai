@@ -729,7 +729,10 @@ paths:
         blob store and nothing reclaims them afterwards. The purge itself
         is recorded — who destroyed which id, and how much history went
         with it — in the one table a purge does not touch (design doc
-        0031). A file has no tombstone, so the parameter is a concept's.
+        0031). A file has no tombstone, so the parameter is a concept's:
+        at a file's path it changes nothing and the file is removed, the
+        way it is without the parameter. A 404 there would say a file was
+        gone while it was still being served.
       parameters:
         - name: purge
           in: query
