@@ -1972,15 +1972,14 @@ func keysetAfter(cols []orderCol, idExpr string, a *After, args *[]any) (string,
 	for i := len(cols) - 1; i >= 0; i-- {
 		c, v := cols[i], a.Keys[i]
 		var strict, eq string
-		switch {
-		case v == nil:
+		if v == nil {
 			// Nothing sorts after a NULL in ASC NULLS LAST, so the walk
 			// can only continue among the other NULLs, by id.
 			if !c.null {
 				return "", fmt.Errorf("cursor holds no value for %s, which is never null", c.expr)
 			}
 			strict, eq = "false", c.expr+" IS NULL"
-		default:
+		} else {
 			*args = append(*args, *v)
 			ref := fmt.Sprintf("$%d::%s", len(*args), c.cast)
 			op := ">"
