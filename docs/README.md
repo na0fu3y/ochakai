@@ -1,8 +1,7 @@
 # Documentation
 
-Start with the [README](../README.md) — it is the manual as much as the
-pitch, and it carries the quick start, the MCP tool list, the knowledge
-types, and every environment variable.
+Start with the [README](../README.md) — what ochakai is, the quick start,
+and what it refuses to do. It is deliberately short; the manual is here.
 
 ## For someone evaluating ochakai
 
@@ -19,8 +18,27 @@ types, and every environment variable.
   deliberately refused.
 - [Changelog](../CHANGELOG.md) — what changed between releases.
 
+## For someone using it
+
+- [Writing knowledge](knowledge.md) — what goes in an entry: the type
+  vocabulary, ids as addresses, links that come from the prose,
+  attachments, the OKF frontmatter that carries trust, and what search
+  does with all of it.
+- [The improvement loop](loop.md) — recall, write-back, review, outcome
+  reports: four prompts that walk it end to end, the web UI's three
+  feeds, and what gets measured.
+- [CLI reference](cli.md) — every command's synopsis, flags and worked
+  examples. It is `ochakai <command> -h` rendered, and a test fails when
+  the two disagree, so it is readable before you have a binary and cannot
+  go stale after you do.
+- [Connecting an MCP client](guides/mcp-clients.md) — the eight tools an
+  agent sees, and the URL or the `mcp-stdio` bridge per client, with the
+  config file each one reads.
+
 ## For someone running it
 
+- [Requirements and configuration](configuration.md) — what ochakai needs
+  before it starts, and every environment variable it reads.
 - [Deploy on Cloud Run](../deploy/cloudrun/README.md) — the complete
   walkthrough, ~$10/month, including private IP, the IAP-fronted web UI,
   a security hardening checklist, and the upgrade path.
@@ -48,13 +66,6 @@ types, and every environment variable.
   `get_context` have something to show.
 - [examples/claude-code](../examples/claude-code) — drop-in agent
   instructions and the recall / write-back hooks.
-- [Connecting an MCP client](guides/mcp-clients.md) — the URL or the
-  `mcp-stdio` bridge, per client, with the config file each one reads and
-  the ones that cannot reach an IAM-restricted deployment at all.
-- [CLI reference](cli.md) — every command's synopsis, flags and worked
-  examples. It is `ochakai <command> -h` rendered, and a test fails when
-  the two disagree, so it is readable before you have a binary and cannot
-  go stale after you do.
 
 ## For someone changing it
 

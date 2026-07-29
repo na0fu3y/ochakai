@@ -168,8 +168,8 @@ Yes, two ways. Take a
 [release archive](https://github.com/na0fu3y/ochakai/releases) — linux,
 macOS and Windows on amd64 and arm64, with checksums and build provenance
 — or skip the client entirely and talk to the REST API, which is all the
-CLI does. The README's [Requirements](../README.md#requirements) section
-has a `curl` that creates an entry.
+CLI does. [Writing knowledge](knowledge.md) opens with a `curl` that
+creates an entry.
 
 ### What is an "entry", exactly?
 
