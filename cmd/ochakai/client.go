@@ -864,7 +864,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	k, err := readEntry(*file)
+	k, claimed, err := readEntry(*file)
 	if err != nil {
 		return err
 	}
@@ -894,7 +894,7 @@ func cmdCreate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	reportNotes(notes)
+	reportNotes(okf.NoteStoredClaim(notes, claimed, created.Document))
 	if *asJSON {
 		return printJSON(created)
 	}
@@ -932,7 +932,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	k, err := readEntry(*file)
+	k, claimed, err := readEntry(*file)
 	if err != nil {
 		return err
 	}
@@ -953,7 +953,7 @@ func cmdUpdate(ctx context.Context, args []string) error {
 		}
 		return err
 	}
-	reportNotes(notes)
+	reportNotes(okf.NoteStoredClaim(notes, claimed, updated.Document))
 	if *asJSON {
 		return printJSON(updated)
 	}
@@ -1209,7 +1209,7 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the entry still imports. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its entry (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing entries are replaced (kept as revisions; entries identical\nto what is stored are left untouched and reported as unchanged;\nentries the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by an entry's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside an entry's\ndirectory (<id>/<name>) attach to that entry. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no entry. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the entry still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per entry, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
@@ -1271,9 +1271,10 @@ func cmdImport(ctx context.Context, args []string) error {
 	}
 	// A document that carried a verified key is confirmed by whoever ran
 	// the import — the actor who put it through the review gate (design
-	// docs 0009 §3.2, 0043 §3.2). The values inside the key are never
-	// read: they are the exporting instance's observations, not claims
-	// this one can adopt.
+	// docs 0009 §3.2, 0043 §3.2). The values inside the key never become
+	// this instance's ledger: what the document said stays a claim beside
+	// it (design doc 0046 §2.2), and the verification recorded here is
+	// the importer's own.
 	confirm := func(d *okf.Doc) {
 		if !d.Verified {
 			return
@@ -1295,7 +1296,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		// replaces whatever is stored (the bundle is the source of truth
 		// for this loop), and whether the id was free is not something the
 		// bundle says anything about.
-		_, wasCreated, changed, notes, err := c.Put(ctx, k.ID, doc, "", false)
+		stored, wasCreated, changed, notes, err := c.Put(ctx, k.ID, doc, "", false)
 		if err != nil {
 			if isInvalid(err) {
 				skipEntry(k, err)
@@ -1303,6 +1304,13 @@ func cmdImport(ctx context.Context, args []string) error {
 			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
+		// The parse above already moved the document's own trust family
+		// under `received`, so the server never saw the keys and cannot
+		// report them. What it can answer is whether the claim stayed —
+		// this instance's own export form coming home is dropped instead
+		// (design doc 0046 §2.2), which is what keeps the Git review loop
+		// note-free.
+		notes = okf.NoteStoredClaim(notes, d.Claimed, stored.Document)
 		noted += len(notes)
 		reportNotes(notes)
 		if wasCreated {
@@ -1482,21 +1490,25 @@ func readBundleTarGz(r io.Reader) (map[string][]byte, error) {
 // readEntry reads a knowledge entry from path ("" or "-" = stdin) in
 // either of the interchange formats from design doc 0004 §5: an OKF
 // document (leading ---) or JSON.
-func readEntry(path string) (*domain.Knowledge, error) {
+//
+// claimed names the server-owned keys the document carried, which the
+// parse kept as its own claim rather than as provenance (design doc 0046
+// §2.2). Whether the claim survives the write is the server's answer, so
+// it travels to the call site rather than being reported here.
+func readEntry(path string) (k *domain.Knowledge, claimed []string, err error) {
 	var data []byte
-	var err error
 	if path == "" || path == "-" {
 		data, err = io.ReadAll(os.Stdin)
 	} else {
 		data, err = os.ReadFile(path)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return decodeEntry(data)
 }
 
-func decodeEntry(data []byte) (*domain.Knowledge, error) {
+func decodeEntry(data []byte) (*domain.Knowledge, []string, error) {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if bytes.HasPrefix(trimmed, []byte("---")) {
 		d, notes, err := okf.Parse(trimmed)
@@ -1504,20 +1516,20 @@ func decodeEntry(data []byte) (*domain.Knowledge, error) {
 			fmt.Fprintln(os.Stderr, "note:", n)
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// A verified key on a single-document write is not acted on: this
 		// is an edit, and confirming an entry is a separate call
 		// (ochakai verify). Only bundle import turns the key into a
 		// verification, because that is the review gate (design doc 0043
 		// §3.2).
-		return &d.Knowledge, nil
+		return &d.Knowledge, d.Claimed, nil
 	}
 	var k domain.Knowledge
 	if err := json.Unmarshal(data, &k); err != nil {
-		return nil, fmt.Errorf("input is neither an OKF document nor valid JSON: %w", err)
+		return nil, nil, fmt.Errorf("input is neither an OKF document nor valid JSON: %w", err)
 	}
-	return &k, nil
+	return &k, nil, nil
 }
 
 // extractTarGz unpacks the OKF bundle under dir, refusing entries that

@@ -307,7 +307,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
 			"different id instead.",
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
-		write, notes, err := in.toKnowledge()
+		write, notes, claimed, err := in.toKnowledge()
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
@@ -324,7 +324,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			if err != nil {
 				return nil, knowledgeOut{}, err
 			}
-			out, err := view(k, notes)
+			out, err := view(k, okf.NoteClaim(notes, claimed, k))
 			return nil, out, err
 		}
 		if err != nil {
@@ -334,7 +334,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		out, err := view(k, notes)
+		out, err := view(k, okf.NoteClaim(notes, claimed, k))
 		return nil, out, err
 	}))
 
@@ -610,18 +610,23 @@ func view(k *domain.Knowledge, notes []string) (knowledgeOut, error) {
 
 type writeIn struct {
 	ID       string `json:"id" jsonschema:"where the entry lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
-	Document string `json:"document" jsonschema:"the entry as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — recommended: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; defaults to draft — whether anyone confirmed the entry is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified} — the material this derives from), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other entries with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the entry's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) are ignored if present, so a document read back from ochakai can be edited and returned as-is"`
+	Document string `json:"document" jsonschema:"the entry as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — recommended: Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; defaults to draft — whether anyone confirmed the entry is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified} — the material this derives from), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other entries with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the entry's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) never set who created or confirmed the entry, so a document read back from ochakai can be edited and returned as-is; a document from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
 }
 
 // toKnowledge parses the document. Notes — values read differently than
 // written — come back with it, for the tool to hand to the agent: a
 // reinterpretation is never silent (design doc 0036 §3.4).
-func (in writeIn) toKnowledge() (*domain.Knowledge, []string, error) {
+//
+// claimed names the server-owned keys the document carried, which became
+// a claim rather than reaching a ledger (design doc 0046 §2.2). Whether
+// the claim survives is the write's answer, not the parse's, so the note
+// is added afterwards (okf.NoteClaim).
+func (in writeIn) toKnowledge() (k *domain.Knowledge, notes, claimed []string, err error) {
 	d, notes, err := okf.Parse([]byte(in.Document))
 	if err != nil {
-		return nil, nil, service.Invalidf("%s", err.Error())
+		return nil, nil, nil, service.Invalidf("%s", err.Error())
 	}
-	k := d.Knowledge
-	k.ID = in.ID
-	return &k, notes, nil
+	out := d.Knowledge
+	out.ID = in.ID
+	return &out, notes, d.Claimed, nil
 }

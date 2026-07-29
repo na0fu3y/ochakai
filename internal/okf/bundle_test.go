@@ -122,6 +122,11 @@ func TestBundleRoundTrip(t *testing.T) {
 	}
 	for i := range want {
 		w, g := want[i], got[i]
+		// The bundle was written by this instance, so the trust family in
+		// it is its own observation coming home rather than a claim — the
+		// call a write path makes with the entry at hand (design doc 0046
+		// §2.2).
+		asStored(&g.Knowledge, &w)
 		if g.Type != w.Type || g.ID != w.ID || g.Title != w.Title || g.Description != w.Description ||
 			g.Status != w.Status || g.Body != w.Body {
 			t.Errorf("entry %d envelope: got %+v, want %+v", i, g, w)

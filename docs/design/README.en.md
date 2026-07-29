@@ -131,12 +131,15 @@ For the shape of the system rather than the history of it, read
 - **[0009 OKF/Git round-trips and who owns
   provenance](0009-provenance-portability.md)** — *Proposed; its
   world-view was settled by 0036 §2.2 and carried into the stored shape
-  by 0043.* Provenance is what an instance
+  by 0043, and 0046 §2.2 narrowed "never read back" to "never believed".*
+  Provenance is what an instance
   observed, not a portable attribute, so bundles carry knowledge only and
   exported `created_by` / `verified_by` are historical reference that
-  import never reads back. A `--preserve-provenance` flag is refused:
-  with no authorization mechanism, it would let anyone self-assert
-  provenance and destroy the anchor 0002 depends on.
+  import never reads into a ledger. A `--preserve-provenance` flag is
+  refused: with no authorization mechanism, it would let anyone
+  self-assert provenance and destroy the anchor 0002 depends on. What
+  0046 §2.2 changed is only that the assertion is kept as a claim
+  instead of being destroyed — nothing derives trust from it.
   *For a user:* migrating to a new instance records the importer, so run
   migrations under a dedicated identity.
 
@@ -190,11 +193,18 @@ For the shape of the system rather than the history of it, read
   keep only SPEC §6's forms, so `ochakai://` leaves the bundle. Trust is
   SPEC §5.3's three tiers rather than a boolean, and the index is the
   frontmatter as `jsonb`, so a key the spec adds is queryable with no
-  migration.
+  migration. The one exception to storing the bytes as received is the
+  trust family, which cannot stay where it was because export writes the
+  instance's own `generated` / `verified` under the same names — but
+  §2.2 keeps what it said: a document's own trust family is a **claim**,
+  stored under `received`, held out of every ledger and out of the trust
+  tier, and reported rather than dropped in silence.
   *For a user:* REST collapses to `/api/v1/bundle/{path}` plus search,
   context, the ledgers and move; MCP is five tools; an entry written
   without a `status` reads as OKF's default (`stable`) and is unverified
-  until the ledger says otherwise.
+  until the ledger says otherwise; a document imported from another
+  instance keeps who it says generated and confirmed it, as a claim
+  nothing derives trust from.
 
 - **[0043 The document is the truth](0043-document-first.md)** —
   *Superseded by 0046, which keeps its world-view, status vocabulary,
