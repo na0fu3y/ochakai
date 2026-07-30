@@ -137,7 +137,6 @@ _ochakai() {
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
         '--limit[max full concepts]:limit:' \
         '--budget[stop rendering after ~bytes]:budget:' \
-        '--min-score[drop hits below this score]:min-score:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
       ;;
@@ -242,7 +241,7 @@ _ochakai() {
   case $cmd in
     search)        opts="--type --status --tag --prefix --source --links-to --trust --fm --rejected --sort --limit --cursor --json --url" ;;
     browse)        opts="--json --url" ;;
-    context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --min-score --json --url" ;;
+    context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     stats)         opts="--days --prefix --exit-code --json --url" ;;
@@ -348,7 +347,6 @@ complete -c ochakai -n '__fish_seen_subcommand_from search context revisions log
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max concepts per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'
 complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'stop rendering after ~bytes'
-complete -c ochakai -n '__fish_seen_subcommand_from context' -l min-score -x -d 'drop hits below this score'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -s f -r -F -d 'input file'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l only-if-new -d 'write only if the id is free'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the concept still has this version'

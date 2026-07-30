@@ -152,8 +152,6 @@ Flags:
     	print the raw JSON response
   -limit int
     	max full concepts (server default 5, max 20)
-  -min-score float
-    	drop hits scoring below this; scores depend on the server's search mode (matched-fragment weight plus boosts vs RRF rank fusion), so calibrate before use (0 = off)
   -prefix path
     	only concepts under this path, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands
   -status value

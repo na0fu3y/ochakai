@@ -548,9 +548,9 @@ For the shape of the system rather than the history of it, read
 
 - **[0015 Surface consistency](0015-surface-consistency.md)** —
   *Accepted; §4's verify-as-sugar judgment was overturned by 0025 §6, its
-  surface table restated by 0046 §3.14, and two omissions added to §3 —
-  `fm.` is not on the web UI (0047 §4), and neither is the producer
-  declaration (0052 §3.3).*
+  surface table restated by 0046 §3.14, and omissions added to §3 —
+  `fm.` is on neither the web UI (0047 §4) nor MCP (0058 §2.2), and
+  neither is the producer declaration (0052 §3.3).*
   Fixes what each surface is for and, more usefully, what each deliberately
   omits. REST is the contract; MCP's tool count is a context budget, so
   browse, revisions, backlinks, attachment writes, bulk export/import,
@@ -559,6 +559,26 @@ For the shape of the system rather than the history of it, read
   precondition that would make a safe replacement expressible.
   *For a user:* an agent that finds verified knowledge wrong reports the
   outcome or drafts a replacement; humans edit from REST, CLI or the web UI.
+
+- **[0058 Two filters nobody arrived through](0058-filters-nobody-arrived-through.md)**
+  — *Accepted; **breaking**.* The folding of 0046, 0055 and 0056 removed
+  second addresses for capabilities that stayed. This removes two entrances
+  that never carried anyone.
+  `min_score` is **gone** from REST and the CLI, with no replacement.
+  Scores are mode-dependent and uncalibrated — a floor that means something
+  under lexical matched-fragment weighting is nonsense under RRF rank
+  fusion (~0.02 scale) — which is why 0051 §3.1 refused a score threshold
+  when defining a search miss, and why the one shipped consumer, the recall
+  hook, passed a default of 0 (off). Bounding a response is what `budget`
+  already does, and it needs no calibration.
+  `fm.` comes off **MCP only**: it stays on REST and the CLI, so 0047's
+  vocabulary and its derivation are untouched. The same 944-character
+  description sat on two tools and made up 14% of the schema text
+  (1,888 of 13,099 characters) every connecting agent pays for, while
+  nothing — the web UI, the examples, the hooks — went through it.
+  *For a user:* if you passed `min_score`, it is ignored now; use `budget`.
+  If an MCP client passed `fm`, filter through the CLI or REST instead. The
+  tool count is still 8 — what dropped is what the schemas cost.
 
 - **[0033 Context hits are a ranking](0033-context-hits-are-a-ranking.md)**
   — *Accepted; 0046 adds the trust tier to each row.* Records the byte-budget decision for `/context` and strips

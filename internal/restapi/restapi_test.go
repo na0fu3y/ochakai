@@ -61,7 +61,6 @@ func TestBadRequestValidation(t *testing.T) {
 		{"bad log limit", "/api/v1/bundle/metrics/log.md?limit=abc", "invalid limit"},
 		{"bad links_to limit", "/api/v1/search?links_to=metrics/revenue&limit=1.5", "invalid limit"},
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
-		{"bad min_score", "/api/v1/context?q=x&min_score=high", "invalid min_score"},
 		{"bad index prefix", "/api/v1/bundle/..%2Fescape/index.md", "invalid prefix"},
 		// "fm." carries the OKF keys nothing else asks about (design
 		// doc 0047). The five with a column behind them, and every key

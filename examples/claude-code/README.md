@@ -39,14 +39,12 @@ never blocks a prompt or a stop.
 | Env var | Effect |
 |---|---|
 | `OCHAKAI_RECALL_BUDGET` | Max bytes the recall hook injects (default 4000) |
-| `OCHAKAI_RECALL_MIN_SCORE` | Drop hits below this score before injecting (default 0 = inject whenever anything matches) |
 
-Search scores are **not calibrated**: they depend on the server's search
-mode (matched-fragment weight plus boosts in lexical mode, RRF rank
-fusion in hybrid mode) and on your corpus. Before setting a floor, run
-`ochakai search "<typical prompt>" | cut -f1-2` for a few relevant and
-irrelevant prompts and pick a value that separates them; there is no
-universal default, which is why the hook ships with the floor off.
+The budget is the only knob, and it is the one that matters: what the
+hook spends is your agent's context window. The rendered output stops
+printing concepts once it is reached and says how many it left, so
+lowering it costs reach, not correctness — the agent can still
+`ochakai get` what it was told about.
 
 The recall hook skips slash commands. The write-back hook only fires in
 sessions whose transcript looks like data work (SQL, ochakai usage) and

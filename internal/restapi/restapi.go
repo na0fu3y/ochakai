@@ -537,11 +537,6 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		minScore, err := queryFloat(q, "min_score")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
 		budget, err := queryInt(q, "budget")
 		if err != nil {
 			writeError(w, err)
@@ -557,7 +552,7 @@ func Handler(svc *service.Service) http.Handler {
 				Trust:       domain.ToTrusts(q["trust"]),
 				Frontmatter: frontmatterFilter(q),
 			},
-			Limit: limit, MinScore: minScore, Budget: budget,
+			Limit: limit, Budget: budget,
 		})
 		if err != nil {
 			writeError(w, err)

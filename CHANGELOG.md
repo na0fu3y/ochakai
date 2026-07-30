@@ -20,6 +20,39 @@ last entry.
 
 ### Added
 
+- **BREAKING** — two filters nobody arrived through come off (design doc
+  [0058](docs/design/0058-filters-nobody-arrived-through.md)):
+
+  ```
+  GET /api/v1/context?min_score=   →  gone; use budget=
+  ochakai context --min-score      →  gone; use --budget
+  MCP search_concepts / get_context "fm"  →  gone (REST ?fm.<key>= and
+                                             ochakai --fm are unchanged)
+  ```
+
+  `min_score` had no working consumer. A score floor is only meaningful
+  once calibrated against a corpus in a known search mode, and ochakai's
+  scores are neither comparable nor calibrated — matched-fragment weight
+  plus boosts under lexical, RRF (~0.02 scale) under hybrid — which is
+  why design doc 0051 §3.1 refused a score threshold when it defined a
+  search miss. MCP never offered it, the web UI never used it, and the
+  one shipped caller, the `ochakai-recall` hook, passed a default of `0`
+  (off) beside a README paragraph saying there is no universal default.
+  **Bounding a response is `budget`'s job**, and it asks nobody to
+  calibrate anything: what does not fit comes back named rather than
+  dropped. `OCHAKAI_RECALL_MIN_SCORE` is gone from the hook.
+
+  `fm` comes off **MCP only** — REST and the CLI keep it, so 0047's
+  vocabulary and its derivation from the OKF envelope keys are
+  unchanged. What comes off is its 944-character schema description,
+  which sat on two tools and made up **14% of the schema text (1,888 of
+  13,099 characters) every connecting agent pays for**, for a filter
+  nothing shipped went through. The tool count is still 8: what dropped
+  is a cost the tool count never showed.
+
+  Query parameters go 19 → 18, and [docs/surface.md](docs/surface.md)'s
+  ceiling with them.
+
 - **BREAKING** — two CLI commands fold into the ones that already
   answered the same question, and taking back a rejection gets one
   spelling everywhere (design doc

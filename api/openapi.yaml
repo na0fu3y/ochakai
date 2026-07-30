@@ -957,16 +957,6 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, default: 5, maximum: 20 }
-        - name: min_score
-          in: query
-          description: >
-            Drop hits scoring below this before expansion, for callers that
-            inject the pack automatically and prefer nothing over junk.
-            Scores are search-mode dependent and uncalibrated
-            (matched-fragment weight plus boosts vs RRF rank fusion) —
-            calibrate against your own corpus before use. Non-numeric
-            values are a 400.
-          schema: { type: number, default: 0 }
         - name: budget
           in: query
           description: >
