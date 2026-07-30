@@ -20,6 +20,38 @@ last entry.
 
 ### Added
 
+- **BREAKING** — a review queue is now named after the listing that shows
+  it (design doc
+  [0059](docs/design/0059-a-queue-is-named-by-its-listing.md)):
+
+  ```
+  GET /api/v1/stats  queues.reported_wrong  →  queues.failed
+                     queues.past_expiry     →  queues.stale_after
+                     queues.drafts          →  unchanged
+  ```
+
+  `ochakai stats` was printing its own evidence — each queue line says how
+  many are waiting and what to type to see them, and on two of the three
+  the two halves disagreed (`reported_wrong 1  ochakai search --sort
+  failed`). The sort names win because they **reuse words a reader has
+  already met**: `failed` is the outcome a caller reports through
+  `report_outcome`, and `stale_after` is OKF SPEC §5's own frontmatter
+  key, which is where the counted date comes from. The queue spellings
+  existed for nothing else. `drafts` keeps a name of its own because it is
+  not a single sort (`sort=usage` plus `status=draft`).
+
+  A CI job reading `jq .queues.reported_wrong` needs one edit; one reading
+  `jq '.queues | add'` needs none, and `ochakai stats --exit-code` reads
+  no key name at all. The counted sets, the counting and the number of
+  queues are unchanged.
+
+  Vocabulary goes 38 → 36, and [docs/surface.md](docs/surface.md)'s
+  ceiling with it. The counting learned the reverse of its own rule: one
+  spelling meaning two things in two families is two words to learn, and
+  **one thing wearing two names is one** — so a queue keyed by the sort
+  that lists it is no longer counted twice, and a queue key that stops
+  being a sort name shows up as a word again.
+
 - **BREAKING** — two filters nobody arrived through come off (design doc
   [0058](docs/design/0058-filters-nobody-arrived-through.md)):
 
