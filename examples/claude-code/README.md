@@ -11,7 +11,7 @@ Two layers, weakest to strongest:
    involved — the same trick memory layers use, minus the LLM:
    - `ochakai-recall.sh` (**UserPromptSubmit**) runs
      `ochakai context "<prompt>"` and injects the resulting pack —
-     full entries behind the top hits, links expanded — into the
+     full concepts behind the top hits, links expanded — into the
      context before the agent starts working. Automatic recall.
    - `ochakai-write-back.sh` (**Stop**) interrupts the agent once per
      data-work session, right before it stops, and asks it to save

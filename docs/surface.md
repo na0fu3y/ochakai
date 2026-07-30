@@ -7,12 +7,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 を先に決めている。
 
 数を出すだけでなく、上限も置く。**表面が増えたことを diff に出す**のが
-下の六つの節で、**増やすと決めたことを diff に出す**のが「上限」の節で
+下の七つの節で、**増やすと決めたことを diff に出す**のが「上限」の節で
 ある。エンドポイントを一本足す変更は
 [api/openapi.yaml](../api/openapi.yaml) の数十行の差分に埋もれるが、
 ここでは `## REST (14)` が `(15)` に変わる一行として出て、さらに上限の
 行を書き換えないと CI が通らない。
-`cmd/ochakai/surface_test.go` が六つの節を実物と突き合わせ、
+`cmd/ochakai/surface_test.go` が七つの節を実物と突き合わせ、
 食い違えば落ちる([0035](design/0035-verifiability.md):
 規約を信じるのではなく、外から不変条件を読む)。
 
@@ -76,8 +76,9 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - PARAM: 19
 - HEADER: 9
 - MCP: 8
-- CLI: 27
+- CLI: 25
 - ENV: 16
+- VOCAB: 38
 
 **天井は一つのファイルの一行で、誰でも上げられる。それは弱点ではなく
 狙いである。** この仕組みが買っているのは、上の節と同じく、**黙って
@@ -204,10 +205,9 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 既にその語で書いていたのにツール名だけが `knowledge` を名乗っていた。
 能力も引数も応答も変わらない。
 
-## CLI (27)
+## CLI (25)
 
 - `ochakai attach`
-- `ochakai backlinks`
 - `ochakai browse`
 - `ochakai completion`
 - `ochakai context`
@@ -221,7 +221,6 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `ochakai move`
 - `ochakai purge`
 - `ochakai put`
-- `ochakai queues`
 - `ochakai reembed`
 - `ochakai reject`
 - `ochakai report`
@@ -258,6 +257,75 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `OCHAKAI_VERTEX_MODEL`
 - `OCHAKAI_VERTEX_PROJECT`
 
+## VOCAB (38)
+
+七つ目の次元は**語**である。上の六つが数えているのは機構 — 呼べるもの、
+設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
+数えていなかった。型の綴り、ライフサイクル値、信頼の段、一覧モード、
+裁定、キューの名前、リビジョンが記録される動詞。どれもドキュメントが
+教え、誰かが覚えるものなのに、増やしても上の六つは 1 も動かない。
+
+**圧力はここへ逃げていた。** [0055](design/0055-one-ruling-one-face.md)
+は REST 3 操作を 1 本に畳んだが、覚える語は 3 つのままである(操作は
+1 つ、値が 3 つ)。[0054](design/0054-concept-is-the-okf-word.md) は
+MCP ツール 5 本を改名したが、本数は 8 のままで、**変わったのは利用者が
+知る語そのもの**だった。この文書は自分についてそう書いていた —
+「数え方を一つ足すたびに、次の逃げ道が一つ見えるようになるだけである」。
+これがその次の一つである。
+
+値は `internal/domain` から読む。各面が既にそこから語彙を取っている
+ので、**製品が言えるようになった瞬間に数に出る**。表記は
+`族.値`(`status.draft`、`sort.failed`)で、理由は二つある — 素の値を
+アルファベット順に並べても読めないこと、そして**一つの綴りが二つの族で
+別の意味を持つとき、それは覚える語が 2 つある**ということ(`failed` は
+一覧モードであり、同時に outcome の値でもある)。
+
+型は閉じた集合ではない([0038](design/0038-type-vocabulary-realignment.md):
+一行の値ならどれでも型になる)。ここで数えているのは**製品が教える
+推奨語彙**であって、書ける値の全体ではない。それでも数えるのは、
+11 の綴りを `--type` のヘルプにも MCP スキーマにも
+[knowledge.md](knowledge.md) の表にも書いている以上、それは利用者が
+払っているものだからである。
+
+- `change.attach`
+- `change.create`
+- `change.delete`
+- `change.detach`
+- `change.move`
+- `change.reject`
+- `change.update`
+- `change.verify`
+- `change.withdraw`
+- `outcome.failed`
+- `outcome.worked`
+- `queue.drafts`
+- `queue.past_expiry`
+- `queue.reported_wrong`
+- `ruling.rejected`
+- `ruling.verified`
+- `ruling.withdrawn`
+- `sort.failed`
+- `sort.stale_after`
+- `sort.usage`
+- `sort.verified_at`
+- `status.deprecated`
+- `status.draft`
+- `status.stable`
+- `trust.human-reviewed`
+- `trust.machine-confirmed`
+- `trust.unverified`
+- `type.API Endpoint`
+- `type.Attested Computation`
+- `type.BigQuery Dataset`
+- `type.BigQuery Table`
+- `type.Glossary Term`
+- `type.Insight`
+- `type.Metric`
+- `type.Playbook`
+- `type.Policy`
+- `type.Reference`
+- `type.Skill`
+
 ## 数えていないもの
 
 - **Web UI。** 自分のアドレス空間を持たず、`/api/v1` の client として
@@ -278,10 +346,15 @@ CI は通る。この仕組みが買っているのは、それを**気づかな
 
 数える次元を増やしても、それは変わらない。PARAM と HEADER が塞いだのは
 「操作を畳めば無条件に得」という**特定の逃げ道**であって、逃げ道一般では
-ない。まだ数えていないものは残っている — `sort=` の 4 つのモードは
-それぞれ別の意味論と別の limit 既定値と別の cursor 可否を持つのに
-`sort` 一語で 1 と数えられ、`GET /api/v1/bundle/{path}` は Accept と
-パスの接尾辞で 6 通りの別物を返して 1 と数えられる。**数え方を一つ足す
-たびに、次の逃げ道が一つ見えるようになるだけである。** それでよい。
-これは判断を置き換える装置ではなく、判断すべき瞬間を見えるようにする
-装置である。
+ない。VOCAB が塞いだのも一つで、「機構を畳んで語を増やせば得」という
+逃げ道である — `sort=` の 4 つのモードは `sort` 一語で 1 と数えられて
+いたが、いま `sort.*` として 4 語に数えられる。
+
+**そして次の逃げ道が見えている。** 4 つのモードは 4 語と数えられるように
+なったが、それぞれが別の limit 既定値と別の cursor 可否を持つことは
+まだどこにも数えられていない。`GET /api/v1/bundle/{path}` は Accept と
+パスの接尾辞で 6 通りの別物を返して 1 と数えられる。エラーの文言も、
+`ochakai://` という URI 形式も、`human:` / `process:` という actor の
+綴りも数えていない。**数え方を一つ足すたびに、次の逃げ道が一つ見える
+ようになるだけである。** それでよい。これは判断を置き換える装置では
+なく、判断すべき瞬間を見えるようにする装置である。

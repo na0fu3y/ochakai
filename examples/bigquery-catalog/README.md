@@ -1,7 +1,7 @@
 # BigQuery catalog sync
 
 A daily job that projects BigQuery table metadata into ochakai as
-`BigQuery Table` entries, so an agent asking about `shop.orders` finds the
+`BigQuery Table` concepts, so an agent asking about `shop.orders` finds the
 columns, the partition filter it must not forget, and whatever a human has
 since written underneath.
 
@@ -15,36 +15,36 @@ of the same REST API the CLI uses, under your own service account.
 
 ## It ships as knowledge, not as a script in a folder
 
-`bundle/` is a two-entry OKF bundle. Import it and the job documents
+`bundle/` is a two-concept OKF bundle. Import it and the job documents
 itself in the knowledge base it writes to:
 
 ```sh
 ochakai import examples/bigquery-catalog/bundle
 ```
 
-| Entry | Type | |
+| Concept | Type | |
 |---|---|---|
 | [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`, the parameters, the receipt, and every decision the projection makes |
 | [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | what the `executor` points at: the identity to run as, the IAM roles, the receipt fields |
 
 [`sync-bigquery-catalog.py`](bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py)
-is the computation itself. It is named by the entry's `computation` key as
+is the computation itself. It is named by the concept's `computation` key as
 a file rather than pasted into a `# Computation` fence — the form
 [OKF SPEC](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 §10.2 gives for a computation too long to inline — and it travels with the
-entry as an attachment, so `ochakai get jobs/sync-bigquery-catalog
+concept as an attachment, so `ochakai get jobs/sync-bigquery-catalog
 --download .` brings back the code with the contract. It sits in the
-entry-named directory beside the document, which is where `ochakai export`
+concept-named directory beside the document, which is where `ochakai export`
 puts an attachment and what the web UI's attachments tab tells you to
 reference (design doc [0013](../../docs/design/0013-attachment-files-gcs-only.md)).
 
 That shape is the point as much as the sync is. An agent told to refresh
 the catalog gets a contract that says *supply these parameters and run this
 file*, and SPEC §10.3 says in as many words that it must not author the
-computation instead. A knowledge base whose own maintenance job is an entry
+computation instead. A knowledge base whose own maintenance job is a concept
 inside it is one fewer thing living in a README nobody reads.
 
-The two entries import as **drafts**, on purpose. Verify them once you have
+The two concepts import as **drafts**, on purpose. Verify them once you have
 run the job in your own project and the receipt came back clean — which is
 also the moment you would want to correct the IAM roles for how you
 actually granted them.
@@ -59,8 +59,8 @@ python bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py \
   --ochakai-url https://ochakai-<hash>.run.app --dry-run
 ```
 
-`--dry-run` prints the entries it would write and needs no credentials for
+`--dry-run` prints the concepts it would write and needs no credentials for
 ochakai at all. Everything else — the daily schedule, the IAM grants, the
 ownership rule that keeps the job from flattening what a person wrote, and
 what is deliberately left out (Looker, a recommended-table flag, deletes) —
-is in the two entries.
+is in the two concepts.

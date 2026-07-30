@@ -34,7 +34,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// exportBatch is how many entries the exporter holds at once. Small
+// exportBatch is how many concepts the exporter holds at once. Small
 // enough that a knowledge base of any size costs the same peak memory;
 // large enough that the round trips disappear against the transfer.
 const exportBatch = 100
@@ -49,10 +49,10 @@ const exportBatch = 100
 // Your knowledge is yours.
 func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, prefix string) {
 	// Every read below comes from one snapshot. Streaming means the id
-	// list, the attachment metadata and the entries are read at
+	// list, the attachment metadata and the concepts are read at
 	// different moments, and a write landing between them produces an
 	// archive that disagrees with its own index — an index.md naming a
-	// file that is not there, an entry that moved appearing twice or
+	// file that is not there, a concept that moved appearing twice or
 	// not at all. The archive would look fine.
 	// Parsed before the snapshot: a rejected parameter should not
 	// have held a pooled connection open, however briefly.
@@ -152,7 +152,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 			return
 		}
 	}
-	// Entries in batches: one batch in memory at a time. The snapshot
+	// Concepts in batches: one batch in memory at a time. The snapshot
 	// does hold a pooled connection for the length of the download —
 	// the trade a point-in-time backup makes (see ExportSnapshot);
 	// batching bounds the memory, not the connection.
@@ -160,7 +160,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		end := min(start+exportBatch, len(ids))
 		batch, err := snap.ListByIDs(r.Context(), ids[start:end])
 		if err != nil {
-			fail(fmt.Sprintf("entries %d-%d", start, end), err)
+			fail(fmt.Sprintf("concepts %d-%d", start, end), err)
 			return
 		}
 		for i := range batch {
@@ -217,13 +217,13 @@ func Handler(svc *service.Service) http.Handler {
 	//
 	// With sort=verified_at, lists by verification age (oldest first)
 	// instead of searching — the feed for canary runs.
-	// source narrows to the entries citing one resource — the reverse of
+	// source narrows to the concepts citing one resource — the reverse of
 	// sources[].resource (design doc 0037 §2.3) — and composes with a
 	// query or with any sort. links_to is the other reverse lookup, the
 	// one /api/v1/backlinks/{id} used to be a face of its own for: what
-	// points at this entry. Neither needs a query; on their own they list
+	// points at this concept. Neither needs a query; on their own they list
 	// in address order and page with a cursor, which backlinks could not
-	// do (design doc 0046 §3.5, 0050). prefix narrows to the entries addressed
+	// do (design doc 0046 §3.5, 0050). prefix narrows to the concepts addressed
 	// under a path, repeatable and OR-ed, for scoping a search to a team's
 	// subtree and the shared one at once (design doc 0041).
 	// cursor walks a listing past the limit — a listing has a total order
@@ -374,7 +374,7 @@ func Handler(svc *service.Service) http.Handler {
 		default:
 			// Every other path is an object of the bundle: a concept at
 			// its own path, or a file (design doc 0046 §3.5). A concept
-			// is answered by the entry surface's own writer, so one
+			// is answered by the concept surface's own writer, so one
 			// address serves both kinds and neither has a shape of its
 			// own here.
 			id, isMarkdown := strings.CutSuffix(path, ".md")
@@ -441,7 +441,7 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			actor := httpauth.Actor(r.Context())
 			// A markdown path is a concept's address, and a write there
-			// is a write to the entry — the same document, the same
+			// is a write to the concept — the same document, the same
 			// preconditions, the same answer. Anything else is a file.
 			//
 			// A .md that carries no type is not a concept (SPEC §11
@@ -518,11 +518,11 @@ func Handler(svc *service.Service) http.Handler {
 	}
 
 	// GET /api/v1/context?q=...&type=...&status=...&tag=...&prefix=...&limit=...&budget=...
-	// The one-call read before answering a data question: full entries
+	// The one-call read before answering a data question: full concepts
 	// behind the top hits, expanded one hop through links.
 	//
 	// prefix scopes the search that picks those hits, not the link
-	// expansion: a scoped entry citing a glossary term outside the scope
+	// expansion: a scoped concept citing a glossary term outside the scope
 	// still arrives with the term, which is the whole reason this endpoint
 	// follows links (design doc 0041 §2.6).
 	//
@@ -567,7 +567,7 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// POST /api/v1/review/{id...} {"ruling": ...} — a human's ruling on
-	// the entry (design doc 0055 §3.1). It replaced three endpoints:
+	// the concept (design doc 0055 §3.1). It replaced three endpoints:
 	// POST /api/v1/verify/{id}, POST /api/v1/reject/{id} and DELETE
 	// /api/v1/reject/{id}.
 	//
@@ -576,7 +576,7 @@ func Handler(svc *service.Service) http.Handler {
 	// updated_at and the ETag all stay put, because ruling on knowledge
 	// and publishing it are different acts (0043 §§3.2-3.3). Each is
 	// recorded against the caller's identity, each answers with the
-	// entry, and each is on the human surfaces and off MCP, because a
+	// concept, and each is on the human surfaces and off MCP, because a
 	// ruling is what a person does. What differed between them was the
 	// value written. That is one operation with a parameter, spelled as
 	// three because they arrived at three different times.
@@ -584,15 +584,14 @@ func Handler(svc *service.Service) http.Handler {
 	// "withdrawn" is the DELETE, said as what it is: nothing is deleted.
 	// Verifications are an append-only ledger and a rejection is the one
 	// live ruling (0043 §3.3), so withdrawing it clears that ruling and
-	// leaves the history — which is exactly what the revision log has
-	// always called `unreject`.
+	// leaves the history, recorded under the same word.
 	//
 	// The note belongs to "rejected" alone. Carrying one on a
 	// verification would be a new thing to say rather than the same three
 	// said once, and the default answer to that is no (docs/surface.md).
 	//
 	// "verified" is why a ruling face has to exist at all rather than
-	// being sugar over PUT: re-affirming an entry that was already
+	// being sugar over PUT: re-affirming a concept that was already
 	// verified is the same act as verifying it the first time, and PUT
 	// writes nothing when the content is unchanged, which left both
 	// review feeds without an exit (design doc 0025 §6).
@@ -615,8 +614,8 @@ func Handler(svc *service.Service) http.Handler {
 		case "verified":
 			if in.Note != "" {
 				writeError(w, service.Invalidf(
-					`a verification carries no note: "%s" says the entry is right as it stands, and `+
-						`anything to say about it belongs in the entry. Use ruling=rejected to record a reason`,
+					`a verification carries no note: "%s" says the concept is right as it stands, and `+
+						`anything to say about it belongs in the concept. Use ruling=rejected to record a reason`,
 					in.Ruling))
 				return
 			}
@@ -629,10 +628,13 @@ func Handler(svc *service.Service) http.Handler {
 					`withdrawing a rejection carries no note: it removes a ruling rather than making one`))
 				return
 			}
-			k, err = svc.LiftRejection(r.Context(), id, actor)
+			k, err = svc.WithdrawRejection(r.Context(), id, actor)
 		default:
+			// The arms above are the vocabulary; domain.Rulings is what
+			// every surface quotes it as, so the refusal cannot name a
+			// different set than the one the switch accepts.
 			writeError(w, service.Invalidf(
-				`ruling must be "verified", "rejected" or "withdrawn", not %q`, in.Ruling))
+				`ruling must be one of %s, not %q`, strings.Join(domain.Rulings, ", "), in.Ruling))
 			return
 		}
 		if err != nil {
@@ -643,7 +645,7 @@ func Handler(svc *service.Service) http.Handler {
 		writeView(w, http.StatusOK, k)
 	})
 
-	// GET /api/v1/usage/{id...} — how often the entry was actually used
+	// GET /api/v1/usage/{id...} — how often the concept was actually used
 	// (search hits, fetches, outcomes). The measure of the write-back
 	// loop: draft promotion evidence, staleness signal. Lives outside
 	// /knowledge/ so a "/usage" suffix can never be confused with an ID
@@ -656,7 +658,7 @@ func Handler(svc *service.Service) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, u)
 	})
-	// POST reports an outcome (worked/failed) against the entry — the
+	// POST reports an outcome (worked/failed) against the concept — the
 	// write half of the same usage resource, so no new API surface is
 	// added (issue #41). Responds with the updated totals.
 	mux.HandleFunc("POST /api/v1/usage/{id...}", func(w http.ResponseWriter, r *http.Request) {
@@ -679,7 +681,7 @@ func Handler(svc *service.Service) http.Handler {
 	// the loop (design doc 0051): what the base is made of, what review
 	// did lately, what callers reported, what is waiting, and what they
 	// searched for and did not find. Every other measurement here is per
-	// entry; this is the only face that answers a question about the base
+	// concept; this is the only face that answers a question about the base
 	// as a whole, which is what running an improvement loop needs.
 	//
 	// GET /api/v1/queues was a second face over the third of those
@@ -687,7 +689,7 @@ func Handler(svc *service.Service) http.Handler {
 	// depths this response already carried, under the same key, and the
 	// one thing it could do that this could not was scope them to a
 	// subtree. So the scope moved here instead, where it now narrows
-	// every number keyed by an entry rather than only the three — a team
+	// every number keyed by a concept rather than only the three — a team
 	// on a shared deployment could count its own queue and could not
 	// count its own knowledge.
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
@@ -707,12 +709,12 @@ func Handler(svc *service.Service) http.Handler {
 	// A file has one address, and it is the path it lives at:
 	// /api/v1/bundle/{path} reads, writes and deletes it (design doc 0046
 	// §§3.3, 3.5). /api/v1/attachments/{id}/{name} is gone with the
-	// concept it was named after — a file was something an entry *had*,
-	// and the address said so by putting the entry's id in front of a
-	// filename. Whether an entry shows a file is now a question its body
+	// concept it was named after — a file was something a concept *had*,
+	// and the address said so by putting the concept's id in front of a
+	// filename. Whether a concept shows a file is now a question its body
 	// answers, so the address that asserted it had nothing left to say.
 
-	// POST /api/v1/move {"from": ..., "to": ...} — rename an entry: the
+	// POST /api/v1/move {"from": ..., "to": ...} — rename a concept: the
 	// id is the address (design doc 0017), so the move carries revisions,
 	// usage, and attachments along and rewrites inbound references (link
 	// targets, attrs.model) so nothing breaks (design doc 0021). Its own
@@ -737,8 +739,8 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for
-	// entries and attachments that have none for the configured model.
-	// The response's cursor feeds the next call: a pass whose entries all
+	// concepts and attachments that have none for the configured model.
+	// The response's cursor feeds the next call: a pass whose concepts all
 	// fail would otherwise hand back the same window forever. Not an MCP
 	// tool: an operator task with an unbounded runtime and no place in an
 	// agent's turn (design doc 0015).
@@ -837,7 +839,7 @@ func asChanges(rows []store.LogRow) []change {
 
 // writeObjectHistory answers ?history: the log.md of the one object at
 // this path, as the document (SPEC §9) or — with an explicit JSON
-// Accept — its ledger rows, each carrying the entry as it stood after
+// Accept — its ledger rows, each carrying the concept as it stood after
 // the change. The documents are the reason this representation exists:
 // a diff between two revisions is a text diff, which is what
 // `ochakai revisions --json` and the web UI's history panel are for.
@@ -995,7 +997,7 @@ func writeMarkdown(w http.ResponseWriter, doc []byte) {
 	_, _ = w.Write(doc)
 }
 
-// wantsDocument reports whether the caller asked for the entry as a
+// wantsDocument reports whether the caller asked for the concept as a
 // document rather than as JSON. Only an explicit markdown Accept counts:
 // a browser sends */* and wants the JSON every existing client reads.
 func wantsDocument(r *http.Request) bool {
@@ -1017,8 +1019,8 @@ func onlyIfAbsent(r *http.Request) bool {
 	return strings.TrimSpace(r.Header.Get("If-None-Match")) == "*"
 }
 
-// putEntry writes one document as the entry at id and answers with the
-// read of it. Two addresses lead here — the entry surface and the bundle
+// putEntry writes one document as the concept at id and answers with the
+// read of it. Two addresses lead here — the concept surface and the bundle
 // path the concept lives at (design doc 0046 §3.5) — and a concept
 // written through either is written the same way, with the same
 // preconditions and the same answer. An address is not a second surface.
@@ -1031,7 +1033,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		return
 	}
 	// The path is the address; the document carries the metadata — type
-	// included, always (no fill-in from the stored entry, design doc 0017
+	// included, always (no fill-in from the stored concept, design doc 0017
 	// §4.5).
 	k := &d.Knowledge
 	k.ID = id
@@ -1054,7 +1056,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		return
 	}
 	// Whether a trust family was a claim or this instance's own export
-	// form coming home is decided against the stored entry, so the note
+	// form coming home is decided against the stored concept, so the note
 	// can only be written once the write has answered: a claim that
 	// survived it is one the document made and ochakai did not observe.
 	notes = okf.NoteClaim(notes, d.Claimed, out)
@@ -1079,7 +1081,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	writeView(w, status, out)
 }
 
-// writeView responds with a read of one entry: the canonical document,
+// writeView responds with a read of one concept: the canonical document,
 // the projection, and what this instance observed (design doc 0043 §3.5).
 func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	v, err := okf.ViewOf(k)
@@ -1091,12 +1093,12 @@ func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	writeJSON(w, status, v)
 }
 
-// writeDocument renders the entry as the document an export would write
+// writeDocument renders the concept as the document an export would write
 // — server-owned keys included, since that is what a reader of a bundle
 // sees and what `ochakai get` hands to an editor.
 //
 // A render failure after the status is out cannot be reported, so it is
-// decided first: the entry came from the store, so failing here means the
+// decided first: the concept came from the store, so failing here means the
 // renderer cannot express something the store holds, which is a 500.
 func writeDocument(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	doc, err := okf.Document(k)
@@ -1140,7 +1142,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrNotFound):
 		status = http.StatusNotFound
 	case errors.Is(err, store.ErrConflict):
-		// The If-Match precondition failed: the entry changed since read.
+		// The If-Match precondition failed: the concept changed since read.
 		status = http.StatusPreconditionFailed
 	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrNotDeleted):
 		status = http.StatusConflict
@@ -1175,9 +1177,9 @@ func missingObject(err error, markdown bool) error {
 	return err
 }
 
-// etagOf renders the entry's version as an ETag: the hash of its
+// etagOf renders the concept's version as an ETag: the hash of its
 // canonical document, quoted. A client echoes it in If-Match to update
-// conditionally (design docs 0030, 0043 §3.4). It moves when the entry's
+// conditionally (design docs 0030, 0043 §3.4). It moves when the concept's
 // content moves and at no other time — verifying, rejecting, or attaching
 // a file all leave a held precondition valid, which the updated_at
 // version could not do because it was also the row's write timestamp.
@@ -1186,8 +1188,8 @@ func etagOf(k *domain.Knowledge) string {
 }
 
 // parseIfMatch reads an optional If-Match precondition. Absent or "*"
-// means no version precondition (the update still requires the entry to
-// exist). Any other value is taken as an entry ETag, quoted or not: it is
+// means no version precondition (the update still requires the concept to
+// exist). Any other value is taken as a concept ETag, quoted or not: it is
 // an opaque token now, so there is no format to validate — a value that
 // never matched anything simply fails the precondition with a 412, which
 // is what a stale one does too.

@@ -44,7 +44,7 @@ if the proposal is concrete.
 - **Make the project legible to somebody who has not read it.** An audit of
   what a newcomer can learn from this repository found the writing good and
   the way in poor. Most of what it raised has landed: the quick start loads a
-  ten-entry knowledge base and says what ochakai requires before you need it,
+  ten-concept knowledge base and says what ochakai requires before you need it,
   every MCP client the README names has setup instructions
   ([docs/guides/mcp-clients.md](docs/guides/mcp-clients.md)), the CLI's help —
   still the best documentation here — is rendered into
@@ -74,7 +74,7 @@ if the proposal is concrete.
   export → Git → review → import loop to be documented rather than decided.
 - **Japanese lexical search does not stay fast forever.** A trigram index
   cannot serve a two-character pattern, so Japanese terms are answered by
-  scanning: about 16 ms across 5000 entries, against 0.2 ms for a latin word.
+  scanning: about 16 ms across 5000 concepts, against 0.2 ms for a latin word.
   That is fine at the scale a curated knowledge base reaches, and embeddings
   are the answer — which is why they stopped being opt-in: running on Google
   Cloud, ochakai turns them on by itself
@@ -117,7 +117,7 @@ it.
   [0003](docs/design/0003-gcp-only.md)).
 - **Authorization, and a user database.** Whoever can reach a deployment can
   read and write; identity is recorded as provenance, and trust is judged from
-  provenance by whoever reads the entry (0002).
+  provenance by whoever reads the concept (0002).
 - **A server-side bulk OKF import endpoint.** Loading a bundle is a loop over
   endpoints that already exist, and a second server-side path to the same
   outcome buys convenience rather than capability. Re-examined in July 2026 at
@@ -128,8 +128,8 @@ it.
 - **A one-to-one MCP mirror of REST.** Tool schemas cost the agent's context,
   so the tool count is a budget: browse, revisions, backlinks, attachment
   writes, bulk export/import, purge, and reembed stay off MCP, as does
-  overwriting or deleting an entry a human has curated — an agent that finds a
-  verified entry wrong reports the outcome or drafts a replacement
+  overwriting or deleting a concept a human has curated — an agent that finds a
+  verified concept wrong reports the outcome or drafts a replacement
   ([0015 §3.1](docs/design/0015-surface-consistency.md),
   [0025](docs/design/0025-closing-the-loop.md)).
 - **A publicly reachable MCP OAuth connector service.** It existed briefly and

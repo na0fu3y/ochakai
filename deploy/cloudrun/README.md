@@ -104,7 +104,7 @@ Notes:
   (`cloudsql.instances.connect`) and mTLS'd — followed by database
   authentication. Local admin access (§3's SQL, §6's maintenance) goes
   through [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy),
-  which uses the same connector path, so the list never needs an entry.
+  which uses the same connector path, so the list never needs a concept.
   Keep it empty and this posture holds. To remove the reachable endpoint
   entirely, see §2b.
 
@@ -334,22 +334,22 @@ gcloud run services update ochakai --region=$REGION \
 ```
 
 `gemini-embedding-2` lives in the `global`/`us`/`eu` locations only, and
-all vectors must share one model's space: on an existing base, entries
+all vectors must share one model's space: on an existing base, concepts
 and attachments keep their old-model vectors (and stay out of the new
 space) until they are written again (design doc 0020 §2.3).
 
-A knowledge base that already has entries needs one more step. Vectors
-are written when an entry is written, so everything loaded before the
+A knowledge base that already has concepts needs one more step. Vectors
+are written when a concept is written, so everything loaded before the
 role was granted has none and hybrid search stays quietly lexical-only:
 
 ```sh
 ochakai reembed            # bounded passes until nothing is left
 ```
 
-`reembed` is the endpoint that spends money deliberately — each entry it
+`reembed` is the endpoint that spends money deliberately — each concept it
 processes is a Vertex AI embedding call, in one go rather than spread
 across writes. ochakai has no authorization, so anyone who can reach the
-service can start one; the cost is bounded by how many entries are
+service can start one; the cost is bounded by how many concepts are
 unembedded (a repeat run with nothing to do calls nothing), but it is
 worth knowing before granting `roles/run.invoker` widely.
 
@@ -403,7 +403,7 @@ attachments again; keep the var set from then on.
 
 ## 5. Load knowledge and connect Claude Code
 
-Register an entry through the API. The CLI resolves Google ID tokens
+Register a concept through the API. The CLI resolves Google ID tokens
 itself from your gcloud login, so no Cloud SQL proxy or authorized
 network is needed — `$OCHAKAI_URL` was exported when the service was
 deployed above:
@@ -546,7 +546,7 @@ Notes from exercising this end-to-end:
 Embedding ochakai in your own product — a data-analytics chat app, an
 internal agent with a web front end — hits a problem the §5 path does not:
 the application reaches Cloud Run with *its* service account, so every
-entry its users write is recorded as that one identity. Provenance, which
+concept its users write is recorded as that one identity. Provenance, which
 is most of what ochakai sells, collapses.
 
 Let the application forward the identity of the person using it
@@ -581,7 +581,7 @@ Notes:
 - **Delegation is off by default.** With `OCHAKAI_DELEGATING_CALLERS`
   unset, the header is a **403**, not a silent downgrade: an application
   that believes it writes as its users must not discover months later
-  that every entry says otherwise.
+  that every concept says otherwise.
 - **A 403 mentioning the header means the caller is not on the list.**
   Compare the `member` you granted in step 1 with the value in step 2 —
   they are the same service-account email, and a mismatch is the usual
@@ -668,8 +668,8 @@ whatever `Authorization` header a stranger sends. As everywhere in this guide,
 
 ### Seeding
 
-[examples/demo](../../examples/demo) is a ten-entry knowledge base built to be
-read: linked entries, mixed types, and enough usage for `sort=usage` to mean
+[examples/demo](../../examples/demo) is a ten-concept knowledge base built to be
+read: linked concepts, mixed types, and enough usage for `sort=usage` to mean
 something. Import it while the service is still private, where you
 authenticate exactly as in §5 — the CLI resolves a Google ID token from your
 gcloud login, nothing special:
@@ -679,7 +679,7 @@ git clone --depth 1 https://github.com/na0fu3y/ochakai && cd ochakai
 go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL from above
 ```
 
-Those ten entries are recorded as `human:you@your-org.example` — the last
+Those ten concepts are recorded as `human:you@your-org.example` — the last
 provenance this base will ever receive, and after the flip the only
 `created_by` any visitor sees. (The sequence has been rehearsed against a
 local server: import writable — 10 created, 0 skipped — then restart with
@@ -702,7 +702,7 @@ the implied read-only. Sending a bogus `Authorization` header changes
 neither answer — that is the property, not a side effect.
 
 If you want the demo to show **hybrid search** (§4), grant the Vertex AI
-role *before* the import: vectors are written when an entry is written,
+role *before* the import: vectors are written when a concept is written,
 and `ochakai reembed` is itself a write, so it is refused once read-only
 is on.
 The demo bundle has no attachments, so §4b's bucket is not needed for it.
@@ -723,7 +723,7 @@ requests no longer come only from your organization. `--max-instances=1`
   be written. Provenance is most of what ochakai sells; a public demo does
   not weaken it, it declines to pretend.
 - **Everything in the base is public.** There is no 401 anywhere, so the
-  entries, their revisions, and their authors' email addresses are on the
+  concepts, their revisions, and their authors' email addresses are on the
   open internet. Put a demo bundle in it. Never point this posture at a real
   knowledge base because "it is only read-only".
 - **Delegation is gone** (§5c) — an embedding application cannot forward its

@@ -601,6 +601,47 @@ func getMarkdown(t *testing.T, url string) string {
 	return string(body)
 }
 
+// Guard: the vocabulary domain.Rulings names is exactly the one the
+// review face accepts. Every surface quotes that list — the refusal
+// text, docs/surface.md's VOCAB count, the OpenAPI enum — so a fourth
+// arm added to the handler without a word added to the list would go out
+// undocumented and uncounted, and a word removed would leave the list
+// promising something that 400s.
+func TestRESTIntegrationEveryRulingIsAccepted(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restit")
+	id := typ + "/ruled-on"
+	removeEntries(t, srv, id)
+	putDoc(t, srv.URL, id, docFrom(t, map[string]any{"type": typ, "id": id}), true).Body.Close()
+
+	// In this order the three are legal back to back: a rejection to
+	// stand up, then a withdrawal to take it back, then a verification.
+	// What a ruling outside the list does is restapi_test.go's
+	// TestReviewRefusesRulingsItCannotRecord — a body the spec refuses is
+	// one this suite cannot send, because every request here is validated
+	// against api/openapi.yaml before it is answered.
+	for _, ruling := range []string{"rejected", "withdrawn", "verified"} {
+		if !slices.Contains(domain.Rulings, ruling) {
+			t.Fatalf("this test rules %q, which domain.Rulings no longer names", ruling)
+		}
+		resp, err := postRuling(srv.URL, id, `{"ruling":"`+ruling+`"}`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("ruling %q = %d: %s", ruling, resp.StatusCode, body)
+		}
+	}
+	for _, ruling := range domain.Rulings {
+		if !slices.Contains([]string{"rejected", "withdrawn", "verified"}, ruling) {
+			t.Errorf("domain.Rulings names %q, which this test never sends", ruling)
+		}
+	}
+}
+
 // POST /api/v1/review/{id} {"ruling":"verified"} records a verification
 // against the entry as it stands. The second call is the point:
 // re-affirming an entry that is already verified is what empties the

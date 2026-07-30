@@ -30,7 +30,7 @@ IP (§2b), GCS attachments (§4b), the IAP-fronted web UI (§5b).
 
 ### No password, anywhere
 
-There is no `random_password` in this module, no Secret Manager entry, no
+There is no `random_password` in this module, no Secret Manager concept, no
 service-account key, and no `password` argument on any resource. The runtime
 authenticates to Postgres with Cloud SQL IAM database authentication, where
 the connection password is a short-lived IAM token fetched at connect time.
@@ -117,7 +117,7 @@ from then on — no password on that path either.
 | Variable | Guide | Effect |
 |---|---|---|
 | `enable_private_ip` | §2b | Drops the Cloud SQL public endpoint; peering range + Direct VPC egress on Cloud Run. Free. Local `cloud-sql-proxy` access then needs a VPC-attached workstation or a temporary public IP. |
-| `enable_vertex_embeddings` | §4 | **On by default.** `roles/aiplatform.user` + `aiplatform.googleapis.com`; the project is discovered rather than set, so a deployment whose pgvector bootstrap has not run yet degrades to lexical search instead of failing to start. Search becomes hybrid, and every write becomes one Vertex AI call. Entries written before the grant stay unembedded until `ochakai reembed`. Set it to `false` to pass `OCHAKAI_EMBEDDINGS=off` and grant nothing. |
+| `enable_vertex_embeddings` | §4 | **On by default.** `roles/aiplatform.user` + `aiplatform.googleapis.com`; the project is discovered rather than set, so a deployment whose pgvector bootstrap has not run yet degrades to lexical search instead of failing to start. Search becomes hybrid, and every write becomes one Vertex AI call. Concepts written before the grant stay unembedded until `ochakai reembed`. Set it to `false` to pass `OCHAKAI_EMBEDDINGS=off` and grant nothing. |
 | `enable_gcs_attachments` | §4b | Bucket + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`. Without it, attach operations return 501. |
 | `enable_webui` | §5b | `serve-ui` as a second Cloud Run service behind IAP, same image, dedicated identity. `webui_records_browser_user` (default on) records the person in the browser rather than the UI's service account. |
 | `read_only` | §5d | `OCHAKAI_READ_ONLY`. Serves the base without changing it; still private. Seed the base *before* turning it on — a read-only deployment cannot be imported into. |

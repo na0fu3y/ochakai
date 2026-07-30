@@ -937,10 +937,10 @@ func (s *Store) Reject(ctx context.Context, id string, actor domain.Actor, note 
 	return k, nil
 }
 
-// LiftRejection withdraws a ruling. ErrNotFound when the entry is gone or
+// WithdrawRejection withdraws a ruling. ErrNotFound when the entry is gone or
 // was never rejected — lifting nothing is a mistake worth reporting, not
 // a no-op to swallow.
-func (s *Store) LiftRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+func (s *Store) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `DELETE FROM knowledge_rejection r
@@ -955,7 +955,7 @@ func (s *Store) LiftRejection(ctx context.Context, id string, actor domain.Actor
 		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
 			return err
 		}
-		return s.addRevision(ctx, tx, k, "unreject", actor)
+		return s.addRevision(ctx, tx, k, "withdraw", actor)
 	})
 	if err != nil {
 		return nil, err

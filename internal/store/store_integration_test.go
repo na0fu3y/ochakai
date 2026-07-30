@@ -2560,7 +2560,7 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 	}{
 		{"verifying", func() error { _, err := s.Verify(ctx, id, actor); return err }},
 		{"rejecting", func() error { _, err := s.Reject(ctx, id, actor, "no"); return err }},
-		{"lifting a rejection", func() error { _, err := s.LiftRejection(ctx, id, actor); return err }},
+		{"lifting a rejection", func() error { _, err := s.WithdrawRejection(ctx, id, actor); return err }},
 	} {
 		if err := tc.do(); err != nil {
 			t.Fatalf("%s: %v", tc.what, err)

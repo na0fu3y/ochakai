@@ -18,6 +18,78 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **BREAKING** — two CLI commands fold into the ones that already
+  answered the same question, and taking back a rejection gets one
+  spelling everywhere (design doc
+  [0056](docs/design/0056-one-question-one-command.md)):
+
+  ```
+  ochakai backlinks <id>     →  ochakai search --links-to <id>
+  ochakai queues             →  ochakai stats  (--exit-code moves with it)
+  ochakai reject --lift      →  ochakai reject --withdraw
+  revision change "unreject" →  "withdraw"
+  ```
+
+  Both commands were second addresses for a face the wire had already
+  folded away — `/api/v1/backlinks/{id}` into `links_to=` (design doc
+  0046 §3.5) and `/api/v1/queues` into the `queues` key of `stats`
+  (0049 §3.1) — and each was quietly costing something. `ochakai
+  backlinks --limit` documented the defaults of the endpoint that no
+  longer existed (20/100, where the search listing it actually calls
+  gives 100/1000), and `queues` printed the same three numbers under
+  different keys than `stats` did. **No capability is lost.** The queue
+  lines of `ochakai stats` now carry the command that lists each queue,
+  under the scope you asked with, and `ochakai stats --exit-code` still
+  exits 2 while any of the three is holding something and 1 on an error.
+  `--links-to` with no query lists in address order, pages with
+  `--cursor`, and combines with every other filter.
+
+  `withdraw` is the spelling the wire already chose (`ruling:
+  "withdrawn"`, 0055 §3.2). The CLI flag, the web UI's button and the
+  revision log's `change` value said `lift`, `Lift rejection` and
+  `unreject` — four words for one act. Migration `0034` rewrites the
+  stored `change` values; who withdrew what and when is untouched. A
+  client that branches on a revision's `change` rewrites one word.
+
+  `ochakai verify` and `ochakai reject` stay two commands: what folds is
+  two commands with one capability, not two different acts. CLI commands
+  go 27 → 25, and [docs/surface.md](docs/surface.md)'s ceiling with them.
+
+- **BREAKING** — the word for the unit of knowledge, `concept`, now runs
+  through **everything a reader meets** rather than the MCP tool names
+  alone (design doc
+  [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md), which
+  completes [0054](docs/design/0054-concept-is-the-okf-word.md)): the
+  README and docs, the examples and deploy guides, the CLI's help and
+  output, the web UI's labels, the tool and schema descriptions an agent
+  is handed, the OpenAPI descriptions, and the server's error text.
+
+  Renaming the tools alone had left `get_concept` describing itself as
+  "Fetch one entry", the English documentation saying `entry` 287 times
+  against `concept` 6, and the web UI labelling its own button "New
+  entry". The translation table 0054 set out to remove had moved rather
+  than gone.
+
+  The line is words a reader meets versus identifiers. The `entries`
+  JSON key stays — naming the array in a response is a different
+  question from naming the unit — and so do Go type names, database
+  columns, and "entry" in its other English senses (a catalog entry, a
+  `sources` entry, a changelog entry). **Nothing on the wire moves**;
+  only a script matching on help or error text sees this.
+
+### Fixed
+
+- `ochakai reject` is named in `ochakai help` and in the CLI reference's
+  command list. It has shipped, run and carried its own `-h` text since
+  the ruling existed, but the one place a reader looks for the commands
+  never listed it, so half of review was reachable only by already
+  knowing it was there. The guard that should have caught it compared
+  the dispatch table against a list written out in the test — a copy of
+  the help rather than a reading of it — and now reads the help itself,
+  in both directions.
+
 ## [0.16.1] - 2026-07-30
 
 ### Fixed

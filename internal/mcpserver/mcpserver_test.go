@@ -201,7 +201,7 @@ func TestParseKnowledgeURI(t *testing.T) {
 		{"ochakai://metrics/revenue", "metrics/revenue", true},
 		{"ochakai://queries/sales/top-customers", "queries/sales/top-customers", true},
 		{"ochakai://tables/GA_sessions_2017", "tables/GA_sessions_2017", true},
-		{"ochakai://overview", "overview", true}, // root-level ids are entries too
+		{"ochakai://overview", "overview", true}, // root-level ids are concepts too
 		{"ochakai://", "", false},                // empty id
 		{"ochakai://metrics/", "", false},        // empty segment
 		{"ochakai:///revenue", "", false},        // empty segment
@@ -217,9 +217,9 @@ func TestParseKnowledgeURI(t *testing.T) {
 	}
 }
 
-// TestResourceTemplateAdvertised pins that entries are addressable as MCP
+// TestResourceTemplateAdvertised pins that concepts are addressable as MCP
 // resources via the ochakai:// template — and that we advertise only the
-// template, not an enumeration of every entry (resources/list stays empty).
+// template, not an enumeration of every concept (resources/list stays empty).
 func TestResourceTemplateAdvertised(t *testing.T) {
 	cs := connect(t)
 	ctx := context.Background()
@@ -318,7 +318,7 @@ func TestToolAnnotations(t *testing.T) {
 }
 
 // TestReportOutcomeValidation pins the tool's input checks: a target
-// that is not a valid entry id and an unknown outcome are tool errors
+// that is not a valid concept id and an unknown outcome are tool errors
 // (not transport failures), and both fire before any store access.
 func TestReportOutcomeValidation(t *testing.T) {
 	cs := connect(t)
@@ -388,10 +388,10 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 		if !ok {
 			t.Fatal("get_context must expose budget")
 		}
-		// "the entries plus the outline rows" is what the cap actually
+		// "the concepts plus the outline rows" is what the cap actually
 		// binds (design doc 0033 §3.2); it is not the response body, and
 		// an agent that reads it as one will size it wrong.
-		for _, want := range []string{"12000", "outline", "the entries plus the outline rows"} {
+		for _, want := range []string{"12000", "outline", "the concepts plus the outline rows"} {
 			if !strings.Contains(budget.Description, want) {
 				t.Errorf("budget description %q does not mention %q", budget.Description, want)
 			}
@@ -415,7 +415,7 @@ func TestContextHint(t *testing.T) {
 		t.Errorf("nothing was dropped; hint must not mention the outline: %s", plain)
 	}
 	truncated := contextHint(3)
-	for _, want := range []string{"3 entries", "outline", "get_concept"} {
+	for _, want := range []string{"3 concepts", "outline", "get_concept"} {
 		if !strings.Contains(truncated, want) {
 			t.Errorf("truncated hint does not mention %q: %s", want, truncated)
 		}
@@ -460,7 +460,7 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 
 // The budget governs the whole response or it governs nothing. A hit is
 // a ranking — an id, a title and a score — and never a second copy of the
-// entry: an entry pushed into outline for being too large would otherwise
+// concept: a concept pushed into outline for being too large would otherwise
 // arrive in full through hits anyway, while the outline row told the
 // agent to go fetch what it already had (design doc 0033).
 func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
@@ -480,16 +480,16 @@ func TestContextHitsCarryRankingNotKnowledge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(encoded), body) {
-		t.Error("hits carried the body; the budget covers only entries")
+		t.Error("hits carried the body; the budget covers only concepts")
 	}
 	if strings.Contains(string(encoded), "SELECT 1") {
-		t.Error("hits carried attrs; the budget covers only entries")
+		t.Error("hits carried attrs; the budget covers only concepts")
 	}
 	got := out.Hits[0]
 	if got.ID != "queries/monthly-revenue" || got.Score != 0.9 || got.Status != domain.StatusStable {
-		t.Errorf("a hit must still rank and address the entry: %+v", got)
+		t.Errorf("a hit must still rank and address the concept: %+v", got)
 	}
-	// Title falls back to the filename when the entry has none (design doc
+	// Title falls back to the filename when the concept has none (design doc
 	// 0022), so a hit is readable without fetching.
 	if got.Title != "monthly-revenue" {
 		t.Errorf("hit title = %q, want the display title", got.Title)
@@ -720,7 +720,7 @@ func TestUnspellableClientInfoIsDroppedNotRefused(t *testing.T) {
 // One write face, and the branch inside it is about the id rather than
 // about which tool the agent should have called (design doc 0046 §3.14).
 // The two tools it replaces asked a question the document does not
-// answer: a write states what the entry should say, and whether the id
+// answer: a write states what the concept should say, and whether the id
 // was already taken is not part of that statement (0043 §3.5).
 func TestOneWriteFace(t *testing.T) {
 	cs := connect(t)

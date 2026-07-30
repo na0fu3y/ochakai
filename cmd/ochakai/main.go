@@ -87,26 +87,26 @@ func usage(w io.Writer) {
 Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
-  search [query]          search knowledge; verified entries rank higher
-  queues                  how much work each review queue is holding
+  search [query]          search knowledge; verified concepts rank higher
   browse [prefix]         list one level of the ID hierarchy (folder view)
-  context <question>      the one-call read before a data question (full entries)
-  get <id>                print one entry as an OKF document
-  put <id> [-f file]      write an entry from OKF markdown or JSON, creating
+  context <question>      the one-call read before a data question (full concepts)
+  get <id>                print one concept as an OKF document
+  put <id> [-f file]      write a concept from OKF markdown or JSON, creating
                           or replacing (every change kept as a revision)
-  verify <id>             record a verification (re-affirms a verified entry too)
-  delete <id>             soft-delete an entry (history retained)
-  purge <id>              hard-delete a soft-deleted entry, freeing its id
-  reembed                 embed entries missing a vector for the current model
-  move <id> <new-id>      move (rename) an entry; references are rewritten
-  attach <id> <file...>   attach files to an entry (png/jpeg/webp/pdf/text)
+  verify <id>             record a verification (re-affirms a verified concept too)
+  reject <id>             record a rejection and why (--withdraw takes it back)
+  delete <id>             soft-delete a concept (history retained)
+  purge <id>              hard-delete a soft-deleted concept, freeing its id
+  reembed                 embed concepts missing a vector for the current model
+  move <id> <new-id>      move (rename) a concept; references are rewritten
+  attach <id> <file...>   attach files to a concept (png/jpeg/webp/pdf/text)
   detach <id> <name>      remove an attachment
   usage <id>              show usage totals (search hits, fetches, outcomes)
-  stats                   show the loop for the whole base (review queues, gaps)
+  stats                   the whole loop: what is stored, what each queue holds,
+                          what review did, what came back empty
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
-  revisions <id>          list an entry's change history (newest first)
+  revisions <id>          list a concept's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
-  backlinks <id>          list entries whose links point at this one
   export <dir | ->        download the knowledge base as an OKF bundle
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)
@@ -152,7 +152,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		st.UseBlobStore(bs)
 		log.Info("attachment bytes on GCS", "bucket", cfg.GCSBucket)
 	} else {
-		log.Info("attachments disabled (no OCHAKAI_GCS_BUCKET); markdown entries only")
+		log.Info("attachments disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only")
 	}
 	if err := st.Migrate(ctx, embedDim); err != nil {
 		// A database that cannot hold vectors is not a reason to refuse

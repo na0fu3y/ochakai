@@ -51,13 +51,13 @@ to you — and note that `purge` deliberately does not reclaim GCS blobs
 ```sh
 ochakai export ./knowledge          # a directory
 ochakai export - > okf.tar.gz       # or a stream
-ochakai export --no-attachments -   # entries only; bytes are already in GCS
+ochakai export --no-attachments -   # concepts only; bytes are already in GCS
 ```
 
-The bundle is an OKF v0.2 directory: one markdown file per entry with
-YAML frontmatter, attachments as plain files beside their entry, and an
-`index.md` per directory. Exporting the ten-entry demo base writes 20
-files — ten entries and ten indexes.
+The bundle is an OKF v0.2 directory: one markdown file per concept with
+YAML frontmatter, attachments as plain files beside their concept, and an
+`index.md` per directory. Exporting the ten-concept demo base writes 20
+files — ten concepts and ten indexes.
 
 This is the backup to run on a schedule if you want one that a human can
 read, diff and commit. It is also the migration path between instances,
@@ -77,17 +77,17 @@ that: a disaster-recovery runbook that assumes a web console will not
 work here.
 
 **What a bundle restore does not bring back.** Measured, on a fresh
-database, by exporting a ten-entry base and importing it into an empty
+database, by exporting a ten-concept base and importing it into an empty
 instance:
 
 - **Timestamps become the restore.** `created_at`, `updated_at` and
-  `verified_at` on the restored entry are all the moment of the import,
+  `verified_at` on the restored concept are all the moment of the import,
   not the moment the work happened.
-- **History collapses.** An entry with two revisions came back with one.
+- **History collapses.** A concept with two revisions came back with one.
   Revisions are the audit trail of what this instance did, and a bundle
   is not that trail.
 - **Provenance is re-recorded as the importer.** A bundle that *claims*
-  someone else wrote and verified an entry does not get believed: editing
+  someone else wrote and verified a concept does not get believed: editing
   the exported frontmatter to say `generated.by: human:tanaka@…` and
   `verified.by: human:sato@…`, then importing, stored the body change and
   kept both actors as the importing identity. Provenance is what an
@@ -99,7 +99,7 @@ came back verified, through the OKF `verified` key rather than an ochakai
 alias, along with every envelope field.
 
 So: **run the import under an identity you are willing to see on every
-entry**, and if provenance matters to you, keep a database backup as
+concept**, and if provenance matters to you, keep a database backup as
 well. Neither of these is a bug — a bundle carries knowledge, and
 provenance belongs to the instance that watched it happen — but a runbook
 that expects a full-fidelity restore from an export will be wrong at the
@@ -135,9 +135,9 @@ them warnings that describe **degraded but running**:
 | `usage recording failed` | the in-memory buffer was full — 20,000 events — and events were dropped |
 | `search miss recording failed` | same buffer, same bargain (0051): a question that found no answer was not kept. The knowledge is unaffected; `ochakai stats` undercounts |
 | `query embedding failed; falling back to lexical-only` | Vertex AI did not answer a search; results are still returned, ranked by the lexical half alone |
-| `document embedding failed` / `storing embedding failed` | an entry was written but is not in the vector index. It stays findable lexically; `ochakai reembed` repairs it |
+| `document embedding failed` / `storing embedding failed` | a concept was written but is not in the vector index. It stays findable lexically; `ochakai reembed` repairs it |
 | `attachment embedding failed` | same, for an attachment: still findable by filename |
-| `backlink lookup failed` | one entry's backlinks are missing from a response |
+| `backlink lookup failed` | one concept's backlinks are missing from a response |
 | `export truncated after the response began` | an export failed midway. **The bytes the client received are not a complete backup** — this is the one in the list that can quietly cost you |
 | `knowledge verified` / `knowledge purged` | not errors: the audit line for a curation event, with the actor |
 
@@ -185,19 +185,21 @@ The list above is about the deployment. The other thing worth watching is
 the knowledge, and it fails silently: a review queue nobody opens looks
 exactly like a review queue with nothing in it.
 
-`ochakai queues` is the whole answer (design doc
-[0049](../design/0049-queue-counts.md)). It prints the three queues a
-curator empties, each line carrying the command that lists it:
+`ochakai stats` is the whole answer (design doc
+[0049](../design/0049-queue-counts.md)). Among its lines are the three
+queues a curator empties, each carrying the command that lists it:
 
 ```console
-$ ochakai queues
-12	drafts	ochakai search --sort usage --status draft
-1	reported wrong	ochakai search --sort failed
-0	past expiry	ochakai search --sort stale_after
+$ ochakai stats
+…
+drafts	12	ochakai search --sort usage --status draft
+reported_wrong	1	ochakai search --sort failed
+past_expiry	0	ochakai search --sort stale_after
+…
 ```
 
 `--exit-code` turns that into something a scheduler watches: **2 while
-any queue is non-empty, 0 when all three are** — and 1 stays what it
+any of the three is non-empty, 0 when all are** — and 1 stays what it
 always was, an error, so an unreachable server cannot be read as "nothing
 to do". `--prefix teams/growth` scopes it, which is how one team on a
 shared deployment asks about its own queue.
@@ -232,8 +234,8 @@ jobs:
 ochakai delivers nothing itself — no mail, no chat, no webhooks (design
 doc 0049 §4). The job above is the delivery, and it is yours.
 
-`ochakai stats` is the same shape for the question one step further out —
-not "is anything waiting" but "is this working": how much of the base is
+The same command answers the question one step further out — not "is
+anything waiting" but "is this working": how much of the base is
 confirmed, how much moved through review this month, and what people
 searched for and did not find (design doc
 [0051](../design/0051-instance-metrics-and-search-misses.md)). One number
@@ -261,14 +263,14 @@ all).
 
 ### What is known
 
-- **Search**: about 16 ms per Japanese search across 5000 entries, against
+- **Search**: about 16 ms per Japanese search across 5000 concepts, against
   0.2 ms for a latin word. Japanese terms are answered by scanning,
   because a trigram index cannot serve a two-character pattern.
-- **Attachments**: 5 MiB per file, 20 files per entry, enforced by the
+- **Attachments**: 5 MiB per file, 20 files per concept, enforced by the
   server.
 - **Usage buffer**: 20,000 events in memory, flushed every 5 seconds.
   Past the cap, events are dropped rather than queued (design doc 0029).
-- **Raw usage events** are pruned after 180 days; the per-entry totals
+- **Raw usage events** are pruned after 180 days; the per-concept totals
   are not.
 - **Shutdown**: in-flight requests get 5 seconds after SIGTERM, then the
   final usage flush runs. Cloud Run allows 10 seconds before SIGKILL.
@@ -290,7 +292,7 @@ in `OCHAKAI_DATABASE_URL` if you need to bound it.
 
 ### What has not been measured
 
-Honestly: most of it. There is no measured entry-count ceiling, no
+Honestly: most of it. There is no measured concept-count ceiling, no
 throughput figure, no latency distribution under concurrency, and no
 guidance on when `db-f1-micro` stops being enough. The project is one
 person's, and these numbers would be invented rather than observed.
@@ -331,11 +333,11 @@ Two upgrade-adjacent traps worth knowing here:
 
 - **Changing `OCHAKAI_EMBEDDING_DIM` on a database that already holds
   vectors rebuilds the vector tables at the new width**, because a vector
-  is derived from the entry it describes and nothing curated is involved
+  is derived from the concept it describes and nothing curated is involved
   (design doc [0053](../design/0053-embeddings-by-default.md) §3). The
   startup log says it happened. Search is lexical-only until
   `ochakai reembed` refills them — that part is deliberate, since
   refilling spends money.
 - **Semantic search becoming reachable, or a changed model, does not
-  backfill.** Existing entries stay unembedded until `ochakai reembed`,
+  backfill.** Existing concepts stay unembedded until `ochakai reembed`,
   which costs Vertex AI tokens proportional to the base.

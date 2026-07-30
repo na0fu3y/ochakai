@@ -399,6 +399,29 @@ For the shape of the system rather than the history of it, read
   *For a user:* sending `links` on write is ignored; write a markdown link
   in the body instead.
 
+- **[0057 Concept is the word a reader meets too](0057-concept-is-the-word-a-reader-meets.md)**
+  — *Accepted. BREAKING (wording only).* Completes 0054. That record
+  counted the spellings left *on the wire* and concluded only the tool
+  names still said `knowledge`; what the count missed was the English a
+  user reads. Right after 0.16.0 shipped the rename, the documentation
+  said `entry` 287 times against `concept` 6, `get_concept` described
+  itself as "Fetch one entry", `docs/knowledge.md` opened with "An entry
+  is an OKF v0.2 document", and the web UI's button read "New entry".
+  The translation table 0054 set out to remove had moved from the tool
+  names to the documentation — to the place a newcomer reads first. So
+  every word a reader meets becomes `concept`: README, docs, examples
+  and deploy guides, the CLI's help and output, the web UI's labels and
+  tooltips, the MCP tool and jsonschema descriptions, the OpenAPI
+  descriptions, and the server's error text. **The line is words a
+  reader meets versus identifiers**: the `entries` JSON key names an
+  array in a response rather than the unit, so it stays, as do Go type
+  names (0054 §3.4), database columns, the immutable Japanese records,
+  and "entry" in its other English senses — a catalog entry, a `sources`
+  entry, a changelog entry, the web UI's `.tree-entry` class.
+  *For a user:* nothing on the wire moves — same calls, same arguments,
+  same responses, same stored form. Only a script matching on help or
+  error text sees this.
+
 - **[0054 The unit of knowledge is called a concept](0054-concept-is-the-okf-word.md)**
   — *Accepted.* Renames the five MCP tools carrying `knowledge` to OKF
   SPEC §2's word: `search_concepts`, `get_concept`, `put_concept`,
@@ -416,7 +439,7 @@ For the shape of the system rather than the history of it, read
   refused.
   *For a user:* breaking for any client that names these tools in its
   configuration; a client that only reads the advertised list needs
-  nothing.
+  nothing. §3.5's "MCP only" was later completed by 0057.
 
 ## Attachments
 
@@ -564,6 +587,30 @@ For the shape of the system rather than the history of it, read
   the way on to stderr and does not walk the pages for you), and the web
   UI's "load more", which now appends a page instead of asking for 1000.
 
+- **[0056 One question, one command; one ruling, one word](0056-one-question-one-command.md)**
+  — *Accepted. BREAKING.* Folds the two CLI commands that survived as
+  second addresses after the wire behind them was folded away:
+  `ochakai backlinks` becomes `ochakai search --links-to` (where 0046
+  §3.5 put the REST side), and `ochakai queues` becomes `ochakai stats`.
+  **No capability is lost** — the queue lines carry the command that
+  lists each queue, `--exit-code` moves to `stats`, and `--links-to`
+  with no query still lists in address order. The second face was
+  already costing something: `backlinks --limit` documented the defaults
+  of the endpoint that no longer existed, and `queues` printed the same
+  three numbers under different keys than `stats` did. The same doc
+  settles the spelling for taking back a rejection on `withdraw`: the
+  wire's `withdrawn` (0055 §3.2) now matches the CLI flag, the web UI
+  button and the revision log's `change` value, with migration 0034
+  rewriting the rows that said `unreject`. `ochakai verify` and
+  `ochakai reject` stay two commands — what folds is two commands with
+  one capability, not two different acts.
+  *For a user:* `ochakai backlinks <id>` → `ochakai search --links-to
+  <id>`; `ochakai queues` → `ochakai stats` (`--exit-code` still exits
+  2 while a queue is holding something); `ochakai reject --lift` →
+  `ochakai reject --withdraw`. A client that branches on a revision's
+  `change` value rewrites one word. Nothing stored, exported or ranked
+  changes.
+
 - **[0055 One ruling, one face](0055-one-ruling-one-face.md)** —
   *Accepted. BREAKING.* Replaces `POST /api/v1/verify/{id}` (0025 §6)
   and `POST` / `DELETE /api/v1/reject/{id}` (0043 §3.3) with one
@@ -582,14 +629,16 @@ For the shape of the system rather than the history of it, read
   folded in — a human's ruling and a machine's observation land on
   opposite surfaces (0015 §3.4), so they cannot share one.
   *For a user:* REST clients rewrite three calls, each a one-liner.
-  `ochakai verify` and `ochakai reject --lift` are unchanged, MCP is
-  unchanged, and no stored data, ledger, export or trust derivation
-  moves.
+  `ochakai verify` and `ochakai reject` are unchanged as commands and
+  MCP is unchanged; no stored data, ledger, export or trust derivation
+  moves. (The flag and the revision log's word for taking a rejection
+  back became `withdraw` in 0056 §3.3, before release.)
 
 - **[0049 Counting the review queues](0049-queue-counts.md)** —
-  *Accepted; revised before release (0048 §2.3) once 0051 made the
-  standalone endpoint a second address for a key it already carried.*
-  Adds `ochakai queues` and the three counts a curator empties — drafts
+  *Accepted; revised before release (0048 §2.3) twice — once when 0051
+  made the standalone endpoint a second address for a key it already
+  carried, and once when 0056 §3.2 folded the CLI command the same way.*
+  Adds the three counts a curator empties — drafts
   waiting to be published or turned down, entries whose failure reports
   are unanswered, entries past the expiry their author declared — as
   counts rather than listings, scoped by `prefix` and nothing else. The
@@ -598,16 +647,18 @@ For the shape of the system rather than the history of it, read
   the stats side, and at that point a face returning only the three
   numbers had no capability of its own. `prefix` was the single
   exception, so it moved to `stats` — where it now narrows every number
-  keyed by an entry, not just the three. 0025 made the queues emptiable; nothing told anyone they
-  were not empty, and a review queue going quiet looked exactly like one
-  being empty. The canary feed (`sort=verified_at`) is deliberately not
+  keyed by an entry, not just the three. The CLI command went the same
+  way (0056 §3.2): the queue lines of `ochakai stats` carry the command
+  that lists each queue, and `--exit-code` moved with them. 0025 made
+  the queues emptiable; nothing told anyone they were not empty, and a
+  review queue going quiet looked exactly like one being empty. The canary feed (`sort=verified_at`) is deliberately not
   counted: it ranks every verified entry, so its size is the size of the
   knowledge base and nobody can drive it to zero. Delivery is refused —
   no mail, no chat, no webhooks, no address book, no scheduler inside the
   server: `--exit-code` exits 2 while any queue is non-empty, and the
   operator's own cron or CI is what pushes.
-  *For a user:* `ochakai queues` says whether anybody owes a review, and
-  each line carries the command that lists that queue; the web UI shows
+  *For a user:* `ochakai stats` says whether anybody owes a review, and
+  each queue line carries the command that lists it; the web UI shows
   the same counts on its Review tab. MCP does not get it — an agent's
   ends of the loop are drafting and reporting outcomes.
 
@@ -656,8 +707,8 @@ For the shape of the system rather than the history of it, read
   the retention rather than quietly answering with less. A miss is
   defined as zero hits and never as a low score, because ochakai's scores
   are uncalibrated across search modes.
-  *For a user:* `ochakai stats` (one number per line, made for cron;
-  `ochakai queues` stays the nudge with the exit code), loop tiles beside
+  *For a user:* `ochakai stats` (one number per line, made for cron,
+  with the exit code that goes red on work nobody picked up), loop tiles beside
   the queue strip on the web UI's review page, and no MCP tool — an agent
   that searched and found nothing already knows. Storing query text is
   new, so it has an off switch (`OCHAKAI_RECORD_MISSES=false`) and is off

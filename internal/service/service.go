@@ -132,7 +132,7 @@ func (s *Service) CreateKeepingCurated(ctx context.Context, k *domain.Knowledge,
 // explainOccupiedID says what holds an id and what to do instead. Every
 // other refusal this surface can meet names the next move — the update,
 // delete and revival guards all end in report_outcome failed or a draft
-// at another id — and this one did not: creating over a live entry
+// at another id — and this one did not: creating over a live concept
 // returned the store's bare "knowledge already exists", the one wall on
 // the surface with no door drawn on it.
 //
@@ -153,7 +153,7 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
 			"(get_concept) before proposing this again. If you disagree, put_concept a new " +
-			"entry at a different id and let a human judge it."
+			"concept at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
 			"re-verification feed. If you have something better, put_concept it at a " +
@@ -162,10 +162,10 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, put_concept a draft at a different id that says why."
 	default:
-		return fmt.Errorf("%w: %s is a live %s entry. Nobody has ruled on it: "+
+		return fmt.Errorf("%w: %s is a live %s concept. Nobody has ruled on it: "+
 			"put_concept replaces it in place", err, id, k.Status)
 	}
-	return fmt.Errorf("%w: %s is a live %s entry. %s", err, id, ruling, instead)
+	return fmt.Errorf("%w: %s is a live %s concept. %s", err, id, ruling, instead)
 }
 
 func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.Actor, keepCuratedTombstones bool) (*domain.Knowledge, error) {
@@ -178,7 +178,7 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 	// OKF says a silent document is stable (SPEC §5.4). The index column
 	// holds what a reader would read, and the document keeps its silence:
 	// ochakai does not write a key its writer left out (design doc 0046
-	// §3.9). Whether anybody has confirmed the entry is a separate
+	// §3.9). Whether anybody has confirmed the concept is a separate
 	// question, which the trust tier answers (§3.10).
 	k.Status = k.Lifecycle()
 	k.CreatedBy, k.UpdatedBy = actor, actor
@@ -189,7 +189,7 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 	return k, nil
 }
 
-// Update replaces an entry's content. changed=false means the payload
+// Update replaces a concept's content. changed=false means the payload
 // matched the stored content exactly, so nothing was written: revisions
 // are the audit trail of changes and updated_at means "content last
 // changed" — recurring bundle imports and agents re-saving what they
@@ -197,7 +197,7 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 //
 // ifMatch is an optional optimistic-concurrency precondition (design doc
 // 0030): when non-nil it is the content hash the caller based the edit
-// on (design doc 0043 §3.4), and an entry that has changed since —
+// on (design doc 0043 §3.4), and a concept that has changed since —
 // whether before this call's read, or in the read-modify-write window
 // below — yields store.ErrConflict rather than silently clobbering the
 // other write. nil keeps the prior last-write-wins behavior for callers
@@ -215,16 +215,16 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if err != nil {
 		return nil, false, err
 	}
-	// The caller's version is already stale if the stored entry moved on
+	// The caller's version is already stale if the stored concept moved on
 	// between their read and ours — reject before doing any work.
 	if ifMatch != nil && old.ContentHash != *ifMatch {
 		return nil, false, store.ErrConflict
 	}
 	// A document's own trust family is a claim and is kept as one (design
-	// doc 0046 §2.2) — but the export form of this very entry is not a
+	// doc 0046 §2.2) — but the export form of this very concept is not a
 	// claim. It is what this instance observed, handed back by get → edit
 	// → PUT or by export → review → import, and only here is there an
-	// entry to compare it against. Recognizing it is what keeps a round
+	// concept to compare it against. Recognizing it is what keeps a round
 	// trip storing the bytes it stored before.
 	if okf.IsObservation(k.Attrs[okf.ClaimKey], old) {
 		okf.DropClaim(k)
@@ -237,7 +237,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	k.CreatedAt = old.CreatedAt
 	// The ledgers belong to the instance, not to the payload: an update
 	// replaces the document and rules on nothing (design doc 0043
-	// §§3.2-3.3). Carrying them over keeps the returned entry honest.
+	// §§3.2-3.3). Carrying them over keeps the returned concept honest.
 	k.Verifications, k.Rejection = old.Verifications, old.Rejection
 	// Three outcomes, because the document being the writer's own bytes
 	// (design doc 0046 §2.2) separates two questions that used to be one.
@@ -253,13 +253,13 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	}
 	// Different bytes saying the same thing — a reformat, a comment, a
 	// reordered frontmatter. The file changed, so it is written and its
-	// version moves; what the entry says did not, so generated stays with
+	// version moves; what the concept says did not, so generated stays with
 	// whoever the content already stood by (design doc 0046 §3.4).
 	if k.SameContent(old) {
 		k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
 	} else {
 		// Past this point the content really changes, so the caller is who
-		// the entry now stands by — OKF's generated (design doc 0036 §3.3).
+		// the concept now stands by — OKF's generated (design doc 0036 §3.3).
 		k.UpdatedBy, k.ContentChangedAt = actor, store.NowStored()
 	}
 	// Pass the precondition through so the write is also guarded against a
@@ -271,14 +271,14 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	return k, true, nil
 }
 
-// Put writes k over whatever holds its id, creating the entry when the id
+// Put writes k over whatever holds its id, creating the concept when the id
 // is free: one operation, because a document PUT is a statement about
-// what the entry should say and not about whether it already existed
+// what the concept should say and not about whether it already existed
 // (design doc 0043 §3.5).
 //
 // ifMatch makes it conditional, which also makes it an update: a
 // precondition names a version, and a version the caller read cannot
-// belong to an entry that does not exist. A missing entry is then a 404
+// belong to a concept that does not exist. A missing concept is then a 404
 // rather than a silent create.
 //
 // created reports which way it went, so a surface can answer 201 or 200;
@@ -294,7 +294,7 @@ func (s *Service) Put(ctx context.Context, k *domain.Knowledge, actor domain.Act
 	// The id was free at the read above. If another writer took it in the
 	// window, this is an update after all — retry once rather than
 	// handing back an ErrAlreadyExists the caller cannot act on, since
-	// what it asked for ("make the entry say this") is still achievable.
+	// what it asked for ("make the concept say this") is still achievable.
 	made, err := s.Create(ctx, k, actor)
 	if err == nil {
 		return made, true, true, nil
@@ -309,9 +309,9 @@ func (s *Service) Put(ctx context.Context, k *domain.Knowledge, actor domain.Act
 	return updated, false, changed, nil
 }
 
-// RefuseIfCurated reports an error when id names an entry a human has
+// RefuseIfCurated reports an error when id names a concept a human has
 // already ruled on — verified, rejected, or deprecated — for surfaces that
-// must not overwrite that ruling in place. It returns the entry's version
+// must not overwrite that ruling in place. It returns the concept's version
 // so the caller can pass it as an If-Match precondition and close the
 // window between this check and the write.
 //
@@ -323,13 +323,13 @@ func (s *Service) Put(ctx context.Context, k *domain.Knowledge, actor domain.Act
 // §3.4) is silently replace a state a human put there.
 //
 // Rejected matters at least as much as verified, and it is the one the
-// obvious rule would have missed. Create refuses a live entry, so an agent
+// obvious rule would have missed. Create refuses a live concept, so an agent
 // blocked by a rejection has a two-call path around it — delete, then
 // create, which revives the tombstone as a fresh draft and takes the
 // status_note with it. That erases the memory of no that the write-back
 // loop is built on (design doc 0025) and that the shipped instructions
 // tell agents to consult before re-proposing. Nobody notices: unlike a
-// deleted verified entry, a deleted rejection leaves nothing anyone was
+// deleted verified concept, a deleted rejection leaves nothing anyone was
 // using.
 func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, error) {
 	k, err := s.Store.Get(ctx, domain.Normalize(id))
@@ -344,7 +344,7 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 			"re-verification feed. If you have something better, put_concept a new draft."
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"before proposing this again. If you disagree, put_concept a new entry at a " +
+			"before proposing this again. If you disagree, put_concept a new concept at a " +
 			"different id and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
@@ -354,16 +354,16 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	}
 	return nil, Invalidf("cannot %s %s from this surface: it is %s, and this surface has no "+
 		"If-Match precondition to replace curated knowledge safely. %s A human changes curated "+
-		"entries from the web UI or CLI.", op, id, ruling, instead)
+		"concepts from the web UI or CLI.", op, id, ruling, instead)
 }
 
 // RefuseIfRevivingCurated reports an error when id names a soft-deleted
-// entry that was ruled on — verified, rejected or deprecated — before it
+// concept that was ruled on — verified, rejected or deprecated — before it
 // was deleted. For surfaces that must not overwrite a ruling in place,
 // create is the second way to do it: Create revives a tombstone (ON
 // CONFLICT ... WHERE deleted_at IS NOT NULL) with the incoming status and
-// status_note, so the reason an entry was turned down is replaced by a
-// fresh draft, and the entry that comes back looks like it was never
+// status_note, so the reason a concept was turned down is replaced by a
+// fresh draft, and the concept that comes back looks like it was never
 // judged.
 //
 // RefuseIfCurated cannot see this: the row it reads is not live. Closing
@@ -376,7 +376,7 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error {
 	k, err := s.Store.GetTombstone(ctx, domain.Normalize(id))
 	if errors.Is(err, store.ErrNotFound) {
-		// A free id, or a live entry — Create's own ErrAlreadyExists
+		// A free id, or a live concept — Create's own ErrAlreadyExists
 		// covers the second case.
 		return nil
 	}
@@ -389,7 +389,7 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	case domain.RulingRejected:
 		instead = "The rejection is the record of a decision and carries the reason; read it " +
 			"(search_concepts with rejected=true) before proposing this again. If you disagree, " +
-			"put_concept a new entry at a different id and let a human judge it."
+			"put_concept a new concept at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
 			"different id and let a human judge it against the history this id still holds."
@@ -399,7 +399,7 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	default:
 		return nil
 	}
-	return Invalidf("cannot create %s from this surface: the id holds a deleted %s entry, and "+
+	return Invalidf("cannot create %s from this surface: the id holds a deleted %s concept, and "+
 		"creating here would revive it as a fresh draft, replacing that ruling. %s A human reuses "+
 		"the id from the web UI or CLI.", id, ruling, instead)
 }
@@ -411,17 +411,17 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
 }
 
-// Verify appends a verification against the entry as it stands, whether
+// Verify appends a verification against the concept as it stands, whether
 // this is the first confirmation or the tenth re-check.
 //
 // Re-checking is the case Update could not express, and without it
 // neither review feed had an exit (design doc 0025 §6): a reviewer who
-// re-read a verified entry and found it still correct had no way to say
-// so, so it stayed at the top of the verification-age feed, and an entry
+// re-read a verified concept and found it still correct had no way to say
+// so, so it stayed at the top of the verification-age feed, and a concept
 // that was reported wrong and then fixed stayed in the re-verification
 // feed for good. A queue nobody can empty stops being read.
 //
-// It does not touch the document, so the entry's status and its ETag stay
+// It does not touch the document, so the concept's status and its ETag stay
 // put (design doc 0043 §3.2). Promoting a draft to stable is a separate
 // edit by a writer; confirming and publishing are different acts, and a
 // draft somebody checked is a state OKF can express (SPEC §§5.3-5.4).
@@ -431,7 +431,7 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) err
 // judged from provenance.
 //
 // Not an MCP tool. Verification is the human ruling the write-back loop
-// turns on; an agent that finds an entry wrong reports the outcome or
+// turns on; an agent that finds a concept wrong reports the outcome or
 // drafts a replacement (design docs 0015 §3.1, 0025).
 func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
@@ -446,9 +446,9 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 	return k, nil
 }
 
-// Reject records that a reviewer turned the entry down, with the reason.
+// Reject records that a reviewer turned the concept down, with the reason.
 // Like Verify it is a ruling and not an edit: the document keeps its
-// lifecycle status and its ETag, and the entry drops out of searches that
+// lifecycle status and its ETag, and the concept drops out of searches that
 // did not ask for rejected ones (design doc 0043 §3.3).
 //
 // This is the memory of no that the write-back loop is built on (design
@@ -471,23 +471,23 @@ func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Acto
 	return k, nil
 }
 
-// LiftRejection withdraws a ruling, returning the entry to the ordinary
-// pool. ErrNotFound when the entry carries no rejection: lifting nothing
+// WithdrawRejection withdraws a ruling, returning the concept to the ordinary
+// pool. ErrNotFound when the concept carries no rejection: lifting nothing
 // is a mistake worth reporting rather than a silent success.
-func (s *Service) LiftRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+func (s *Service) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
 	id = domain.Normalize(id)
-	k, err := s.Store.LiftRejection(ctx, id, actor)
+	k, err := s.Store.WithdrawRejection(ctx, id, actor)
 	if err != nil {
 		return nil, err
 	}
-	s.Log.Info("knowledge rejection lifted", "id", id, "actor", actor.String())
+	s.Log.Info("knowledge rejection withdrawn", "id", id, "actor", actor.String())
 	return k, nil
 }
 
-// Purge hard-deletes an already soft-deleted entry, freeing its id for a
+// Purge hard-deletes an already soft-deleted concept, freeing its id for a
 // move (design doc 0021: Move cannot revive a tombstone the way Create
 // can). Not an MCP tool: this is the one operation that destroys history,
 // so it belongs to the human surfaces (design doc 0015).
@@ -509,7 +509,7 @@ func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) erro
 	return nil
 }
 
-// Move renames an entry to newID, carrying every id-keyed record along
+// Move renames a concept to newID, carrying every id-keyed record along
 // (revisions, usage, attachments, embeddings) and rewriting inbound
 // references so nothing breaks (design doc 0021). Moving to the current
 // id is a no-op read.
@@ -536,7 +536,7 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 // leaving lower() enough to fold the column.
 //
 // The casing is not touched. A recommended type used to settle on its
-// canonical spelling here, which meant the stored entry no longer said
+// canonical spelling here, which meant the stored concept no longer said
 // what its writer wrote — and once the document is what is stored
 // (design doc 0046 §2.2), it would also mean the index disagreeing with
 // the document it is derived from. The type is the writer's vocabulary
@@ -647,7 +647,7 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 		// The modes come from domain.ListSorts rather than a sentence:
 		// this message named three of them for as long as there were
 		// three, and stale_after (design doc 0037) never reached it.
-		return nil, Invalidf("search needs a query; use sort=%s to list entries without one, "+
+		return nil, Invalidf("search needs a query; use sort=%s to list concepts without one, "+
 			"or source=URI to list what cites a resource", strings.Join(domain.ListSorts, "|"))
 	}
 	f, err := checkedFilter(f)
@@ -702,9 +702,9 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, err
 	}
-	// Entries whose attachments match are the third list (design doc
-	// 0020): an entry matching in both body and attachment gains rank
-	// from both, so evidence-backed entries surface first.
+	// Concepts whose attachments match are the third list (design doc
+	// 0020): a concept matching in both body and attachment gains rank
+	// from both, so evidence-backed concepts surface first.
 	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
 		return nil, err
@@ -714,12 +714,12 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 }
 
 // ContextResult is the one-call context pack behind get_context and
-// `ochakai context`: the ranking, plus the full entries behind the top
-// hits expanded one hop through links. Entries that did not fit the
+// `ochakai context`: the ranking, plus the full concepts behind the top
+// hits expanded one hop through links. Concepts that did not fit the
 // caller's budget are listed in Outline instead — named, not delivered.
 //
 // Hits is the ranking only (design doc 0033). The knowledge travels once,
-// in Entries; a hit that was not expanded into an entry is a pointer the
+// in Concepts; a hit that was not expanded into a concept is a pointer the
 // caller can spend a round trip on.
 type ContextResult struct {
 	Hits      []domain.ContextRank    `json:"hits"`
@@ -729,7 +729,7 @@ type ContextResult struct {
 }
 
 // ContextRequest is the input to Context. Budget caps the serialized size
-// of the response — the entries returned in full and the outline rows
+// of the response — the concepts returned in full and the outline rows
 // naming the rest, which carry a description and are not free; 0 means no
 // cap.
 type ContextRequest struct {
@@ -741,8 +741,8 @@ type ContextRequest struct {
 }
 
 // Context gathers what an agent should read before answering a data
-// question, in one call: search (verified entries rank higher), fetch
-// the entries behind the top hits in full, and follow their links one
+// question, in one call: search (verified concepts rank higher), fetch
+// the concepts behind the top hits in full, and follow their links one
 // hop so companion knowledge — the insight that says how to read a
 // metric, the golden query that answers the question — arrives without
 // further round trips.
@@ -754,7 +754,7 @@ type ContextRequest struct {
 // rank fusion (~0.02 scale) in hybrid mode — a floor meaningful in one
 // mode is nonsense in the other.
 //
-// req.Budget caps how many bytes of full entries come back; the rest
+// req.Budget caps how many bytes of full concepts come back; the rest
 // become outline rows (packWithinBudget). Callers whose context window is
 // the scarce resource — an agent, not a UI — should always set it.
 func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResult, error) {
@@ -803,7 +803,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 		}
 		add(h.ID)
 	}
-	// One hop through the primary entries' links, both directions: the
+	// One hop through the primary concepts' links, both directions: the
 	// query a metric links to, and the insight that links to the metric
 	// (rel: explains points at the metric, not the other way round).
 	// Companions share the 2*limit cap and are never expanded themselves.
@@ -821,24 +821,24 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 			addFetched(&linking[j])
 		}
 	}
-	// Entries become views here: a context pack hands over the document
+	// Concepts become views here: a context pack hands over the document
 	// (design doc 0043 §3.5), and the budget below has to measure what is
 	// actually sent.
 	views := make([]domain.View, 0, len(entries))
 	for i := range entries {
 		v, err := okf.ViewOf(&entries[i])
 		if err != nil {
-			// The entry came from the store, so this means the renderer
+			// The concept came from the store, so this means the renderer
 			// cannot express something it holds. Naming it and leaving it
 			// out beats failing the whole pack.
-			s.Log.Warn("cannot render an entry for a context pack", "id", entries[i].ID, "error", err)
+			s.Log.Warn("cannot render a concept for a context pack", "id", entries[i].ID, "error", err)
 			continue
 		}
 		views = append(views, v)
 	}
 	kept, outline := packWithinBudget(views, req.Budget)
-	// Only delivered entries count as fetched. An outline row names an
-	// entry; it does not hand over the knowledge, so counting it as a use
+	// Only delivered concepts count as fetched. An outline row names an
+	// concept; it does not hand over the knowledge, so counting it as a use
 	// would inflate the demand signal that drives the review feeds.
 	ids := make([]string, len(kept))
 	for i := range kept {
@@ -851,32 +851,32 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	}, nil
 }
 
-// packWithinBudget splits entries into the ones that fit within budget
+// packWithinBudget splits concepts into the ones that fit within budget
 // serialized bytes and outline rows for the rest, preserving rank order in
 // both. budget <= 0 means no cap.
 //
-// Entries are atomic: an entry is delivered whole or not at all. Cutting a
+// Concepts are atomic: a concept is delivered whole or not at all. Cutting a
 // body mid-way would be worse than dropping it — half of an attested
 // computation's SQL still looks executable, and half a model spec is not a
 // spec. Nothing downstream can tell a truncated field from a short one.
 //
-// Packing is greedy rather than a prefix cut: one oversized entry high in
-// the ranking (a model entry carries its entire spec in attrs) would
-// otherwise starve everything below it. An entry larger than the whole
+// Packing is greedy rather than a prefix cut: one oversized concept high in
+// the ranking (a model concept carries its entire spec in attrs) would
+// otherwise starve everything below it. A concept larger than the whole
 // budget always becomes an outline row, even at rank 1 — the caller sees
 // its size and can fetch it deliberately.
 //
 // The outline is inside the budget, not on top of it. Naming what was left
 // out costs bytes too, and an outline row carries a description, which is
-// unbounded on an entry: a budget that governed only the delivered entries
+// unbounded on a concept: a budget that governed only the delivered concepts
 // left the response as a whole ungoverned, which is the thing callers
 // actually have to fit in a context window. So rows are counted, their
-// descriptions are capped, and entries are demoted from the bottom of the
+// descriptions are capped, and concepts are demoted from the bottom of the
 // ranking until the two halves fit together.
 //
 // The floor is the outline of everything: a request whose budget cannot
 // even hold the names of what matched gets those names anyway. Silently
-// dropping entries the caller never hears about is worse than a response
+// dropping concepts the caller never hears about is worse than a response
 // slightly over budget, and the caller can raise the budget only if it
 // knows there was something there.
 func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domain.ContextOutline) {
@@ -902,9 +902,9 @@ func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domai
 		outlineBytes += rowSizes[i]
 	}
 	// Demote from the bottom of the ranking until the outline the skipped
-	// entries cost fits alongside what was kept. Each demotion frees the
-	// entry's bytes and pays for its row, which is strictly smaller — the
-	// guard is there so a pathological entry cannot spin this loop.
+	// concepts cost fits alongside what was kept. Each demotion frees the
+	// concept's bytes and pays for its row, which is strictly smaller — the
+	// guard is there so a pathological concept cannot spin this loop.
 	for used+outlineBytes > budget {
 		last := -1
 		for i := range deliver {
@@ -934,7 +934,7 @@ func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domai
 // outlineDescriptionBytes caps the description an outline row carries.
 // The description is what makes a row worth reading — it is the caller's
 // only basis for spending a round trip — but nothing bounds it on the
-// entry, so one entry with a page-long description could outweigh the
+// concept, so one concept with a page-long description could outweigh the
 // budget on its own. Enough for a sentence or two; the rest is what the
 // fetch is for.
 const outlineDescriptionBytes = 200
@@ -947,8 +947,8 @@ func outlineRow(v *domain.View, size int) domain.ContextOutline {
 	}
 }
 
-// serializedSize is what the entry costs on the wire. It measures the
-// whole view, document included: the document is the entry, so a measure
+// serializedSize is what the concept costs on the wire. It measures the
+// whole view, document included: the document is the concept, so a measure
 // that skipped it would be budgeting for a fraction of what is sent.
 func serializedSize(v *domain.View) int {
 	b, err := json.Marshal(v)
@@ -988,13 +988,13 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 			return nil, Invalidf("invalid sort %q (valid: %s)", sort, strings.Join(domain.ListSorts, ", "))
 		}
 		if strings.TrimSpace(query) != "" {
-			return nil, Invalidf("sort=%s lists entries; it cannot be combined with a search query", sort)
+			return nil, Invalidf("sort=%s lists concepts; it cannot be combined with a search query", sort)
 		}
 		return s.list(ctx, sort, cursor, f, limit)
 	}
 	// A reverse lookup with nothing to search by lists rather than
 	// searches: "what derives from this material" (design doc 0037 §2.3)
-	// and "what links at this entry" both have a set for an answer and no
+	// and "what links at this concept" both have a set for an answer and no
 	// text to rank it by. Both list in address order, and the mode is
 	// named so a cursor from one cannot resume the other.
 	if strings.TrimSpace(query) == "" {
@@ -1089,18 +1089,18 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 //   - usage — by demand, most-searched first, never-used drafts
 //     oldest-first at the bottom: the web UI's draft review queue. Hits
 //     carry their usage totals so the reviewer sees the evidence inline.
-//   - failed — entries whose failure reports are still unanswered, worst
+//   - failed — concepts whose failure reports are still unanswered, worst
 //     first: the re-verification feed (design doc 0025), the
 //     evidence-based counterpart to verified_at. Verifying (or rejecting)
-//     takes an entry out of it, so a base that is kept up yields an empty
+//     takes a concept out of it, so a base that is kept up yields an empty
 //     one. Hits carry their usage totals.
-//   - stale_after — entries whose declared expiry has passed, most
-//     overdue first (design doc 0037 §2.1); only entries stale today, a
+//   - stale_after — concepts whose declared expiry has passed, most
+//     overdue first (design doc 0037 §2.1); only concepts stale today, a
 //     date that has not come due is not work yet. The one feed verifying
 //     does not empty: verified_at and failed are server observations,
 //     while stale_after is what the writer declared, so clearing it means
-//     editing the entry to declare a new expiry (design doc 0037 §2.2).
-//   - source — the entries citing one resource, the reverse of
+//     editing the concept to declare a new expiry (design doc 0037 §2.2).
+//   - source — the concepts citing one resource, the reverse of
 //     sources[].resource (design doc 0037 §2.3).
 //
 // Every mode pages: each has a total order ending in the id, so a cursor
@@ -1133,7 +1133,7 @@ func (s *Service) list(ctx context.Context, sort, cursor string, f store.Filter,
 
 // listPage runs one feed's query. The two usage feeds rank by the usage
 // totals and hand them back with each hit, so they are hits already; the
-// rest return entries to project.
+// rest return concepts to project.
 func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, after *store.After, limit int) ([]domain.SearchHit, error) {
 	switch sort {
 	case "usage":
@@ -1161,9 +1161,9 @@ func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, aft
 	return hits, nil
 }
 
-// Revisions returns an entry's change history, newest first — the
+// Revisions returns a concept's change history, newest first — the
 // audit surface behind "every change kept as a revision". Not a search:
-// no usage is recorded (auditing an entry is not using it).
+// no usage is recorded (auditing a concept is not using it).
 func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -1171,7 +1171,7 @@ func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain
 	return s.Store.ListRevisions(ctx, domain.Normalize(id), limit)
 }
 
-// Usage returns usage totals for one entry (404 when the entry is gone).
+// Usage returns usage totals for one concept (404 when the concept is gone).
 func (s *Service) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 	id = domain.Normalize(id)
 	if _, err := s.Store.Get(ctx, id); err != nil {
@@ -1189,10 +1189,10 @@ const maxOutcomeNote = 2000
 // neither is a place to paste a transcript.
 const maxRejectionNote = 2000
 
-// ReportOutcome records a worked/failed report against one entry and
+// ReportOutcome records a worked/failed report against one concept and
 // returns the updated usage totals. The last edge of the write-back
 // loop: an agent that ran a golden query and got a wrong number can say
-// so, instead of the next agent trusting the same entry blind. Unlike
+// so, instead of the next agent trusting the same concept blind. Unlike
 // passive usage recording, a failed write is returned — the reporter
 // should know the report was lost.
 func (s *Service) ReportOutcome(ctx context.Context, id, outcome, note string) (*domain.Usage, error) {
@@ -1307,7 +1307,7 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 }
 
 // rrfFuse merges ranked lists with reciprocal rank fusion (k=60), adding a
-// small boost for verified entries so certified knowledge surfaces first.
+// small boost for verified concepts so certified knowledge surfaces first.
 func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 	const k = 60
 	type entry struct {
@@ -1358,7 +1358,7 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	}
 	vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
 	if err != nil {
-		s.Log.Warn("document embedding failed; entry remains findable by the lexical half of search", "type", k.Type, "id", k.ID, "error", err)
+		s.Log.Warn("document embedding failed; concept remains findable by the lexical half of search", "type", k.Type, "id", k.ID, "error", err)
 		return
 	}
 	if err := s.Store.UpsertEmbedding(ctx, k.ID, s.Embedder.Model(), vecs[0]); err != nil {
@@ -1376,7 +1376,7 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 // the model rather than from a constant: the window it has to fit inside
 // is a property of the model, and applying the smallest model's budget to
 // a model with four times the window throws away three quarters of it —
-// silently, since an entry truncated for no reason still embeds fine and
+// silently, since a concept truncated for no reason still embeds fine and
 // just carries less of itself.
 //
 // A provider that does not say (any embedder but Vertex, including the
@@ -1390,7 +1390,7 @@ func (s *Service) embedBytes() int {
 }
 
 // ReembedResult reports what a Reembed pass did. Missing is how many
-// entries and attachments still have no vector once the pass is over —
+// concepts and attachments still have no vector once the pass is over —
 // the number that decides whether the operator runs it again, so it
 // counts what is actually left rather than what this pass did not get
 // to. Cursor is where the next pass resumes; empty means the corpus is
@@ -1403,7 +1403,7 @@ type ReembedResult struct {
 	Cursor      string `json:"cursor,omitempty"`
 }
 
-// A reembed pass is one HTTP request, and one entry is one call to the
+// A reembed pass is one HTTP request, and one concept is one call to the
 // embedding provider — gemini-embedding-001 takes a single text per
 // request, so the passes are sequential by construction. At a few hundred
 // milliseconds each, a pass of 500 is minutes of request time, and Cloud
@@ -1418,15 +1418,15 @@ const (
 	maxReembedPass     = 5000
 )
 
-// Reembed fills in the vectors that entry writes never produced. Vectors
+// Reembed fills in the vectors that concept writes never produced. Vectors
 // are written on create and update only, so a base loaded before semantic
 // search was reachable has none, and hybrid search silently stays
-// lexical-only until every entry happens to be rewritten. Switching models
+// lexical-only until every concept happens to be rewritten. Switching models
 // has the same shape: the old vectors are in a space nothing queries any
 // more (design doc 0020), as does a changed dimension, which rebuilds the
 // tables empty (design doc 0053 §3).
 //
-// Failures are counted, not fatal: one entry the provider chokes on must
+// Failures are counted, not fatal: one concept the provider chokes on must
 // not strand the rest of the corpus.
 func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*ReembedResult, error) {
 	if err := s.readOnly(); err != nil {
@@ -1448,7 +1448,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 		k, err := s.Store.Get(ctx, id)
 		if err != nil {
 			res.Failed++
-			s.Log.Warn("reembed: entry disappeared", "id", id, "error", err)
+			s.Log.Warn("reembed: concept disappeared", "id", id, "error", err)
 			continue
 		}
 		vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
@@ -1469,7 +1469,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	}
 	// Attachments carry vectors of their own (design doc 0020) and only
 	// attach writes them, so dropping the embedding tables to change
-	// dimensions leaves every file findable by name alone. Entries come
+	// dimensions leaves every file findable by name alone. Concepts come
 	// first and attachments fill the rest of the pass, so a corpus with
 	// both makes progress on both.
 	if rest := limit - len(ids); rest > 0 {
@@ -1480,7 +1480,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	}
 	// Counted after the pass, so it is what is left — not what was left
 	// minus what we did, which double-counts the work and reports a
-	// bounded pass as a finished one. Entries this pass failed on are
+	// bounded pass as a finished one. Concepts this pass failed on are
 	// still unembedded and belong in the total.
 	missing, err := s.Store.CountUnembedded(ctx, s.Embedder.Model())
 	if err != nil {
@@ -1501,7 +1501,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 }
 
 // reembedAttachments re-embeds up to limit attachments, returning the
-// cursor to resume from. Failures are counted like entry failures: a
+// cursor to resume from. Failures are counted like concept failures: a
 // file the provider rejects must not strand the rest.
 func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, cursor string, limit int) (string, error) {
 	afterID, afterName := splitReembedCursor(cursor)
@@ -1542,7 +1542,7 @@ func (s *Service) attachmentVectorCount(ctx context.Context, id, name string) in
 	return n
 }
 
-// The reembed cursor carries two positions — entries and attachments —
+// The reembed cursor carries two positions — concepts and attachments —
 // in one opaque string, so the wire stays a single token the CLI can
 // hand back unchanged. "\x00" cannot occur in an id (design doc 0017)
 // or an attachment name.
@@ -1560,7 +1560,7 @@ func splitReembedCursor(c string) (string, string) {
 
 // embedDocument embeds text, halving it and retrying while the model says
 // it is too long. Byte budgets only approximate a token count, and the
-// approximation is worst for Japanese; without this, an entry that
+// approximation is worst for Japanese; without this, a concept that
 // overruns is dropped from vector search silently — logged, but with the
 // write reported as a success. Halving converges in a couple of rounds
 // and only runs on the rejection, so an outage still costs one call.
@@ -1587,14 +1587,14 @@ func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, 
 // embeddingText builds the document text to embed: envelope fields plus the
 // golden query question, body truncated to keep within model input limits.
 // The id leads (design doc 0022): with title optional, the filename may be
-// the entry's only name, and the path carries the domain hierarchy.
+// the concept's only name, and the path carries the domain hierarchy.
 func embeddingText(k *domain.Knowledge, max int) string {
 	parts := []string{k.ID, k.Title, k.Description, strings.Join(k.Tags, " ")}
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
 	}
 	parts = append(parts, k.Body)
-	// The cap covers the joined text: an entry whose envelope is long
+	// The cap covers the joined text: a concept whose envelope is long
 	// (a deep path, a paragraph of description) must not push the total
 	// past the window just because the body fit on its own.
 	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), max)

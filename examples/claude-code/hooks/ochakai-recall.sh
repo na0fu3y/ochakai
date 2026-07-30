@@ -28,4 +28,4 @@ pack=$(ochakai context "$prompt" --budget "${OCHAKAI_RECALL_BUDGET:-4000}" \
 	--min-score "${OCHAKAI_RECALL_MIN_SCORE:-0}" 2>/dev/null) || exit 0
 [ -z "$pack" ] && exit 0
 
-printf 'Team knowledge from ochakai relevant to this request (trust verified entries; judge drafts by created_by):\n\n%s\n' "$pack"
+printf 'Team knowledge from ochakai relevant to this request (trust verified concepts; judge drafts by created_by):\n\n%s\n' "$pack"

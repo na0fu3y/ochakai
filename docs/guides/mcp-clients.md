@@ -43,14 +43,14 @@ is worth an issue.
 
 | Tool | Description |
 |---|---|
-| `get_context` | The one call before answering a data question: full entries behind the top hits, links expanded both ways |
-| `search_concepts` | Cross-type search; verified entries rank higher |
-| `get_concept` | Fetch one entry as an OKF document, with its links and attachment metadata |
-| `get_attachment` | Fetch a file attached to an entry (dashboard screenshots, ER diagrams, seeds files) |
+| `get_context` | The one call before answering a data question: full concepts behind the top hits, links expanded both ways |
+| `search_concepts` | Cross-type search; verified concepts rank higher |
+| `get_concept` | Fetch one concept as an OKF document, with its links and attachment metadata |
+| `get_attachment` | Fetch a file attached to a concept (dashboard screenshots, ER diagrams, seeds files) |
 | `put_concept` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
 | `delete_concept` | Soft-delete (history retained) |
-| `get_concept_usage` | Usage totals per entry — draft-promotion evidence, staleness signal |
-| `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified entries for re-verification |
+| `get_concept_usage` | Usage totals per concept — draft-promotion evidence, staleness signal |
+| `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified concepts for re-verification |
 
 Every one of these is a knowledge operation: ochakai never executes SQL and
 never calls an LLM. `compile_sql` — deterministic SQL generation from a
@@ -59,10 +59,10 @@ semantic model — existed until 0.13.0 and was retired (design doc
 is the verified query and the caveat around it, and both arrive from
 `get_context`.
 
-Every entry is also an **MCP resource** addressable by its canonical URI —
-`ochakai://` plus its id (the entry's path), e.g. `ochakai://metrics/revenue`
+Every concept is also an **MCP resource** addressable by its canonical URI —
+`ochakai://` plus its id (the concept's path), e.g. `ochakai://metrics/revenue`
 or `ochakai://queries/sales/top-customers`. Clients that support resource
-references (`@`-mentions) can pull an entry in as an OKF document —
+references (`@`-mentions) can pull a concept in as an OKF document —
 frontmatter and body — without a tool call; discovery stays with
 `get_context`/`search_concepts`. Read tools carry `readOnly` annotations and
 `delete_concept` a `destructive` one, so client auto-approval policies work
@@ -228,7 +228,7 @@ Install links for the local case (the second is for Insiders):
 ```
 
 MCP configuration moved out of `settings.json` in VS Code 1.102 and
-existing entries were migrated; if you find a `"mcp"` key in your
+existing concepts were migrated; if you find a `"mcp"` key in your
 settings, that is where it came from.
 
 ## Windsurf
@@ -342,7 +342,7 @@ supported path.
 - **The server answers curl but not the client.** Check the path — `/mcp`,
   not the root. `GET /` on an ochakai server prints the endpoints it
   serves.
-- **Searches come back empty on a base that has entries.** Not a
+- **Searches come back empty on a base that has concepts.** Not a
   connection problem. Japanese knowledge bases want embeddings on; see
   [what search does with it](../knowledge.md#what-search-does-with-it).
 

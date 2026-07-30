@@ -1,6 +1,11 @@
 # ochakai 設計ドキュメント 0054: 知識の単位は concept と呼ぶ
 
-Status: Accepted(2026-07-29)。MCP のツール名 5 本が持つ `knowledge` を、
+Status: Accepted(2026-07-29)。**§3.5 の「MCP のみ」は
+[0057](0057-concept-is-the-word-a-reader-meets.md) が補った** — 決めた
+語を、利用者が読む英語の散文(README・docs・CLI のヘルプ・Web UI の
+ラベル・ツール説明・OpenAPI の description・エラー文)にも広げる。
+本ドキュメントの §3.4(識別子は射程外)はそのまま維持される。
+MCP のツール名 5 本が持つ `knowledge` を、
 OKF SPEC §2 が定義する語 `concept` に改める — `search_concepts` /
 `get_concept` / `put_concept` / `delete_concept` / `get_concept_usage`。
 リソーステンプレートの表示名も同じ語に揃える。**ツールは 8 本のまま**で、

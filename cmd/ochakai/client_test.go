@@ -39,7 +39,7 @@ func TestParseRef(t *testing.T) {
 	for in, want := range map[string]string{
 		"metrics/revenue":           "metrics/revenue",
 		"ochakai://metrics/revenue": "metrics/revenue",
-		"revenue":                   "revenue", // root-level ids are entries too
+		"revenue":                   "revenue", // root-level ids are concepts too
 	} {
 		id, err := parseRef(in)
 		if err != nil || id != want {
@@ -132,21 +132,50 @@ func TestExtractTarGzRefusesEscapes(t *testing.T) {
 	}
 }
 
-// Guard: the client dispatch table and domain types stay in sync with the
-// commands documented in usage().
-func TestClientCommandsCoverDesignDoc(t *testing.T) {
-	for _, name := range []string{"search", "queues", "browse", "context", "get", "put", "verify", "reject", "delete", "purge", "reembed", "move", "attach", "detach", "usage", "stats", "report", "revisions", "log", "backlinks", "export", "import", "use", "whoami", "ui", "mcp-stdio", "completion"} {
-		if _, ok := clientCommands[name]; !ok {
-			t.Errorf("missing client command %q", name)
+// Guard: `ochakai help` names every command the binary dispatches, and no
+// others. The earlier form of this test compared the dispatch table
+// against a list written out here — a copy of usage() rather than a
+// reading of it, which is how `reject` came to run without ever being
+// named in the help. docs/cli.md renders the same text, so a command
+// missing here is missing from the reference too.
+func TestUsageNamesEveryCommand(t *testing.T) {
+	var b strings.Builder
+	usage(&b)
+
+	documented := map[string]bool{}
+	for _, line := range strings.Split(b.String(), "\n") {
+		// Command lines are indented two spaces; a description
+		// continued on the next line is indented to its column.
+		if !strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "   ") {
+			continue
+		}
+		if f := strings.Fields(line); len(f) > 0 {
+			documented[f[0]] = true
 		}
 	}
-	if len(clientCommands) != 27 {
-		t.Errorf("unexpected extra client commands: %d", len(clientCommands))
+
+	// These three are how the binary is run rather than something
+	// ochakai knows, so they are not client commands and docs/surface.md
+	// does not count them either.
+	for _, name := range []string{"serve", "serve-ui", "version"} {
+		if !documented[name] {
+			t.Errorf("usage() no longer documents %q", name)
+		}
+		delete(documented, name)
+	}
+	for name := range clientCommands {
+		if !documented[name] {
+			t.Errorf("`ochakai %s` runs, but `ochakai help` never names it", name)
+		}
+		delete(documented, name)
+	}
+	for name := range documented {
+		t.Errorf("usage() documents %q, which the binary does not dispatch", name)
 	}
 	_ = domain.Types // keep the import honest
 }
 
-// viewOf renders an entry the way a read does, so a rendering test works
+// viewOf renders a concept the way a read does, so a rendering test works
 // on the shape the CLI actually receives.
 func viewOf(t *testing.T, k domain.Knowledge) domain.View {
 	t.Helper()
@@ -188,7 +217,7 @@ func TestRenderContext(t *testing.T) {
 	for _, want := range []string{
 		"## ochakai://queries/monthly-revenue (stable) — Monthly revenue",
 		"verified by human:na0 on 2026-06-01; created by process:claude",
-		// The entry is its document: the producer key and the body come
+		// The concept is its document: the producer key and the body come
 		// out as written, without this renderer knowing about either.
 		"question: Revenue by month?",
 		"Prefer this over writing new SQL.",
@@ -201,26 +230,26 @@ func TestRenderContext(t *testing.T) {
 		}
 	}
 	if strings.Contains(s, "ochakai://queries/monthly-revenue (verified) — Monthly revenue\n- ") {
-		t.Error("rendered entries must not repeat in the Also relevant list")
+		t.Error("rendered concepts must not repeat in the Also relevant list")
 	}
 
-	// A tiny budget still renders the first entry, then reports the rest.
+	// A tiny budget still renders the first concept, then reports the rest.
 	out.Reset()
 	renderContext(&out, res, 10)
 	s = out.String()
 	if !strings.Contains(s, "## ochakai://queries/monthly-revenue") {
-		t.Errorf("first entry must render regardless of budget:\n%s", s)
+		t.Errorf("first concept must render regardless of budget:\n%s", s)
 	}
 	if strings.Contains(s, "## ochakai://insights/revenue-seasonality") {
-		t.Errorf("budget must drop later entries:\n%s", s)
+		t.Errorf("budget must drop later concepts:\n%s", s)
 	}
-	if !strings.Contains(s, "1 more entries beyond --budget") {
-		t.Errorf("omitted entries must be reported:\n%s", s)
+	if !strings.Contains(s, "1 more concepts beyond --budget") {
+		t.Errorf("omitted concepts must be reported:\n%s", s)
 	}
 }
 
 // TestImportReportsUnchanged pins the import summary against a fake
-// server: an existing entry whose PUT answers with Ochakai-Unchanged
+// server: an existing concept whose PUT answers with Ochakai-Unchanged
 // counts (and prints) as unchanged, everything else as before. Servers
 // without the header (absent on the second PUT) keep reporting updated.
 func TestImportReportsUnchanged(t *testing.T) {
@@ -240,7 +269,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		// The payload is a document now (design doc 0043 §3.5), and the
-		// import loop makes one call per entry rather than create-then-
+		// import loop makes one call per concept rather than create-then-
 		// update: whether the id was free is not something a bundle says.
 		if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/markdown") {
 			t.Errorf("Content-Type = %q, want text/markdown", ct)
@@ -282,7 +311,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 	for _, want := range []string{
 		"unchanged ochakai://metrics/same\n",
 		"updated ochakai://metrics/diff\n",
-		"imported 2 entries (0 created, 1 updated, 1 unchanged, 0 attachments, 0 files, 0 skipped, 0 notes)\n",
+		"imported 2 concepts (0 created, 1 updated, 1 unchanged, 0 attachments, 0 files, 0 skipped, 0 notes)\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
@@ -291,7 +320,7 @@ func TestImportReportsUnchanged(t *testing.T) {
 }
 
 // TestImportStrictRefusesBeforeWriting pins the whole point of --strict:
-// a note is a report by default and an entry carrying one still imports,
+// a note is a report by default and a concept carrying one still imports,
 // but under --strict the same bundle fails — and fails before the first
 // PUT, so a sync that would drift lands nothing at all. Without the flag
 // the identical bundle is written, which is what makes this a posture and
@@ -337,7 +366,7 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 		t.Errorf("--strict error = %v, want it to say nothing was written", err)
 	}
 	if puts != 0 {
-		t.Errorf("--strict wrote %d entries before failing, want 0", puts)
+		t.Errorf("--strict wrote %d concepts before failing, want 0", puts)
 	}
 
 	// --dry-run --strict is the CI gate: same verdict, still no writes.
@@ -349,7 +378,7 @@ func TestImportStrictRefusesBeforeWriting(t *testing.T) {
 		t.Fatalf("without --strict the same bundle must import: %v", err)
 	}
 	if puts != 1 {
-		t.Errorf("import without --strict wrote %d entries, want 1", puts)
+		t.Errorf("import without --strict wrote %d concepts, want 1", puts)
 	}
 }
 
@@ -388,7 +417,7 @@ func TestPutIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 
 // A verification's whole product is a timestamp and a name, and the only
 // way to read them back was a second call: verify printed one line and
-// dropped the entry the server had already returned. --json hands the
+// dropped the concept the server had already returned. --json hands the
 // same response every other write verb hands over, so a canary can stamp
 // and record verified_at in one round trip.
 func TestVerifyJSONPrintsTheEntry(t *testing.T) {
@@ -428,22 +457,19 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 	}
 	last := got.Observed.LastVerified()
 	if got.ID != "queries/monthly-revenue" || last == nil || !last.At.Equal(verified) {
-		t.Errorf("verified entry = %+v, want the server's response with its verification", got)
+		t.Errorf("verified concept = %+v, want the server's response with its verification", got)
 	}
 }
 
-// TestQueuesPrintsEachQueueWithTheCommandThatListsIt pins the two halves
-// of what makes `queues` a nudge rather than a statistic: every line
-// carries the command that opens that queue (with the scope it was asked
-// under), and --exit-code turns "somebody owes a review" into an exit
-// status a scheduler can watch (design doc 0049).
-func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
+// TestStatsPrintsEachQueueWithTheCommandThatListsIt pins the two halves
+// of what makes the queue lines a nudge rather than a statistic: every
+// one carries the command that opens that queue (with the scope it was
+// asked under), and --exit-code turns "somebody owes a review" into an
+// exit status a scheduler can watch (design doc 0049).
+func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 	var gotPrefixes []string
 	counts := domain.QueueCounts{Drafts: 3, ReportedWrong: 1, PastExpiry: 0}
 	mux := http.NewServeMux()
-	// The depths come off the stats face: the address they had of their
-	// own is gone (design doc 0049 §3.1), and `queues` is the client-side
-	// convenience over the same three numbers.
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
 		gotPrefixes = r.URL.Query()["prefix"]
 		_ = json.NewEncoder(w).Encode(map[string]any{"queues": counts})
@@ -457,34 +483,34 @@ func TestQueuesPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Stdout = pw
-	queuesErr := cmdQueues(context.Background(), []string{"--prefix", "teams/growth", "--exit-code", "--url", srv.URL})
+	statsErr := cmdStats(context.Background(), []string{"--prefix", "teams/growth", "--exit-code", "--url", srv.URL})
 	pw.Close()
 	os.Stdout = orig
 	out, err := io.ReadAll(pr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !errors.Is(queuesErr, errWorkPending) {
-		t.Errorf("--exit-code with 4 waiting = %v, want errWorkPending (exit 2)", queuesErr)
+	if !errors.Is(statsErr, errWorkPending) {
+		t.Errorf("--exit-code with 4 waiting = %v, want errWorkPending (exit 2)", statsErr)
 	}
 	if len(gotPrefixes) != 1 || gotPrefixes[0] != "teams/growth" {
 		t.Errorf("server saw prefix %v, want [teams/growth]", gotPrefixes)
 	}
 	for _, want := range []string{
-		"3\tdrafts\tochakai search --sort usage --status draft --prefix teams/growth\n",
-		"1\treported wrong\tochakai search --sort failed --prefix teams/growth\n",
-		"0\tpast expiry\tochakai search --sort stale_after --prefix teams/growth\n",
+		"drafts\t3\tochakai search --sort usage --status draft --prefix teams/growth\n",
+		"reported_wrong\t1\tochakai search --sort failed --prefix teams/growth\n",
+		"past_expiry\t0\tochakai search --sort stale_after --prefix teams/growth\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
 		}
 	}
 
-	// All three empty is the case the whole command exists to make
+	// All three empty is the case the exit status exists to make
 	// visible: it prints the zeros and exits 0, so a quiet queue and an
 	// empty one stop looking alike.
 	counts = domain.QueueCounts{}
-	if err := cmdQueues(context.Background(), []string{"--exit-code", "--url", srv.URL}); err != nil {
+	if err := cmdStats(context.Background(), []string{"--exit-code", "--url", srv.URL}); err != nil {
 		t.Errorf("--exit-code on an empty base = %v, want nil (exit 0)", err)
 	}
 }
