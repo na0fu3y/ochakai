@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0001](0001-architecture.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
-| 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用) |
+| 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用)、[0060](0060-one-word-for-the-posture.md)(姿勢の綴り) |
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
@@ -105,14 +105,29 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   持たない —「到達できた者は読み書きできる」。ヘッダから読むのは
   provenance だけで、信頼の判断は参照側が provenance を見て行う。
 - [0040 デプロイ単位の read-only](0040-read-only-mode.md) —
-  **Accepted**。`OCHAKAI_READ_ONLY` でデプロイ全体を読み取り専用にする。
+  **Accepted**(綴りは 0060 が `OCHAKAI_MODE=read-only` に改訂)。
+  デプロイ全体を読み取り専用にする。
   呼び出し元を区別しないので 0002 の「認可を持たない」は維持される。
   強制点はサービス層 1 箇所、各面は自分の語彙で告げる(REST は 403 と
   ヘッダ、MCP は書き込みツールを出さない)。
 - [0042 公開読み取り専用という姿勢](0042-public-read-only.md) —
-  **Accepted**。誰でも到達できるデプロイのために、identity を一切読まない
+  **Accepted**(綴りは 0060 が `OCHAKAI_MODE=public` に改訂)。
+  誰でも到達できるデプロイのために、identity を一切読まない
   (トークンも委譲ヘッダも見ない、全員 anonymous、401 を返さない)。
   read-only を含意するので「公開かつ書き込み可能」は設定として存在しない。
+- [0060 姿勢は一語で言う](0060-one-word-for-the-posture.md) —
+  **Accepted**、**BREAKING**。`OCHAKAI_READ_ONLY` /
+  `OCHAKAI_PUBLIC_READ_ONLY` / `OCHAKAI_INSECURE_DEV` の 3 つのブールを
+  `OCHAKAI_MODE`(未設定 / `read-only` / `public` / `dev`)一本に畳む。
+  0040 と 0042 が**決めたことは何も変えない** — 3 つのブールが書き下せた
+  8 通りのうち意味を持つのは 4 つだけで、差は規則 3 つ(黙って補正する
+  含意 2 つと、起動を拒否する組み合わせ 1 つ)で埋められていた。実際に
+  あるのは「呼び出し元が特定されるか」「誰かが書けるか」の 2 軸 4 象限で
+  あり、`INSECURE_DEV` が姿勢に見えなかったのは名前が機構を言っていた
+  からである(§1.1)。**規則は消えるのではなく、書き下せなくなる。**
+  読めない綴りは既定に落とさず起動エラーにする(0053 §2.4 と同じ理由)。
+  ENV は 16 → 14 で、姿勢の 3 綴りは VOCAB に数えない — 姿勢はデプロイ
+  する人の語であり、それは ENV が既に数えている(§4)。
 - [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
   — **Accepted**(§3 の合成規則を 0052 が producer に適用)。信頼済みの
   呼び出し元が `X-Ochakai-On-Behalf-Of` でエンドユーザーを名乗り、

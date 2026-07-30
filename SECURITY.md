@@ -23,7 +23,7 @@ ochakai's security posture is deliberately narrow (see
   (The publicly reachable MCP OAuth connector service existed briefly
   and was retired in 0.9.0.)
 - There is exactly one public posture, and it is public because it
-  believes nothing: `OCHAKAI_PUBLIC_READ_ONLY` reads no identity at all
+  believes nothing: `OCHAKAI_MODE=public` reads no identity at all
   and refuses every write (design docs
   [0040](docs/design/0040-read-only-mode.md),
   [0042](docs/design/0042-public-read-only.md)). A deployment that is
@@ -35,7 +35,7 @@ Especially interesting reports, given that design:
 
 - Ways a request could smuggle or spoof the forwarded identity when
   deployed as documented in [deploy/cloudrun/README.md](deploy/cloudrun/README.md).
-- Anything that makes `OCHAKAI_INSECURE_DEV` behavior reachable in a
+- Anything that makes `OCHAKAI_MODE=dev` behavior reachable in a
   non-dev configuration.
 
 Weaknesses that only manifest when the documented deployment posture is

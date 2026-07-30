@@ -116,12 +116,12 @@ func TestEmbeddingsSwitch(t *testing.T) {
 
 // The public posture implies read-only and cannot be separated from it:
 // not reading provenance is only defensible because nothing is written
-// (design doc 0042 §2.1, §3).
-func TestPublicReadOnlyImpliesReadOnly(t *testing.T) {
+// (design doc 0042 §2.1, §3). Since 0060 the implication is the only
+// thing left to check — there is no second variable that could ask for
+// writes back.
+func TestPublicModeImpliesReadOnly(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
-	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")
-	// Asking for writes back is not a way out.
-	t.Setenv("OCHAKAI_READ_ONLY", "false")
+	t.Setenv("OCHAKAI_MODE", "public")
 
 	cfg, err := FromEnv()
 	if err != nil {
@@ -133,26 +133,62 @@ func TestPublicReadOnlyImpliesReadOnly(t *testing.T) {
 	}
 }
 
-// Both make callers anonymous, but insecure dev also lets anyone
-// delegate. Refuse rather than silently pick one (design doc 0042 §2.3).
-func TestPublicReadOnlyRefusesInsecureDev(t *testing.T) {
+// One word, one posture. The combination 0042 §2.3 had to refuse —
+// public together with insecure dev, where a stranger may name any
+// person they like — is now unspellable rather than rejected, which is
+// the whole of design doc 0060 in one test.
+func TestModesAreExclusive(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
-	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")
-	t.Setenv("OCHAKAI_INSECURE_DEV", "true")
-	if _, err := FromEnv(); err == nil {
-		t.Error("accepted the public posture together with insecure dev")
+	for _, c := range []struct {
+		mode                          string
+		readOnly, public, insecureDev bool
+	}{
+		{"", false, false, false},
+		{"read-only", true, false, false},
+		{"public", true, true, false},
+		{"dev", false, false, true},
+	} {
+		t.Run(c.mode, func(t *testing.T) {
+			t.Setenv("OCHAKAI_MODE", c.mode)
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.ReadOnly != c.readOnly || cfg.PublicReadOnly != c.public || cfg.InsecureDev != c.insecureDev {
+				t.Errorf("mode %q: read_only=%v public=%v dev=%v, want %v/%v/%v",
+					c.mode, cfg.ReadOnly, cfg.PublicReadOnly, cfg.InsecureDev,
+					c.readOnly, c.public, c.insecureDev)
+			}
+		})
 	}
 }
 
-// Off by default: an existing deployment that sets neither is unchanged.
-func TestPublicReadOnlyDefaultsOff(t *testing.T) {
+// A misspelled posture is refused, not read as the default. A deployment
+// that meant read-only and got a writable one would find out from its
+// knowledge rather than from its logs (design doc 0060 §2.3) — the same
+// reasoning OCHAKAI_EMBEDDINGS already used for "false".
+func TestUnknownModeRefused(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	for _, mode := range []string{"readonly", "read_only", "true", "public-read-only", "READ-ONLY"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("OCHAKAI_MODE", mode)
+			if _, err := FromEnv(); err == nil {
+				t.Errorf("OCHAKAI_MODE=%q was accepted; a posture nobody can spell must not be silently the default", mode)
+			}
+		})
+	}
+}
+
+// Off by default: a deployment that names no mode is unchanged.
+func TestModeDefaultsToTheOrdinaryPosture(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.PublicReadOnly || cfg.ReadOnly {
-		t.Errorf("public=%v read_only=%v, want both off", cfg.PublicReadOnly, cfg.ReadOnly)
+	if cfg.PublicReadOnly || cfg.ReadOnly || cfg.InsecureDev {
+		t.Errorf("public=%v read_only=%v dev=%v, want the ordinary posture",
+			cfg.PublicReadOnly, cfg.ReadOnly, cfg.InsecureDev)
 	}
 }
 
@@ -180,9 +216,9 @@ func TestRecordMissesDefaultsOn(t *testing.T) {
 // A public deployment reads no identity, so it keeps no query text
 // either — and asking for it back is not a way out, exactly as with
 // read-only (design doc 0051 §3.4).
-func TestPublicReadOnlyKeepsNoQueries(t *testing.T) {
+func TestPublicModeKeepsNoQueries(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
-	t.Setenv("OCHAKAI_PUBLIC_READ_ONLY", "true")
+	t.Setenv("OCHAKAI_MODE", "public")
 	t.Setenv("OCHAKAI_RECORD_MISSES", "true")
 	cfg, err := FromEnv()
 	if err != nil {

@@ -14,7 +14,7 @@ finished.
 ```sh
 createdb shots   # or: docker exec <pg> psql -U t -d t -c 'CREATE DATABASE shots'
 OCHAKAI_DATABASE_URL='postgres://…/shots?sslmode=disable' \
-  OCHAKAI_INSECURE_DEV=true PORT=8095 go run ./cmd/ochakai serve &
+  OCHAKAI_MODE=dev PORT=8095 go run ./cmd/ochakai serve &
 
 export OCHAKAI_URL=http://127.0.0.1:8095
 go run ./cmd/ochakai import examples/demo

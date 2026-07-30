@@ -60,7 +60,11 @@ locals {
   # module states the implication in the environment rather than leaving it
   # to be read back off the running service, so the deployed configuration
   # reads the same way the posture does.
-  read_only = var.read_only || var.public_read_only
+  # One word for the posture (design doc 0060): the module maps its two
+  # booleans onto the single OCHAKAI_MODE the server reads, and public
+  # wins because it is the stronger of the two — it is read-only plus
+  # believing nobody.
+  mode = var.public_read_only ? "public" : (var.read_only ? "read-only" : "")
 
   server_env = merge(
     {
@@ -75,8 +79,7 @@ locals {
         "&user=${local.db_service_account_user}",
       ])
     },
-    local.read_only ? { OCHAKAI_READ_ONLY = "true" } : {},
-    var.public_read_only ? { OCHAKAI_PUBLIC_READ_ONLY = "true" } : {},
+    local.mode != "" ? { OCHAKAI_MODE = local.mode } : {},
     var.enable_gcs_attachments ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
     # No OCHAKAI_VERTEX_PROJECT when embeddings are on: ochakai discovers
     # the project it runs in, and a discovered project is the mode that
@@ -464,8 +467,8 @@ resource "google_cloud_run_v2_service_iam_member" "public_demo" {
     # binding must never outlive the posture that justifies it, not even for
     # the length of an apply.
     precondition {
-      condition     = lookup(local.server_env, "OCHAKAI_PUBLIC_READ_ONLY", "") == "true"
-      error_message = "Refusing to grant allUsers: the service is not running with OCHAKAI_PUBLIC_READ_ONLY=true. Public is only safe while ochakai writes nothing and reads no identity (design doc 0042)."
+      condition     = lookup(local.server_env, "OCHAKAI_MODE", "") == "public"
+      error_message = "Refusing to grant allUsers: the service is not running with OCHAKAI_MODE=public. Public is only safe while ochakai writes nothing and reads no identity (design doc 0042)."
     }
   }
 }

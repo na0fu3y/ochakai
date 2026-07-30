@@ -77,7 +77,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - HEADER: 9
 - MCP: 8
 - CLI: 25
-- ENV: 16
+- ENV: 14
 - VOCAB: 36
 
 **天井は一つのファイルの一行で、誰でも上げられる。それは弱点ではなく
@@ -238,12 +238,22 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `ochakai verify`
 - `ochakai whoami`
 
-## ENV (16)
+## ENV (14)
 
 環境変数も表面である — デプロイする人が読み、間違えられる。No FDE(C4)
 を掲げる以上、**設定の数は「自分で立ち上げられるか」に直接効く**。
 非テストの Go ソースから読み戻すので、`os.Getenv` を一つ足せばここも
 動く。
+
+16 → 14 は [0060](design/0060-one-word-for-the-posture.md) の畳み込みで
+ある。`OCHAKAI_READ_ONLY` / `OCHAKAI_PUBLIC_READ_ONLY` /
+`OCHAKAI_INSECURE_DEV` の 3 つのブールが表していたのは、実際には
+**排他的な 4 つの姿勢**(既定 / read-only / public / dev)であり、
+`OCHAKAI_MODE` 一語になった。**減ったのは 2 本だけだが、消えたのは
+それだけではない** — 起動時に拒否していた組み合わせが 1 つ、黙って
+補正していた含意が 2 つ、どれも**書き下せなくなった**ので規則ごと消えた。
+この文書が数えているのは名前であって規則ではないから、この行は
+16 → 14 としか言わない。
 
 - `OCHAKAI_DATABASE_URL`
 - `OCHAKAI_DB_IAM_AUTH`
@@ -252,10 +262,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `OCHAKAI_EMBEDDING_DIM`
 - `OCHAKAI_GCS_BUCKET`
 - `OCHAKAI_IAP_AUDIENCE`
-- `OCHAKAI_INSECURE_DEV`
+- `OCHAKAI_MODE`
 - `OCHAKAI_PRODUCER`
-- `OCHAKAI_PUBLIC_READ_ONLY`
-- `OCHAKAI_READ_ONLY`
 - `OCHAKAI_RECORD_MISSES`
 - `OCHAKAI_URL`
 - `OCHAKAI_VERTEX_LOCATION`

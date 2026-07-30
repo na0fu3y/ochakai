@@ -1,6 +1,6 @@
 # Local development harness. ochakai itself targets Google Cloud
 # (design doc 0003); this compose file exists for hacking on ochakai and
-# trying it out — hence OCHAKAI_INSECURE_DEV.
+# trying it out — hence OCHAKAI_MODE=dev.
 services:
   ochakai:
     image: ghcr.io/na0fu3y/ochakai:latest
@@ -10,7 +10,7 @@ services:
       - "8080:8080"
     environment:
       OCHAKAI_DATABASE_URL: postgres://ochakai:ochakai@db:5432/ochakai?sslmode=disable
-      OCHAKAI_INSECURE_DEV: "true" # local only: all requests act as human:anonymous
+      OCHAKAI_MODE: dev # local only: all requests act as human:anonymous
     depends_on:
       db:
         condition: service_healthy

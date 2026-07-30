@@ -119,8 +119,8 @@ For the shape of the system rather than the history of it, read
   self-asserted.
 
 - **[0040 Deployment-wide read-only mode](0040-read-only-mode.md)** —
-  *Accepted.* `OCHAKAI_READ_ONLY=true` makes a deployment serve knowledge
-  without changing any. It is deliberately not authorization: it never
+  *Accepted; respelled `OCHAKAI_MODE=read-only` by 0060.* It makes a
+  deployment serve knowledge without changing any. It is deliberately not authorization: it never
   looks at the caller and refuses the operator too. Enforcement sits at one
   point in the service layer, so no surface can leak past it. Usage
   recording continues, being the server's own observation.
@@ -129,8 +129,8 @@ For the shape of the system rather than the history of it, read
   `ochakai whoami` reports the mode.
 
 - **[0042 The public read-only posture](0042-public-read-only.md)** —
-  *Accepted.* `OCHAKAI_PUBLIC_READ_ONLY=true` is the posture for a
-  deployment anyone may reach — a demo, or a reference-only copy handed
+  *Accepted; respelled `OCHAKAI_MODE=public` by 0060.* It is the posture
+  for a deployment anyone may reach — a demo, or a reference-only copy handed
   out. It reads no identity at all: `Authorization` and the delegation
   header are ignored, every caller is `human:anonymous`, and nobody gets a
   401. Reading a token nothing verified would be worse than ignoring it,
@@ -139,11 +139,34 @@ For the shape of the system rather than the history of it, read
   0040's read-only mode and cannot be separated from it: not recording who
   asked is defensible only because nothing is written. Not a revision of
   0002 — reading less provenance is the opposite of adding authorization —
-  and deliberately not spelled `OCHAKAI_INSECURE_DEV`, which also lets
-  anyone delegate and must stay a name that means "not this".
+  and deliberately not the same thing as the insecure-dev posture, which
+  also lets anyone delegate. (0060 made them two spellings of one
+  variable, so they can no longer be asked for together at all.)
   *For a user:* it is the only way to expose ochakai without IAM in front,
   and a publicly readable *and* writable deployment is not a configuration
   the program accepts.
+
+- **[0060 One word for the posture](0060-one-word-for-the-posture.md)** —
+  *Accepted; **breaking**.* `OCHAKAI_READ_ONLY`,
+  `OCHAKAI_PUBLIC_READ_ONLY` and `OCHAKAI_INSECURE_DEV` become one
+  variable: `OCHAKAI_MODE`, unset or `read-only` / `public` / `dev`.
+  Nothing 0040 or 0042 decided changes — only how it is written down.
+  Three booleans could spell eight combinations, of which four mean
+  something; the gap was covered by three rules, two that silently
+  corrected what an operator wrote and one that refused to start. What
+  actually exists is a two-by-two: is the caller identified, and may
+  anyone write. Insecure dev did not look like a posture because its name
+  described a mechanism rather than a stance, which is why 0042 §2.3 had
+  to refuse it next to `public` — they were moving the same axis from two
+  places. **The rules are not removed; they become unwritable.** A
+  spelling that is none of the four is a startup error rather than a
+  guess, for the reason 0053 §2.4 gives about `OCHAKAI_EMBEDDINGS`.
+  *For a user:* set `OCHAKAI_MODE` before upgrading. The old variables
+  are ignored, so a deployment that only set `OCHAKAI_READ_ONLY=true`
+  becomes writable — the migration is one `gcloud run services update`.
+  ENV drops 16 → 14; the three spellings are not counted as vocabulary,
+  because a posture is the deployer's word and the variable that carries
+  it is already counted.
 
 - **[0027 Delegated end-user provenance](0027-delegated-provenance.md)** —
   *Accepted; the web-UI half is 0032.* A caller listed in

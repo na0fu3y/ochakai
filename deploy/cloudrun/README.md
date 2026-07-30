@@ -594,7 +594,7 @@ Notes:
   not what anyone may do — every caller that reaches ochakai can already
   read and write everything (design doc 0002). Reachability stays IAM's
   job.
-- Developing the integration locally? `OCHAKAI_INSECURE_DEV=true` honors
+- Developing the integration locally? `OCHAKAI_MODE=dev` honors
   the header too (as `via human:anonymous`), so a malformed header fails
   on your machine instead of on first deploy.
 
@@ -605,12 +605,12 @@ deployment anyone can write to. A demo is the exception, and it is an
 exception only because of what it gives up. Two settings, and the second
 implies the first:
 
-- **`OCHAKAI_READ_ONLY=true`** — the deployment changes no knowledge (design
+- **`OCHAKAI_MODE=read-only`** — the deployment changes no knowledge (design
   doc 0040). Writes are 403, MCP does not offer the write tools at all, and
   the web UI stops drawing buttons that would only fail. Useful on its own,
   private, for a reference-only copy or for freezing a base during a
   migration.
-- **`OCHAKAI_PUBLIC_READ_ONLY=true`** — the deployment reads no identity
+- **`OCHAKAI_MODE=public`** — the deployment reads no identity
   (design doc 0042). The `Authorization` header is ignored: without Cloud Run
   IAM in front its signature is unverifiable, and a forged unsigned token
   would otherwise be believed. `X-Ochakai-On-Behalf-Of` is ignored. Every
@@ -642,7 +642,7 @@ export OCHAKAI_URL=$(terraform output -raw service_url)
 
 # 2. Seed it while it is still private and writable — see below.
 
-# 3. Flip. This sets OCHAKAI_PUBLIC_READ_ONLY and grants allUsers in the
+# 3. Flip. This sets OCHAKAI_MODE=public and grants allUsers in the
 #    same apply; the module has no way to do one without the other.
 terraform apply -var public_read_only=true
 terraform output -raw demo_url
@@ -654,7 +654,7 @@ then flip in this order:
 ```sh
 # 1. Stop believing identities and stop writing, while still private.
 gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_PUBLIC_READ_ONLY=true
+  --update-env-vars=OCHAKAI_MODE=public
 
 # 2. Only then open it.
 gcloud run services add-iam-policy-binding ochakai --region=$REGION \
@@ -683,7 +683,7 @@ Those ten concepts are recorded as `human:you@your-org.example` — the last
 provenance this base will ever receive, and after the flip the only
 `created_by` any visitor sees. (The sequence has been rehearsed against a
 local server: import writable — 10 created, 0 skipped — then restart with
-`OCHAKAI_PUBLIC_READ_ONLY=true`, after which reads serve anonymously and
+`OCHAKAI_MODE=public`, after which reads serve anonymously and
 every write is refused. Cloud Run adds only the IAM binding.)
 
 ### Checking the flip landed
@@ -696,7 +696,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue" 
 curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/bundle/queries/monthly-revenue.md"  # 403
 ```
 
-200 without a token proves the public grant and `OCHAKAI_PUBLIC_READ_ONLY`
+200 without a token proves the public grant and `OCHAKAI_MODE=public`
 both landed (before the flip this is Google's 401); 403 on the write proves
 the implied read-only. Sending a bogus `Authorization` header changes
 neither answer — that is the property, not a side effect.
@@ -751,7 +751,7 @@ is never open while it is anything but read-only:
 gcloud run services remove-iam-policy-binding ochakai --region=$REGION \
   --member=allUsers --role=roles/run.invoker
 gcloud run services update ochakai --region=$REGION \
-  --remove-env-vars=OCHAKAI_PUBLIC_READ_ONLY
+  --remove-env-vars=OCHAKAI_MODE
 ```
 
 With Terraform, `terraform apply -var public_read_only=false` does both, in

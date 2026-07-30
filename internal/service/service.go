@@ -32,7 +32,7 @@ type Service struct {
 }
 
 // ErrReadOnly is returned by every operation that would change knowledge
-// when the deployment runs with OCHAKAI_READ_ONLY (design doc 0040).
+// when the deployment runs with OCHAKAI_MODE=read-only (design doc 0040).
 //
 // The check lives here rather than in the transports because REST and MCP
 // both come through this package: a write endpoint added later is covered

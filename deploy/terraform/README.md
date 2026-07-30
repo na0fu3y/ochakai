@@ -120,8 +120,8 @@ from then on — no password on that path either.
 | `enable_vertex_embeddings` | §4 | **On by default.** `roles/aiplatform.user` + `aiplatform.googleapis.com`; the project is discovered rather than set, so a deployment whose pgvector bootstrap has not run yet degrades to lexical search instead of failing to start. Search becomes hybrid, and every write becomes one Vertex AI call. Concepts written before the grant stay unembedded until `ochakai reembed`. Set it to `false` to pass `OCHAKAI_EMBEDDINGS=off` and grant nothing. |
 | `enable_gcs_attachments` | §4b | Bucket + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`. Without it, attach operations return 501. |
 | `enable_webui` | §5b | `serve-ui` as a second Cloud Run service behind IAP, same image, dedicated identity. `webui_records_browser_user` (default on) records the person in the browser rather than the UI's service account. |
-| `read_only` | §5d | `OCHAKAI_READ_ONLY`. Serves the base without changing it; still private. Seed the base *before* turning it on — a read-only deployment cannot be imported into. |
-| `public_read_only` | §5d | `OCHAKAI_PUBLIC_READ_ONLY` + the module's only `allUsers` grant. The public demo: no account needed, no identity read, nothing writable (implies `read_only`). Apply writable, `ochakai import examples/demo`, then re-apply with this on. |
+| `read_only` | §5d | `OCHAKAI_MODE=read-only`. Serves the base without changing it; still private. Seed the base *before* turning it on — a read-only deployment cannot be imported into. |
+| `public_read_only` | §5d | `OCHAKAI_MODE=public` + the module's only `allUsers` grant. The public demo: no account needed, no identity read, nothing writable (implies `read_only`). Apply writable, `ochakai import examples/demo`, then re-apply with this on. |
 | `maintenance_users` | §6 | Cloud SQL IAM logins for people, no passwords. |
 | `database_backups` | §6 | Daily backups. Off by default for cost; turn it on for anything you care about. |
 
