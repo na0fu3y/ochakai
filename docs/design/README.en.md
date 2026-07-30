@@ -657,7 +657,8 @@ For the shape of the system rather than the history of it, read
 - **[0049 Counting the review queues](0049-queue-counts.md)** —
   *Accepted; revised before release (0048 §2.3) twice — once when 0051
   made the standalone endpoint a second address for a key it already
-  carried, and once when 0056 §3.2 folded the CLI command the same way.*
+  carried, and once when 0056 §3.2 folded the CLI command the same way.
+  Two of the three key names were later renamed by 0059.*
   Adds the three counts a curator empties — drafts
   waiting to be published or turned down, entries whose failure reports
   are unanswered, entries past the expiry their author declared — as
@@ -681,6 +682,27 @@ For the shape of the system rather than the history of it, read
   each queue line carries the command that lists it; the web UI shows
   the same counts on its Review tab. MCP does not get it — an agent's
   ends of the loop are drafting and reporting outcomes.
+
+- **[0059 A queue is named by the listing that shows it](0059-a-queue-is-named-by-its-listing.md)**
+  — *Accepted; **breaking**.* Two of 0049's three queues were spelled one
+  way when counted and another when listed, and `ochakai stats` printed
+  both on the same line: "`reported_wrong` 1 — `ochakai search --sort
+  failed`". The line was its own evidence. `reported_wrong` becomes
+  `failed` and `past_expiry` becomes `stale_after`, in that direction
+  because the sort names reuse words a reader has already met — `failed`
+  is the outcome a caller reports, `stale_after` is OKF SPEC §5's own
+  frontmatter key — while the queue names existed for nothing else.
+  `drafts` keeps a name of its own: it is not a single sort
+  (`sort=usage` plus `status=draft`), and a rule is not worth bending an
+  exception into.
+  It also adds the reverse of docs/surface.md's counting rule. One
+  spelling meaning two things in two families is two words to learn; one
+  thing wearing two names is one. VOCAB drops 38 → 36, and a queue key
+  that stops being a sort name shows up as a word again on the next test
+  run.
+  *For a user:* `GET /api/v1/stats` returns `queues.failed` and
+  `queues.stale_after`; a CI job reading `jq .queues.reported_wrong`
+  needs one edit. `--exit-code` reads no key name and is unaffected.
 
 - **[0025 Closing the write-back loop](0025-closing-the-loop.md)** —
   *Accepted; 0037 later added a third feed, 0043 turns verify's record

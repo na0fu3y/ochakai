@@ -651,8 +651,39 @@ func TestSurfaceDocCountsVocabulary(t *testing.T) {
 	add("ruling", domain.Rulings...)
 	add("change", domain.Changes...)
 	add("outcome", domain.Outcomes...)
-	add("queue", jsonFieldNames(t, domain.QueueCounts{})...)
+	add("queue", queueWordsToLearn(t)...)
 	compareSurface(t, "VOCAB", words)
+}
+
+// queueWordsToLearn is the queue keys that are words of their own. A
+// queue named after the sort that lists it is not a second word — the
+// curator learns `failed` once and meets it as an outcome to report, a
+// feed to work and a number in `stats` (design doc 0059). Counting it
+// again per family would say the folding cost nothing, when what it
+// bought was exactly this.
+//
+// The family-first spelling is still right for the words that stay:
+// docs/surface.md counts `family.value` because one spelling can mean two
+// things in two families, and two words is what that costs. This is the
+// other case — one thing wearing two names — and it is now impossible to
+// reintroduce quietly, because a queue key that is not a sort shows up
+// here as a word.
+func queueWordsToLearn(t *testing.T) []string {
+	t.Helper()
+	sorts := map[string]bool{}
+	for _, s := range domain.ListSorts {
+		sorts[s] = true
+	}
+	var out []string
+	for _, key := range jsonFieldNames(t, domain.QueueCounts{}) {
+		if !sorts[key] {
+			out = append(out, key)
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("every queue key is a sort name: this check now guards nothing")
+	}
+	return out
 }
 
 // jsonFieldNames reads a struct's wire names off its json tags, so a

@@ -234,9 +234,9 @@ func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
 			t.Errorf("%s = %d, the feed held %d then %d", name, got, a, b)
 		}
 	}
-	between(t, "queues.reported_wrong", st.Queues.ReportedWrong, len(failedBefore), len(failedAfter))
-	between(t, "queues.past_expiry", st.Queues.PastExpiry, len(staleBefore), len(staleAfter))
-	if st.Queues.ReportedWrong == 0 || st.Queues.PastExpiry == 0 {
+	between(t, "queues.failed", st.Queues.Failed, len(failedBefore), len(failedAfter))
+	between(t, "queues.stale_after", st.Queues.StaleAfter, len(staleBefore), len(staleAfter))
+	if st.Queues.Failed == 0 || st.Queues.StaleAfter == 0 {
 		t.Errorf("the entries this test just made are in neither queue: %+v", st.Queues)
 	}
 }

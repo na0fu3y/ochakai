@@ -1779,7 +1779,7 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 		getJSON(t, srv.URL+"/api/v1/stats?prefix="+root, &out)
 		return out.Queues
 	}
-	if got, want := counts(), (domain.QueueCounts{Drafts: 1, PastExpiry: 1}); got != want {
+	if got, want := counts(), (domain.QueueCounts{Drafts: 1, StaleAfter: 1}); got != want {
 		t.Fatalf("queues = %+v, want %+v", got, want)
 	}
 
@@ -1791,7 +1791,7 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if got, want := counts(), (domain.QueueCounts{Drafts: 1, ReportedWrong: 1, PastExpiry: 1}); got != want {
+	if got, want := counts(), (domain.QueueCounts{Drafts: 1, Failed: 1, StaleAfter: 1}); got != want {
 		t.Fatalf("queues after a failure report = %+v, want %+v", got, want)
 	}
 
@@ -1802,7 +1802,7 @@ func TestRESTQueuesCountsTheReviewQueues(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if got, want := counts(), (domain.QueueCounts{Drafts: 1, PastExpiry: 1}); got != want {
+	if got, want := counts(), (domain.QueueCounts{Drafts: 1, StaleAfter: 1}); got != want {
 		t.Errorf("queues after the re-verification = %+v, want %+v", got, want)
 	}
 

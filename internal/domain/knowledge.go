@@ -366,32 +366,42 @@ var Changes = []string{
 
 // QueueCounts is how much work each review queue is holding — the three
 // listing feeds that a curator is meant to empty, counted rather than
-// listed (design doc 0049). Each field is the size of a feed that
-// already exists:
+// listed (design doc 0049).
 //
-//   - Drafts — sort=usage with status=draft: what agents proposed,
-//     waiting to be published or turned down. Verifying does not empty
-//     it: confirming and publishing are different acts (design doc 0043
+// A queue is keyed by the sort that lists it, so the count and the way to
+// see what it counts share one word (design doc 0059). Two of the three
+// once had names of their own — reported_wrong and past_expiry — and a
+// curator who wanted to work the queue `stats` had just named had to know
+// that it was spelled `failed` on the way to seeing it:
+//
+//   - failed — sort=failed: entries whose failure reports are still
+//     unanswered. `failed` is already the outcome a caller reports
+//     (Outcomes), so the queue, the feed and the report are one word for
+//     one thing.
+//   - stale_after — sort=stale_after: entries past the expiry their own
+//     author declared. `stale_after` is OKF's own frontmatter key, which
+//     is where the date being counted came from.
+//   - drafts — sort=usage with status=draft: what agents proposed,
+//     waiting to be published or turned down. This one keeps a name of
+//     its own, because it is not a sort: no single listing mode names it
+//     (design doc 0059 §2.2). Verifying does not empty it either —
+//     confirming and publishing are different acts (design doc 0043
 //     §3.2), so a draft leaves by an edit or a rejection.
-//   - ReportedWrong — sort=failed: entries whose failure reports are
-//     still unanswered.
-//   - PastExpiry — sort=stale_after: entries past the expiry their own
-//     author declared.
 //
 // The verification-age feed (sort=verified_at) is deliberately absent:
 // it ranks every verified entry rather than holding the ones that need
 // something, so a count of it is the size of the knowledge base and
 // never reaches zero. A number nobody can drive down is not a queue.
 type QueueCounts struct {
-	Drafts        int64 `json:"drafts"`
-	ReportedWrong int64 `json:"reported_wrong"`
-	PastExpiry    int64 `json:"past_expiry"`
+	Drafts     int64 `json:"drafts"`
+	Failed     int64 `json:"failed"`
+	StaleAfter int64 `json:"stale_after"`
 }
 
 // Total is how much work is waiting across all three queues. An entry
 // can sit in more than one, so this counts places in queues rather than
 // distinct entries — which is what a reviewer works through anyway.
-func (q QueueCounts) Total() int64 { return q.Drafts + q.ReportedWrong + q.PastExpiry }
+func (q QueueCounts) Total() int64 { return q.Drafts + q.Failed + q.StaleAfter }
 
 // Usage aggregates how often a knowledge entry was actually used, and
 // how often users reported it worked or failed.

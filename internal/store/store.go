@@ -2296,7 +2296,7 @@ func (s *Store) QueueCounts(ctx context.Context, f Filter) (domain.QueueCounts, 
 		WHERE %[1]s`, where)
 	var c domain.QueueCounts
 	err := s.pool.QueryRow(ctx, q, args...).
-		Scan(&c.Drafts, &c.ReportedWrong, &c.PastExpiry)
+		Scan(&c.Drafts, &c.Failed, &c.StaleAfter)
 	return c, err
 }
 

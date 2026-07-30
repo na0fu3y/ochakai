@@ -193,10 +193,15 @@ queues a curator empties, each carrying the command that lists it:
 $ ochakai stats
 …
 drafts	12	ochakai search --sort usage --status draft
-reported_wrong	1	ochakai search --sort failed
-past_expiry	0	ochakai search --sort stale_after
+failed	1	ochakai search --sort failed
+stale_after	0	ochakai search --sort stale_after
 …
 ```
+
+Each queue is named after the `sort` that lists it, so the count and the
+way to see what it counts are one word (design doc
+[0059](../design/0059-a-queue-is-named-by-its-listing.md)). `drafts` is
+the exception, because no single sort lists it.
 
 `--exit-code` turns that into something a scheduler watches: **2 while
 any of the three is non-empty, 0 when all are** — and 1 stays what it

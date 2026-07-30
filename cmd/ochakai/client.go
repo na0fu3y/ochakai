@@ -617,8 +617,8 @@ func cmdStats(ctx context.Context, args []string) error {
 		lists string
 	}{
 		{"drafts", st.Queues.Drafts, "--sort usage --status draft"},
-		{"reported_wrong", st.Queues.ReportedWrong, "--sort failed"},
-		{"past_expiry", st.Queues.PastExpiry, "--sort stale_after"},
+		{"failed", st.Queues.Failed, "--sort failed"},
+		{"stale_after", st.Queues.StaleAfter, "--sort stale_after"},
 	} {
 		fmt.Printf("%s\t%d\tochakai search %s%s\n", q.name, q.count, q.lists, scope)
 	}
