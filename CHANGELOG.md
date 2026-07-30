@@ -20,6 +20,42 @@ last entry.
 
 ### Added
 
+- **BREAKING** — one variable says what a deployment is (design doc
+  [0060](docs/design/0060-one-word-for-the-posture.md)):
+
+  ```
+  OCHAKAI_READ_ONLY=true         →  OCHAKAI_MODE=read-only
+  OCHAKAI_PUBLIC_READ_ONLY=true  →  OCHAKAI_MODE=public
+  OCHAKAI_INSECURE_DEV=true      →  OCHAKAI_MODE=dev
+  (unset)                        →  (unset — the ordinary posture)
+  ```
+
+  **Set `OCHAKAI_MODE` before upgrading.** The old variables are ignored,
+  so a deployment that set only `OCHAKAI_READ_ONLY=true` becomes writable,
+  and one that set `OCHAKAI_PUBLIC_READ_ONLY=true` starts demanding an
+  identity as well. Migration is one command:
+
+  ```sh
+  gcloud run services update ochakai \
+    --update-env-vars=OCHAKAI_MODE=read-only \
+    --remove-env-vars=OCHAKAI_READ_ONLY,OCHAKAI_PUBLIC_READ_ONLY,OCHAKAI_INSECURE_DEV
+  ```
+
+  Nothing design docs 0040 and 0042 decided has changed — only how it is
+  written down. Three booleans could spell eight combinations, of which
+  four mean anything, and the gap was covered by three rules: two that
+  silently corrected what an operator wrote (`public` forcing read-only
+  on, and forcing miss recording off) and one that refused to start
+  (`public` together with insecure dev). What actually exists is a
+  two-by-two — is the caller identified, and may anyone write —
+  and **the rules are not removed so much as left without a subject**,
+  because the combinations can no longer be written down. A spelling that
+  is none of the four is a startup error rather than a guess.
+
+  Environment variables go 16 → 14, and [docs/surface.md](docs/surface.md)'s
+  ceiling with them. The Terraform module's `read_only` and
+  `public_read_only` variables are unchanged; they set the new spelling.
+
 - **BREAKING** — a review queue is now named after the listing that shows
   it (design doc
   [0059](docs/design/0059-a-queue-is-named-by-its-listing.md)):
