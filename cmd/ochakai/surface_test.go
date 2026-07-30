@@ -455,6 +455,35 @@ func TestSurfaceDocCountsCLICommands(t *testing.T) {
 	compareSurface(t, "CLI", commands)
 }
 
+// Counting commands measured the dimension the pressure escapes from,
+// exactly as counting REST operations did before PARAM was added. Folding
+// an endpoint into a query parameter always lowers the operation count,
+// which is why PARAM had to be counted; the CLI has the same shape and
+// nothing was reading it. `ochakai search` alone carries thirteen — more
+// choices than the whole REST contract has operations — and every one of
+// them is something a reader learns.
+//
+// Short flags count. `-f` is a name to learn like any other, and the one
+// place that already reads the flag sets skipped them because the
+// completion scripts do not offer them, which is a fact about the
+// scripts rather than about what a user pays.
+//
+// --url is one word wherever it appears, like `limit` in PARAM: names are
+// counted, not occurrences, so reusing a flag across commands is free and
+// inventing one is what costs.
+func TestSurfaceDocCountsCLIFlags(t *testing.T) {
+	seen := map[string]bool{}
+	for _, names := range commandFlags(t) {
+		for _, name := range names {
+			seen[name] = true
+		}
+	}
+	if len(seen) == 0 {
+		t.Fatal("no CLI flags found: this check now guards nothing")
+	}
+	compareSurface(t, "FLAG", sortedKeys(seen))
+}
+
 // Configuration is surface for the same reason a command is: somebody
 // deploying reads it, and can set it wrong. A project whose fourth
 // condition is "no forward-deployed engineer" pays for every knob in
@@ -468,8 +497,18 @@ func TestSurfaceDocCountsCLICommands(t *testing.T) {
 // measure except its name: nothing outside a _test.go imports it, and
 // the only variable it reads is the one that says where the test
 // database is. TestNothingShipsTestSupport keeps that true.
+//
+// What is read is the call, not the prefix. Matching "OCHAKAI_*" was a
+// convention standing in for a question, and PORT — which Cloud Run sets,
+// which the deploy guide names, and which docs/configuration.md has
+// always listed — sat outside it for as long as the check existed. Only
+// the variables the operating system defines are skipped, by name and for
+// a reason: XDG_CONFIG_HOME and AppData say where any program's config
+// lives on that platform, so ochakai reads them rather than defining
+// them, and nobody sets one to configure ochakai.
 func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
-	varRe := regexp.MustCompile(`"(OCHAKAI_[A-Z_]+)"`)
+	varRe := regexp.MustCompile(`(?:os\.Getenv|envOr)\("([A-Za-z][A-Za-z0-9_]*)"`)
+	osOwned := map[string]bool{"XDG_CONFIG_HOME": true, "AppData": true}
 	seen := map[string]bool{}
 	for _, root := range []string{"../../internal", "../../cmd"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -487,7 +526,9 @@ func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 				return err
 			}
 			for _, m := range varRe.FindAllStringSubmatch(string(content), -1) {
-				seen[m[1]] = true
+				if !osOwned[m[1]] {
+					seen[m[1]] = true
+				}
 			}
 			return nil
 		})
@@ -496,7 +537,7 @@ func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 		}
 	}
 	if len(seen) == 0 {
-		t.Fatal("no OCHAKAI_* variables found: this check now guards nothing")
+		t.Fatal("no environment variables found: this check now guards nothing")
 	}
 	names := make([]string, 0, len(seen))
 	for name := range seen {
