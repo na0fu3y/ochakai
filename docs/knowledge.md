@@ -179,9 +179,10 @@ from rank fusion across both halves rather than from term overlap alone.
 
 Scores are not comparable across the two modes and are not calibrated:
 matched-fragment weight plus boosts in the lexical-only mode, RRF rank fusion
-(~0.02 scale) in the hybrid one. Treat them as an ordering, not a measure —
-`min_score` is for callers who have calibrated against their own corpus,
-which is why the MCP surface does not offer it. To bound a response, use
-`budget` instead: it caps the whole payload — the concepts delivered in full
-and the `outline` rows naming the rest — so what comes back fits what you
-asked for.
+(~0.02 scale) in the hybrid one. **Treat them as an ordering, not a measure**
+— there is no score floor to set, on any surface, because a floor that means
+something in one mode is nonsense in the other (design doc
+[0058](design/0058-filters-nobody-arrived-through.md)). To bound a response,
+use `budget`: it caps the whole payload — the concepts delivered in full and
+the `outline` rows naming the rest — so what comes back fits what you asked
+for, without anyone having to calibrate anything.

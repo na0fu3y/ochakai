@@ -390,7 +390,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 	res, err := c.Context(context.Background(), ContextParams{
 		Query: "why did revenue drop", Types: []string{"metrics"},
 		Statuses: []string{"stable"}, Tags: []string{"core"},
-		Prefixes: []string{"teams/growth", "company"}, Limit: 7, MinScore: 0.5,
+		Prefixes: []string{"teams/growth", "company"}, Limit: 7,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -400,7 +400,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 	}
 	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metrics" ||
 		got.Get("status") != "stable" || got.Get("tag") != "core" ||
-		got.Get("limit") != "7" || got.Get("min_score") != "0.5" {
+		got.Get("limit") != "7" {
 		t.Errorf("query = %v", got)
 	}
 	// Every scope travels as its own repeated parameter: joining them into

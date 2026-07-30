@@ -270,9 +270,8 @@ type ContextParams struct {
 	Trust []string
 	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
 	// Which keys those are is the server's answer (design doc 0047).
-	FM       map[string]string
-	Limit    int
-	MinScore float64
+	FM    map[string]string
+	Limit int
 	// Budget, when positive, caps the response bytes server-side: entries
 	// that do not fit come back as Outline instead of being dropped
 	// silently. 0 asks for everything, which is what the rendered CLI
@@ -284,9 +283,6 @@ type ContextParams struct {
 func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, error) {
 	q := url.Values{}
 	q.Set("q", p.Query)
-	if p.MinScore > 0 {
-		q.Set("min_score", strconv.FormatFloat(p.MinScore, 'f', -1, 64))
-	}
 	for _, t := range p.Types {
 		q.Add("type", t)
 	}

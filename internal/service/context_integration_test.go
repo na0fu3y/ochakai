@@ -99,16 +99,6 @@ func TestContextIntegration(t *testing.T) {
 		t.Error("rejected companions must stay out of the pack")
 	}
 
-	// A prohibitive min_score empties the pack instead of shipping junk.
-	filtered, err := svc.Context(ctx, ContextRequest{Query: id + "-revenue", Limit: 5, MinScore: 1e9})
-	if err != nil {
-		t.Fatalf("Context with min_score: %v", err)
-	}
-	if len(filtered.Hits) != 0 || len(filtered.Entries) != 0 {
-		t.Errorf("min_score should drop everything, got %d hits / %d entries",
-			len(filtered.Hits), len(filtered.Entries))
-	}
-
 	// A blank question is the client's mistake.
 	var invalid *InvalidInputError
 	if _, err := svc.Context(ctx, ContextRequest{Query: "  ", Limit: 5}); !errors.As(err, &invalid) {

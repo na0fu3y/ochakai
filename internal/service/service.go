@@ -733,11 +733,10 @@ type ContextResult struct {
 // naming the rest, which carry a description and are not free; 0 means no
 // cap.
 type ContextRequest struct {
-	Query    string
-	Filter   store.Filter
-	Limit    int
-	MinScore float64
-	Budget   int
+	Query  string
+	Filter store.Filter
+	Limit  int
+	Budget int
 }
 
 // Context gathers what an agent should read before answering a data
@@ -746,13 +745,6 @@ type ContextRequest struct {
 // hop so companion knowledge — the insight that says how to read a
 // metric, the golden query that answers the question — arrives without
 // further round trips.
-//
-// req.MinScore drops hits scoring below it before expansion, for callers
-// that inject the pack automatically (hooks) and prefer nothing over
-// junk. It defaults to 0 (off) because scores are search-mode dependent
-// and uncalibrated: matched-fragment weight plus boosts in lexical mode, RRF
-// rank fusion (~0.02 scale) in hybrid mode — a floor meaningful in one
-// mode is nonsense in the other.
 //
 // req.Budget caps how many bytes of full concepts come back; the rest
 // become outline rows (packWithinBudget). Callers whose context window is
@@ -768,15 +760,6 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	hits, err := s.Search(ctx, req.Query, req.Filter, 2*limit)
 	if err != nil {
 		return nil, err
-	}
-	if req.MinScore > 0 {
-		kept := hits[:0]
-		for _, h := range hits {
-			if h.Score >= req.MinScore {
-				kept = append(kept, h)
-			}
-		}
-		hits = kept
 	}
 	seen := map[string]bool{}
 	var entries []domain.Knowledge

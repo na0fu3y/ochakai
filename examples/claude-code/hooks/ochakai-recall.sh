@@ -9,10 +9,6 @@
 # Requires: jq, and ochakai on PATH with a server selected
 # (`ochakai use <url>`). Tune with:
 #   OCHAKAI_RECALL_BUDGET     max injected bytes (default 4000)
-#   OCHAKAI_RECALL_MIN_SCORE  drop hits below this score (default 0 = off).
-#     Scores depend on the server's search mode and your corpus, and are
-#     not comparable between modes — so measure with
-#     `ochakai search ... | cut -f1` before picking a floor.
 #
 # Failures are silent by design: a knowledge base being down must never
 # block the user's prompt.
@@ -24,8 +20,7 @@ case $prompt in
 /*) exit 0 ;; # slash commands are not data questions
 esac
 
-pack=$(ochakai context "$prompt" --budget "${OCHAKAI_RECALL_BUDGET:-4000}" \
-	--min-score "${OCHAKAI_RECALL_MIN_SCORE:-0}" 2>/dev/null) || exit 0
+pack=$(ochakai context "$prompt" --budget "${OCHAKAI_RECALL_BUDGET:-4000}" 2>/dev/null) || exit 0
 [ -z "$pack" ] && exit 0
 
 printf 'Team knowledge from ochakai relevant to this request (trust verified concepts; judge drafts by created_by):\n\n%s\n' "$pack"

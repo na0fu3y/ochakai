@@ -35,8 +35,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
 | 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md)(ツール名)、[0057](0057-concept-is-the-word-a-reader-meets.md)(読む語) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
-| 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
-| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
+| 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
+| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
 | 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
@@ -314,8 +314,19 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) —
   **Accepted**(§4 の verify 糖衣の判断は 0025 §6 が覆し、サーフェス表は
   0046 §3.14 が現在の姿に言い直した。§3 の「載せないもの」に
-  0047 §4 が `fm.` の Web UI 省略を足した)。
+  0047 §4 が `fm.` の Web UI 省略を、0058 §2.2 が MCP 省略を足した)。
   4 サーフェスの役割分担と、意図して実装しないもの。
+- [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md)
+  — **Accepted**、**BREAKING**。**第二の住所ではなく、最初から通行量の
+  無かった入口を降ろす**二件。`min_score`(REST・CLI)は**廃止** —
+  スコアはモード依存で較正されておらず(0051 §3.1 が同じ理由で閾値を
+  採らなかった)、同梱の唯一の利用者である recall フックが既定 0 = off
+  で渡していた。応答を絞る手段は較正の要らない `budget` が既に持って
+  いる。`fm.` は **MCP からだけ降ろす**(REST と CLI には残るので
+  0047 の語彙も導出も不変)— 同じ 944 文字の説明が 2 ツールに載って
+  スキーマ説明文の 14%(1,888 / 13,099 文字)を占め、接続するエージェント
+  が毎回払っていたのに、Web UI にも例にもフックにも通行の跡が無かった。
+  **ツール数は 8 のまま、エージェントが払う額だけが減る**(§4)。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
   — **Accepted**(0046 §3.10 が行に trust tier を足す)。バイト予算の決定を記録し、`hits` から知識の複製を外す
   (全サーフェスで `id`/`type`/`title`/`status`/`score` のみ)。REST の

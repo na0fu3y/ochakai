@@ -243,7 +243,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
 			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
-			Trust: domain.ToTrusts(in.Trust), Rejected: in.Rejected, Frontmatter: in.FM,
+			Trust: domain.ToTrusts(in.Trust), Rejected: in.Rejected,
 		}
 		page, err := svc.SearchOrList(ctx, in.Query, in.Sort, in.Cursor, f, in.Limit)
 		if err != nil {
@@ -271,7 +271,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			Query: in.Query,
 			Filter: store.Filter{
 				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
-				Prefixes: in.Prefixes, Trust: domain.ToTrusts(in.Trust), Frontmatter: in.FM,
+				Prefixes: in.Prefixes, Trust: domain.ToTrusts(in.Trust),
 			},
 			Limit: in.Limit, Budget: budget,
 		})
@@ -521,18 +521,17 @@ type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
 	// rejects it — exactly one of query / sort must be set (the service
 	// rejects an empty search, the handler rejects the combination).
-	Query    string            `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
-	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed a concept is a separate question — use verified"`
-	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the concept: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable concept unverified"`
-	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds concepts whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_concepts"`
-	Rejected *bool             `json:"rejected,omitempty" jsonschema:"true to list only concepts a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected concepts stay out of results"`
-	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Source   string            `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
-	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only concepts addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
-	Sort     string            `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists concepts reported wrong (re-verification feed), \"stale_after\" lists concepts past their declared expiry (most overdue first) — all mutually exclusive with query"`
-	Limit    int               `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
-	Cursor   string            `json:"cursor,omitempty" jsonschema:"resume a listing where the last page ended: pass back the cursor that page returned, with the same sort and filters. Only for listings (any sort, or source alone) — a search is bounded by limit and refuses it"`
+	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed a concept is a separate question — use verified"`
+	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the concept: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable concept unverified"`
+	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only concepts a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected concepts stay out of results"`
+	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists concepts reported wrong (re-verification feed), \"stale_after\" lists concepts past their declared expiry (most overdue first) — all mutually exclusive with query"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
+	Cursor   string   `json:"cursor,omitempty" jsonschema:"resume a listing where the last page ended: pass back the cursor that page returned, with the same sort and filters. Only for listings (any sort, or source alone) — a search is bounded by limit and refuses it"`
 }
 
 type searchOut struct {
@@ -542,22 +541,24 @@ type searchOut struct {
 	Cursor string `json:"cursor,omitempty"`
 }
 
-// contextIn deliberately omits min_score, which the REST surface still
-// carries. A score floor is only usable once calibrated against a corpus
-// in a known search mode (lexical vs hybrid RRF), and an agent cannot
-// calibrate anything — offering it here spends tool-schema context on a
-// parameter whose own documentation says to leave it alone. What an agent
-// actually needs to bound a response is budget.
+// contextIn omits fm: a frontmatter key filter is the vocabulary of
+// somebody who already knows which key they mean, and the schema that
+// teaches an agent the eleven askable spellings costs more context than
+// the filter has ever saved (design doc 0058 §2.2). It stays on REST and
+// the CLI, where the caller is a program somebody wrote or a person at a
+// shell. What bounds a response for an agent is budget.
+//
+// min_score is not omitted here — it no longer exists anywhere (0058
+// §2.1).
 type contextIn struct {
-	Query    string            `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string          `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string          `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed a concept is a separate question — use verified"`
-	Trust    []string          `json:"trust,omitempty" jsonschema:"filter by who confirmed the concept: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable concept unverified"`
-	FM       map[string]string `json:"fm,omitempty" jsonschema:"filter by an OKF frontmatter key, exactly: {\"resource\": \"bigquery://p.d.t\"} finds concepts whose frontmatter names that resource, matching a scalar or a member of a list. Every pair must match. A value spelling a number or a boolean also matches the typed frontmatter, so {\"required\": \"true\"} finds required: true and {\"usage_count\": \"5\"} finds usage_count: 5. The keys it answers are the ones OKF defines that have no field of their own: attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window. A key a producer invented is kept and handed back exactly as written but is not part of the query vocabulary; type, status, tags, sources and stale_after are read through columns that answer a different question (a document that says no status reads as stable to a status filter and as nothing to fm), so ask those with the field of that name, on this tool or on search_concepts"`
-	Tags     []string          `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Prefixes []string          `json:"prefixes,omitempty" jsonschema:"only concepts addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: a concept in scope that cites a term outside it still arrives with that term"`
-	Limit    int               `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	Budget   int               `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the concepts plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Concepts past it are listed under \"outline\" with their size, fetchable by id with get_concept, and those rows count against the same budget. Raise it when you need whole concepts, lower it when context is tight"`
+	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, or any custom type); matched case-insensitively"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed a concept is a separate question — use verified"`
+	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the concept: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable concept unverified"`
+	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: a concept in scope that cites a term outside it still arrives with that term"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
+	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the concepts plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Concepts past it are listed under \"outline\" with their size, fetchable by id with get_concept, and those rows count against the same budget. Raise it when you need whole concepts, lower it when context is tight"`
 }
 
 type contextOut struct {

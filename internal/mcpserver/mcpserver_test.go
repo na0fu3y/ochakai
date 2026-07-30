@@ -106,44 +106,42 @@ func TestLimitContractsInSchema(t *testing.T) {
 	}
 }
 
-// TestFMSchemaListsTheAskableKeys holds the "fm" description to the
-// vocabulary the server enforces (design doc 0047 §2). An agent sees only
-// the schema, so a key promised here and refused by checkedFilter costs a
-// tool call to find out — and a key OKF adds later is only askable once
-// this text says so.
-func TestFMSchemaListsTheAskableKeys(t *testing.T) {
+// TestFMIsNotOnTheToolSchemas keeps the frontmatter filter off MCP
+// (design doc 0058 §2.2). It was here, and the description that made it
+// usable had to name all eleven askable keys and explain why `fm.status`
+// and `status=` answer differently — 944 characters, on each of two
+// tools, or 14% of the schema text every connecting agent pays for.
+// Nothing went through it: not the web UI, not the examples, not the
+// hooks.
+//
+// The filter itself is untouched on REST (`?fm.<key>=`) and the CLI
+// (`--fm key=value`), where the caller is a program somebody wrote or a
+// person at a shell — both of whom already know which key they mean, and
+// neither of whom is charged for the explanation.
+func TestFMIsNotOnTheToolSchemas(t *testing.T) {
 	cs := connect(t)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
-	tools := map[string]bool{"search_concepts": true, "get_context": true}
+	if len(res.Tools) == 0 {
+		t.Fatal("the server offered no tools: this check now guards nothing")
+	}
 	for _, tool := range res.Tools {
-		if !tools[tool.Name] {
-			continue
-		}
-		delete(tools, tool.Name)
 		raw, err := json.Marshal(tool.InputSchema)
 		if err != nil {
 			t.Fatalf("marshal %s schema: %v", tool.Name, err)
 		}
 		var schema struct {
-			Properties map[string]struct {
-				Description string `json:"description"`
-			} `json:"properties"`
+			Properties map[string]json.RawMessage `json:"properties"`
 		}
 		if err := json.Unmarshal(raw, &schema); err != nil {
 			t.Fatalf("unmarshal %s schema: %v", tool.Name, err)
 		}
-		desc := schema.Properties["fm"].Description
-		for _, key := range domain.AskableFrontmatterKeys() {
-			if !strings.Contains(desc, key) {
-				t.Errorf("%s fm description does not name the askable key %q", tool.Name, key)
-			}
+		if _, ok := schema.Properties["fm"]; ok {
+			t.Errorf("%s exposes fm: a frontmatter filter is REST and CLI vocabulary, "+
+				"and its schema costs every agent that connects (design doc 0058 §2.2)", tool.Name)
 		}
-	}
-	for name := range tools {
-		t.Errorf("tool %s not found", name)
 	}
 }
 
@@ -356,9 +354,14 @@ func TestReportOutcomeValidation(t *testing.T) {
 
 // TestContextSchemaBoundsResponse pins the get_context input schema: an
 // embedding host that never touches the tool arguments must still get a
-// bounded response, so budget is documented with its default and
-// min_score — usable only after calibration an agent cannot do — is off
-// this surface entirely.
+// bounded response, so budget is documented with its default.
+//
+// It also pins what is *not* here. A score floor was never on this
+// surface and no longer exists at all (design doc 0058 §2.1). `fm` was,
+// and came off in 0058 §2.2 — the description that made it usable ran to
+// 944 characters on each of two tools, which is 14% of everything an
+// agent's context pays for at connect time, for a filter that stays
+// available on REST and the CLI.
 func TestContextSchemaBoundsResponse(t *testing.T) {
 	cs := connect(t)
 	res, err := cs.ListTools(context.Background(), nil)
@@ -381,8 +384,10 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 		if err := json.Unmarshal(raw, &schema); err != nil {
 			t.Fatalf("unmarshal schema: %v", err)
 		}
-		if _, ok := schema.Properties["min_score"]; ok {
-			t.Error("get_context must not expose min_score: an agent cannot calibrate a score floor")
+		for _, gone := range []string{"min_score", "fm"} {
+			if _, ok := schema.Properties[gone]; ok {
+				t.Errorf("get_context must not expose %q (design doc 0058)", gone)
+			}
 		}
 		budget, ok := schema.Properties["budget"]
 		if !ok {
