@@ -38,7 +38,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング) |
+| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -385,7 +385,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   移った先でエントリに紐づく数すべてを絞るようになった(§3.1、§3.3)。
   **CLI `ochakai queues` も畳まれた**(0056 §3.2、これもリリース前)—
   各行が次に打つコマンドを持つことも `--exit-code` も `ochakai stats`
-  に移っており、失われた性質は無い。
+  に移っており、失われた性質は無い。**キー名は 0059 が改訂した。**
+- [0059 キューは、それを一覧する sort の名で呼ぶ](0059-a-queue-is-named-by-its-listing.md)
+  — **Accepted**、**BREAKING**。0049 が数えた 3 つのキューのうち 2 つは、
+  それを一覧する `sort` とは別の綴りを持っていた — `stats` の各行が
+  「`reported_wrong` が 1 件、見るには `--sort failed`」と印字しており、
+  **行そのものが二つの名前を指す証拠になっていた**。`reported_wrong` →
+  `failed`、`past_expiry` → `stale_after` に改名する。方向がこちらなのは
+  sort 側の綴りが既にある語の使い回しだからで(`failed` は report する
+  outcome の値、`stale_after` は OKF SPEC §5 の frontmatter キー)、
+  キュー側の 2 語は**そのためだけに存在する発明語**だった。`drafts` は
+  単一の sort ではない(`sort=usage` + `status=draft`)ので据え置く。
+  あわせて surface.md の VOCAB の数え方に、既存規則の裏面を足す —
+  「一つの綴りが二つの族で別の意味を持つなら 2 語」に対して、
+  **「一つのものが二つの名前を着ているなら 1 語」**。VOCAB は 38 → 36。
 - [0025 書き戻しループを締める](0025-closing-the-loop.md) —
   **Accepted**(§6 は 0015 §4 の verify 糖衣の判断を覆した。フィードは
   0037 が 3 つめを足した。§6 の verify の記録は 0043 が検証台帳への

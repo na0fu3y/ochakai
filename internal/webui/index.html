@@ -1959,10 +1959,10 @@ async function refreshQueues() {
     waiting = null; // a nudge that cannot load must not become an error banner
   }
   const badge = $('#nav-waiting');
-  const total = waiting ? waiting.drafts + waiting.reported_wrong + waiting.past_expiry : 0;
+  const total = waiting ? waiting.drafts + waiting.failed + waiting.stale_after : 0;
   badge.textContent = total;
   badge.hidden = !total;
-  badge.title = total ? `${total} waiting: ${waiting.drafts} drafts, ${waiting.reported_wrong} reported wrong, ${waiting.past_expiry} past their expiry` : '';
+  badge.title = total ? `${total} waiting: ${waiting.drafts} drafts, ${waiting.failed} reported wrong, ${waiting.stale_after} past their expiry` : '';
   const strip = $('#queue-strip');
   if (strip) strip.innerHTML = queueStrip();
 }
@@ -1975,8 +1975,8 @@ function queueStrip() {
   if (!waiting) return '';
   return [
     ['#/review', waiting.drafts, waiting.drafts === 1 ? 'draft' : 'drafts'],
-    ['#/search/reported-wrong', waiting.reported_wrong, 'reported wrong'],
-    ['#/search/stale', waiting.past_expiry, 'past expiry'],
+    ['#/search/reported-wrong', waiting.failed, 'reported wrong'],
+    ['#/search/stale', waiting.stale_after, 'past expiry'],
   ].map(([href, n, label]) =>
     `<a class="badge${n ? ' draft' : ''}" href="${href}">${n} ${label}</a>`).join(' ');
 }

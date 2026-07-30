@@ -468,7 +468,7 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 // exit status a scheduler can watch (design doc 0049).
 func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 	var gotPrefixes []string
-	counts := domain.QueueCounts{Drafts: 3, ReportedWrong: 1, PastExpiry: 0}
+	counts := domain.QueueCounts{Drafts: 3, Failed: 1, StaleAfter: 0}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
 		gotPrefixes = r.URL.Query()["prefix"]
@@ -498,8 +498,8 @@ func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 	}
 	for _, want := range []string{
 		"drafts\t3\tochakai search --sort usage --status draft --prefix teams/growth\n",
-		"reported_wrong\t1\tochakai search --sort failed --prefix teams/growth\n",
-		"past_expiry\t0\tochakai search --sort stale_after --prefix teams/growth\n",
+		"failed\t1\tochakai search --sort failed --prefix teams/growth\n",
+		"stale_after\t0\tochakai search --sort stale_after --prefix teams/growth\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)

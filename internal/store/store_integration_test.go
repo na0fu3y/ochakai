@@ -3280,7 +3280,7 @@ func TestIntegrationQueueCounts(t *testing.T) {
 	}
 	// The answer to a failure report is a verification, and it must land
 	// after the report to count as one: this is the entry that proves the
-	// reported_wrong count is a queue and not a ledger.
+	// failed count is a queue and not a ledger.
 	if _, err := s.Verify(ctx, answered, actor); err != nil {
 		t.Fatal(err)
 	}
@@ -3289,7 +3289,7 @@ func TestIntegrationQueueCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueueCounts: %v", err)
 	}
-	want := domain.QueueCounts{Drafts: 2, ReportedWrong: 2, PastExpiry: 1}
+	want := domain.QueueCounts{Drafts: 2, Failed: 2, StaleAfter: 1}
 	if got != want {
 		t.Errorf("QueueCounts = %+v, want %+v", got, want)
 	}
@@ -3308,8 +3308,8 @@ func TestIntegrationQueueCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if int64(len(drafts)) != got.Drafts || int64(len(reported)) != got.ReportedWrong ||
-		int64(len(expired)) != got.PastExpiry {
+	if int64(len(drafts)) != got.Drafts || int64(len(reported)) != got.Failed ||
+		int64(len(expired)) != got.StaleAfter {
 		t.Errorf("counts %+v disagree with the feeds (%d drafts, %d reported wrong, %d past expiry)",
 			got, len(drafts), len(reported), len(expired))
 	}

@@ -1703,8 +1703,8 @@ paths:
                       created: 12
                     queues:
                       drafts: 31
-                      reported_wrong: 4
-                      past_expiry: 2
+                      failed: 4
+                      stale_after: 2
                     review:
                       verifications: 7
                     outcomes:
@@ -2398,19 +2398,30 @@ components:
         feed that already exists, and every count has a way to be driven
         to zero: rule on the draft, verify the concept that was reported
         wrong, edit the one whose expiry passed.
+
+
+        A queue is named after the `sort` that lists it, so the count and
+        the way to see what it counts are one word (design doc 0059).
+        `drafts` is the exception, and names itself, because no single
+        sort lists it.
       properties:
         drafts:
           type: integer
           description: >
             Drafts waiting to be published or turned down — GET
-            /api/v1/search?sort=usage&status=draft. Verifying does not
-            empty this one: confirming and publishing are different acts,
-            so a draft leaves when it is edited to another status or
-            rejected (design doc 0043 §3.2).
-        reported_wrong:
+            /api/v1/search?sort=usage&status=draft. It takes a filter as
+            well as a sort, which is why this one keeps a name of its own
+            (design doc 0059 §2.2). Verifying does not empty it:
+            confirming and publishing are different acts, so a draft
+            leaves when it is edited to another status or rejected
+            (design doc 0043 §3.2).
+        failed:
           type: integer
-          description: Concepts whose failure reports are still unanswered — sort=failed. Verifying takes one out.
-        past_expiry:
+          description: >
+            Concepts whose failure reports are still unanswered —
+            sort=failed, the listing this count is keyed by (design doc
+            0059). Verifying takes one out.
+        stale_after:
           type: integer
           description: >
             Concepts past the stale_after their author declared —

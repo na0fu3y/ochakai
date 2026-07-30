@@ -78,7 +78,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP: 8
 - CLI: 25
 - ENV: 16
-- VOCAB: 38
+- VOCAB: 36
 
 **天井は一つのファイルの一行で、誰でも上げられる。それは弱点ではなく
 狙いである。** この仕組みが買っているのは、上の節と同じく、**黙って
@@ -262,7 +262,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `OCHAKAI_VERTEX_MODEL`
 - `OCHAKAI_VERTEX_PROJECT`
 
-## VOCAB (38)
+## VOCAB (36)
 
 七つ目の次元は**語**である。上の六つが数えているのは機構 — 呼べるもの、
 設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
@@ -283,7 +283,17 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 `族.値`(`status.draft`、`sort.failed`)で、理由は二つある — 素の値を
 アルファベット順に並べても読めないこと、そして**一つの綴りが二つの族で
 別の意味を持つとき、それは覚える語が 2 つある**ということ(`failed` は
-一覧モードであり、同時に outcome の値でもある)。
+一覧モードであり、同時に outcome の値でもある — 報告する行為と、一覧を
+求める行為は別である)。
+
+**逆に、一つのものが二つの名前を着ていたときは 1 と数える。**
+38 → 36 は [0059](design/0059-a-queue-is-named-by-its-listing.md) が
+`queue.reported_wrong` / `queue.past_expiry` を `failed` / `stale_after`
+に改名したぶんで、`stats` が数える集合と `sort=` が並べる集合は**同じ
+一つ**だから、キューは自分の名前を持たない。ここで減ったのは機構では
+なく**覚える語そのもの**である — 数えていなければ、改名は「本数が動か
+ない変更」として通っていた。`queue.drafts` だけが残るのは、それが単一
+の sort ではないからである(`sort=usage` + `status=draft`)。
 
 型は閉じた集合ではない([0038](design/0038-type-vocabulary-realignment.md):
 一行の値ならどれでも型になる)。ここで数えているのは**製品が教える
@@ -304,8 +314,6 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `outcome.failed`
 - `outcome.worked`
 - `queue.drafts`
-- `queue.past_expiry`
-- `queue.reported_wrong`
 - `ruling.rejected`
 - `ruling.verified`
 - `ruling.withdrawn`
