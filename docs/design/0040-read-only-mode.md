@@ -5,7 +5,10 @@ Status: Accepted(2026-07-27)。[0002](0002-authn-authz.md) の「認可を持た
 しない — §2.1 でその理由を述べる。[0015](0015-surface-consistency.md) の
 面一貫性に従い 4 面すべてに現れる。§2.2 の「利用測定は凍結の外」は
 [0049](0049-instance-metrics-and-search-misses.md) の検索ミスにもそのまま
-及ぶ(§3.4)
+及ぶ(§3.4)。**綴りは [0060](0060-one-word-for-the-posture.md) が改訂
+した** — `OCHAKAI_READ_ONLY=true` は `OCHAKAI_MODE=read-only` になった。
+この記録が決めたこと(何を拒否するか、認可ではないこと、4 面すべてに
+現れること、利用測定は凍結の外)はどれも不変である
 Date: 2026-07-27
 
 ## 1. 目的

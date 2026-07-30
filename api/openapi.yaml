@@ -1843,7 +1843,7 @@ components:
       description: >
         Set to "true" on every /api/v1 response — reads, writes, and
         errors alike — when the deployment is read-only
-        (OCHAKAI_READ_ONLY, design doc 0040 §2.3). It describes the
+        (OCHAKAI_MODE=read-only or public, design doc 0040 §2.3). It describes the
         deployment, not the outcome of the call. Absent means the
         deployment accepts writes, which is what every server predating
         the flag says. MCP announces read-only by not offering the write

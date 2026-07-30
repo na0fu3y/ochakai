@@ -237,7 +237,7 @@ func parseOnBehalfOf(v string) (domain.Actor, error) {
 // the actor name; service accounts are processes, people are humans.
 func actorFromIDToken(token string) (domain.Actor, error) {
 	if token == "" {
-		return domain.Actor{}, errors.New("no identity token; is the service non-public with Cloud Run IAM enforced? (for local development set OCHAKAI_INSECURE_DEV=true)")
+		return domain.Actor{}, errors.New("no identity token; is the service non-public with Cloud Run IAM enforced? (for local development set OCHAKAI_MODE=dev)")
 	}
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {

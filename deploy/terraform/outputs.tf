@@ -18,7 +18,7 @@ output "posture" {
   description = "One line naming what this deployment will and will not do, so that a flip between demo and normal shows up in the output diff as well as the plan."
   value = (var.public_read_only
     ? "public read-only: anyone with the URL can read; no identity is read, every caller is human:anonymous, and nothing can be written (design doc 0042)"
-    : local.read_only
+    : local.mode == "read-only"
     ? "private read-only: only invoker_members can reach it, and nothing can be written (design doc 0040)"
   : "private read-write: only invoker_members can reach it, and whoever reaches it can read and write everything (design doc 0002)")
 }

@@ -104,7 +104,7 @@ service publicly invokable is a misconfiguration rather than a deployment
 mode (design doc 0002).
 
 If you need a deployment that serves knowledge without changing it, that
-is `OCHAKAI_READ_ONLY` (design doc 0040) — a property of the deployment,
+is `OCHAKAI_MODE=read-only` (design doc 0040) — a property of the deployment,
 not of the caller. It refuses the operator too.
 
 ### What happens to my knowledge if I stop using ochakai?

@@ -76,7 +76,7 @@ variable "invoker_members" {
     # Keeping the two in one variable is what makes "public and writable"
     # unrepresentable instead of merely checked.
     condition     = !contains(var.invoker_members, "allUsers") && !contains(var.invoker_members, "allAuthenticatedUsers")
-    error_message = "ochakai must never be publicly invokable by naming it here: its provenance headers are only trustworthy behind Cloud Run IAM. Grant a domain, group, user or service account instead — or, for the public read-only demo, set public_read_only = true, which grants allUsers itself and only alongside OCHAKAI_PUBLIC_READ_ONLY (deploy/cloudrun/README.md §5d)."
+    error_message = "ochakai must never be publicly invokable by naming it here: its provenance headers are only trustworthy behind Cloud Run IAM. Grant a domain, group, user or service account instead — or, for the public read-only demo, set public_read_only = true, which grants allUsers itself and only alongside OCHAKAI_MODE=public (deploy/cloudrun/README.md §5d)."
   }
 }
 
@@ -84,7 +84,7 @@ variable "invoker_members" {
 
 variable "read_only" {
   description = <<-EOT
-    Serve the knowledge base without changing it (OCHAKAI_READ_ONLY, design
+    Serve the knowledge base without changing it (OCHAKAI_MODE=read-only, design
     doc 0040): every write is a 403, MCP does not offer the write tools at
     all, and the web UI stops drawing buttons that would only fail. For a
     reference-only instance, or for freezing a base during a migration or an
@@ -102,7 +102,7 @@ variable "read_only" {
 
 variable "public_read_only" {
   description = <<-EOT
-    The public read-only demo (OCHAKAI_PUBLIC_READ_ONLY, design doc 0042).
+    The public read-only demo (OCHAKAI_MODE=public, design doc 0042).
     This is the one posture where a publicly invokable ochakai is intended:
     the module grants allUsers roles/run.invoker, so anyone with the URL can
     read the base with no Google account and no token.

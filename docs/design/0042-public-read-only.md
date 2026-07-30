@@ -5,7 +5,11 @@ Status: Accepted(2026-07-27)。[0040](0040-read-only-mode.md) の read-only を
 「到達制御は Cloud Run IAM の仕事」は変えない — §2.1 で、この姿勢が
 その外側にあることを述べる。[0049](0049-instance-metrics-and-search-misses.md)
 §3.4 が、この姿勢の帰結を 1 つ足した — identity を読まないデプロイは、
-呼び出し元が打ったクエリ文字列も残さない
+呼び出し元が打ったクエリ文字列も残さない。**綴りは
+[0060](0060-one-word-for-the-posture.md) が改訂した** —
+`OCHAKAI_PUBLIC_READ_ONLY=true` は `OCHAKAI_MODE=public` になり、
+§2.1 の含意は一語の中に入り、§2.3 の「insecure dev との併用を拒否する」
+は**書き下せなくなったので規則ごと消えた**。姿勢そのものは不変である
 Date: 2026-07-27
 
 ## 1. 目的

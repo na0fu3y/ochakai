@@ -31,7 +31,7 @@ is usually the actual bug: a shell that still exports `OCHAKAI_URL` from an
 earlier session overrides `ochakai use` every time.
 
 **Writes fail with 403 and `mode:` says `read-only`.** The deployment sets
-`OCHAKAI_READ_ONLY`. Every write is refused, including yours as the
+`OCHAKAI_MODE` (`read-only` or `public`). Every write is refused, including yours as the
 operator; it is a property of the deployment, not of the caller.
 
 ## Search

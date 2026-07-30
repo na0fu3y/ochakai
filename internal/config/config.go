@@ -24,6 +24,10 @@ type Config struct {
 	DBIAMAuth bool
 	// InsecureDev disables authentication for local development: every
 	// request acts as human:anonymous. Never enable on a deployment.
+	//
+	// This and the two posture fields below are derived from OCHAKAI_MODE
+	// and never set independently, which is what makes the combinations
+	// that had to be refused or corrected unspellable (design doc 0060).
 	InsecureDev bool
 	// Delegators lists the caller identities allowed to forward an end
 	// user's identity with X-Ochakai-On-Behalf-Of (design doc 0027): the
@@ -57,7 +61,9 @@ type Config struct {
 	// It implies ReadOnly and cannot be separated from it. Not reading
 	// provenance is only defensible because nothing is written, so a
 	// deployment that is publicly readable and writable is not a
-	// configuration this program accepts.
+	// configuration this program accepts — and since 0060 it is not one
+	// anybody can write down either: OCHAKAI_MODE=public is one word, and
+	// there is no second variable to disagree with it.
 	PublicReadOnly bool
 
 	// GCSBucket names the bucket holding attachment bytes as GCS objects
@@ -122,25 +128,59 @@ func splitList(v string) []string {
 	return out
 }
 
+// Mode is what a deployment is, as one word. The postures are exclusive
+// by construction rather than by rule: three booleans could spell a
+// combination that had to be rejected at startup, and two more that had
+// to be silently corrected, while a mode can only be one of these
+// (design doc 0060).
+//
+// The two axes underneath are whether the caller is identified and
+// whether anyone may write, and each spelling below is one cell of that
+// square. The fourth cell — anonymous and writable — is ModeDev, which
+// says in its name that it is not for a deployment.
+const (
+	// ModeDefault is the empty value: Cloud Run IAM decides who reaches
+	// the deployment, and whoever reaches it can read and write
+	// (design doc 0002).
+	ModeDefault = ""
+	// ModeReadOnly serves knowledge without changing it. The caller is
+	// still identified; every write is refused, including the
+	// operator's (design doc 0040).
+	ModeReadOnly = "read-only"
+	// ModePublic is the posture for a deployment anyone may reach. It
+	// reads no identity at all and refuses every write (design doc
+	// 0042).
+	ModePublic = "public"
+	// ModeDev disables authentication for local development: every
+	// request acts as human:anonymous and writes are allowed. Never on a
+	// deployment.
+	ModeDev = "dev"
+)
+
+// Modes is every spelling OCHAKAI_MODE takes, for the error that lists
+// them.
+var Modes = []string{ModeReadOnly, ModePublic, ModeDev}
+
 func FromEnv() (*Config, error) {
 	cfg := &Config{
 		Addr:        ":" + envOr("PORT", "8080"),
 		DatabaseURL: os.Getenv("OCHAKAI_DATABASE_URL"),
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
-		InsecureDev: os.Getenv("OCHAKAI_INSECURE_DEV") == "true",
-		ReadOnly:    os.Getenv("OCHAKAI_READ_ONLY") == "true",
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
 		// The only default-on boolean here, so the only one read as
 		// "anything but false": an operator turning it off writes false.
 		RecordMisses: os.Getenv("OCHAKAI_RECORD_MISSES") != "false",
 	}
-	if os.Getenv("OCHAKAI_PUBLIC_READ_ONLY") == "true" {
-		// The implication is applied here, not checked here: there is no
-		// way to ask for the public posture and not get read-only, so the
-		// dangerous combination never exists to be rejected (design doc
-		// 0042 §2.1). Setting OCHAKAI_READ_ONLY=false alongside it does
-		// not turn writes back on.
+	switch mode := os.Getenv("OCHAKAI_MODE"); mode {
+	case ModeDefault:
+	case ModeReadOnly:
+		cfg.ReadOnly = true
+	case ModePublic:
+		// The implication is spelled here rather than checked: there is
+		// no way to ask for the public posture and not get read-only, so
+		// the dangerous combination never exists to be rejected (design
+		// doc 0042 §2.1).
 		cfg.PublicReadOnly = true
 		cfg.ReadOnly = true
 		// Same shape, same reason: a public deployment reads no identity
@@ -148,14 +188,15 @@ func FromEnv() (*Config, error) {
 		// — and OCHAKAI_RECORD_MISSES=true alongside does not turn it
 		// back on (design doc 0051 §3.4).
 		cfg.RecordMisses = false
-	}
-	if cfg.PublicReadOnly && cfg.InsecureDev {
-		// Both make every caller anonymous, but insecure dev also lets
-		// anyone delegate, which in public is a stranger naming any
-		// person they like. Refuse rather than silently pick one
-		// (design doc 0042 §2.3).
-		return nil, fmt.Errorf("OCHAKAI_PUBLIC_READ_ONLY and OCHAKAI_INSECURE_DEV are both set: " +
-			"the public posture reads no identity, while insecure dev lets any caller claim one")
+	case ModeDev:
+		cfg.InsecureDev = true
+	default:
+		// Not a posture, and guessing at one is the wrong way to be
+		// wrong: a deployment that misspelled "read-only" and got a
+		// writable one would find out from its knowledge, not from its
+		// logs (design doc 0060 §2.3).
+		return nil, fmt.Errorf("OCHAKAI_MODE is %q; it takes %s, or is unset for the default posture",
+			mode, strings.Join(Modes, " / "))
 	}
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL is required")

@@ -3,7 +3,11 @@
 Status: Accepted(2026-07-16)。「任意で Vertex AI」は
 [0053](0053-embeddings-by-default.md) が既定パスの依存に変えた — Google Cloud
 の上では埋め込みが既定になる。secret-zero は変わらない(Vertex AI の認証も
-ADC / IAM である)
+ADC / IAM である)。§2 の環境変数表はその時点の一覧であり、いま何を
+読むかは [docs/surface.md](../surface.md) と
+[configuration.md](../configuration.md) が持つ — 表に載っている
+`OCHAKAI_INSECURE_DEV` は [0060](0060-one-word-for-the-posture.md) が
+`OCHAKAI_MODE=dev` に改訂した
 Date: 2026-07-16
 
 ## 1. 決定

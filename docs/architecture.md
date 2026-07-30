@@ -138,7 +138,7 @@ The consequences to plan around:
   kept, plainly labelled as a claim, rather than thrown away — see the
   data model below.
 
-A deployment can be made **read-only** with `OCHAKAI_READ_ONLY=true`
+A deployment can be made **read-only** with `OCHAKAI_MODE=read-only`
 (design doc [0040](design/0040-read-only-mode.md)). This is not
 authorization either, and for a sharper reason: it never looks at the
 caller. It cannot be narrowed to some concepts or some people, and it
