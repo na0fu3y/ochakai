@@ -21,7 +21,7 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
   concepts rank higher), expanded one hop through links so the insight
   explaining a metric arrives with it. Start here; use search/get below
   for precise lookups.
-- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Playbook|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|'API Endpoint'|Reference] [--verified true]`
+- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Playbook|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|'API Endpoint'|Reference] [--trust human-reviewed]`
   — one hit per line: score, uri, status, title. Trust verified concepts;
   judge `draft` concepts by their provenance (`--json` shows `created_by`).
 - `ochakai get <id>` — full concept as markdown (YAML frontmatter +
@@ -55,5 +55,7 @@ related knowledge.
 
 When a query you wrote turns out to be correct and useful,
 save it: `type: Attested Computation` with `runtime` (where the SQL runs),
-the SQL in a `# Computation` fence in the body, and `attrs.question` (the
-natural-language question). A human can promote it to `verified` later.
+the SQL in a `# Computation` fence in the body, and a top-level
+`question` key (the natural-language question) — OKF frontmatter is flat,
+so a key of your own goes beside the ones the spec defines, never nested
+under one. A human confirms it later with `ochakai verify`.
