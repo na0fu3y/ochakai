@@ -436,6 +436,70 @@ func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string,
 		resp.Header.Get("Ochakai-Unchanged") != "true", resp.Header.Values("Ochakai-Note"), nil
 }
 
+// The three answers a plan can give, as the Ochakai-Plan header spells
+// them (design doc 0061).
+const (
+	PlanCreated   = "created"
+	PlanUpdated   = "updated"
+	PlanUnchanged = "unchanged"
+)
+
+// Plan asks what a Put of doc would do, and writes nothing
+// (?dry_run=true). The answer is the server's own — the same validation,
+// the same read of what is stored, the same notes — so a caller gating a
+// sync on it meets the same verdict when it runs the import for real
+// (design doc 0061).
+//
+// plan is one of PlanCreated, PlanUpdated or PlanUnchanged. A server that
+// does not know the parameter would have written the document, so an
+// answer with no plan in it is an error rather than a clean bill.
+func (c *Client) Plan(ctx context.Context, id string, doc []byte) (out *domain.View, plan string, notes []string, err error) {
+	q := url.Values{"dry_run": []string{"true"}}
+	resp, err := c.doRaw(ctx, http.MethodPut, entryPath(id), q, documentMediaType, nil, bytes.NewReader(doc))
+	if err != nil {
+		return nil, "", nil, err
+	}
+	defer resp.Body.Close()
+	var k domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
+		return nil, "", nil, err
+	}
+	plan, err = planOf(resp)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return &k, plan, resp.Header.Values("Ochakai-Note"), nil
+}
+
+// PlanBundleFile is Plan for an object of the bundle that is not a
+// concept: the same refusals a PutBundleFile would meet, and nothing
+// written.
+func (c *Client) PlanBundleFile(ctx context.Context, path string, data []byte) (plan string, err error) {
+	q := url.Values{"dry_run": []string{"true"}}
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(path), q,
+		"application/octet-stream", nil, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return planOf(resp)
+}
+
+// planOf reads the Ochakai-Plan header, and refuses an answer that has
+// none: a server old enough not to know dry_run ignored the parameter and
+// wrote, so silence here means the opposite of what it looks like.
+func planOf(resp *http.Response) (string, error) {
+	switch p := resp.Header.Get("Ochakai-Plan"); p {
+	case PlanCreated, PlanUpdated, PlanUnchanged:
+		return p, nil
+	case "":
+		return "", fmt.Errorf("the server answered a dry run with no Ochakai-Plan header: it does not support dry_run, and may have written the document (ochakai 0.16.1 and earlier)")
+	default:
+		return "", fmt.Errorf("the server answered a dry run with an unknown plan %q", p)
+	}
+}
+
 // documentMediaType is what an OKF concept document travels as.
 const documentMediaType = "text/markdown; charset=utf-8"
 

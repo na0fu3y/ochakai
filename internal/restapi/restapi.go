@@ -433,6 +433,13 @@ func Handler(svc *service.Service) http.Handler {
 	// write there is a conflict with what the address is (409). Every
 	// other path is an object, and what it becomes is decided by the
 	// bytes rather than by the caller — see below.
+	//
+	// ?dry_run=true asks what the write would do instead of doing it
+	// (design doc 0061): the same body, the same preconditions, the same
+	// refusals and the same Ochakai-Note headers, answered from the same
+	// code the write runs — and nothing stored. The answer is
+	// Ochakai-Plan. It is a query parameter and not a header because a
+	// header a proxy drops turns a dry run into a write.
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
@@ -440,6 +447,11 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 			actor := httpauth.Actor(r.Context())
+			dry, err := queryBool(r.URL.Query(), "dry_run", false)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
 			// A markdown path is a concept's address, and a write there
 			// is a write to the concept — the same document, the same
 			// preconditions, the same answer. Anything else is a file.
@@ -450,6 +462,14 @@ func Handler(svc *service.Service) http.Handler {
 			// one gets it back (design doc 0046 §3.2).
 			id, isMarkdown := strings.CutSuffix(path, ".md")
 			if r.Method == http.MethodDelete {
+				// A delete has no plan to report — what it would do is
+				// what its name says — and ignoring the parameter here
+				// would remove the object of a caller who believed they
+				// were asking. Refusing is the only safe reading.
+				if dry {
+					writeError(w, service.Invalidf("dry_run asks what a write would do; a delete has no plan beside it, so it is not accepted here"))
+					return
+				}
 				// ?purge=true hard-deletes a concept that is already
 				// soft-deleted, freeing its id (a tombstone still owns
 				// the primary key, so a move onto it fails). Two calls,
@@ -505,13 +525,24 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 			if isMarkdown && okf.CarriesType(body) {
-				putEntry(w, r, svc, id, body, actor)
+				putEntry(w, r, svc, id, body, actor, dry)
 				return
 			}
-			att, err := svc.PutFile(r.Context(), path, body, actor)
+			var (
+				att              *domain.Attachment
+				created, changed bool
+			)
+			if dry {
+				att, created, changed, err = svc.PlanFile(r.Context(), path, body)
+			} else {
+				att, err = svc.PutFile(r.Context(), path, body, actor)
+			}
 			if err != nil {
 				writeError(w, err)
 				return
+			}
+			if dry {
+				w.Header().Set(planHeader, planOf(created, changed))
 			}
 			writeJSON(w, http.StatusOK, att)
 		})
@@ -1020,7 +1051,7 @@ func onlyIfAbsent(r *http.Request) bool {
 // written through either is written the same way, with the same
 // preconditions and the same answer. An address is not a second surface.
 func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
-	id string, body []byte, actor domain.Actor,
+	id string, body []byte, actor domain.Actor, dry bool,
 ) {
 	d, notes, err := okf.Parse(body)
 	if err != nil {
@@ -1040,10 +1071,17 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		out              *domain.Knowledge
 		created, changed bool
 	)
-	if onlyIfAbsent(r) {
+	switch {
+	case dry:
+		// If-None-Match "*" is a precondition on a write that is not
+		// happening, and the plan already says whether the id is free —
+		// which is the whole of what the precondition would have told
+		// the caller, without the 412 (design doc 0061).
+		out, created, changed, err = svc.Plan(r.Context(), k, actor, parseIfMatch(r))
+	case onlyIfAbsent(r):
 		out, err = svc.Create(r.Context(), k, actor)
 		created, changed = true, true
-	} else {
+	default:
 		out, created, changed, err = svc.Put(r.Context(), k, actor, parseIfMatch(r))
 	}
 	if err != nil {
@@ -1057,6 +1095,18 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	notes = okf.NoteClaim(notes, d.Claimed, out)
 	for _, n := range notes {
 		w.Header().Add("Ochakai-Note", n)
+	}
+	// A dry run has nothing to report about a version that was not
+	// written: no ETag, because there is no state to precondition on, and
+	// no 201, because nothing was created. What it has is the plan.
+	if dry {
+		w.Header().Set(planHeader, planOf(created, changed))
+		if wantsDocument(r) {
+			writeDocument(w, http.StatusOK, out)
+			return
+		}
+		writeView(w, http.StatusOK, out)
+		return
 	}
 	// A payload identical to the stored content wrote nothing (no
 	// revision, no version bump); the header lets clients report
@@ -1074,6 +1124,30 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		return
 	}
 	writeView(w, status, out)
+}
+
+// Ochakai-Plan is what ?dry_run=true answers with: the one word the write
+// would have been (design doc 0061). It replaces Ochakai-Unchanged on a
+// dry run rather than joining it — "unchanged" is one of the three values,
+// and two headers saying overlapping things is how a client ends up
+// reading only one of them.
+const planHeader = "Ochakai-Plan"
+
+const (
+	planCreated   = "created"
+	planUpdated   = "updated"
+	planUnchanged = "unchanged"
+)
+
+func planOf(created, changed bool) string {
+	switch {
+	case created:
+		return planCreated
+	case !changed:
+		return planUnchanged
+	default:
+		return planUpdated
+	}
 }
 
 // writeView responds with a read of one concept: the canonical document,

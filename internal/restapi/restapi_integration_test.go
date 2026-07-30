@@ -2325,3 +2325,187 @@ func TestRESTIntegrationReservedNamesAreNotObjects(t *testing.T) {
 		}
 	}
 }
+
+// storedDocument reads a concept's stored bytes back, so a test can say
+// what a dry run did not write.
+func storedDocument(t *testing.T, base, id string) string {
+	t.Helper()
+	resp, err := http.Get(base + "/api/v1/bundle/" + id + ".md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var v domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v.Document
+}
+
+// dryRunDoc is putDoc asking what the write would do (design doc 0061).
+func dryRunDoc(t *testing.T, base, id string, doc []byte) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPut,
+		base+"/api/v1/bundle/"+id+".md?dry_run=true", bytes.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "text/markdown")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+// A dry run answers what the write would answer, and stores nothing
+// (design doc 0061). The note is the case that made this necessary:
+// whether a document's trust family stays a claim is decided against the
+// stored concept, so a caller reading the bundle alone cannot know — and
+// `import --dry-run --strict` reported a clean bundle that the import
+// then noted, which is the false green this closes.
+func TestRESTIntegrationDryRunAnswersWithoutWriting(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	id := testdb.Unique(t, "restdry") + "/revenue"
+	removeEntries(t, srv, id)
+
+	// A foreign export form: it says who generated and confirmed it
+	// somewhere else, which is a claim here.
+	const written = "---\ntype: Metric\ntitle: 売上\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n  - by: human:ceo@example.co.jp\n    at: 2026-07-02T00:00:00Z\n" +
+		"created_by: human:sato@example.co.jp\n---\n\n受注合計。\n"
+
+	// The plan for a free id is "created", the note is already there, and
+	// the concept is not.
+	resp := dryRunDoc(t, srv.URL, id, []byte(written))
+	var planned domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&planned); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("dry run = %d, want 200: nothing was created", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Ochakai-Plan"); got != "created" {
+		t.Errorf("Ochakai-Plan = %q, want created", got)
+	}
+	if got := resp.Header.Get("ETag"); got != "" {
+		t.Errorf("ETag = %q on a dry run: nothing was written, so there is no version", got)
+	}
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 1 ||
+		!strings.Contains(notes[0], "received") {
+		t.Errorf("Ochakai-Note = %q, want the claim note the write would report", notes)
+	}
+	if !strings.Contains(planned.Document, "received:") {
+		t.Errorf("the planned document does not carry the claim:\n%s", planned.Document)
+	}
+	getResp, err := http.Get(srv.URL + "/api/v1/bundle/" + id + ".md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	getResp.Body.Close()
+	if getResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("the dry run wrote the concept: GET = %d, want 404", getResp.StatusCode)
+	}
+
+	// Now write it for real, and the write says exactly what the plan did.
+	resp = putDoc(t, srv.URL, id, []byte(written), false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 1 {
+		t.Errorf("the write reported %q; the dry run promised one note", notes)
+	}
+
+	// The same bundle again: the plan is "unchanged", and the note is
+	// still there, because the claim is still not this instance's
+	// observation.
+	resp = dryRunDoc(t, srv.URL, id, []byte(written))
+	resp.Body.Close()
+	if got := resp.Header.Get("Ochakai-Plan"); got != "unchanged" {
+		t.Errorf("Ochakai-Plan = %q, want unchanged: the payload says what is stored", got)
+	}
+	if got := resp.Header.Get("Ochakai-Unchanged"); got != "" {
+		t.Errorf("Ochakai-Unchanged = %q on a dry run: Ochakai-Plan is the one answer", got)
+	}
+	if notes := resp.Header.Values("Ochakai-Note"); len(notes) != 1 {
+		t.Errorf("Ochakai-Note = %q, want the claim note again", notes)
+	}
+
+	// An edit plans as an update, and still writes nothing.
+	edited := strings.Replace(written, "受注合計。", "受注の合計。", 1)
+	resp = dryRunDoc(t, srv.URL, id, []byte(edited))
+	resp.Body.Close()
+	if got := resp.Header.Get("Ochakai-Plan"); got != "updated" {
+		t.Errorf("Ochakai-Plan = %q, want updated", got)
+	}
+	stored := storedDocument(t, srv.URL, id)
+	if strings.Contains(stored, "受注の合計。") {
+		t.Errorf("the dry run wrote the edit:\n%s", stored)
+	}
+
+	// This instance's own export form, handed back, is not a claim — and
+	// the dry run says so without writing, which is what makes
+	// `--dry-run --strict` usable on an export → review → import loop.
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/bundle/"+id+".md", nil)
+	req.Header.Set("Accept", "text/markdown")
+	mdResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, _ := io.ReadAll(mdResp.Body)
+	mdResp.Body.Close()
+	resp = dryRunDoc(t, srv.URL, id, served)
+	resp.Body.Close()
+	if got := resp.Header.Get("Ochakai-Plan"); got != "unchanged" {
+		t.Errorf("the export form plans as %q, want unchanged", got)
+	}
+
+	// A delete is not something with a plan beside it, and the parameter
+	// must not be ignored there: a caller who believed they were asking
+	// would lose the object.
+	req, _ = http.NewRequest(http.MethodDelete,
+		srv.URL+"/api/v1/bundle/"+id+".md?dry_run=true", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("DELETE ?dry_run=true = %d, want 400", resp.StatusCode)
+	}
+	if storedDocument(t, srv.URL, id) == "" {
+		t.Error("the refused dry-run delete removed the concept anyway")
+	}
+}
+
+// A concept the write path refuses is refused by the plan too, which is
+// the other half of what `--strict` fails on and the other half the dry
+// run could not see.
+func TestRESTIntegrationDryRunRefusesWhatTheWriteRefuses(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	id := testdb.Unique(t, "restdrybad") + "/broken"
+	removeEntries(t, srv, id)
+
+	// An Attested Computation without a runtime is what the write path
+	// rejects (design doc 0036 §3.4).
+	const bad = "---\ntype: Attested Computation\ntitle: Broken\n---\n\nbody\n"
+	dry := dryRunDoc(t, srv.URL, id, []byte(bad))
+	dry.Body.Close()
+	real := putDoc(t, srv.URL, id, []byte(bad), false)
+	real.Body.Close()
+	if dry.StatusCode != real.StatusCode {
+		t.Errorf("dry run = %d, write = %d: the plan must meet the same refusal",
+			dry.StatusCode, real.StatusCode)
+	}
+	if dry.StatusCode != http.StatusBadRequest {
+		t.Errorf("dry run = %d, want 400", dry.StatusCode)
+	}
+}

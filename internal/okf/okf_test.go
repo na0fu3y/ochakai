@@ -696,3 +696,40 @@ func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
 		}
 	}
 }
+
+// A document that says nothing about its lifecycle gets no status key
+// back. ochakai does not write a key its writer left out (design doc 0046
+// §3.9), and the rendering used to emit `status: ""` — which reached the
+// store through `ochakai put` and `ochakai import`, and reached a third
+// party's OKF reader through the export as an empty status. Every stored
+// concept has a status because the write path fills OKF's default in, so
+// the key is absent only where it was absent to begin with.
+func TestCanonicalWritesNoEmptyStatus(t *testing.T) {
+	const written = "---\ntype: Metric\ntitle: Revenue\n---\n\nbody\n"
+	d, _, err := Parse([]byte(written))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Status != "" {
+		t.Fatalf("status = %q, want unset: the document named none", d.Status)
+	}
+	canon, err := Canonical(&d.Knowledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(canon), "status:") {
+		t.Errorf("the rendering invented a status the document did not name:\n%s", canon)
+	}
+	// And a status that was written still comes back.
+	d, _, err = Parse([]byte("---\ntype: Metric\nstatus: draft\n---\n\nbody\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canon, err = Canonical(&d.Knowledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(canon), "status: draft") {
+		t.Errorf("the status the writer named is missing:\n%s", canon)
+	}
+}

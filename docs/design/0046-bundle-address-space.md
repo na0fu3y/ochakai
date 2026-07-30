@@ -44,7 +44,11 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 §2.4 が継承する 0043 §3.8 のうち「`<producer>/<version>` 形式は使わない」は
 [0052](0052-producer-beside-the-actor.md) が改訂した — actor の綴りが
 `human:` / `process:` の 2 つであることは変わらず、producer は actor の
-隣の `Actor.producer` に記録される
+隣の `Actor.producer` に記録される。
+§3.5 の書き込み面は [0061](0061-a-dry-run-is-the-write-withheld.md) が
+`dry_run` パラメータと `Ochakai-Plan` ヘッダで拡げた — §2.2 の claim の
+判定も §3.4 の unchanged の判定も**変わらず**、書き込みを止めたまま
+同じ判定を返す口が増えただけである
 Date: 2026-07-28
 
 ## 1. 目的

@@ -272,7 +272,7 @@ func parseRef(s string) (string, error) {
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists concepts whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes a concept out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists concepts whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the concept to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the concepts citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe concepts whose body links at one concept — its backlinks, the reverse\nof its inbound edges; --prefix narrows to\nthe concepts living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
+		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists concepts whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes a concept out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists concepts whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the concept to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the concepts citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe concepts whose body links at one concept — its backlinks, the reverse\nof its inbound edges; --prefix narrows to\nthe concepts living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nThe two reverse lookups also stand alone: --source or --links-to with no\nquery lists in address order and pages with --cursor, because a set is\nthe answer and there is no text to rank it by.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search --links-to metrics/revenue --type Insight   # which insights read this metric\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -297,8 +297,14 @@ func cmdSearch(ctx context.Context, args []string) error {
 	if *sortBy != "" && len(pos) > 0 {
 		return fmt.Errorf("--sort lists concepts; it cannot be combined with a search query")
 	}
-	if *sortBy == "" && *source == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
-		return fmt.Errorf("search needs a query; use --sort to list concepts without one, or --source to list what cites a resource")
+	// Both reverse lookups list on their own, exactly as they do on the
+	// wire (design doc 0046 §3.5): a set is the answer and there is no
+	// text to rank it by. --links-to was left out of this guard and out
+	// of the message, so `--links-to X` alone was refused by the CLI and
+	// accepted by REST, and the refusal named the two ways out that were
+	// not the one the caller had asked for.
+	if *sortBy == "" && *source == "" && *linksTo == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
+		return fmt.Errorf("search needs a query; use --sort to list concepts without one, --source to list what cites a resource, or --links-to to list what points at a concept")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
@@ -1224,10 +1230,10 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\nconcepts the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by a concept's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attach to that concept. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.",
-		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
-	dryRun := fs.Bool("dry-run", false, "parse and list what would be written, write nothing")
-	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing")
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\nconcepts the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by a concept's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attach to that concept. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
+		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
+	dryRun := fs.Bool("dry-run", false, "report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet")
+	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1255,23 +1261,12 @@ func cmdImport(ctx context.Context, args []string) error {
 	if *strict && (noted > 0 || len(skipped) > 0) {
 		return strictErr(noted, len(skipped), "nothing was written")
 	}
-	if *dryRun {
-		for i := range entries {
-			fmt.Printf("would import %s\n", entries[i].URI())
-		}
-		for _, a := range atts {
-			fmt.Printf("would attach %s/%s (from %s)\n", a.ID, a.Name, a.Path)
-		}
-		for _, f := range loose {
-			fmt.Printf("would write %s\n", f.Path)
-		}
-		fmt.Printf("dry run: %d concepts, %d attachments, %d files, %d skipped, %d notes\n",
-			len(entries), len(atts), len(loose), len(skipped), noted)
-		return nil
-	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
+	}
+	if *dryRun {
+		return dryRunImport(ctx, c, entries, atts, loose, skipped, noted, *strict)
 	}
 	// A 400 is the server's judgment on one document (e.g. a models concept
 	// whose spec fails write-time validation) — skip and report it like a
@@ -1386,6 +1381,114 @@ func cmdImport(ctx context.Context, args []string) error {
 	// and the line above it says how far it got.
 	if *strict && (noted > 0 || len(skipped) > 0) {
 		return strictErr(noted, len(skipped), "the concepts above are already written")
+	}
+	return nil
+}
+
+// dryRunImport is the import loop with the writes withheld. It is not a
+// second, cheaper reading of the bundle: every object goes to the server
+// with ?dry_run=true, so the notes, the refusals and the create /
+// update / unchanged verdict are the ones the import itself would meet
+// (design doc 0061).
+//
+// The version that only listed what it had parsed is what made
+// `--dry-run --strict` a false green. Half of what --strict fails on is
+// the server's judgment — a document whose trust family stays a claim, a
+// concept the write path refuses — and none of it is visible from the
+// bundle alone, so a CI gate on the dry run passed bundles the import
+// then failed on.
+func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
+	atts []okf.BundleAttachment, loose []okf.BundleFile, skipped []string, noted int, strict bool,
+) error {
+	var created, updated, unchanged int
+	refused := map[string]bool{}
+	skip := func(what, why string) {
+		skipped = append(skipped, what+": "+why)
+		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+	}
+	for i := range entries {
+		d := &entries[i]
+		k := &d.Knowledge
+		doc, err := documentOf(k)
+		if err != nil {
+			refused[k.ID] = true
+			skip(k.ID+".md", "rejected by the server: "+err.Error())
+			continue
+		}
+		planned, plan, notes, err := c.Plan(ctx, k.ID, doc)
+		if err != nil {
+			if isInvalid(err) {
+				refused[k.ID] = true
+				skip(k.ID+".md", "rejected by the server: "+err.Error())
+				continue
+			}
+			return fmt.Errorf("%s: %w", k.URI(), err)
+		}
+		// The same question the write path asks, of the same answer: a
+		// claim still on the concept the write would leave behind is one
+		// the document made and this instance did not observe.
+		notes = okf.NoteStoredClaim(notes, d.Claimed, planned.Document)
+		noted += len(notes)
+		reportNotes(notes)
+		switch plan {
+		case apiclient.PlanCreated:
+			created++
+			fmt.Printf("would create %s\n", k.URI())
+		case apiclient.PlanUnchanged:
+			unchanged++
+			fmt.Printf("would leave unchanged %s\n", k.URI())
+		default:
+			updated++
+			fmt.Printf("would update %s\n", k.URI())
+		}
+	}
+	// A file's plan is a yes or a no: the counts the summary keeps for
+	// files are of the objects the bundle carries, not of the rows they
+	// would move, so ok=false means the server refused this one.
+	planFile := func(path string, data []byte) (ok bool, err error) {
+		if _, err := c.PlanBundleFile(ctx, path, data); err != nil {
+			if !isInvalid(err) {
+				return false, fmt.Errorf("write %s: %w", path, err)
+			}
+			skip(path, "rejected by the server: "+err.Error())
+			return false, nil
+		}
+		return true, nil
+	}
+	attached := 0
+	for _, a := range atts {
+		if refused[a.ID] {
+			skip(a.Path, "its concept "+a.ID+" would not be imported")
+			continue
+		}
+		ok, err := planFile(a.Path, a.Data)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		attached++
+		fmt.Printf("would attach %s (%s)\n", a.Path, a.ID)
+	}
+	var wrote int
+	for _, f := range loose {
+		ok, err := planFile(f.Path, f.Data)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		wrote++
+		fmt.Printf("would write %s\n", f.Path)
+	}
+	fmt.Printf("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attachments, %d files, %d skipped, %d notes)\n",
+		created+updated+unchanged, created, updated, unchanged, attached, wrote, len(skipped), noted)
+	// The whole point of the dry run under --strict: the same verdict the
+	// import would reach, reached with nothing written.
+	if strict && (noted > 0 || len(skipped) > 0) {
+		return strictErr(noted, len(skipped), "nothing was written")
 	}
 	return nil
 }

@@ -73,8 +73,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 落ちる。
 
 - REST: 11
-- PARAM: 18
-- HEADER: 9
+- PARAM: 19
+- HEADER: 10
 - MCP: 8
 - CLI: 25
 - FLAG: 29
@@ -136,7 +136,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 が Web UI に載せないと決めている当のものである。数のためだけの畳み込み
 は、この文書が数えようとしているものを増やす。
 
-## PARAM (18)
+## PARAM (19)
 
 クエリパラメータも表面である。**操作の数だけを数えていた間、圧力は
 ここへ逃げていた** — エンドポイントをパラメータや content type に
@@ -158,10 +158,22 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 呼び出し元がスコアの床を置く」ことで、較正の手順を製品が説明できず、
 同梱の唯一の利用者が既定で切っていたものだった。
 
+18 → 19 は [0061](design/0061-a-dry-run-is-the-write-withheld.md) の
+`dry_run` である。**天井を上げる決定**であり、そう言って上げている。
+`--dry-run --strict` を CI の関門にしていた利用者が偽グリーンを踏んだ —
+関門が通り、本番 import が落ちた — のは、判定の半分がサーバのもので
+あってバンドルからは見えないからである。クライアント側で作り直せば
+パラメータは増えないが、増えないのは表面だけで、書き込み経路の判断を
+第二の実装が推測することになる(0007「CLI は REST の薄いクライアント」)。
+ヘッダではなくクエリパラメータなのは、**落とされたヘッダは書き込みに
+なる**からである。同じ PR で `Ochakai-Plan` も足しており、HEADER の
+天井も上がっている。
+
 - `attachments`
 - `budget`
 - `cursor`
 - `days`
+- `dry_run`
 - `fm.{key}`
 - `history`
 - `limit`
@@ -177,7 +189,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `trust`
 - `type`
 
-## HEADER (9)
+## HEADER (10)
 
 表面が隠れる三つ目の場所。`Ochakai-Read-Only` と `Ochakai-Unchanged` は
 クライアントが実装しなければならないプロトコルで、`If-Match` は
@@ -185,11 +197,19 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 どれもエンドポイントの数には現れない。リクエストとレスポンスを分けず、
 **ワイヤを流れる名前**で数える。読む人が出会うのはそれだからである。
 
+9 → 10 は [0061](design/0061-a-dry-run-is-the-write-withheld.md) の
+`Ochakai-Plan` で、`dry_run` と同じ一つの決定の片割れである。dry run の
+答えは created / updated / unchanged の三値であり、`Ochakai-Unchanged`
+はそのうちの一つしか言えない。三値を二つのヘッダに割ると、クライアント
+は片方しか読まなくなる — だから dry run では `Ochakai-Unchanged` を
+出さず、`Ochakai-Plan` が置き換える。
+
 - `Content-Disposition`
 - `ETag`
 - `If-Match`
 - `If-None-Match`
 - `Ochakai-Note`
+- `Ochakai-Plan`
 - `Ochakai-Read-Only`
 - `Ochakai-Unchanged`
 - `X-Ochakai-On-Behalf-Of`

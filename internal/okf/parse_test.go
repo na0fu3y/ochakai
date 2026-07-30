@@ -390,6 +390,7 @@ func TestParseReadsOKFFamiliesIntoTheEnvelope(t *testing.T) {
 type: Attested Computation
 title: Revenue for fiscal year
 tags: [finance]
+status: stable
 runtime: bigquery
 parameters:
   - { name: year, type: integer, required: true }
