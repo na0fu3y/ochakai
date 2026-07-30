@@ -78,6 +78,23 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 // three scripts agreed it did not exist.
 func commandLongFlags(t *testing.T) map[string][]string {
 	t.Helper()
+	long := map[string][]string{}
+	for name, names := range commandFlags(t) {
+		for _, f := range names {
+			if len(f) > 1 { // a one-letter name is a short flag (-f)
+				long[name] = append(long[name], f)
+			}
+		}
+	}
+	return long
+}
+
+// commandFlags is every flag each command registers, short ones
+// included. docs/surface.md counts these — a flag is a name somebody has
+// to learn, whichever length it is — while the completion check above
+// looks only at the long ones, which are all the scripts offer.
+func commandFlags(t *testing.T) map[string][]string {
+	t.Helper()
 	// The --url default reads the CLI config: keep the probe off the
 	// developer's own. The help every -h prints is noise here.
 	t.Setenv("OCHAKAI_URL", "")
@@ -99,11 +116,7 @@ func commandLongFlags(t *testing.T) map[string][]string {
 			continue
 		}
 		var names []string
-		fs.VisitAll(func(f *flag.Flag) {
-			if len(f.Name) > 1 { // a one-letter name is a short flag (-f)
-				names = append(names, f.Name)
-			}
-		})
+		fs.VisitAll(func(f *flag.Flag) { names = append(names, f.Name) })
 		flags[name] = names
 	}
 	return flags
