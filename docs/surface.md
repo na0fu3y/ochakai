@@ -498,15 +498,22 @@ REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 
 にも出ていなかった代金である。5,700 → 5,760。仕組みが狙っていたのは
 まさにこれで、畳み込みの PR が散文を増やしていたことが、初めて数として
 出た。[#355](https://github.com/na0fu3y/ochakai/issues/355) の
-deploy/cloudrun/README.md 分割は逆方向でも同じ代金を払った — 5,760 →
-5,790。
+deploy/cloudrun/README.md 分割は逆方向でも同じ代金を払った — 直前の
+フィルタ畳み込み([#352](https://github.com/na0fu3y/ochakai/issues/352))
+で 5,760 から 5,753 まで下がっていた天井を、5,790 まで上げている。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
 - **[docs/design](design) の記録。** 利用者ではなく、変えようとする人が
-  読む。何が番号を取るかは
+  読む。何が番号を**取る資格**を持つかは
   [0048](design/0048-decision-records-for-wire-contracts.md) が既に
-  狭めており、同じものを二重に締めない。
+  狭めているが、取った後に**何冊積み上がるか**は別の問いで、これは
+  数えていなかった — v0.10.0 の 19 記録から現在の 59 記録へ、この文書の
+  どの次元よりも速く増えている。冊数と総行数の天井は
+  [CONTRIBUTING.md](../CONTRIBUTING.md) の `RECORD-COUNT` /
+  `RECORD-CORPUS-LINES` に置く。読むのは利用者ではなく変える人で、
+  `RECORD-LINES`(一冊の天井)と同じ読者の同じ種類の天井だから、ここに
+  十一本目の上限を足すより、その天井の隣に置くほうが筋が通る。
 - **OKF ドキュメント。** `examples/demo` の 10 件も
   `examples/bigquery-catalog/bundle` も、ochakai が**保存するもの**で
   あって ochakai についての説明ではない。frontmatter を持つ md は

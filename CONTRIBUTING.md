@@ -161,7 +161,7 @@ Architecture decisions live in [docs/design](docs/design) as numbered
 documents (mostly Japanese). Start from the
 [index](docs/design/README.md): its opening table says which document
 describes each area today, and the prose below it carries the history. A
-new record needs a summary in
+new record needs a row in
 [README.en.md](docs/design/README.en.md) beside it, which a test checks.
 [docs/architecture.md](docs/architecture.md) summarizes the accepted ones
 in English if you would rather read the shape of the system first.
@@ -199,10 +199,11 @@ state per area, so when a design doc lands:
   doc to its area with a one-line summary, adjust the status notes of
   the docs it amends, and — if it becomes the doc to read for that area —
   update the area's row in the opening table.
-- Summarize it in `README.en.md`. A doc the new one supersedes drops to a
-  one-line pointer at its replacement; full summaries are maintained only
-  for what is current, and a test holds it — cutting the old summary is
-  part of superseding, not tidying for later.
+- Add its row to `README.en.md`'s table, in the same area. A doc the new
+  one supersedes drops to a bare pointer row (record and status only, no
+  decision cell); full rows are kept only for what is current, and a test
+  holds it — cutting the old row is part of superseding, not tidying for
+  later.
 - Avoid amendment chains. If the new decision would be the second
   partial amendment stacked on the same doc, don't add another diff:
   write it as a full replacement that states the area's whole current
@@ -243,15 +244,53 @@ are not measured: they are immutable, and immutability is a promise about
 decisions somebody could be depending on, not a licence to keep writing
 at whatever length the last one happened to be.
 
+### How many records, and how much
+
+`RECORD-LINES` bounds one record's thickness. Nothing bounded how many
+records there are, and that turned out to be the number that moved: 19
+records at v0.10.0, 59 now — 4.6x, against 2.3x for non-test Go and REST's
+own retreat from 19 operations to 11. Folding a surface leaves a record
+behind, and [docs/surface.md](docs/surface.md)'s DOC section already names
+that residue — an index entry in each language, an English summary, a
+paragraph in that file or this one — for the manual it counts. Records are
+the larger half of the same residue, and until now none of it was counted
+anywhere.
+
+    RECORD-COUNT: 59
+    RECORD-CORPUS-LINES: 10292
+
+Both count every record under `docs/design`, Superseded ones included:
+they still ship in the tree, and a reader following a `Status:` header
+still opens them. Counting only what is current would let a supersession
+buy headroom for the next addition — the file stays on disk either way, so
+that would be the next escape hatch rather than a saving.
+
+The two catch different shapes. `RECORD-CORPUS-LINES` is `DOC-LINES`'s
+argument applied to this corpus: a record that never crosses
+`RECORD-LINES` can still add to what a reader gets through, and enough of
+them doing it at once moves nothing else. `RECORD-COUNT` is for the shape
+a line total cannot see at all — 0054/0057 and 0055/0056 are one subject
+apiece, told across two numbers, and a per-record cap has no way to notice
+that a second number was the wrong fix.
+
+These live here, next to `RECORD-LINES`, rather than as an eleventh line in
+[docs/surface.md](docs/surface.md)'s 上限 section. A record is read by
+somebody changing ochakai, not somebody using it — that document's DOC
+section already excludes `docs/design` from the manual on that basis — and
+a ceiling for that same reader belongs beside the other ceiling for that
+reader, not split across two files that both happen to hold a number.
+
 Most of that list is checked rather than remembered
 (`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
 indexes, the two indexes have to agree with the record's own `Status:`
 header about whether it is current or superseded, a supersession has
 to be recorded at both ends — the new record naming what it retires, and
-the retired one saying so — and a new record has to fit under the
-ceiling. What no test can read is the judgment: whether the opening
-table's row still points at the doc somebody should actually read. That
-is where the attention goes.
+the retired one saying so — a new record has to fit under its own
+ceiling, and the corpus as a whole has to fit under `RECORD-COUNT` and
+`RECORD-CORPUS-LINES`
+(`TestDesignRecordCorpusStaysUnderItsCeiling`). What no test can read is
+the judgment: whether the opening table's row still points at the doc
+somebody should actually read. That is where the attention goes.
 
 Two decisions worth knowing before proposing features:
 

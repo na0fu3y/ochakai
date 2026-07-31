@@ -68,17 +68,10 @@ command carries its flags and worked examples in `ochakai <command> -h`;
 [docs/cli.md](docs/cli.md) is that same text rendered, for reading before
 you install anything.
 
-Agents without a shell (Claude Desktop, hosted agents) connect over MCP,
-which remains the primary interface. Claude Code can use it too:
-
-```sh
-claude mcp add --transport http ochakai http://localhost:8080/mcp
-```
-
-Against Cloud Run, and for clients that only speak stdio, `ochakai
-mcp-stdio` is the bridge — it forwards each message and resolves your
-identity, so the client itself holds no credentials. Which form each
-client wants, and the eight tools it will see:
+Agents without a shell — Claude Desktop, hosted agents — connect over
+MCP instead, and it's the primary interface for that case. Which form
+each client wants (a URL, or the `ochakai mcp-stdio` bridge against
+Cloud Run), and the eight tools it will see:
 [connecting an MCP client](docs/guides/mcp-clients.md).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)

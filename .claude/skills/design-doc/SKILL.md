@@ -91,6 +91,17 @@ what citing it is for. If it genuinely is that large, raise the number in
 the same PR and say why. Do not answer the ceiling by compressing the
 prose: a record nobody finishes costs more than a long one.
 
+CONTRIBUTING.md also caps the corpus as a whole: `RECORD-COUNT` for how
+many records exist, `RECORD-CORPUS-LINES` for how many lines they total —
+both count every record, Superseded ones included, since they still ship
+in the tree and a reader following a `Status:` trail still opens them.
+`TestDesignRecordCorpusStaysUnderItsCeiling` reads both back. Landing a
+new record can push the corpus over either one even when the record
+itself is well under `RECORD-LINES`; the same two escapes apply, just
+visible only once the whole corpus is counted — this decision restates
+one already on file (cite it instead), or two subjects have been sharing
+one number and would read better split.
+
 **4. Update the older docs' `Status:` headers.** Every doc the new one
 supersedes or amends gets a line pointing at the new number. See 0011 or
 0018 for the style. This is the step that is easiest to forget and the
@@ -103,14 +114,15 @@ read for an area, update that area's row in the index's opening table —
 that table is what a reader is meant to reach the current state from
 (0048 §2.4).
 
-**6. Summarize it in English.** `docs/design/README.en.md` needs an entry
-or `TestEnglishDesignIndexCoversEveryRecord` fails. A doc this one
-supersedes **drops to a one-line pointer at its replacement** — full
-summaries are only maintained for what is current (0048 §2.5), and
-`TestEnglishIndexSummarizesOnlyWhatIsCurrent` fails if the old summary is
-left standing. Cutting it is part of superseding, not tidying to do later:
-the summary of a replaced record describes the old world in the present
-tense and nobody rereads it.
+**6. Summarize it in English.** `docs/design/README.en.md` is a table, one
+row per record (record link, status, decision in a sentence or two); a
+missing row fails `TestEnglishDesignIndexCoversEveryRecord`. A doc this
+one supersedes **drops to a bare pointer row** — record and status only,
+no decision cell — since full rows are only kept for what is current
+(0048 §2.5), and `TestEnglishIndexSummarizesOnlyWhatIsCurrent` fails if
+the old row is left standing. Cutting it is part of superseding, not
+tidying to do later: the row of a replaced record describes the old world
+in the present tense and nobody rereads it.
 
 **7. Avoid amendment chains.** If this would be the *second* partial
 amendment stacked on the same doc, do not add another diff. Write a full

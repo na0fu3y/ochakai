@@ -122,8 +122,8 @@ func TestDesignIndexEntersEveryRecord(t *testing.T) {
 		for _, index := range []string{designIndex, designEnglishIndex} {
 			if indexEntry(t, index, r.file) == "" {
 				t.Errorf("%s has no entry for %s. A link from elsewhere in the file is "+
-					"not an entry: the record needs the bullet that introduces it, so a "+
-					"reader meets it where its area is described",
+					"not an entry: the record needs the bullet or table row that introduces "+
+					"it, so a reader meets it where its area is described",
 					strings.TrimPrefix(index, "../../"), r.file)
 			}
 		}
@@ -219,9 +219,11 @@ func TestIndexEntriesAgreeWithTheRecordsStatus(t *testing.T) {
 	}
 }
 
-// indexEntry returns the index bullet that introduces the named record — the
+// indexEntry returns the index entry that introduces the named record — the
 // one whose own first link is that record — or "" when the index has none. A
-// mention inside another record's entry is not an entry.
+// mention inside another record's entry is not an entry. The Japanese index
+// is bullets; the English index (README.en.md) is a table with the record as
+// its first column, one row per record — both are read back here.
 func indexEntry(t *testing.T, index, file string) string {
 	t.Helper()
 	content, err := os.ReadFile(index)
@@ -229,6 +231,21 @@ func indexEntry(t *testing.T, index, file string) string {
 		t.Fatalf("read %s: %v", index, err)
 	}
 	link := regexp.MustCompile(`\]\(([^)]+)\)`)
+
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "|") {
+			continue
+		}
+		cells := strings.SplitN(trimmed, "|", 3)
+		if len(cells) < 2 {
+			continue
+		}
+		if first := link.FindStringSubmatch(cells[1]); first != nil && first[1] == file {
+			return trimmed
+		}
+	}
+
 	// Bullets are separated by "\n- " and continuation lines are indented, so
 	// the split leaves each entry whole. What comes before the first bullet is
 	// the index's own prose, and is not an entry.
@@ -322,10 +339,78 @@ Japanese.`, r.file, lines, limit, contributing)
 	}
 }
 
+// recordCorpusCapRe reads a ceiling on the corpus as a whole rather than on
+// one record: "RECORD-COUNT: 59" or "RECORD-CORPUS-LINES: 10292", declared
+// beside RECORD-LINES in CONTRIBUTING.md rather than as an eleventh cap in
+// docs/surface.md's 上限 section — a record is read by somebody changing
+// ochakai, not somebody using it, so its ceiling lives with the other
+// ceiling for that same reader.
+var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-COUNT|RECORD-CORPUS-LINES): (\d+)$`)
+
+// TestDesignRecordCorpusStaysUnderItsCeiling reads docs/design as a whole:
+// how many records it holds, and how many lines they total. Superseded
+// records count in both — they still ship in the tree, and a reader
+// following a Status: header still opens them. Counting only what is
+// current would let a supersession buy headroom for the next addition, and
+// the file stays on disk either way, so that would be the next escape
+// hatch rather than a saving.
+//
+// The two catch different shapes. RECORD-CORPUS-LINES is DOC-LINES's
+// argument applied to this corpus: a record that never crosses RECORD-LINES
+// can still add to what a reader gets through, and enough of them doing it
+// at once moves nothing else. RECORD-COUNT is for the shape a line total
+// cannot see at all — 0054/0057 and 0055/0056 are one subject apiece, told
+// across two numbers, and no per-record cap can notice that a second
+// number was the wrong fix.
+func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	caps := map[string]int{}
+	for _, m := range recordCorpusCapRe.FindAllStringSubmatch(string(content), -1) {
+		n, err := strconv.Atoi(m[2])
+		if err != nil {
+			t.Fatalf("%s: %s %q: %v", contributing, m[1], m[2], err)
+		}
+		caps[m[1]] = n
+	}
+	for _, name := range []string{"RECORD-COUNT", "RECORD-CORPUS-LINES"} {
+		if _, ok := caps[name]; !ok {
+			t.Fatalf("%s declares no %s ceiling: this check now guards nothing", contributing, name)
+		}
+	}
+
+	records := designRecords(t)
+	totalLines := 0
+	for _, r := range records {
+		totalLines += strings.Count(r.body, "\n")
+	}
+
+	if count, limit := len(records), caps["RECORD-COUNT"]; count > limit {
+		t.Errorf(`docs/design holds %d records, over the RECORD-COUNT ceiling of %d in %s.
+
+Going over is a decision to make the corpus bigger, so it is made by
+raising the number in the same PR, having said why — or by finding that the
+new record restates one already on file, or that two subjects have been
+sharing one number and would read better split.`, count, limit, contributing)
+	}
+	if got, limit := totalLines, caps["RECORD-CORPUS-LINES"]; got > limit {
+		t.Errorf(`docs/design totals %d lines across %d records, over the RECORD-CORPUS-LINES
+ceiling of %d in %s.
+
+A record can stay under RECORD-LINES on its own and still add to what a
+reader gets through if enough records do it at once, which is what this
+ceiling is for. Raise it in the same PR, having said why.`,
+			got, len(records), limit, contributing)
+	}
+}
+
 // maxSupersededSummary is how many lines a superseded record earns in the
-// English index. Four, not one: the pointer is one sentence, but a long
-// title wraps and the bullet carries the link twice.
-const maxSupersededSummary = 5
+// English index. README.en.md is a table, one row per record, so a
+// superseded record's row is a record link and a status cell — always one
+// line — and nothing more.
+const maxSupersededSummary = 1
 
 // README.en.md opens by saying that only current records are summarized in
 // full, and that a superseded one "keeps a one-line pointer to whatever
@@ -351,7 +436,9 @@ func TestEnglishIndexSummarizesOnlyWhatIsCurrent(t *testing.T) {
 			continue // TestEnglishDesignIndexCoversEveryRecord owns that failure
 		}
 		checked++
-		// The bullet runs to the blank line that separates it from the next.
+		// A table row is one line by construction; the split guards a future
+		// format change back to bullets, which run to the blank line that
+		// separates one entry from the next.
 		lines := strings.Count(strings.SplitN(entry, "\n\n", 2)[0], "\n") + 1
 		if lines <= maxSupersededSummary {
 			continue
