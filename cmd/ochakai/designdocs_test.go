@@ -122,8 +122,8 @@ func TestDesignIndexEntersEveryRecord(t *testing.T) {
 		for _, index := range []string{designIndex, designEnglishIndex} {
 			if indexEntry(t, index, r.file) == "" {
 				t.Errorf("%s has no entry for %s. A link from elsewhere in the file is "+
-					"not an entry: the record needs the bullet that introduces it, so a "+
-					"reader meets it where its area is described",
+					"not an entry: the record needs the bullet or table row that introduces "+
+					"it, so a reader meets it where its area is described",
 					strings.TrimPrefix(index, "../../"), r.file)
 			}
 		}
@@ -219,9 +219,11 @@ func TestIndexEntriesAgreeWithTheRecordsStatus(t *testing.T) {
 	}
 }
 
-// indexEntry returns the index bullet that introduces the named record — the
+// indexEntry returns the index entry that introduces the named record — the
 // one whose own first link is that record — or "" when the index has none. A
-// mention inside another record's entry is not an entry.
+// mention inside another record's entry is not an entry. The Japanese index
+// is bullets; the English index (README.en.md) is a table with the record as
+// its first column, one row per record — both are read back here.
 func indexEntry(t *testing.T, index, file string) string {
 	t.Helper()
 	content, err := os.ReadFile(index)
@@ -229,6 +231,21 @@ func indexEntry(t *testing.T, index, file string) string {
 		t.Fatalf("read %s: %v", index, err)
 	}
 	link := regexp.MustCompile(`\]\(([^)]+)\)`)
+
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "|") {
+			continue
+		}
+		cells := strings.SplitN(trimmed, "|", 3)
+		if len(cells) < 2 {
+			continue
+		}
+		if first := link.FindStringSubmatch(cells[1]); first != nil && first[1] == file {
+			return trimmed
+		}
+	}
+
 	// Bullets are separated by "\n- " and continuation lines are indented, so
 	// the split leaves each entry whole. What comes before the first bullet is
 	// the index's own prose, and is not an entry.
@@ -323,9 +340,10 @@ Japanese.`, r.file, lines, limit, contributing)
 }
 
 // maxSupersededSummary is how many lines a superseded record earns in the
-// English index. Four, not one: the pointer is one sentence, but a long
-// title wraps and the bullet carries the link twice.
-const maxSupersededSummary = 5
+// English index. README.en.md is a table, one row per record, so a
+// superseded record's row is a record link and a status cell — always one
+// line — and nothing more.
+const maxSupersededSummary = 1
 
 // README.en.md opens by saying that only current records are summarized in
 // full, and that a superseded one "keeps a one-line pointer to whatever
@@ -351,7 +369,9 @@ func TestEnglishIndexSummarizesOnlyWhatIsCurrent(t *testing.T) {
 			continue // TestEnglishDesignIndexCoversEveryRecord owns that failure
 		}
 		checked++
-		// The bullet runs to the blank line that separates it from the next.
+		// A table row is one line by construction; the split guards a future
+		// format change back to bullets, which run to the blank line that
+		// separates one entry from the next.
 		lines := strings.Count(strings.SplitN(entry, "\n\n", 2)[0], "\n") + 1
 		if lines <= maxSupersededSummary {
 			continue
