@@ -31,6 +31,12 @@ chains get a replacement instead). The bookkeeping half of it is checked:
 an index that disagrees with a record's `Status:` header about whether it
 is current, or a supersession recorded at only one end.
 
+**A record has a ceiling too.** CONTRIBUTING.md declares `RECORD-LINES:`
+and the same test reads it back. 0048 narrowed what earns a number and
+left how much unbounded, which is the direction the corpus grew. Over the
+line usually means two decisions, or a record restating one that already
+exists — not a record that needs denser prose.
+
 ## Surface, and the default answer
 
 What ochakai costs the person using it is its **surface** — the endpoints
