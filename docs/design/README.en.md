@@ -241,6 +241,35 @@ For the shape of the system rather than the history of it, read
   the next request is the right one. `fm.` stays on REST, MCP and the CLI,
   and stays off the web UI, whose filters show the values you can pick.
 
+- **[0061 A dry run is the write withheld](0061-a-dry-run-is-the-write-withheld.md)**
+  — *Accepted; extends 0046 §3.5's write face with a `dry_run` query
+  parameter and an `Ochakai-Plan` response header. It changes no ruling —
+  what stays a claim (§2.2) and what counts as unchanged (§3.4) are as
+  they were — only who answers the question.* `ochakai import --dry-run
+  --strict` was documented as a CI gate, and it was a false green: half of
+  what `--strict` fails on is not visible from the bundle. Whether a
+  document's trust family stays a claim under `received` is decided
+  *against the stored concept*; whether the server refuses the document is
+  the write path's validation; whether the write changes anything is a
+  comparison with stored bytes. The dry run saw none of it, so a bundle
+  carrying `verified:` passed the gate with 0 notes and then imported with
+  one. Rebuilding those answers in the client costs no surface but buys a
+  second implementation of the write path's judgment, which is the
+  duplication 0007 exists to prevent — and it would not even be accurate.
+  So the write path answers instead: same body, same validation, same
+  preconditions, same refusals, same `Ochakai-Note` headers, nothing
+  stored. `Update` and `Plan` share one decision step (`settleUpdate`), so
+  a plan cannot become a second opinion. The switch is a query parameter
+  and not a header because a header a proxy drops turns a dry run into a
+  write; a dry run answers 200 only, carries no ETag, and is a 400 on
+  DELETE.
+  *For a user:* `ochakai import --dry-run` now reports what the import
+  would report — `would create` / `would update` / `would leave
+  unchanged`, the same notes, the same refusals — so a CI gate on
+  `--dry-run --strict` reaches the verdict the real import reaches, with
+  nothing written. Against an ochakai 0.16.1 or older server the dry run
+  fails rather than passing: that server ignored the parameter and wrote.
+
 - **[0046 The bundle is the address space](0046-bundle-address-space.md)**
   — *Accepted; the current record for OKF compatibility, superseding 0043,
   0008, 0011, 0013 and 0014. Implementation follows in later pull requests,

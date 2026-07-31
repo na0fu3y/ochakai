@@ -2,11 +2,15 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
+	"github.com/na0fu3y/ochakai/internal/store"
 )
 
 // Attachment operations (design docs 0008, 0013). ochakai stores and
@@ -101,25 +105,9 @@ func (s *Service) FillAttachments(ctx context.Context, ks []*domain.Knowledge) e
 // written under an entry's namespace, or one an entry already links,
 // arrives attributed and one nothing points at is simply a file.
 func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
-	if err := s.readOnly(); err != nil {
-		return nil, err
-	}
-	p = domain.Normalize(p)
-	if !s.Store.HasBlobStore() {
-		return nil, Unsupportedf("files are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
-	}
-	if !domain.ValidBundlePath(p) {
-		return nil, Invalidf("invalid bundle path %q (path segments separated by \"/\"; segments must not start with \".\", and index.md and log.md are generated rather than stored)", p)
-	}
-	if len(data) == 0 {
-		return nil, Invalidf("the file is empty")
-	}
-	if len(data) > domain.MaxAttachmentSize {
-		return nil, Invalidf("the file exceeds %d MiB", domain.MaxAttachmentSize>>20)
-	}
-	mediaType, err := domain.DetectAttachmentMediaType(data)
+	p, mediaType, err := s.settleFile(p, data)
 	if err != nil {
-		return nil, Invalidf("%v", err)
+		return nil, err
 	}
 	att, err := s.Store.PutFile(ctx, p, mediaType, data, actor)
 	if err != nil {
@@ -132,6 +120,66 @@ func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor doma
 		s.updateAttachmentEmbedding(ctx, owner, att, data)
 	}
 	return att, nil
+}
+
+// settleFile is everything a file write decides before it writes: where
+// the file may live, whether these bytes may be stored at all, and what
+// they are. PlanFile is this step and no more (design doc 0061).
+func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err error) {
+	if err := s.readOnly(); err != nil {
+		return "", "", err
+	}
+	p = domain.Normalize(p)
+	if !s.Store.HasBlobStore() {
+		return "", "", Unsupportedf("files are not supported without GCS: this instance stores markdown entries only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
+	}
+	if !domain.ValidBundlePath(p) {
+		return "", "", Invalidf("invalid bundle path %q (path segments separated by \"/\"; segments must not start with \".\", and index.md and log.md are generated rather than stored)", p)
+	}
+	if len(data) == 0 {
+		return "", "", Invalidf("the file is empty")
+	}
+	if len(data) > domain.MaxAttachmentSize {
+		return "", "", Invalidf("the file exceeds %d MiB", domain.MaxAttachmentSize>>20)
+	}
+	mediaType, err = domain.DetectAttachmentMediaType(data)
+	if err != nil {
+		return "", "", Invalidf("%v", err)
+	}
+	return p, mediaType, nil
+}
+
+// PlanFile is PutFile with the write withheld: the same refusals, and the
+// same three-way answer about what the write would do (design doc 0061).
+//
+// The file's own address is the one thing a concept's plan does not have
+// to ask about: a path a concept holds is not a path a file may take, and
+// the store says so only from inside the write. Asking here is what keeps
+// a bundle carrying a markdown file that lost its type key from passing a
+// dry run and failing the import.
+func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *domain.Attachment, created, changed bool, err error) {
+	p, mediaType, err := s.settleFile(p, data)
+	if err != nil {
+		return nil, false, false, err
+	}
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	old, err := s.Store.GetFileMeta(ctx, p)
+	switch {
+	case err == nil:
+		return old, false, old.SHA256 != hash, nil
+	case !errors.Is(err, store.ErrNotFound):
+		return nil, false, false, err
+	}
+	if id, isMarkdown := strings.CutSuffix(p, ".md"); isMarkdown {
+		if _, err := s.Store.Get(ctx, id); err == nil {
+			return nil, false, false, fmt.Errorf("%w: %s is a concept", store.ErrAlreadyExists, p)
+		}
+	}
+	return &domain.Attachment{
+		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
+		Size: int64(len(data)), SHA256: hash, Path: p,
+	}, true, true, nil
 }
 
 // GetFile returns the file at a bundle path with its bytes.

@@ -588,3 +588,185 @@ func TestImportReportsAKeptClaim(t *testing.T) {
 		t.Errorf("our own export form coming home was reported as a claim:\n%s", dropped)
 	}
 }
+
+// The false green --dry-run was: a bundle with nothing wrong in it as far
+// as the parse could see, and a note the server raises at write time (a
+// trust family kept as the document's own claim). The dry run reported it
+// clean and exited 0; the import that followed reported the note and,
+// under --strict, failed. Now the dry run asks the server the same
+// question — with dry_run=true, so nothing is written — and reaches the
+// same verdict (design doc 0061).
+func TestImportDryRunAsksTheServerAndWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Parses without a single note: "verified" here is the trust family
+	// OKF defines, not an unrecognized status.
+	doc := "---\ntype: Metric\ntitle: Revenue\n" +
+		"verified:\n  - by: human:ceo@example.com\n    at: 2026-07-02T00:00:00Z\n---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "revenue.md"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var writes, plans int
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		d, _, err := okf.Parse(body)
+		if err != nil {
+			t.Errorf("bad PUT payload: %v\n%s", err, body)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		k := d.Knowledge
+		k.ID = strings.TrimSuffix(r.PathValue("path"), ".md")
+		// The import moved the trust family under `received` before
+		// sending, so the server sees no keys of its own to report on and
+		// raises no note itself: what it answers is the document it would
+		// have stored, and a claim still on it is the note (design doc
+		// 0046 §2.2). Both modes answer the same way.
+		if !strings.Contains(string(body), "received:") {
+			t.Errorf("the import sent a trust family the server owns:\n%s", body)
+		}
+		if r.URL.Query().Get("dry_run") == "true" {
+			plans++
+			w.Header().Set("Ochakai-Plan", "created")
+			_ = json.NewEncoder(w).Encode(domain.View{ID: k.ID, Document: string(body)})
+			return
+		}
+		writes++
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: k.ID, Document: string(body)})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	out := captureStdout(t, func() {
+		if err := cmdImport(context.Background(), []string{dir, "--dry-run", "--url", srv.URL}); err != nil {
+			t.Fatalf("plain --dry-run must report rather than fail: %v", err)
+		}
+	})
+	for _, want := range []string{
+		"would create ochakai://metrics/revenue\n",
+		"dry run: 1 concepts (1 created, 0 updated, 0 unchanged, 0 attachments, 0 files, 0 skipped, 1 notes)\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("dry run output misses %q:\n%s", want, out)
+		}
+	}
+	if plans != 1 || writes != 0 {
+		t.Errorf("dry run made %d plans and %d writes, want 1 and 0", plans, writes)
+	}
+
+	// The gate now fails, and still writes nothing — which is the whole
+	// point of gating CI on it.
+	err := cmdImport(context.Background(), []string{dir, "--dry-run", "--strict", "--url", srv.URL})
+	if err == nil {
+		t.Fatal("--dry-run --strict accepted a bundle the import would note")
+	}
+	if !strings.Contains(err.Error(), "nothing was written") {
+		t.Errorf("--strict error = %v, want it to say nothing was written", err)
+	}
+	if writes != 0 {
+		t.Errorf("the dry run wrote %d concepts", writes)
+	}
+
+	// And the verdict is the import's own: without --dry-run the same
+	// bundle raises the same note, and --strict fails on it too.
+	if err := cmdImport(context.Background(), []string{dir, "--strict", "--url", srv.URL}); err == nil {
+		t.Error("--strict imported a bundle the dry run refused")
+	}
+	if writes != 1 {
+		t.Errorf("the import wrote %d concepts, want 1", writes)
+	}
+}
+
+// A server that does not know dry_run ignored the parameter and wrote the
+// document. Silence is then the opposite of what it looks like, so the
+// missing plan header is an error and not a clean bill (design doc 0061
+// §3.2).
+func TestImportDryRunRefusesAServerWithNoPlan(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "revenue.md"),
+		[]byte("---\ntype: Metric\ntitle: Revenue\n---\n\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: strings.TrimSuffix(r.PathValue("path"), ".md")})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	err := cmdImport(context.Background(), []string{dir, "--dry-run", "--url", srv.URL})
+	if err == nil {
+		t.Fatal("a dry run against a server with no Ochakai-Plan reported success")
+	}
+	if !strings.Contains(err.Error(), "Ochakai-Plan") {
+		t.Errorf("error = %v, want it to name the missing header", err)
+	}
+}
+
+// captureStdout runs f with stdout on a pipe and returns what it printed.
+// The import loop prints its per-object lines and its summary there, and
+// asserting on them is how the counts stay the ones a reader sees.
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+	orig := os.Stdout
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = pw
+	done := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(pr)
+		done <- string(b)
+	}()
+	f()
+	pw.Close()
+	os.Stdout = orig
+	return <-done
+}
+
+// `--links-to X` on its own lists the backlinks of X, exactly as the wire
+// does (design doc 0046 §3.5): a set is the answer and there is no text
+// to rank it by. The CLI refused it and named the two other ways out,
+// which is how a reader learns the filter cannot stand alone — of the
+// three the message could have named, it named the two they had not
+// asked for.
+func TestSearchLinksToStandsAlone(t *testing.T) {
+	var got string
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/search", func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.RawQuery
+		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []any{}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	if err := cmdSearch(context.Background(),
+		[]string{"--links-to", "metrics/revenue", "--url", srv.URL}); err != nil {
+		t.Fatalf("--links-to alone: %v", err)
+	}
+	if !strings.Contains(got, "links_to=metrics%2Frevenue") {
+		t.Errorf("query = %q, want the reverse lookup", got)
+	}
+
+	// With nothing at all the refusal names every way out, including the
+	// one it used to leave out.
+	err := cmdSearch(context.Background(), []string{"--url", srv.URL})
+	if err == nil {
+		t.Fatal("a search with no query and no filter was accepted")
+	}
+	for _, want := range []string{"--sort", "--source", "--links-to"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not name %s", err, want)
+		}
+	}
+}

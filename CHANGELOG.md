@@ -180,7 +180,60 @@ last entry.
   `sources` entry, a changelog entry). **Nothing on the wire moves**;
   only a script matching on help or error text sees this.
 
+- **`ochakai import --dry-run` now asks the server what the import would
+  do** instead of listing what it parsed (design doc
+  [0061](docs/design/0061-a-dry-run-is-the-write-withheld.md)). Every
+  object is sent to `PUT /api/v1/bundle/{path}?dry_run=true`, a new
+  parameter that runs the whole write path and stores nothing, and
+  answers with the new `Ochakai-Plan: created | updated | unchanged`
+  header beside the same `Ochakai-Note` headers a real write sets.
+
+  This closes a false green. `--dry-run --strict` was documented as a CI
+  gate, but half of what `--strict` fails on is not visible from the
+  bundle: whether a document's trust family stays a claim under
+  `received` is decided against the *stored* concept, whether the server
+  refuses the document is the write path's validation, and whether the
+  write changes anything is a comparison with stored bytes. A bundle
+  carrying `verified:` passed the gate with 0 notes and then imported
+  with one. It now reaches the import's own verdict, with nothing
+  written.
+
+  The output gains the breakdown the real import always had — `would
+  create` / `would update` / `would leave unchanged`, and a summary line
+  in the same shape — so a re-sync says how many of its 66 concepts would
+  actually move.
+
+  Two consequences worth knowing before upgrading: a dry run against an
+  ochakai 0.16.1 or older server now **fails** rather than passing (that
+  server ignored `dry_run` and wrote, so a missing plan header means the
+  opposite of a clean bill), and a dry run of a large bundle now makes
+  one request per object, as the import does. `?dry_run` is refused with
+  a 400 on DELETE: a delete has no plan beside it, and ignoring the
+  parameter would remove an object for a caller who believed they were
+  asking. REST query parameters go 18 → 19 and headers 9 → 10, with
+  [docs/surface.md](docs/surface.md)'s ceilings.
+
 ### Fixed
+
+- **`ochakai search --links-to <id>` works on its own.** The reverse
+  lookup has listed without a query on the wire since design doc 0046
+  §3.5 — a set is the answer and there is no text to rank it by — but the
+  CLI refused it, and the refusal named `--sort` and `--source` as the
+  ways to list without a query, which is how a reader learns that
+  `--links-to` is not one of them. Of the three the message could have
+  named, it named the two the caller had not asked for.
+
+- **The export stops writing `status: ""`.** A concept whose document
+  named no lifecycle value is a document that said nothing, and ochakai
+  does not write a key its writer left out (design doc 0046 §3.9) — but
+  the rendering `ochakai put` and `ochakai import` send emitted the key
+  empty, so the empty string reached the store and came back out of the
+  export. ochakai reads it as `stable` either way, and its own import
+  round-trips it with 0 notes, so nothing here was broken for ochakai;
+  what it cost was a third party's OKF reader, which met a concept with
+  an empty status. The first import after upgrading rewrites the
+  documents that carried it — same content, a new revision, and
+  `updated` rather than `unchanged` for those concepts once.
 
 - `ochakai reject` is named in `ochakai help` and in the CLI reference's
   command list. It has shipped, run and carried its own `-h` text since

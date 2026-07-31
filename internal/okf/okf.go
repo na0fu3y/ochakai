@@ -56,17 +56,26 @@ type frontmatter struct {
 	UsageWindow *usageWindow `yaml:"usage_window,omitempty"`
 	Generated   *event       `yaml:"generated,omitempty"` // omitted only by Canonical, which writes no server-owned key
 	Verified    []event      `yaml:"verified,omitempty"`  // absent means unverified — the trust tier is read from this key's presence (SPEC §5.3)
-	Status      text         `yaml:"status"`              // OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4)
-	StatusNote  text         `yaml:"status_note,omitempty"`
-	StaleAfter  text         `yaml:"stale_after,omitempty"`
-	Runtime     text         `yaml:"runtime,omitempty"`
-	Parameters  []parameter  `yaml:"parameters,omitempty"`
-	Computation text         `yaml:"computation,omitempty"`
-	Executor    *executor    `yaml:"executor,omitempty"`
-	Attester    *attester    `yaml:"attester,omitempty"`
-	CreatedBy   text         `yaml:"created_by,omitempty"` // ochakai extension: OKF records only who produced the current content
-	RejectedBy  text         `yaml:"rejected_by,omitempty"`
-	RejectedAt  text         `yaml:"rejected_at,omitempty"`
+	// OKF vocabulary: draft | stable | deprecated (design doc 0036 §3.4).
+	// omitempty because a concept whose status is unset is a document that
+	// said nothing about its lifecycle, and ochakai does not write a key
+	// its writer left out (design doc 0046 §3.9). Every stored concept has
+	// a status — the write path fills OKF's default in (§5.4) — so the key
+	// is absent only where it was absent to begin with: the rendering
+	// `ochakai put` and `ochakai import` send for a document that carries
+	// no status, which used to reach the store, and a third party's OKF
+	// reader, as `status: ""`.
+	Status      text        `yaml:"status,omitempty"`
+	StatusNote  text        `yaml:"status_note,omitempty"`
+	StaleAfter  text        `yaml:"stale_after,omitempty"`
+	Runtime     text        `yaml:"runtime,omitempty"`
+	Parameters  []parameter `yaml:"parameters,omitempty"`
+	Computation text        `yaml:"computation,omitempty"`
+	Executor    *executor   `yaml:"executor,omitempty"`
+	Attester    *attester   `yaml:"attester,omitempty"`
+	CreatedBy   text        `yaml:"created_by,omitempty"` // ochakai extension: OKF records only who produced the current content
+	RejectedBy  text        `yaml:"rejected_by,omitempty"`
+	RejectedAt  text        `yaml:"rejected_at,omitempty"`
 }
 
 // The YAML spelling of the v0.2 families lives here rather than on the

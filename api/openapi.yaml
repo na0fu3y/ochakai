@@ -758,17 +758,43 @@ paths:
         (OCHAKAI_GCS_BUCKET); without it an instance stores concepts and
         nothing else, and a write that is not a concept is a 501 (design
         doc 0013). A concept is unaffected.
+
+        `dry_run=true` asks what the write would do and stores nothing
+        (design doc 0061). Everything else is the same call — the same
+        body, the same validation, the same read of what is there, the
+        same 400s and 403s and 501s, the same `Ochakai-Note` headers —
+        and the answer is `Ochakai-Plan`. Because it is the write path
+        answering, a caller gating a sync on the dry run meets the same
+        verdict when it writes for real; a caller that re-derived the
+        verdict from its own copy of the bundle did not. The response is
+        always 200 (nothing was created, so there is no 201) and carries
+        no ETag (nothing was written, so there is no version to
+        precondition on). Not accepted on DELETE, where it is a 400: a
+        delete has no plan beside it, and ignoring the parameter would
+        remove an object for a caller who believed they were asking.
       parameters:
         - $ref: "#/components/parameters/IfMatch"
         - $ref: "#/components/parameters/IfNoneMatch"
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
+        - name: dry_run
+          in: query
+          description: >
+            Answer with what the write would do, and store nothing. `true`
+            or `false`; anything else is a 400 rather than a write,
+            because the one wrong outcome here is writing for a caller who
+            asked what would happen.
+          schema: { type: boolean, default: false }
       responses:
         "200":
-          description: The object as stored — a View for a concept, file metadata otherwise.
+          description: >
+            The object as stored — a View for a concept, file metadata
+            otherwise. With `dry_run=true`, the object as the write would
+            have left it, and `Ochakai-Plan` says which write that was.
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Note: { $ref: "#/components/headers/Note" }
+            Ochakai-Plan: { $ref: "#/components/headers/Plan" }
             Ochakai-Unchanged:
               description: Concepts only — the payload matched what was stored, so nothing was written.
               schema: { type: string, enum: ["true"] }
@@ -1839,6 +1865,18 @@ components:
         silent (design doc 0036 §3.4), and there is no room for it in a
         response whose body is the concept.
       schema: { type: string }
+    Plan:
+      description: >
+        What a `dry_run=true` write would have done (design doc 0061):
+        "created" when the path is free, "updated" when the object would
+        change, "unchanged" when the body says exactly what is stored and
+        the write would have written nothing. It replaces
+        Ochakai-Unchanged on a dry run rather than joining it — unchanged
+        is one of the three values, and two headers saying overlapping
+        things is how a client ends up reading only one of them. Present
+        only on a dry run: a plan header on a response to a real write
+        would describe something that already happened.
+      schema: { type: string, enum: [created, updated, unchanged] }
     ReadOnly:
       description: >
         Set to "true" on every /api/v1 response — reads, writes, and

@@ -30,7 +30,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 全体アーキテクチャ | [0001](0001-architecture.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用)、[0060](0060-one-word-for-the-posture.md)(姿勢の綴り) |
-| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
+| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
 | 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md)(ツール名)、[0057](0057-concept-is-the-word-a-reader-meets.md)(読む語) |
@@ -164,6 +164,22 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   1 か所で、REST / MCP / CLI が共有する。0015 §3 に「`fm.` は Web UI に
   載せない」という省略を 1 件足す(§4)。**未リリースにつき、同番号の
   初版を 0048 §2.3 に従って差し替えた**(その規則の最初の適用)。
+- [0061 dry run は書き込みを止めたもの](0061-a-dry-run-is-the-write-withheld.md)
+  — **Accepted**。`PUT /api/v1/bundle/{path}` に `dry_run` と
+  `Ochakai-Plan` を足し、**書き込み経路そのものに「書かないで答えろ」と
+  言う**。`ochakai import --dry-run --strict` は CI の関門として文書化
+  されていたのに、`--strict` が落ちる理由の半分 —— trust family が
+  `received` の claim として残るか(0046 §2.2 の判定は**保存済みとの
+  比較**である)、サーバがその文書を拒むか、書き込みが何も変えないか
+  —— がバンドルからは見えず、**関門が通って本番 import が落ちていた**
+  (§1)。クライアント側で作り直せば表面は増えないが、増えないのは表面
+  だけで、増えるのは書き込み判断の第二の実装である(0007、§2.1)。
+  判定は `settleUpdate` を `Update` と `Plan` が共有して一つの経路から
+  出す(§3.3)。dry run は 200 のみ・ETag 無し・DELETE では 400、
+  ヘッダではなくクエリパラメータ(**落とされたヘッダは書き込みになる**)。
+  副産物として dry run が created / updated / unchanged を出し分ける。
+  PARAM 18 → 19、HEADER 9 → 10 —— **天井を二つ上げる決定**であり、
+  増えるのは口であって能力ではない(§4)。
 - [0046 バンドルがアドレス空間](0046-bundle-address-space.md) —
   **Accepted**(実装は後続 PR、0.15.0 の次のリリースで 0043 の実装と
   束ねて出る。§3.11 は 0047 が改訂。

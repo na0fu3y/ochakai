@@ -288,19 +288,23 @@ reported and neither fails the command, because a consumer takes the
 document rather than rejecting it. --strict is the opposite posture,
 for a sync nobody watches: a bundle that is not read exactly as
 written fails, and the counts land in the summary line either way.
+--dry-run is the same run with nothing written: each object is sent
+as a plan the server answers without storing it, so the notes, the
+refusals and the created / updated / unchanged counts are the ones
+the import would produce.
 
 Flags:
   -dry-run
-    	parse and list what would be written, write nothing
+    	report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet
   -strict
-    	refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. Parse-time ones are found before anything is written, so a strict import either lands whole or writes nothing
+    	refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai import ./knowledge
   ochakai import ga4-bundle.tar.gz --dry-run
-  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on a clean parse
+  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
 ```
 
@@ -560,6 +564,9 @@ the concepts whose body links at one concept — its backlinks, the reverse
 of its inbound edges; --prefix narrows to
 the concepts living under a path, which is how a team's own knowledge is
 told apart from the company-wide vocabulary.
+The two reverse lookups also stand alone: --source or --links-to with no
+query lists in address order and pages with --cursor, because a set is
+the answer and there is no text to rank it by.
 A listing that has more behind it prints the way on to stderr; pass it
 back with --cursor to read the next page. A search prints none: it is
 bounded by --limit, and a ranking has no page two.

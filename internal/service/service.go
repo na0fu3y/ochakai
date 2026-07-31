@@ -203,6 +203,42 @@ func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.
 // other write. nil keeps the prior last-write-wins behavior for callers
 // that do not opt in.
 func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) (updated *domain.Knowledge, changed bool, err error) {
+	old, changed, err := s.settleUpdate(ctx, k, ifMatch)
+	if err != nil {
+		return nil, false, err
+	}
+	if !changed {
+		return old, false, nil
+	}
+	// Different bytes saying the same thing — a reformat, a comment, a
+	// reordered frontmatter. The file changed, so it is written and its
+	// version moves; what the concept says did not, so generated stays with
+	// whoever the content already stood by (design doc 0046 §3.4).
+	if k.SameContent(old) {
+		k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
+	} else {
+		// Past this point the content really changes, so the caller is who
+		// the concept now stands by — OKF's generated (design doc 0036 §3.3).
+		k.UpdatedBy, k.ContentChangedAt = actor, store.NowStored()
+	}
+	// Pass the precondition through so the write is also guarded against a
+	// concurrent update landing between the Get above and the write.
+	if err := s.Store.Update(ctx, k, actor, ifMatch); err != nil {
+		return nil, false, err
+	}
+	s.updateEmbedding(ctx, k)
+	return k, true, nil
+}
+
+// settleUpdate is everything an update decides before it writes: the
+// validation, the read of what is there, the precondition, the rules that
+// fill k in from it, and the comparison that says whether writing k would
+// change anything at all. It leaves k as the row an update would store.
+//
+// It is a separate step because a dry run is exactly this step and no
+// more (design doc 0061): a plan that re-derived the answer beside the
+// write path would be a second opinion, and the two would drift.
+func (s *Service) settleUpdate(ctx context.Context, k *domain.Knowledge, ifMatch *string) (old *domain.Knowledge, changed bool, err error) {
 	if err := s.readOnly(); err != nil {
 		return nil, false, err
 	}
@@ -211,7 +247,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 		return nil, false, err
 	}
 	deriveLinks(k)
-	old, err := s.Store.Get(ctx, k.ID)
+	old, err = s.Store.Get(ctx, k.ID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -248,27 +284,7 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 	if err != nil {
 		return nil, false, err
 	}
-	if doc == old.Doc {
-		return old, false, nil
-	}
-	// Different bytes saying the same thing — a reformat, a comment, a
-	// reordered frontmatter. The file changed, so it is written and its
-	// version moves; what the concept says did not, so generated stays with
-	// whoever the content already stood by (design doc 0046 §3.4).
-	if k.SameContent(old) {
-		k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
-	} else {
-		// Past this point the content really changes, so the caller is who
-		// the concept now stands by — OKF's generated (design doc 0036 §3.3).
-		k.UpdatedBy, k.ContentChangedAt = actor, store.NowStored()
-	}
-	// Pass the precondition through so the write is also guarded against a
-	// concurrent update landing between the Get above and the write.
-	if err := s.Store.Update(ctx, k, actor, ifMatch); err != nil {
-		return nil, false, err
-	}
-	s.updateEmbedding(ctx, k)
-	return k, true, nil
+	return old, doc != old.Doc, nil
 }
 
 // Put writes k over whatever holds its id, creating the concept when the id
@@ -307,6 +323,41 @@ func (s *Service) Put(ctx context.Context, k *domain.Knowledge, actor domain.Act
 		return nil, false, false, err
 	}
 	return updated, false, changed, nil
+}
+
+// Plan is Put with the write withheld: the same validation, the same read
+// of what is there, the same rules filling k in from it, and the same
+// three-way answer — and then nothing is written (design doc 0061).
+//
+// It exists because the answer is the server's and only the server's. A
+// document's own trust family becomes a claim or is recognized as this
+// instance's observation coming home by comparing it with the stored
+// concept (settleUpdate); whether the payload says anything new is a
+// comparison against stored bytes; and whether the concept is writable at
+// all is validate's ruling. A caller that guessed at those from the
+// bundle alone — as `ochakai import --dry-run` did — reported a clean
+// parse and then met a different verdict from the write.
+//
+// out is the concept as the write would leave it, so the caller can read
+// the claim off it exactly as it reads it off a real write (okf.NoteClaim).
+func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) (out *domain.Knowledge, created, changed bool, err error) {
+	old, changed, err := s.settleUpdate(ctx, k, ifMatch)
+	if err == nil {
+		if !changed {
+			return old, false, false, nil
+		}
+		return k, false, true, nil
+	}
+	if ifMatch != nil || !errors.Is(err, store.ErrNotFound) {
+		return nil, false, false, err
+	}
+	// The id is free, so the write would create. Everything a create
+	// validates has already run inside settleUpdate, which reaches the
+	// store only after it; what is left is the two rules create applies to
+	// the concept it stores, so out says what a created concept would say.
+	k.Status = k.Lifecycle()
+	k.CreatedBy, k.UpdatedBy = actor, actor
+	return k, true, true, nil
 }
 
 // RefuseIfCurated reports an error when id names a concept a human has
