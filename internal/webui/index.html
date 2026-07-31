@@ -493,7 +493,7 @@ function esc(s) {
 // Keys are the OKF type vocabulary, which is what the server stores
 // (design doc 0023). Lookup is case-insensitive to match the server's
 // filter matching — the stored spelling is whatever the writer used.
-const TYPE_ICONS = { 'Metric': '📊', 'Attested Computation': '🧮', 'Skill': '🛠️', 'Playbook': '📘', 'Insight': '💡', 'Policy': '⚖️', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'API Endpoint': '🔌', 'Reference': '🔖' };
+const TYPE_ICONS = { 'Metric': '📊', 'Attested Computation': '🧮', 'Skill': '🛠️', 'Insight': '💡', 'Policy': '⚖️', 'Glossary Term': '📖', 'BigQuery Dataset': '🗂️', 'BigQuery Table': '🗃️', 'Reference': '🔖' };
 const ICON_BY_LOWER = new Map(Object.entries(TYPE_ICONS).map(([k, v]) => [k.toLowerCase(), v]));
 const icon = t => ICON_BY_LOWER.get(String(t ?? '').trim().toLowerCase()) || '📄';
 const KNOWN_TYPES = Object.keys(TYPE_ICONS);
@@ -2168,7 +2168,6 @@ const TEMPLATES = {
   'Attested Computation': 'runtime: bigquery\nparameters:\n    - name: year\n      type: integer\n      required: true\n',
   'BigQuery Dataset': 'resource: bigquery://project/dataset\n',
   'BigQuery Table': 'resource: bigquery://project/dataset/table\n',
-  'API Endpoint': 'resource: https://api.example.com/v1/thing\n',
   Reference: 'resource: https://example.com/the-original\n',
 };
 

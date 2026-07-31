@@ -167,7 +167,7 @@ Flags:
   -trust value
     	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
-    	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
+    	filter by type: Metric|Attested Computation|Skill|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|Reference, or any custom type (repeatable)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
@@ -340,7 +340,7 @@ Flags:
   -trust value
     	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
-    	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
+    	filter by type: Metric|Attested Computation|Skill|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|Reference, or any custom type (repeatable)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 ```

@@ -275,9 +275,9 @@ func TestOpenAPITypeVocabularyMatchesDomain(t *testing.T) {
 			t.Errorf("the Type schema never mentions the recommended type %q", ty)
 		}
 	}
-	for _, retired := range []string{"Semantic Model", "Golden Query"} {
+	for _, retired := range []string{"Semantic Model", "Golden Query", "Playbook", "API Endpoint"} {
 		if strings.Contains(block, retired) {
-			t.Errorf("the Type schema still lists %q, retired by design doc 0038", retired)
+			t.Errorf("the Type schema still lists %q, retired by design doc 0038 or 0063", retired)
 		}
 	}
 

@@ -2003,15 +2003,15 @@ components:
       type: string
       description: >
         The OKF type vocabulary, verbatim — the built-ins (Metric,
-        Attested Computation, Skill, Playbook, Insight, Policy,
-        Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint,
+        Attested Computation, Skill, Insight, Policy,
+        Glossary Term, BigQuery Dataset, BigQuery Table,
         Reference) are recommendations,
         not a closed set, and no server behavior hangs off any of them
-        (design doc 0038). Any
+        (design doc 0038, design doc 0063). Any
         single-line value works as a type; OKF registers no taxonomy, so
         the spelling is the meaning and it round-trips unchanged. Matching
         is case-insensitive; the spelling you write is the one stored.
-      examples: [Metric, Attested Computation, Skill, Playbook, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, API Endpoint, Reference, Data Contract]
+      examples: [Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
       pattern: "^[^/\\r\\n]{1,128}$"
     Status:
       type: string

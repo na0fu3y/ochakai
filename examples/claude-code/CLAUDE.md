@@ -21,7 +21,7 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
   concepts rank higher), expanded one hop through links so the insight
   explaining a metric arrives with it. Start here; use search/get below
   for precise lookups.
-- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Playbook|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|'API Endpoint'|Reference] [--trust human-reviewed]`
+- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|Reference] [--trust human-reviewed]`
   — one hit per line: score, uri, status, title. Trust verified concepts;
   judge `draft` concepts by their provenance (`--json` shows `created_by`).
 - `ochakai get <id>` — full concept as markdown (YAML frontmatter +

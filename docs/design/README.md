@@ -32,7 +32,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用)、[0060](0060-one-word-for-the-posture.md)(姿勢の綴り) |
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
-| 型の語彙 | [0038](0038-type-vocabulary-realignment.md) |
+| 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
 | 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md)(ツール名)、[0057](0057-concept-is-the-word-a-reader-meets.md)(読む語) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
@@ -252,11 +252,19 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   `Attested Computation` を追加)。内部スラグと OKF 表示名の二重語彙を
   廃止し、型の値は OKF の綴りそのものに。
 - [0038 推奨型の語彙を OKF の証拠に合わせ直す](0038-type-vocabulary-realignment.md)
-  — **Accepted**(書き込み時の case 正規化は 0046 §3.9 が撤去)。
-  **型の語彙領域の現行ドキュメント**。`Semantic Model` と
-  `Golden Query` を外し、`Skill` / `Playbook` / `Policy` / `API Endpoint` を
-  足して 11 型に(退役した綴りは自由型として存続、マイグレーションなし)。
-  語彙を述べる 11 箇所を `domain.TypesHint()` と外側のテストで固定する。
+  — **Accepted**(書き込み時の case 正規化は 0046 §3.9 が撤去。
+  `Playbook` / `API Endpoint` に関する §3.2 と §4 の表は 0063 が改訂)。
+  `Semantic Model` と `Golden Query` を外し、`Skill` / `Playbook` /
+  `Policy` / `API Endpoint` を足して 11 型に(退役した綴りは自由型として
+  存続、マイグレーションなし)。語彙を述べる箇所を `domain.TypesHint()`
+  と外側のテストで固定する。
+- [0063 使われていない2つの推奨型を外す](0063-two-unused-recommended-types-leave.md)
+  — **Accepted**。**型の語彙領域の現行ドキュメント**。0038 が足した
+  `Playbook` と `API Endpoint` を推奨語彙から外し、11 型を 9 型に。
+  ochakai 自身の `examples/` にも OKF 公式のリファレンスバンドルにも
+  一度も書かれていなかった 2 語で、SPEC の例示だけを根拠にしていた
+  (issue #353)。型集合は閉じないまま、退役は自由型として存続、
+  マイグレーションなし。
 - [0057 concept は読む人が出会う語でもある](0057-concept-is-the-word-a-reader-meets.md)
   — **Accepted**、**BREAKING(文言のみ)**。0054 を補う。0054 は
   「ワイヤ上に残る `knowledge` はツール名だけ」と数えたが、その数え方が

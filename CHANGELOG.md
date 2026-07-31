@@ -240,6 +240,29 @@ last entry.
   asking. REST query parameters go 18 → 19 and headers 9 → 10, with
   [docs/surface.md](docs/surface.md)'s ceilings.
 
+### Changed
+
+- **BREAKING** — the recommended type vocabulary drops from eleven types
+  to nine (design doc [0063](docs/design/0063-two-unused-recommended-types-leave.md)),
+  four days after 0038 grew it to eleven. `Playbook` and `API Endpoint`
+  are retired: neither spelling was ever written by ochakai's own
+  `examples/` or by [OKF's own reference
+  bundles](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf/bundles) —
+  only named in the spec's prose — and a recommended type is taught on
+  every MCP call (design doc 0015 §3.1), so an unused one is a cost with
+  no offsetting use. The other nine additions and retirements 0038 made
+  are unchanged.
+  - **No migration runs and no stored entry changes.** `Playbook` and
+    `API Endpoint` stay valid to write, matched, searched, exported and
+    updated exactly as before — they are now free types (design doc
+    0005).
+  - `domain.TypePlaybooks` and `domain.TypeEndpoints` are gone from the
+    Go API.
+  - The MCP tool descriptions, schema, `--type` help, shell completion
+    and [docs/knowledge.md](docs/knowledge.md)'s table all drop the two
+    spellings; `domain.TypesHint()` stays the one source they render
+    from.
+
 ### Fixed
 
 - **`ochakai search --links-to <id>` works on its own.** The reverse
