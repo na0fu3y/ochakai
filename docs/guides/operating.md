@@ -192,9 +192,9 @@ queues a curator empties, each carrying the command that lists it:
 ```console
 $ ochakai stats
 …
-drafts	12	ochakai search --sort usage --status draft
-failed	1	ochakai search --sort failed
-stale_after	0	ochakai search --sort stale_after
+drafts	12	ochakai list usage --status draft
+failed	1	ochakai list failed
+stale_after	0	ochakai list stale_after
 …
 ```
 

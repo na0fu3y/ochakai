@@ -659,6 +659,29 @@ For the shape of the system rather than the history of it, read
   the way on to stderr and does not walk the pages for you), and the web
   UI's "load more", which now appends a page instead of asking for 1000.
 
+- **[0062 A listing is not a search](0062-a-listing-is-not-a-search.md)** —
+  *Accepted. BREAKING.* Splits `ochakai search` in two. `--sort` and its
+  four values become the argument of a new `ochakai list [feed]`, and a
+  reverse lookup with no query (`--source`, `--links-to`) moves there too;
+  `ochakai search` now requires a query. This is the converse of 0056's
+  rule: one capability means one command, and **two capabilities mean two
+  commands**. The two had disagreed about almost everything while sharing
+  one name — `--limit` defaulted to 10 (max 50) for a ranking and 100 (max
+  1000) for a listing, `--cursor` meant nothing on one and was the whole
+  point of the other, and the first column held a score or a feed's number
+  — which is why `search -h` spent thirty lines of prose before its flags.
+  0050 had already decided a listing and a ranking are different things.
+  **The wire does not move**: `GET /api/v1/search?sort=` and MCP's
+  `search_concepts` are unchanged, and so is the vocabulary — the four
+  `sort.*` words move from a flag's values to a command's argument, which
+  is a change of place and not of what anybody has to know.
+  *For a user:* `ochakai search --sort usage --status draft` →
+  `ochakai list usage --status draft`, and likewise for `verified_at`,
+  `failed` and `stale_after`; `ochakai search --source <uri>` and
+  `--links-to <id>` with no query → `ochakai list --source/--links-to`.
+  `ochakai stats` prints the new spelling on its queue lines. There is no
+  deprecation period at 0.x: the old flag fails as an unknown flag.
+
 - **[0056 One question, one command; one ruling, one word](0056-one-question-one-command.md)**
   — *Accepted. BREAKING.* Folds the two CLI commands that survived as
   second addresses after the wire behind them was folded away:
