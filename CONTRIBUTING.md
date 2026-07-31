@@ -201,7 +201,8 @@ state per area, so when a design doc lands:
   update the area's row in the opening table.
 - Summarize it in `README.en.md`. A doc the new one supersedes drops to a
   one-line pointer at its replacement; full summaries are maintained only
-  for what is current.
+  for what is current, and a test holds it — cutting the old summary is
+  part of superseding, not tidying for later.
 - Avoid amendment chains. If the new decision would be the second
   partial amendment stacked on the same doc, don't add another diff:
   write it as a full replacement that states the area's whole current

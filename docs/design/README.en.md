@@ -19,6 +19,12 @@ Only the records that are still current are summarized in full. A record
 that has been superseded keeps a one-line pointer to whatever replaced it,
 which is enough to follow the trail and is all the maintenance it earns
 (design record [0048](0048-decision-records-for-wire-contracts.md) §2.5).
+That rule now holds: `TestEnglishIndexSummarizesOnlyWhatIsCurrent` reads
+it back. It had not — ten superseded records carried ninety-six lines of
+summary between them, describing stored shapes and endpoints that no
+longer exist, in the present tense. Nobody rereads the summary of a record
+that has been replaced, which is exactly why it needed a check rather than
+a rule.
 
 For the shape of the system rather than the history of it, read
 [docs/architecture.md](../architecture.md) first.
@@ -304,26 +310,8 @@ For the shape of the system rather than the history of it, read
   nothing derives trust from.
 
 - **[0043 The document is the truth](0043-document-first.md)** —
-  *Superseded by 0046, which keeps its world-view, status vocabulary,
-  ledgers and actor spelling and replaces the stored shape, the wire, the
-  hash's subject, canonicalization, revisions and the surface list; §3.11's
-  web UI form sugar had already been withdrawn by 0044. Implemented across
-  later pull requests and not yet released.* Both storage and the wire become the
-  canonical OKF document itself (frontmatter + markdown); the database is
-  reduced to derived index columns and instance-local ledgers. Status
-  becomes OKF's three values verbatim; "a human confirmed this" is a row
-  in an append-only verification ledger (so verifications are plural and
-  re-verification is history, not an overwrite); rejection moves to its
-  own ledger and stops being a status; the ETag becomes a hash of the
-  canonical document; actors are spelled `human:` / `process:` per SPEC
-  §7. The mapping tables, the envelope-versus-`attrs` double floor, the
-  lossy `rejected` round trip, the demotion of foreign `stable` entries,
-  and `updated_at`'s triple duty all lose their subject.
-  *For a user:* a breaking release — knowledge is written as a document
-  (PUT), read as document + read-only projection + observed ledgers, the
-  status vocabulary changes, and one migration rewrites the stored shape
-  one way. Bundles gain multi-entry `verified` lists and `process:`
-  actors; nothing needs re-embedding.
+  *Superseded by [0046](0046-bundle-address-space.md), which keeps its
+  world-view, status vocabulary, ledgers and actor spelling.*
 
 - **[0041 Narrowing a search by address](0041-path-scoped-search.md)** —
   *Accepted.* Carries 0017's "the path is the address" through to search
@@ -358,18 +346,8 @@ For the shape of the system rather than the history of it, read
   stale feed — only editing the entry to re-declare a date does.
 
 - **[0036 OKF's schema is ochakai's schema](0036-okf-schema-first.md)** —
-  *Superseded by 0043, which the code keeps shipping until its
-  implementation lands. Shipped in 0.14.0; supersedes 0005 and 0016. Two
-  items in §5 were withdrawn and implemented by 0037, and §3.6's type list
-  was reworked by 0038.* One rule replaces
-  the whole area: keys the OKF v0.2 spec defines are first-class envelope
-  fields, and `attrs` keeps only producer extension keys. Seven fields move
-  up (`sources`, `usage_window`, `runtime`, `parameters`, `computation`,
-  `executor`, `attester`); trust becomes `generated` / `verified`.
-  Compatibility with past ochakai loses to compatibility with OKF.
-  *For a user:* those keys left `attrs` (migration 0020 moved them),
-  writing an `attrs` key that shadows an envelope key is a 400, and an
-  Attested Computation without `runtime` is rejected.
+  *Superseded by [0043](0043-document-first.md), then by
+  [0046](0046-bundle-address-space.md); supersedes 0005 and 0016.*
 
 - **0034 OKF v0.2 conformance** — *Withdrawn; the number is vacant.*
   Written as the v0.2 work and merged to `main`, but its criterion for
@@ -379,18 +357,12 @@ For the shape of the system rather than the history of it, read
   the document was withdrawn — the implementation shipped.
 
 - **[0005 OKF compatibility and knowledge
-  structure](0005-okf-compatibility.md)** — *Superseded by 0036.* The
-  starting point for bidirectional OKF compatibility: slash-separated
-  hierarchical ids, free-string types, unknown frontmatter preserved in
-  `attrs`, `index.md` / `log.md` reserved, and bundle import as a
-  client-side loop over endpoints that already exist rather than a new
-  server surface.
+  structure](0005-okf-compatibility.md)** — *Superseded by
+  [0036](0036-okf-schema-first.md).*
 
 - **[0016 Alignment with the knowledge-catalog reference
-  bundles](0016-knowledge-catalog-alignment.md)** — *Superseded by 0036;
-  its type vocabulary was already replaced by 0023.* Adopted the
-  conventions of Google's reference OKF bundles, including promoting
-  `resource` from `attrs` to an envelope field.
+  bundles](0016-knowledge-catalog-alignment.md)** — *Superseded by
+  [0036](0036-okf-schema-first.md); its type vocabulary by 0023.*
 
 - **[0017 The path is the address; the type is an
   attribute](0017-path-addressing.md)** — *Accepted; the id character set
@@ -424,12 +396,7 @@ For the shape of the system rather than the history of it, read
   *For a user:* clients must tolerate a missing `title` in responses.
 
 - **[0023 One type vocabulary, OKF's](0023-okf-type-vocabulary.md)** —
-  *Superseded by 0038.* Ends the double vocabulary of internal slugs and
-  OKF display names: the stored type is the OKF spelling itself, and a
-  type is any single line. Aliases were refused — no compatibility shims
-  while the major version is 0.
-  *For a user:* type values need quoting or URL-encoding, and are matched
-  case-insensitively.
+  *Superseded by [0038](0038-type-vocabulary-realignment.md).*
 
 - **[0038 Realigning the recommended
   vocabulary](0038-type-vocabulary-realignment.md)** — *Accepted; the
@@ -495,29 +462,16 @@ For the shape of the system rather than the history of it, read
 
 ## Attachments
 
-- **[0008 Image attachments](0008-image-attachments.md)** — *Superseded by
-  0046, which dissolves attachments into bundle objects; the "evidence, not
-  originals" framing and the `<id>/<name>` layout survive as the rule that
-  derives which entry a file belongs to.* An image is knowledge only together
-  with the text around it, so search and retrieval are per-entry and an
-  image is never a standalone result. Metadata first, bytes on demand. SVG
-  is refused because it can carry script into the web UI. 5 MiB per file,
-  20 files per entry.
+- **[0008 Image attachments](0008-image-attachments.md)** — *Superseded
+  by [0046](0046-bundle-address-space.md), which dissolves attachments
+  into bundle objects.*
 
 - **[0011 Moving attachment bytes to GCS](0011-gcs-attachment-storage.md)**
-  — *Superseded by 0046; only "the bytes live in GCS" survives.* Only the bytes move; attachment rows,
-  revisions and metadata stay in PostgreSQL. Signed URLs were refused —
-  the API keeps proxying bytes, so clients see no change.
+  — *Superseded by [0046](0046-bundle-address-space.md); only "the bytes
+  live in GCS" survives.*
 
 - **[0013 Any file type, GCS only](0013-attachment-files-gcs-only.md)** —
-  *Superseded by 0046; sniffing the media type and running markdown-only
-  without a bucket carry forward, while refusing SVG and HTML at write time
-  becomes a serving-side defence.* Widens attachments from
-  images to the intersection of what Claude reads and what Gemini embeds:
-  png, jpeg, webp, pdf, plain text. The media type is decided by sniffing
-  the bytes, never by what the client claims. HTML and SVG stay refused.
-  *For a user:* attachments need `OCHAKAI_GCS_BUCKET`; without it the
-  instance runs as a markdown-only knowledge base and attach returns 501.
+  *Superseded by [0046](0046-bundle-address-space.md).*
 
 - **[0020 Attachment search](0020-attachment-search.md)** — *Accepted; 0046
   rekeys it by bundle path.*
@@ -538,13 +492,9 @@ For the shape of the system rather than the history of it, read
   *For a user:* `ochakai ui` also proxies `/mcp`, so an MCP client can use
   `http://127.0.0.1:<port>/mcp` under your own identity.
 
-- **[0014 Folder browse](0014-folder-browse.md)** — *Superseded by 0046,
-  which makes browse the derived `index.md`; its parameters had been
-  revised by 0017 §4.7.* `GET /api/v1/browse` returns one
-  level of the id hierarchy at a time. A level is cut off at 1000 entries
-  and flagged rather than paginated. Browsing records no usage, since
-  walking a tree is not a demand signal. REST and web UI only — deliberately
-  not an MCP tool.
+- **[0014 Folder browse](0014-folder-browse.md)** — *Superseded by
+  [0046](0046-bundle-address-space.md), which makes browse the derived
+  `index.md`.*
 
 - **[0021 Move, and web UI refinements](0021-move-and-webui-refinements.md)**
   — *Accepted.* `POST /api/v1/move` rewrites an entry's id in one
@@ -871,10 +821,8 @@ For the shape of the system rather than the history of it, read
 ## The MCP OAuth connector, and what replaced it
 
 - **[0010 An MCP OAuth connector service](0010-mcp-oauth-connector.md)** —
-  *Superseded by 0012; kept as the starting point if it ever returns.* A
-  second, public Cloud Run service exposing only `/mcp` and the OAuth
-  endpoints, so hosted assistants could reach an otherwise private
-  deployment.
+  *Superseded by [0012](0012-retire-mcp-oauth-connector.md); kept as the
+  starting point if it ever returns.*
 
 - **[0012 Retiring the connector](0012-retire-mcp-oauth-connector.md)** —
   *Accepted.* Removed on cost, not on technique: no user materialized,
