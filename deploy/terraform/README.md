@@ -42,7 +42,8 @@ Two consequences worth knowing before you read further:
 
 - The module does **not** create the guide's password-holding admin user.
   Direct database access for people is an IAM login instead
-  (`maintenance_users`), which is where guide §6 ends up anyway.
+  (`maintenance_users`), which is where the operating guide's hardening
+  checklist ends up anyway.
 - Terraform therefore cannot run the one-time schema bootstrap SQL — doing so
   would mean holding a password. That step stays manual; see below.
 
@@ -89,7 +90,7 @@ only ever hits the privilege-free `CREATE EXTENSION IF NOT EXISTS` skip path.
 
 An IAM login never qualifies as `cloudsqlsuperuser`, so use the built-in
 `postgres` user with a break-glass password you mint and discard rather than
-store (guide §6):
+store (operating guide's hardening checklist):
 
 ```sh
 gcloud sql users set-password postgres --instance=ochakai --prompt-for-password
@@ -131,27 +132,33 @@ so it is downloaded even when the UI is off, where it does nothing.
 
 ## What this module does not cover
 
-Deliberately. Each is in the guide; reach for it there.
+Deliberately. Each is documented — most in the guide, hardening and
+upgrades in the [operating guide](../../docs/guides/operating.md).
 
-- **The schema bootstrap SQL** (§3) — needs a database password, see above.
-- **Loading knowledge and connecting Claude Code** (§5) — client-side, and
-  the CLI needs no configuration beyond `ochakai use`.
-- **Delegated provenance for your own application** (§5c) — the variable is
-  here (`delegating_callers`), but the application and its service account
-  are yours to deploy.
-- **Org-policy guardrails** (§6: `sql.restrictAuthorizedNetworks`,
-  `sql.restrictPublicIp`, `iam.allowedPolicyMemberDomains`) — they belong at
-  the organization level, above any one deployment, and need the Org Policy
-  Administrator role.
-- **Retiring the password admin user** (§6) — nothing to retire: this module
-  never creates one.
+- **The schema bootstrap SQL** (guide §3) — needs a database password, see
+  above.
+- **Loading knowledge and connecting Claude Code** (guide §5) —
+  client-side, and the CLI needs no configuration beyond `ochakai use`.
+- **Delegated provenance for your own application** (guide §5c) — the
+  variable is here (`delegating_callers`), but the application and its
+  service account are yours to deploy.
+- **Org-policy guardrails** (operating guide's
+  [Hardening](../../docs/guides/operating.md#hardening):
+  `sql.restrictAuthorizedNetworks`, `sql.restrictPublicIp`,
+  `iam.allowedPolicyMemberDomains`) — they belong at the organization
+  level, above any one deployment, and need the Org Policy Administrator
+  role.
+- **Retiring the password admin user** (same section) — nothing to retire:
+  this module never creates one.
 - **`--ssl-mode=ENCRYPTED_ONLY`, point-in-time recovery, Binary
-  Authorization, Cloud SQL data-access audit logs** (§6) — hardening beyond
-  the baseline, one `gcloud` command or console setting each.
-- **Upgrading an existing deployment** (§8) — change `image_tag` and apply;
-  migrations run at startup. The version notes in §8 still apply, and
-  importing an existing gcloud-built deployment into this module's state is
-  not something this module tries to make easy.
+  Authorization, Cloud SQL data-access audit logs** (same section) —
+  hardening beyond the baseline, one `gcloud` command or console setting
+  each.
+- **Upgrading an existing deployment** ([Upgrades](../../docs/guides/operating.md#upgrades))
+  — change `image_tag` and apply; migrations run at startup. The
+  version-specific notes there still apply, and importing an existing
+  gcloud-built deployment into this module's state is not something this
+  module tries to make easy.
 
 ## Teardown
 

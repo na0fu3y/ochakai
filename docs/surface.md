@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 36
 - DOC: 25
-- DOC-LINES: 5760
+- DOC-LINES: 5790
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -466,9 +466,15 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 
 ページは利用者が払うものである。README は 20 以上の文書へ送り出し、
 デプロイする人は
-[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 983 行を
+[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 665 行を
 通る。No FDE(C4)がドキュメントを正当化するが、C4 が求めるのは
 **自分で立ち上げられること**であって行数ではない。
+
+**そこは 2026-07 まで 983 行だった**([#355](https://github.com/na0fu3y/ochakai/issues/355))。
+private IP・team web UI・hardening checklist・upgrade path の全文を
+[docs/guides/operating.md](guides/operating.md) に移し、短い参照だけを
+残した。ページは増えず(`DOC` は 25 のまま) — 総行数への効果は下の
+天井の節にある。
 
 **そしてここは、どの次元より速く増えてきた。** v0.10.0 から現在まで、
 REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 25 ページは
@@ -485,13 +491,15 @@ REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 
 置いた(上限の節の `DOC-LINES`)。0059 のキュー改名がこの文書に段落を
 足したとき、動いた数は一つも無かった。
 
-**この天井は、置いた次の PR で一度上がっている。**
+**この天井は、置いた後に二度上がっている。**
 [0062](design/0062-a-listing-is-not-a-search.md) が `ochakai search` を
 二つに割ったとき、[cli.md](cli.md) は 9 つのフィルタを二度書くことに
 なった — コマンドを割るのは**参照文の重複を買う**という、それまでどこ
 にも出ていなかった代金である。5,700 → 5,760。仕組みが狙っていたのは
 まさにこれで、畳み込みの PR が散文を増やしていたことが、初めて数として
-出た。
+出た。[#355](https://github.com/na0fu3y/ochakai/issues/355) の
+deploy/cloudrun/README.md 分割は逆方向でも同じ代金を払った — 5,760 →
+5,790。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 

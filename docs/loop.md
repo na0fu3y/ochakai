@@ -69,7 +69,7 @@ Same page, two identities: `ochakai ui` serves it on loopback acting as *you*
 (zero deploy, edits recorded as `human:<you>`), and `ochakai serve-ui`
 deploys it as a team-shared service — same container image as the server,
 just `--args=serve-ui`
-([deploy guide §5b](../deploy/cloudrun/README.md)).
+([operating guide](guides/operating.md#the-team-web-ui)).
 
 ## Three feeds, and finishing them
 

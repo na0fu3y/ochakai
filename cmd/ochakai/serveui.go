@@ -6,7 +6,7 @@
 // service-to-service auth. The ochakai deployment therefore stays
 // IAM-restricted, and browser users are recorded as this service's
 // identity (process:<sa-email>). Same image as `serve`: deploy it with
-// `--args=serve-ui` (deploy guide §5b).
+// `--args=serve-ui` (docs/guides/operating.md, "The team web UI").
 //
 // OCHAKAI_URL is required: the page always talks to its own origin
 // (design doc 0006 rev. 2026-07-19), so without an upstream there is
