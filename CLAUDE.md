@@ -35,11 +35,14 @@ is current, or a supersession recorded at only one end.
 
 What ochakai costs the person using it is its **surface** — the endpoints
 they can call, the tool schemas that spend their agent's context, the
-commands they have to learn, the variables they have to set — not the
-code behind it. [docs/surface.md](docs/surface.md) counts all four in one
+commands they have to learn, the variables they have to set, the pages of
+the manual they have to read — not the code behind it.
+[docs/surface.md](docs/surface.md) counts all nine dimensions in one
 place, and `cmd/ochakai/surface_test.go` fails when the count and the
 build disagree, so an addition shows up as a heading moving from `(19)`
-to `(20)` instead of disappearing into a spec diff.
+to `(20)` instead of disappearing into a spec diff. **Prose is counted
+too**: the manual has a ceiling on its line count, so explaining a fold
+at length is a decision like any other.
 
 That document opens with the **seven conditions** ochakai exists to
 satisfy — the knowledge stays the user's, Google Cloud with no secrets,

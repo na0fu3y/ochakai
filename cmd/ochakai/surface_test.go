@@ -343,7 +343,16 @@ func TestOpenAPIComponentsAreReachable(t *testing.T) {
 
 // A cap line: "- REST: 14". Deliberately not the backticked shape an
 // item takes, so the ceiling section cannot be mistaken for a surface.
-var surfaceCapRe = regexp.MustCompile(`^- ([A-Z]+): (\d+)$`)
+//
+// A cap whose name ends in -LINES caps a measurement rather than a list:
+// "- DOC-LINES: 5800" is the reading volume of the section DOC counts.
+// Every other section is counted in names, because a name is learned once
+// however often it appears; reading is not paid that way.
+var surfaceCapRe = regexp.MustCompile(`^- ([A-Z-]+): (\d+)$`)
+
+// capMeasures is the suffix that marks a cap on an amount, and the
+// section whose amount it caps.
+const capMeasures = "-LINES"
 
 // The counters above are a thermometer: they say how big each surface is
 // and let it be any size at all, as long as the document agrees. This is
@@ -392,7 +401,8 @@ folded away in exchange.`, name, section.declared, limit, name)
 		}
 	}
 	for name := range caps {
-		if _, ok := sections[name]; !ok {
+		counted := strings.TrimSuffix(name, capMeasures)
+		if _, ok := sections[counted]; !ok {
 			t.Errorf("%s caps %s, which it does not count", surfaceDoc, name)
 		}
 	}
@@ -694,6 +704,128 @@ func TestSurfaceDocCountsVocabulary(t *testing.T) {
 	add("outcome", domain.Outcomes...)
 	add("queue", queueWordsToLearn(t)...)
 	compareSurface(t, "VOCAB", words)
+}
+
+// The eight sections above count what a caller can invoke, what a deployer
+// can set and what a curator has to know. None of them counts what
+// somebody reads before any of it means anything.
+//
+// docs/surface.md put the implementation's line count under "not counted"
+// and said why; the Web UI is there too, with its reason. Documentation
+// was on neither list — not excluded, but never recognized as surface,
+// though the README sends a reader to twenty-odd pages and the deploy
+// guide alone is longer than the CLI reference.
+//
+// It is the dimension that grew fastest. Between v0.10.0 and now the REST
+// contract went 19 → 11 while these pages passed 5,600 lines from 2,971: the
+// folding was real, and the prose explaining the folding outgrew what it
+// folded. Every other counter would have called that a pure win, which is
+// the same shape of blind spot PARAM, FLAG and VOCAB each closed.
+//
+// What counts as one of these pages is decided here rather than listed
+// twice: an exception nobody can see is a place to put a page.
+func TestSurfaceDocCountsUserDocs(t *testing.T) {
+	docs, _ := userDocs(t)
+	if len(docs) == 0 {
+		t.Fatal("no user-facing documents found: this check now guards nothing")
+	}
+	compareSurface(t, "DOC", docs)
+}
+
+// Counting pages leaves growing one free, and growing one is how the
+// manual actually grew: 0059 renamed two words and left paragraphs in four
+// files, moving no number anywhere. Names are counted everywhere else
+// because a name is learned once however often it appears — reading is not
+// paid that way, so this is the one place an amount has a ceiling.
+func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
+	content, err := os.ReadFile(surfaceDoc)
+	if err != nil {
+		t.Fatalf("read %s: %v", surfaceDoc, err)
+	}
+	limit := 0
+	for _, line := range strings.Split(string(content), "\n") {
+		if m := surfaceCapRe.FindStringSubmatch(line); m != nil && m[1] == "DOC"+capMeasures {
+			if limit, err = strconv.Atoi(m[2]); err != nil {
+				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
+			}
+		}
+	}
+	if limit == 0 {
+		t.Fatalf("%s sets no DOC%s cap: this check now guards nothing", surfaceDoc, capMeasures)
+	}
+	_, lines := userDocs(t)
+	if lines > limit {
+		t.Errorf(`the manual is %d lines, over its cap of %d.
+
+What a reader has to get through is a cost like any other, and this is the
+only ceiling on an amount rather than on a list of names. Going past it is
+a decision: raise the cap in the same PR, having answered %s's three
+questions — or find the pages that say the same thing twice.`,
+			lines, limit, surfaceDoc)
+	}
+}
+
+// userDocs is the manual: every markdown page a reader is sent to in order
+// to evaluate, use or run ochakai, with the total number of lines in them.
+//
+// Four things are markdown and are not the manual, and each is left out
+// for a reason docs/surface.md states:
+//
+//   - docs/design — decision records, read by somebody changing ochakai.
+//     What earns a number is already narrowed by design doc 0048; the same
+//     thing is not tightened twice.
+//   - OKF documents — a file with frontmatter is knowledge, the thing
+//     ochakai stores, not prose about it. That is examples/demo and the
+//     bundle under examples/bigquery-catalog.
+//   - internal — fixtures.
+//   - CHANGELOG, CONTRIBUTING, CLAUDE.md, the code of conduct, and the
+//     dot-directories — a ledger read one entry at a time, and the surface
+//     somebody changing ochakai reads.
+func userDocs(t *testing.T) ([]string, int) {
+	t.Helper()
+	const root = "../.."
+	skipDirs := map[string]bool{
+		".git": true, "node_modules": true, "docs/design": true, "internal": true,
+	}
+	forChangers := map[string]bool{
+		"CHANGELOG.md": true, "CONTRIBUTING.md": true,
+		"CODE_OF_CONDUCT.md": true, "CLAUDE.md": true,
+	}
+	var docs []string
+	lines := 0
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			if skipDirs[rel] || (strings.HasPrefix(d.Name(), ".") && rel != ".") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(rel) != ".md" || forChangers[rel] {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(string(content), "---\n") {
+			return nil // an OKF document: knowledge, not documentation
+		}
+		docs = append(docs, rel)
+		lines += strings.Count(string(content), "\n")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", root, err)
+	}
+	return docs, lines
 }
 
 // queueWordsToLearn is the queue keys that are words of their own. A

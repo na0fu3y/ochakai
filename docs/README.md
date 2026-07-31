@@ -79,11 +79,12 @@ and what it refuses to do. It is deliberately short; the manual is here.
   runs, and how design docs work.
 - [The surface](surface.md) — the seven conditions ochakai exists to
   satisfy, and every REST operation, query parameter, header, MCP tool,
-  CLI command, CLI flag, environment variable and word of vocabulary
-  counted in one place, with the three questions a change that adds one
-  has to answer. The default answer is no. A test reads all eight lists
-  back out of the build, so the count cannot drift and a feature cannot
-  arrive without the diff saying so.
+  CLI command, CLI flag, environment variable, word of vocabulary and page
+  of this manual counted in one place, with the three questions a change
+  that adds one has to answer. The default answer is no. A test reads all
+  nine lists back out of the build, so the count cannot drift and a
+  feature cannot arrive without the diff saying so — nor can the prose
+  explaining it, which is the ninth list and the fastest-growing one.
 - [docs/design](design) — the numbered, immutable decision records, and
   the [index](design/README.md) that says which ones still describe the
   current state. Mostly Japanese; authoritative where they and the English
