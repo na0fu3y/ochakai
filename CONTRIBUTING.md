@@ -161,7 +161,7 @@ Architecture decisions live in [docs/design](docs/design) as numbered
 documents (mostly Japanese). Start from the
 [index](docs/design/README.md): its opening table says which document
 describes each area today, and the prose below it carries the history. A
-new record needs a summary in
+new record needs a row in
 [README.en.md](docs/design/README.en.md) beside it, which a test checks.
 [docs/architecture.md](docs/architecture.md) summarizes the accepted ones
 in English if you would rather read the shape of the system first.
@@ -199,10 +199,11 @@ state per area, so when a design doc lands:
   doc to its area with a one-line summary, adjust the status notes of
   the docs it amends, and — if it becomes the doc to read for that area —
   update the area's row in the opening table.
-- Summarize it in `README.en.md`. A doc the new one supersedes drops to a
-  one-line pointer at its replacement; full summaries are maintained only
-  for what is current, and a test holds it — cutting the old summary is
-  part of superseding, not tidying for later.
+- Add its row to `README.en.md`'s table, in the same area. A doc the new
+  one supersedes drops to a bare pointer row (record and status only, no
+  decision cell); full rows are kept only for what is current, and a test
+  holds it — cutting the old row is part of superseding, not tidying for
+  later.
 - Avoid amendment chains. If the new decision would be the second
   partial amendment stacked on the same doc, don't add another diff:
   write it as a full replacement that states the area's whole current
