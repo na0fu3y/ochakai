@@ -105,8 +105,12 @@ that table is what a reader is meant to reach the current state from
 
 **6. Summarize it in English.** `docs/design/README.en.md` needs an entry
 or `TestEnglishDesignIndexCoversEveryRecord` fails. A doc this one
-supersedes drops to a one-line pointer at its replacement — full
-summaries are only maintained for what is current (0048 §2.5).
+supersedes **drops to a one-line pointer at its replacement** — full
+summaries are only maintained for what is current (0048 §2.5), and
+`TestEnglishIndexSummarizesOnlyWhatIsCurrent` fails if the old summary is
+left standing. Cutting it is part of superseding, not tidying to do later:
+the summary of a replaced record describes the old world in the present
+tense and nobody rereads it.
 
 **7. Avoid amendment chains.** If this would be the *second* partial
 amendment stacked on the same doc, do not add another diff. Write a full

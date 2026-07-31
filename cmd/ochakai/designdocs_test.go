@@ -321,3 +321,51 @@ Japanese.`, r.file, lines, limit, contributing)
 		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCappedRecord)
 	}
 }
+
+// maxSupersededSummary is how many lines a superseded record earns in the
+// English index. Four, not one: the pointer is one sentence, but a long
+// title wraps and the bullet carries the link twice.
+const maxSupersededSummary = 5
+
+// README.en.md opens by saying that only current records are summarized in
+// full, and that a superseded one "keeps a one-line pointer to whatever
+// replaced it, which is enough to follow the trail and is all the
+// maintenance it earns" (design doc 0048 §2.5). It was not true of ten of
+// them: 0043 kept twenty-two lines describing a stored shape that no longer
+// exists, and the ten together held ninety-six lines of summary for
+// decisions nothing implements.
+//
+// A rule a file states about itself and does not keep is worse than no
+// rule, because a reader believes it. The prose of a superseded entry also
+// rots in a way nothing else notices — nobody rereads the summary of a
+// record that has been replaced, so it goes on describing the old world in
+// the present tense.
+func TestEnglishIndexSummarizesOnlyWhatIsCurrent(t *testing.T) {
+	checked := 0
+	for _, r := range designRecords(t) {
+		if !supersededByRe.MatchString(r.status) {
+			continue
+		}
+		entry := indexEntry(t, designEnglishIndex, r.file)
+		if entry == "" {
+			continue // TestEnglishDesignIndexCoversEveryRecord owns that failure
+		}
+		checked++
+		// The bullet runs to the blank line that separates it from the next.
+		lines := strings.Count(strings.SplitN(entry, "\n\n", 2)[0], "\n") + 1
+		if lines <= maxSupersededSummary {
+			continue
+		}
+		t.Errorf(`%s keeps a %d-line summary of %s in %s, which is superseded.
+
+The file says a superseded record keeps a pointer to what replaced it and
+nothing more (design doc 0048 §2.5), because that is enough to follow the
+trail and all the maintenance it earns. A full summary of a decision
+nothing implements is prose that describes the old world in the present
+tense, and nobody rereads it to notice.`,
+			designEnglishIndex, lines, r.number, r.file)
+	}
+	if checked == 0 {
+		t.Fatal("no superseded record has an English index entry: this check now guards nothing")
+	}
+}
