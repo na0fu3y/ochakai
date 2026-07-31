@@ -108,8 +108,8 @@ The consequences to plan around:
 
 - **The service must be private.** On a public Cloud Run service the
   identity headers are self-asserted and the whole model collapses. IAM
-  enforcement is the security boundary; the [deploy
-  guide](../deploy/cloudrun/README.md) carries a hardening checklist.
+  enforcement is the security boundary; the [operating
+  guide](guides/operating.md#hardening) carries a hardening checklist.
 - **An embedding application collapses its users into one identity.** An
   app that calls ochakai with its own service account records every one
   of its users as that service account. `X-Ochakai-On-Behalf-Of` fixes
