@@ -18,6 +18,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-31
+
 ### Added
 
 - **BREAKING** — a listing is not a search, so it is not the same command
@@ -2315,7 +2317,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/na0fu3y/ochakai/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/na0fu3y/ochakai/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/na0fu3y/ochakai/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/na0fu3y/ochakai/compare/v0.14.0...v0.15.0
