@@ -82,6 +82,15 @@ Date: YYYY-MM-DD
 
 Use 0038 or 0015 as models for the header style.
 
+**Keep it under the ceiling.** CONTRIBUTING.md declares a `RECORD-LINES:`
+number and `TestDesignRecordsStayUnderTheirCeiling` reads it back; the
+median record is about 140 lines. Going over almost always means the
+decision is two decisions — split it and take two numbers — or that the
+record is restating something an earlier one already settled, which is
+what citing it is for. If it genuinely is that large, raise the number in
+the same PR and say why. Do not answer the ceiling by compressing the
+prose: a record nobody finishes costs more than a long one.
+
 **4. Update the older docs' `Status:` headers.** Every doc the new one
 supersedes or amends gets a line pointing at the new number. See 0011 or
 0018 for the style. This is the step that is easiest to forget and the
@@ -106,11 +115,12 @@ older docs **Superseded**.
 
 ## What the checks hold, and what they cannot
 
-`cmd/ochakai/designdocs_test.go` fails when steps 4-6 are half done: a
-record with no entry in either index, an index that still lists a
-superseded record as current (or retires one that is still standing), a
-supersession written at only one end. Run `go test ./cmd/ochakai/` before
-opening the PR and those come back as sentences, not review comments.
+`cmd/ochakai/designdocs_test.go` fails when steps 3-6 are half done: a
+record over the ceiling, a record with no entry in either index, an index
+that still lists a superseded record as current (or retires one that is
+still standing), a supersession written at only one end. Run
+`go test ./cmd/ochakai/` before opening the PR and those come back as
+sentences, not review comments.
 
 No test reads step 5's judgment — whether the opening table's row points
 at the doc somebody should actually read now — or whether the summary in

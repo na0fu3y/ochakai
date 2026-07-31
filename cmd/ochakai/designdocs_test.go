@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -255,4 +256,68 @@ func capturedNumbers(re *regexp.Regexp, s string) []string {
 		}
 	}
 	return numbers
+}
+
+// The four checks above read a record against the index. None of them reads
+// how much of it there is.
+//
+// 0048 narrowed what earns a number and said nothing about how much a number
+// costs, so the corpus grew in the one direction nothing measured: 58 records
+// and roughly 10,400 lines beside a 25-page manual of 5,700. The record for
+// renaming two queue keys runs to 150 lines and leaves an entry in each index
+// behind it. Explaining a fold has been outgrowing the fold for several
+// releases, and docs/surface.md's DOC section now says so in numbers.
+//
+// The ceiling lives in CONTRIBUTING.md rather than here, for the same reason
+// docs/surface.md keeps the surface caps in prose: raising it should be a
+// line in a diff whose subject is the agreement, not a constant in a test.
+const (
+	contributing = "../../CONTRIBUTING.md"
+	// firstCappedRecord is where the rule starts. Everything before it is
+	// immutable — a ceiling cannot reach back, and a record that could be
+	// edited to fit was never a decision somebody could depend on. 0062 is
+	// the exception that is not one: it has not reached a release, and
+	// CONTRIBUTING.md already says an unreleased record is revised by
+	// replacing it, so nobody can be depending on its length either. It also
+	// keeps this check from guarding nothing on the day it lands.
+	firstCappedRecord = "0062"
+)
+
+var recordCeilingRe = regexp.MustCompile(`(?m)^\s*RECORD-LINES: (\d+)$`)
+
+func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	m := recordCeilingRe.FindStringSubmatch(string(content))
+	if m == nil {
+		t.Fatalf("%s declares no RECORD-LINES ceiling: this check now guards nothing", contributing)
+	}
+	limit, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("%s: RECORD-LINES %q: %v", contributing, m[1], err)
+	}
+	capped := 0
+	for _, r := range designRecords(t) {
+		if r.number < firstCappedRecord {
+			continue
+		}
+		capped++
+		lines := strings.Count(r.body, "\n")
+		if lines <= limit {
+			continue
+		}
+		t.Errorf(`%s is %d lines, over the %d in %s.
+
+A record is prose somebody reads, and going over usually means the decision
+is two decisions — split it and take two numbers. If it is restating what an
+earlier record already settled, cite that record instead. If it really is
+that large, raise the ceiling in this PR and say why: the number is there so
+the raise cannot happen quietly, not to be worked around by writing denser
+Japanese.`, r.file, lines, limit, contributing)
+	}
+	if capped == 0 {
+		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCappedRecord)
+	}
 }

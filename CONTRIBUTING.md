@@ -206,15 +206,51 @@ state per area, so when a design doc lands:
   partial amendment stacked on the same doc, don't add another diff:
   write it as a full replacement that states the area's whole current
   picture and mark the older docs Superseded.
+- Keep it under the ceiling below. A record is prose somebody reads.
+
+### How long a record gets
+
+    RECORD-LINES: 220
+
+0048 narrowed *what* earns a number. It said nothing about *how much*,
+and the corpus grew accordingly: 58 records and about 10,400 lines, on
+top of a 25-page manual of 5,700. A decision that renames two words has
+cost 150 lines of record, an entry in each index and a paragraph in
+[docs/surface.md](docs/surface.md) — the explanation outgrowing the
+thing explained is the shape the numbers have been showing for several
+releases.
+
+So a record from 0063 on stays under that line, and
+`TestDesignRecordsStayUnderTheirCeiling` reads it back out of this file.
+The ceiling is the same bargain [docs/surface.md](docs/surface.md)
+strikes for the surface: it is one number in one file and anybody can
+raise it, in the same PR, having said why. What it buys is only that the
+raise cannot happen quietly.
+
+Going over usually means one of three things, in order of likelihood:
+
+1. **It is two decisions.** Split it and take two numbers. Two records a
+   reader can finish beat one they abandon.
+2. **It is restating what another record already decided.** Cite it
+   instead. The index exists so a record does not have to carry its
+   ancestors.
+3. **It really is that large** — 0046 rebuilt the address space in 601
+   lines and earned every one. Then raise the line above and say so.
+
+What the ceiling must not buy is denser prose. Records earlier than 0063
+are not measured: they are immutable, and immutability is a promise about
+decisions somebody could be depending on, not a licence to keep writing
+at whatever length the last one happened to be.
 
 Most of that list is checked rather than remembered
 (`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
 indexes, the two indexes have to agree with the record's own `Status:`
-header about whether it is current or superseded, and a supersession has
+header about whether it is current or superseded, a supersession has
 to be recorded at both ends — the new record naming what it retires, and
-the retired one saying so. What no test can read is the judgment: whether
-the opening table's row still points at the doc somebody should actually
-read. That is where the attention goes.
+the retired one saying so — and a new record has to fit under the
+ceiling. What no test can read is the judgment: whether the opening
+table's row still points at the doc somebody should actually read. That
+is where the attention goes.
 
 Two decisions worth knowing before proposing features:
 
