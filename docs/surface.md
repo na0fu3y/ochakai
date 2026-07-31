@@ -7,12 +7,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 を先に決めている。
 
 数を出すだけでなく、上限も置く。**表面が増えたことを diff に出す**のが
-下の八つの節で、**増やすと決めたことを diff に出す**のが「上限」の節で
+下の九つの節で、**増やすと決めたことを diff に出す**のが「上限」の節で
 ある。エンドポイントを一本足す変更は
 [api/openapi.yaml](../api/openapi.yaml) の数十行の差分に埋もれるが、
 ここでは `## REST (14)` が `(15)` に変わる一行として出て、さらに上限の
 行を書き換えないと CI が通らない。
-`cmd/ochakai/surface_test.go` が八つの節を実物と突き合わせ、
+`cmd/ochakai/surface_test.go` が九つの節を実物と突き合わせ、
 食い違えば落ちる([0035](design/0035-verifiability.md):
 規約を信じるのではなく、外から不変条件を読む)。
 
@@ -80,6 +80,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 29
 - ENV: 15
 - VOCAB: 36
+- DOC: 25
+- DOC-LINES: 5700
+
+`-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
+`DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
+そちらにも天井が要る(DOC の節)。
 
 **天井は一つのファイルの一行で、誰でも上げられる。それは弱点ではなく
 狙いである。** この仕組みが買っているのは、上の節と同じく、**黙って
@@ -427,6 +433,77 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
+## DOC (25)
+
+九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
+**使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
+あって、それを使えるようになるために**読むもの**は一つも数えていな
+かった。下の「数えていないもの」は実装の行数も Web UI も、数えない理由を
+書いて挙げている。ドキュメントはどちらの側にも無かった — 除外されていた
+のではなく、表面だと思われていなかった。
+
+ページは利用者が払うものである。README は 20 以上の文書へ送り出し、
+デプロイする人は
+[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 983 行を
+通る。No FDE(C4)がドキュメントを正当化するが、C4 が求めるのは
+**自分で立ち上げられること**であって行数ではない。
+
+**そしてここは、どの次元より速く増えてきた。** v0.10.0 から現在まで、
+REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 25 ページは
+2,971 行から 5,600 行を超えた。畳み込みは本物だったが、**畳んだことの
+説明が、畳んだものより速く増えていた** — 表面を一つ減らす決定が、記録と
+二つの索引と英語要約とこの文書の段落を生む。数えていなければ、それは
+どの節にも出ない。これは PARAM・FLAG・VOCAB が塞いだのと同じ形の
+逃げ道である。
+
+**ここだけは量を数える。** 上の八つは名前を数え、`limit` を五箇所で
+使い回すのは無料だった — 覚えるのは一度きりだからである。読む労力は
+そう働かない。ページを一枚足すのは決定なので `DOC` に出るが、**既存の
+ページを太らせるのは名前を一つも増やさない**ので、総行数にも天井を
+置いた(上限の節の `DOC-LINES`)。0059 のキュー改名がこの文書に段落を
+足したとき、動いた数は一つも無かった。
+
+数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
+
+- **[docs/design](design) の記録。** 利用者ではなく、変えようとする人が
+  読む。何が番号を取るかは
+  [0048](design/0048-decision-records-for-wire-contracts.md) が既に
+  狭めており、同じものを二重に締めない。
+- **OKF ドキュメント。** `examples/demo` の 10 件も
+  `examples/bigquery-catalog/bundle` も、ochakai が**保存するもの**で
+  あって ochakai についての説明ではない。frontmatter を持つ md は
+  知識であり、ここでは数えない。
+- **CHANGELOG。** 過去の台帳で、読むのは一エントリである。通して読む
+  ものを数えるこの節に、追記だけで伸びるものを混ぜない。
+- **CONTRIBUTING・CLAUDE.md・行動規範・`.github`・`.claude`。**
+  変える人の面であって、使う人の面ではない。
+
+- `README.md`
+- `ROADMAP.md`
+- `SECURITY.md`
+- `SUPPORT.md`
+- `deploy/cloudrun/README.md`
+- `deploy/terraform/README.md`
+- `docs/README.md`
+- `docs/architecture.md`
+- `docs/cli.md`
+- `docs/compatibility.md`
+- `docs/configuration.md`
+- `docs/faq.md`
+- `docs/guides/golden-query-canary.md`
+- `docs/guides/mcp-clients.md`
+- `docs/guides/operating.md`
+- `docs/guides/troubleshooting.md`
+- `docs/images/README.md`
+- `docs/knowledge.md`
+- `docs/loop.md`
+- `docs/positioning.md`
+- `docs/surface.md`
+- `examples/README.md`
+- `examples/bigquery-catalog/README.md`
+- `examples/claude-code/CLAUDE.md`
+- `examples/claude-code/README.md`
+
 ## 数えていないもの
 
 - **Web UI。** 自分のアドレス空間を持たず、`/api/v1` の client として
@@ -450,6 +527,12 @@ CI は通る。この仕組みが買っているのは、それを**気づかな
 ない。VOCAB が塞いだのも一つで、「機構を畳んで語を増やせば得」という
 逃げ道である — `sort=` の 4 つのモードは `sort` 一語で 1 と数えられて
 いたが、いま `sort.*` として 4 語に数えられる。
+
+DOC が塞いだのはさらに一つで、これは他とは向きが違う —
+**「表面を畳んで、畳んだ説明を書けば得」**という逃げ道である。上の八つ
+だけを見ていると、面を一つ減らす PR は必ず勝ちに見える。その PR が記録と
+索引と要約と段落を残していくことは、どの数にも出なかった。減った面と
+増えた行が同じ表に並ぶのは、この節が足されて初めてである。
 
 FLAG が塞いだのはもう一つで、「REST を畳んで CLI に逃がせば得」という
 逃げ道である。[0046](design/0046-bundle-address-space.md) と
