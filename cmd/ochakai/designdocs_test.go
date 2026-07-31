@@ -339,6 +339,73 @@ Japanese.`, r.file, lines, limit, contributing)
 	}
 }
 
+// recordCorpusCapRe reads a ceiling on the corpus as a whole rather than on
+// one record: "RECORD-COUNT: 59" or "RECORD-CORPUS-LINES: 10292", declared
+// beside RECORD-LINES in CONTRIBUTING.md rather than as an eleventh cap in
+// docs/surface.md's 上限 section — a record is read by somebody changing
+// ochakai, not somebody using it, so its ceiling lives with the other
+// ceiling for that same reader.
+var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-COUNT|RECORD-CORPUS-LINES): (\d+)$`)
+
+// TestDesignRecordCorpusStaysUnderItsCeiling reads docs/design as a whole:
+// how many records it holds, and how many lines they total. Superseded
+// records count in both — they still ship in the tree, and a reader
+// following a Status: header still opens them. Counting only what is
+// current would let a supersession buy headroom for the next addition, and
+// the file stays on disk either way, so that would be the next escape
+// hatch rather than a saving.
+//
+// The two catch different shapes. RECORD-CORPUS-LINES is DOC-LINES's
+// argument applied to this corpus: a record that never crosses RECORD-LINES
+// can still add to what a reader gets through, and enough of them doing it
+// at once moves nothing else. RECORD-COUNT is for the shape a line total
+// cannot see at all — 0054/0057 and 0055/0056 are one subject apiece, told
+// across two numbers, and no per-record cap can notice that a second
+// number was the wrong fix.
+func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	caps := map[string]int{}
+	for _, m := range recordCorpusCapRe.FindAllStringSubmatch(string(content), -1) {
+		n, err := strconv.Atoi(m[2])
+		if err != nil {
+			t.Fatalf("%s: %s %q: %v", contributing, m[1], m[2], err)
+		}
+		caps[m[1]] = n
+	}
+	for _, name := range []string{"RECORD-COUNT", "RECORD-CORPUS-LINES"} {
+		if _, ok := caps[name]; !ok {
+			t.Fatalf("%s declares no %s ceiling: this check now guards nothing", contributing, name)
+		}
+	}
+
+	records := designRecords(t)
+	totalLines := 0
+	for _, r := range records {
+		totalLines += strings.Count(r.body, "\n")
+	}
+
+	if count, limit := len(records), caps["RECORD-COUNT"]; count > limit {
+		t.Errorf(`docs/design holds %d records, over the RECORD-COUNT ceiling of %d in %s.
+
+Going over is a decision to make the corpus bigger, so it is made by
+raising the number in the same PR, having said why — or by finding that the
+new record restates one already on file, or that two subjects have been
+sharing one number and would read better split.`, count, limit, contributing)
+	}
+	if got, limit := totalLines, caps["RECORD-CORPUS-LINES"]; got > limit {
+		t.Errorf(`docs/design totals %d lines across %d records, over the RECORD-CORPUS-LINES
+ceiling of %d in %s.
+
+A record can stay under RECORD-LINES on its own and still add to what a
+reader gets through if enough records do it at once, which is what this
+ceiling is for. Raise it in the same PR, having said why.`,
+			got, len(records), limit, contributing)
+	}
+}
+
 // maxSupersededSummary is how many lines a superseded record earns in the
 // English index. README.en.md is a table, one row per record, so a
 // superseded record's row is a record link and a status cell — always one
