@@ -11,8 +11,12 @@ and `serve-ui` are the exception: they are the deployed services, and they
 take their configuration from the environment rather than from flags —
 [Requirements and configuration](configuration.md) lists it.
 
-The same text is what `ochakai <command> -h` prints, so nothing here can
-disagree with the binary you are running.
+Every section is what `ochakai <command> -h` prints, so nothing here
+can disagree with the binary you are running — except `search` and
+`list`, which narrow the same way (design doc
+[0062](design/0062-a-listing-is-not-a-search.md)) and point at
+[Shared filters](#shared-filters) instead of repeating it; `-h` on
+either command still prints its own copy in full.
 
 ## Commands
 
@@ -310,6 +314,37 @@ Examples:
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
 ```
 
+## Shared filters
+
+What `ochakai search -h` and `ochakai list -h` share (design doc
+[0062](design/0062-a-listing-is-not-a-search.md)), once.
+
+```
+Flags:
+  -fm key=value
+    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
+  -json
+    	print the raw JSON response
+  -links-to id
+    	only concepts whose body links at this id — what points at one concept (its backlinks)
+  -prefix path
+    	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
+  -rejected
+    	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
+  -source resource
+    	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
+  -status value
+    	filter by status: draft|stable|deprecated (repeatable)
+  -tag value
+    	filter by tag (repeatable)
+  -trust value
+    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
+  -type value
+    	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+```
+
 ## ochakai list
 
 ```
@@ -344,30 +379,9 @@ To rank by relevance instead, use `ochakai search`.
 Flags:
   -cursor cursor
     	resume a listing where the last page ended: the cursor the previous page printed, with the same feed and filters
-  -fm key=value
-    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
-  -json
-    	print the raw JSON response
   -limit int
     	max results (server default 100, max 1000)
-  -links-to id
-    	only concepts whose body links at this id — what points at one concept (its backlinks)
-  -prefix path
-    	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
-  -rejected
-    	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
-  -source resource
-    	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
-  -status value
-    	filter by status: draft|stable|deprecated (repeatable)
-  -tag value
-    	filter by tag (repeatable)
-  -trust value
-    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
-  -type value
-    	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  # shared with `ochakai search` — see "Shared filters" above
 
 Examples:
   ochakai list usage --status draft --limit 50        # the draft review queue
@@ -621,30 +635,9 @@ lookups, which are sets rather than rankings and page with --cursor.
 The filters below narrow either command the same way.
 
 Flags:
-  -fm key=value
-    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
-  -json
-    	print the raw JSON response
   -limit int
     	max results (server default 10, max 50)
-  -links-to id
-    	only concepts whose body links at this id — what points at one concept (its backlinks)
-  -prefix path
-    	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
-  -rejected
-    	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
-  -source resource
-    	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
-  -status value
-    	filter by status: draft|stable|deprecated (repeatable)
-  -tag value
-    	filter by tag (repeatable)
-  -trust value
-    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
-  -type value
-    	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  # shared with `ochakai list` — see "Shared filters" above
 
 Examples:
   ochakai search "gross margin" --type Metric --type 'Glossary Term' --trust human-reviewed
