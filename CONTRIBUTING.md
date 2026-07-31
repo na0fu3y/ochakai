@@ -243,15 +243,53 @@ are not measured: they are immutable, and immutability is a promise about
 decisions somebody could be depending on, not a licence to keep writing
 at whatever length the last one happened to be.
 
+### How many records, and how much
+
+`RECORD-LINES` bounds one record's thickness. Nothing bounded how many
+records there are, and that turned out to be the number that moved: 19
+records at v0.10.0, 59 now — 4.6x, against 2.3x for non-test Go and REST's
+own retreat from 19 operations to 11. Folding a surface leaves a record
+behind, and [docs/surface.md](docs/surface.md)'s DOC section already names
+that residue — an index entry in each language, an English summary, a
+paragraph in that file or this one — for the manual it counts. Records are
+the larger half of the same residue, and until now none of it was counted
+anywhere.
+
+    RECORD-COUNT: 59
+    RECORD-CORPUS-LINES: 10292
+
+Both count every record under `docs/design`, Superseded ones included:
+they still ship in the tree, and a reader following a `Status:` header
+still opens them. Counting only what is current would let a supersession
+buy headroom for the next addition — the file stays on disk either way, so
+that would be the next escape hatch rather than a saving.
+
+The two catch different shapes. `RECORD-CORPUS-LINES` is `DOC-LINES`'s
+argument applied to this corpus: a record that never crosses
+`RECORD-LINES` can still add to what a reader gets through, and enough of
+them doing it at once moves nothing else. `RECORD-COUNT` is for the shape
+a line total cannot see at all — 0054/0057 and 0055/0056 are one subject
+apiece, told across two numbers, and a per-record cap has no way to notice
+that a second number was the wrong fix.
+
+These live here, next to `RECORD-LINES`, rather than as an eleventh line in
+[docs/surface.md](docs/surface.md)'s 上限 section. A record is read by
+somebody changing ochakai, not somebody using it — that document's DOC
+section already excludes `docs/design` from the manual on that basis — and
+a ceiling for that same reader belongs beside the other ceiling for that
+reader, not split across two files that both happen to hold a number.
+
 Most of that list is checked rather than remembered
 (`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
 indexes, the two indexes have to agree with the record's own `Status:`
 header about whether it is current or superseded, a supersession has
 to be recorded at both ends — the new record naming what it retires, and
-the retired one saying so — and a new record has to fit under the
-ceiling. What no test can read is the judgment: whether the opening
-table's row still points at the doc somebody should actually read. That
-is where the attention goes.
+the retired one saying so — a new record has to fit under its own
+ceiling, and the corpus as a whole has to fit under `RECORD-COUNT` and
+`RECORD-CORPUS-LINES`
+(`TestDesignRecordCorpusStaysUnderItsCeiling`). What no test can read is
+the judgment: whether the opening table's row still points at the doc
+somebody should actually read. That is where the attention goes.
 
 Two decisions worth knowing before proposing features:
 

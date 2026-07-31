@@ -91,6 +91,17 @@ what citing it is for. If it genuinely is that large, raise the number in
 the same PR and say why. Do not answer the ceiling by compressing the
 prose: a record nobody finishes costs more than a long one.
 
+CONTRIBUTING.md also caps the corpus as a whole: `RECORD-COUNT` for how
+many records exist, `RECORD-CORPUS-LINES` for how many lines they total —
+both count every record, Superseded ones included, since they still ship
+in the tree and a reader following a `Status:` trail still opens them.
+`TestDesignRecordCorpusStaysUnderItsCeiling` reads both back. Landing a
+new record can push the corpus over either one even when the record
+itself is well under `RECORD-LINES`; the same two escapes apply, just
+visible only once the whole corpus is counted — this decision restates
+one already on file (cite it instead), or two subjects have been sharing
+one number and would read better split.
+
 **4. Update the older docs' `Status:` headers.** Every doc the new one
 supersedes or amends gets a line pointing at the new number. See 0011 or
 0018 for the style. This is the step that is easiest to forget and the
