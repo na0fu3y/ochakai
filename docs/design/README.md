@@ -36,9 +36,9 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md)(ツール名)、[0057](0057-concept-is-the-word-a-reader-meets.md)(読む語) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
-| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
+| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0062](0062-a-listing-is-not-a-search.md)(一つのコマンドが二役なら割る規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング) |
+| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング)、[0062](0062-a-listing-is-not-a-search.md)(一覧の CLI 面) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -373,6 +373,17 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   ないという refusal(§2.2)。総件数は返さず、`cursor` の不在が終わりを
   意味する(§2.3)。REST / MCP / CLI / Web UI の 4 面に載り、CLI が
   ページを自分で歩かないことだけが意図的な省略(§4)。
+- [0062 一覧は検索ではない](0062-a-listing-is-not-a-search.md)
+  — **Accepted**、**BREAKING**。`ochakai search --sort` を廃し、一覧を
+  `ochakai list [feed]` に分ける。0056 の系の逆向き — **一つのコマンドが
+  二つの能力を持つなら、コマンドも二つ**。`search` は順位(クエリ必須、
+  `--limit` 10/50、cursor 無し)、`list` は全順序(フィードか逆引き、
+  `--limit` 100/1000、`--cursor` で進む)で、0050 が別物と決めた二つが
+  CLI でも別のコマンドになる。**ワイヤは動かない**(`sort=` も
+  `search_concepts` もそのまま)。語彙も動かない(`sort.*` の 4 語が
+  フラグ値からコマンド引数へ移るだけ)。CLI 25 → 26、FLAG 29 → 28。
+  `stats` が印字するコマンド文字列は `ochakai list …` になる
+  (0049 §3.4・0059 の印字形式を改訂)。
 - [0056 一つの問いに一つのコマンド、一つの裁定に一つの語](0056-one-question-one-command.md)
   — **Accepted**、**BREAKING**。ワイヤで畳んだ面が CLI にコマンドとして
   残っていた二件を畳む: `ochakai backlinks` は

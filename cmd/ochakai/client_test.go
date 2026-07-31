@@ -497,9 +497,9 @@ func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 		t.Errorf("server saw prefix %v, want [teams/growth]", gotPrefixes)
 	}
 	for _, want := range []string{
-		"drafts\t3\tochakai search --sort usage --status draft --prefix teams/growth\n",
-		"failed\t1\tochakai search --sort failed --prefix teams/growth\n",
-		"stale_after\t0\tochakai search --sort stale_after --prefix teams/growth\n",
+		"drafts\t3\tochakai list usage --status draft --prefix teams/growth\n",
+		"failed\t1\tochakai list failed --prefix teams/growth\n",
+		"stale_after\t0\tochakai list stale_after --prefix teams/growth\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
@@ -735,12 +735,12 @@ func captureStdout(t *testing.T, f func()) string {
 }
 
 // `--links-to X` on its own lists the backlinks of X, exactly as the wire
-// does (design doc 0046 §3.5): a set is the answer and there is no text
-// to rank it by. The CLI refused it and named the two other ways out,
-// which is how a reader learns the filter cannot stand alone — of the
-// three the message could have named, it named the two they had not
-// asked for.
-func TestSearchLinksToStandsAlone(t *testing.T) {
+// does (design doc 0046 §3.5): a set is the answer and there is no text to
+// rank it by. That makes it a listing rather than a search, so it lives on
+// `ochakai list` (design doc 0062) — and the refusal each command gives
+// has to point at the other one, because a reader who reached for the
+// wrong half learns the split from that sentence or from nowhere.
+func TestListStandsAloneOnAReverseLookup(t *testing.T) {
 	var got string
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/search", func(w http.ResponseWriter, r *http.Request) {
@@ -750,7 +750,7 @@ func TestSearchLinksToStandsAlone(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	if err := cmdSearch(context.Background(),
+	if err := cmdList(context.Background(),
 		[]string{"--links-to", "metrics/revenue", "--url", srv.URL}); err != nil {
 		t.Fatalf("--links-to alone: %v", err)
 	}
@@ -758,15 +758,33 @@ func TestSearchLinksToStandsAlone(t *testing.T) {
 		t.Errorf("query = %q, want the reverse lookup", got)
 	}
 
-	// With nothing at all the refusal names every way out, including the
-	// one it used to leave out.
+	// A feed is a positional argument now, and the wire still calls it sort.
+	if err := cmdList(context.Background(), []string{"usage", "--url", srv.URL}); err != nil {
+		t.Fatalf("list usage: %v", err)
+	}
+	if !strings.Contains(got, "sort=usage") {
+		t.Errorf("query = %q, want sort=usage", got)
+	}
+
+	// Neither half accepts what belongs to the other, and each refusal
+	// names the command that does take it.
 	err := cmdSearch(context.Background(), []string{"--url", srv.URL})
 	if err == nil {
-		t.Fatal("a search with no query and no filter was accepted")
+		t.Fatal("a search with no query was accepted")
 	}
-	for _, want := range []string{"--sort", "--source", "--links-to"} {
+	if !strings.Contains(err.Error(), "ochakai list") {
+		t.Errorf("refusal %q does not send the reader to `ochakai list`", err)
+	}
+	err = cmdList(context.Background(), []string{"--url", srv.URL})
+	if err == nil {
+		t.Fatal("a listing with no feed and no reverse lookup was accepted")
+	}
+	for _, want := range append(append([]string{}, domain.ListSorts...), "--source", "--links-to") {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal %q does not name %s", err, want)
 		}
+	}
+	if err := cmdList(context.Background(), []string{"nonsense", "--url", srv.URL}); err == nil {
+		t.Error("an unknown feed was accepted")
 	}
 }

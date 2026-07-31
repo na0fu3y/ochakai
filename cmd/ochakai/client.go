@@ -27,6 +27,7 @@ import (
 
 var clientCommands = map[string]func(context.Context, []string) error{
 	"search":    cmdSearch,
+	"list":      cmdList,
 	"browse":    cmdBrowse,
 	"context":   cmdContext,
 	"get":       cmdGet,
@@ -269,65 +270,150 @@ func parseRef(s string) (string, error) {
 	return id, nil
 }
 
+// searchFilters registers the narrowing flags both cmdSearch and cmdList
+// take. They are the same words on both because they mean the same thing
+// on both — surface is counted in distinct names (docs/surface.md), so a
+// filter shared between the two commands costs nothing to learn twice.
+type searchFilters struct {
+	types, statuses, tags, prefixes, trust, fm repeated
+	source, linksTo                            *string
+	rejected                                   *bool
+}
+
+func addSearchFilters(fs *flag.FlagSet) *searchFilters {
+	f := &searchFilters{}
+	fs.Var(&f.types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
+	fs.Var(&f.statuses, "status", "filter by status: "+statusList()+" (repeatable)")
+	fs.Var(&f.tags, "tag", "filter by tag (repeatable)")
+	fs.Var(&f.prefixes, "prefix", "only concepts under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
+	f.source = fs.String("source", "", "only concepts citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
+	f.linksTo = fs.String("links-to", "", "only concepts whose body links at this `id` — what points at one concept (its backlinks)")
+	fs.Var(&f.trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
+	fs.Var(&f.fm, "fm", fmUsage)
+	f.rejected = fs.Bool("rejected", false, "only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results")
+	return f
+}
+
+// params folds the filters into the wire call both commands make. Query
+// and Sort are what tells the two apart: exactly one of them is ever set,
+// which is the whole of design doc 0062.
+func (f *searchFilters) params(query, sortBy, cursor string, limit int) (apiclient.SearchParams, error) {
+	pairs, err := fmPairs(f.fm)
+	if err != nil {
+		return apiclient.SearchParams{}, err
+	}
+	return apiclient.SearchParams{
+		Query: query, Types: f.types, Statuses: f.statuses, Tags: f.tags,
+		Source: *f.source, LinksTo: *f.linksTo, Prefixes: f.prefixes,
+		Sort: sortBy, Limit: limit, Trust: f.trust,
+		Rejected: optBool(*f.rejected), FM: pairs, Cursor: cursor,
+	}, nil
+}
+
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] [query]\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nWith --sort verified_at the command lists by verification age instead\nof searching (oldest first, never-verified last — the\ncanary feed); output leads with verified_at. With --sort usage it lists\nby demand (most search_hits first, never-used oldest-first at the bottom\n— the draft review feed); output leads with the search_hits count.\nWith --sort failed it lists concepts whose failure reports (report_outcome\nfailed) are still unanswered, worst first — the re-verification feed;\noutput leads with the failed count. `ochakai verify` takes a concept out\nof it, so a base that is kept up shows an empty feed.\nWith --sort stale_after it lists concepts whose declared stale_after has\npassed, most overdue first; output leads with that date. Verifying does\nnot empty this one — the date is the writer's declaration, so clearing it\nmeans editing the concept to re-declare an expiry.\n--source, --links-to and --prefix are filters, not modes: they combine\nwith a query or with any --sort. --source narrows to the concepts citing\none resource (the reverse of sources[].resource); --links-to narrows to\nthe concepts whose body links at one concept — its backlinks, the reverse\nof its inbound edges; --prefix narrows to\nthe concepts living under a path, which is how a team's own knowledge is\ntold apart from the company-wide vocabulary.\nThe two reverse lookups also stand alone: --source or --links-to with no\nquery lists in address order and pages with --cursor, because a set is\nthe answer and there is no text to rank it by.\nA listing that has more behind it prints the way on to stderr; pass it\nback with --cursor to read the next page. A search prints none: it is\nbounded by --limit, and a ranking has no page two.",
-		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai search --sort usage --status draft --limit 50   # review queue\n  ochakai search --sort failed --trust human-reviewed     # re-verification queue\n  ochakai search --sort stale_after                         # past their declared expiry\n  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai search --links-to metrics/revenue --type Insight   # which insights read this metric\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n")
-	var types, statuses, tags, prefixes repeated
-	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
-	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
-	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	fs.Var(&prefixes, "prefix", "only concepts under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
-	source := fs.String("source", "", "only concepts citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
-	linksTo := fs.String("links-to", "", "only concepts whose body links at this `id` — what points at one concept, in address order (its backlinks)")
-	var trust repeated
-	fs.Var(&trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
-	var fm repeated
-	fs.Var(&fm, "fm", fmUsage)
-	rejected := fs.Bool("rejected", false, "only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results")
-	sortBy := fs.String("sort", "", `list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first`)
-	limit := fs.Int("limit", 0, "max results (server default 10, max 50; with --sort: 100, max 1000)")
-	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit")
+		"Usage: ochakai search [flags] <query>\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nA search is a ranking: it is bounded by --limit and has no page two\n(design doc 0050), so it takes no cursor and prints none.\n`ochakai list` is the other half — the review feeds and the reverse\nlookups, which are sets rather than rankings and page with --cursor.\nThe filters below narrow either command the same way.",
+		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n  ochakai search revenue --links-to metrics/revenue --type Insight   # among what reads this metric\n")
+	filters := addSearchFilters(fs)
+	limit := fs.Int("limit", 0, "max results (server default 10, max 50)")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
-	if *sortBy != "" && len(pos) > 0 {
-		return fmt.Errorf("--sort lists concepts; it cannot be combined with a search query")
-	}
-	// Both reverse lookups list on their own, exactly as they do on the
-	// wire (design doc 0046 §3.5): a set is the answer and there is no
-	// text to rank it by. --links-to was left out of this guard and out
-	// of the message, so `--links-to X` alone was refused by the CLI and
-	// accepted by REST, and the refusal named the two ways out that were
-	// not the one the caller had asked for.
-	if *sortBy == "" && *source == "" && *linksTo == "" && strings.TrimSpace(strings.Join(pos, " ")) == "" {
-		return fmt.Errorf("search needs a query; use --sort to list concepts without one, --source to list what cites a resource, or --links-to to list what points at a concept")
+	if strings.TrimSpace(strings.Join(pos, " ")) == "" {
+		return fmt.Errorf("search needs a query; `ochakai list` is the command for the feeds and the reverse lookups")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
 	}
-	pairs, err := fmPairs(fm)
+	params, err := filters.params(strings.Join(pos, " "), "", "", *limit)
 	if err != nil {
 		return err
 	}
-	page, err := c.Search(ctx, apiclient.SearchParams{
-		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
-		Source: *source, LinksTo: *linksTo, Prefixes: prefixes, Sort: *sortBy, Limit: *limit,
-		Trust: trust, Rejected: optBool(*rejected), FM: pairs, Cursor: *cursor,
-	})
+	page, err := c.Search(ctx, params)
 	if err != nil {
 		return err
 	}
 	if *asJSON {
 		return printJSON(page)
 	}
+	printHits(page, "")
+	return nil
+}
+
+// cmdList is the listing half. A feed and a search are not one question
+// asked two ways: one is a total order that pages, the other a ranking
+// that does not (design doc 0050), and they disagree about --limit's
+// default, about whether --cursor means anything, and about what the
+// first column holds. While both lived in `ochakai search`, its help had
+// to say all of that before a reader reached the flags (design doc 0062).
+func cmdList(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"list",
+		"Usage: ochakai list [flags] [feed]\n\nList concepts as a set rather than a ranking: the review feeds, and the\ntwo reverse lookups. A listing is a total order, so it pages — a page\nwith more behind it prints the way on to stderr, and passing that back\nwith --cursor reads the next one.\n\nThe feed is the argument; it sets the order and the first column:\n\n  usage         most search_hits first, never-used oldest first at the\n                bottom. With --status draft, the draft review feed\n  verified_at   oldest verification first, never-verified last — the\n                canary feed\n  failed        unanswered failure reports (report_outcome failed),\n                worst first — the re-verification feed, which\n                `ochakai verify` empties\n  stale_after   past the expiry their author declared, most overdue\n                first. Verifying does not empty this one: the date is\n                the writer's declaration, so clearing it means editing\n                the concept to re-declare an expiry\n\nWithout a feed, --source or --links-to lists in address order, because a\nset is the answer and there is no text to rank it by. --source is what\ncites one resource (the reverse of sources[].resource); --links-to is\nwhat points at one concept (its backlinks).\n\nTo rank by relevance instead, use `ochakai search`.",
+		"  ochakai list usage --status draft --limit 50        # the draft review queue\n  ochakai list failed --trust human-reviewed          # the re-verification queue\n  ochakai list stale_after                            # past their declared expiry\n  ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric\n")
+	filters := addSearchFilters(fs)
+	limit := fs.Int("limit", 0, "max results (server default 100, max 1000)")
+	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same feed and filters")
+	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 1 {
+		fs.Usage()
+		return errReported
+	}
+	feed := ""
+	if len(pos) == 1 {
+		if feed = pos[0]; !domain.ValidListSort(feed) {
+			return fmt.Errorf("%q is not a feed; the feeds are %s", feed, strings.Join(domain.ListSorts, ", "))
+		}
+	}
+	// A reverse lookup lists on its own, exactly as it does on the wire
+	// (design doc 0046 §3.5). Anything else needs a feed to be an order:
+	// the filters narrow a listing, they do not make one.
+	if feed == "" && *filters.source == "" && *filters.linksTo == "" {
+		return fmt.Errorf("list needs a feed (%s) or a reverse lookup (--source, --links-to)",
+			strings.Join(domain.ListSorts, ", "))
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	params, err := filters.params("", feed, *cursor, *limit)
+	if err != nil {
+		return err
+	}
+	page, err := c.Search(ctx, params)
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		return printJSON(page)
+	}
+	printHits(page, feed)
+	// The way on, on stderr: stdout stays one hit per line, so a pipe
+	// reads the same whether or not there is another page (design doc
+	// 0050 §4). The command does not walk the pages itself — --limit is
+	// the bound the caller set, and a listing that grew past it on its
+	// own would surprise whoever piped it into head.
+	if page.Cursor != "" {
+		fmt.Fprintf(os.Stderr, "note: more concepts — rerun with --cursor %s\n", page.Cursor)
+	}
+	return nil
+}
+
+// printHits writes one hit per line. The first column is what the caller
+// ordered by: the relevance score for a search, and the feed's own number
+// or date for a listing.
+func printHits(page *apiclient.SearchResult, feed string) {
 	for _, h := range page.Hits {
 		lead := fmt.Sprintf("%.3f", h.Score)
-		switch *sortBy {
+		switch feed {
 		case "verified_at":
 			lead = "-" // never verified sorts last
 			if h.VerifiedAt != nil {
@@ -352,15 +438,6 @@ func cmdSearch(ctx context.Context, args []string) error {
 		}
 		fmt.Println(line)
 	}
-	// The way on, on stderr: stdout stays one hit per line, so a pipe
-	// reads the same whether or not there is another page (design doc
-	// 0050 §4). The command does not walk the pages itself — --limit is
-	// the bound the caller set, and a listing that grew past it on its
-	// own would surprise whoever piped it into head.
-	if page.Cursor != "" {
-		fmt.Fprintf(os.Stderr, "note: more concepts — rerun with --cursor %s\n", page.Cursor)
-	}
-	return nil
 }
 
 func cmdBrowse(ctx context.Context, args []string) error {
@@ -622,11 +699,11 @@ func cmdStats(ctx context.Context, args []string) error {
 		count int64
 		lists string
 	}{
-		{"drafts", st.Queues.Drafts, "--sort usage --status draft"},
-		{"failed", st.Queues.Failed, "--sort failed"},
-		{"stale_after", st.Queues.StaleAfter, "--sort stale_after"},
+		{"drafts", st.Queues.Drafts, "usage --status draft"},
+		{"failed", st.Queues.Failed, "failed"},
+		{"stale_after", st.Queues.StaleAfter, "stale_after"},
 	} {
-		fmt.Printf("%s\t%d\tochakai search %s%s\n", q.name, q.count, q.lists, scope)
+		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope)
 	}
 	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
 		st.WindowDays, st.Entries.Created, st.Review.Verifications,
@@ -993,7 +1070,7 @@ func reportNotes(notes []string) {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (--sort verified_at, --sort failed).\nIt does not edit the concept: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.\nVerifying a rejected concept lifts the rejection.",
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nIt does not edit the concept: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.\nVerifying a rejected concept lifts the rejection.",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
 	asJSON := fs.Bool("json", false, "print the verified concept as JSON")
 	id, _, err := idArgs(fs, args, 1)

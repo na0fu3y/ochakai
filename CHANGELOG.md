@@ -20,6 +20,33 @@ last entry.
 
 ### Added
 
+- **BREAKING** — a listing is not a search, so it is not the same command
+  (design doc [0062](docs/design/0062-a-listing-is-not-a-search.md)):
+
+  ```
+  ochakai search --sort usage --status draft  →  ochakai list usage --status draft
+  ochakai search --sort verified_at           →  ochakai list verified_at
+  ochakai search --sort failed                →  ochakai list failed
+  ochakai search --sort stale_after           →  ochakai list stale_after
+  ochakai search --source <uri>               →  ochakai list --source <uri>
+  ochakai search --links-to <id>              →  ochakai list --links-to <id>
+  ```
+
+  `ochakai search` now requires a query and takes no `--cursor`; a ranking
+  has no page two. `ochakai list` pages with `--cursor` and defaults
+  `--limit` to 100 (max 1000), where a search defaults to 10 (max 50) —
+  the two defaults that used to hide behind one flag. The nine filters
+  (`--type`, `--status`, `--tag`, `--trust`, `--prefix`, `--source`,
+  `--links-to`, `--fm`, `--rejected`) work the same on both.
+
+  `ochakai stats` prints the new spelling on its queue lines, so a script
+  that greps the third field gets `ochakai list …`.
+
+  **The wire is unchanged.** `GET /api/v1/search?sort=`, MCP's
+  `search_concepts` and the web UI are untouched, and so is the
+  vocabulary: `usage`, `verified_at`, `failed` and `stale_after` are the
+  same four words, moved from a flag's values to a command's argument.
+
 - **BREAKING** — one variable says what a deployment is (design doc
   [0060](docs/design/0060-one-word-for-the-posture.md)):
 

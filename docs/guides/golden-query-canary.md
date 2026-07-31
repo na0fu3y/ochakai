@@ -27,7 +27,7 @@ supplies the material and records what you found.
 ### 1. List — least recently verified first
 
 ```sh
-ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100 --json \
+ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100 --json \
   | jq -r '.hits[] | [.id, .verified_at, .title] | @tsv'
 ```
 
@@ -88,7 +88,7 @@ canonicalize a run against. ochakai takes no part in this step.
   `POST /api/v1/usage/queries/<id>`, MCP: `report_outcome`). The worked
   and failed totals show up under `/usage`, so verified concepts that have
   accumulated failures can be picked up for re-verification first. **The
-  `sort=failed` re-verification feed** (`ochakai search --sort failed
+  `sort=failed` re-verification feed** (`ochakai list failed
   --trust human-reviewed`, REST: `GET /api/v1/search?sort=failed`, MCP:
   `search_concepts` with `sort: "failed"`) lists them in order of how
   often they were reported wrong. It is the evidence-based entrance,

@@ -27,7 +27,7 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 ```
 
 Then try `ochakai context "why is revenue down?"`,
-`ochakai search --links-to glossary/completed-order`, and `ochakai search --sort
+`ochakai list --links-to glossary/completed-order`, and `ochakai list
 stale_after`. The concepts link to each other with ordinary markdown links, so
 the graph is already there — nothing declares it.
 

@@ -22,7 +22,9 @@ ochakai — context provider for data agents
 Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
-  search [query]          search knowledge; verified concepts rank higher
+  search <query>          search knowledge; verified concepts rank higher
+  list [feed]             list a review feed or a reverse lookup, page by page
+                          (usage, verified_at, failed, stale_after)
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full concepts)
   get <id>                print one concept as an OKF document
@@ -308,6 +310,74 @@ Examples:
   ochakai export - | OCHAKAI_URL=https://other ochakai import -
 ```
 
+## ochakai list
+
+```
+Usage: ochakai list [flags] [feed]
+
+List concepts as a set rather than a ranking: the review feeds, and the
+two reverse lookups. A listing is a total order, so it pages — a page
+with more behind it prints the way on to stderr, and passing that back
+with --cursor reads the next one.
+
+The feed is the argument; it sets the order and the first column:
+
+  usage         most search_hits first, never-used oldest first at the
+                bottom. With --status draft, the draft review feed
+  verified_at   oldest verification first, never-verified last — the
+                canary feed
+  failed        unanswered failure reports (report_outcome failed),
+                worst first — the re-verification feed, which
+                `ochakai verify` empties
+  stale_after   past the expiry their author declared, most overdue
+                first. Verifying does not empty this one: the date is
+                the writer's declaration, so clearing it means editing
+                the concept to re-declare an expiry
+
+Without a feed, --source or --links-to lists in address order, because a
+set is the answer and there is no text to rank it by. --source is what
+cites one resource (the reverse of sources[].resource); --links-to is
+what points at one concept (its backlinks).
+
+To rank by relevance instead, use `ochakai search`.
+
+Flags:
+  -cursor cursor
+    	resume a listing where the last page ended: the cursor the previous page printed, with the same feed and filters
+  -fm key=value
+    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
+  -json
+    	print the raw JSON response
+  -limit int
+    	max results (server default 100, max 1000)
+  -links-to id
+    	only concepts whose body links at this id — what points at one concept (its backlinks)
+  -prefix path
+    	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
+  -rejected
+    	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
+  -source resource
+    	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
+  -status value
+    	filter by status: draft|stable|deprecated (repeatable)
+  -tag value
+    	filter by tag (repeatable)
+  -trust value
+    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
+  -type value
+    	filter by type: Metric|Attested Computation|Skill|Playbook|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|API Endpoint|Reference, or any custom type (repeatable)
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai list usage --status draft --limit 50        # the draft review queue
+  ochakai list failed --trust human-reviewed          # the re-verification queue
+  ochakai list stale_after                            # past their declared expiry
+  ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100
+  ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this
+  ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric
+```
+
 ## ochakai log
 
 ```
@@ -540,54 +610,29 @@ Examples:
 ## ochakai search
 
 ```
-Usage: ochakai search [flags] [query]
+Usage: ochakai search [flags] <query>
 
 Search the knowledge base; verified concepts rank higher.
 Output: score, uri, status, title — description (one hit per line).
-With --sort verified_at the command lists by verification age instead
-of searching (oldest first, never-verified last — the
-canary feed); output leads with verified_at. With --sort usage it lists
-by demand (most search_hits first, never-used oldest-first at the bottom
-— the draft review feed); output leads with the search_hits count.
-With --sort failed it lists concepts whose failure reports (report_outcome
-failed) are still unanswered, worst first — the re-verification feed;
-output leads with the failed count. `ochakai verify` takes a concept out
-of it, so a base that is kept up shows an empty feed.
-With --sort stale_after it lists concepts whose declared stale_after has
-passed, most overdue first; output leads with that date. Verifying does
-not empty this one — the date is the writer's declaration, so clearing it
-means editing the concept to re-declare an expiry.
---source, --links-to and --prefix are filters, not modes: they combine
-with a query or with any --sort. --source narrows to the concepts citing
-one resource (the reverse of sources[].resource); --links-to narrows to
-the concepts whose body links at one concept — its backlinks, the reverse
-of its inbound edges; --prefix narrows to
-the concepts living under a path, which is how a team's own knowledge is
-told apart from the company-wide vocabulary.
-The two reverse lookups also stand alone: --source or --links-to with no
-query lists in address order and pages with --cursor, because a set is
-the answer and there is no text to rank it by.
-A listing that has more behind it prints the way on to stderr; pass it
-back with --cursor to read the next page. A search prints none: it is
-bounded by --limit, and a ranking has no page two.
+A search is a ranking: it is bounded by --limit and has no page two
+(design doc 0050), so it takes no cursor and prints none.
+`ochakai list` is the other half — the review feeds and the reverse
+lookups, which are sets rather than rankings and page with --cursor.
+The filters below narrow either command the same way.
 
 Flags:
-  -cursor cursor
-    	resume a listing where the last page ended: the cursor the previous page printed, with the same --sort and filters. Listings only — a search is bounded by --limit
   -fm key=value
     	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, id, parameters, resource, runtime, status_note, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
   -json
     	print the raw JSON response
   -limit int
-    	max results (server default 10, max 50; with --sort: 100, max 1000)
+    	max results (server default 10, max 50)
   -links-to id
-    	only concepts whose body links at this id — what points at one concept, in address order (its backlinks)
+    	only concepts whose body links at this id — what points at one concept (its backlinks)
   -prefix path
     	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
   -rejected
     	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
-  -sort string
-    	list instead of search: "verified_at" = by verification age (oldest first), "usage" = by demand (most search_hits first), "failed" = by failed outcome reports (re-verification feed), "stale_after" = past their declared expiry, most overdue first
   -source resource
     	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
   -status value
@@ -604,13 +649,8 @@ Flags:
 Examples:
   ochakai search "gross margin" --type Metric --type 'Glossary Term' --trust human-reviewed
   ochakai search churn --json | jq -r '.hits[] | .id'
-  ochakai search --sort verified_at --type 'Attested Computation' --trust human-reviewed --limit 100
-  ochakai search --sort usage --status draft --limit 50   # review queue
-  ochakai search --sort failed --trust human-reviewed     # re-verification queue
-  ochakai search --sort stale_after                         # past their declared expiry
-  ochakai search --source https://wiki.example/finance/revenue-recognition  # what cites this
-  ochakai search --links-to metrics/revenue --type Insight   # which insights read this metric
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
+  ochakai search revenue --links-to metrics/revenue --type Insight   # among what reads this metric
 ```
 
 ## ochakai stats
@@ -735,7 +775,7 @@ Usage: ochakai verify [flags] <id>
 Append a verification against the concept as it stands: you and the time
 are added to its ledger. The first confirmation and the tenth re-check
 are the same command, and re-checking is what takes a concept out of
-both review feeds (--sort verified_at, --sort failed).
+both review feeds (`ochakai list verified_at`, `ochakai list failed`).
 It does not edit the concept: the lifecycle status and the ETag stay put,
 because confirming knowledge and publishing it are different acts. Use
 `put` to move a draft to stable.
