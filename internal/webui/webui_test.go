@@ -146,9 +146,9 @@ func TestTypeVocabularyMatchesDomain(t *testing.T) {
 			t.Errorf("TYPE_ICONS has no icon for %q", ty)
 		}
 	}
-	for _, retired := range []string{"Semantic Model", "Golden Query"} {
+	for _, retired := range []string{"Semantic Model", "Golden Query", "Playbook", "API Endpoint"} {
 		if strings.Contains(icons, retired) {
-			t.Errorf("the page still offers %q, retired by design doc 0038", retired)
+			t.Errorf("the page still offers %q, retired by design doc 0038 or 0063", retired)
 		}
 	}
 }

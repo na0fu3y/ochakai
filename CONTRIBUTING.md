@@ -248,7 +248,7 @@ at whatever length the last one happened to be.
 
 `RECORD-LINES` bounds one record's thickness. Nothing bounded how many
 records there are, and that turned out to be the number that moved: 19
-records at v0.10.0, 59 now — 4.6x, against 2.3x for non-test Go and REST's
+records at v0.10.0, 60 now — 4.6x, against 2.3x for non-test Go and REST's
 own retreat from 19 operations to 11. Folding a surface leaves a record
 behind, and [docs/surface.md](docs/surface.md)'s DOC section already names
 that residue — an index entry in each language, an English summary, a
@@ -256,8 +256,8 @@ paragraph in that file or this one — for the manual it counts. Records are
 the larger half of the same residue, and until now none of it was counted
 anywhere.
 
-    RECORD-COUNT: 59
-    RECORD-CORPUS-LINES: 10292
+    RECORD-COUNT: 60
+    RECORD-CORPUS-LINES: 10422
 
 Both count every record under `docs/design`, Superseded ones included:
 they still ship in the tree, and a reader following a `Status:` header

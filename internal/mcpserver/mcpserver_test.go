@@ -634,9 +634,9 @@ func TestToolSchemasCarryTheTypeVocabulary(t *testing.T) {
 				t.Errorf("%s never names the recommended type %q", tool.Name, ty)
 			}
 		}
-		for _, retired := range []string{"Semantic Model", "Golden Query"} {
+		for _, retired := range []string{"Semantic Model", "Golden Query", "Playbook", "API Endpoint"} {
 			if strings.Contains(text, retired) {
-				t.Errorf("%s still recommends %q, retired by design doc 0038", tool.Name, retired)
+				t.Errorf("%s still recommends %q, retired by design doc 0038 or 0063", tool.Name, retired)
 			}
 		}
 	}

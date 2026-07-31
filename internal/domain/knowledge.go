@@ -27,13 +27,11 @@ const (
 	TypeMetrics      Type = "Metric"               // semantic metric definition, synonyms
 	TypeComputations Type = "Attested Computation" // sanctioned computation and the means to check a run of it (OKF SPEC §10, design doc 0036 §3.6)
 	TypeSkills       Type = "Skill"                // the procedure an executor.resource points at (OKF SPEC §10.2)
-	TypePlaybooks    Type = "Playbook"             // an operational procedure people and agents follow (OKF SPEC §4.4)
 	TypeInsights     Type = "Insight"              // how to read a metric: baselines, caveats
 	TypePolicies     Type = "Policy"               // the rule that decides a number; what a sources[].resource cites
 	TypeTerms        Type = "Glossary Term"        // glossary term
 	TypeDatasets     Type = "BigQuery Dataset"     // dataset: a container grouping tables
 	TypeTables       Type = "BigQuery Table"       // table catalog entry
-	TypeEndpoints    Type = "API Endpoint"         // catalog entry for an asset that is not a BigQuery one
 	TypeReferences   Type = "Reference"            // mirror of external material (enums, licenses, schema docs)
 )
 
@@ -55,15 +53,22 @@ const (
 // itself spells out (design doc 0038). "Semantic Model" and "Golden Query"
 // left on the first count: the one carried its meaning in a foreign spec
 // rather than in its spelling, and the other is what an Attested
-// Computation with a runtime already is. Skill, Playbook, Policy and API
-// Endpoint joined on the second — Skill and Policy are what an entry's own
-// executor.resource and sources[].resource point at, so leaving them out
-// left both ends of an edge ochakai already stores without a name.
+// Computation with a runtime already is. Skill and Policy joined on the
+// second — they are what an entry's own executor.resource and
+// sources[].resource point at, so leaving them out left both ends of an
+// edge ochakai already stores without a name.
+//
+// "Playbook" and "API Endpoint" also joined with 0038, on SPEC's example
+// list alone, and left with design doc 0063: a recommended type is taught
+// on every MCP call (design doc 0015 §3.1), and neither spelling was ever
+// written by ochakai's own examples or by OKF's own reference bundles —
+// SPEC naming a type in prose is not the same evidence as somebody having
+// used it.
 //
 // The retired spellings stay first-class as free types; only the
 // recommendation is gone.
-var Types = []Type{TypeMetrics, TypeComputations, TypeSkills, TypePlaybooks, TypeInsights,
-	TypePolicies, TypeTerms, TypeDatasets, TypeTables, TypeEndpoints, TypeReferences}
+var Types = []Type{TypeMetrics, TypeComputations, TypeSkills, TypeInsights,
+	TypePolicies, TypeTerms, TypeDatasets, TypeTables, TypeReferences}
 
 // TypesHint renders the recommended vocabulary for help and error text,
 // so no surface keeps its own copy of the list to fall behind.

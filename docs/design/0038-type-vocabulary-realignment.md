@@ -4,10 +4,12 @@ Status: Accepted(2026-07-27)。[0023](0023-okf-type-vocabulary.md) を
 Superseded にし、[0028](0028-retire-compile-sql.md) §3 の
 「`Semantic Model` は推奨語彙に残す」と
 [0036](0036-okf-schema-first.md) §3.6 の 9 型を改訂する。
-**型の語彙領域の現行ドキュメント**。実装は同 PR。
 [0046](0046-bundle-address-space.md) §3.9 が書き込み時の case 正規化
 (`CanonicalType`)を撤去する — 語彙そのものは不変で、照合が case 非依存で
-あることも変わらない
+あることも変わらない。**型の語彙領域の現行ドキュメントは
+[0063](0063-two-unused-recommended-types-leave.md)** —
+同ドキュメントが §3.2 の `Playbook` / `API Endpoint` に関する記述と §4 の
+表を改訂し、11 型は 9 型になる
 Date: 2026-07-27
 
 ## 1. 目的

@@ -79,7 +79,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - CLI: 26
 - FLAG: 28
 - ENV: 15
-- VOCAB: 36
+- VOCAB: 34
 - DOC: 25
 - DOC-LINES: 5790
 
@@ -378,7 +378,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `OCHAKAI_VERTEX_PROJECT`
 - `PORT`
 
-## VOCAB (36)
+## VOCAB (34)
 
 八つ目の次元は**語**である。上の七つが数えているのは機構 — 呼べるもの、
 設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
@@ -414,9 +414,12 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 型は閉じた集合ではない([0038](design/0038-type-vocabulary-realignment.md):
 一行の値ならどれでも型になる)。ここで数えているのは**製品が教える
 推奨語彙**であって、書ける値の全体ではない。それでも数えるのは、
-11 の綴りを `--type` のヘルプにも MCP スキーマにも
+9 の綴りを `--type` のヘルプにも MCP スキーマにも
 [knowledge.md](knowledge.md) の表にも書いている以上、それは利用者が
-払っているものだからである。
+払っているものだからである。`Playbook` と `API Endpoint` は
+[0063](design/0063-two-unused-recommended-types-leave.md) がここから外した
+— SPEC の例示にはあったが、ochakai 自身の examples にも OKF 公式の
+リファレンスバンドルにも一度も書かれていなかった。
 
 - `change.attach`
 - `change.create`
@@ -443,14 +446,12 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `trust.human-reviewed`
 - `trust.machine-confirmed`
 - `trust.unverified`
-- `type.API Endpoint`
 - `type.Attested Computation`
 - `type.BigQuery Dataset`
 - `type.BigQuery Table`
 - `type.Glossary Term`
 - `type.Insight`
 - `type.Metric`
-- `type.Playbook`
 - `type.Policy`
 - `type.Reference`
 - `type.Skill`

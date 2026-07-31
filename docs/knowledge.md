@@ -24,13 +24,11 @@ decision records it links are authoritative.
 | `Metric` | Semantic metric definition, synonyms |
 | `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it. A golden query is one of these: `runtime` says where the SQL runs, and a producer key such as `question` carries the question it answers |
 | `Skill` | A procedure a concept's `executor.resource` points at — how to actually run a computation on a given runtime |
-| `Playbook` | An operational procedure people and agents follow, bound to no resource: incident triage, an on-call runbook |
 | `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
 | `Policy` | The rule that decides a number — revenue recognition, cost allocation. What a concept's `sources[].resource` cites |
 | `Glossary Term` | Glossary term |
 | `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
 | `BigQuery Table` | BigQuery table catalog entry: source, column notes, known issues |
-| `API Endpoint` | Catalog entry for an asset that is not a BigQuery one |
 | `Reference` | Mirror of external material: enum definitions, licenses, schema docs |
 
 These are recommendations, not a closed set — any single-line value works as
