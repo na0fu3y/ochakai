@@ -380,18 +380,27 @@ curl -fsSL "https://raw.githubusercontent.com/na0fu3y/ochakai/v$VERSION/examples
   go run github.com/na0fu3y/ochakai/cmd/ochakai@latest put queries/monthly-revenue
 ```
 
-Connect Claude Code — with the Cloud Run proxy running, no headers, no
-tokens (this repository's committed `.mcp.json` does the same
-automatically when you open the repo in Claude Code):
+Point Claude Code — or any agent with a shell — at the same URL; the CLI
+run above already proved it resolves tokens with no proxy needed. This is
+the recommended way in, per the README's
+[Connect an agent](../../README.md#connect-an-agent):
+
+```sh
+go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
+ochakai use $OCHAKAI_URL
+```
+
+If you want MCP tools inside Claude Code instead, the bridge needs no
+proxy either — `claude mcp add ochakai -- ochakai mcp-stdio` (needs
+`gcloud auth login` and `ochakai` on `PATH`; see [connecting an MCP
+client](../../docs/guides/mcp-clients.md#what-the-bridge-needs)).
+
+Smoke test over REST through the [Cloud Run
+proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy),
+same as §3 (direct `curl` is blocked by IAM):
 
 ```sh
 gcloud run services proxy ochakai --region=$REGION --port=8787 &
-claude mcp add --transport http ochakai http://localhost:8787/mcp
-```
-
-Smoke test over REST (through the proxy, also tokenless):
-
-```sh
 curl "http://localhost:8787/api/v1/search?q=revenue"
 ```
 
