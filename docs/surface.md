@@ -80,8 +80,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 28
 - ENV: 15
 - VOCAB: 34
-- DOC: 24
-- DOC-LINES: 5003
+- DOC: 23
+- DOC-LINES: 4929
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -464,7 +464,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
-## DOC (24)
+## DOC (23)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -486,7 +486,7 @@ private IP・team web UI・hardening checklist・upgrade path の全文を
 天井の節にある。
 
 **そしてここは、どの次元より速く増えてきた。** v0.10.0 から現在まで、
-REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 26 ページは
+REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 25 ページは
 2,971 行から 5,600 行を超えた。畳み込みは本物だったが、**畳んだことの
 説明が、畳んだものより速く増えていた** — 表面を一つ減らす決定が、記録と
 二つの索引と英語要約とこの文書の段落を生む。数えていなければ、それは
@@ -529,6 +529,15 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 最初の例である。architecture.md と knowledge.md は同じ六つの主題を二度語り
 、二枚を一枚に畳んだ。DOC が 26 → 25 になった分、天井も合わせている。
 
+**[#380](https://github.com/na0fu3y/ochakai/issues/380) はここで初めて
+下がった、畳み込みではない理由で。** `docs/images/README.md` は
+`createdb shots` や `sips --resampleWidth` といったスクリーンショット
+再現手順で、読むのは ochakai を使う人ではなく変える人だった。下の
+「数えていないもの」が CONTRIBUTING を除外している理由(変える人の面)
+と同じ理由がこのページにも当てはまっていたのに、置き場所だけが違って
+いた。[CONTRIBUTING.md](../CONTRIBUTING.md) に移し、DOC は 24 → 23 に
+なった。
+
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
 - **[docs/design](design) の記録。** 利用者ではなく、変えようとする人が
@@ -566,7 +575,6 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 - `docs/guides/operating.md`
 - `docs/guides/rest-integration.md`
 - `docs/guides/troubleshooting.md`
-- `docs/images/README.md`
 - `docs/loop.md`
 - `docs/positioning.md`
 - `docs/surface.md`
