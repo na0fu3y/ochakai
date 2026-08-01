@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -300,6 +301,20 @@ func Handler(svc *service.Service) http.Handler {
 			scope, err := service.NormalizePrefix(path)
 			if err != nil {
 				writeError(w, err)
+				return
+			}
+			// A concept or a file is an object at its own address, not a
+			// directory: NormalizePrefix accepts it — dots are legal
+			// inside a segment, so "metrics/revenue.md" is a legal prefix
+			// — and nothing lives beneath an object's own address, so the
+			// same empty-archive-with-a-200 the reserved names got fixed
+			// above is still open here for every other object.
+			refused, err := refuseObjectAsArchive(w, r, svc, scope)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if refused {
 				return
 			}
 			writeBundleArchive(w, r, svc, scope)
@@ -784,7 +799,54 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	return announceReadOnly(svc, mux)
+	return announceReadOnly(svc, stdlibDefaultsAsJSON(mux))
+}
+
+// stdlibDefaultsAsJSON rewrites the two responses net/http's ServeMux
+// answers by itself — an unmatched path, and a path matched by another
+// method — into the same {"error": "..."} envelope every handler in this
+// file writes by hand, instead of the plain-text body http.Error puts on
+// the wire. Both travel through http.Error, which always sets
+// Content-Type to text/plain before the status is written; every
+// deliberate response here sets a JSON Content-Type first (writeJSON
+// runs before WriteHeader), so a still-text/plain Content-Type at a 404
+// or 405 can only be one of these two, never an application 404 like
+// store.ErrNotFound.
+func stdlibDefaultsAsJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(&defaultEnvelopeWriter{ResponseWriter: w}, r)
+	})
+}
+
+type defaultEnvelopeWriter struct {
+	http.ResponseWriter
+	rewriting bool
+}
+
+func (w *defaultEnvelopeWriter) WriteHeader(status int) {
+	if (status != http.StatusNotFound && status != http.StatusMethodNotAllowed) ||
+		!strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") {
+		w.ResponseWriter.WriteHeader(status)
+		return
+	}
+	w.rewriting = true
+	msg := "not found"
+	if status == http.StatusMethodNotAllowed {
+		msg = "method not allowed"
+	}
+	body, _ := json.Marshal(map[string]string{"error": msg})
+	h := w.Header()
+	h.Set("Content-Type", "application/json; charset=utf-8")
+	h.Set("Content-Length", strconv.Itoa(len(body)))
+	w.ResponseWriter.WriteHeader(status)
+	_, _ = w.ResponseWriter.Write(body)
+}
+
+func (w *defaultEnvelopeWriter) Write(b []byte) (int, error) {
+	if w.rewriting {
+		return len(b), nil
+	}
+	return w.ResponseWriter.Write(b)
 }
 
 // announceReadOnly marks every REST response from a read-only deployment
@@ -998,6 +1060,43 @@ func refuseReserved(w http.ResponseWriter, path, because string) bool {
 			base, because),
 	})
 	return true
+}
+
+// refuseObjectAsArchive answers 409 when path names one object — a
+// concept at its own <id>.md or a file at its own path — rather than a
+// directory nothing lives under, and reports whether it did. It goes
+// straight to the store rather than through svc.Get: this is a check of
+// whether the address is a subtree, not a read of the object living
+// there, and must not count as a fetch or fault on missing attachments.
+func refuseObjectAsArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) (bool, error) {
+	if path == "" {
+		return false, nil // the root is the whole bundle, never an object's own address
+	}
+	isObject := false
+	if id, ok := strings.CutSuffix(path, ".md"); ok {
+		switch _, err := svc.Store.Get(r.Context(), id); {
+		case err == nil:
+			isObject = true
+		case !errors.Is(err, store.ErrNotFound):
+			return false, err
+		}
+	}
+	if !isObject {
+		switch _, err := svc.Store.GetFileMeta(r.Context(), path); {
+		case err == nil:
+			isObject = true
+		case !errors.Is(err, store.ErrNotFound):
+			return false, err
+		}
+	}
+	if !isObject {
+		return false, nil
+	}
+	writeJSON(w, http.StatusConflict, map[string]string{
+		"error": fmt.Sprintf(
+			"%s is an object, not a directory (design doc 0046 §3.5); there is no subtree here to archive, ask the directory it sits in", path),
+	})
+	return true, nil
 }
 
 // splitReserved cuts a bundle path into the directory it names and its
@@ -1219,6 +1318,15 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.As(err, &unsupportedErr):
 		status = http.StatusNotImplemented
+	}
+	if status == http.StatusInternalServerError {
+		// Every status above is a message a caller is meant to read; this
+		// one is whatever the store or a driver said, which can carry SQL
+		// text or a connection string. Logged for an operator instead of
+		// put on the wire.
+		slog.Default().Error("unhandled REST error", "error", err)
+		writeJSON(w, status, map[string]string{"error": "internal error"})
+		return
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }

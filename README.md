@@ -15,9 +15,9 @@ humans and agents together, and served to Claude Code and every other
 data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
 a bundled web UI. More at [ochak.ai](https://ochak.ai).
 
-One Go binary and Postgres: Cloud Run + Cloud SQL for
-[about $10/month](deploy/cloudrun/README.md), or Docker and nothing else
-locally.
+One Go binary and Postgres: [Terraform stands up Cloud Run + Cloud
+SQL](deploy/terraform/README.md) for about $10/month, or Docker and
+nothing else locally.
 
 [Quick start](#quick-start) · [Why ochakai](#why-ochakai) ·
 [Requirements](#requirements) · [All docs](docs/README.md) ·
@@ -63,7 +63,11 @@ ochakai verify metrics/revenue      # promotes a draft; re-affirms a verified co
 ochakai ui                          # web UI at http://127.0.0.1:8098, acting as you
 ```
 
-Auth is `gcloud login` / ADC — there are no tokens to configure. Every
+Auth is `gcloud auth login` — there are no tokens to configure. (A
+service account's ADC works too; your own `gcloud auth
+application-default login` does not, because Cloud Run needs an
+audience-bound ID token that only those two can mint — [why, and what to
+run instead](docs/guides/mcp-clients.md#what-the-bridge-needs).) Every
 command carries its flags and worked examples in `ochakai <command> -h`;
 [docs/cli.md](docs/cli.md) is that same text rendered, for reading before
 you install anything.
@@ -167,7 +171,8 @@ in the version you are running.
   [Writing knowledge](docs/knowledge.md) · [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) ·
   [Troubleshooting](docs/guides/troubleshooting.md)
-- **Running** — [Deploy on Cloud Run](deploy/cloudrun/README.md) ·
+- **Running** — [Deploy with Terraform](deploy/terraform/README.md) ·
+  [the gcloud reference it runs](deploy/cloudrun/README.md) ·
   [Configuration](docs/configuration.md) ·
   [Operating](docs/guides/operating.md) ·
   [Golden query canary](docs/guides/golden-query-canary.md)

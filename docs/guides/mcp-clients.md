@@ -21,7 +21,7 @@ bridge** — which has prerequisites of its own, listed
 
 | Client | Local `docker compose` | Cloud Run | Config lives in |
 |---|---|---|---|
-| [Claude Code](#claude-code) | URL | bridge | `.mcp.json`, or `claude mcp add` |
+| [Claude Code](#claude-code)* | URL | bridge | `.mcp.json`, or `claude mcp add` |
 | [Claude Desktop](#claude-desktop) | bridge | bridge | `claude_desktop_config.json` |
 | [Cursor](#cursor) | URL | bridge | `~/.cursor/mcp.json` or `.cursor/mcp.json` |
 | [VS Code](#vs-code) | URL | bridge | `.vscode/mcp.json` |
@@ -33,6 +33,10 @@ bridge** — which has prerequisites of its own, listed
 
 The local URL below is `http://localhost:8080/mcp`, which is what
 `deploy/compose.yaml` gives you.
+
+\* Claude Code is the one exception to this table: it also has a shell,
+and the [recommended path there is the CLI](#claude-code), not MCP at
+all.
 
 Claude Code and the bridge are what this project exercises. The rest is
 transcribed from each client's own documentation as of July 2026 and
@@ -88,6 +92,10 @@ is present on a machine by default:
 - **`gcloud auth login` having happened**, as a principal holding
   `roles/run.invoker` on the service.
 
+The CLI resolves the same token the same way when you point it straight
+at a Cloud Run URL (`ochakai use https://your-service.run.app`) — this
+list is really what reaching Cloud Run needs, bridge or not.
+
 "The client is configured with no credentials" is a claim about the
 config file, not about the machine. The credential exists; it lives in
 your gcloud session instead of in JSON, which is what keeps it out of
@@ -103,13 +111,21 @@ token at all.
 
 ## Claude Code
 
+**Recommended: the CLI, not MCP.** Claude Code has a shell, so the CLI's
+tool schemas cost the agent no context — `--help` is read on demand —
+and against Cloud Run it needs no proxy or bridge process, because it
+resolves the ID token itself. See the README's
+[Connect an agent](../../README.md#connect-an-agent).
+
+### If you want MCP tools instead
+
 Against a local server:
 
 ```sh
 claude mcp add --transport http ochakai http://localhost:8080/mcp
 ```
 
-Against Cloud Run:
+Against Cloud Run, the bridge:
 
 ```sh
 claude mcp add ochakai -- ochakai mcp-stdio
@@ -117,13 +133,9 @@ claude mcp add ochakai -- ochakai mcp-stdio
 
 `-s user` puts it in your user config instead of the project's; the
 default scope is local to the project directory. `-s project` writes
-`.mcp.json`, which is the committed form — this repository has one, and
-opening it in Claude Code connects automatically.
-
-Claude Code also has a shell, which is the other way in and often the
-better one: the CLI's tool schemas cost the agent no context, because
-`--help` is read on demand. See the README's
-[Connect an agent](../../README.md#connect-an-agent).
+`.mcp.json`, which is the committed form — this repository's own
+`.mcp.json` targets its local `docker compose` server and connects
+automatically once that's running.
 
 ## Claude Desktop
 
@@ -309,8 +321,10 @@ and exposes `/mcp` alongside the web UI, bound to loopback:
 ochakai ui        # http://127.0.0.1:8098/mcp
 ```
 
-`gcloud run services proxy` is the third way, and it is the one the
-deploy guide's [§5](../../deploy/cloudrun/README.md) documents.
+`gcloud run services proxy` is the third way — a plain HTTP tunnel with
+no MCP-specific behavior. The deploy guide uses it for verifying a
+deployment over `curl` ([§3](../../deploy/cloudrun/README.md)), not for
+connecting a client; prefer the bridge or `ochakai ui` above for that.
 
 ## Clients that cannot reach your deployment
 
