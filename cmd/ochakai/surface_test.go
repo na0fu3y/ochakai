@@ -345,7 +345,10 @@ func TestOpenAPIComponentsAreReachable(t *testing.T) {
 // item takes, so the ceiling section cannot be mistaken for a surface.
 //
 // A cap whose name ends in -LINES caps a measurement rather than a list:
-// "- DOC-LINES: 5800" is the reading volume of the section DOC counts.
+// "- DOC-LINES: 5800" is the reading volume of the section DOC counts. A
+// -LINES cap may carry its own -LINES-SLACK cap beside it — the only
+// tolerance this file grants, and stated for the same reason the ceiling
+// itself is: so it is a number somebody agreed to rather than a habit.
 // Every other section is counted in names, because a name is learned once
 // however often it appears; reading is not paid that way.
 var surfaceCapRe = regexp.MustCompile(`^- ([A-Z-]+): (\d+)$`)
@@ -354,11 +357,34 @@ var surfaceCapRe = regexp.MustCompile(`^- ([A-Z-]+): (\d+)$`)
 // section whose amount it caps.
 const capMeasures = "-LINES"
 
+// slackSuffix marks the tolerance declared beside a -LINES cap, and
+// capSlack is that suffix appended to capMeasures: "DOC-LINES-SLACK"
+// says how much of DOC-LINES's ceiling may sit unspent before that is
+// itself a failure, rather than headroom nobody has to return.
+const (
+	slackSuffix = "-SLACK"
+	capSlack    = capMeasures + slackSuffix
+)
+
 // The counters above are a thermometer: they say how big each surface is
 // and let it be any size at all, as long as the document agrees. This is
-// the thermostat. Every surface declares a ceiling, and exceeding it
-// fails — so growing one means editing a line whose subject is the
-// agreement, not just the arithmetic.
+// the thermostat. Every surface declares a ceiling, and the ceiling is
+// exact — not a limit not to cross but the number this project agreed the
+// surface is, so growing one means editing a line whose subject is the
+// agreement, not just the arithmetic, and shrinking one means the same
+// PR returns the ceiling it earned.
+//
+// Without this, a fold could lower what is declared and leave the cap
+// where it was: nothing would fail, and the next addition would spend the
+// gap in silence rather than moving a number anyone could see in the
+// diff. That is what happened to DOC-LINES once (d28c3c8) before the
+// habit of lowering it by hand caught back up — this test is that habit,
+// checked from outside rather than trusted (design doc 0035).
+//
+// A list dimension carries no tolerance: adding or removing a name is
+// already a visible diff, so there is no amount of drift small enough to
+// deserve one. The -LINES measurements are different, and get their own
+// stated slack below.
 //
 // The ceiling is one number in one file and anybody can raise it. That is
 // the point rather than a weakness, and it is the same bargain
@@ -391,16 +417,33 @@ func TestSurfaceStaysUnderItsCaps(t *testing.T) {
 			t.Errorf("%s counts %s but sets it no cap; every counted surface has a ceiling", surfaceDoc, name)
 			continue
 		}
-		if section.declared > limit {
+		switch {
+		case section.declared > limit:
 			t.Errorf(`%s is at %d, over its cap of %d.
 
 The cap is the size this project agreed %s should be. Going past it is a
 decision, so it is made by editing the cap — in the same PR, with the
 three questions answered in the description, and ideally with something
 folded away in exchange.`, name, section.declared, limit, name)
+		case section.declared < limit:
+			t.Errorf(`%s is at %d, under its cap of %d.
+
+A list dimension carries no headroom: adding a name is already a visible
+diff, so the cap is not a limit not to cross but the count this project
+agreed %s is. A fold that lowers what is declared and leaves the cap
+where it was banks the difference for the next addition to spend without
+moving a number anyone would see. Lower the cap to %d in the same PR that
+earned it.`, name, section.declared, limit, name, section.declared)
 		}
 	}
 	for name := range caps {
+		if strings.HasSuffix(name, capSlack) {
+			base := strings.TrimSuffix(name, slackSuffix)
+			if _, ok := caps[base]; !ok {
+				t.Errorf("%s declares %s but no %s for it to soften", surfaceDoc, name, base)
+			}
+			continue
+		}
 		counted := strings.TrimSuffix(name, capMeasures)
 		if _, ok := sections[counted]; !ok {
 			t.Errorf("%s caps %s, which it does not count", surfaceDoc, name)
@@ -737,15 +780,32 @@ func TestSurfaceDocCountsUserDocs(t *testing.T) {
 // files, moving no number anywhere. Names are counted everywhere else
 // because a name is learned once however often it appears — reading is not
 // paid that way, so this is the one place an amount has a ceiling.
+//
+// The ceiling alone let headroom bank silently: d28c3c8 shortened the
+// deploy guide, raised DOC-LINES 5,753 → 5,790 for the room the fold
+// needed, and landed at 5,762 — 28 lines the PR whose whole purpose was
+// to make the manual smaller never returned. DOC-LINES-SLACK is the
+// stated tolerance for the gap a normal edit leaves; anything wider than
+// that is unreturned budget, not editing noise, and fails here instead of
+// waiting for somebody to notice by hand.
 func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
 	content, err := os.ReadFile(surfaceDoc)
 	if err != nil {
 		t.Fatalf("read %s: %v", surfaceDoc, err)
 	}
-	limit := 0
+	limit, slack := 0, -1
 	for _, line := range strings.Split(string(content), "\n") {
-		if m := surfaceCapRe.FindStringSubmatch(line); m != nil && m[1] == "DOC"+capMeasures {
+		m := surfaceCapRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		switch m[1] {
+		case "DOC" + capMeasures:
 			if limit, err = strconv.Atoi(m[2]); err != nil {
+				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
+			}
+		case "DOC" + capSlack:
+			if slack, err = strconv.Atoi(m[2]); err != nil {
 				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
 			}
 		}
@@ -753,8 +813,12 @@ func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
 	if limit == 0 {
 		t.Fatalf("%s sets no DOC%s cap: this check now guards nothing", surfaceDoc, capMeasures)
 	}
+	if slack < 0 {
+		t.Fatalf("%s sets no DOC%s cap: DOC%s would carry silent headroom with no ceiling of its own", surfaceDoc, capSlack, capMeasures)
+	}
 	_, lines := userDocs(t)
-	if lines > limit {
+	switch headroom := limit - lines; {
+	case headroom < 0:
 		t.Errorf(`the manual is %d lines, over its cap of %d.
 
 What a reader has to get through is a cost like any other, and this is the
@@ -762,6 +826,15 @@ only ceiling on an amount rather than on a list of names. Going past it is
 a decision: raise the cap in the same PR, having answered %s's three
 questions — or find the pages that say the same thing twice.`,
 			lines, limit, surfaceDoc)
+	case headroom > slack:
+		t.Errorf(`the manual is %d lines, %d under its cap of %d — more than the %d
+DOC%s allows.
+
+A fold that shrinks the manual is meant to lower the cap in the same PR,
+not leave headroom for the next addition to spend without moving a
+number anyone would see (this is exactly what happened to DOC-LINES
+across d28c3c8 and its follow-up). Lower the cap to %d, or close to it.`,
+			lines, headroom, limit, slack, capSlack, lines)
 	}
 }
 

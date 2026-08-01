@@ -289,12 +289,14 @@ anywhere.
 
     RECORD-COUNT: 60
     RECORD-CORPUS-LINES: 8152
+    RECORD-CORPUS-LINES-SLACK: 15
 
-Both count every record under `docs/design`, Superseded ones included:
-they still ship in the tree, and a reader following a `Status:` header
-still opens them. Counting only what is current would let a supersession
-buy headroom for the next addition — the file stays on disk either way, so
-that would be the next escape hatch rather than a saving.
+Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
+`docs/design`, Superseded ones included: they still ship in the tree, and
+a reader following a `Status:` header still opens them. Counting only
+what is current would let a supersession buy headroom for the next
+addition — the file stays on disk either way, so that would be the next
+escape hatch rather than a saving.
 
 The two catch different shapes. `RECORD-CORPUS-LINES` is `DOC-LINES`'s
 argument applied to this corpus: a record that never crosses
@@ -308,7 +310,25 @@ reason a Superseded record was never exempt from `RECORD-CORPUS-LINES`
 either — but a reader following either area now meets one record to read,
 not two.
 
-These live here, next to `RECORD-LINES`, rather than as an eleventh line in
+Every ceiling in this file and in [docs/surface.md](docs/surface.md) used
+to check only one direction: over the number fails, under it is free. That
+let headroom bank quietly — a fold could shrink what a ceiling measures
+and leave the ceiling where it was, and the next addition would spend the
+gap without moving a number anyone would see in the diff. It happened to
+`DOC-LINES` once: a PR that shortened the deploy guide raised the ceiling
+5,753 → 5,790 for room the fold needed, landed at 5,762, and left 28 lines
+nobody returned ([#376](https://github.com/na0fu3y/ochakai/issues/376)).
+`RECORD-COUNT`, like the name-counted dimensions in docs/surface.md's 上限
+section, now has to match exactly — a record either exists or it does
+not, so there is no amount of drift small enough to deserve headroom.
+`RECORD-CORPUS-LINES` is an amount, not a list, so instead it gets a
+stated tolerance: `RECORD-CORPUS-LINES-SLACK` is how far the ceiling may
+sit above the actual total before that gap is itself a failure. Both are
+read back by `TestDesignRecordCorpusStaysUnderItsCeiling`, and both are
+checked the same way `RECORD-LINES` already was — one number in one file,
+raised or lowered in the PR that earns it.
+
+These live here, next to `RECORD-LINES`, rather than as extra lines in
 [docs/surface.md](docs/surface.md)'s 上限 section. A record is read by
 somebody changing ochakai, not somebody using it — that document's DOC
 section already excludes `docs/design` from the manual on that basis — and
@@ -323,10 +343,10 @@ to be recorded at both ends — the new record naming what it retires, and
 the retired one saying so — a new record has to fit under its own
 ceiling, a Superseded one has to be a tombstone
 (`TestSupersededRecordsAreTombstones`), and the corpus as a whole has to
-fit under `RECORD-COUNT` and `RECORD-CORPUS-LINES`
-(`TestDesignRecordCorpusStaysUnderItsCeiling`). What no test can read is
-the judgment: whether the opening table's row still points at the doc
-somebody should actually read. That is where the attention goes.
+fit under `RECORD-COUNT` and `RECORD-CORPUS-LINES`, with no more slack than
+`RECORD-CORPUS-LINES-SLACK` allows (`TestDesignRecordCorpusStaysUnderItsCeiling`).
+What no test can read is the judgment: whether the opening table's row still
+points at the doc somebody should actually read. That is where the attention goes.
 
 Two decisions worth knowing before proposing features:
 
