@@ -416,6 +416,7 @@ paths:
                   value:
                     error: cursor belongs to the usage listing; it cannot resume the failed one
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/bundle/{path}:
     get:
       operationId: getBundleFile
@@ -731,6 +732,7 @@ paths:
                   error: { type: string }
               example:
                 error: no object at this path
+        "500": { $ref: "#/components/responses/Error" }
     put:
       operationId: putBundleFile
       summary: Write one object of the bundle
@@ -836,6 +838,7 @@ paths:
                   error: { type: string }
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
+        "500": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteBundleFile
       summary: Delete one object of the bundle
@@ -887,6 +890,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/context:
     get:
       operationId: getContext
@@ -1189,6 +1193,7 @@ paths:
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveKnowledge
@@ -1299,6 +1304,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/review/{id}:
     parameters:
       - name: id
@@ -1536,6 +1542,7 @@ paths:
                     error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
       - name: id
@@ -1575,6 +1582,7 @@ paths:
                     last_used_at: "2026-07-26T23:58:07.336114Z"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
     post:
       operationId: reportOutcome
       summary: Report an outcome (worked/failed) for a knowledge concept
@@ -1641,6 +1649,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/stats:
     get:
       operationId: getStats
@@ -1748,6 +1757,7 @@ paths:
                           last_at: "2026-07-26T08:11:02.104233Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/reembed:
     post:
       operationId: reembedKnowledge
@@ -1842,6 +1852,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "501": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
 components:
   headers:
     ETag:
