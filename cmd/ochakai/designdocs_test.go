@@ -406,6 +406,63 @@ ceiling is for. Raise it in the same PR, having said why.`,
 	}
 }
 
+// tombstoneLineCeilingRe reads "TOMBSTONE-LINES: 12" from CONTRIBUTING.md,
+// declared next to RECORD-LINES for the same reason: raising it should be
+// a line in a diff whose subject is the agreement, not a constant here.
+var tombstoneLineCeilingRe = regexp.MustCompile(`(?m)^\s*TOMBSTONE-LINES: (\d+)$`)
+
+// commitLinkRe matches the link a tombstone owes the reader: the commit
+// that held the record in full, as this repository's own GitHub blob URL
+// (github.com/<owner>/<repo>/blob/<sha>/<path>).
+var commitLinkRe = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/blob/[0-9a-f]{7,40}/`)
+
+// TestSupersededRecordsAreTombstones holds every Superseded record to what
+// CONTRIBUTING.md's "What a superseded record keeps" says its body may be:
+// title, header, one sentence of what it decided, and a link to the
+// commit that held it in full. Ten Superseded records once carried 2,107
+// lines between them — prose nobody rereads once a Status: header has
+// already sent the reader to the record that replaced it.
+func TestSupersededRecordsAreTombstones(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	m := tombstoneLineCeilingRe.FindStringSubmatch(string(content))
+	if m == nil {
+		t.Fatalf("%s declares no TOMBSTONE-LINES ceiling: this check now guards nothing", contributing)
+	}
+	limit, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("%s: TOMBSTONE-LINES %q: %v", contributing, m[1], err)
+	}
+
+	checked := 0
+	for _, r := range designRecords(t) {
+		if !supersededByRe.MatchString(r.status) {
+			continue
+		}
+		checked++
+		if lines := strings.Count(r.body, "\n"); lines > limit {
+			t.Errorf(`docs/design/%s is %d lines, over the %d a tombstone keeps
+(TOMBSTONE-LINES in %s).
+
+A record whose Status: says Superseded shrinks to a tombstone: the title,
+the header, one sentence of what it decided, and a link to the commit
+that held it in full. Nobody can be depending on a decision that has
+already been replaced, and the full text stays one git show away — it
+does not need to stay in this file too.`,
+				r.file, lines, limit, contributing)
+		}
+		if !commitLinkRe.MatchString(r.body) {
+			t.Errorf("docs/design/%s is Superseded but links no commit holding it in full — "+
+				"a tombstone's whole point is that the text is one git show away, not gone", r.file)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no Superseded record found: this check now guards nothing")
+	}
+}
+
 // maxSupersededSummary is how many lines a superseded record earns in the
 // English index. README.en.md is a table, one row per record, so a
 // superseded record's row is a record link and a status cell — always one
