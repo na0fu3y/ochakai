@@ -31,6 +31,19 @@ last entry.
   is minutes long and restartable, so resuming means starting the pass
   over, not losing work.
 
+- **BREAKING** — `Accept: application/gzip` on a concept's or a file's
+  own bundle path answers 409 instead of an empty, valid `tar.gz` with a
+  200 on it. Dots are legal inside a path segment, so an object's own
+  address — `metrics/revenue.md` as much as a reserved name — normalized
+  as a legal prefix nothing lives under, and the archive of nothing that
+  produced was the same defect fixed one release ago for `index.md` and
+  `log.md` (design doc 0046 §3.5): the refusal covered the two reserved
+  names and not every other object. It matters because the archive is
+  what `api/openapi.yaml` tells an operator to verify a backup by
+  reading rather than by the status code, and this one read fine — valid
+  gzip, valid tar, empty. A backup script pointed one path too deep
+  succeeded forever.
+
 ## [0.17.0] - 2026-07-31
 
 ### Added
