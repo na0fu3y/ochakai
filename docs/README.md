@@ -14,9 +14,10 @@ and what it refuses to do. It is deliberately short; the manual is here.
   store inside an AI-analyst product, and a markdown vault with an MCP
   server. Includes where ochakai loses, and who should pick something
   else.
-- [Architecture](architecture.md) — how the pieces fit, what the data
-  model is, and why there is no authorization layer. English summary of
-  the decision records.
+- [Architecture](architecture.md) — how the pieces fit, the data model —
+  types, ids as addresses, links that come from the prose, the OKF
+  frontmatter that carries trust — and why there is no authorization
+  layer. English summary of the decision records.
 - [Compatibility and support](compatibility.md) — every interface is
   unstable at 0.x, there is no deprecation window, and only the latest
   release is supported. Read this before building on ochakai.
@@ -26,10 +27,6 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 ## For someone using it
 
-- [Writing knowledge](knowledge.md) — what goes in a concept: the type
-  vocabulary, ids as addresses, links that come from the prose,
-  attachments, the OKF frontmatter that carries trust, and what search
-  does with all of it.
 - [The improvement loop](loop.md) — recall, write-back, review, outcome
   reports: four prompts that walk it end to end, the web UI's three
   feeds, and what gets measured.
