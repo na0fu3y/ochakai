@@ -34,6 +34,14 @@ last entry.
   (port 8080) connected to nothing, with no error saying so. It now
   matches the compose default; the Cloud Run guide says to repoint it
   at the proxy instead of claiming that happens automatically.
+- The operating guide's web UI section still showed delegated writes as
+  `agent:ochakai-webui@…`, the actor-kind spelling design doc
+  [0043](docs/design/0043-document-first.md) §3.8 retired for `process:`
+  back in 0.15 — a caller that sent it now gets a 400. The retired-spelling
+  guard (issue [#275](https://github.com/na0fu3y/ochakai/issues/275))
+  checked addresses and OKF lifecycle values but not actor kinds, so three
+  lines kept teaching a request that cannot succeed. Both are now
+  guarded.
 - **BREAKING** — `POST /api/v1/reembed`'s `cursor` is now opaque, versioned
   and base64url-encoded, the same shape a listing's `cursor` has had since
   design doc [0050](docs/design/0050-listings-page-rankings-do-not.md). It
