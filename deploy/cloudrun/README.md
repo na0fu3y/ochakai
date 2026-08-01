@@ -369,8 +369,9 @@ go run github.com/na0fu3y/ochakai/cmd/ochakai@latest create queries/monthly-reve
 ```
 
 Connect Claude Code — with the Cloud Run proxy running, no headers, no
-tokens (this repository's committed `.mcp.json` does the same
-automatically when you open the repo in Claude Code):
+tokens. The repository's committed `.mcp.json` defaults to the local
+compose port (8080); repoint its `url` at the proxy below, or add the
+server with `claude mcp add`:
 
 ```sh
 gcloud run services proxy ochakai --region=$REGION --port=8787 &

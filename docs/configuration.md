@@ -25,12 +25,16 @@ and a database that cannot hold vectors makes a discovered deployment fall
 back to lexical search rather than fail. Without it, plain PostgreSQL is
 enough. CI and the deploy guide both exercise Postgres 17.
 
-**The server needs Docker; the client commands need a binary.** The README's
-quick start runs the CLI with `go run`, which wants the toolchain named in
-`go.mod` — Go 1.21 and newer download it for you. To stay toolchain-free,
-take a [release archive](https://github.com/na0fu3y/ochakai/releases)
-instead, or talk to the API directly, since that is all the CLI does — see
-[Writing knowledge](knowledge.md) for the one-line `curl` version of a write.
+**The server needs Docker; the client commands need a binary.** The
+README's quick start runs its one CLI command, `import`, inside the
+compose container (`docker compose exec ochakai /ochakai import ...`), so
+nothing beyond Docker is needed to follow it. Past that — `ochakai use`,
+`ochakai context`, the web UI — take a
+[release archive](https://github.com/na0fu3y/ochakai/releases), or
+`go run ./cmd/ochakai`, which wants the toolchain named in `go.mod` (Go
+1.21 and newer download it for you). Or talk to the API directly, since
+that is all the CLI does — see [Writing knowledge](knowledge.md) for the
+one-line `curl` version of a write.
 
 ## Environment variables
 
