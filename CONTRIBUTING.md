@@ -221,7 +221,7 @@ ochakai actually pays for — and `cmd/ochakai/surface_test.go` fails when
 the count and the build disagree, so an addition arrives as a heading
 moving from `(19)` to `(20)` rather than as a few lines buried in a spec.
 
-The same document opens with the seven conditions ochakai exists to
+The same document opens with the eight conditions ochakai exists to
 satisfy. **A proposal that serves none of them is a no before the
 questions start**, and that is the cheapest place to find out. If it does
 serve one, saying which is where the description begins — serving a
@@ -440,7 +440,7 @@ Two decisions worth knowing before proposing features:
 - Keep PRs small and focused; include tests for behavior changes.
 - A PR that widens a surface — a REST operation, an MCP tool, a CLI
   command, an environment variable — names which of
-  [docs/surface.md](docs/surface.md)'s seven conditions it serves, updates
+  [docs/surface.md](docs/surface.md)'s eight conditions it serves, updates
   the count there, and answers the three questions in the description.
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml) — keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`

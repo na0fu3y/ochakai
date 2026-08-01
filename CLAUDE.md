@@ -55,13 +55,15 @@ to `(20)` instead of disappearing into a spec diff. **Prose is counted
 too**: the manual has a ceiling on its line count, so explaining a fold
 at length is a decision like any other.
 
-That document opens with the **seven conditions** ochakai exists to
+That document opens with the **eight conditions** ochakai exists to
 satisfy — the knowledge stays the user's, Google Cloud with no secrets,
 OKF v0.2, no forward-deployed engineer, usable from Claude Code, a small
-embeddable REST API, a measurable improvement loop. Read them before
-proposing anything a user would touch. **A proposal that serves none of
-the seven is one to decline**, and saying so is the more useful answer;
-naming which one it serves is where a proposal that survives begins.
+embeddable REST API, a measurable improvement loop, and being one of the
+best choices available to a Japanese-speaking user weighing similar
+services. Read them before proposing anything a user would touch. **A
+proposal that serves none of the eight is one to decline**, and saying so
+is the more useful answer; naming which one it serves is where a proposal
+that survives begins.
 Serving a condition is necessary and not sufficient — every condition has
 infinitely many mechanisms that would serve it.
 
