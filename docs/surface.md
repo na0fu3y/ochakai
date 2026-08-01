@@ -80,8 +80,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 28
 - ENV: 15
 - VOCAB: 34
-- DOC: 24
-- DOC-LINES: 5807
+- DOC: 25
+- DOC-LINES: 5803
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -511,26 +511,15 @@ docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
 
-<<<<<<< HEAD
-**26 → 25 は逆方向で、量そのものではなく何を量に入れるかの変更で
-ある。** [docs/cli.md](cli.md) の 808 行のうち 702 行は
-`cmd/ochakai/clidocs_test.go` の `TestCLIReferenceIsCurrent` がバイナリ
-自身の `-h` から再生成し、手書きの散文は `cliDocsHeader` の見出し 1 つ
-だけである([0035](design/0035-verifiability.md))。この節が量っている
-のは前から通して読まれる分量であり、`ochakai search -h` と打つ人にも、
-インストール前に一冊として読む人にも、このページはそう読まれていない
-([#371](https://github.com/na0fu3y/ochakai/issues/371))。基準は狭く
-してある — **ビルドから生成され、テストが往復を保証し、固定ヘッダー
-以外に手書きの散文がない** — 今日これに当たるのは `docs/cli.md` だけ
-で、次に生成ページが増えても自動では外れない。5,952 → 5,161。
-=======
+[#374](https://github.com/na0fu3y/ochakai/issues/374) は逆方向をもう一度
+たどった。アクセスモデル・secret-zero・read-only/public の姿勢は README・
+configuration・architecture・faq・deploy の各ページに同じ話が繰り返し
+書かれ、二本のテキストが同じことを言えばどちらが古いか分からなくなる
+([faq.md](faq.md) 自身の規則)という代金を払っていた。持ち主を一つに決め、
+残りを一行のリンクに畳んで、#374 の削減が出ている。
 [#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
-最初の例である。architecture.md と knowledge.md は同じ六つの主題 —
-概念は OKF 文書、型は開いた集合、id はパス、リンクは本文から、
-verified の台帳と status のライフサイクル、provenance はバンドルから
-読み返さない — を二度語り、日本語検索の説明も二重だった。二枚を一枚に
-畳み、DOC を 26 → 25、天井を 5,952 から 5,833 まで下げている。
->>>>>>> 4035544 (Fold docs/knowledge.md into docs/architecture.md)
+最初の例である。architecture.md と knowledge.md は同じ六つの主題を二度語り
+、二枚を一枚に畳んだ。DOC が 26 → 25 になった分、天井も合わせている。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 

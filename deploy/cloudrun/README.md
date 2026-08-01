@@ -211,11 +211,10 @@ How this works:
 
 - **Cloud Run IAM decides who can reach the service** (org members and
   service accounts you grant `roles/run.invoker`; anonymous requests get
-  Google's 401 without hitting the container). ochakai performs no
-  authorization: whoever reaches it reads and writes.
-- **ochakai reads the Cloud-Run-verified caller identity for provenance**:
-  people are recorded as `human:<email>`, service accounts as
-  `process:<sa-email>`. Nothing to issue, rotate, or revoke.
+  Google's 401 without hitting the container), and ochakai records who
+  they were as provenance — see
+  [requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)
+  for the whole access model.
 - **Never make the service publicly invokable (`allUsers`)** — the
   identity headers ochakai reads are only trustworthy behind Cloud Run's
   IAM check. The single exception is a deployment that reads no identity

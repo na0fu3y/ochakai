@@ -87,22 +87,20 @@ container image, a different argument (design doc
 
 ## Identity, provenance, and no authorization
 
-**Whoever can reach the service can read and write it.** ochakai has no
-roles, no scopes, no per-concept permissions, and no way to make a
-read-only user (design doc [0002](design/0002-authn-authz.md)). This is
-a decision, not a gap, and for some organizations it is a hard stop. Read
-this section before the rest.
+**Whoever can reach the service can read and write it — there is no
+per-concept permission, and for some organizations that is a hard stop.**
+What that means operationally, and the postures that narrow it, are in
+[requirements and configuration](configuration.md#authentication-has-no-configuration)
+(design doc [0002](design/0002-authn-authz.md)); this section is the *why*.
 
-What ochakai does with an identity is *record* it. Cloud Run performs the
-IAM check and forwards the verified caller identity in a header; ochakai
-reads that header for one purpose — deciding whose name goes on the
-concept. An email ending in `.gserviceaccount.com` becomes
-`process:<sa-email>`, anything else `human:<email>`. Nothing else consults
-it. Verifying a concept is not restricted either: who verified a
-concept is always recorded, so the decision about whether to trust it is
-made by whoever reads the provenance, not by a gate at the write. The
-phrase the record uses is that trust is secured *by recording, not by
-authorizing*.
+What ochakai does with an identity is *record* it, for one purpose:
+deciding whose name goes on the concept (how the identity itself is read
+is in
+[requirements and configuration](configuration.md#authentication-has-no-configuration)).
+Verifying a concept is not restricted either: who verified it is always
+recorded, so the decision about whether to trust it is made by whoever
+reads the provenance, not by a gate at the write. The phrase the record
+uses is that trust is secured *by recording, not by authorizing*.
 
 The consequences to plan around:
 
@@ -112,14 +110,11 @@ The consequences to plan around:
   guide](guides/operating.md#hardening) carries a hardening checklist.
 - **An embedding application collapses its users into one identity.** An
   app that calls ochakai with its own service account records every one
-  of its users as that service account. `X-Ochakai-On-Behalf-Of` fixes
-  this for callers you list in `OCHAKAI_DELEGATING_CALLERS`; both
-  identities are then recorded (`human:… via process:…`), never just the
-  forwarded one, and a delegation header from an unlisted caller is
-  refused rather than quietly downgraded (design doc
-  [0027](design/0027-delegated-provenance.md)). The team web UI does the
-  same thing from an IAP-signed JWT, so browser edits are attributed to
-  the person signed in (design doc
+  of its users as that service account.
+  [Delegated provenance](guides/rest-integration.md#delegated-provenance-forwarding-who-used-your-product)
+  fixes this for callers an operator lists explicitly (design doc
+  [0027](design/0027-delegated-provenance.md)); the team web UI does the
+  same from an IAP-signed JWT (design doc
   [0032](design/0032-webui-iap-identity.md)).
 - **The identity says who, not what.** An agent that writes under a
   person's own credentials — an MCP client, a CLI in a script — records
@@ -138,18 +133,16 @@ The consequences to plan around:
   kept, plainly labelled as a claim, rather than thrown away — see the
   data model below.
 
-A deployment can be made **read-only** with `OCHAKAI_MODE=read-only`
-(design doc [0040](design/0040-read-only-mode.md)). This is not
-authorization either, and for a sharper reason: it never looks at the
-caller. It cannot be narrowed to some concepts or some people, and it
-refuses whoever operates the deployment exactly as it refuses anyone
-else. The check sits in the service layer, which both REST and MCP come
-through, so a write endpoint added later is covered without its author
-knowing about it. Each surface says it in its own vocabulary — REST
-answers 403 and marks every response `Ochakai-Read-Only: true`, MCP
-simply does not offer the write tools, and the web UI stops drawing the
-buttons. Usage telemetry keeps recording: a search hit is the server's
-own observation, not content a caller wrote.
+A deployment can be made **read-only**, which is not authorization
+either and for a sharper reason: the check never looks at the caller, so
+it refuses whoever operates the deployment exactly as it refuses anyone
+else. It sits in the service layer that both REST and MCP pass through,
+so a write endpoint added later is covered without its author knowing
+about it. What each surface does about it, and the sibling **public**
+posture that also stops reading identity at all, are in
+[requirements and configuration](configuration.md#environment-variables)
+(design docs [0040](design/0040-read-only-mode.md),
+[0042](design/0042-public-read-only.md)).
 
 There is one narrow exception to "no authorization", and it is
 deliberately framed as not being one: MCP refuses to overwrite, delete,
@@ -417,11 +410,10 @@ forever.
 
 The vector half — Vertex AI embeddings, authenticated by ADC with no API
 key to hold, fused with the lexical ranking by reciprocal rank fusion —
-is **on by default where ochakai runs on Google Cloud**: it reads its own
-project from the metadata server, and whether it may call Vertex AI there
-is IAM's answer rather than a setting, asked once at startup (design doc
-[0053](design/0053-embeddings-by-default.md)). A deployment that cannot
-call it, or that says `OCHAKAI_EMBEDDINGS=off`, runs lexical-only.
+is **on by default where ochakai runs on Google Cloud** (design doc
+[0053](design/0053-embeddings-by-default.md); what decides it, and how to
+decline, is in
+[requirements and configuration](configuration.md#environment-variables)).
 Vectors are written when a concept is written, so a base loaded before
 embeddings were reachable — or a changed model — leaves older concepts
 unembedded until `ochakai reembed` runs.
