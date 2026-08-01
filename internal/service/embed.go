@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -103,7 +104,10 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	if limit <= 0 || limit > maxReembedPass {
 		limit = defaultReembedPass
 	}
-	entryCursor, attachCursor := splitReembedCursor(cursor)
+	entryCursor, attachID, attachName, err := decodeReembedCursor(cursor)
+	if err != nil {
+		return nil, err
+	}
 	ids, err := s.Store.ListUnembedded(ctx, s.Embedder.Model(), entryCursor, limit)
 	if err != nil {
 		return nil, err
@@ -138,7 +142,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	// first and attachments fill the rest of the pass, so a corpus with
 	// both makes progress on both.
 	if rest := limit - len(ids); rest > 0 {
-		attachCursor, err = s.reembedAttachments(ctx, res, attachCursor, rest)
+		attachID, attachName, err = s.reembedAttachments(ctx, res, attachID, attachName, rest)
 		if err != nil {
 			return nil, err
 		}
@@ -160,19 +164,18 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	}
 	res.Missing = missing + attMissing
 	if res.Missing > 0 {
-		res.Cursor = joinReembedCursor(entryCursor, attachCursor)
+		res.Cursor = encodeReembedCursor(entryCursor, attachID, attachName)
 	}
 	return res, nil
 }
 
 // reembedAttachments re-embeds up to limit attachments, returning the
-// cursor to resume from. Failures are counted like concept failures: a
+// position to resume from. Failures are counted like concept failures: a
 // file the provider rejects must not strand the rest.
-func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, cursor string, limit int) (string, error) {
-	afterID, afterName := splitReembedCursor(cursor)
+func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, afterID, afterName string, limit int) (string, string, error) {
 	pending, err := s.Store.ListUnembeddedAttachments(ctx, s.Embedder.Model(), afterID, afterName, limit)
 	if err != nil {
-		return cursor, err
+		return afterID, afterName, err
 	}
 	for _, a := range pending {
 		att, data, err := s.Store.GetAttachment(ctx, a.KnowledgeID, a.Name)
@@ -193,7 +196,7 @@ func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, cu
 		}
 		afterID, afterName = a.KnowledgeID, a.Name
 	}
-	return joinReembedCursor(afterID, afterName), nil
+	return afterID, afterName, nil
 }
 
 // attachmentVectorCount reports whether a current-model vector exists,
@@ -207,20 +210,44 @@ func (s *Service) attachmentVectorCount(ctx context.Context, id, name string) in
 	return n
 }
 
-// The reembed cursor carries two positions — concepts and attachments —
-// in one opaque string, so the wire stays a single token the CLI can
-// hand back unchanged. "\x00" cannot occur in an id (design doc 0017)
-// or an attachment name.
-func joinReembedCursor(a, b string) string {
-	if a == "" && b == "" {
+// reembedCursorTag marks a cursor as belonging to the reembed pass rather
+// than to a listing (internal/service/cursor.go) — both share cursorVersion
+// as their first field, so without a second discriminator a listing cursor
+// with one ordering key and a reembed cursor decode to the same field
+// count and one would silently be accepted as the other.
+const reembedCursorTag = "reembed"
+
+// The reembed cursor carries three positions — the last concept id and
+// the last attachment's (concept id, name) — packed and base64url-encoded
+// the same way encodeCursor packs a listing position: a version prefix so
+// a later change of shape is a 400 with a sentence, and an opaque token
+// rather than raw ids so the wire survives proxies and WAFs that balk at
+// a NUL byte and needs no client-side encoding to round-trip. "\x00"
+// cannot occur in an id (design doc 0017) or an attachment name.
+func encodeReembedCursor(entryID, attachID, attachName string) string {
+	if entryID == "" && attachID == "" && attachName == "" {
 		return ""
 	}
-	return a + "\x00" + b
+	raw := strings.Join([]string{cursorVersion, reembedCursorTag, entryID, attachID, attachName}, "\x00")
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
-func splitReembedCursor(c string) (string, string) {
-	a, b, _ := strings.Cut(c, "\x00")
-	return a, b
+// decodeReembedCursor reads a cursor back, refusing anything this server
+// did not hand out — including a cursor from a listing's own cursor
+// space, which carries a different tag in the same position.
+func decodeReembedCursor(c string) (entryID, attachID, attachName string, err error) {
+	if c == "" {
+		return "", "", "", nil
+	}
+	raw, decErr := base64.RawURLEncoding.DecodeString(c)
+	if decErr != nil {
+		return "", "", "", malformedCursor()
+	}
+	parts := strings.Split(string(raw), "\x00")
+	if len(parts) != 5 || parts[0] != cursorVersion || parts[1] != reembedCursorTag {
+		return "", "", "", malformedCursor()
+	}
+	return parts[2], parts[3], parts[4], nil
 }
 
 // embedDocument embeds text, halving it and retrying while the model says

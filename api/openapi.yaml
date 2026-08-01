@@ -1830,7 +1830,7 @@ paths:
                     attachments: 0
                     failed: 0
                     missing: 613
-                    cursor: "metrics/revenue\u0000"
+                    cursor: "MQByZWVtYmVkAG1ldHJpY3MvcmV2ZW51ZQAA"
                 done:
                   summary: The last pass
                   description: Nothing is missing, so no cursor comes back.
