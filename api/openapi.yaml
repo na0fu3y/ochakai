@@ -36,10 +36,20 @@ info:
     name: MIT
 servers:
   - url: /
+security:
+  - GoogleIDToken: []
+  - {}
 # Authentication is Cloud Run IAM (Google identity), handled by the
 # infrastructure before requests reach ochakai — there is no
 # application-level auth scheme. ochakai reads the forwarded identity
-# only to record provenance (design docs 0002/0003). An application on
+# only to record provenance (design docs 0002/0003). The scheme below
+# (components/securitySchemes/GoogleIDToken) documents what Cloud Run
+# checks before a request reaches this server; ochakai itself verifies
+# nothing, which is why the empty alternative sits beside it — a
+# deployment with OCHAKAI_MODE=public or dev answers with no Authorization
+# header at all (design docs 0040, 0042). See
+# docs/guides/rest-integration.md for a walkthrough of minting a token and
+# what it takes to embed this API in your own service. An application on
 # the delegator allowlist may forward the end user it acts for with
 # X-Ochakai-On-Behalf-Of (design doc 0027) — the header is honored on
 # every call; it is declared below (components/parameters/OnBehalfOf)
@@ -1867,6 +1877,25 @@ paths:
         "501": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
 components:
+  securitySchemes:
+    GoogleIDToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        A Google-signed identity token, audience-bound to this service's
+        URL, as `Authorization: Bearer <token>` (design docs 0002 §2,
+        0003). Cloud Run IAM verifies it before a request reaches ochakai
+        — the container never checks the signature itself and never sees
+        a caller without one, except on OCHAKAI_MODE=public or dev, where
+        nothing is checked and every caller is `human:anonymous` (design
+        docs 0040, 0042); the empty security requirement alongside this
+        scheme covers that case. Mint one with
+        `gcloud auth print-identity-token --audiences=$OCHAKAI_URL`, or
+        from code with a client library's ID-token helper — see
+        [Embedding the REST API](../docs/guides/rest-integration.md) for
+        both, plus everything else an application calling this API
+        directly needs.
   headers:
     ETag:
       description: >
