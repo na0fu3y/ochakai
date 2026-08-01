@@ -2326,6 +2326,84 @@ func TestRESTIntegrationReservedNamesAreNotObjects(t *testing.T) {
 	}
 }
 
+// A concept and a file are objects at their own address, not a
+// directory — dots are legal inside a segment, so their address
+// normalizes as a legal prefix nothing lives under. The archive face
+// used to hand back an empty, valid tar.gz with a 200 on it (issue
+// #364), which reads as "nothing lives under this path" rather than as
+// "this is not a directory" — the same defect
+// TestRESTIntegrationReservedNamesAreNotObjects covers for the two
+// generated names, still open for every other object.
+func TestRESTIntegrationAnObjectIsNotAnArchivableDirectory(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, s := newIntegrationServer(t)
+	s.UseBlobStore(memBlobStore{})
+
+	typ := testdb.Unique(t, "restobjarchive")
+	id := typ + "/revenue"
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	loose := typ + "/seed.csv"
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+loose,
+		bytes.NewReader([]byte("a,b\n1,2\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	putResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	putResp.Body.Close()
+	if putResp.StatusCode != http.StatusOK {
+		t.Fatalf("writing the file = %d", putResp.StatusCode)
+	}
+
+	for _, path := range []string{id + ".md", loose} {
+		resp, err := getArchive(t, srv.URL+"/api/v1/bundle/"+path, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			t.Errorf("archive at %s = %d, want 409 (it is an object, not a directory)", path, resp.StatusCode)
+		}
+	}
+
+	// The directory both objects sit in is a real subtree, and archiving
+	// it still works, carrying both.
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/"+typ, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("archive status = %d", resp.StatusCode)
+	}
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]bool{}
+	for tr := tar.NewReader(gz); ; {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		found[hdr.Name] = true
+	}
+	if !found[id+".md"] || !found[loose] {
+		t.Errorf("archive of the real directory = %v, want both %s and %s", found, id+".md", loose)
+	}
+}
+
 // storedDocument reads a concept's stored bytes back, so a test can say
 // what a dry run did not write.
 func storedDocument(t *testing.T, base, id string) string {

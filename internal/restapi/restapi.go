@@ -302,6 +302,20 @@ func Handler(svc *service.Service) http.Handler {
 				writeError(w, err)
 				return
 			}
+			// A concept or a file is an object at its own address, not a
+			// directory: NormalizePrefix accepts it — dots are legal
+			// inside a segment, so "metrics/revenue.md" is a legal prefix
+			// — and nothing lives beneath an object's own address, so the
+			// same empty-archive-with-a-200 the reserved names got fixed
+			// above is still open here for every other object.
+			refused, err := refuseObjectAsArchive(w, r, svc, scope)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if refused {
+				return
+			}
 			writeBundleArchive(w, r, svc, scope)
 			return
 		}
@@ -998,6 +1012,43 @@ func refuseReserved(w http.ResponseWriter, path, because string) bool {
 			base, because),
 	})
 	return true
+}
+
+// refuseObjectAsArchive answers 409 when path names one object — a
+// concept at its own <id>.md or a file at its own path — rather than a
+// directory nothing lives under, and reports whether it did. It goes
+// straight to the store rather than through svc.Get: this is a check of
+// whether the address is a subtree, not a read of the object living
+// there, and must not count as a fetch or fault on missing attachments.
+func refuseObjectAsArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) (bool, error) {
+	if path == "" {
+		return false, nil // the root is the whole bundle, never an object's own address
+	}
+	isObject := false
+	if id, ok := strings.CutSuffix(path, ".md"); ok {
+		switch _, err := svc.Store.Get(r.Context(), id); {
+		case err == nil:
+			isObject = true
+		case !errors.Is(err, store.ErrNotFound):
+			return false, err
+		}
+	}
+	if !isObject {
+		switch _, err := svc.Store.GetFileMeta(r.Context(), path); {
+		case err == nil:
+			isObject = true
+		case !errors.Is(err, store.ErrNotFound):
+			return false, err
+		}
+	}
+	if !isObject {
+		return false, nil
+	}
+	writeJSON(w, http.StatusConflict, map[string]string{
+		"error": fmt.Sprintf(
+			"%s is an object, not a directory (design doc 0046 §3.5); there is no subtree here to archive, ask the directory it sits in", path),
+	})
+	return true, nil
 }
 
 // splitReserved cuts a bundle path into the directory it names and its
