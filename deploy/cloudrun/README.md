@@ -58,7 +58,7 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 Pin a version rather than `:latest`, so a redeploy is a decision. Without
 the `gh` CLI, read the number off the
 [releases page](https://github.com/na0fu3y/ochakai/releases) and set it by
-hand — `export VERSION=0.14.0`.
+hand — `export VERSION=0.17.0`.
 
 (This guide assumes 0.9.0 or later; earlier releases are
 [retracted](https://go.dev/ref/mod#go-mod-file-retract) and unsupported —
@@ -197,7 +197,7 @@ How this works:
   authorization: whoever reaches it reads and writes.
 - **ochakai reads the Cloud-Run-verified caller identity for provenance**:
   people are recorded as `human:<email>`, service accounts as
-  `agent:<sa-email>`. Nothing to issue, rotate, or revoke.
+  `process:<sa-email>`. Nothing to issue, rotate, or revoke.
 - **Never make the service publicly invokable (`allUsers`)** — the
   identity headers ochakai reads are only trustworthy behind Cloud Run's
   IAM check. The single exception is a deployment that reads no identity
@@ -365,7 +365,8 @@ network is needed — `$OCHAKAI_URL` was exported when the service was
 deployed above:
 
 ```sh
-go run github.com/na0fu3y/ochakai/cmd/ochakai@latest create queries/monthly-revenue -f examples/golden-query.md
+curl -fsSL "https://raw.githubusercontent.com/na0fu3y/ochakai/v$VERSION/examples/golden-query.md" | \
+  go run github.com/na0fu3y/ochakai/cmd/ochakai@latest put queries/monthly-revenue
 ```
 
 Connect Claude Code — with the Cloud Run proxy running, no headers, no
@@ -403,7 +404,7 @@ is most of what ochakai sells, collapses.
 
 Let the application forward the identity of the person using it
 (design doc 0027). Both identities are recorded — `human:tanaka@…
-via agent:app-sa@…` — never just the forwarded one, so a write made
+via process:app-sa@…` — never just the forwarded one, so a write made
 through the application stays distinguishable from one the person made
 directly.
 
@@ -425,7 +426,7 @@ The application then sends the header with each request:
 X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
 ```
 
-The kind (`human:` / `agent:`) is required and never guessed — the
+The kind (`human:` / `process:`) is required and never guessed — the
 application knows whether it is forwarding a person or another agent.
 
 Notes:
