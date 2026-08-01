@@ -41,11 +41,11 @@ letting the next agent trust it blind. Verifying it again empties the feed.
 If nothing comes back on the first prompt, the agent has not actually
 connected — `ochakai whoami` says which server it is talking to and as whom.
 
-To make the loop automatic rather than habitual, install the
-[Claude Code hooks](../examples/claude-code): a UserPromptSubmit hook injects
-relevant knowledge before the agent starts (recall), and a Stop hook asks it
-once per data session to save what it learned (write-back) — both without an
-LLM.
+To make the loop automatic rather than habitual, install the [Claude Code
+hooks](../examples/claude-code): a UserPromptSubmit hook injects relevant
+knowledge before the agent starts (recall), and a Stop hook asks it once per
+data session to save what it learned (write-back) and whether a recalled
+concept held up when acted on (`report_outcome`) — all without an LLM.
 
 ## The web UI: the human half
 
