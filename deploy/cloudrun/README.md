@@ -351,10 +351,7 @@ ochakai use $OCHAKAI_URL
 If you want MCP tools inside Claude Code instead, the bridge needs no
 proxy either — `claude mcp add ochakai -- ochakai mcp-stdio` (needs
 `gcloud auth login` and `ochakai` on `PATH`; see [connecting an MCP
-client](../../docs/guides/mcp-clients.md#what-the-bridge-needs)). The
-repository's committed `.mcp.json` defaults to the local compose port
-(8080); if using this repo's config file against a Cloud Run deployment,
-repoint its `url` at the proxy below.
+client](../../docs/guides/mcp-clients.md#what-the-bridge-needs)).
 
 Smoke test over REST through the [Cloud Run
 proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy),

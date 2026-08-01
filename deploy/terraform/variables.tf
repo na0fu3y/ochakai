@@ -306,7 +306,7 @@ variable "webui_iap_members" {
 variable "webui_records_browser_user" {
   description = <<-EOT
     Record the person signed in to the browser as the author of their edits
-    (`human:tanaka@… via agent:<webui-sa>`) instead of the webui's own service
+    (`human:tanaka@… via process:<webui-sa>`) instead of the webui's own service
     account. Sets OCHAKAI_IAP_AUDIENCE on the webui and adds the webui's
     service account to the server's delegating callers (design docs 0027,
     0032). Once set, serve-ui refuses any request IAP did not sign, so a

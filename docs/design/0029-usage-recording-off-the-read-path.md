@@ -1,6 +1,6 @@
 # ochakai 設計ドキュメント 0029: 利用測定を読み取りパスから外す
 
-Status: Accepted(2026-07-26)。[0049](0049-instance-metrics-and-search-misses.md)
+Status: Accepted(2026-07-26)。[0051](0051-instance-metrics-and-search-misses.md)
 が同じバッファ・同じフラッシュ・同じ 180 日の刈り取りを、エントリに紐づかない
 事実(ヒット 0 の検索)にも広げた — 決定そのものは変わらない
 Date: 2026-07-26

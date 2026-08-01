@@ -86,7 +86,7 @@ body:
         The commands or requests you ran, in order. If the content of an entry
         matters, paste it as OKF markdown.
       placeholder: |
-        1. ochakai create metrics/revenue -f revenue.md
+        1. ochakai put metrics/revenue -f revenue.md
         2. ochakai search "revenue" --type Metric
     validations:
       required: true

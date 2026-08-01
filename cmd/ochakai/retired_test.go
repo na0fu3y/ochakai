@@ -127,6 +127,7 @@ func repoTextFiles(t *testing.T) []string {
 	text := map[string]bool{
 		".go": true, ".md": true, ".yaml": true, ".yml": true, ".json": true,
 		".html": true, ".css": true, ".js": true, ".sh": true, ".sql": true,
+		".tf": true,
 	}
 	var out []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -138,7 +139,10 @@ func repoTextFiles(t *testing.T) []string {
 			return relErr
 		}
 		if d.IsDir() {
-			if skipDirs[rel] || strings.HasPrefix(d.Name(), ".") && rel != "." {
+			// .github holds prose a reader follows too — issue templates,
+			// most namely — so it is not skipped as a dot-directory the
+			// way .git and other tooling directories are.
+			if skipDirs[rel] || strings.HasPrefix(d.Name(), ".") && rel != "." && rel != ".github" {
 				return fs.SkipDir
 			}
 			return nil
