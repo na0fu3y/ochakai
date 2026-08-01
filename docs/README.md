@@ -72,6 +72,9 @@ and what it refuses to do. It is deliberately short; the manual is here.
   `get_context` have something to show.
 - [examples/claude-code](../examples/claude-code) — drop-in agent
   instructions and the recall / write-back hooks.
+- [Embedding the REST API](guides/rest-integration.md) — authenticating,
+  forwarding your users' identity without collapsing them into your
+  service account, and writing without racing another caller.
 
 ## For someone changing it
 

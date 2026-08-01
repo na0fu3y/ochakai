@@ -22,12 +22,20 @@ at the bottom.
 covers what happens after: backup and restore, hardening, the team web
 UI, monitoring, capacity, and upgrades.
 
+**Embedding ochakai in your own product?**
+[docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
+covers authenticating, delegated provenance and safe concurrent writes for
+an application calling the REST API directly.
+
 **Prefer infrastructure as code?**
 [deploy/terraform](../terraform) stands up §1–§4b (plus the web UI and
 demo posture) as a Terraform module, so a deployment can be reviewed as a
 diff, reproduced per environment, and destroyed cleanly. This guide stays
-the reference for §1–§5, §5c, §5d and §9; the operating guide covers the
-rest it leaves out — the web UI, org-policy guardrails, and upgrade notes.
+the reference for §1–§5, §5d and §9; the operating guide covers the web
+UI, org-policy guardrails and upgrade notes, and
+[docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
+covers §5c and the rest of what an application embedding the REST API
+needs.
 
 ## 1. Prerequisites
 
@@ -197,7 +205,7 @@ How this works:
   authorization: whoever reaches it reads and writes.
 - **ochakai reads the Cloud-Run-verified caller identity for provenance**:
   people are recorded as `human:<email>`, service accounts as
-  `agent:<sa-email>`. Nothing to issue, rotate, or revoke.
+  `process:<sa-email>`. Nothing to issue, rotate, or revoke.
 - **Never make the service publicly invokable (`allUsers`)** — the
   identity headers ochakai reads are only trustworthy behind Cloud Run's
   IAM check. The single exception is a deployment that reads no identity
@@ -401,54 +409,10 @@ the application reaches Cloud Run with *its* service account, so every
 concept its users write is recorded as that one identity. Provenance, which
 is most of what ochakai sells, collapses.
 
-Let the application forward the identity of the person using it
-(design doc 0027). Both identities are recorded — `human:tanaka@…
-via agent:app-sa@…` — never just the forwarded one, so a write made
-through the application stays distinguishable from one the person made
-directly.
-
-```sh
-# 1. The application's identity needs to reach ochakai at all (§3's grant).
-gcloud run services add-iam-policy-binding ochakai \
-  --region="$REGION" \
-  --member="serviceAccount:$APP_SA" \
-  --role=roles/run.invoker
-
-# 2. Allow that identity — and only it — to speak for its users.
-gcloud run services update ochakai --region="$REGION" \
-  --update-env-vars="OCHAKAI_DELEGATING_CALLERS=$APP_SA"
-```
-
-The application then sends the header with each request:
-
-```
-X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
-```
-
-The kind (`human:` / `agent:`) is required and never guessed — the
-application knows whether it is forwarding a person or another agent.
-
-Notes:
-
-- **Delegation is off by default.** With `OCHAKAI_DELEGATING_CALLERS`
-  unset, the header is a **403**, not a silent downgrade: an application
-  that believes it writes as its users must not discover months later
-  that every concept says otherwise.
-- **A 403 mentioning the header means the caller is not on the list.**
-  Compare the `member` you granted in step 1 with the value in step 2 —
-  they are the same service-account email, and a mismatch is the usual
-  cause. A **400** means the header itself is malformed (missing kind,
-  whitespace in the identity).
-- `OCHAKAI_DELEGATING_CALLERS` takes a comma-separated list; `*` trusts
-  every authenticated caller, which is only sensible when IAM already
-  admits nothing but your own applications.
-- **This is not authorization.** It decides whose identity is recorded,
-  not what anyone may do — every caller that reaches ochakai can already
-  read and write everything (design doc 0002). Reachability stays IAM's
-  job.
-- Developing the integration locally? `OCHAKAI_MODE=dev` honors
-  the header too (as `via human:anonymous`), so a malformed header fails
-  on your machine instead of on first deploy.
+The fix, the two-command setup, and everything else an application
+embedding the REST API needs — authenticating, delegated provenance,
+`X-Ochakai-Producer`, and safe concurrent writes — are in
+[Embedding the REST API](../../docs/guides/rest-integration.md).
 
 ## 5d. Optional: a public read-only demo (the one public posture)
 
