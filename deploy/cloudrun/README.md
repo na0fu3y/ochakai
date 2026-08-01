@@ -24,8 +24,8 @@ which turns §1–§4b (plus the web UI and demo posture) into a thirteen-step
 destroyed cleanly. This guide is what stays the reference — it explains
 why each resource is shaped the way it is, and is the path to use if you
 would rather run the commands by hand. It covers §1–§5, §5d and §9; the
-operating guide covers the web UI, org-policy guardrails and upgrade
-notes, and [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
+operating guide covers the web UI, the public demo, org-policy guardrails
+and upgrade notes, and [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
 covers §5c and the rest of what an application embedding the REST API
 needs.
 
@@ -266,14 +266,10 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 Grant them unless you have a reason not to — above all for a knowledge
 base written in Japanese, where the trigram index cannot serve a
-two-character term and the lexical half is answering by scanning.
-
-On the next start, ochakai creates the pgvector tables and embeds new
-and updated knowledge — and newly attached plain-text files (design doc
-0020) — with `gemini-embedding-001`. Search becomes hybrid
-(trigram + vector, reciprocal rank fusion). If Vertex AI is ever
-unavailable afterwards, writes and searches degrade gracefully to
-trigram-only.
+two-character term and the lexical half is answering by scanning. On the
+next start ochakai creates the pgvector tables and search becomes hybrid
+(trigram + vector); if Vertex AI is ever unavailable afterwards, it
+degrades gracefully back to trigram-only.
 
 **To refuse it**, either do not grant the role (nothing is called, and
 nothing is charged), or say so:
@@ -288,60 +284,16 @@ environment variables and would wipe `OCHAKAI_DATABASE_URL`.
 
 Worth knowing before you grant the role: ochakai has no authorization
 (design doc 0002), so **anyone who can reach the service can cause a
-Vertex AI call by writing**. Each write embeds one document. That is
-cents at the scale a curated knowledge base reaches, and it is the same
-reasoning as `reembed` below, only spread across ordinary writes.
+Vertex AI call by writing** — cents at the scale a curated knowledge base
+reaches.
 
-Embedding a project other than the one ochakai runs in — or running it
-outside Google Cloud, where there is no metadata server — still takes
-`OCHAKAI_VERTEX_PROJECT`. A project named that way is a deployment
-asking for semantic search by name: if Vertex AI or pgvector is not
-there, it refuses to start rather than quietly serving lexical results.
-
-To also search image and PDF attachments by content, run the base on
-the multimodal model instead:
-
-```sh
-gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_VERTEX_MODEL=gemini-embedding-2,OCHAKAI_VERTEX_LOCATION=global
-```
-
-`gemini-embedding-2` lives in the `global`/`us`/`eu` locations only, and
-all vectors must share one model's space: on an existing base, concepts
-and attachments keep their old-model vectors (and stay out of the new
-space) until they are written again (design doc 0020 §2.3).
-
-A knowledge base that already has concepts needs one more step. Vectors
-are written when a concept is written, so everything loaded before the
-role was granted has none and hybrid search stays quietly lexical-only:
-
-```sh
-ochakai reembed            # bounded passes until nothing is left
-```
-
-`reembed` is the endpoint that spends money deliberately — each concept it
-processes is a Vertex AI embedding call, in one go rather than spread
-across writes. ochakai has no authorization, so anyone who can reach the
-service can start one; the cost is bounded by how many concepts are
-unembedded (a repeat run with nothing to do calls nothing), but it is
-worth knowing before granting `roles/run.invoker` widely.
-
-The same applies after changing `OCHAKAI_VERTEX_MODEL`: the old vectors
-are in a space nothing queries any more (design doc 0020).
-
-If the new model also changes `OCHAKAI_EMBEDDING_DIM`, ochakai rebuilds
-the vector tables at the new width on the next start and logs that it
-did (design doc 0053 §3). Nothing you curated is involved: a vector is
-derived from the object it describes, and the old ones were in a space
-nothing would query. What it costs is the calls to refill them, so
-refilling stays yours to ask for:
-
-```sh
-ochakai reembed            # after the restart that resized the tables
-```
-
-Until it runs, search answers lexically — hybrid ranking survives one
-half being empty.
+The model, location, multimodal attachment search, `OCHAKAI_EMBEDDING_DIM`
+and `ochakai reembed` — the command that backfills a base loaded before
+the role was granted, or before a model change — are all in
+[Environment variables](../../docs/configuration.md#environment-variables);
+what changing the dimension does to an existing database is in
+[Upgrades](../../docs/guides/operating.md#upgrades) in the operating
+guide.
 
 ## 4b. Attachments require GCS
 
@@ -439,151 +391,16 @@ embedding the REST API needs — authenticating, delegated provenance,
 ## 5d. Optional: a public read-only demo (the one public posture)
 
 Everything above says never `allUsers`, and that stays true for every
-deployment anyone can write to. A demo is the exception, and it is an
-exception only because of what it gives up: `OCHAKAI_MODE=public`
-(design doc 0042) reads no identity at all and **implies** `read-only`
-(design doc 0040) — a publicly readable *and* writable ochakai has no
-configuration in this program. What each of those postures does is in
-[requirements and configuration](../../docs/configuration.md#environment-variables);
-what follows here is the walkthrough for standing one up safely.
+deployment anyone can write to. A demo is the one exception, and only
+because of what it gives up: `OCHAKAI_MODE=public` reads no identity and
+implies no writes (design docs 0040, 0042) — a service that records
+nobody and writes nothing is the one kind safe to open to everyone.
 
-That is the whole trade: a service that believes nobody is safe to open,
-because it records nobody and writes nothing.
-
-### The ordering problem
-
-**A read-only deployment cannot be seeded.** `ochakai import` is a
-client-side loop over the ordinary write endpoints (§5) — there is no bulk
-import path that bypasses the refusal. So the sequence is always: deploy
-**writable and private**, import, then flip. Getting this backwards is the
-one way to end up with an empty demo and no way to fill it.
-
-**Terraform** — [deploy/terraform](../terraform) has both variables:
-
-```sh
-cd deploy/terraform
-# 1. Normal private deployment: public_read_only stays false.
-#    (invoker_members = ["user:you@your-org.example"] is enough for a demo.)
-terraform apply
-export OCHAKAI_URL=$(terraform output -raw service_url)
-# ... the one-time schema bootstrap, as always (module README) ...
-
-# 2. Seed it while it is still private and writable — see below.
-
-# 3. Flip. This sets OCHAKAI_MODE=public and grants allUsers in the
-#    same apply; the module has no way to do one without the other.
-terraform apply -var public_read_only=true
-terraform output -raw demo_url
-```
-
-**gcloud** — deploy per §3 (private, `--no-allow-unauthenticated`), seed,
-then flip in this order:
-
-```sh
-# 1. Stop believing identities and stop writing, while still private.
-gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_MODE=public
-
-# 2. Only then open it.
-gcloud run services add-iam-policy-binding ochakai --region=$REGION \
-  --member=allUsers --role=roles/run.invoker
-```
-
-The order is the point: between the two commands the service is harmless, and
-the reverse order leaves a window in which a public ochakai still believes
-whatever `Authorization` header a stranger sends. As everywhere in this guide,
-`--update-env-vars` — `--set-env-vars` would wipe `OCHAKAI_DATABASE_URL`.
-
-### Seeding
-
-[examples/demo](../../examples/demo) is a ten-concept knowledge base built to be
-read: linked concepts, mixed types, and enough usage for `sort=usage` to mean
-something. Import it while the service is still private, where you
-authenticate exactly as in §5 — the CLI resolves a Google ID token from your
-gcloud login, nothing special:
-
-```sh
-git clone --depth 1 https://github.com/na0fu3y/ochakai && cd ochakai
-go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL from above
-```
-
-Those ten concepts are recorded as `human:you@your-org.example` — the last
-provenance this base will ever receive, and after the flip the only
-`created_by` any visitor sees. (The sequence has been rehearsed against a
-local server: import writable — 10 created, 0 skipped — then restart with
-`OCHAKAI_MODE=public`, after which reads serve anonymously and
-every write is refused. Cloud Run adds only the IAM binding.)
-
-### Checking the flip landed
-
-The demo is the one deployment where a plain `curl` is supposed to work, so
-it is also the one you can verify without a proxy:
-
-```sh
-curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue"  # 200, no token
-curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/bundle/queries/monthly-revenue.md"  # 403
-```
-
-200 without a token proves the public grant and `OCHAKAI_MODE=public`
-both landed (before the flip this is Google's 401); 403 on the write proves
-the implied read-only. Sending a bogus `Authorization` header changes
-neither answer — that is the property, not a side effect.
-
-If you want the demo to show **hybrid search** (§4), grant the Vertex AI
-role *before* the import: vectors are written when a concept is written,
-and `ochakai reembed` is itself a write, so it is refused once read-only
-is on.
-The demo bundle has no attachments, so §4b's bucket is not needed for it.
-
-### Cost
-
-The same shape as the table at the top of this guide — a demo is one Cloud
-Run service and one `db-f1-micro`, with nothing extra to pay for. One
-difference in kind, not in the numbers: Cloud Run is request-billed and the
-requests no longer come only from your organization. `--max-instances=1`
-(§3) is what keeps that bounded; leave it in place.
-
-### What you give up, and why that is acceptable
-
-- **No identity, at all.** Nothing about a visitor is known or recorded.
-  `created_by` / `updated_by` on anything written through a public service
-  would be a value the server invented — which is precisely why nothing can
-  be written. Provenance is most of what ochakai sells; a public demo does
-  not weaken it, it declines to pretend.
-- **Everything in the base is public.** There is no 401 anywhere, so the
-  concepts, their revisions, and their authors' email addresses are on the
-  open internet. Put a demo bundle in it. Never point this posture at a real
-  knowledge base because "it is only read-only".
-- **Delegation is gone** (§5c) — an embedding application cannot forward its
-  users' identities here, because none of it would be believed.
-- **Domain Restricted Sharing rejects the `allUsers` binding** (§6, §7). It
-  should. Lift it for a dedicated demo project if you want one, not for the
-  organization.
-
-**The demo database still grows.** Usage telemetry — search hits and fetch
-counts (design doc 0029) — keeps recording under read-only on purpose: it is
-the server's own observation rather than a caller's write, and switching it
-off would freeze the `sort=usage` feed that a demo most wants to show (design
-doc 0040 §2.2). Two consequences: the 10 GB disk is a hard ceiling with
-auto-growth off (§2), so watch it on a demo that gets attention; and those
-counts are driven by anonymous strangers, so treat them as a public
-popularity signal, never as evidence about the knowledge.
-
-### Taking it back down
-
-Full teardown is §9. To retract just the posture and keep the deployment,
-reverse the order it was set in — the public grant goes first, so the service
-is never open while it is anything but read-only:
-
-```sh
-gcloud run services remove-iam-policy-binding ochakai --region=$REGION \
-  --member=allUsers --role=roles/run.invoker
-gcloud run services update ochakai --region=$REGION \
-  --remove-env-vars=OCHAKAI_MODE
-```
-
-With Terraform, `terraform apply -var public_read_only=false` does both, in
-that order.
+Seeding it, flipping the mode without a window in which a public service
+still believes a stranger's `Authorization` header, checking the flip
+landed, cost, what you give up, and taking it back down are all in
+[Public demo](../../docs/guides/operating.md#public-demo) in the
+operating guide.
 
 ## 6. Security hardening checklist
 

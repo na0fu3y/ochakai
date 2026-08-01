@@ -56,7 +56,7 @@ knowledge base is in Japanese, when questions arrive as sentences rather
 than keywords, or when you attach images and PDFs you want searchable by
 content. Search still works without them — lexical-only, calling no
 external API. What that costs, and why Japanese is the case that needs
-them, is in [what search does with it](knowledge.md#what-search-does-with-it);
+them, is in [architecture's search section](architecture.md#search);
 the three ways to decline are in
 [configuration](configuration.md#environment-variables).
 
@@ -142,8 +142,8 @@ Yes, two ways. Take a
 [release archive](https://github.com/na0fu3y/ochakai/releases) — linux,
 macOS and Windows on amd64 and arm64, with checksums and build provenance
 — or skip the client entirely and talk to the REST API, which is all the
-CLI does. [Writing knowledge](knowledge.md) opens with a `curl` that
-creates a concept.
+CLI does. [The data model](architecture.md#the-data-model) opens with a
+`curl` that creates a concept.
 
 ### What is a "concept", exactly?
 

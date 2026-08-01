@@ -9,14 +9,14 @@ Two layers, weakest to strongest:
 2. **[hooks/](hooks)** make the loop automatic. Hooks are executed by
    Claude Code itself, so they fire every time, no agent judgment
    involved — the same trick memory layers use, minus the LLM:
-   - `ochakai-recall.sh` (**UserPromptSubmit**) runs
-     `ochakai context "<prompt>"` and injects the resulting pack —
-     full concepts behind the top hits, links expanded — into the
-     context before the agent starts working. Automatic recall.
-   - `ochakai-write-back.sh` (**Stop**) interrupts the agent once per
-     data-work session, right before it stops, and asks it to save
-     reusable queries and metric insights (or explicitly decide there
-     is nothing worth saving). Automatic write-back prompting.
+   - `ochakai-recall.sh` (**UserPromptSubmit**) runs `ochakai context
+     "<prompt>"` and injects the resulting pack — full concepts behind the top
+     hits, links expanded — into the context before the agent starts working,
+     and records what it recalls for the Stop hook below. Automatic recall.
+   - `ochakai-write-back.sh` (**Stop**) interrupts the agent once per data-work
+     session, right before it stops, and asks it to save reusable queries and
+     metric insights (write-back), and whether a concept recall handed it held
+     up when acted on (`report_outcome`) — or decide neither applies.
 
 ## Install
 

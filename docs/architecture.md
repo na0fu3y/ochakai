@@ -157,18 +157,28 @@ it believed it was replacing. The human surfaces are unrestricted
 
 ## The data model
 
-**A concept is an OKF document** — YAML frontmatter, then a markdown
-body — and that is the stored form, the wire form, and the export form
-alike (design doc [0046](design/0046-bundle-address-space.md) §2.2,
-which carries design doc 0043's *the document is the only truth*
-forward and takes it down to the byte level: what a write stores is the
-bytes it received, and the canonical form is derived from them). The
-database columns beside it are an index derived from the document, used
-to sort and filter; where the two could disagree the document is right.
-Keys OKF does not define are kept exactly where their writer put them,
-at the top level and inside a `sources` entry, a parameter, the executor
-or the attester, because a key discarded on the way in is a key no later
-release can recover.
+**A concept is an [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+v0.2 document** — YAML frontmatter, then a markdown body — and that is
+the stored form, the wire form, and the export form alike (design doc
+[0046](design/0046-bundle-address-space.md) §2.2, which carries design
+doc 0043's *the document is the only truth* forward and takes it down to
+the byte level: what a write stores is the bytes it received, and the
+canonical form is derived from them). Reading a concept, editing it, and
+sending it back is one loop with no translation in it — the id is the
+address, at both ends:
+
+```sh
+curl -X PUT http://localhost:8080/api/v1/bundle/metrics/revenue.md \
+  -H 'content-type: text/markdown' \
+  --data-binary $'---\ntype: Metric\n---\n\nCompleted orders only, net of refunds.\n'
+```
+
+The database columns beside the document are an index derived from it,
+used to sort and filter; where the two could disagree the document is
+right. Keys OKF does not define are kept exactly where their writer put
+them, at the top level and inside a `sources` entry, a parameter, the
+executor or the attester, because a key discarded on the way in is a key
+no later release can recover.
 
 A concept's version is the hash of the document as stored, which a read
 returns as an `ETag` and a write takes back as `If-Match`. Being a hash
@@ -177,72 +187,139 @@ file to it all leave a held precondition valid; reformatting the concept
 moves it, because the file did change — what the concept *says* did not,
 and that is what `generated.at` reports.
 
-What this instance *observed* about a concept travels beside the document
-rather than inside it: who created it, who last changed it, every
-recorded confirmation, and a live rejection if there is one. A bundle
-carries knowledge; provenance is an observation, and import never reads
-it into a ledger (design doc
-[0009](design/0009-provenance-portability.md)). What a document says
-about *itself* — the `generated` and `verified` a bundle from another
-instance arrives with — is a claim, and a claim is neither believed nor
-thrown away: it is kept under a `received` key in the stored document
-and reported on the way in, while the trust tier and the `trust=` filter
-go on answering from this instance's ledger alone (design doc
-[0046](design/0046-bundle-address-space.md) §2.2).
+**Types are an open set with a recommended vocabulary.**
+
+| Type | What it holds |
+|---|---|
+| `Metric` | Semantic metric definition, synonyms |
+| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it. A golden query is one of these: `runtime` says where the SQL runs, and a producer key such as `question` carries the question it answers |
+| `Skill` | A procedure a concept's `executor.resource` points at — how to actually run a computation on a given runtime |
+| `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
+| `Policy` | The rule that decides a number — revenue recognition, cost allocation. What a concept's `sources[].resource` cites |
+| `Glossary Term` | Glossary term |
+| `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
+| `BigQuery Table` | BigQuery table catalog entry: source, column notes, known issues |
+| `Reference` | Mirror of external material: enum definitions, licenses, schema docs |
+
+These are recommendations, not a closed set: any single-line string
+works as a type for your own document kinds. The spellings are the OKF
+knowledge-catalog vocabulary verbatim — `Attested Computation`, not a
+slug — so a bundle's types survive a round-trip with no translation
+layer in between, and what earns a place in the recommended nine is
+SPEC §4.1's one demand of a producer — that the spelling be descriptive
+and self-explanatory — read against the spellings OKF itself supplies,
+in the spec's own examples and in its reference bundles (design docs
+[0023](design/0023-okf-type-vocabulary.md),
+[0038](design/0038-type-vocabulary-realignment.md)). Matching is
+case-insensitive; the spelling you write is the one stored.
 
 **Identity is a path.** A concept's id is its address and its bundle
 location: `queries/sales/monthly-revenue` is one concept, and the
-directories are how you organize a knowledge base. A type is an attribute
-of a concept, not part of its address, so the layout of an exported bundle
-comes from ids alone (design doc
+directories are how you organize a knowledge base — a type is an
+attribute of a concept, not part of its address, so the layout of an
+exported bundle comes from ids alone (design doc
 [0017](design/0017-path-addressing.md)). MCP addresses a concept as a
 resource by that path under the `ochakai://` scheme — a URI for MCP's
-sake, which never travels in a bundle. `title` is optional — a concept without one
-is displayed by the last segment of its id, the way a file is named by
-its filename — and ids are NFC-normalized and searchable in their own
-right (design doc [0022](design/0022-filename-as-name.md)).
+sake, which never travels in a bundle. `title` is optional — a concept
+without one is displayed by the last segment of its id, the way a file
+is named by its filename — and ids are NFC-normalized and searchable in
+their own right (design doc [0022](design/0022-filename-as-name.md)).
 
 Because the address is the path, the path is also something to search
-within. `?prefix=` narrows a search or a `context` call to a subtree,
-repeatable and OR-ed, so one call can cover two parts of the tree and
-tell the answers apart by id (design doc
+within. `--prefix` (REST `?prefix=`, MCP `prefixes`) narrows a search or
+a `context` call to a subtree, repeatable and OR-ed, so one call can
+cover two parts of the tree and tell the answers apart by id (design doc
 [0041](design/0041-path-scoped-search.md)). Matching is on segment
 boundaries: `metrics` does not reach `metrics-legacy`. How much this
-buys depends on what the directories mean — a tree grouped by kind is
-already served by `--type`, while directories standing for teams,
-domains or tenants are the case `--type` cannot express. ochakai
+buys depends on what the directories mean —
+[examples/demo](../examples/demo) groups by kind (`metrics/`,
+`glossary/`, `queries/sales/`), where `--type` already does most of
+this; it earns its keep when directories mean something `--type` cannot
+say, such as one team's own vocabulary beside a shared one. ochakai
 attaches no meaning to any path either way, and the filter is not an
 access control: any caller may pass any prefix, and passing none returns
 everything they could already reach.
 
-**Types are an open set with a recommended vocabulary.** The spellings
-are the OKF knowledge-catalog vocabulary verbatim — `Attested
-Computation`, not a slug — so a bundle's types survive a round-trip with
-no translation layer in between, and what earns a place in the
-recommended eleven is SPEC §4.1's one demand of a producer — that the
-spelling be descriptive and self-explanatory — read against the spellings
-OKF itself supplies, in the spec's own examples and in its reference
-bundles (design doc
-[0038](design/0038-type-vocabulary-realignment.md)). Any
-single-line string works as a type. `status`, by contrast, is a closed
-set, and it is OKF's lifecycle vocabulary and nothing else: `draft`,
-`stable`, `deprecated` (SPEC §5.4). Whether anybody confirmed a concept is
-a separate question — an append-only ledger of verifications, so a draft
-may be verified and a `stable` concept unverified. "Considered and turned
-down" is a third thing again, a ruling rather than a stage: a rejection
-carries who ruled, when, and why, and it is the record most stores lack —
-an agent can check it before re-proposing the same thing (design doc
-[0046](design/0046-bundle-address-space.md) §2.4, which inherits design
-doc 0043 §§3.2-3.3 unchanged).
-
 **Relationships come from the prose.** There is no links field. A
 markdown link in the body — `[revenue](/metrics/revenue.md)` or a
-relative path, the two forms OKF SPEC §6 defines — is the edge; the target gains a backlink,
-and rename rewrites the references pointing at it. What *kind* of
-relationship it is comes from the sentence around it, so ochakai stores
-no relationship vocabulary of its own (design doc
+relative path (`./gross.md`) — those two are the forms OKF SPEC §6
+defines, and they are the only ones — is the edge; the target gains a
+backlink, and `get_context` expands the edge in both directions. What
+kind of relationship it is comes from the sentence around it, so ochakai
+stores no relationship vocabulary of its own (design doc
 [0024](design/0024-links-from-body.md)). Links inside fenced code blocks
-and inline code spans are examples and are skipped.
+(``` or ~~~) and inline `` `code spans` `` are examples and are skipped
+— indented code is not detected, so a link four spaces deep is read as
+prose. Renaming a concept rewrites the references pointing at it, prose
+included.
+
+**Attachments** live beside a concept — the dashboard screenshot behind
+an insight, the ER diagram behind a table concept, the seeds.txt or spec
+PDF behind a dataset — and round-trip through OKF bundles as plain files
+next to it. Accepted formats are the intersection of what Claude reads
+and what Gemini embeds: PNG, JPEG, WebP, PDF, plain text, sniffed from
+the bytes rather than trusted from a filename, because that operation is
+one of the ones 0046 §3.5 folds into the bundle address, and the fold is
+still landing. Bytes live in Cloud Storage and are fetched on demand,
+one object up to 5 MiB, with the database keeping what addresses them
+(design doc [0046](design/0046-bundle-address-space.md) §3.2, which
+keeps design doc 0013's judgment); with `OCHAKAI_GCS_BUCKET` unset the
+instance stores markdown concepts only and a non-markdown write is
+refused. Attachments are searchable: filenames match in every search,
+and contents join hybrid search wherever embeddings are enabled — text
+with any embedding model, images and PDFs with `gemini-embedding-2` —
+and a hit is always the owning concept, never the file itself (design
+doc [0020](design/0020-attachment-search.md)).
+
+**Trust travels with the knowledge.** OKF v0.2's schema is ochakai's
+schema: every key the spec defines is a first-class field, so an
+exported concept carries its provenance, trust and lifecycle (SPEC §5)
+where a consumer that has never heard of ochakai will look for them.
+
+```yaml
+type: Attested Computation
+runtime: bigquery
+title: Monthly revenue by channel
+sources:
+  - id: rev-policy
+    resource: https://wiki.example/finance/revenue-recognition
+    title: Revenue Recognition Policy (FY2026)
+    author: human:jsmith@example.co.jp
+    last_modified: "2026-06-15"
+usage_window: { from: "2026-06-01", to: "2026-06-30" }
+generated: { by: process:analyst@example.iam.gserviceaccount.com, producer: insightflow/1.4.0, at: 2026-07-26T04:12:00Z }
+verified:
+  - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
+status: stable                 # draft | stable | deprecated
+stale_after: "2026-12-31"      # advisory: re-check on and after this day
+```
+
+`sources` is the material a concept derives from — give one an `id` and
+a markdown footnote in the body can attribute a single claim to it.
+`generated` is who the content stands by and when it last changed;
+`verified` is who confirmed it — absent means unverified, and a
+`human:` entry is what makes it human-reviewed (SPEC §5.3). ochakai
+holds these the way the spec defines them: `status` is the lifecycle
+value alone (`draft`, `stable`, `deprecated` — SPEC §5.4) and `verified`
+is an append-only ledger of every confirmation, so the two signals stay
+independent. A draft somebody checked and a stable concept nobody has
+are both states the model can hold, and a foreign bundle's lifecycle
+value survives the trip unaltered.
+
+A rejection — reviewed and *not* accepted — is this instance's ruling
+rather than a stage of the concept, so it is not a status either, and it
+is the record most stores lack: an agent can check it before
+re-proposing the same thing. It exports as `rejected_by` /
+`rejected_at` beside the concept's real status, and import never reads
+it back — a bundle carries knowledge, not one instance's judgments
+(design doc [0046](design/0046-bundle-address-space.md) §2.4, which
+inherits design doc 0043 §§3.2-3.3 unchanged).
+
+ochakai **records** these; it never acts on them. It does not fetch a
+source's `resource`, score its credibility signals, or run an Attested
+Computation's `executor` and `attester` — weighing the signals and
+running the computation belong to whoever consumes the concept (SPEC
+§5.1, §10.5).
 
 Every change is kept as a revision, and `delete` is a soft delete.
 Discarding history is a second, explicit step — `purge`, available on
@@ -294,30 +371,16 @@ vectors all live in PostgreSQL — pgvector for the vectors, which Cloud
 SQL and a plain Postgres both provide, so hybrid search adds no
 infrastructure (design doc [0001](design/0001-architecture.md) §4).
 There is no Redis, no separate vector database, and no search cluster.
-Migrations ship in the binary.
-
-Non-markdown *bytes* are the exception: they live in Cloud Storage and
-are fetched on demand, with the database keeping what addresses them
-(design doc [0046](design/0046-bundle-address-space.md) §3.2, which
-keeps design doc 0013's judgment — GCS for non-markdown, one object up
-to 5 MiB, and the media type sniffed from the bytes rather than trusted
-from a filename). With `OCHAKAI_GCS_BUCKET` unset the instance stores
-markdown concepts only and a non-markdown write is refused. What `attach`
-accepts today is narrower than what a bundle may carry — PNG, JPEG,
-WebP, PDF, plain text, the intersection of what Claude can read and what
-Gemini can embed — because that operation is one of the ones 0046 §3.5
-folds into the bundle address, and the fold is still landing.
-Attachments travel through OKF bundles as plain files beside their concept.
+Migrations ship in the binary. Non-markdown bytes are the exception —
+they live in Cloud Storage instead, as covered under Attachments above.
 
 Usage recording is deliberately off the read path: events are buffered in
 memory and flushed periodically, statistics are documented as
 best-effort, an overrun is dropped rather than backing up the request,
 and shutdown drains before a final flush (design doc
 [0029](design/0029-usage-recording-off-the-read-path.md)). Concurrent
-edits are handled by optional optimistic locking — the stored
-document's hash as the version, exposed as an ETag with `If-Match`
-(design doc
-[0030](design/0030-optimistic-locking.md)).
+edits are handled by optimistic locking on that same document hash
+(design doc [0030](design/0030-optimistic-locking.md)).
 
 ## Search
 
@@ -330,8 +393,11 @@ tags, body, attachment filenames. Latin tokens stay whole; a run of
 Japanese, which has no spaces to split on, is cut into sliding
 two-character windows, and only the windows carrying a kanji or katakana
 are kept, since an all-hiragana window is grammar and matches nearly
-everything. Ranking is by how much of the *rare* part of a query a concept
-contains.
+everything. Concepts are ranked by how much of the *rare* part of a
+query they contain — that finds the right concepts for a keyword and
+for a Japanese question, but it is still a bag of words: ask an English
+question and a concept sharing three of its function words can outrank
+the one that names the subject.
 
 The cost is known and written down: a trigram index cannot serve a
 two-character pattern — there is no whole trigram inside one — so a
@@ -350,11 +416,7 @@ decline, is in
 [requirements and configuration](configuration.md#environment-variables)).
 Vectors are written when a concept is written, so a base loaded before
 embeddings were reachable — or a changed model — leaves older concepts
-unembedded until `ochakai reembed` runs (design doc
-[0020](design/0020-attachment-search.md)). Attachments join the same
-search: filenames match lexically always, contents join the vector half
-when embeddings are on, and a hit is always the owning concept rather than
-the file.
+unembedded until `ochakai reembed` runs.
 
 Scores are not calibrated and are not comparable between the two modes.
 Treat them as an ordering. To bound what comes back, use the byte
@@ -444,6 +506,8 @@ are pinned by commit SHA.
 - [docs/design/README.md](design/README.md) — the decision records, by
   area. The authoritative source for everything above.
 - [api/openapi.yaml](../api/openapi.yaml) — the wire surface.
+- [examples/demo](../examples/demo) — a ten-concept knowledge base with
+  the layout, types, and links this page describes.
 - [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) — the
   deployment walkthrough and the hardening checklist.
 - [docs/guides/golden-query-canary.md](guides/golden-query-canary.md) —

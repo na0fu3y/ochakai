@@ -1,16 +1,41 @@
 # ochakai 設計ドキュメント 0057: concept は読む人が出会う語でもある
 
 Status: Accepted(2026-07-29)。**BREAKING(文言のみ)。**
-[0054](0054-concept-is-the-okf-word.md) を**補う** — 0054 は MCP の
-ツール名 5 本を OKF SPEC §2 の語 `concept` に改めたが、**利用者が読む
-英語の散文は `entry` のままだった**。その散文も `concept` にする:
-README・`docs/`・`examples/`・`deploy/` の英語、CLI のヘルプと標準出力、
-Web UI のラベルとツールチップ、MCP のツール説明と `jsonschema` の説明文、
-OpenAPI の `description`、サーバのエラー文。0054 §3.4 の
-「`domain.Knowledge` は改名しない」は維持し、**JSON のフィールド名
-`entries` も動かさない**(§3.2)。ワイヤの形・引数・応答・能力・
-保存形はどれも 1 バイトも変わらない
+[0054](0054-concept-is-the-okf-word.md) を Superseded にする — 0054 が
+決めた MCP ツール名 5 本の改名(§0)を引き継ぎ、**利用者が読む英語の
+散文は `entry` のままだった**ものも `concept` にする: README・`docs/`・
+`examples/`・`deploy/` の英語、CLI のヘルプと標準出力、Web UI のラベルと
+ツールチップ、MCP のツール説明と `jsonschema` の説明文、OpenAPI の
+`description`、サーバのエラー文。0054 §3.4 の「`domain.Knowledge` は
+改名しない」は維持し、**JSON のフィールド名 `entries` も動かさない**
+(§3.2)。ワイヤの形・引数・応答・能力・保存形はどれも 1 バイトも変わらない
 Date: 2026-07-29
+
+## 0. 0054 が決めたこと: MCP ツール名 5 本の改名
+
+同じものに二つの名前が残っていた — OKF SPEC §2 はバンドル中の知識の
+単位を **concept** と定義し、ochakai 自身の文書やコードコメントも
+既に「概念(concept)」と書いていたが、MCP のツール名だけが
+`knowledge` のままだった([0046](0046-bundle-address-space.md) §3.5 の
+畳み込みが終わった時点で、ワイヤ上に残る `knowledge` はこの 5 本だけに
+なっていた)。0023・0038 と同じ「綴りが割れたら OKF を採る」の三度目
+として、次のように改名する。
+
+| 旧 | 新 |
+|---|---|
+| `search_knowledge` | `search_concepts` |
+| `get_knowledge` | `get_concept` |
+| `put_knowledge` | `put_concept` |
+| `delete_knowledge` | `delete_concept` |
+| `get_knowledge_usage` | `get_concept_usage` |
+
+**検索だけ複数形**である — `concept` は可算で、検索は複数を返し残りは
+一つを扱う。リソーステンプレートの表示名(`Name` / `Title`)も同じ語に
+揃える。**変えないもの**: `get_context` / `report_outcome` / 
+`get_attachment`(いずれも concept を名指していない)、ツールの本数 8、
+引数・応答・スキーマ、`domain.Knowledge`(Go の型名。内部パッケージの
+名前を利用者が覚える必要はない、§3.4)。改名であって能力の変更では
+ないため、ツール名を設定に書いているクライアントだけが影響を受ける。
 
 ## 1. 問題: 翻訳表は消えず、置き場所が変わった
 

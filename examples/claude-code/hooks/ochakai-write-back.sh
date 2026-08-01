@@ -1,11 +1,21 @@
 #!/bin/sh
 # ochakai-write-back: Stop hook for Claude Code.
 #
-# The write-back half of the loop. When the agent finishes a session that
-# looks like data work, ask it once — before it stops — whether anything
-# it learned belongs in the team knowledge base. CLAUDE.md alone relies
-# on the agent remembering the habit; this hook makes the question
-# unskippable, exactly once per session.
+# Two of the loop's write-side moves, both nudged once per session, before
+# the agent stops:
+#
+# - write-back: whether anything the agent learned belongs in the team
+#   knowledge base.
+# - report_outcome: whether any concept ochakai-recall.sh handed this
+#   session (recorded to a per-session file under $TMPDIR) held up when
+#   acted on. `failed` reports are what moves a verified concept into the
+#   re-verification feed (design doc 0025) — without them that feed stays
+#   at zero regardless of how stale the knowledge actually is.
+#
+# CLAUDE.md alone relies on the agent remembering both habits; this hook
+# makes the question unskippable. Neither move is something the hook can
+# judge for itself (no LLM here, per 0001) — it can only ask, using the
+# structural fact of which concepts this session actually read.
 #
 # Requires: jq. Failures are silent: never block the agent from stopping.
 set -eu
@@ -26,7 +36,16 @@ marker="${TMPDIR:-/tmp}/ochakai-write-back-$session"
 grep -qiE 'SELECT|ochakai|bigquery|warehouse' "$transcript" || exit 0
 : >"$marker"
 
-jq -n '{
+recalled_file="${TMPDIR:-/tmp}/ochakai-recalled-$session"
+recalled=""
+[ -r "$recalled_file" ] && recalled=$(sort -u "$recalled_file" 2>/dev/null | head -20 | tr '\n' ' ')
+
+outcome_reason=""
+if [ -n "$recalled" ]; then
+	outcome_reason="This session was handed these ochakai concepts: $recalled — if you acted on one (ran its SQL, followed its definition), report whether the result held up: \`ochakai report <id> worked\` or \`ochakai report <id> failed --note \"what went wrong\"\`. Skip any you only read but never acted on. Always report failed when a verified concept led you to a wrong number. "
+fi
+
+jq -n --arg outcome "$outcome_reason" '{
   decision: "block",
-  reason: "Before finishing: this session did data work. If a query you wrote proved correct and reusable, or you learned how to read a metric (a baseline, a seasonality, a caveat), write it back to ochakai — search first (including --rejected) to avoid re-proposing, then `ochakai put <path>` (type \"Attested Computation\" with runtime, the SQL in a # Computation fence, and a top-level question key; or type \"Insight\"). If nothing durable was learned, finish now without creating anything — do not invent knowledge."
+  reason: ($outcome + "Before finishing: this session did data work. If a query you wrote proved correct and reusable, or you learned how to read a metric (a baseline, a seasonality, a caveat), write it back to ochakai — search first (including --rejected) to avoid re-proposing, then `ochakai put <path>` (type \"Attested Computation\" with runtime, the SQL in a # Computation fence, and a top-level question key; or type \"Insight\"). If nothing durable was learned, finish now without creating anything — do not invent knowledge.")
 }'

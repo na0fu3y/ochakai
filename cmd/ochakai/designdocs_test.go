@@ -288,19 +288,20 @@ func capturedNumbers(re *regexp.Regexp, s string) []string {
 // The ceiling lives in CONTRIBUTING.md rather than here, for the same reason
 // docs/surface.md keeps the surface caps in prose: raising it should be a
 // line in a diff whose subject is the agreement, not a constant in a test.
-const (
-	contributing = "../../CONTRIBUTING.md"
-	// firstCappedRecord is where the rule starts. Everything before it is
-	// immutable — a ceiling cannot reach back, and a record that could be
-	// edited to fit was never a decision somebody could depend on. 0062 is
-	// the exception that is not one: it has not reached a release, and
-	// CONTRIBUTING.md already says an unreleased record is revised by
-	// replacing it, so nobody can be depending on its length either. It also
-	// keeps this check from guarding nothing on the day it lands.
-	firstCappedRecord = "0062"
-)
+const contributing = "../../CONTRIBUTING.md"
 
 var recordCeilingRe = regexp.MustCompile(`(?m)^\s*RECORD-LINES: (\d+)$`)
+
+// firstCappedRecordRe reads where the rule starts, rather than pinning a
+// second copy of the number here: a record before it is immutable — a
+// ceiling cannot reach back, and a record that could be edited to fit was
+// never a decision somebody could depend on — while a record from here on
+// has not reached a release yet, so CONTRIBUTING.md's own rule that an
+// unreleased record is revised by replacing it means nobody can be
+// depending on its length either. Reading the boundary back, the same way
+// RECORD-LINES itself is read, is what keeps the two from disagreeing the
+// way they did when 0063 landed and this file still said 0062.
+var firstCappedRecordRe = regexp.MustCompile(`(?m)^\s*RECORD-CAP-FROM: (\d{4})$`)
 
 func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
 	content, err := os.ReadFile(contributing)
@@ -315,9 +316,13 @@ func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s: RECORD-LINES %q: %v", contributing, m[1], err)
 	}
+	firstCapped := firstCappedRecordRe.FindStringSubmatch(string(content))
+	if firstCapped == nil {
+		t.Fatalf("%s declares no RECORD-CAP-FROM: this check now guards nothing", contributing)
+	}
 	capped := 0
 	for _, r := range designRecords(t) {
-		if r.number < firstCappedRecord {
+		if r.number < firstCapped[1] {
 			continue
 		}
 		capped++
@@ -335,7 +340,7 @@ the raise cannot happen quietly, not to be worked around by writing denser
 Japanese.`, r.file, lines, limit, contributing)
 	}
 	if capped == 0 {
-		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCappedRecord)
+		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCapped[1])
 	}
 }
 
@@ -403,6 +408,63 @@ A record can stay under RECORD-LINES on its own and still add to what a
 reader gets through if enough records do it at once, which is what this
 ceiling is for. Raise it in the same PR, having said why.`,
 			got, len(records), limit, contributing)
+	}
+}
+
+// tombstoneLineCeilingRe reads "TOMBSTONE-LINES: 12" from CONTRIBUTING.md,
+// declared next to RECORD-LINES for the same reason: raising it should be
+// a line in a diff whose subject is the agreement, not a constant here.
+var tombstoneLineCeilingRe = regexp.MustCompile(`(?m)^\s*TOMBSTONE-LINES: (\d+)$`)
+
+// commitLinkRe matches the link a tombstone owes the reader: the commit
+// that held the record in full, as this repository's own GitHub blob URL
+// (github.com/<owner>/<repo>/blob/<sha>/<path>).
+var commitLinkRe = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/blob/[0-9a-f]{7,40}/`)
+
+// TestSupersededRecordsAreTombstones holds every Superseded record to what
+// CONTRIBUTING.md's "What a superseded record keeps" says its body may be:
+// title, header, one sentence of what it decided, and a link to the
+// commit that held it in full. Ten Superseded records once carried 2,107
+// lines between them — prose nobody rereads once a Status: header has
+// already sent the reader to the record that replaced it.
+func TestSupersededRecordsAreTombstones(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	m := tombstoneLineCeilingRe.FindStringSubmatch(string(content))
+	if m == nil {
+		t.Fatalf("%s declares no TOMBSTONE-LINES ceiling: this check now guards nothing", contributing)
+	}
+	limit, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("%s: TOMBSTONE-LINES %q: %v", contributing, m[1], err)
+	}
+
+	checked := 0
+	for _, r := range designRecords(t) {
+		if !supersededByRe.MatchString(r.status) {
+			continue
+		}
+		checked++
+		if lines := strings.Count(r.body, "\n"); lines > limit {
+			t.Errorf(`docs/design/%s is %d lines, over the %d a tombstone keeps
+(TOMBSTONE-LINES in %s).
+
+A record whose Status: says Superseded shrinks to a tombstone: the title,
+the header, one sentence of what it decided, and a link to the commit
+that held it in full. Nobody can be depending on a decision that has
+already been replaced, and the full text stays one git show away — it
+does not need to stay in this file too.`,
+				r.file, lines, limit, contributing)
+		}
+		if !commitLinkRe.MatchString(r.body) {
+			t.Errorf("docs/design/%s is Superseded but links no commit holding it in full — "+
+				"a tombstone's whole point is that the text is one git show away, not gone", r.file)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no Superseded record found: this check now guards nothing")
 	}
 }
 

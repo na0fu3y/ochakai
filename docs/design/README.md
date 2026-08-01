@@ -33,12 +33,12 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
-| 知識の単位の呼び名 | [0054](0054-concept-is-the-okf-word.md)(ツール名)、[0057](0057-concept-is-the-word-a-reader-meets.md)(読む語) |
+| 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0062](0062-a-listing-is-not-a-search.md)(一つのコマンドが二役なら割る規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
-| 検証ループと利用測定 | [0055](0055-one-ruling-one-face.md)(裁定の面)、[0056](0056-one-question-one-command.md)(裁定の綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング)、[0062](0062-a-listing-is-not-a-search.md)(一覧の CLI 面) |
+| 検証ループと利用測定 | [0056](0056-one-question-one-command.md)(裁定の面・綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング)、[0062](0062-a-listing-is-not-a-search.md)(一覧の CLI 面) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -266,9 +266,11 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   (issue #353)。型集合は閉じないまま、退役は自由型として存続、
   マイグレーションなし。
 - [0057 concept は読む人が出会う語でもある](0057-concept-is-the-word-a-reader-meets.md)
-  — **Accepted**、**BREAKING(文言のみ)**。0054 を補う。0054 は
-  「ワイヤ上に残る `knowledge` はツール名だけ」と数えたが、その数え方が
-  取りこぼしていたのが**利用者が読む英語**だった — 0.16.0 の直後で
+  — **Accepted**、**BREAKING(文言のみ)**。**知識の単位の呼び名領域の
+  現行ドキュメント**(0054 の決定を §0 に統合する)。0054 は MCP
+  のツール名 5 本の `knowledge` を OKF SPEC §2 の語 `concept` に改めた
+  (`search_concepts` 等、ツールは 8 本のまま)。0057 はその数え方が
+  取りこぼしていたのが**利用者が読む英語**だったと気づく — 0.16.0 の直後で
   英語ドキュメントは `entry` 287 回に対し `concept` 6 回、`get_concept`
   自身の説明が「Fetch one entry」、Web UI のボタンが「New entry」で
   ある。翻訳表は消えずにツール名からドキュメントへ移っていた(§1)。
@@ -283,19 +285,8 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   依存しているスクリプトだけである(§5)。
 
 - [0054 知識の単位は concept と呼ぶ](0054-concept-is-the-okf-word.md)
-  — **Accepted**。MCP のツール名 5 本の `knowledge` を OKF SPEC §2 の語
-  `concept` に改める(`search_concepts` / `get_concept` / `put_concept` /
-  `delete_concept` / `get_concept_usage`)。0046 §3.5 の畳み込みが終わった
-  時点で、ワイヤ上の `knowledge` は MCP のツール名だけになっていた
-  — REST も CLI も 0 で、設計文書(0046 §2)もコードのコメントも既に
-  「概念(concept)」と書いていた。0023・0038 と同じ「綴りが割れたら OKF
-  を採る」の三度目で、二重語彙としては最後に残ったものである。検索だけ
-  複数形なのは concept が可算だから(§3.1)。ツールは 8 本のまま、
-  引数も応答も変わらない。`get_attachment` は別の問い、
-  `domain.Knowledge` は内部なので射程外(§3.2、§3.4)。反対の論拠
-  ——「`search_knowledge` はエージェントに何屋かを伝えている」—— と、
-  別名を並べる案(ツールが 13 本になる)を退けた理由は §4。
-  §3.5 の「MCP のみ」は 0057 が補った。
+  — **Superseded by 0057**。MCP のツール名 5 本の `knowledge` を OKF
+  SPEC §2 の語 `concept` に改めた最初の決定。0057 §0 に吸収された。
 
 - [0024 リンクは本文から導出する](0024-links-from-body.md) —
   **Accepted**(本文の `ochakai://` は 0046 §3.6 が退役させ、SPEC §6 の
@@ -393,7 +384,9 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   `stats` が印字するコマンド文字列は `ochakai list …` になる
   (0049 §3.4・0059 の印字形式を改訂)。
 - [0056 一つの問いに一つのコマンド、一つの裁定に一つの語](0056-one-question-one-command.md)
-  — **Accepted**、**BREAKING**。ワイヤで畳んだ面が CLI にコマンドとして
+  — **Accepted**、**BREAKING**。**裁定の面・綴り領域の現行ドキュメント**
+  (0055 の決定を §0 に統合する — REST の三つの裁定面を
+  `POST /api/v1/review/{id}` 一本にした決定)。ワイヤで畳んだ面が CLI にコマンドとして
   残っていた二件を畳む: `ochakai backlinks` は
   `ochakai search --links-to`(0046 §3.5 が REST 側を畳んだ先)へ、
   `ochakai queues` は `ochakai stats` へ。**失われた能力は無い** —
@@ -409,19 +402,9 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   あって、行為が違う二本ではない(§2)。0015 §2 の「CLI は完全性の面」
   に、完全性とは能力の完全性であるという一行を足す。
 - [0055 裁定は一つの面から下す](0055-one-ruling-one-face.md) —
-  **Accepted**、**BREAKING**。0025 §6 の `POST /api/v1/verify/{id}` と
-  0043 §3.3 の `POST|DELETE /api/v1/reject/{id}` を、`ruling` を本文に
-  取る **`POST /api/v1/review/{id}` 一本**に置き換える
-  (`verified` / `rejected` / `withdrawn`)。三つは**構造的性質を全て
-  共有していた** — 台帳に書く、文書と status と ETag を動かさない、
-  identity で記録される、人の面に載り MCP には載らない — ので、
-  「値だけが違う三つ」は一つの操作である(§1)。`withdrawn` が DELETE で
-  ないのは何も削除されないから(§3.2)、`note` が `rejected` 専用なのは
-  検証に言えることを増やさないため(§3.3)。**`report_outcome` は畳ま
-  ない** — 人の裁定と機械の観測は載る面が逆である(§2)。CLI の
-  `verify` / `reject --lift` と MCP は無変更で、壊れるのは REST の
-  三つの URL だけ(§5)。CLI の `--lift` とリビジョン値 `unreject` は
-  0056 §3.3 がリリース前に `withdraw` へ言い直した。
+  **Superseded by 0056**。verify / reject / 却下の解除という構造の
+  同じ三つの REST 面を `POST /api/v1/review/{id}` 一本にした最初の
+  決定。0056 §0 に吸収された。
 - [0049 キューの長さを数える](0049-queue-counts.md) — **Accepted**
   (2026-07-29 にリリース前改訂 — 0048 §2.3)。
   0025 と 0037 の 3 本のフィードを一覧せずに**数える**ことと CLI
