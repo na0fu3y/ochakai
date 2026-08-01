@@ -145,7 +145,7 @@ step 6 says what the record decided. Spend the attention there.
 ## Surface consistency
 
 Start from no. [docs/surface.md](../../../docs/surface.md) opens with the
-seven conditions ochakai exists to satisfy — a change that serves none of
+eight conditions ochakai exists to satisfy — a change that serves none of
 them is a no before anything else — and counts every REST operation, MCP
 tool, CLI command and environment variable. A change that widens one
 names the condition it serves and answers the three questions in the PR:

@@ -82,7 +82,7 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — local setup, the exact checks CI
   runs, and how design docs work.
-- [The surface](surface.md) — the seven conditions ochakai exists to
+- [The surface](surface.md) — the eight conditions ochakai exists to
   satisfy, and every REST operation, query parameter, header, MCP tool,
   CLI command, CLI flag, environment variable, word of vocabulary and page
   of this manual counted in one place, with the three questions a change
