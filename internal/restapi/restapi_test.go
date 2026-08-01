@@ -2,6 +2,7 @@ package restapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -36,6 +37,62 @@ func TestWriteErrorStatuses(t *testing.T) {
 			writeError(rec, c.err)
 			if rec.Code != c.want {
 				t.Errorf("writeError(%v) = %d, want %d", c.err, rec.Code, c.want)
+			}
+		})
+	}
+}
+
+// TestWriteErrorHidesInternalDetailsOn500 pins the one status whose
+// message a caller does not get verbatim: everything else above is text
+// the service deliberately wrote for a caller to read, but an unmapped
+// error can be a driver or SQL message, and a 500 must not put that on
+// the wire (issue #365).
+func TestWriteErrorHidesInternalDetailsOn500(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeError(rec, errors.New("pq: password authentication failed for user \"ochakai\" at 10.0.0.5:5432"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %q is not JSON: %v", rec.Body, err)
+	}
+	if strings.Contains(body["error"], "10.0.0.5") || strings.Contains(body["error"], "password") {
+		t.Errorf(`error = %q, leaks the underlying error`, body["error"])
+	}
+}
+
+// TestUnmatchedRoutesAnswerJSON pins the other half of the same envelope
+// promise: a path nothing serves and a path served under a different
+// method both used to fall through to net/http's own plain-text 404/405
+// instead of the {"error": "..."} shape every other response here uses
+// (issue #365).
+func TestUnmatchedRoutesAnswerJSON(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct {
+		name, method, url string
+		want              int
+		wantErr           string
+	}{
+		{"unknown path", http.MethodGet, "/api/v1/nope", http.StatusNotFound, "not found"},
+		{"wrong method", http.MethodPost, "/api/v1/search", http.StatusMethodNotAllowed, "method not allowed"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			if rec.Code != c.want {
+				t.Fatalf("%s %s = %d, want %d (body: %s)", c.method, c.url, rec.Code, c.want, rec.Body)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Errorf("Content-Type = %q, want application/json", ct)
+			}
+			var body map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("body %q is not JSON: %v", rec.Body, err)
+			}
+			if body["error"] != c.wantErr {
+				t.Errorf("error = %q, want %q", body["error"], c.wantErr)
 			}
 		})
 	}

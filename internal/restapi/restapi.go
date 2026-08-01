@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -798,7 +799,54 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	return announceReadOnly(svc, mux)
+	return announceReadOnly(svc, stdlibDefaultsAsJSON(mux))
+}
+
+// stdlibDefaultsAsJSON rewrites the two responses net/http's ServeMux
+// answers by itself — an unmatched path, and a path matched by another
+// method — into the same {"error": "..."} envelope every handler in this
+// file writes by hand, instead of the plain-text body http.Error puts on
+// the wire. Both travel through http.Error, which always sets
+// Content-Type to text/plain before the status is written; every
+// deliberate response here sets a JSON Content-Type first (writeJSON
+// runs before WriteHeader), so a still-text/plain Content-Type at a 404
+// or 405 can only be one of these two, never an application 404 like
+// store.ErrNotFound.
+func stdlibDefaultsAsJSON(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(&defaultEnvelopeWriter{ResponseWriter: w}, r)
+	})
+}
+
+type defaultEnvelopeWriter struct {
+	http.ResponseWriter
+	rewriting bool
+}
+
+func (w *defaultEnvelopeWriter) WriteHeader(status int) {
+	if (status != http.StatusNotFound && status != http.StatusMethodNotAllowed) ||
+		!strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") {
+		w.ResponseWriter.WriteHeader(status)
+		return
+	}
+	w.rewriting = true
+	msg := "not found"
+	if status == http.StatusMethodNotAllowed {
+		msg = "method not allowed"
+	}
+	body, _ := json.Marshal(map[string]string{"error": msg})
+	h := w.Header()
+	h.Set("Content-Type", "application/json; charset=utf-8")
+	h.Set("Content-Length", strconv.Itoa(len(body)))
+	w.ResponseWriter.WriteHeader(status)
+	_, _ = w.ResponseWriter.Write(body)
+}
+
+func (w *defaultEnvelopeWriter) Write(b []byte) (int, error) {
+	if w.rewriting {
+		return len(b), nil
+	}
+	return w.ResponseWriter.Write(b)
 }
 
 // announceReadOnly marks every REST response from a read-only deployment
@@ -1270,6 +1318,15 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.As(err, &unsupportedErr):
 		status = http.StatusNotImplemented
+	}
+	if status == http.StatusInternalServerError {
+		// Every status above is a message a caller is meant to read; this
+		// one is whatever the store or a driver said, which can carry SQL
+		// text or a connection string. Logged for an operator instead of
+		// put on the wire.
+		slog.Default().Error("unhandled REST error", "error", err)
+		writeJSON(w, status, map[string]string{"error": "internal error"})
+		return
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
