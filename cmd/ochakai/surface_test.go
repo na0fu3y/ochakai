@@ -945,6 +945,19 @@ var commandGuardExempt = map[string]bool{
 	"ROADMAP.md":  true,
 }
 
+// commandGuardExtra are files outside the manual that also teach a literal
+// "ochakai <command>" invocation and so need the same guard —
+// TestManualNamesNoCommandThatDoesNotExist did not reach them because
+// userDocs() is DOC-page prose only (.md, and .github/ skipped as a
+// dot-directory): issue #399 found bug_report.yml still showing the
+// retired `ochakai create` as the example every bug reporter copies.
+// These are scanned with commandWordsIn rather than commandWordIn: none of
+// them wrap prose in Markdown fences or backticks to isolate a span with,
+// so every field in every line is checked instead.
+var commandGuardExtra = []string{
+	".github/ISSUE_TEMPLATE/bug_report.yml",
+}
+
 var inlineCodeSpanRe = regexp.MustCompile("`([^`]*)`")
 
 // commandWordIn reads "ochakai <word>" out of an already-isolated code
@@ -966,6 +979,26 @@ func commandWordIn(span string) (string, bool) {
 }
 
 var commandWordRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*`)
+
+// commandWordsIn finds every "ochakai <word>" in a line where "ochakai" is
+// its own field — unlike commandWordIn, which requires "ochakai" to open
+// an already-isolated span, this walks all fields so it also catches a
+// standalone "ochakai" appearing mid-sentence, while still passing over
+// "./cmd/ochakai" or "ochakai.example.com", where "ochakai" is never a
+// field by itself.
+func commandWordsIn(line string) []string {
+	fields := strings.Fields(line)
+	var words []string
+	for i, field := range fields[:max(0, len(fields)-1)] {
+		if field != "ochakai" && field != "/ochakai" {
+			continue
+		}
+		if word := commandWordRe.FindString(fields[i+1]); word != "" {
+			words = append(words, word)
+		}
+	}
+	return words
+}
 
 // TestManualNamesNoCommandThatDoesNotExist reads every DOC page for
 // "ochakai <word>" and fails on any word that is not a command the binary
@@ -1025,6 +1058,21 @@ func TestManualNamesNoCommandThatDoesNotExist(t *testing.T) {
 				if !valid[word] {
 					t.Errorf("%s:%d names a command ochakai does not have: %q\n\t%s",
 						rel, i+1, word, strings.TrimSpace(span))
+				}
+			}
+		}
+	}
+	for _, rel := range commandGuardExtra {
+		content, err := os.ReadFile(filepath.Join("../..", rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		for i, line := range strings.Split(string(content), "\n") {
+			for _, word := range commandWordsIn(line) {
+				checked++
+				if !valid[word] {
+					t.Errorf("%s:%d names a command ochakai does not have: %q\n\t%s",
+						rel, i+1, word, strings.TrimSpace(line))
 				}
 			}
 		}

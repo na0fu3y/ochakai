@@ -8,7 +8,7 @@ frontmatter フィルタ `fm.` を **MCP の 2 ツールから降ろす**
 MCP も載せないに改訂する)— REST と CLI には残るので能力は落ちない。
 [0015](0015-surface-consistency.md) §3 の「載せないもの」に 1 件足す。
 [0051](0051-instance-metrics-and-search-misses.md) §3.1 がスコアの床を
-採らなかった理由を、そのままこちらにも適用する
+採らなかった理由を、そのままこちらにも適用する。**§1.1 の `knowledge.md` は architecture.md に畳まれた** — [architecture.md](../architecture.md#search) に読み替える
 Date: 2026-07-30
 
 ## 1. 問題: 面に載っているが、誰も通っていない

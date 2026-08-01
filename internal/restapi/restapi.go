@@ -1068,6 +1068,14 @@ func refuseReserved(w http.ResponseWriter, path, because string) bool {
 // straight to the store rather than through svc.Get: this is a check of
 // whether the address is a subtree, not a read of the object living
 // there, and must not count as a fetch or fault on missing attachments.
+//
+// A prefix that is not an object's own address but still matches
+// nothing — a typo one level too deep, as much as a directory that is
+// legitimately empty — is deliberately not refused here: the two are
+// indistinguishable from the store's side, and treating "matches
+// nothing" as an error would refuse every empty subtree along with
+// every typo. Only an object's own address is a defect this endpoint
+// can tell apart from a real, empty directory (issue #399).
 func refuseObjectAsArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) (bool, error) {
 	if path == "" {
 		return false, nil // the root is the whole bundle, never an object's own address
@@ -1254,8 +1262,7 @@ func planOf(created, changed bool) string {
 func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	v, err := okf.ViewOf(k)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError,
-			map[string]string{"error": "render document: " + err.Error()})
+		writeError(w, fmt.Errorf("render document: %w", err))
 		return
 	}
 	writeJSON(w, status, v)
@@ -1271,8 +1278,7 @@ func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
 func writeDocument(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	doc, err := okf.Document(k)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError,
-			map[string]string{"error": "render document: " + err.Error()})
+		writeError(w, fmt.Errorf("render document: %w", err))
 		return
 	}
 	w.Header().Set("Content-Type", documentMediaType)
