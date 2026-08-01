@@ -171,7 +171,7 @@ in the version you are running.
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)
 - **Using** — [The improvement loop](docs/loop.md) ·
-  [Writing knowledge](docs/knowledge.md) · [CLI reference](docs/cli.md) ·
+  [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) ·
   [Troubleshooting](docs/guides/troubleshooting.md)
 - **Running** — [Deploy with Terraform](deploy/terraform/README.md) ·

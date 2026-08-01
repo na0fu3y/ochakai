@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 25
-- DOC-LINES: 5161
+- DOC-LINES: 5833
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -415,7 +415,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 一行の値ならどれでも型になる)。ここで数えているのは**製品が教える
 推奨語彙**であって、書ける値の全体ではない。それでも数えるのは、
 9 の綴りを `--type` のヘルプにも MCP スキーマにも
-[knowledge.md](knowledge.md) の表にも書いている以上、それは利用者が
+[architecture.md](architecture.md) の表にも書いている以上、それは利用者が
 払っているものだからである。`Playbook` と `API Endpoint` は
 [0063](design/0063-two-unused-recommended-types-leave.md) がここから外した
 — SPEC の例示にはあったが、ochakai 自身の examples にも OKF 公式の
@@ -492,7 +492,7 @@ REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 
 置いた(上限の節の `DOC-LINES`)。0059 のキュー改名がこの文書に段落を
 足したとき、動いた数は一つも無かった。
 
-**この天井は、置いた後に三度上がっている。**
+**この天井は、置いた後に三度上がり、一度下がっている。**
 [0062](design/0062-a-listing-is-not-a-search.md) が `ochakai search` を
 二つに割ったとき、[cli.md](cli.md) は 9 つのフィルタを二度書くことに
 なった — コマンドを割るのは**参照文の重複を買う**という、それまでどこ
@@ -511,6 +511,7 @@ docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
 
+<<<<<<< HEAD
 **26 → 25 は逆方向で、量そのものではなく何を量に入れるかの変更で
 ある。** [docs/cli.md](cli.md) の 808 行のうち 702 行は
 `cmd/ochakai/clidocs_test.go` の `TestCLIReferenceIsCurrent` がバイナリ
@@ -522,6 +523,14 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
 してある — **ビルドから生成され、テストが往復を保証し、固定ヘッダー
 以外に手書きの散文がない** — 今日これに当たるのは `docs/cli.md` だけ
 で、次に生成ページが増えても自動では外れない。5,952 → 5,161。
+=======
+[#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
+最初の例である。architecture.md と knowledge.md は同じ六つの主題 —
+概念は OKF 文書、型は開いた集合、id はパス、リンクは本文から、
+verified の台帳と status のライフサイクル、provenance はバンドルから
+読み返さない — を二度語り、日本語検索の説明も二重だった。二枚を一枚に
+畳み、DOC を 26 → 25、天井を 5,952 から 5,833 まで下げている。
+>>>>>>> 4035544 (Fold docs/knowledge.md into docs/architecture.md)
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
@@ -561,7 +570,6 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
 - `docs/guides/rest-integration.md`
 - `docs/guides/troubleshooting.md`
 - `docs/images/README.md`
-- `docs/knowledge.md`
 - `docs/loop.md`
 - `docs/positioning.md`
 - `docs/surface.md`

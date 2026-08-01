@@ -33,8 +33,8 @@ nothing beyond Docker is needed to follow it. Past that — `ochakai use`,
 [release archive](https://github.com/na0fu3y/ochakai/releases), or
 `go run ./cmd/ochakai`, which wants the toolchain named in `go.mod` (Go
 1.21 and newer download it for you). Or talk to the API directly, since
-that is all the CLI does — see [Writing knowledge](knowledge.md) for the
-one-line `curl` version of a write.
+that is all the CLI does — see [the data model](architecture.md#the-data-model)
+for the one-line `curl` version of a write.
 
 ## Environment variables
 
