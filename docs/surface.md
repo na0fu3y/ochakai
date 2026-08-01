@@ -80,8 +80,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 28
 - ENV: 15
 - VOCAB: 34
-- DOC: 26
-- DOC-LINES: 5952
+- DOC: 25
+- DOC-LINES: 5161
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -456,7 +456,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
-## DOC (26)
+## DOC (25)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -511,6 +511,18 @@ docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
 
+**26 → 25 は逆方向で、量そのものではなく何を量に入れるかの変更で
+ある。** [docs/cli.md](cli.md) の 808 行のうち 702 行は
+`cmd/ochakai/clidocs_test.go` の `TestCLIReferenceIsCurrent` がバイナリ
+自身の `-h` から再生成し、手書きの散文は `cliDocsHeader` の見出し 1 つ
+だけである([0035](design/0035-verifiability.md))。この節が量っている
+のは前から通して読まれる分量であり、`ochakai search -h` と打つ人にも、
+インストール前に一冊として読む人にも、このページはそう読まれていない
+([#371](https://github.com/na0fu3y/ochakai/issues/371))。基準は狭く
+してある — **ビルドから生成され、テストが往復を保証し、固定ヘッダー
+以外に手書きの散文がない** — 今日これに当たるのは `docs/cli.md` だけ
+で、次に生成ページが増えても自動では外れない。5,952 → 5,161。
+
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
 - **[docs/design](design) の記録。** 利用者ではなく、変えようとする人が
@@ -540,7 +552,6 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
 - `deploy/terraform/README.md`
 - `docs/README.md`
 - `docs/architecture.md`
-- `docs/cli.md`
 - `docs/compatibility.md`
 - `docs/configuration.md`
 - `docs/faq.md`
@@ -569,6 +580,12 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
   あって、ochakai が知っていることではない。
 - **実装の行数、内部パッケージ、依存。** 外から見えないものは、増えても
   使う人は払わない。困るのは維持者だけで、それは別の問題である。
+- **生成された参照ページ。** ビルドから生成され、テストが往復を保証し、
+  固定ヘッダー以外に手書きの散文がないページ。誰も前から通して読まない
+  一方で、正確さに絶対に狂いが出ない — [docs/cli.md](cli.md) が今日
+  唯一これに当たる(`TestCLIReferenceIsCurrent`、
+  [#371](https://github.com/na0fu3y/ochakai/issues/371))。基準は三条件
+  だけで、狭く保つのがこの箇条書き自体の目的である。
 
 ## この仕組みが持てないもの
 
