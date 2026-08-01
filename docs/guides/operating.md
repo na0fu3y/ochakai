@@ -619,6 +619,173 @@ Notes from exercising this end-to-end:
   configure IAP with a custom OAuth client. Browsers are the intended
   clients here — MCP and CLI use the deploy guide's §5 path.
 
+## Public demo
+
+Everything in the deploy guide says never `allUsers`, and that stays true
+for every deployment anyone can write to. A demo is the exception, and it
+is an exception only because of what it gives up. Two settings, and the
+second implies the first:
+
+- **`OCHAKAI_MODE=read-only`** — the deployment changes no knowledge (design
+  doc 0040). Writes are 403, MCP does not offer the write tools at all, and
+  the web UI stops drawing buttons that would only fail. Useful on its own,
+  private, for a reference-only copy or for freezing a base during a
+  migration.
+- **`OCHAKAI_MODE=public`** — the deployment reads no identity
+  (design doc 0042). The `Authorization` header is ignored: without Cloud Run
+  IAM in front its signature is unverifiable, and a forged unsigned token
+  would otherwise be believed. `X-Ochakai-On-Behalf-Of` is ignored. Every
+  caller is `human:anonymous`, and nothing returns 401. It **implies
+  read-only** and cannot be separated from it — a publicly readable *and*
+  writable ochakai is not a configuration this program accepts, so the
+  dangerous half of "public" has no configuration.
+
+That is the whole trade: a service that believes nobody is safe to open,
+because it records nobody and writes nothing.
+
+### The ordering problem
+
+**A read-only deployment cannot be seeded.** `ochakai import` is a
+client-side loop over the ordinary write endpoints (deploy guide §5) —
+there is no bulk import path that bypasses the refusal. So the sequence
+is always: deploy **writable and private**, import, then flip. Getting
+this backwards is the one way to end up with an empty demo and no way to
+fill it.
+
+**Terraform** — [deploy/terraform](../../deploy/terraform) has both
+variables:
+
+```sh
+cd deploy/terraform
+# 1. Normal private deployment: public_read_only stays false.
+#    (invoker_members = ["user:you@your-org.example"] is enough for a demo.)
+terraform apply
+export OCHAKAI_URL=$(terraform output -raw service_url)
+# ... the one-time schema bootstrap, as always (module README) ...
+
+# 2. Seed it while it is still private and writable — see below.
+
+# 3. Flip. This sets OCHAKAI_MODE=public and grants allUsers in the
+#    same apply; the module has no way to do one without the other.
+terraform apply -var public_read_only=true
+terraform output -raw demo_url
+```
+
+**gcloud** — deploy per the deploy guide's §3 (private,
+`--no-allow-unauthenticated`), seed, then flip in this order:
+
+```sh
+# 1. Stop believing identities and stop writing, while still private.
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_MODE=public
+
+# 2. Only then open it.
+gcloud run services add-iam-policy-binding ochakai --region=$REGION \
+  --member=allUsers --role=roles/run.invoker
+```
+
+The order is the point: between the two commands the service is harmless, and
+the reverse order leaves a window in which a public ochakai still believes
+whatever `Authorization` header a stranger sends. As everywhere in the
+deploy guide, `--update-env-vars` — `--set-env-vars` would wipe
+`OCHAKAI_DATABASE_URL`.
+
+### Seeding
+
+[examples/demo](../../examples/demo) is a ten-concept knowledge base built to be
+read: linked concepts, mixed types, and enough usage for `sort=usage` to mean
+something. Import it while the service is still private, where you
+authenticate exactly as in the deploy guide's §5 — the CLI resolves a
+Google ID token from your gcloud login, nothing special:
+
+```sh
+git clone --depth 1 https://github.com/na0fu3y/ochakai && cd ochakai
+go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL from above
+```
+
+Those ten concepts are recorded as `human:you@your-org.example` — the last
+provenance this base will ever receive, and after the flip the only
+`created_by` any visitor sees. (The sequence has been rehearsed against a
+local server: import writable — 10 created, 0 skipped — then restart with
+`OCHAKAI_MODE=public`, after which reads serve anonymously and
+every write is refused. Cloud Run adds only the IAM binding.)
+
+### Checking the flip landed
+
+The demo is the one deployment where a plain `curl` is supposed to work, so
+it is also the one you can verify without a proxy:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue"  # 200, no token
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/bundle/queries/monthly-revenue.md"  # 403
+```
+
+200 without a token proves the public grant and `OCHAKAI_MODE=public`
+both landed (before the flip this is Google's 401); 403 on the write proves
+the implied read-only. Sending a bogus `Authorization` header changes
+neither answer — that is the property, not a side effect.
+
+If you want the demo to show **hybrid search** (deploy guide §4), grant
+the Vertex AI role *before* the import: vectors are written when a
+concept is written, and `ochakai reembed` is itself a write, so it is
+refused once read-only is on. The demo bundle has no attachments, so the
+deploy guide's §4b bucket is not needed for it.
+
+### Cost
+
+The same shape as the table at the top of the deploy guide — a demo is
+one Cloud Run service and one `db-f1-micro`, with nothing extra to pay
+for. One difference in kind, not in the numbers: Cloud Run is
+request-billed and the requests no longer come only from your
+organization. `--max-instances=1` (deploy guide §3) is what keeps that
+bounded; leave it in place.
+
+### What you give up, and why that is acceptable
+
+- **No identity, at all.** Nothing about a visitor is known or recorded.
+  `created_by` / `updated_by` on anything written through a public service
+  would be a value the server invented — which is precisely why nothing can
+  be written. Provenance is most of what ochakai sells; a public demo does
+  not weaken it, it declines to pretend.
+- **Everything in the base is public.** There is no 401 anywhere, so the
+  concepts, their revisions, and their authors' email addresses are on the
+  open internet. Put a demo bundle in it. Never point this posture at a real
+  knowledge base because "it is only read-only".
+- **Delegation is gone** (deploy guide §5c) — an embedding application
+  cannot forward its users' identities here, because none of it would be
+  believed.
+- **Domain Restricted Sharing rejects the `allUsers` binding** — see
+  [Guardrails against misconfiguration](#guardrails-against-misconfiguration)
+  above; the deploy guide's §7 has the exact error message. It should be
+  rejected — lift it for a dedicated demo project if you want one, not for
+  the organization.
+
+**The demo database still grows.** Usage telemetry — search hits and fetch
+counts (design doc 0029) — keeps recording under read-only on purpose: it is
+the server's own observation rather than a caller's write, and switching it
+off would freeze the `sort=usage` feed that a demo most wants to show (design
+doc 0040 §2.2). Two consequences: the 10 GB disk is a hard ceiling with
+auto-growth off (deploy guide §2), so watch it on a demo that gets
+attention; and those counts are driven by anonymous strangers, so treat
+them as a public popularity signal, never as evidence about the knowledge.
+
+### Taking it back down
+
+Full teardown is the deploy guide's §9. To retract just the posture and
+keep the deployment, reverse the order it was set in — the public grant
+goes first, so the service is never open while it is anything but
+read-only:
+
+```sh
+gcloud run services remove-iam-policy-binding ochakai --region=$REGION \
+  --member=allUsers --role=roles/run.invoker
+gcloud run services update ochakai --region=$REGION \
+  --remove-env-vars=OCHAKAI_MODE
+```
+
+With Terraform, `terraform apply -var public_read_only=false` does both, in
+that order.
+
 ## Upgrades
 
 Migrations run automatically at startup, so an upgrade is a new image
