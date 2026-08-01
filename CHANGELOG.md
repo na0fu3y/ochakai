@@ -20,6 +20,17 @@ last entry.
 
 ### Fixed
 
+- **BREAKING** — `POST /api/v1/reembed`'s `cursor` is now opaque, versioned
+  and base64url-encoded, the same shape a listing's `cursor` has had since
+  design doc [0050](docs/design/0050-listings-page-rankings-do-not.md). It
+  used to be the last concept id and attachment name joined with a raw NUL
+  byte and handed back unencoded — a hazard through proxies and WAFs, not
+  URL-safe on its own, and published as an example in `api/openapi.yaml`
+  right after the same paragraph called it opaque. A cursor from a pass
+  running when this deploys is invalid after the upgrade; a reembed pass
+  is minutes long and restartable, so resuming means starting the pass
+  over, not losing work.
+
 - **BREAKING** — `Accept: application/gzip` on a concept's or a file's
   own bundle path answers 409 instead of an empty, valid `tar.gz` with a
   200 on it. Dots are legal inside a path segment, so an object's own
