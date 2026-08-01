@@ -768,7 +768,7 @@ questions — or find the pages that say the same thing twice.`,
 // userDocs is the manual: every markdown page a reader is sent to in order
 // to evaluate, use or run ochakai, with the total number of lines in them.
 //
-// Four things are markdown and are not the manual, and each is left out
+// Five things are markdown and are not the manual, and each is left out
 // for a reason docs/surface.md states:
 //
 //   - docs/design — decision records, read by somebody changing ochakai.
@@ -781,6 +781,12 @@ questions — or find the pages that say the same thing twice.`,
 //   - CHANGELOG, CONTRIBUTING, CLAUDE.md, the code of conduct, and the
 //     dot-directories — a ledger read one entry at a time, and the surface
 //     somebody changing ochakai reads.
+//   - a generated reference page — one nobody reads front to back, built
+//     from the binary and unable to drift from it. The rule stays narrow
+//     enough that it cannot become a hiding place: generated from the
+//     build, verified by a test, with no hand-written prose beyond a
+//     fixed header. docs/cli.md is the only file that qualifies today
+//     (TestCLIReferenceIsCurrent in clidocs_test.go, issue #371).
 func userDocs(t *testing.T) ([]string, int) {
 	t.Helper()
 	const root = "../.."
@@ -790,6 +796,9 @@ func userDocs(t *testing.T) ([]string, int) {
 	forChangers := map[string]bool{
 		"CHANGELOG.md": true, "CONTRIBUTING.md": true,
 		"CODE_OF_CONDUCT.md": true, "CLAUDE.md": true,
+	}
+	generatedReference := map[string]bool{
+		"docs/cli.md": true,
 	}
 	var docs []string
 	lines := 0
@@ -808,7 +817,7 @@ func userDocs(t *testing.T) ([]string, int) {
 			}
 			return nil
 		}
-		if filepath.Ext(rel) != ".md" || forChangers[rel] {
+		if filepath.Ext(rel) != ".md" || forChangers[rel] || generatedReference[rel] {
 			return nil
 		}
 		content, err := os.ReadFile(path)
