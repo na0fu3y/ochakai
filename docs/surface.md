@@ -80,8 +80,9 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 28
 - ENV: 15
 - VOCAB: 34
-- DOC: 25
-- DOC-LINES: 5879
+- DOC: 23
+- DOC-LINES: 4929
+- DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -93,9 +94,16 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 する」と声に出して言っている PR であり、三つの問いはそのときのために
 ある。
 
-**下げるのは日常、上げるのは決定。** 畳み込みで数が減ったら、上限も
-一緒に下げる — さもないと次の追加が無言で通る余白が貯まる。減った数の
-横に古い天井が残っていれば、それは diff に見えている。
+**下げるのは日常、上げるのは決定。** 一覧の天井(DOC-LINES を除く上の
+九つ)は宣言数と実数が一致することを CI が確認するので、畳み込みで数が
+減れば天井を下げないと落ちる — 黙って通る余白は残らない。`DOC-LINES`
+だけは行数という量なので、編集のたびに一致させるのは神経質すぎる。
+その代わり `DOC-LINES-SLACK` が「実数が天井よりどれだけ少なくてよいか」
+を宣言し、それを超えて余白が空けば CI が落ちる。d28c3c8 はガイドを
+縮めながら天井を 5,753 → 5,790 に上げ、実際の着地は 5,762 — 28 行分の
+予算が返らないまま残った。数行の編集がそのたびに CI を落とすのは
+やり過ぎだが、28 行の未返却は見逃していい余白ではない、というのが
+`DOC-LINES-SLACK: 10` の意味である。
 
 ## この文書は番号を取らない
 
@@ -415,7 +423,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 一行の値ならどれでも型になる)。ここで数えているのは**製品が教える
 推奨語彙**であって、書ける値の全体ではない。それでも数えるのは、
 9 の綴りを `--type` のヘルプにも MCP スキーマにも
-[knowledge.md](knowledge.md) の表にも書いている以上、それは利用者が
+[architecture.md](architecture.md) の表にも書いている以上、それは利用者が
 払っているものだからである。`Playbook` と `API Endpoint` は
 [0063](design/0063-two-unused-recommended-types-leave.md) がここから外した
 — SPEC の例示にはあったが、ochakai 自身の examples にも OKF 公式の
@@ -456,7 +464,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
-## DOC (25)
+## DOC (23)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -467,7 +475,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 
 ページは利用者が払うものである。README は 20 以上の文書へ送り出し、
 デプロイする人は
-[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 665 行を
+[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 459 行を
 通る。No FDE(C4)がドキュメントを正当化するが、C4 が求めるのは
 **自分で立ち上げられること**であって行数ではない。
 
@@ -492,7 +500,7 @@ REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 
 置いた(上限の節の `DOC-LINES`)。0059 のキュー改名がこの文書に段落を
 足したとき、動いた数は一つも無かった。
 
-**この天井は、置いた後に三度上がっている。**
+**この天井は、置いた後に三度上がり、一度下がっている。**
 [0062](design/0062-a-listing-is-not-a-search.md) が `ochakai search` を
 二つに割ったとき、[cli.md](cli.md) は 9 つのフィルタを二度書くことに
 なった — コマンドを割るのは**参照文の重複を買う**という、それまでどこ
@@ -511,15 +519,24 @@ docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
 
+[#374](https://github.com/na0fu3y/ochakai/issues/374) は逆方向をもう一度
+たどった。アクセスモデル・secret-zero・read-only/public の姿勢は README・
+configuration・architecture・faq・deploy の各ページに同じ話が繰り返し
+書かれ、二本のテキストが同じことを言えばどちらが古いか分からなくなる
+([faq.md](faq.md) 自身の規則)という代金を払っていた。持ち主を一つに決め、
+残りを一行のリンクに畳んで、#374 の削減が出ている。
+[#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
+最初の例である。architecture.md と knowledge.md は同じ六つの主題を二度語り
+、二枚を一枚に畳んだ。DOC が 26 → 25 になった分、天井も合わせている。
+
 **[#380](https://github.com/na0fu3y/ochakai/issues/380) はここで初めて
 下がった、畳み込みではない理由で。** `docs/images/README.md` は
 `createdb shots` や `sips --resampleWidth` といったスクリーンショット
 再現手順で、読むのは ochakai を使う人ではなく変える人だった。下の
 「数えていないもの」が CONTRIBUTING を除外している理由(変える人の面)
 と同じ理由がこのページにも当てはまっていたのに、置き場所だけが違って
-いた。[CONTRIBUTING.md](../CONTRIBUTING.md) に移し、`DOC` は 26 → 25、
-天井は 5,952 まで上げていたものを、この一段落を足した後の実測に合わせて
-5,879 まで下げている。
+いた。[CONTRIBUTING.md](../CONTRIBUTING.md) に移し、DOC は 24 → 23 に
+なった。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
@@ -550,7 +567,6 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
 - `deploy/terraform/README.md`
 - `docs/README.md`
 - `docs/architecture.md`
-- `docs/cli.md`
 - `docs/compatibility.md`
 - `docs/configuration.md`
 - `docs/faq.md`
@@ -559,7 +575,6 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
 - `docs/guides/operating.md`
 - `docs/guides/rest-integration.md`
 - `docs/guides/troubleshooting.md`
-- `docs/knowledge.md`
 - `docs/loop.md`
 - `docs/positioning.md`
 - `docs/surface.md`
@@ -578,6 +593,12 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
   あって、ochakai が知っていることではない。
 - **実装の行数、内部パッケージ、依存。** 外から見えないものは、増えても
   使う人は払わない。困るのは維持者だけで、それは別の問題である。
+- **生成された参照ページ。** ビルドから生成され、テストが往復を保証し、
+  固定ヘッダー以外に手書きの散文がないページ。誰も前から通して読まない
+  一方で、正確さに絶対に狂いが出ない — [docs/cli.md](cli.md) が今日
+  唯一これに当たる(`TestCLIReferenceIsCurrent`、
+  [#371](https://github.com/na0fu3y/ochakai/issues/371))。基準は三条件
+  だけで、狭く保つのがこの箇条書き自体の目的である。
 
 ## この仕組みが持てないもの
 

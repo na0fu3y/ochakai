@@ -113,3 +113,36 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+  # The quick start is the first five minutes of every reader's experience
+  # with ochakai, and nothing else here runs it: the unit tests never
+  # start deploy/compose.yaml, and nothing curls the API it stands up.
+  # This job runs README.md's own steps verbatim.
+  quickstart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # --build: the compose file also names a published `image:`, and
+      # without --build compose is free to reuse that instead of building
+      # the commit under test. The point of this job is to catch a break
+      # in this commit's code or compose file, not to re-test a release.
+      - run: docker compose -f deploy/compose.yaml up -d --build
+      # `ochakai` has no healthcheck (only `db` does — see the compose
+      # file), so wait for the port to answer instead of `docker compose
+      # up --wait`. Migration runs before the server starts listening
+      # (cmd/ochakai/main.go's setup() then serve()), so a /health that
+      # answers means search is ready too.
+      - name: wait for ochakai to come up
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/health > /dev/null && exit 0
+            sleep 1
+          done
+          echo "ochakai never answered /health" >&2
+          exit 1
+      - run: docker compose -f deploy/compose.yaml exec -T ochakai /ochakai import /examples/demo
+      - name: search finds what was just imported
+        run: |
+          hits=$(curl -sf 'http://localhost:8080/api/v1/search?q=revenue' | jq '.hits | length')
+          [ "$hits" -gt 0 ] || { echo "search?q=revenue returned no hits after import" >&2; exit 1; }
+      - if: failure()
+        run: docker compose -f deploy/compose.yaml logs

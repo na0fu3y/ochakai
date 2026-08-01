@@ -288,19 +288,20 @@ func capturedNumbers(re *regexp.Regexp, s string) []string {
 // The ceiling lives in CONTRIBUTING.md rather than here, for the same reason
 // docs/surface.md keeps the surface caps in prose: raising it should be a
 // line in a diff whose subject is the agreement, not a constant in a test.
-const (
-	contributing = "../../CONTRIBUTING.md"
-	// firstCappedRecord is where the rule starts. Everything before it is
-	// immutable — a ceiling cannot reach back, and a record that could be
-	// edited to fit was never a decision somebody could depend on. 0062 is
-	// the exception that is not one: it has not reached a release, and
-	// CONTRIBUTING.md already says an unreleased record is revised by
-	// replacing it, so nobody can be depending on its length either. It also
-	// keeps this check from guarding nothing on the day it lands.
-	firstCappedRecord = "0062"
-)
+const contributing = "../../CONTRIBUTING.md"
 
 var recordCeilingRe = regexp.MustCompile(`(?m)^\s*RECORD-LINES: (\d+)$`)
+
+// firstCappedRecordRe reads where the rule starts, rather than pinning a
+// second copy of the number here: a record before it is immutable — a
+// ceiling cannot reach back, and a record that could be edited to fit was
+// never a decision somebody could depend on — while a record from here on
+// has not reached a release yet, so CONTRIBUTING.md's own rule that an
+// unreleased record is revised by replacing it means nobody can be
+// depending on its length either. Reading the boundary back, the same way
+// RECORD-LINES itself is read, is what keeps the two from disagreeing the
+// way they did when 0063 landed and this file still said 0062.
+var firstCappedRecordRe = regexp.MustCompile(`(?m)^\s*RECORD-CAP-FROM: (\d{4})$`)
 
 func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
 	content, err := os.ReadFile(contributing)
@@ -315,9 +316,13 @@ func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s: RECORD-LINES %q: %v", contributing, m[1], err)
 	}
+	firstCapped := firstCappedRecordRe.FindStringSubmatch(string(content))
+	if firstCapped == nil {
+		t.Fatalf("%s declares no RECORD-CAP-FROM: this check now guards nothing", contributing)
+	}
 	capped := 0
 	for _, r := range designRecords(t) {
-		if r.number < firstCappedRecord {
+		if r.number < firstCapped[1] {
 			continue
 		}
 		capped++
@@ -335,17 +340,18 @@ the raise cannot happen quietly, not to be worked around by writing denser
 Japanese.`, r.file, lines, limit, contributing)
 	}
 	if capped == 0 {
-		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCappedRecord)
+		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCapped[1])
 	}
 }
 
 // recordCorpusCapRe reads a ceiling on the corpus as a whole rather than on
-// one record: "RECORD-COUNT: 59" or "RECORD-CORPUS-LINES: 10292", declared
-// beside RECORD-LINES in CONTRIBUTING.md rather than as an eleventh cap in
-// docs/surface.md's 上限 section — a record is read by somebody changing
-// ochakai, not somebody using it, so its ceiling lives with the other
-// ceiling for that same reader.
-var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-COUNT|RECORD-CORPUS-LINES): (\d+)$`)
+// one record: "RECORD-COUNT: 59", "RECORD-CORPUS-LINES: 10292" or
+// "RECORD-CORPUS-LINES-SLACK: 10", declared beside RECORD-LINES in
+// CONTRIBUTING.md rather than as an eleventh cap in docs/surface.md's 上限
+// section — a record is read by somebody changing ochakai, not somebody
+// using it, so its ceiling lives with the other ceiling for that same
+// reader.
+var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-COUNT|RECORD-CORPUS-LINES|RECORD-CORPUS-LINES-SLACK): (\d+)$`)
 
 // TestDesignRecordCorpusStaysUnderItsCeiling reads docs/design as a whole:
 // how many records it holds, and how many lines they total. Superseded
@@ -362,6 +368,15 @@ var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-COUNT|RECORD-CORPUS-
 // cannot see at all — 0054/0057 and 0055/0056 are one subject apiece, told
 // across two numbers, and no per-record cap can notice that a second
 // number was the wrong fix.
+//
+// RECORD-COUNT is a name count exactly like DOC or VOCAB — a record either
+// exists or it does not, so its ceiling is exact and a drop has to lower it
+// in the same PR. RECORD-CORPUS-LINES is an amount, like DOC-LINES, and
+// gets the same stated tolerance rather than an exact match: editing a
+// handful of records should not fail CI, but the gap docs/surface.md
+// describes for DOC-LINES — a fold that lowers what is declared and leaves
+// the ceiling where it was — is exactly as possible here, so
+// RECORD-CORPUS-LINES-SLACK bounds it the same way.
 func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
 	content, err := os.ReadFile(contributing)
 	if err != nil {
@@ -375,7 +390,7 @@ func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
 		}
 		caps[m[1]] = n
 	}
-	for _, name := range []string{"RECORD-COUNT", "RECORD-CORPUS-LINES"} {
+	for _, name := range []string{"RECORD-COUNT", "RECORD-CORPUS-LINES", "RECORD-CORPUS-LINES-SLACK"} {
 		if _, ok := caps[name]; !ok {
 			t.Fatalf("%s declares no %s ceiling: this check now guards nothing", contributing, name)
 		}
@@ -387,15 +402,27 @@ func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
 		totalLines += strings.Count(r.body, "\n")
 	}
 
-	if count, limit := len(records), caps["RECORD-COUNT"]; count > limit {
+	switch count, limit := len(records), caps["RECORD-COUNT"]; {
+	case count > limit:
 		t.Errorf(`docs/design holds %d records, over the RECORD-COUNT ceiling of %d in %s.
 
 Going over is a decision to make the corpus bigger, so it is made by
 raising the number in the same PR, having said why — or by finding that the
 new record restates one already on file, or that two subjects have been
 sharing one number and would read better split.`, count, limit, contributing)
+	case count < limit:
+		t.Errorf(`docs/design holds %d records, under the RECORD-COUNT ceiling of %d in %s.
+
+A record either exists or it does not, so this ceiling carries no
+headroom: it is the count this project agreed the corpus holds, not a
+limit not to cross. Lower it to %d in the same PR that retired a record
+— otherwise the gap is spare capacity the next addition spends without
+moving a number anyone would see.`, count, limit, contributing, count)
 	}
-	if got, limit := totalLines, caps["RECORD-CORPUS-LINES"]; got > limit {
+
+	got, limit, slack := totalLines, caps["RECORD-CORPUS-LINES"], caps["RECORD-CORPUS-LINES-SLACK"]
+	switch headroom := limit - got; {
+	case got > limit:
 		t.Errorf(`docs/design totals %d lines across %d records, over the RECORD-CORPUS-LINES
 ceiling of %d in %s.
 
@@ -403,6 +430,73 @@ A record can stay under RECORD-LINES on its own and still add to what a
 reader gets through if enough records do it at once, which is what this
 ceiling is for. Raise it in the same PR, having said why.`,
 			got, len(records), limit, contributing)
+	case headroom > slack:
+		t.Errorf(`docs/design totals %d lines across %d records, %d under the
+RECORD-CORPUS-LINES ceiling of %d — more than the %d RECORD-CORPUS-LINES-SLACK
+allows.
+
+A ceiling on an amount that is left standing after the amount drops is
+headroom nobody has to justify before spending it, which is the same gap
+docs/surface.md describes for DOC-LINES. Lower the ceiling to %d, or close
+to it, in the same PR that lowered the total.`,
+			got, len(records), headroom, limit, slack, got)
+	}
+}
+
+// tombstoneLineCeilingRe reads "TOMBSTONE-LINES: 12" from CONTRIBUTING.md,
+// declared next to RECORD-LINES for the same reason: raising it should be
+// a line in a diff whose subject is the agreement, not a constant here.
+var tombstoneLineCeilingRe = regexp.MustCompile(`(?m)^\s*TOMBSTONE-LINES: (\d+)$`)
+
+// commitLinkRe matches the link a tombstone owes the reader: the commit
+// that held the record in full, as this repository's own GitHub blob URL
+// (github.com/<owner>/<repo>/blob/<sha>/<path>).
+var commitLinkRe = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/blob/[0-9a-f]{7,40}/`)
+
+// TestSupersededRecordsAreTombstones holds every Superseded record to what
+// CONTRIBUTING.md's "What a superseded record keeps" says its body may be:
+// title, header, one sentence of what it decided, and a link to the
+// commit that held it in full. Ten Superseded records once carried 2,107
+// lines between them — prose nobody rereads once a Status: header has
+// already sent the reader to the record that replaced it.
+func TestSupersededRecordsAreTombstones(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	m := tombstoneLineCeilingRe.FindStringSubmatch(string(content))
+	if m == nil {
+		t.Fatalf("%s declares no TOMBSTONE-LINES ceiling: this check now guards nothing", contributing)
+	}
+	limit, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("%s: TOMBSTONE-LINES %q: %v", contributing, m[1], err)
+	}
+
+	checked := 0
+	for _, r := range designRecords(t) {
+		if !supersededByRe.MatchString(r.status) {
+			continue
+		}
+		checked++
+		if lines := strings.Count(r.body, "\n"); lines > limit {
+			t.Errorf(`docs/design/%s is %d lines, over the %d a tombstone keeps
+(TOMBSTONE-LINES in %s).
+
+A record whose Status: says Superseded shrinks to a tombstone: the title,
+the header, one sentence of what it decided, and a link to the commit
+that held it in full. Nobody can be depending on a decision that has
+already been replaced, and the full text stays one git show away — it
+does not need to stay in this file too.`,
+				r.file, lines, limit, contributing)
+		}
+		if !commitLinkRe.MatchString(r.body) {
+			t.Errorf("docs/design/%s is Superseded but links no commit holding it in full — "+
+				"a tombstone's whole point is that the text is one git show away, not gone", r.file)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no Superseded record found: this check now guards nothing")
 	}
 }
 

@@ -10,12 +10,35 @@ CLI から `ochakai backlinks` を廃し、`ochakai search --links-to <id>`
 の `--lift` と §5 が据え置いたリビジョン値 `unreject` を改訂する)。
 四つとも 0.16.0 でリリース済みなので、どれも差し替えではなく改訂で
 あり、新しい番号を取る([0048](0048-decision-records-for-wire-contracts.md)
-§2.3)。
+§2.3)。[0055](0055-one-ruling-one-face.md) を Superseded にする —
+裁定を REST の一つの面に畳んだ決定(§0)を引き継ぐ。
 [0015](0015-surface-consistency.md) §2 の「CLI は完全性の面」に 1 行
 足す — 完全性とは**能力**の完全性であって、REST 操作との一対一でも、
 畳まれた面をコマンドとして保存することでもない。記録される内容・
 台帳の形・ワイヤの形はどれも変わらない
 Date: 2026-07-29
+
+## 0. 0055 が決めたこと: 裁定は一つの REST 面から下す
+
+`POST /api/v1/verify/{id}`(検証台帳への追記)、`POST /api/v1/reject/{id}`
+(却下)、`DELETE /api/v1/reject/{id}`(却下の解除)は構造的性質を
+すべて共有していた — 文書に触れない、台帳に書く、呼び出し元の identity
+で記録される、人の面に載り MCP には載らない。値だけが違う三つの操作は、
+`ruling` をパラメータに持つ一つの操作である。
+
+- **`POST /api/v1/review/{id}`** が三つを置き換える。本文に
+  `{"ruling": "verified" | "rejected" | "withdrawn"}` を取り、応答は
+  エントリそのもの(`View`)、ETag 付き。REST は 11 操作になる
+  ([0046](0046-bundle-address-space.md) §3.14)。
+- **`withdrawn` は DELETE ではない** — 検証は追記のみの台帳、却下は
+  1 つの生きた裁定であり、却下を降ろす操作は台帳の行を消すのではなく
+  履歴に 1 行増やす(リビジョンの `change` はこの記録の系では
+  `unreject` と呼んでいたが、[0056](0056-one-question-one-command.md)
+  §3.3 が `withdraw` に言い直した)。
+- **`note` は `rejected` 専用**で、他の ruling と一緒に来たら 400。
+- **変えないもの**: `ochakai verify` / `ochakai reject`(CLI は 2 本の
+  まま — REST を畳んだのはワイヤであって語彙ではない)、MCP(裁定は
+  人が下すもの)、`report_outcome`(載る面が逆であり畳まない)。
 
 ## 1. 問題: ワイヤを畳んだのに、CLI に旧い面が残っている
 

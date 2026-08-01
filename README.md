@@ -143,7 +143,7 @@ ochakai loses, and says who should pick something else.
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
-| authorization | reachability is the whole access model: **whoever can reach the deployment can read and write everything** (design doc [0002](docs/design/0002-authn-authz.md)). If you need per-concept permissions, this is the wrong tool |
+| authorization | reachability is the access model — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) |
 | telemetry | nothing is reported anywhere. The only hosts ochakai contacts are Google Cloud APIs in your own project |
 
 ## Requirements
@@ -171,7 +171,7 @@ in the version you are running.
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)
 - **Using** — [The improvement loop](docs/loop.md) ·
-  [Writing knowledge](docs/knowledge.md) · [CLI reference](docs/cli.md) ·
+  [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) ·
   [Troubleshooting](docs/guides/troubleshooting.md)
 - **Running** — [Deploy with Terraform](deploy/terraform/README.md) ·

@@ -49,6 +49,16 @@ var retiredSpellings = []retiredSpelling{
 		forms:   []string{"](ochakai://", "<ochakai://"},
 		instead: "[text](/metrics/revenue.md) or [text](./revenue.md), the SPEC §6 forms (design doc 0046 §3.6)",
 	},
+	{
+		// domain.ValidActorKind accepts only "human" and "process"; a
+		// caller that sends "agent:" gets a 400 (httpauth.parseOnBehalfOf).
+		// The two forms are the shapes an identity string actually takes —
+		// `agent:` opening a backtick span, and the "human:x via agent:y"
+		// join — chosen so that explaining the rename ("`agent:` became
+		// `process:`") is not itself a hit.
+		forms:   []string{"`agent:", "via agent:"},
+		instead: "human: or process:, the SPEC §5.3 kinds (design doc 0043 §3.8)",
+	},
 }
 
 // Guard: the spellings the project retired do not grow back in the prose

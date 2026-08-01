@@ -274,6 +274,8 @@ state per area, so when a design doc lands:
   it into the one replacing it, as 0034 did.
 - Update the `Status:` header of every older doc the new one supersedes
   or amends, linking to the new number (see 0011 or 0018 for the style).
+  A doc the new one supersedes outright also shrinks to a tombstone —
+  see "What a superseded record keeps" below.
 - Update [docs/design/README.md](docs/design/README.md): add the new
   doc to its area with a one-line summary, adjust the status notes of
   the docs it amends, and — if it becomes the doc to read for that area —
@@ -292,6 +294,7 @@ state per area, so when a design doc lands:
 ### How long a record gets
 
     RECORD-LINES: 220
+    RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
 and the corpus grew accordingly: 58 records and about 10,400 lines, on
@@ -302,7 +305,8 @@ thing explained is the shape the numbers have been showing for several
 releases.
 
 So a record from 0063 on stays under that line, and
-`TestDesignRecordsStayUnderTheirCeiling` reads it back out of this file.
+`TestDesignRecordsStayUnderTheirCeiling` reads both numbers back out of
+this file.
 The ceiling is the same bargain [docs/surface.md](docs/surface.md)
 strikes for the surface: it is one number in one file and anybody can
 raise it, in the same PR, having said why. What it buys is only that the
@@ -323,6 +327,33 @@ are not measured: they are immutable, and immutability is a promise about
 decisions somebody could be depending on, not a licence to keep writing
 at whatever length the last one happened to be.
 
+### What a superseded record keeps
+
+    TOMBSTONE-LINES: 12
+
+A record's own `Status:` header already says when it has been replaced.
+Until now the body kept every word regardless of whether anyone still
+read it: ten Superseded records carried 2,107 lines between them, and
+1,071 of those were a two-hop chain — 0036 → 0043 → 0046 — that nobody
+following a `Status:` header should start from in the first place.
+
+So a record whose `Status:` says Superseded shrinks to a tombstone: the
+title, the header, one sentence of what it decided, and a link to the
+commit that held it in full. Immutability does not object — it is a
+promise about decisions somebody could be depending on, and nobody can be
+depending on a decision that has already been replaced. The full text is
+not gone, only a `git show` away, and the tombstone's commit link points
+at exactly that.
+
+This is the rule
+[0048](docs/design/0048-decision-records-for-wire-contracts.md) §2.5
+already applies to *summaries* of a superseded record in
+[README.en.md](docs/design/README.en.md) — a pointer, and no more
+maintenance than that — extended to the record it summarizes.
+`TestSupersededRecordsAreTombstones` holds a Superseded record to
+`TOMBSTONE-LINES` and requires the commit link; going over it means the
+record is still carrying prose nobody rereads.
+
 ### How many records, and how much
 
 `RECORD-LINES` bounds one record's thickness. Nothing bounded how many
@@ -336,23 +367,47 @@ the larger half of the same residue, and until now none of it was counted
 anywhere.
 
     RECORD-COUNT: 60
-    RECORD-CORPUS-LINES: 10422
+    RECORD-CORPUS-LINES: 8152
+    RECORD-CORPUS-LINES-SLACK: 15
 
-Both count every record under `docs/design`, Superseded ones included:
-they still ship in the tree, and a reader following a `Status:` header
-still opens them. Counting only what is current would let a supersession
-buy headroom for the next addition — the file stays on disk either way, so
-that would be the next escape hatch rather than a saving.
+Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
+`docs/design`, Superseded ones included: they still ship in the tree, and
+a reader following a `Status:` header still opens them. Counting only
+what is current would let a supersession buy headroom for the next
+addition — the file stays on disk either way, so that would be the next
+escape hatch rather than a saving.
 
 The two catch different shapes. `RECORD-CORPUS-LINES` is `DOC-LINES`'s
 argument applied to this corpus: a record that never crosses
 `RECORD-LINES` can still add to what a reader gets through, and enough of
 them doing it at once moves nothing else. `RECORD-COUNT` is for the shape
-a line total cannot see at all — 0054/0057 and 0055/0056 are one subject
-apiece, told across two numbers, and a per-record cap has no way to notice
-that a second number was the wrong fix.
+a line total cannot see at all — 0054/0057 and 0055/0056 were one subject
+apiece, told across two numbers, until this pass folded each pair into one
+full record and a tombstone. `RECORD-COUNT` does not move for that: a
+tombstoned record still occupies its number and its file, for the same
+reason a Superseded record was never exempt from `RECORD-CORPUS-LINES`
+either — but a reader following either area now meets one record to read,
+not two.
 
-These live here, next to `RECORD-LINES`, rather than as an eleventh line in
+Every ceiling in this file and in [docs/surface.md](docs/surface.md) used
+to check only one direction: over the number fails, under it is free. That
+let headroom bank quietly — a fold could shrink what a ceiling measures
+and leave the ceiling where it was, and the next addition would spend the
+gap without moving a number anyone would see in the diff. It happened to
+`DOC-LINES` once: a PR that shortened the deploy guide raised the ceiling
+5,753 → 5,790 for room the fold needed, landed at 5,762, and left 28 lines
+nobody returned ([#376](https://github.com/na0fu3y/ochakai/issues/376)).
+`RECORD-COUNT`, like the name-counted dimensions in docs/surface.md's 上限
+section, now has to match exactly — a record either exists or it does
+not, so there is no amount of drift small enough to deserve headroom.
+`RECORD-CORPUS-LINES` is an amount, not a list, so instead it gets a
+stated tolerance: `RECORD-CORPUS-LINES-SLACK` is how far the ceiling may
+sit above the actual total before that gap is itself a failure. Both are
+read back by `TestDesignRecordCorpusStaysUnderItsCeiling`, and both are
+checked the same way `RECORD-LINES` already was — one number in one file,
+raised or lowered in the PR that earns it.
+
+These live here, next to `RECORD-LINES`, rather than as extra lines in
 [docs/surface.md](docs/surface.md)'s 上限 section. A record is read by
 somebody changing ochakai, not somebody using it — that document's DOC
 section already excludes `docs/design` from the manual on that basis — and
@@ -365,11 +420,12 @@ indexes, the two indexes have to agree with the record's own `Status:`
 header about whether it is current or superseded, a supersession has
 to be recorded at both ends — the new record naming what it retires, and
 the retired one saying so — a new record has to fit under its own
-ceiling, and the corpus as a whole has to fit under `RECORD-COUNT` and
-`RECORD-CORPUS-LINES`
-(`TestDesignRecordCorpusStaysUnderItsCeiling`). What no test can read is
-the judgment: whether the opening table's row still points at the doc
-somebody should actually read. That is where the attention goes.
+ceiling, a Superseded one has to be a tombstone
+(`TestSupersededRecordsAreTombstones`), and the corpus as a whole has to
+fit under `RECORD-COUNT` and `RECORD-CORPUS-LINES`, with no more slack than
+`RECORD-CORPUS-LINES-SLACK` allows (`TestDesignRecordCorpusStaysUnderItsCeiling`).
+What no test can read is the judgment: whether the opening table's row still
+points at the doc somebody should actually read. That is where the attention goes.
 
 Two decisions worth knowing before proposing features:
 

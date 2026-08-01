@@ -12,10 +12,9 @@ bundles, so leaving does not depend on what you are leaving.
 `deploy/compose.yaml` runs the same binary locally with authentication
 switched off — a development harness, not the small end of production.
 
-**There is no authorization.** Whoever can reach a deployment can read and
-write everything. If you need per-concept permissions, this is the wrong tool;
-the [README's refusal table](../README.md#what-it-refuses) says what that
-buys.
+**There is no authorization.** Reachability is the whole access model — see
+[Authentication has no configuration](#authentication-has-no-configuration)
+below.
 
 **PostgreSQL, plus `pg_trgm`.** The first migration creates the extension, so
 a database whose user may not `CREATE EXTENSION` needs an admin to create it
@@ -33,8 +32,8 @@ nothing beyond Docker is needed to follow it. Past that — `ochakai use`,
 [release archive](https://github.com/na0fu3y/ochakai/releases), or
 `go run ./cmd/ochakai`, which wants the toolchain named in `go.mod` (Go
 1.21 and newer download it for you). Or talk to the API directly, since
-that is all the CLI does — see [Writing knowledge](knowledge.md) for the
-one-line `curl` version of a write.
+that is all the CLI does — see [the data model](architecture.md#the-data-model)
+for the one-line `curl` version of a write.
 
 ## Environment variables
 
@@ -58,10 +57,17 @@ Client commands read `OCHAKAI_URL` — the server to talk to, overriding the
 
 ## Authentication has no configuration
 
+Whoever can reach a deployment can read and write everything. If you need
+per-concept permissions, this is the wrong tool — the
+[README's refusal table](../README.md#what-it-refuses) says what that buys.
+
 ochakai reads the caller identity that Cloud Run forwards after its IAM check
 (`human:<email>` for people, `process:<sa-email>` for service accounts) and
-records it as provenance. Reachability is Cloud Run IAM's job; ochakai does
-no authorization.
+records it as provenance; nothing else consults it. Reachability — deciding
+who may reach a deployment at all — is entirely Cloud Run IAM's job.
+`OCHAKAI_MODE` above narrows what a reachable caller can do (`read-only`) or
+stops recording who they are at all (`public`); neither is authorization,
+because neither looks at who is asking.
 
 The complete, cost-minimized deployment walkthrough (~$10/month) lives in
 [deploy/cloudrun/README.md](../deploy/cloudrun/README.md), including a

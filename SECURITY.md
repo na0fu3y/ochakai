@@ -11,25 +11,25 @@ window and no backporting ([docs/compatibility.md](docs/compatibility.md)).
 ## Scope notes
 
 ochakai's security posture is deliberately narrow (see
-[docs/design/0002-authn-authz.md](docs/design/0002-authn-authz.md)):
+[docs/design/0002-authn-authz.md](docs/design/0002-authn-authz.md) and
+[requirements and configuration](docs/configuration.md#authentication-has-no-configuration)):
 
 - It holds **no warehouse credentials** and never executes SQL.
 - It does **no authorization**: whoever can reach a deployment can read
-  and write; identity is recorded as provenance only. Reachability is
-  Cloud Run IAM's job: ochakai trusts the identity headers Cloud Run
-  forwards after its IAM check, and a deployment that reads those headers
-  must **never run publicly invokable** — nothing verified their
-  signature, so a public one would let any caller name any person.
-  (The publicly reachable MCP OAuth connector service existed briefly
-  and was retired in 0.9.0.)
-- There is exactly one public posture, and it is public because it
-  believes nothing: `OCHAKAI_MODE=public` reads no identity at all
-  and refuses every write (design docs
+  and write, and identity is recorded as provenance only — never checked
+  before it is believed. A deployment must **never run publicly
+  invokable**: nothing verified the identity headers' signature, so a
+  public one would let any caller name any person. (The publicly
+  reachable MCP OAuth connector service existed briefly and was retired
+  in 0.9.0.)
+- The one exception is `OCHAKAI_MODE=public` (design docs
   [0040](docs/design/0040-read-only-mode.md),
-  [0042](docs/design/0042-public-read-only.md)). A deployment that is
-  publicly readable and writable is not a configuration ochakai accepts.
-  A report that this posture reads a header it should not, or that a
-  write reaches the database through it, is a vulnerability.
+  [0042](docs/design/0042-public-read-only.md)): safe to run publicly
+  only because it reads no identity and refuses every write. A
+  deployment that is publicly readable *and* writable is not a
+  configuration ochakai accepts — a report that this posture reads a
+  header it should not, or that a write reaches the database through it,
+  is a vulnerability.
 
 Especially interesting reports, given that design:
 

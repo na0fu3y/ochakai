@@ -196,7 +196,7 @@ func TestShippedInstructionsNameFlagsThatExist(t *testing.T) {
 func TestConceptAuthoringInstructionsKeepFrontmatterFlat(t *testing.T) {
 	for _, path := range []string{
 		"../../README.md",
-		"../../docs/knowledge.md",
+		"../../docs/architecture.md",
 		"../../docs/guides/golden-query-canary.md",
 		"../../examples/README.md",
 		"../../examples/golden-query.md",

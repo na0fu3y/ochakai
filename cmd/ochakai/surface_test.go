@@ -345,7 +345,10 @@ func TestOpenAPIComponentsAreReachable(t *testing.T) {
 // item takes, so the ceiling section cannot be mistaken for a surface.
 //
 // A cap whose name ends in -LINES caps a measurement rather than a list:
-// "- DOC-LINES: 5800" is the reading volume of the section DOC counts.
+// "- DOC-LINES: 5800" is the reading volume of the section DOC counts. A
+// -LINES cap may carry its own -LINES-SLACK cap beside it — the only
+// tolerance this file grants, and stated for the same reason the ceiling
+// itself is: so it is a number somebody agreed to rather than a habit.
 // Every other section is counted in names, because a name is learned once
 // however often it appears; reading is not paid that way.
 var surfaceCapRe = regexp.MustCompile(`^- ([A-Z-]+): (\d+)$`)
@@ -354,11 +357,34 @@ var surfaceCapRe = regexp.MustCompile(`^- ([A-Z-]+): (\d+)$`)
 // section whose amount it caps.
 const capMeasures = "-LINES"
 
+// slackSuffix marks the tolerance declared beside a -LINES cap, and
+// capSlack is that suffix appended to capMeasures: "DOC-LINES-SLACK"
+// says how much of DOC-LINES's ceiling may sit unspent before that is
+// itself a failure, rather than headroom nobody has to return.
+const (
+	slackSuffix = "-SLACK"
+	capSlack    = capMeasures + slackSuffix
+)
+
 // The counters above are a thermometer: they say how big each surface is
 // and let it be any size at all, as long as the document agrees. This is
-// the thermostat. Every surface declares a ceiling, and exceeding it
-// fails — so growing one means editing a line whose subject is the
-// agreement, not just the arithmetic.
+// the thermostat. Every surface declares a ceiling, and the ceiling is
+// exact — not a limit not to cross but the number this project agreed the
+// surface is, so growing one means editing a line whose subject is the
+// agreement, not just the arithmetic, and shrinking one means the same
+// PR returns the ceiling it earned.
+//
+// Without this, a fold could lower what is declared and leave the cap
+// where it was: nothing would fail, and the next addition would spend the
+// gap in silence rather than moving a number anyone could see in the
+// diff. That is what happened to DOC-LINES once (d28c3c8) before the
+// habit of lowering it by hand caught back up — this test is that habit,
+// checked from outside rather than trusted (design doc 0035).
+//
+// A list dimension carries no tolerance: adding or removing a name is
+// already a visible diff, so there is no amount of drift small enough to
+// deserve one. The -LINES measurements are different, and get their own
+// stated slack below.
 //
 // The ceiling is one number in one file and anybody can raise it. That is
 // the point rather than a weakness, and it is the same bargain
@@ -391,16 +417,33 @@ func TestSurfaceStaysUnderItsCaps(t *testing.T) {
 			t.Errorf("%s counts %s but sets it no cap; every counted surface has a ceiling", surfaceDoc, name)
 			continue
 		}
-		if section.declared > limit {
+		switch {
+		case section.declared > limit:
 			t.Errorf(`%s is at %d, over its cap of %d.
 
 The cap is the size this project agreed %s should be. Going past it is a
 decision, so it is made by editing the cap — in the same PR, with the
 three questions answered in the description, and ideally with something
 folded away in exchange.`, name, section.declared, limit, name)
+		case section.declared < limit:
+			t.Errorf(`%s is at %d, under its cap of %d.
+
+A list dimension carries no headroom: adding a name is already a visible
+diff, so the cap is not a limit not to cross but the count this project
+agreed %s is. A fold that lowers what is declared and leaves the cap
+where it was banks the difference for the next addition to spend without
+moving a number anyone would see. Lower the cap to %d in the same PR that
+earned it.`, name, section.declared, limit, name, section.declared)
 		}
 	}
 	for name := range caps {
+		if strings.HasSuffix(name, capSlack) {
+			base := strings.TrimSuffix(name, slackSuffix)
+			if _, ok := caps[base]; !ok {
+				t.Errorf("%s declares %s but no %s for it to soften", surfaceDoc, name, base)
+			}
+			continue
+		}
 		counted := strings.TrimSuffix(name, capMeasures)
 		if _, ok := sections[counted]; !ok {
 			t.Errorf("%s caps %s, which it does not count", surfaceDoc, name)
@@ -737,15 +780,32 @@ func TestSurfaceDocCountsUserDocs(t *testing.T) {
 // files, moving no number anywhere. Names are counted everywhere else
 // because a name is learned once however often it appears — reading is not
 // paid that way, so this is the one place an amount has a ceiling.
+//
+// The ceiling alone let headroom bank silently: d28c3c8 shortened the
+// deploy guide, raised DOC-LINES 5,753 → 5,790 for the room the fold
+// needed, and landed at 5,762 — 28 lines the PR whose whole purpose was
+// to make the manual smaller never returned. DOC-LINES-SLACK is the
+// stated tolerance for the gap a normal edit leaves; anything wider than
+// that is unreturned budget, not editing noise, and fails here instead of
+// waiting for somebody to notice by hand.
 func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
 	content, err := os.ReadFile(surfaceDoc)
 	if err != nil {
 		t.Fatalf("read %s: %v", surfaceDoc, err)
 	}
-	limit := 0
+	limit, slack := 0, -1
 	for _, line := range strings.Split(string(content), "\n") {
-		if m := surfaceCapRe.FindStringSubmatch(line); m != nil && m[1] == "DOC"+capMeasures {
+		m := surfaceCapRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		switch m[1] {
+		case "DOC" + capMeasures:
 			if limit, err = strconv.Atoi(m[2]); err != nil {
+				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
+			}
+		case "DOC" + capSlack:
+			if slack, err = strconv.Atoi(m[2]); err != nil {
 				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
 			}
 		}
@@ -753,8 +813,12 @@ func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
 	if limit == 0 {
 		t.Fatalf("%s sets no DOC%s cap: this check now guards nothing", surfaceDoc, capMeasures)
 	}
+	if slack < 0 {
+		t.Fatalf("%s sets no DOC%s cap: DOC%s would carry silent headroom with no ceiling of its own", surfaceDoc, capSlack, capMeasures)
+	}
 	_, lines := userDocs(t)
-	if lines > limit {
+	switch headroom := limit - lines; {
+	case headroom < 0:
 		t.Errorf(`the manual is %d lines, over its cap of %d.
 
 What a reader has to get through is a cost like any other, and this is the
@@ -762,25 +826,40 @@ only ceiling on an amount rather than on a list of names. Going past it is
 a decision: raise the cap in the same PR, having answered %s's three
 questions — or find the pages that say the same thing twice.`,
 			lines, limit, surfaceDoc)
+	case headroom > slack:
+		t.Errorf(`the manual is %d lines, %d under its cap of %d — more than the %d
+DOC%s allows.
+
+A fold that shrinks the manual is meant to lower the cap in the same PR,
+not leave headroom for the next addition to spend without moving a
+number anyone would see (this is exactly what happened to DOC-LINES
+across d28c3c8 and its follow-up). Lower the cap to %d, or close to it.`,
+			lines, headroom, limit, slack, capSlack, lines)
 	}
 }
 
 // userDocs is the manual: every markdown page a reader is sent to in order
 // to evaluate, use or run ochakai, with the total number of lines in them.
 //
-// Four things are markdown and are not the manual, and each is left out
+// Five things are markdown and are not the manual, and each is left out
 // for a reason docs/surface.md states:
 //
 //   - docs/design — decision records, read by somebody changing ochakai.
 //     What earns a number is already narrowed by design doc 0048; the same
 //     thing is not tightened twice.
-//   - OKF documents — a file with frontmatter is knowledge, the thing
-//     ochakai stores, not prose about it. That is examples/demo and the
-//     bundle under examples/bigquery-catalog.
+//   - OKF documents — a file with frontmatter under examples/ is
+//     knowledge, the thing ochakai stores, not prose about it. That is
+//     examples/demo and the bundle under examples/bigquery-catalog.
 //   - internal — fixtures.
 //   - CHANGELOG, CONTRIBUTING, CLAUDE.md, the code of conduct, and the
 //     dot-directories — a ledger read one entry at a time, and the surface
 //     somebody changing ochakai reads.
+//   - a generated reference page — one nobody reads front to back, built
+//     from the binary and unable to drift from it. The rule stays narrow
+//     enough that it cannot become a hiding place: generated from the
+//     build, verified by a test, with no hand-written prose beyond a
+//     fixed header. docs/cli.md is the only file that qualifies today
+//     (TestCLIReferenceIsCurrent in clidocs_test.go, issue #371).
 func userDocs(t *testing.T) ([]string, int) {
 	t.Helper()
 	const root = "../.."
@@ -790,6 +869,9 @@ func userDocs(t *testing.T) ([]string, int) {
 	forChangers := map[string]bool{
 		"CHANGELOG.md": true, "CONTRIBUTING.md": true,
 		"CODE_OF_CONDUCT.md": true, "CLAUDE.md": true,
+	}
+	generatedReference := map[string]bool{
+		"docs/cli.md": true,
 	}
 	var docs []string
 	lines := 0
@@ -808,14 +890,21 @@ func userDocs(t *testing.T) ([]string, int) {
 			}
 			return nil
 		}
-		if filepath.Ext(rel) != ".md" || forChangers[rel] {
+		if filepath.Ext(rel) != ".md" || forChangers[rel] || generatedReference[rel] {
 			return nil
 		}
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(string(content), "---\n") {
+		// Frontmatter is read as "this is an OKF document" only under
+		// examples/, where a real bundle (examples/demo,
+		// examples/bigquery-catalog/bundle) sits beside plain README
+		// prose. Trusting the first line anywhere else would let a page
+		// in docs/ drop out of the manual by starting with "---" for a
+		// reason that has nothing to do with OKF — this test caught
+		// nothing telling the two apart until it did.
+		if strings.HasPrefix(rel, "examples/") && strings.HasPrefix(string(content), "---\n") {
 			return nil // an OKF document: knowledge, not documentation
 		}
 		docs = append(docs, rel)
@@ -826,6 +915,123 @@ func userDocs(t *testing.T) ([]string, int) {
 		t.Fatalf("walk %s: %v", root, err)
 	}
 	return docs, lines
+}
+
+// extraTopLevelCommands are the words after "ochakai" that a reader can
+// run but that are not in clientCommands — how the binary is started
+// rather than something it knows (TestSurfaceDocCountsCLICommands excludes
+// them from CLI for the same reason).
+var extraTopLevelCommands = map[string]bool{
+	"serve": true, "serve-ui": true, "version": true, "help": true,
+}
+
+// commandGuardExempt are DOC pages TestManualNamesNoCommandThatDoesNotExist
+// does not read, each for a reason that holds regardless of what the page
+// says elsewhere:
+//
+//   - docs/cli.md is regenerated byte-for-byte from the running binary's
+//     own flag usage (TestCLIReferenceIsCurrent), so a wrong command word
+//     there is already impossible by construction. Its flag-usage prose
+//     also reads as one to a pattern that cannot tell a command from a
+//     description: "-url ochakai server URL" is `-url`'s help text, not an
+//     invocation of `ochakai server`.
+//   - ROADMAP.md is where a command that does not exist belongs: a
+//     proposal not yet built (`ochakai tutorial`, issue #212) or a request
+//     already declined (`ochakai sync`, issue #43). Naming what ochakai
+//     does not do is that page's job, the same reason CHANGELOG.md is
+//     exempt from TestRetiredSpellingsAreNotTaught.
+var commandGuardExempt = map[string]bool{
+	"docs/cli.md": true,
+	"ROADMAP.md":  true,
+}
+
+var inlineCodeSpanRe = regexp.MustCompile("`([^`]*)`")
+
+// commandWordIn reads "ochakai <word>" out of an already-isolated code
+// span — a line inside a fenced block, or the text of an inline `...`
+// span — the second word taken as the command. "ochakai" must be the
+// span's first word: mid-span it names something else's argument, not the
+// program being invoked, which is what excludes `claude mcp add
+// --transport http ochakai http://localhost:8080/mcp` (docs/guides/mcp-clients.md,
+// where "ochakai" names the server being registered) from reading as a
+// command. "/ochakai" is accepted too, the shape a container's exec form
+// takes (`docker compose exec ochakai /ochakai import ...`).
+func commandWordIn(span string) (string, bool) {
+	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(span), "$ "))
+	if len(fields) < 2 || (fields[0] != "ochakai" && fields[0] != "/ochakai") {
+		return "", false
+	}
+	word := commandWordRe.FindString(fields[1])
+	return word, word != ""
+}
+
+var commandWordRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*`)
+
+// TestManualNamesNoCommandThatDoesNotExist reads every DOC page for
+// "ochakai <word>" and fails on any word that is not a command the binary
+// actually has — issue #377's first guard. Issue #363 found `ochakai
+// create` written as the first command after a deploy and `update` twice
+// in troubleshooting: four pages taught a command that does not exist,
+// and nothing but a human rereading every page would have noticed either
+// mistake.
+//
+// A prose sentence can start "ochakai " as easily as an invocation can —
+// "ochakai is a small project" sits one line above a real one in
+// operating.md, purely because the paragraph wrapped there — so which
+// words after "ochakai" are worth checking cannot be read from the words
+// alone. What it is read from instead is the markdown around them: this
+// project always writes a real invocation either inside a fenced code
+// block or inside backticks (true of every DOC page when this guard was
+// added), so only those two contexts are searched.
+func TestManualNamesNoCommandThatDoesNotExist(t *testing.T) {
+	valid := map[string]bool{}
+	for name := range clientCommands {
+		valid[name] = true
+	}
+	for name := range extraTopLevelCommands {
+		valid[name] = true
+	}
+
+	docs, _ := userDocs(t)
+	checked := 0
+	for _, rel := range docs {
+		if commandGuardExempt[rel] {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join("../..", rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		inFence := false
+		for i, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "```") {
+				inFence = !inFence
+				continue
+			}
+			var spans []string
+			if inFence {
+				spans = []string{line}
+			} else {
+				for _, m := range inlineCodeSpanRe.FindAllStringSubmatch(line, -1) {
+					spans = append(spans, m[1])
+				}
+			}
+			for _, span := range spans {
+				word, ok := commandWordIn(span)
+				if !ok {
+					continue
+				}
+				checked++
+				if !valid[word] {
+					t.Errorf("%s:%d names a command ochakai does not have: %q\n\t%s",
+						rel, i+1, word, strings.TrimSpace(span))
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no command invocation found across the manual: this check now guards nothing")
+	}
 }
 
 // queueWordsToLearn is the queue keys that are words of their own. A

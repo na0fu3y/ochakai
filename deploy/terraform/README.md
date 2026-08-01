@@ -32,12 +32,12 @@ IP (§2b), GCS attachments (§4b), the IAP-fronted web UI (§5b).
 ### No password, anywhere
 
 There is no `random_password` in this module, no Secret Manager concept, no
-service-account key, and no `password` argument on any resource. The runtime
-authenticates to Postgres with Cloud SQL IAM database authentication, where
-the connection password is a short-lived IAM token fetched at connect time.
-That is why `OCHAKAI_DATABASE_URL` can sit in a plain environment variable,
-and it is the project's central design decision, not a detail (design docs
-0002, 0003).
+service-account key, and no `password` argument on any resource — the
+runtime authenticates to Postgres with Cloud SQL IAM database authentication
+instead. **Secret-zero** is the project's central design decision, not a
+detail; the
+[deploy guide](../cloudrun/README.md#3-deploy-cloud-run-dedicated-identity-passwordless-org-restricted)
+explains why (design docs 0002, 0003).
 
 Two consequences worth knowing before you read further:
 
@@ -50,12 +50,12 @@ Two consequences worth knowing before you read further:
 
 ### Never publicly invokable, with one named exception
 
-`invoker_members` refuses `allUsers` and `allAuthenticatedUsers`. This is not
-just about access: ochakai does no authorization of its own and reads the
-caller identity Cloud Run has already verified in order to record provenance.
-Without the IAM check in front, those headers would be forgeable, and every
-recorded author would be a guess. The same rule keeps the deployment
-compatible with the Domain Restricted Sharing org policy.
+`invoker_members` refuses `allUsers` and `allAuthenticatedUsers` — the
+headers ochakai trusts for provenance are only trustworthy behind Cloud
+Run's IAM check
+([requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)).
+The same rule keeps the deployment compatible with the Domain Restricted
+Sharing org policy.
 
 The exception is `public_read_only` (guide §5d, design doc 0042), which grants
 `allUsers` itself. It is one variable rather than two because public is only
@@ -119,11 +119,11 @@ from then on — no password on that path either.
 | Variable | Guide | Effect |
 |---|---|---|
 | `enable_private_ip` | §2b | Drops the Cloud SQL public endpoint; peering range + Direct VPC egress on Cloud Run. Free. Local `cloud-sql-proxy` access then needs a VPC-attached workstation or a temporary public IP. |
-| `enable_vertex_embeddings` | §4 | **On by default.** `roles/aiplatform.user` + `aiplatform.googleapis.com`; the project is discovered rather than set, so a deployment whose pgvector bootstrap has not run yet degrades to lexical search instead of failing to start. Search becomes hybrid, and every write becomes one Vertex AI call. Concepts written before the grant stay unembedded until `ochakai reembed`. Set it to `false` to pass `OCHAKAI_EMBEDDINGS=off` and grant nothing. |
+| `enable_vertex_embeddings` | §4 | **On by default**: grants `roles/aiplatform.user` and enables `aiplatform.googleapis.com`. What being on gets you, and what a deployment must do afterward, is in [the deploy guide](../cloudrun/README.md#4-hybrid-semantic-search-vertex-ai-on-by-default). Set it to `false` to pass `OCHAKAI_EMBEDDINGS=off` and grant nothing. |
 | `enable_gcs_attachments` | §4b | Bucket + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`. Without it, attach operations return 501. |
 | `enable_webui` | §5b | `serve-ui` as a second Cloud Run service behind IAP, same image, dedicated identity. `webui_records_browser_user` (default on) records the person in the browser rather than the UI's service account. |
-| `read_only` | §5d | `OCHAKAI_MODE=read-only`. Serves the base without changing it; still private. Seed the base *before* turning it on — a read-only deployment cannot be imported into. |
-| `public_read_only` | §5d | `OCHAKAI_MODE=public` + the module's only `allUsers` grant. The public demo: no account needed, no identity read, nothing writable (implies `read_only`). Apply writable, `ochakai import examples/demo`, then re-apply with this on. |
+| `read_only` | §5d | Sets `OCHAKAI_MODE=read-only` — still private. Seed the base *before* turning it on: a read-only deployment cannot be imported into. |
+| `public_read_only` | §5d | Sets `OCHAKAI_MODE=public` and grants the module's only `allUsers`. Implies `read_only`; what that posture gives up is in [the deploy guide](../cloudrun/README.md#5d-optional-a-public-read-only-demo-the-one-public-posture). Apply writable, `ochakai import examples/demo`, then re-apply with this on. |
 | `maintenance_users` | §6 | Cloud SQL IAM logins for people, no passwords. |
 | `database_backups` | §6 | Daily backups. Off by default for cost; turn it on for anything you care about. |
 
