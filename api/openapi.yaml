@@ -450,6 +450,11 @@ paths:
         the thing it returns (design doc 0046 §3.5). Your knowledge is
         yours.
 
+        A path is a subtree or it is not: a concept's or a file's own
+        address — `metrics/revenue.md` as much as a reserved name — is
+        409, not an empty archive with a 200 on it, because nothing lives
+        under an object's own address (design doc 0046 §3.5).
+
         Paths inside the archive are not re-rooted: an archive of
         `metrics/` carries `metrics/revenue.md` and imports back to where
         it came from, because this is a copy of a subtree rather than a
@@ -698,14 +703,22 @@ paths:
                 error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
         "409":
           description: >
-            A reserved name was read as something other than the file it
-            is: as an archive (`Accept: application/gzip`), or as an
-            object's own `?history`. Both read the path as a thing the
-            bundle stores — a directory to walk, an object with events —
-            and a generated file is neither (design doc 0046 §§3.7-3.8).
-            The same refusal PUT and DELETE make at these two names, for
-            the same reason. Reading the file itself is a 200: that is
-            what generating it is for.
+            The path was read as a thing it is not. A reserved name was
+            read as something other than the file it is: as an archive
+            (`Accept: application/gzip`), or as an object's own
+            `?history`. Both read the path as a thing the bundle stores —
+            a directory to walk, an object with events — and a generated
+            file is neither (design doc 0046 §§3.7-3.8). The same refusal
+            PUT and DELETE make at these two names, for the same reason.
+            Reading the file itself is a 200: that is what generating it
+            is for.
+
+            The same status answers `Accept: application/gzip` on a
+            concept's or a file's own address: dots are legal inside a
+            path segment, so an object's address — `metrics/revenue.md`
+            as much as a reserved name — normalizes as a legal, empty
+            subtree unless it is refused here. Reading the object itself
+            is still a 200; only reading it as an archive is refused.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
