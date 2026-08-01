@@ -1,99 +1,11 @@
 # ochakai 設計ドキュメント 0005: OKF 互換とナレッジの構造
 
-Status: **Superseded by [0036](0036-okf-schema-first.md)**(OKF v0.2 対応に
-あたり、OKF 互換領域の現在の姿を 0036 が全面的に置き換えた)。改訂の履歴:
-[0016](0016-knowledge-catalog-alignment.md) が一部を改訂
-(推奨タイプは複数形スラグに、`resource` は封筒フィールドに)。§3.1 のパス規則
-(第 1 セグメント = タイプ)と §3.3 の一部・§3.5 のレガシーエイリアスは
-[0017](0017-path-addressing.md) が改訂
+Status: Superseded by [0036](0036-okf-schema-first.md)
 Date: 2026-07-17
 
-## 1. 目的
-
-ochakai のナレッジベースを [OKF(Open Knowledge Format)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
-バンドルと**双方向に**互換にする。設計ドキュメント 0001 の時点でエクスポートは OKF 準拠だったが、
-
-- 構造が `type/id` の 2 セグメント固定で、OKF の任意ネストのディレクトリ構造を表現できない
-- タイプが 5 種の閉集合で、OKF がタクソノミーを規定しない(タイプは自由文字列)のに対して狭い
-- バンドル単位のインポートが存在しない
-
-という非対称があった。本ドキュメントはこれを解消し、あわせてその根底にある世界観を記録する。
-
-## 2. 世界観: 推奨はするが、強制しない
-
-**ochakai の 5 タイプ(metric / query / insight / term / table)は「推奨」であり、閉集合ではない。**
-
-- 何も持っていない人には、この 5 タイプから始めることを推奨する。compile_sql(metric)、
-  ゴールデンクエリカナリア(query)、resource エクスポート(table)など、
-  サーバーの振る舞いが結びついているのはこの 5 つである。
-- しかし利用者が自分のドキュメント種別(runbook、data-contract、ガイド、ADR……)を
-  持ち込むことを妨げない。**自由なタイプは一級市民**であり、検索・CRUD・検証ステータス・
-  provenance・リビジョンのすべてが同じように機能する。振る舞いが付かないだけである。
-- これは「Your knowledge is yours」の帰結でもある。他所の OKF バンドルを取り込むとき、
-  ochakai の語彙に翻訳することを要求しない。出て行くときも入ってきた形のまま出て行ける。
-
-## 3. 決定
-
-### 3.1 ID は階層(スラッシュ区切り)を持てる
-
-OKF の concept ID は「ファイルパスから `.md` を除いたもの」であり、ディレクトリは任意にネストできる。
-ochakai もこれに合わせ、ID をスラッシュ区切りのスラグ列にする(`sales/orders`、`notes/2026/q3`)。
-
-- バンドルパスは従来どおり `<type>/<id>.md`。第 1 セグメントがタイプ、残りが ID。
-- セグメントは `[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}`。大文字とドットを許すのは外部バンドル
-  (テーブル名 `GA_sessions_2017` 等)をリネームなしで受けるため。先頭英数字の強制により
-  `.` / `..` が構文的に存在できず、パスとして常に安全。推奨は今までどおり小文字スラグ。
-- 末尾セグメント `index` は予約(生成される `index.md` と衝突するため)。
-- DB は複合主キー (type, id) の text のままで変更不要。タイプの CHECK 制約のみ
-  マイグレーション 0003 で撤廃した。
-
-このディレクトリ構造は将来の人間向け Web UI のナビゲーション(ツリー表示・
-フォルダ単位の閲覧)の基盤にもなる。
-
-### 3.2 タイプは任意のスラグ
-
-`domain.ValidType` は「1 セグメントのスラグであること」だけを検査する。5 タイプは
-`domain.Types`(推奨リスト)として残り、エクスポートのルート index の並び順と
-表示名(`query` → `Golden Query` 等)にだけ使われる。
-
-### 3.3 往復(round-trip)の規則
-
-エクスポート → インポート → エクスポートがバイト同一に近づくよう、次の規則を置く。
-
-| 事象 | 規則 |
-|---|---|
-| タイプの表記 | frontmatter の `type` が推奨タイプの表示名/スラグならそれに写像。それ以外はスラグ化し、**表記が変わる場合は元の表記を `attrs.okf_type` に保存**。エクスポート時に `type` キーへ畳み戻し、属性としては出力しない |
-| パスと frontmatter の不一致 | **パスが勝つ**(OKF の concept ID = パス)。`tables/users.md` に `type: Table` とあれば type=`tables`、`okf_type: Table` として保存し、再エクスポートで元の位置・元の表記に戻る |
-| 未知の frontmatter キー | プロデューサ拡張キー(OKF SPEC §4.1)として**値ごとそのまま `attrs` に保存**し、エクスポートで**トップレベルキーに書き戻す**(`resource` / `owner` 等が元の位置・表記で往復する)。`attrs:` のネストは出力しない(旧形式のネストは読み込みで畳み込む)。封筒キーと同名の attr はエクスポートせず封筒が勝つ |
-| `resource` | 拡張キーの一般規則で `attrs.resource` として往復。ochakai 自身の table エントリは従来どおり `attrs.source` から導出して出力する(`attrs.resource` があればそちらが優先) |
-| `index.md` / `log.md` | OKF の予約ファイル。ナビゲーション/履歴であり実体ではないため、インポートでは黙ってスキップ。index.md はエクスポートで全ディレクトリ階層に再生成する(SPEC §6 に従い **frontmatter なし**、ルートのみ `okf_version` を宣言) |
-| 隠しファイル | セグメントが `.` で始まるパス(`.git`、macOS tar の `._*`、`.DS_Store`)はナレッジにならないため黙ってスキップ(ディレクトリ走査と tar で同じ扱い) |
-| 非 Markdown ファイル | ナレッジにならないためスキップし、レポートに残す(例: GA4 バンドルの `viz.html`) |
-| ルート直下の concept | タイプディレクトリがないため frontmatter のタイプで受ける(再エクスポートでタイプディレクトリ配下に移動する) |
-| 単一ディレクトリに包まれたアーカイブ | `tar czf bundle.tgz ga4/` の形。放置すると包みディレクトリ名が全エントリのタイプになるため、**自動でアンラップして通知**する(`ochakai import --keep-root` で抑止) |
-| 改行コード | CRLF は LF に正規化して受ける(OKF は改行コードを規定しない) |
-| サーバー所有キー | `timestamp` / `created_by` / `verified_*` は従来どおりペイロードから受け取らない。provenance は認証から来る。`status` / `status_note` は封筒キーとして受ける |
-
-### 3.4 インポートの入口
-
-- `ochakai import <dir | file.tar.gz | ->`(クライアント、REST 経由): `export` の逆。
-  既存エントリは全置換で更新され、リビジョンとして履歴が残る。`--dry-run` あり。
-- `ochakai import-okf <dir | file.tar.gz>`(サーバー管理、DB 直結): `export-okf` の逆。
-
-新しい API 面は作らない(設計ドキュメント 0004 の原則)。インポートは既存の
-POST / PUT `/api/v1/knowledge` の繰り返しとしてクライアント側で実装する。
-
-### 3.5 REST パスの変更
-
-階層 ID の導入で `{id}` は `{id...}` ワイルドカードになった。`/knowledge/{type}/{id}/usage` は
-ID セグメントと `/usage` サフィックスが曖昧になるため、**usage の正規パスを
-`GET /api/v1/usage/{type}/{id...}` に移動**した。旧パスは単一セグメント ID の
-レガシーエイリアスとして残る(2 セグメント ID の末尾が `usage` の場合のみ旧パスが
-GET を隠すが、正規パス側に曖昧さはない)。
-
-## 4. やらないこと
-
-- タイプごとのスキーマ強制。自由タイプの `attrs` は検証しない(推奨タイプも従来どおり)。
-- OKF バンドル内の非 Markdown アセットの保存。ナレッジは Markdown + frontmatter である。
-- ID リネーム API。階層の付け替えは export → 編集 → import で行える(provenance は
-  作り直しになる点に注意)。
+OKF バンドルとの双方向互換を導入した最初の決定。ID をスラッシュ区切りの
+階層スラグにし、タイプを 5 種の閉集合から自由文字列に開き、バンドル単位の
+import/export と往復規則(未知キーの保存・パス優先・サーバー所有キーの
+拒否)を定めた。全文は Superseded 直前のコミット
+[7f5b1e5](https://github.com/na0fu3y/ochakai/blob/7f5b1e59ea825df390d5d53125ab648b3fa0034d/docs/design/0005-okf-compatibility.md)
+にある。
