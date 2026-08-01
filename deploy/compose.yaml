@@ -11,6 +11,9 @@ services:
     environment:
       OCHAKAI_DATABASE_URL: postgres://ochakai:ochakai@db:5432/ochakai?sslmode=disable
       OCHAKAI_MODE: dev # local only: all requests act as human:anonymous
+      OCHAKAI_URL: http://localhost:8080 # read by client commands only; lets `exec ochakai /ochakai import ...` work with no Go toolchain
+    volumes:
+      - ../examples:/examples:ro
     depends_on:
       db:
         condition: service_healthy

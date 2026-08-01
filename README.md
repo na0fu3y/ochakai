@@ -30,16 +30,19 @@ to verify or reject them](docs/images/webui-review.png)
 
 ```sh
 git clone https://github.com/na0fu3y/ochakai && cd ochakai
-docker compose -f deploy/compose.yaml up
+docker compose -f deploy/compose.yaml up -d
 ```
+
+This runs with `OCHAKAI_MODE=dev`: authentication is off and every
+request acts as `human:anonymous` — never do this on a deployment
+([every mode](docs/configuration.md#environment-variables)).
 
 Load the demo knowledge base — [ten concepts](examples/demo) about one
 invented retail domain, linked to each other, some of them drafts — and
 search it. Everything goes through the API, so plain curl works too:
 
 ```sh
-export OCHAKAI_URL=http://localhost:8080
-go run ./cmd/ochakai import examples/demo
+docker compose -f deploy/compose.yaml exec ochakai /ochakai import /examples/demo
 curl 'http://localhost:8080/api/v1/search?q=revenue'
 ```
 

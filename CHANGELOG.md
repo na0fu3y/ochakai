@@ -20,6 +20,20 @@ last entry.
 
 ### Fixed
 
+- The quick start's demo import needed the Go toolchain
+  (`go run ./cmd/ochakai import examples/demo`) despite the README
+  promising "Docker and nothing else locally", and there was no
+  Docker-only path: `deploy/compose.yaml` mounted no volume the import
+  could read from. It now mounts `examples/`, and the quick start runs
+  `docker compose exec ochakai /ochakai import /examples/demo` instead.
+- `OCHAKAI_MODE=dev` — what makes the compose stack usable with no
+  authentication — was undiscoverable outside a code comment and one
+  clause of the configuration reference. The quick start now names it.
+- The committed `.mcp.json` pointed at the Cloud Run proxy's port
+  (8787), so opening the repo in Claude Code after the quick start
+  (port 8080) connected to nothing, with no error saying so. It now
+  matches the compose default; the Cloud Run guide says to repoint it
+  at the proxy instead of claiming that happens automatically.
 - **BREAKING** — `POST /api/v1/reembed`'s `cursor` is now opaque, versioned
   and base64url-encoded, the same shape a listing's `cursor` has had since
   design doc [0050](docs/design/0050-listings-page-rankings-do-not.md). It
