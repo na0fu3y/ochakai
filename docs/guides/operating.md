@@ -523,7 +523,7 @@ non-public too: [Identity-Aware Proxy](https://cloud.google.com/iap/docs/enablin
 sits in front, so browsers sign in with their Google account and only
 your organization gets through — no `allUsers` grant anywhere. By default
 writes through the UI are recorded as the webui's service account
-(`agent:ochakai-webui@…`); set `OCHAKAI_IAP_AUDIENCE` (below) to record
+(`process:ochakai-webui@…`); set `OCHAKAI_IAP_AUDIENCE` (below) to record
 the person in the browser instead. MCP and CLI clients get per-user
 identity via the deploy guide's §5 proxy path.
 
@@ -561,7 +561,7 @@ with an `x-goog-iap-generated-response: true` header, not the page.
 
 ### Recording the browser user instead of the service account
 
-Out of the box every edit from the UI reads `agent:ochakai-webui@…`,
+Out of the box every edit from the UI reads `process:ochakai-webui@…`,
 which is one author for the whole team. To record who actually made it,
 tell serve-ui which IAP audience to trust and let ochakai accept the
 webui as a delegator (design docs 0027, 0032):
@@ -592,7 +592,7 @@ The startup log says which way it went: `recording browser users by
 their IAP identity` with the audience it will require, or `no
 OCHAKAI_IAP_AUDIENCE; writes are recorded as this service account`.
 
-Writes then read `human:tanaka@example.co.jp via agent:ochakai-webui@…`
+Writes then read `human:tanaka@example.co.jp via process:ochakai-webui@…`
 — both identities, never just one. serve-ui verifies IAP's signature,
 audience, expiry and issuer on every request, and **refuses (403) any
 request IAP did not sign** once the audience is set: if IAP is not

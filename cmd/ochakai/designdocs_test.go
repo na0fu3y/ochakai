@@ -288,19 +288,20 @@ func capturedNumbers(re *regexp.Regexp, s string) []string {
 // The ceiling lives in CONTRIBUTING.md rather than here, for the same reason
 // docs/surface.md keeps the surface caps in prose: raising it should be a
 // line in a diff whose subject is the agreement, not a constant in a test.
-const (
-	contributing = "../../CONTRIBUTING.md"
-	// firstCappedRecord is where the rule starts. Everything before it is
-	// immutable — a ceiling cannot reach back, and a record that could be
-	// edited to fit was never a decision somebody could depend on. 0062 is
-	// the exception that is not one: it has not reached a release, and
-	// CONTRIBUTING.md already says an unreleased record is revised by
-	// replacing it, so nobody can be depending on its length either. It also
-	// keeps this check from guarding nothing on the day it lands.
-	firstCappedRecord = "0062"
-)
+const contributing = "../../CONTRIBUTING.md"
 
 var recordCeilingRe = regexp.MustCompile(`(?m)^\s*RECORD-LINES: (\d+)$`)
+
+// firstCappedRecordRe reads where the rule starts, rather than pinning a
+// second copy of the number here: a record before it is immutable — a
+// ceiling cannot reach back, and a record that could be edited to fit was
+// never a decision somebody could depend on — while a record from here on
+// has not reached a release yet, so CONTRIBUTING.md's own rule that an
+// unreleased record is revised by replacing it means nobody can be
+// depending on its length either. Reading the boundary back, the same way
+// RECORD-LINES itself is read, is what keeps the two from disagreeing the
+// way they did when 0063 landed and this file still said 0062.
+var firstCappedRecordRe = regexp.MustCompile(`(?m)^\s*RECORD-CAP-FROM: (\d{4})$`)
 
 func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
 	content, err := os.ReadFile(contributing)
@@ -315,9 +316,13 @@ func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s: RECORD-LINES %q: %v", contributing, m[1], err)
 	}
+	firstCapped := firstCappedRecordRe.FindStringSubmatch(string(content))
+	if firstCapped == nil {
+		t.Fatalf("%s declares no RECORD-CAP-FROM: this check now guards nothing", contributing)
+	}
 	capped := 0
 	for _, r := range designRecords(t) {
-		if r.number < firstCappedRecord {
+		if r.number < firstCapped[1] {
 			continue
 		}
 		capped++
@@ -335,7 +340,7 @@ the raise cannot happen quietly, not to be worked around by writing denser
 Japanese.`, r.file, lines, limit, contributing)
 	}
 	if capped == 0 {
-		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCappedRecord)
+		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCapped[1])
 	}
 }
 

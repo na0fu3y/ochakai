@@ -213,6 +213,7 @@ state per area, so when a design doc lands:
 ### How long a record gets
 
     RECORD-LINES: 220
+    RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
 and the corpus grew accordingly: 58 records and about 10,400 lines, on
@@ -223,7 +224,8 @@ thing explained is the shape the numbers have been showing for several
 releases.
 
 So a record from 0063 on stays under that line, and
-`TestDesignRecordsStayUnderTheirCeiling` reads it back out of this file.
+`TestDesignRecordsStayUnderTheirCeiling` reads both numbers back out of
+this file.
 The ceiling is the same bargain [docs/surface.md](docs/surface.md)
 strikes for the surface: it is one number in one file and anybody can
 raise it, in the same PR, having said why. What it buys is only that the
