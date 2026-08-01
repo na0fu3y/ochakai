@@ -66,20 +66,20 @@ response, use `budget` rather than a score floor.
 
 ## Writing concepts
 
-**409 on create.** A live concept already has that id — including a
-`rejected` one. Use `update`, or pick another id. Creating over a
-*soft-deleted* concept revives it, with its prior history intact; over MCP,
-reviving one that was verified, rejected or deprecated before deletion is
-refused instead, because it would put a fresh draft where a recorded
-ruling used to be. REST and the CLI allow that revival: they are the
-surfaces a human curates from.
+**409 on `put --only-if-new`.** A live concept already has that id —
+including a `rejected` one. Drop `--only-if-new`, or pick another id.
+Writing over a *soft-deleted* concept revives it, with its prior history
+intact; over MCP, reviving one that was verified, rejected or deprecated
+before deletion is refused instead, because it would put a fresh draft
+where a recorded ruling used to be. REST and the CLI allow that revival:
+they are the surfaces a human curates from.
 
-**404 on update.** `update` replaces a concept that exists; it does not
-create one.
+**404 on `put --if-match`.** `--if-match` replaces a concept that exists;
+it does not create one.
 
-**412 on update.** The `If-Match` you sent is not the concept's current
-`ETag` — somebody wrote in between. Re-read the concept, reapply your change
-and retry. Nothing was written.
+**412 on `put --if-match`.** The `If-Match` you sent is not the concept's
+current `ETag` — somebody wrote in between. Re-read the concept, reapply
+your change and retry. Nothing was written.
 
 **`invalid type "…"`.** A type is one line, no `/`, up to 128 bytes. Any
 value that fits is legal — the recommended vocabulary is a recommendation,

@@ -77,7 +77,7 @@ This is not authorization — a human on the same deployment can edit
 anything from REST, the CLI or the web UI. It is a surface rule: MCP has
 no way to carry the `If-Match` precondition that makes a safe replacement
 expressible (design docs 0015 §3.1, 0030). Reviving a curated concept's
-tombstone with `create` is refused on MCP for the same reason: it would
+tombstone with `put_concept` is refused on MCP for the same reason: it would
 put a fresh draft where a rejection's recorded reason used to be. On REST
 and the CLI that revival is allowed — those are the surfaces a human
 curates from.
