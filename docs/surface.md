@@ -80,8 +80,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 28
 - ENV: 15
 - VOCAB: 34
-- DOC: 26
-- DOC-LINES: 5952
+- DOC: 25
+- DOC-LINES: 5879
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -456,7 +456,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
-## DOC (26)
+## DOC (25)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -478,7 +478,7 @@ private IP・team web UI・hardening checklist・upgrade path の全文を
 天井の節にある。
 
 **そしてここは、どの次元より速く増えてきた。** v0.10.0 から現在まで、
-REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 26 ページは
+REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 25 ページは
 2,971 行から 5,600 行を超えた。畳み込みは本物だったが、**畳んだことの
 説明が、畳んだものより速く増えていた** — 表面を一つ減らす決定が、記録と
 二つの索引と英語要約とこの文書の段落を生む。数えていなければ、それは
@@ -510,6 +510,16 @@ docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 増えたぶんは畳み込みで相殺されず、5,808 から 5,942 まで上げている —
 C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
+
+**[#380](https://github.com/na0fu3y/ochakai/issues/380) はここで初めて
+下がった、畳み込みではない理由で。** `docs/images/README.md` は
+`createdb shots` や `sips --resampleWidth` といったスクリーンショット
+再現手順で、読むのは ochakai を使う人ではなく変える人だった。下の
+「数えていないもの」が CONTRIBUTING を除外している理由(変える人の面)
+と同じ理由がこのページにも当てはまっていたのに、置き場所だけが違って
+いた。[CONTRIBUTING.md](../CONTRIBUTING.md) に移し、`DOC` は 26 → 25、
+天井は 5,952 まで上げていたものを、この一段落を足した後の実測に合わせて
+5,879 まで下げている。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
@@ -549,7 +559,6 @@ C6 が七つの条件の一つであり、これまで YAML のコメント一�
 - `docs/guides/operating.md`
 - `docs/guides/rest-integration.md`
 - `docs/guides/troubleshooting.md`
-- `docs/images/README.md`
 - `docs/knowledge.md`
 - `docs/loop.md`
 - `docs/positioning.md`
