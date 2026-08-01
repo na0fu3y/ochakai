@@ -34,6 +34,29 @@ last entry.
   (port 8080) connected to nothing, with no error saying so. It now
   matches the compose default; the Cloud Run guide says to repoint it
   at the proxy instead of claiming that happens automatically.
+- **BREAKING** — `POST /api/v1/reembed`'s `cursor` is now opaque, versioned
+  and base64url-encoded, the same shape a listing's `cursor` has had since
+  design doc [0050](docs/design/0050-listings-page-rankings-do-not.md). It
+  used to be the last concept id and attachment name joined with a raw NUL
+  byte and handed back unencoded — a hazard through proxies and WAFs, not
+  URL-safe on its own, and published as an example in `api/openapi.yaml`
+  right after the same paragraph called it opaque. A cursor from a pass
+  running when this deploys is invalid after the upgrade; a reembed pass
+  is minutes long and restartable, so resuming means starting the pass
+  over, not losing work.
+
+- **BREAKING** — `Accept: application/gzip` on a concept's or a file's
+  own bundle path answers 409 instead of an empty, valid `tar.gz` with a
+  200 on it. Dots are legal inside a path segment, so an object's own
+  address — `metrics/revenue.md` as much as a reserved name — normalized
+  as a legal prefix nothing lives under, and the archive of nothing that
+  produced was the same defect fixed one release ago for `index.md` and
+  `log.md` (design doc 0046 §3.5): the refusal covered the two reserved
+  names and not every other object. It matters because the archive is
+  what `api/openapi.yaml` tells an operator to verify a backup by
+  reading rather than by the status code, and this one read fine — valid
+  gzip, valid tar, empty. A backup script pointed one path too deep
+  succeeded forever.
 
 ## [0.17.0] - 2026-07-31
 

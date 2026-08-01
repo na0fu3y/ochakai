@@ -45,9 +45,14 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 - [Requirements and configuration](configuration.md) — what ochakai needs
   before it starts, and every environment variable it reads.
-- [Deploy on Cloud Run](../deploy/cloudrun/README.md) — the complete
-  walkthrough, ~$10/month, including private IP, the IAP-fronted web UI,
-  a security hardening checklist, and the upgrade path.
+- [Deploy with Terraform](../deploy/terraform/README.md) — the
+  recommended path, ~$10/month: `terraform apply` in 13 steps instead of
+  the gcloud walkthrough's 36.
+- [Deploy on Cloud Run](../deploy/cloudrun/README.md) — the gcloud
+  walkthrough the module runs underneath. Read it instead of the module
+  when you want to run the commands by hand, or as the reference for
+  what each resource is and why: private IP, the IAP-fronted web UI, a
+  security hardening checklist, and the upgrade path.
 - [deploy/compose.yaml](../deploy/compose.yaml) — the local stack. Docker
   and nothing else; no Google account needed.
 - [Operating a deployment](guides/operating.md) — the two backups and what
@@ -72,6 +77,9 @@ and what it refuses to do. It is deliberately short; the manual is here.
   `get_context` have something to show.
 - [examples/claude-code](../examples/claude-code) — drop-in agent
   instructions and the recall / write-back hooks.
+- [Embedding the REST API](guides/rest-integration.md) — authenticating,
+  forwarding your users' identity without collapsing them into your
+  service account, and writing without racing another caller.
 
 ## For someone changing it
 

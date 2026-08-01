@@ -4,11 +4,12 @@ The baseline of [deploy/cloudrun/README.md](../cloudrun/README.md) as code,
 so that a deployment can be reviewed as a diff, reproduced per environment,
 and torn down cleanly.
 
-**The gcloud guide remains the reference and the source of truth.** It
-explains why each piece is shaped the way it is, covers everything this
-module leaves out, and is the thing to read first. This module is a
-convenience for standing up what it describes — where the two disagree, the
-guide is right and this module has a bug.
+**This module is the recommended way to stand ochakai up** — thirteen
+steps below instead of the gcloud guide's thirty-six. The gcloud guide
+remains the reference and the source of truth: it explains why each piece
+is shaped the way it is and covers everything this module leaves out, but
+you do not need to read it to run `terraform apply`. Where the two
+disagree, the guide is right and this module has a bug.
 
 ## What it creates
 

@@ -36,10 +36,20 @@ info:
     name: MIT
 servers:
   - url: /
+security:
+  - GoogleIDToken: []
+  - {}
 # Authentication is Cloud Run IAM (Google identity), handled by the
 # infrastructure before requests reach ochakai — there is no
 # application-level auth scheme. ochakai reads the forwarded identity
-# only to record provenance (design docs 0002/0003). An application on
+# only to record provenance (design docs 0002/0003). The scheme below
+# (components/securitySchemes/GoogleIDToken) documents what Cloud Run
+# checks before a request reaches this server; ochakai itself verifies
+# nothing, which is why the empty alternative sits beside it — a
+# deployment with OCHAKAI_MODE=public or dev answers with no Authorization
+# header at all (design docs 0040, 0042). See
+# docs/guides/rest-integration.md for a walkthrough of minting a token and
+# what it takes to embed this API in your own service. An application on
 # the delegator allowlist may forward the end user it acts for with
 # X-Ochakai-On-Behalf-Of (design doc 0027) — the header is honored on
 # every call; it is declared below (components/parameters/OnBehalfOf)
@@ -416,6 +426,7 @@ paths:
                   value:
                     error: cursor belongs to the usage listing; it cannot resume the failed one
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/bundle/{path}:
     get:
       operationId: getBundleFile
@@ -449,6 +460,11 @@ paths:
         (`/api/v1/bundle/`) is the whole knowledge base — this is what `GET /api/v1/export` was, at the address of
         the thing it returns (design doc 0046 §3.5). Your knowledge is
         yours.
+
+        A path is a subtree or it is not: a concept's or a file's own
+        address — `metrics/revenue.md` as much as a reserved name — is
+        409, not an empty archive with a 200 on it, because nothing lives
+        under an object's own address (design doc 0046 §3.5).
 
         Paths inside the archive are not re-rooted: an archive of
         `metrics/` carries `metrics/revenue.md` and imports back to where
@@ -698,14 +714,22 @@ paths:
                 error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
         "409":
           description: >
-            A reserved name was read as something other than the file it
-            is: as an archive (`Accept: application/gzip`), or as an
-            object's own `?history`. Both read the path as a thing the
-            bundle stores — a directory to walk, an object with events —
-            and a generated file is neither (design doc 0046 §§3.7-3.8).
-            The same refusal PUT and DELETE make at these two names, for
-            the same reason. Reading the file itself is a 200: that is
-            what generating it is for.
+            The path was read as a thing it is not. A reserved name was
+            read as something other than the file it is: as an archive
+            (`Accept: application/gzip`), or as an object's own
+            `?history`. Both read the path as a thing the bundle stores —
+            a directory to walk, an object with events — and a generated
+            file is neither (design doc 0046 §§3.7-3.8). The same refusal
+            PUT and DELETE make at these two names, for the same reason.
+            Reading the file itself is a 200: that is what generating it
+            is for.
+
+            The same status answers `Accept: application/gzip` on a
+            concept's or a file's own address: dots are legal inside a
+            path segment, so an object's address — `metrics/revenue.md`
+            as much as a reserved name — normalizes as a legal, empty
+            subtree unless it is refused here. Reading the object itself
+            is still a 200; only reading it as an archive is refused.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -731,6 +755,7 @@ paths:
                   error: { type: string }
               example:
                 error: no object at this path
+        "500": { $ref: "#/components/responses/Error" }
     put:
       operationId: putBundleFile
       summary: Write one object of the bundle
@@ -836,6 +861,7 @@ paths:
                   error: { type: string }
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
+        "500": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteBundleFile
       summary: Delete one object of the bundle
@@ -887,6 +913,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/context:
     get:
       operationId: getContext
@@ -1189,6 +1216,7 @@ paths:
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveKnowledge
@@ -1299,6 +1327,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/review/{id}:
     parameters:
       - name: id
@@ -1536,6 +1565,7 @@ paths:
                     error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
       - name: id
@@ -1575,6 +1605,7 @@ paths:
                     last_used_at: "2026-07-26T23:58:07.336114Z"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
     post:
       operationId: reportOutcome
       summary: Report an outcome (worked/failed) for a knowledge concept
@@ -1641,6 +1672,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/stats:
     get:
       operationId: getStats
@@ -1748,6 +1780,7 @@ paths:
                           last_at: "2026-07-26T08:11:02.104233Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/reembed:
     post:
       operationId: reembedKnowledge
@@ -1830,7 +1863,7 @@ paths:
                     attachments: 0
                     failed: 0
                     missing: 613
-                    cursor: "metrics/revenue\u0000"
+                    cursor: "MQByZWVtYmVkAG1ldHJpY3MvcmV2ZW51ZQAA"
                 done:
                   summary: The last pass
                   description: Nothing is missing, so no cursor comes back.
@@ -1842,7 +1875,27 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "501": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
 components:
+  securitySchemes:
+    GoogleIDToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        A Google-signed identity token, audience-bound to this service's
+        URL, as `Authorization: Bearer <token>` (design docs 0002 §2,
+        0003). Cloud Run IAM verifies it before a request reaches ochakai
+        — the container never checks the signature itself and never sees
+        a caller without one, except on OCHAKAI_MODE=public or dev, where
+        nothing is checked and every caller is `human:anonymous` (design
+        docs 0040, 0042); the empty security requirement alongside this
+        scheme covers that case. Mint one with
+        `gcloud auth print-identity-token --audiences=$OCHAKAI_URL`, or
+        from code with a client library's ID-token helper — see
+        [Embedding the REST API](../docs/guides/rest-integration.md) for
+        both, plus everything else an application calling this API
+        directly needs.
   headers:
     ETag:
       description: >

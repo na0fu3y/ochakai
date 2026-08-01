@@ -18,18 +18,35 @@ Cloud SQL dominates the bill. Regions in Asia (e.g. `asia-northeast1`) cost
 slightly more; pick what matches your latency needs. Teardown commands are
 at the bottom.
 
+**Recommended: stand this up with [deploy/terraform](../terraform)**,
+which turns §1–§4b (plus the web UI and demo posture) into a thirteen-step
+`terraform apply`, reviewable as a diff, reproducible per environment, and
+destroyed cleanly. This guide is what stays the reference — it explains
+why each resource is shaped the way it is, and is the path to use if you
+would rather run the commands by hand. It covers §1–§5, §5d and §9; the
+operating guide covers the web UI, org-policy guardrails and upgrade
+notes, and [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
+covers §5c and the rest of what an application embedding the REST API
+needs.
+
 **Already deployed?** [docs/guides/operating.md](../../docs/guides/operating.md)
 covers what happens after: backup and restore, hardening, the team web
 UI, monitoring, capacity, and upgrades.
 
-**Prefer infrastructure as code?**
-[deploy/terraform](../terraform) stands up §1–§4b (plus the web UI and
-demo posture) as a Terraform module, so a deployment can be reviewed as a
-diff, reproduced per environment, and destroyed cleanly. This guide stays
-the reference for §1–§5, §5c, §5d and §9; the operating guide covers the
-rest it leaves out — the web UI, org-policy guardrails, and upgrade notes.
+**Embedding ochakai in your own product?**
+[docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
+covers authenticating, delegated provenance and safe concurrent writes for
+an application calling the REST API directly.
 
 ## 1. Prerequisites
+
+Local tools this guide uses, beyond `gcloud` itself (authenticated —
+`gcloud auth login`): the [Go toolchain](https://go.dev/dl/) (`go run` /
+`go install`, §5), [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy)
+and `psql` (§3's one-time database setup), `openssl` (§2's admin
+password), and optionally the [`gh` CLI](https://cli.github.com) (the
+version lookup just below — without it, read the version off the
+[releases page](https://github.com/na0fu3y/ochakai/releases) by hand).
 
 ```sh
 export PROJECT_ID=<your-project>
@@ -58,7 +75,7 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 Pin a version rather than `:latest`, so a redeploy is a decision. Without
 the `gh` CLI, read the number off the
 [releases page](https://github.com/na0fu3y/ochakai/releases) and set it by
-hand — `export VERSION=0.14.0`.
+hand — `export VERSION=0.17.0`.
 
 (This guide assumes 0.9.0 or later; earlier releases are
 [retracted](https://go.dev/ref/mod#go-mod-file-retract) and unsupported —
@@ -158,16 +175,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<P
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
 ```
 
-Note on ownership: the first deploy's startup migration creates the
-tables, owned by the **runtime service account** (imports go through the
-API, so nothing is ever created as the admin). For the admin user to
-work with those tables directly (maintenance, ad-hoc SQL), give it the
-runtime's role in the same session:
-
-```sql
-GRANT "ochakai-run@<PROJECT_ID>.iam" TO "ochakai";
-```
-
 Deploy privately with the dedicated identity and `OCHAKAI_DB_IAM_AUTH`
 (passwordless database), then allow your organization to invoke it:
 
@@ -189,6 +196,17 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
 export OCHAKAI_URL=$(gcloud run services describe ochakai --region=$REGION --format='value(status.url)')
 ```
 
+**One more one-time step, now that the first deploy has run its startup
+migration:** the migration creates the tables, owned by the **runtime
+service account** (imports go through the API, so nothing is ever
+created as the admin). For the admin user to work with those tables
+directly (maintenance, ad-hoc SQL), give it the runtime's role —
+reconnect the same way as above, with `$DB_PASSWORD` from §2:
+
+```sql
+GRANT "ochakai-run@<PROJECT_ID>.iam" TO "ochakai";
+```
+
 How this works:
 
 - **Cloud Run IAM decides who can reach the service** (org members and
@@ -197,7 +215,7 @@ How this works:
   authorization: whoever reaches it reads and writes.
 - **ochakai reads the Cloud-Run-verified caller identity for provenance**:
   people are recorded as `human:<email>`, service accounts as
-  `agent:<sa-email>`. Nothing to issue, rotate, or revoke.
+  `process:<sa-email>`. Nothing to issue, rotate, or revoke.
 - **Never make the service publicly invokable (`allUsers`)** — the
   identity headers ochakai reads are only trustworthy behind Cloud Run's
   IAM check. The single exception is a deployment that reads no identity
@@ -365,22 +383,34 @@ network is needed — `$OCHAKAI_URL` was exported when the service was
 deployed above:
 
 ```sh
-go run github.com/na0fu3y/ochakai/cmd/ochakai@latest create queries/monthly-revenue -f examples/golden-query.md
+curl -fsSL "https://raw.githubusercontent.com/na0fu3y/ochakai/v$VERSION/examples/golden-query.md" | \
+  go run github.com/na0fu3y/ochakai/cmd/ochakai@latest put queries/monthly-revenue
 ```
 
-Connect Claude Code — with the Cloud Run proxy running, no headers, no
-tokens. The repository's committed `.mcp.json` defaults to the local
-compose port (8080); repoint its `url` at the proxy below, or add the
-server with `claude mcp add`:
+Point Claude Code — or any agent with a shell — at the same URL; the CLI
+run above already proved it resolves tokens with no proxy needed. This is
+the recommended way in, per the README's
+[Connect an agent](../../README.md#connect-an-agent):
+
+```sh
+go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
+ochakai use $OCHAKAI_URL
+```
+
+If you want MCP tools inside Claude Code instead, the bridge needs no
+proxy either — `claude mcp add ochakai -- ochakai mcp-stdio` (needs
+`gcloud auth login` and `ochakai` on `PATH`; see [connecting an MCP
+client](../../docs/guides/mcp-clients.md#what-the-bridge-needs)). The
+repository's committed `.mcp.json` defaults to the local compose port
+(8080); if using this repo's config file against a Cloud Run deployment,
+repoint its `url` at the proxy below.
+
+Smoke test over REST through the [Cloud Run
+proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy),
+same as §3 (direct `curl` is blocked by IAM):
 
 ```sh
 gcloud run services proxy ochakai --region=$REGION --port=8787 &
-claude mcp add --transport http ochakai http://localhost:8787/mcp
-```
-
-Smoke test over REST (through the proxy, also tokenless):
-
-```sh
 curl "http://localhost:8787/api/v1/search?q=revenue"
 ```
 
@@ -402,54 +432,10 @@ the application reaches Cloud Run with *its* service account, so every
 concept its users write is recorded as that one identity. Provenance, which
 is most of what ochakai sells, collapses.
 
-Let the application forward the identity of the person using it
-(design doc 0027). Both identities are recorded — `human:tanaka@…
-via agent:app-sa@…` — never just the forwarded one, so a write made
-through the application stays distinguishable from one the person made
-directly.
-
-```sh
-# 1. The application's identity needs to reach ochakai at all (§3's grant).
-gcloud run services add-iam-policy-binding ochakai \
-  --region="$REGION" \
-  --member="serviceAccount:$APP_SA" \
-  --role=roles/run.invoker
-
-# 2. Allow that identity — and only it — to speak for its users.
-gcloud run services update ochakai --region="$REGION" \
-  --update-env-vars="OCHAKAI_DELEGATING_CALLERS=$APP_SA"
-```
-
-The application then sends the header with each request:
-
-```
-X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
-```
-
-The kind (`human:` / `agent:`) is required and never guessed — the
-application knows whether it is forwarding a person or another agent.
-
-Notes:
-
-- **Delegation is off by default.** With `OCHAKAI_DELEGATING_CALLERS`
-  unset, the header is a **403**, not a silent downgrade: an application
-  that believes it writes as its users must not discover months later
-  that every concept says otherwise.
-- **A 403 mentioning the header means the caller is not on the list.**
-  Compare the `member` you granted in step 1 with the value in step 2 —
-  they are the same service-account email, and a mismatch is the usual
-  cause. A **400** means the header itself is malformed (missing kind,
-  whitespace in the identity).
-- `OCHAKAI_DELEGATING_CALLERS` takes a comma-separated list; `*` trusts
-  every authenticated caller, which is only sensible when IAM already
-  admits nothing but your own applications.
-- **This is not authorization.** It decides whose identity is recorded,
-  not what anyone may do — every caller that reaches ochakai can already
-  read and write everything (design doc 0002). Reachability stays IAM's
-  job.
-- Developing the integration locally? `OCHAKAI_MODE=dev` honors
-  the header too (as `via human:anonymous`), so a malformed header fails
-  on your machine instead of on first deploy.
+The fix, the two-command setup, and everything else an application
+embedding the REST API needs — authenticating, delegated provenance,
+`X-Ochakai-Producer`, and safe concurrent writes — are in
+[Embedding the REST API](../../docs/guides/rest-integration.md).
 
 ## 5d. Optional: a public read-only demo (the one public posture)
 
