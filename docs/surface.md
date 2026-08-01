@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 26
-- DOC-LINES: 5952
+- DOC-LINES: 5937
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
 `DOC` はページ数を数えるが、ページは太らせても名前が増えないので、
@@ -510,6 +510,13 @@ docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 増えたぶんは畳み込みで相殺されず、5,808 から 5,942 まで上げている —
 C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
+
+[#374](https://github.com/na0fu3y/ochakai/issues/374) は逆方向をもう一度
+たどった。アクセスモデル・secret-zero・read-only/public の姿勢は README・
+configuration・architecture・faq・deploy の各ページに同じ話が繰り返し
+書かれ、二本のテキストが同じことを言えばどちらが古いか分からなくなる
+([faq.md](faq.md) 自身の規則)という代金を払っていた。持ち主を一つに決め、
+残りを一行のリンクに畳んで、下がった分は下の天井に出ている。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 

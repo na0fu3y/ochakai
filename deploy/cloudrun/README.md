@@ -211,11 +211,10 @@ How this works:
 
 - **Cloud Run IAM decides who can reach the service** (org members and
   service accounts you grant `roles/run.invoker`; anonymous requests get
-  Google's 401 without hitting the container). ochakai performs no
-  authorization: whoever reaches it reads and writes.
-- **ochakai reads the Cloud-Run-verified caller identity for provenance**:
-  people are recorded as `human:<email>`, service accounts as
-  `process:<sa-email>`. Nothing to issue, rotate, or revoke.
+  Google's 401 without hitting the container), and ochakai records who
+  they were as provenance — see
+  [requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)
+  for the whole access model.
 - **Never make the service publicly invokable (`allUsers`)** — the
   identity headers ochakai reads are only trustworthy behind Cloud Run's
   IAM check. The single exception is a deployment that reads no identity
@@ -441,22 +440,12 @@ embedding the REST API needs — authenticating, delegated provenance,
 
 Everything above says never `allUsers`, and that stays true for every
 deployment anyone can write to. A demo is the exception, and it is an
-exception only because of what it gives up. Two settings, and the second
-implies the first:
-
-- **`OCHAKAI_MODE=read-only`** — the deployment changes no knowledge (design
-  doc 0040). Writes are 403, MCP does not offer the write tools at all, and
-  the web UI stops drawing buttons that would only fail. Useful on its own,
-  private, for a reference-only copy or for freezing a base during a
-  migration.
-- **`OCHAKAI_MODE=public`** — the deployment reads no identity
-  (design doc 0042). The `Authorization` header is ignored: without Cloud Run
-  IAM in front its signature is unverifiable, and a forged unsigned token
-  would otherwise be believed. `X-Ochakai-On-Behalf-Of` is ignored. Every
-  caller is `human:anonymous`, and nothing returns 401. It **implies
-  read-only** and cannot be separated from it — a publicly readable *and*
-  writable ochakai is not a configuration this program accepts, so the
-  dangerous half of "public" has no configuration.
+exception only because of what it gives up: `OCHAKAI_MODE=public`
+(design doc 0042) reads no identity at all and **implies** `read-only`
+(design doc 0040) — a publicly readable *and* writable ochakai has no
+configuration in this program. What each of those postures does is in
+[requirements and configuration](../../docs/configuration.md#environment-variables);
+what follows here is the walkthrough for standing one up safely.
 
 That is the whole trade: a service that believes nobody is safe to open,
 because it records nobody and writes nothing.

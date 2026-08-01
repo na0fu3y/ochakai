@@ -96,29 +96,20 @@ curated concepts.
 
 ### Who can read and write?
 
-Anyone who can reach the deployment. ochakai identifies the caller from
-what Cloud Run forwards, records it as provenance, and does no
-authorization at all — no roles, no per-concept permissions, no read-only
-users. Deciding who may reach it is Cloud Run IAM's job, and running the
-service publicly invokable is a misconfiguration rather than a deployment
-mode (design doc 0002).
-
-If you need a deployment that serves knowledge without changing it, that
-is `OCHAKAI_MODE=read-only` (design doc 0040) — a property of the deployment,
-not of the caller. It refuses the operator too.
+Anyone who can reach the deployment — reachability is the whole access
+model, and there is no authorization on top of it. What identity ochakai
+records, and the postures (`read-only`, `public`) that narrow what a
+reachable caller can do, are in
+[requirements and configuration](configuration.md#authentication-has-no-configuration).
 
 ### What happens to my knowledge if I stop using ochakai?
 
-`ochakai export ./knowledge` writes the whole base as an OKF v0.2 bundle:
-one markdown file per concept with YAML frontmatter, attachments as plain
-files beside them, trust and lifecycle in the spec's own keys. It is a
-git-friendly directory that another OKF consumer reads without knowing
-ochakai exists. `ochakai import` is the inverse, and it accepts any
-producer's bundle, not just ours.
-
-Provenance is the one thing that does not travel: it is what an instance
-observed, not a claim a document can carry, so an import records the
-importer rather than replaying history (design doc 0009).
+`ochakai export ./knowledge` writes the whole base as a git-friendly OKF
+v0.2 bundle that another OKF consumer reads without knowing ochakai
+exists; `ochakai import` is the inverse, for any producer's bundle, not
+just ours. What does and does not survive the round trip — provenance
+does not — is in
+[operating a deployment](guides/operating.md#backup-and-restore).
 
 ### Is there a hosted version?
 
