@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 273
+    RECORD-LINES: 364
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -404,19 +404,55 @@ add a posture beside it" differ by which noun a に governs, and a guess
 there fails by blocking a PR that did nothing wrong. That one stays a
 reviewer's job.
 
-222 → 273 is a record catching up with its own decision rather than
-amending another one. Issue [#470](https://github.com/na0fu3y/ochakai/issues/470)
-found that 0064 §6 and §7's vocabulary sweep missed four corners of the
-same wire: the `attach`/`detach` change-verbs §6 left behind, and three
-more places §7's `entries` → `concepts` rename had a sibling (`/context`'s
-redundant `truncated` count, a file listing row calling `created_at` by
-the wrong name, `reembed`'s `embedded`). Two new sections carry the four
-decisions, one migration, and one scope boundary each — the same shape as
-§7 itself, which is the nearest precedent for "this record's own earlier
-section didn't reach everywhere it said it would."
+222 → 253, 8,391 → 8,422: issue
+[#470](https://github.com/na0fu3y/ochakai/issues/470) found that §2's own
+decision — an unrecognized query parameter is a 400, naming it — had only
+half landed. A request body's unknown key was still a silent 200
+(`readJSON` never called `DisallowUnknownFields`), and
+`GET /api/v1/bundle/{path}` allowed `history`, `limit` and `files` for the
+whole address while reading each in only one or two of its modes, so a
+parameter sent to the wrong mode was ignored rather than refused — the
+same shape as the query-parameter gap 0064 already closed once. 0064 §2
+decides both, and §11 gains the two BREAKING bullets that follow from
+deciding them. 31 lines on the one record still unreleased enough to
+revise in place.
 
-    RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8442
+253 → 313, 8,422 → 8,482 is the same issue's audit closing its third
+part: three places where `api/openapi.yaml` and the code it describes
+disagreed — `?history`'s `limit` stated one ceiling while the code
+enforced two, a concept's GET declared `If-None-Match` without ever
+answering 304, and a file `PUT` declared an `ETag` response header it
+never sent. None of the three change a stored shape or a wire
+identifier, so 0064 gains a new section rather than a new record (0048
+§2.3: still unreleased, so revised in place) — 60 more lines for three
+findings, each with the disagreement, the decision and which side
+moved.
+
+61 → 63 while 8,482 → 7,986 is the first consolidation, and it moves the
+two numbers in opposite directions on purpose. Seven records were current
+for identity and the posture at once — the opening table named all seven,
+so reaching that area's current state meant opening 928 lines — and 0065
+and 0066 replace them, leaving seven tombstones. **The count goes up by
+the two records added**: a tombstoned record keeps its number and its
+file, which is what makes every citation of 0002 still land somewhere,
+so a consolidation can only ever add. Read together the pair says what
+happened — two more records, five hundred fewer lines, and an area that
+now takes two records to read instead of seven. Neither number says that
+alone, and `RECORD-COUNT` rising is not this corpus growing.
+
+313 → 364, 7,986 → 8,037 is issue #470's third and last 0064 PR. §6
+retired `attachments`/`Attachment` from the wire but left its own
+change-verbs, `attach`/`detach`, behind, and three more places carried
+the same "named for the act, not the object" gap §7 closed for
+`entries`: `/context`'s redundant `truncated` count, a bundle listing
+row spelled `updated_at` where `created_at` was the only fact the
+underlying object actually held, and `reembed`'s `embedded`. Two new
+sections (§8, §9) carry the four decisions, one migration, and the
+scope boundary that keeps the CLI's `attach`/`detach` commands out of
+it — the same shape §7 itself used for the same reason.
+
+    RECORD-COUNT: 63
+    RECORD-CORPUS-LINES: 8037
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

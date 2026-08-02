@@ -384,6 +384,12 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("attach status = %d, want 201", resp.StatusCode)
 	}
+	// The spec has declared ETag on this response since design doc 0064;
+	// the code never sent it until §12.3 (issue #470).
+	putETag := resp.Header.Get("ETag")
+	if putETag == "" {
+		t.Error("file PUT response carries no ETag")
+	}
 
 	// Replacing the same file's bytes is 200, not 201: the address
 	// already held an object.
@@ -408,6 +414,9 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 		t.Fatalf("hits should carry attachment metadata: %+v", hits.Hits)
 	}
 	sum := hits.Hits[0].Files[0].SHA256
+	if putETag != `"`+sum+`"` {
+		t.Errorf("file PUT ETag = %q, want %q", putETag, `"`+sum+`"`)
+	}
 
 	// Plain GET: bytes, content-hash ETag, revalidation policy.
 	resp, err = http.Get(attURL)
@@ -811,6 +820,63 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("cleanup delete status = %d", resp.StatusCode)
+	}
+}
+
+// TestRESTIntegrationConceptConditionalGET covers a concept's own GET
+// answering If-None-Match with 304, the same way both file branches on
+// this address already did (design doc 0064 §14.2, issue #470): the
+// ETag was always computed, but a concept's GET never compared it, so a
+// client sending a matching If-None-Match always got a 200 back.
+func TestRESTIntegrationConceptConditionalGET(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restit")
+	id := typ + "/conditional-get"
+	payload := docFrom(t, map[string]any{"type": typ, "id": id, "title": "conditional get"})
+	resp := putDoc(t, srv.URL, id, payload, true)
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	etag := resp.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("create carried no ETag")
+	}
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	bundle := srv.URL + "/api/v1/bundle/" + id + ".md"
+
+	// The current ETag: 304, no body.
+	req, _ := http.NewRequest(http.MethodGet, bundle, nil)
+	req.Header.Set("If-None-Match", etag)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotModified || len(body) != 0 {
+		t.Errorf("conditional GET with the current ETag = %d with %d bytes, want 304 empty", resp.StatusCode, len(body))
+	}
+
+	// A stale ETag still gets the document.
+	req, _ = http.NewRequest(http.MethodGet, bundle, nil)
+	req.Header.Set("If-None-Match", `"deadbeef"`)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || len(body) == 0 {
+		t.Errorf("conditional GET with a stale ETag = %d with %d bytes, want 200 with a body", resp.StatusCode, len(body))
 	}
 }
 

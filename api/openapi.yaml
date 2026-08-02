@@ -40,6 +40,12 @@ info:
     Every other operation has no such downstream check and rejects `fm.*`
     like any other unrecognized parameter.
 
+    **An unrecognized JSON body key is a 400, naming it** (design doc
+    0064), the same rule applied to the body: `POST /api/v1/move`,
+    `POST /api/v1/review/{id}` and `POST /api/v1/usage/{id}` reject a key
+    their schema does not declare, rather than decoding the request and
+    silently dropping it.
+
     **REST is frozen at `/api/v1`** (design doc 0064,
     docs/compatibility.md): this contract is the address list a client can
     hold onto, and the only thing that can still break it after this point
@@ -584,12 +590,25 @@ paths:
             §3.5). Presence is the whole of it — `?history` — and a
             value is ignored, the way `Accept` decides a representation
             without being asked a question. A directory's history is the
-            reserved `log.md` beside it.
+            reserved `log.md` beside it. Combined with
+            `Accept: application/gzip` it is a 400 rather than the
+            archive silently winning: the two address different objects
+            — this object's own history, not the archive's subtree
+            (design doc 0064 §2).
           schema: { type: string }
           allowEmptyValue: true
         - name: limit
           in: query
-          description: log.md and ?history only — maximum concepts (default and max 1000).
+          description: >
+            log.md and ?history only — maximum rows, and a 400 naming
+            the mode when sent anywhere else on this address (design doc
+            0064 §2). A concept's own `?history`, read as JSON, is 50 by
+            default and 200 at most: each row carries the whole document
+            as it stood at that revision, so 1000 of them is the
+            knowledge base several times over. log.md and every other
+            `?history` (a file's, or any of the two rendered as
+            markdown) carries no document and is 1000 by default and at
+            most (design doc 0064 §12.1).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
         - name: files
@@ -599,7 +618,8 @@ paths:
             markdown without any file bytes. They live in GCS, so a
             periodic backup can copy them from there directly instead of
             pulling them through here. A value that is neither `true` nor
-            `false` is a 400.
+            `false` is a 400, and so is sending it without
+            `Accept: application/gzip` (design doc 0064 §2).
           schema: { type: boolean, default: true }
       responses:
         "200":
@@ -727,7 +747,11 @@ paths:
                           Revenue is the sum of `net_amount` over every
                           completed order.
         "304":
-          description: Not modified — a file whose If-None-Match matched its content hash.
+          description: >
+            Not modified — a concept or a file whose If-None-Match
+            matched its content hash (design doc 0064 §12.2: a concept
+            answered this GET's `If-None-Match` parameter with a 200
+            always, until now).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
@@ -1325,6 +1349,7 @@ paths:
         - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
+        description: A key outside from/to is a 400 naming it (design doc 0064).
         content:
           application/json:
             schema:
@@ -1456,6 +1481,7 @@ paths:
         - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
+        description: A key outside ruling/note is a 400 naming it (design doc 0064).
         content:
           application/json:
             schema:
@@ -1725,6 +1751,7 @@ paths:
         - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
+        description: A key outside outcome/note is a 400 naming it (design doc 0064).
         content:
           application/json:
             schema:
@@ -2082,11 +2109,13 @@ components:
       in: header
       required: false
       description: >
-        The other precondition (design doc 0030). On a concept, `*` means
-        "only if the path is free": the write creates or fails with a 412,
-        which is how a caller states that it is not replacing anything.
-        On a file it is the ordinary cache validator — the content hash a
-        prior read returned, answered with a 304 when it still matches.
+        The other precondition (design doc 0030). On a PUT to a concept,
+        `*` means "only if the path is free": the write creates or fails
+        with a 412, which is how a caller states that it is not replacing
+        anything. On a GET, of a concept or a file, it is the ordinary
+        cache validator — the content hash a prior read returned,
+        answered with a 304 when it still matches (design doc 0064
+        §12.2: a concept's GET did not compare it until now).
       schema: { type: string }
     OnBehalfOf:
       name: Ochakai-On-Behalf-Of

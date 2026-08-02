@@ -36,6 +36,31 @@ REST の 11 操作すべてで、宣言していないクエリキーは 400 に
 推測しているのはその名残)、凍結後に同じ形の事故が起きないための土台が
 これである。
 
+この決定はクエリパラメータでは閉じておらず、同じ形の穴が二つ残って
+いた(issue [#470](https://github.com/na0fu3y/ochakai/issues/470))。
+
+**リクエストボディの未知キー。** `readJSON`(`internal/restapi/restapi.go`)
+は `DisallowUnknownFields` を呼んでおらず、本文を読む三操作
+(`POST /api/v1/move`・`POST /api/v1/review/{id}`・
+`POST /api/v1/usage/{id}`)は宣言していないキーを黙って捨てて 200 を
+返していた。`{"rulling": "verified"}` は何もしない 200、`note` のつもり
+の `notes` は静かに消える書き込み — 本文版の `dry_run` false green で
+ある。**決定:** `dec.DisallowUnknownFields()` を呼び、JSON 値のあとに
+続く内容(`dec.More()`)も 400 にする。未知キーはクエリパラメータと
+同じ形で名指す。
+
+**バンドル GET のモード別パラメータ。**
+`GET /api/v1/bundle/{path}` は `history`・`limit`・`files` の三つを
+住所全体に許可していたが、実際に読むのはそれぞれ一部のモードだけ
+だった — `files` はアーカイブ分岐のみ、`limit` は `?history` と
+`log.md` のみ、`history` はアーカイブ分岐より後で見るため
+`Accept: application/gzip` と `?history` を同時に送ると `?history` が
+黙って無視されていた。**決定:** モードの外で送られたキーは、そのモード
+を名指す 400 にする。アーカイブと `?history` の重なりは、§4 が 6 通り
+の表現に優先順位を与えた理由(同じものの表現違いだから)がここには
+当てはまらない — `?history` はアーカイブとは別のオブジェクトなので、
+優先順位ではなく 400 にする。
+
 ## 3. ヘッダ接頭辞の統一
 
 `X-Ochakai-On-Behalf-Of` / `X-Ochakai-Producer`(リクエストヘッダ)を
@@ -252,6 +277,12 @@ issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同
   `X-` を外す。`On-Behalf-Of` は古い綴りのままだと 400 でなく黙って誤
   身元に書き込む。段階アップグレード中に限らない([Upgrades](../guides/operating.md#upgrades))。
 - 未知のクエリパラメータを送っていたら 400 になる。
+- `POST /api/v1/move`・`POST /api/v1/review/{id}`・
+  `POST /api/v1/usage/{id}` の本文に宣言外のキーを送っていたら 400 になる。
+- `GET /api/v1/bundle/{path}` で `history`・`limit`・`files` を、それを
+  読まないモードに送っていたら(`limit` を index.md や概念・ファイルの
+  住所に、`files` をアーカイブ以外に、`history` をアーカイブ
+  (`Accept: application/gzip`)と同時に、など)400 になる。
 - `attachments` という JSON キー・クエリパラメータ・MCP ツール名を
   読み書きしていたら `files` に読み替える。
 - `stats`・バンドル一覧・`context`(MCP `get_context` も)の JSON キー
@@ -271,3 +302,63 @@ issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同
   読み替える。
 
 保存形とワイヤの識別子(id・path)は 1 バイトも動かない。
+
+## 14. 契約と実装の食い違いを閉じる(issue #470 C)
+
+§4 は「表は『エクスポート形』、コードは JSON の View」という食い違いを
+一件、手で直した。残りは issue #470 の監査が見つけた 3 件で、いずれも
+スペックとコードのどちらが正しいかを決め、もう一方をそれに合わせる。
+
+### 14.1 `?history` の `limit`: 二つの上限を書き分ける
+
+`api/openapi.yaml` は「log.md と `?history` のみ――既定・上限とも
+1000」と一枚岩に書いていたが、実装は二通りある: 概念自身の
+`?history` を JSON で読むと `checkedLimit(limit, 50, 200)`
+(`internal/service/usage.go` の `Revisions`)、log.md および
+`?history` のあらゆる markdown レンダリング(ファイルの履歴も含む)は
+`checkedLimit(limit, MaxLogLines, MaxLogLines)` = 1000/1000
+(`internal/service/browse.go`)。同じ `?history&limit=500` が、
+`Accept: application/json` で概念に対しては 400 に、markdown として
+は 200 になる――スペックの「1000」は後者にしか当てはまっていない。
+
+**決定:** コードは変えない。概念の JSON 履歴は改訂 1 件ごとに文書
+全体を運ぶので、1000 件は知識ベースの複数コピー分になる――`Change`
+自身の説明がドキュメントを埋め込まない理由に挙げるのと同じ論拠
+(§11)。log.md やファイルの履歴はドキュメントを運ばないので、そこまで
+の重さがない。**スペックを直す**: `limit` の説明に、対象によって上限
+が違うと書き、両方の数字(50/200 と 1000/1000)を名指す。
+
+### 14.2 概念の GET に ETag はあるが 304 が無かった
+
+`api/openapi.yaml` は `If-None-Match` をこの GET 全体のパラメータと
+して宣言していたが、304 の説明は「ファイル」としか書いていなかった。
+実装も同じ形の欠落を持っていた: 概念の分岐
+(`internal/restapi/restapi.go`)は ETag を計算してヘッダに立てる
+だけで `If-None-Match` と比較しておらず、両方のファイル分岐はすでに
+比較して 304 を返している。概念に `If-None-Match` を送るクライアント
+は、今まで一致していても常に 200 を受け取っていた。
+
+**決定:** 実装する。ETag はすでに計算済みで、比較を一つ足すだけ――
+ファイル分岐と同じ `strings.Contains` の形。スペックの 304 応答の
+説明と `If-None-Match` パラメータの説明の双方を、概念にも 304 が
+返ることを言うよう直す。
+
+### 14.3 ファイル PUT は宣言した ETag を送っていなかった
+
+`api/openapi.yaml` はファイル PUT の 200・201 双方に `ETag` レスポンス
+ヘッダを宣言していた(概念 PUT と同じ形)が、実装は JSON を書くだけで
+ヘッダを送っていなかった――「宣言してあるのに実装が無い」は §4 が
+閉じようとした食い違いと同じ形で、凍結後に既知の嘘を契約に残すことに
+なる。
+
+**決定:** 実装する。GET が返すのと同じ形(`"` + sha256 + `"`)で、
+書き込んだファイルの ETag を PUT の応答にも立てる。ダウンロードは
+今までどおり無し(§11 の一覧のとおり、そこには precondition を掛ける
+状態がない)。
+
+これら 3 件はいずれも破壊的変更ではない――§13 の一覧に加わるものは
+無い。14.2 は観測できる挙動が変わる(概念に `If-None-Match` を送って
+一致したクライアントは、200 の代わりに 304 を受け取るようになる)が、
+このヘッダはこの GET 全体のパラメータとしてスペックがすでに宣言して
+いたので、これは契約を破る変更ではなく、実装が最初からの契約に追いつ
+く完成である。
