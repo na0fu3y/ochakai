@@ -70,8 +70,8 @@ Auth is `gcloud auth login` — there are no tokens to configure. (A
 service account's ADC works too; your own `gcloud auth
 application-default login` does not, because Cloud Run needs an
 audience-bound ID token that only those two can mint — [why, and what to
-run instead](docs/guides/mcp-clients.md#what-the-bridge-needs).) Every
-command carries its flags and worked examples in `ochakai <command> -h`;
+run instead](docs/guides/mcp-clients.md#what-the-bridge-needs) (Japanese).)
+Every command carries its flags and worked examples in `ochakai <command> -h`;
 [docs/cli.md](docs/cli.md) is that same text rendered, for reading before
 you install anything.
 
@@ -79,7 +79,7 @@ Agents without a shell — Claude Desktop, hosted agents — connect over
 MCP instead, and it's the primary interface for that case. Which form
 each client wants (a URL, or the `ochakai mcp-stdio` bridge against
 Cloud Run), and the eight tools it will see:
-[connecting an MCP client](docs/guides/mcp-clients.md).
+[connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 into your project's CLAUDE.md, or install the
@@ -175,7 +175,7 @@ in the version you are running.
   [Roadmap](ROADMAP.md)
 - **Using** — [The improvement loop](docs/loop.md) (Japanese) ·
   [CLI reference](docs/cli.md) ·
-  [MCP clients](docs/guides/mcp-clients.md) ·
+  [MCP clients](docs/guides/mcp-clients.md) (Japanese) ·
   [Troubleshooting](docs/guides/troubleshooting.md)
 - **Running** — [Deploy with Terraform](deploy/terraform/README.md)
   (Japanese) ·
