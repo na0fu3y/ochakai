@@ -68,7 +68,7 @@ type Config struct {
 
 	// GCSBucket names the bucket holding file bytes as GCS objects
 	// (blob/<sha256>, design doc 0013). Auth is ADC. When empty,
-	// files are unsupported — markdown entries only.
+	// files are unsupported — markdown concepts only.
 	GCSBucket string
 
 	// RecordMisses keeps the searches that found nothing, with the query

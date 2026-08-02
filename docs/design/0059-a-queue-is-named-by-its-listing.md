@@ -6,7 +6,10 @@ Status: Accepted(2026-07-30)。**BREAKING。**
 [0049](0049-queue-counts.md) §3.3 が付けた名前を改訂する(数える集合も
 数え方も、キューの本数も変えない)。`drafts` は据え置く。
 [docs/surface.md](../surface.md) の VOCAB の数え方に 1 行足す —
-**sort の名を着たキューは第二の語ではない**ので 1 と数える
+**sort の名を着たキューは第二の語ではない**ので 1 と数える。
+**キュー名を印字する形は [0062](0062-a-listing-is-not-a-search.md) が
+改訂した** — 名前はそのままで、横に添えるコマンドが
+`ochakai search --sort …` から `ochakai list …` になった
 Date: 2026-07-30
 
 ## 1. 問題: 同じ一つのキューが、二つの名前を持っていた

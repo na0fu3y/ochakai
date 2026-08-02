@@ -73,9 +73,9 @@ func NowStored() time.Time { return time.Now().UTC().Truncate(time.Microsecond) 
 
 type Store struct {
 	pool *pgxpool.Pool
-	// blobs holds attachment bytes (GCS, design doc 0013); metadata stays
-	// in PostgreSQL. When nil, attachments are unsupported — markdown
-	// entries only.
+	// blobs holds file bytes (GCS, design doc 0013); metadata stays
+	// in PostgreSQL. When nil, files are unsupported — markdown concepts
+	// only.
 	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64

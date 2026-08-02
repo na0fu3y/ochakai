@@ -28,7 +28,9 @@ instance metric はこの応答に兄弟キーを足す形で入るべき」と�
 `reported_wrong` → `failed`、`past_expiry` → `stale_after`。キューは
 それを一覧する `sort` の名で呼ぶ(`drafts` は単一の sort ではないので
 据え置き)。数える集合・数え方・キューの本数はどれも本ドキュメントの
-ままである
+ままである。**§3.4 が各行に添える次のコマンド文字列は
+[0062](0062-a-listing-is-not-a-search.md) が改訂した** — `ochakai search
+--sort …` は `ochakai list …` になった。数える対象も終了コードも変わらない
 Date: 2026-07-28
 
 ## 1. 問題: 誰も見に行かなければ、キューは無いのと同じ

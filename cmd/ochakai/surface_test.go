@@ -1002,6 +1002,15 @@ func commandWordsIn(line string) []string {
 	var words []string
 	for i, field := range fields[:max(0, len(fields)-1)] {
 		field = strings.TrimPrefix(field, "(")
+		// Outside the Markdown manual the raw line is read, so a code
+		// span arrives with its backticks attached. A prose mention
+		// closes the span on the name — `ochakai` — while an invocation
+		// runs on into the command, `ochakai put`. Dropping only the
+		// opening backtick tells them apart: the first still carries its
+		// closing one and does not match, the second does. Without this
+		// a real invocation is exempt exactly where prose is, which is
+		// the inverse of the manual, where a span is the only thing read.
+		field = strings.TrimPrefix(field, "`")
 		if field != "ochakai" && field != "/ochakai" {
 			continue
 		}
