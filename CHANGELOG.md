@@ -141,6 +141,19 @@ last entry.
     silent no-op, which is what let a 0.16.1 server ignore `dry_run` and
     write anyway; this closes the same shape of hole for anything added
     to the wire from here on.
+  - An unrecognized JSON body key on `POST /api/v1/move`,
+    `POST /api/v1/review/{id}` and `POST /api/v1/usage/{id}` is now a 400
+    naming it too, closing the same hole for the body: `{"rulling":
+    "verified"}` used to be a 200 that did nothing recognizable, and
+    `"notes"` for `"note"` used to drop the note silently (issue
+    [#470](https://github.com/na0fu3y/ochakai/issues/470)).
+  - `GET /api/v1/bundle/{path}`'s `history`, `limit` and `files` query
+    parameters are now a 400 naming the mode when sent outside the mode
+    that reads them — `limit` outside `?history` and a directory's
+    `log.md`, `files` outside `Accept: application/gzip`, and `?history`
+    together with `Accept: application/gzip` (a different object, not a
+    representation choice, so no precedence rule decides it). All three
+    used to be silently ignored outside their mode (issue #470).
   - `X-Ochakai-On-Behalf-Of` and `X-Ochakai-Producer` lose their `X-`
     prefix — `Ochakai-On-Behalf-Of` and `Ochakai-Producer`, matching the
     five response headers, which never carried one. No dual-accept
