@@ -1,41 +1,40 @@
-# Architecture
+# アーキテクチャ
 
-This page is the reference half of the manual: what a concept is, how it
-is addressed, what search does, and how the pieces fit. **What ochakai is
-and why you would pick it** is the [README](../README.md); this page
-assumes you have read it and are working.
+このページはマニュアルの参照側である: concept とは何か、それがどう
+住所を持つか、検索が何をするか、そして部品がどう組み合わさるか。
+**ochakai が何であり、なぜ選ぶか**は [README](../README.md) にあり、
+このページはそれを読んで作業を始めた人を前提にする。
 
-The decisions it describes are recorded in the
-numbered decision records under [docs/design](design) — mostly in
-Japanese, and authoritative where this page and they disagree. Start from
-[the index](design/README.md): it groups every record by area and marks
-which ones still describe the current state, and
-[README.en.md](design/README.en.md) beside it summarizes each record in
-English. Sections below cite the
-record they rest on as `(design doc NNNN)`, the way the
-[README](../README.md) does.
+ここで説明する決定は [docs/design](design) 配下の番号付き decision
+record に記録されている — 大半は日本語で、このページと食い違えば
+そちらが正である。まず [index](design/README.md) から: すべての
+record を分野別にまとめ、どれが今の状態を説明しているかを示している。
+横にある [README.en.md](design/README.en.md) は各 record を英語で
+要約する。以下の節は、それぞれが依拠する record を
+`(設計ドキュメント NNNN)` として引用する — [README](../README.md) と
+同じやり方である。
 
-## Component layout
+## コンポーネント構成
 
 ```mermaid
 flowchart LR
-  A["Data agent<br/>Claude Code · hosted MCP agent · CI job"]
-  H["Human reviewer<br/>browser"]
-  CLI["ochakai CLI<br/>thin REST client"]
-  UI["Web UI<br/>one page + same-origin proxy"]
+  A["データエージェント<br/>Claude Code・ホスト型 MCP エージェント・CI ジョブ"]
+  H["人間のレビュアー<br/>ブラウザ"]
+  CLI["ochakai CLI<br/>薄い REST クライアント"]
+  UI["Web UI<br/>一枚のページ + 同一オリジンのプロキシ"]
 
-  subgraph SRV["ochakai — one Go binary on Cloud Run"]
+  subgraph SRV["ochakai — Cloud Run 上の一つの Go バイナリ"]
     direction TB
-    M["MCP server<br/>/mcp"]
+    M["MCP サーバー<br/>/mcp"]
     R["REST API<br/>/api/v1"]
-    SVC["service<br/>search · links · provenance · usage"]
+    SVC["service<br/>検索・links・provenance・usage"]
     M --> SVC
     R --> SVC
   end
 
   PG[("Cloud SQL for PostgreSQL<br/>+ pgvector")]
-  GCS[("Cloud Storage<br/>file bytes")]
-  VX["Vertex AI Embeddings<br/>default on Google Cloud"]
+  GCS[("Cloud Storage<br/>ファイルのバイト列")]
+  VX["Vertex AI Embeddings<br/>Google Cloud 上では既定"]
 
   A -->|MCP over HTTP| M
   A --> CLI
@@ -47,98 +46,102 @@ flowchart LR
   SVC -.-> VX
 ```
 
-`serve` runs the MCP server and the REST API on one port, next to the
-database. The CLI and the web UI are REST clients and hold no database
-connection of their own (design doc
-[0007](design/0007-api-only-cli.md)); the web UI is a single
-self-contained page with no build step, served either from your loopback
-by `ochakai ui` or as a team service by `ochakai serve-ui` — the same
-container image, a different argument (design doc
-[0006](design/0006-web-ui-serving.md)).
+`serve` は MCP サーバーと REST API を一つのポートで、データベースの
+隣で動かす。CLI と web UI は REST クライアントであり、自分自身の
+データベース接続を持たない(設計ドキュメント
+[0007](design/0007-api-only-cli.md))。web UI はビルドステップの無い
+一枚の自己完結したページで、`ochakai ui` によってループバックから、
+あるいは `ochakai serve-ui` によってチームのサービスとして配られる —
+同じコンテナイメージに、違う引数を渡すだけである(設計ドキュメント
+[0006](design/0006-web-ui-serving.md))。
 
-## Identity, provenance, and no authorization
+## Identity と provenance、そして認可は無い
 
-**Whoever can reach the service can read and write it — there is no
-per-concept permission, and for some organizations that is a hard stop.**
-What that means operationally, and the postures that narrow it, are in
-[requirements and configuration](configuration.md#authentication-has-no-configuration)
-(Japanese) (design doc [0002](design/0002-authn-authz.md)); this section is
-the *why*.
+**デプロイに届く者は誰でも読み書きできる — concept ごとの権限は無く、
+それが一部の組織にとっては致命的な欠格事由になる。** それが運用上
+何を意味するか、そしてそれを狭める姿勢は
+[要件と設定](configuration.md#authentication-has-no-configuration)
+(設計ドキュメント [0002](design/0002-authn-authz.md))にある。この
+節はその*理由*である。
 
-What ochakai does with an identity is *record* it, for one purpose:
-deciding whose name goes on the concept (how the identity itself is read
-is in
-[requirements and configuration](configuration.md#authentication-has-no-configuration)
-(Japanese)).
-Verifying a concept is not restricted either: who verified it is always
-recorded, so the decision about whether to trust it is made by whoever
-reads the provenance, not by a gate at the write. The phrase the record
-uses is that trust is secured *by recording, not by authorizing*.
+ochakai が identity に対してすることは*記録*だけであり、目的は一つ
+— concept に誰の名前を載せるかを決めることである(identity 自体が
+どう読まれるかは
+[要件と設定](configuration.md#authentication-has-no-configuration)
+にある)。concept の検証も制限されていない: 誰が検証したかは常に
+記録されるので、それを信頼するかどうかの判断は provenance を読む側が
+行うのであって、書き込み側の門番が行うのではない。record が使う
+言い回しで言えば、trust は*認可によってではなく記録によって*担保
+される。
 
-The consequences to plan around:
+計画するうえで踏まえておく帰結:
 
-- **The service must be private.** On a public Cloud Run service the
-  identity headers are self-asserted and the whole model collapses. IAM
-  enforcement is the security boundary; the [operating
-  guide](guides/operating.md#hardening) carries a hardening checklist.
-- **An embedding application collapses its users into one identity.** An
-  app that calls ochakai with its own service account records every one
-  of its users as that service account.
+- **サービスは非公開でなければならない。** 公開された Cloud Run
+  サービスでは identity ヘッダーは自称にすぎず、モデル全体が崩壊
+  する。IAM による強制がセキュリティ境界であり、
+  [運用ガイド](guides/operating.md#hardening) に hardening の
+  チェックリストがある。
+- **組み込んだアプリケーションは利用者を一つの identity に潰す。**
+  自分自身のサービスアカウントで ochakai を呼ぶアプリは、その
+  利用者全員を同じサービスアカウントとして記録する。
   [Delegated provenance](guides/rest-integration.md#delegated-provenance-forwarding-who-used-your-product)
-  (Japanese) fixes this for callers an operator lists explicitly (design doc
-  [0027](design/0027-delegated-provenance.md)); the team web UI does the
-  same from an IAP-signed JWT (design doc
-  [0032](design/0032-webui-iap-identity.md)).
-- **The identity says who, not what.** An agent that writes under a
-  person's own credentials — an MCP client, a CLI in a script — records
-  that person, and the record then reads as if they wrote the prose.
-  `Ochakai-Producer: insightflow/1.4.0` (or, on MCP, the client's
-  `initialize` info) names the software; it is recorded beside the actor
-  and never in place of it, because it is the one thing here the caller
-  declares about itself rather than something authentication observed
-  (design doc [0052](design/0052-producer-beside-the-actor.md)).
-- **Provenance is never read from a payload.** Import puts nothing from a
-  bundle's frontmatter into a ledger, and nothing there moves the trust
-  tier. Provenance is what this instance observed, not what a document
-  claims about itself (design docs
-  [0009](design/0009-provenance-portability.md),
-  [0035](design/0035-verifiability.md)). What the document does claim is
-  kept, plainly labelled as a claim, rather than thrown away — see the
-  data model below.
+  は、運用者が明示的に一覧した呼び出し元についてこれを解消する
+  (設計ドキュメント [0027](design/0027-delegated-provenance.md))。
+  team web UI は IAP が署名した JWT から同じことを行う(設計
+  ドキュメント [0032](design/0032-webui-iap-identity.md))。
+- **identity が言うのは誰かであって、何かではない。** 本人の
+  資格情報の下で書き込むエージェント — MCP クライアント、スクリプト
+  内の CLI — はその人物を記録し、record はまるで本人が文章を書いた
+  かのように読める。`Ochakai-Producer: insightflow/1.4.0`(あるいは
+  MCP ではクライアントの `initialize` 情報)がソフトウェアの名前を
+  伝える。これは actor の**隣に**記録され、決してその代わりには
+  ならない — ここで唯一、呼び出し元が認証によって観測されたのでは
+  なく自分自身について宣言するものだからである(設計ドキュメント
+  [0052](design/0052-producer-beside-the-actor.md))。
+- **provenance がペイロードから読まれることは無い。** import は
+  バンドルの frontmatter から ledger へ何も持ち込まず、そこにある
+  何も trust の段階を動かさない。provenance はこのインスタンスが
+  観測したものであって、文書が自分自身について主張していることでは
+  ない(設計ドキュメント [0009](design/0009-provenance-portability.md)、
+  [0035](design/0035-verifiability.md))。文書が主張していることは、
+  捨てられるのではなく主張だと明示された形で保持される — 下の
+  データモデルを見よ。
 
-A deployment can be made **read-only**, which is not authorization
-either and for a sharper reason: the check never looks at the caller, so
-it refuses whoever operates the deployment exactly as it refuses anyone
-else. It sits in the service layer that both REST and MCP pass through,
-so a write endpoint added later is covered without its author knowing
-about it. What each surface does about it, and the sibling **public**
-posture that also stops reading identity at all, are in
-[requirements and configuration](configuration.md#environment-variables)
-(Japanese) (design docs [0040](design/0040-read-only-mode.md),
-[0042](design/0042-public-read-only.md)).
+デプロイは**read-only**にできる。これも認可ではなく、しかもより鋭い
+理由による: このチェックは呼び出し元を一切見ないので、デプロイを
+運用する者もそれ以外の誰かとまったく同じように拒む。REST と MCP が
+どちらも通るサービス層に置かれているので、後から追加される書き込み
+エンドポイントも、その作者が意識せずとも対象になる。各サーフェスが
+それについて何をするか、そして identity を読むこと自体をやめる
+姉妹の**public**姿勢については
+[要件と設定](configuration.md#environment-variables)
+(設計ドキュメント [0040](design/0040-read-only-mode.md)、
+[0042](design/0042-public-read-only.md))にある。
 
-There is one narrow exception to "no authorization", and it is
-deliberately framed as not being one: MCP refuses to overwrite, delete,
-or change a concept a human has ruled on — verified, rejected, or
-deprecated — and refuses to revive such a concept's
-soft-deleted tombstone with a create. The reasoning is visibility rather
-than permission: a silently replaced verified golden query is discovered
-only when somebody runs it and gets a wrong number, and MCP has no
-conditional-write channel (no ETag) with which an agent could state what
-it believed it was replacing. The human surfaces are unrestricted
-(design doc [0015](design/0015-surface-consistency.md) §3.1).
+「認可は無い」には一つだけ狭い例外があり、それは意図して認可では
+ないと位置づけられている: MCP は、人間が裁定した concept —
+verified・rejected・deprecated — を上書き・削除・変更することを
+拒み、そうした concept のソフトデリートされた tombstone を create
+で蘇らせることも拒む。その理由は権限ではなく可視性である: 静かに
+置き換えられた verified の golden query は、誰かがそれを実行して
+違う数字を得たときにしか発覚せず、しかも MCP には条件付き書き込みの
+経路(ETag)が無いので、エージェントは自分が何を置き換えるつもり
+だったかを示すすべを持たない。人間向けのサーフェスは制限されない
+(設計ドキュメント [0015](design/0015-surface-consistency.md) §3.1)。
 
-## The data model
+<a id="the-data-model"></a>
 
-**A concept is an [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
-v0.2 document** — YAML frontmatter, then a markdown body — and that is
-the stored form, the wire form, and the export form alike (design doc
-[0046](design/0046-bundle-address-space.md) §2.2, which carries design
-doc 0043's *the document is the only truth* forward and takes it down to
-the byte level: what a write stores is the bytes it received, and the
-canonical form is derived from them). Reading a concept, editing it, and
-sending it back is one loop with no translation in it — the id is the
-address, at both ends:
+## データモデル
+
+**concept とは [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+v0.2 文書である** — YAML の frontmatter の後に markdown 本文が続く —
+そしてそれが保存形式であり、ワイヤ形式であり、export 形式でもある
+(設計ドキュメント [0046](design/0046-bundle-address-space.md) §2.2。
+設計ドキュメント 0043 の*文書だけが真実*をそのまま引き継ぎ、バイト
+レベルまで落とし込んでいる: 書き込みが保存するのは受け取ったバイト
+列そのものであり、正準形式はそこから導かれる)。concept を読み、
+編集し、送り返すのは変換の入らない一つのループである — id が、
+両端で住所になる:
 
 ```sh
 curl -X PUT http://localhost:8080/api/v1/bundle/metrics/revenue.md \
@@ -146,108 +149,115 @@ curl -X PUT http://localhost:8080/api/v1/bundle/metrics/revenue.md \
   --data-binary $'---\ntype: Metric\n---\n\nCompleted orders only, net of refunds.\n'
 ```
 
-The database columns beside the document are an index derived from it,
-used to sort and filter; where the two could disagree the document is
-right. Keys OKF does not define are kept exactly where their writer put
-them, at the top level and inside a `sources` entry, a parameter, the
-executor or the attester, because a key discarded on the way in is a key
-no later release can recover.
+文書の隣にあるデータベースの列は、そこから導かれた索引であり、sort
+や filter に使われる — 両者が食い違い得る場面では文書が正しい。OKF
+が定義していないキーは、書き手が置いた場所そのまま保たれる —
+トップレベルでも、`sources` のエントリの中でも、parameter・
+executor・attester の中でも。取り込み時に捨てたキーは、後の
+リリースが二度と取り戻せないキーだからである。
 
-A concept's version is the hash of the document as stored, which a read
-returns as an `ETag` and a write takes back as `If-Match`. Being a hash
-of the document alone, confirming a concept, rejecting it or attaching a
-file to it all leave a held precondition valid; reformatting the concept
-moves it, because the file did change — what the concept *says* did not,
-and that is what `generated.at` reports.
+concept のバージョンは、保存された文書のハッシュであり、読み取りは
+これを `ETag` として返し、書き込みは `If-Match` として受け取る。
+文書だけのハッシュであるため、concept を確認すること、reject する
+こと、ファイルを添付することはどれも、保持していた precondition を
+有効なままにする。concept を整形し直すとこれは動く — ファイルは
+実際に変わったからである — が、concept が*言っている*ことは変わって
+おらず、それを伝えるのが `generated.at` である。
 
-**Types are an open set with a recommended vocabulary.**
+**type は閉じていない集合で、推奨 vocabulary を持つ。**
 
-| Type | What it holds |
+| Type | 何を持つか |
 |---|---|
-| `Metric` | Semantic metric definition, synonyms |
-| `Attested Computation` | A sanctioned computation and the means to check a run of it: the computation in a `# Computation` body fence, the contract in the `runtime` / `parameters` / `executor` / `attester` fields. ochakai records it and never runs it. A golden query is one of these: `runtime` says where the SQL runs, and a producer key such as `question` carries the question it answers |
-| `Skill` | A procedure a concept's `executor.resource` points at — how to actually run a computation on a given runtime |
-| `Insight` | How to read a metric: baselines, seasonality, caveats, thresholds |
-| `Policy` | The rule that decides a number — revenue recognition, cost allocation. What a concept's `sources[].resource` cites |
-| `Glossary Term` | Glossary term |
-| `BigQuery Dataset` | BigQuery dataset catalog entry: a container grouping tables |
-| `BigQuery Table` | BigQuery table catalog entry: source, column notes, known issues |
-| `Reference` | Mirror of external material: enum definitions, licenses, schema docs |
+| `Metric` | セマンティックなメトリック定義、同義語 |
+| `Attested Computation` | 承認された computation と、その実行を確認する手段: computation は本文の `# Computation` フェンスに、契約は `runtime` / `parameters` / `executor` / `attester` の各フィールドにある。ochakai はこれを記録するだけで、決して実行しない。golden query はこの一種である: `runtime` が SQL がどこで動くかを言い、`question` のような producer 側のキーがそれが答える問いを運ぶ |
+| `Skill` | concept の `executor.resource` が指す手順 — 与えられた runtime で computation を実際にどう動かすか |
+| `Insight` | メトリックの読み方: baseline、季節性、注意点、閾値 |
+| `Policy` | 数字を決めるルール — revenue recognition、cost allocation。concept の `sources[].resource` が引用するもの |
+| `Glossary Term` | 用語集の項目 |
+| `BigQuery Dataset` | BigQuery データセットのカタログエントリ: table をまとめるコンテナ |
+| `BigQuery Table` | BigQuery table のカタログエントリ: source、列の注記、既知の問題 |
+| `Reference` | 外部資料の写し: enum の定義、ライセンス、スキーマ文書 |
 
-These are recommendations, not a closed set: any single-line string
-works as a type for your own document kinds. The spellings are the OKF
-knowledge-catalog vocabulary verbatim — `Attested Computation`, not a
-slug — so a bundle's types survive a round-trip with no translation
-layer in between, and what earns a place in the recommended nine is
-SPEC §4.1's one demand of a producer — that the spelling be descriptive
-and self-explanatory — read against the spellings OKF itself supplies,
-in the spec's own examples and in its reference bundles (design docs
-[0023](design/0023-okf-type-vocabulary.md),
-[0038](design/0038-type-vocabulary-realignment.md)). Matching is
-case-insensitive; the spelling you write is the one stored.
+これらは推奨であって閉じた集合ではない: 一行に収まる文字列なら
+何でも、自分自身の文書の種類の type として使える。綴りは OKF の
+knowledge-catalog vocabulary をそのまま使う — スラッグではなく
+`Attested Computation` — ので、バンドルの type は間に変換層を挟まず
+round trip を生き残る。推奨の九つに入る資格を得るのは、SPEC §4.1 が
+producer に課すただ一つの要求 — 綴りが descriptive で
+self-explanatory であること — を、OKF 自身が spec の例やその
+reference bundle で示している綴りに照らして判断した結果である
+(設計ドキュメント [0023](design/0023-okf-type-vocabulary.md)、
+[0038](design/0038-type-vocabulary-realignment.md))。マッチングは
+大文字小文字を区別しない — 保存されるのは書いた綴りそのものである。
 
-**Identity is a path.** A concept's id is its address and its bundle
-location: `queries/sales/monthly-revenue` is one concept, and the
-directories are how you organize a knowledge base — a type is an
-attribute of a concept, not part of its address, so the layout of an
-exported bundle comes from ids alone (design doc
-[0017](design/0017-path-addressing.md)). MCP addresses a concept as a
-resource by that path under the `ochakai://` scheme — a URI for MCP's
-sake, which never travels in a bundle. `title` is optional — a concept
-without one is displayed by the last segment of its id, the way a file
-is named by its filename — and ids are NFC-normalized and searchable in
-their own right (design doc [0022](design/0022-filename-as-name.md)).
+**identity とはパスである。** concept の id はその住所であり bundle
+上の場所でもある: `queries/sales/monthly-revenue` は一つの concept
+であり、ディレクトリはナレッジベースをどう組織するかを表す — type
+は concept の属性であって住所の一部ではないので、export した
+bundle のレイアウトは id だけから決まる(設計ドキュメント
+[0017](design/0017-path-addressing.md))。MCP は concept を、
+`ochakai://` スキームの下でそのパスによる resource として住所づける
+— これは MCP のための URI であって、bundle の中を旅することは無い。
+`title` は省略でき、それを持たない concept は id の最後のセグメント
+で表示される — ファイルがファイル名で呼ばれるのと同じである — そして
+id は NFC 正規化されており、それ自体が検索対象でもある(設計
+ドキュメント [0022](design/0022-filename-as-name.md))。
 
-Because the address is the path, the path is also something to search
-within. `--prefix` (REST `?prefix=`, MCP `prefixes`) narrows a search or
-a `context` call to a subtree, repeatable and OR-ed, so one call can
-cover two parts of the tree and tell the answers apart by id (design doc
-[0041](design/0041-path-scoped-search.md)). Matching is on segment
-boundaries: `metrics` does not reach `metrics-legacy`. How much this
-buys depends on what the directories mean —
-[examples/demo](../examples/demo) groups by kind (`metrics/`,
-`glossary/`, `queries/sales/`), where `--type` already does most of
-this; it earns its keep when directories mean something `--type` cannot
-say, such as one team's own vocabulary beside a shared one. ochakai
-attaches no meaning to any path either way, and the filter is not an
-access control: any caller may pass any prefix, and passing none returns
-everything they could already reach.
+住所がパスであるということは、パスもまた検索の対象になるという
+ことである。`--prefix`(REST では `?prefix=`、MCP では `prefixes`)
+は検索や `context` の呼び出しを一つの subtree に絞り込む — 繰り返し
+指定でき、OR で結ばれるので、一回の呼び出しで木の二箇所をカバーし、
+id で答えを見分けられる(設計ドキュメント
+[0041](design/0041-path-scoped-search.md))。マッチングはセグメント
+境界で行われる: `metrics` は `metrics-legacy` には届かない。これが
+どれだけ役に立つかはディレクトリが何を意味するかによる —
+[examples/demo](../examples/demo) は種類でグループ化しており
+(`metrics/`、`glossary/`、`queries/sales/`)、そこでは `--type` が
+すでに同じことのほとんどをやっている。これが効いてくるのは、共有の
+vocabulary の隣にあるチーム独自の vocabulary のように、ディレクトリ
+が `--type` では言えない何かを意味しているときである。ochakai は
+どちらの場合もパスに意味を持たせておらず、このフィルタはアクセス
+制御ではない: どの呼び出し元もどんな prefix でも渡してよく、何も
+渡さなければ既に届く範囲すべてが返る。
 
-**Relationships come from the prose.** There is no links field. A
-markdown link in the body — `[revenue](/metrics/revenue.md)` or a
-relative path (`./gross.md`) — those two are the forms OKF SPEC §6
-defines, and they are the only ones — is the edge; the target gains a
-backlink, and `get_context` expands the edge in both directions. What
-kind of relationship it is comes from the sentence around it, so ochakai
-stores no relationship vocabulary of its own (design doc
-[0024](design/0024-links-from-body.md)). Links inside fenced code blocks
-(``` or ~~~) and inline `` `code spans` `` are examples and are skipped
-— indented code is not detected, so a link four spaces deep is read as
-prose. Renaming a concept rewrites the references pointing at it, prose
-included.
+**関係は本文から来る。** links フィールドは無い。本文中の markdown
+リンク — `[revenue](/metrics/revenue.md)` や相対パス
+(`./gross.md`)— この二つが OKF SPEC §6 が定義する形式であり、それが
+すべてである — が edge になる。リンク先は backlink を得て、
+`get_context` はその edge を両方向に展開する。どんな種類の関係かは
+その周りの文が語るので、ochakai は自分自身の関係 vocabulary を一切
+保存しない(設計ドキュメント [0024](design/0024-links-from-body.md))。
+フェンスされたコードブロック(``` や ~~~)の中のリンクとインラインの
+`` `code span` `` は例として扱われスキップされる — インデントされた
+コードは検出されないので、4 スペース分インデントされたリンクは本文
+として読まれる。concept の名前を変えると、それを指す参照も本文ごと
+書き換わる。
 
-**Files** live beside a concept — the dashboard screenshot behind
-an insight, the ER diagram behind a table concept, the seeds.txt or spec
-PDF behind a dataset — and round-trip through OKF bundles as plain files
-next to it. Accepted formats are the intersection of what Claude reads
-and what Gemini embeds: PNG, JPEG, WebP, PDF, plain text, sniffed from
-the bytes rather than trusted from a filename, because that operation is
-one of the ones 0046 §3.5 folds into the bundle address, and the fold is
-still landing. Bytes live in Cloud Storage and are fetched on demand,
-one object up to 5 MiB, with the database keeping what addresses them
-(design doc [0046](design/0046-bundle-address-space.md) §3.2, which
-keeps design doc 0013's judgment); with `OCHAKAI_GCS_BUCKET` unset the
-instance stores markdown concepts only and a non-markdown write is
-refused. Files are searchable: filenames match in every search,
-and contents join hybrid search wherever embeddings are enabled — text
-with any embedding model, images and PDFs with `gemini-embedding-2` —
-and a hit is always the owning concept, never the file itself (design
-doc [0020](design/0020-attachment-search.md)).
+**Files** は concept の隣に住む — insight の裏にある dashboard の
+スクリーンショット、table concept の裏にある ER 図、dataset の裏に
+ある seeds.txt や spec の PDF — そして OKF bundle を通じて、その隣の
+ただのファイルとして round trip する。受け付ける形式は Claude が
+読めるものと Gemini が embed できるものの積である: PNG、JPEG、
+WebP、PDF、プレーンテキスト。ファイル名からではなくバイト列から
+判定する — これは 0046 §3.5 が bundle address に畳み込んでいる操作の
+一つで、その畳み込みはまだ着地の途中だからである。バイト列は Cloud
+Storage に置かれ、必要になったときに取得される。1 オブジェクト
+あたり 5 MiB まで、住所を保持するのはデータベースの側である(設計
+ドキュメント [0046](design/0046-bundle-address-space.md) §3.2。設計
+ドキュメント 0013 の判断を引き継いでいる)。`OCHAKAI_GCS_BUCKET` が
+未設定なら、そのインスタンスは markdown の concept だけを保存し、
+markdown 以外の書き込みは拒否される。Files は検索対象でもある:
+ファイル名はすべての検索でマッチし、内容は embeddings が有効な
+ところではハイブリッド検索に加わる — テキストはどの embedding
+model でも、画像と PDF は `gemini-embedding-2` で。ヒットは常に
+それを持つ concept であって、ファイル自身がヒットすることは無い
+(設計ドキュメント [0020](design/0020-attachment-search.md))。
 
-**Trust travels with the knowledge.** OKF v0.2's schema is ochakai's
-schema: every key the spec defines is a first-class field, so an
-exported concept carries its provenance, trust and lifecycle (SPEC §5)
-where a consumer that has never heard of ochakai will look for them.
+**trust はナレッジと一緒に旅をする。** OKF v0.2 のスキーマは
+ochakai のスキーマでもある: spec が定義するキーはすべて第一級の
+フィールドなので、export された concept は provenance と trust と
+lifecycle(SPEC §5)を、ochakai を聞いたことも無い consumer が探す
+まさにその場所に運ぶ。
 
 ```yaml
 type: Attested Computation
@@ -264,205 +274,217 @@ generated: { by: process:analyst@example.iam.gserviceaccount.com, producer: insi
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
 status: stable                 # draft | stable | deprecated
-stale_after: "2026-12-31"      # advisory: re-check on and after this day
+stale_after: "2026-12-31"      # 参考情報: この日以降に見直す
 ```
 
-`sources` is the material a concept derives from — give one an `id` and
-a markdown footnote in the body can attribute a single claim to it.
-`generated` is who the content stands by and when it last changed;
-`verified` is who confirmed it — absent means unverified, and a
-`human:` entry is what makes it human-reviewed (SPEC §5.3). ochakai
-holds these the way the spec defines them: `status` is the lifecycle
-value alone (`draft`, `stable`, `deprecated` — SPEC §5.4) and `verified`
-is an append-only ledger of every confirmation, so the two signals stay
-independent. A draft somebody checked and a stable concept nobody has
-are both states the model can hold, and a foreign bundle's lifecycle
-value survives the trip unaltered.
+`sources` は concept が依拠する材料である — 一つに `id` を与えれば、
+本文中の markdown の脚注がその一つの主張の出典を示せる。`generated`
+はその内容の後ろに誰が立っているか、いつ最後に変わったかを言い、
+`verified` は誰がそれを確認したかを言う — 無ければ unverified を
+意味し、`human:` のエントリがあってはじめて human-reviewed になる
+(SPEC §5.3)。ochakai はこれらを spec が定義するとおりに保持する:
+`status` は lifecycle の値だけを持ち(`draft`、`stable`、
+`deprecated` — SPEC §5.4)、`verified` は確認のたびに追記される
+だけの ledger であり、この二つの信号は独立したまま保たれる。誰かが
+確認した draft も、誰も確認していない stable な concept も、どちら
+もこのモデルが持てる状態であり、他所の bundle の lifecycle の値も
+そのままの姿で旅を終える。
 
-A rejection — reviewed and *not* accepted — is this instance's ruling
-rather than a stage of the concept, so it is not a status either, and it
-is the record most stores lack: an agent can check it before
-re-proposing the same thing. It exports as `rejected_by` /
-`rejected_at` beside the concept's real status, and import never reads
-it back — a bundle carries knowledge, not one instance's judgments
-(design doc [0046](design/0046-bundle-address-space.md) §2.4, which
-inherits design doc 0043 §§3.2-3.3 unchanged).
+rejection — レビューされて*受け入れられなかった*こと — は concept
+の段階ではなくこのインスタンスの裁定なので、status でもない。
+そしてこれはほとんどのストアが持たない記録である: エージェントは
+同じことを再提案する前にこれを確認できる。export では concept の
+本当の status の隣に `rejected_by` / `rejected_at` として現れ、
+import はそれを二度と読み戻さない — bundle が運ぶのはナレッジで
+あって、一つのインスタンスの判断ではないからである(設計ドキュメント
+[0046](design/0046-bundle-address-space.md) §2.4。設計ドキュメント
+0043 §§3.2-3.3 を変えずに引き継いでいる)。
 
-ochakai **records** these; it never acts on them. It does not fetch a
-source's `resource`, score its credibility signals, or run an Attested
-Computation's `executor` and `attester` — weighing the signals and
-running the computation belong to whoever consumes the concept (SPEC
-§5.1, §10.5).
+ochakai はこれらを**記録する**だけで、決してそれをもとに動かない。
+source の `resource` を取得することも、その信頼性の信号を採点する
+ことも、Attested Computation の `executor` と `attester` を実行する
+ことも無い — 信号を重み付けすることと computation を実行することは、
+concept を消費する側の仕事である(SPEC §5.1、§10.5)。
 
-Every change is kept as a revision, and `delete` is a soft delete.
-Discarding history is a second, explicit step — `purge`, available on
-REST and the CLI only, which leaves an audit row behind and frees the id
-(design doc [0031](design/0031-purge.md)).
+すべての変更はリビジョンとして保持され、`delete` はソフトデリート
+である。履歴を捨てるのは第二の、明示的なステップ — REST と CLI に
+だけある `purge` で、監査行を一つ残して id を解放する(設計
+ドキュメント [0031](design/0031-purge.md))。
 
-## The four surfaces
+## 四つのサーフェス
 
-REST, MCP, CLI, and the web UI are held to one rule: a feature lands on
-all of them consistently, including where it deliberately lands on none
-(design doc [0015](design/0015-surface-consistency.md)). Each has a
-declared job.
+REST、MCP、CLI、web UI は一つのルールに従う: 機能はこのすべてに
+一貫して現れる — 意図してどれにも現れない場合も含めて(設計
+ドキュメント [0015](design/0015-surface-consistency.md))。それぞれ
+に宣言された役目がある。
 
-| Surface | Job |
+| Surface | 役目 |
 |---|---|
-| REST `/api/v1` | The only contract. A feature lands here first or nowhere; limits, enums, and defaults live server-side. [api/openapi.yaml](../api/openapi.yaml) is the published wire surface |
-| MCP `/mcp` | The agent's purpose-built entrance. Tool schemas cost the agent context, so the tool count is a budget — not a mirror of REST. `get_context` is the extreme case: one call returns everything the loop needs |
-| CLI | The completeness surface. A pure REST client covering every operation, for humans and for agents with a shell |
-| Web UI | The human half of the loop. Search, browse, review, history — a curation surface, not a BI tool. The page knows nothing about authentication, which is what lets one page ship two ways |
+| REST `/api/v1` | 唯一の契約。機能はまずここに現れるか、どこにも現れない。limit・enum・既定値はすべてサーバー側にある。[api/openapi.yaml](../api/openapi.yaml) が公開されたワイヤサーフェスである |
+| MCP `/mcp` | エージェント専用に作られた入口。tool schema はエージェントの context を消費するので、tool の数は予算である — REST の写しではない。`get_context` はその極端な例で、一回の呼び出しでループが必要とするすべてを返す |
+| CLI | 完全性のサーフェス。すべての操作をカバーする、純粋な REST クライアント。人間にも、シェルを持つエージェントにも |
+| Web UI | ループの人間側の半分。検索・browse・review・履歴 — curation のためのサーフェスであって BI ツールではない。このページは認証について何も知らず、それが一枚のページを二通りに出荷できる理由である |
 
-The value of writing the roles down is that it makes the omissions
-reviewable. MCP carries no `browse` (walking a tree is multi-round-trip
-exploration, the opposite of `get_context`), no `revisions` and no
-`links_to` reverse lookup (duplicated or too heavy in tokens — an agent
-that wants what points at a concept gets it inside `get_context`, which
-follows the same edge), no file writes
-(base64 in a tool argument wastes tokens, and an agent's write-back
-should be searchable text), no bulk export or import, and no `verify` —
-re-verification is a human judgment. The web UI carries no outcome
-reporting, because a surface that cannot run SQL would produce
-worked/failed reports with no action behind them. REST carries no SQL
-execution, no LLM features, no user management, and no bulk OKF import.
+役目を書き出すことの価値は、それが省略を review 可能にすることで
+ある。MCP には `browse` が無く(木を歩くことは `get_context` の
+対極にある、何往復もの探索である)、`revisions` も `links_to` の
+逆引きも無い(重複するか token として重すぎる — concept を指して
+いるものが欲しいエージェントは、同じ edge をたどる `get_context` の
+中でそれを得る)、ファイルの書き込みも無く(tool の引数の中の
+base64 は token の無駄であり、エージェントの書き戻しは検索可能な
+テキストであるべきである)、一括の export も import も無く、
+`verify` も無い — 再検証は人間の判断だからである。web UI には
+outcome の報告が無い。SQL を実行できないサーフェスが worked/failed
+の報告を作っても、その裏に行動が無いからである。REST には SQL の
+実行も、LLM の機能も、ユーザー管理も、一括の OKF import も無い。
 
-That last one is the single place the CLI is more than a thin client.
-Loading a bundle is a loop over endpoints that already exist, so a
-server-side second path to the same outcome would buy convenience rather
-than capability — at the cost of a second implementation to keep in sync.
-The acknowledged price is that bundle semantics live in the client, and
-the mitigation is that [api/openapi.yaml](../api/openapi.yaml) spells out
-what the loop does, so another implementation can reproduce it. The
-record names the condition that would reverse the decision: a restore
-demanded from an environment where the binary cannot be run (design doc
-[0015](design/0015-surface-consistency.md) §3.2).
+その最後の一つが、CLI が薄いクライアント以上のものになる唯一の
+場所である。bundle を読み込むことは既に存在するエンドポイント群への
+ループなので、同じ結果へのサーバー側の第二の経路を作っても、買える
+のは capability ではなく convenience でしかない — しかも同期を保つ
+べき二つ目の実装というコストを払って。認めている代償は bundle の
+意味論がクライアント側に住むことであり、その緩和策は
+[api/openapi.yaml](../api/openapi.yaml) がそのループが何をしているか
+を書き尽くしていて、別の実装がそれを再現できることである。この決定
+を覆す条件も record は名指している: バイナリを動かせない環境から
+restore を求められたときである(設計ドキュメント
+[0015](design/0015-surface-consistency.md) §3.2)。
 
-## Storage
+## ストレージ
 
-One database. Concepts, revisions, links, usage totals, and embedding
-vectors all live in PostgreSQL — pgvector for the vectors, which Cloud
-SQL and a plain Postgres both provide, so hybrid search adds no
-infrastructure (design doc [0001](design/0001-architecture.md) §4).
-There is no Redis, no separate vector database, and no search cluster.
-Migrations ship in the binary. Non-markdown bytes are the exception —
-they live in Cloud Storage instead, as covered under Files above.
+データベースは一つだけである。concept、リビジョン、リンク、利用の
+合計、そして埋め込みベクトルはすべて PostgreSQL に住む — ベクトルに
+は pgvector を使い、これは Cloud SQL でもプレーンな Postgres でも
+使えるので、ハイブリッド検索は追加のインフラを一つも要らない(設計
+ドキュメント [0001](design/0001-architecture.md) §4)。Redis も、
+別のベクトルデータベースも、検索クラスタも無い。マイグレーションは
+バイナリの中に入って出荷される。markdown 以外のバイト列だけは例外
+で、上の Files の節で述べたとおり Cloud Storage に住む。
 
-Usage recording is deliberately off the read path: events are buffered in
-memory and flushed periodically, statistics are documented as
-best-effort, an overrun is dropped rather than backing up the request,
-and shutdown drains before a final flush (design doc
-[0029](design/0029-usage-recording-off-the-read-path.md)). Concurrent
-edits are handled by optimistic locking on that same document hash
-(design doc [0030](design/0030-optimistic-locking.md)).
+利用の記録は意図して読み取りの経路の外に置かれている: イベントは
+メモリ上にバッファされ、定期的にフラッシュされる。統計は
+best-effort だと文書化されており、あふれた分はリクエストを詰まらせ
+るのではなく捨てられ、shutdown は最後のフラッシュの前に drain する
+(設計ドキュメント [0029](design/0029-usage-recording-off-the-read-path.md))。
+同時編集は同じ文書のハッシュに対する楽観的ロックで扱われる(設計
+ドキュメント [0030](design/0030-optimistic-locking.md))。
 
-## Search
+<a id="search"></a>
 
-Search has a lexical half and an optional vector half.
+## 検索
 
-The lexical half exists in the shape it does because of Japanese.
-PostgreSQL's full-text search does not tokenize it, so ochakai matches
-query *fragments* against a stored haystack — id, title, description,
-tags, body, and its files' names. Latin tokens stay whole; a run of
-Japanese, which has no spaces to split on, is cut into sliding
-two-character windows, and only the windows carrying a kanji or katakana
-are kept, since an all-hiragana window is grammar and matches nearly
-everything. Concepts are ranked by how much of the *rare* part of a
-query they contain — that finds the right concepts for a keyword and
-for a Japanese question, but it is still a bag of words: ask an English
-question and a concept sharing three of its function words can outrank
-the one that names the subject.
+検索には字句面と、任意のベクトル面がある。
 
-The cost is known and written down: a trigram index cannot serve a
-two-character pattern — there is no whole trigram inside one — so a
-Japanese term like 売上 is answered by a table scan. Measured on 5000
-concepts that is about 16 ms against 0.2 ms for an indexed Latin word.
-Three-character windows would restore the index and lose exactly the
-terms the search exists to find, so the scan is the price. It is fine at
-the scale a curated knowledge base reaches, and it does not stay fine
-forever.
+字句面が今の形をしているのは日本語のためである。PostgreSQL の全文
+検索はそれをトークン化しないので、ochakai はクエリの*断片*を保存
+された haystack — id、title、description、tags、本文、そしてその
+files のファイル名 — に対してマッチさせる。ラテン文字のトークンは
+そのまま残る。日本語の連続は、区切る空白が無いので、二文字の
+スライディングウィンドウに切られ、そのうち漢字かカタカナを含む
+ウィンドウだけが残る — ひらがなだけのウィンドウは文法であってほぼ
+何にでもマッチしてしまうからである。concept はクエリの*レア*な部分
+をどれだけ含むかで ranking される — これはキーワードにも日本語の
+質問にも正しい concept を見つけるが、それでも bag of words である
+ことに変わりはない: 英語で質問すると、機能語を三つ共有する concept
+が、主題そのものを名指す concept より上位に来てしまうことがある。
 
-The vector half — Vertex AI embeddings, authenticated by ADC with no API
-key to hold, fused with the lexical ranking by reciprocal rank fusion —
-is **on by default where ochakai runs on Google Cloud** (design doc
-[0053](design/0053-embeddings-by-default.md); what decides it, and how to
-decline, is in
-[requirements and configuration](configuration.md#environment-variables)
-(Japanese)).
-Vectors are written when a concept is written, so a base loaded before
-embeddings were reachable — or a changed model — leaves older concepts
-unembedded until `ochakai reembed` runs.
+そのコストは分かっており、書き残されている: trigram 索引は二文字の
+パターンには使えない — その中に丸ごとの trigram が一つも無いから
+である — ので、売上のような日本語の語はテーブルスキャンによって
+答えられる。5000 concept で測ると、索引の効いたラテン文字の語が
+0.2ms なのに対しておよそ 16ms である。三文字のウィンドウなら索引を
+取り戻せるが、この検索が見つけるために存在している語をまさに取り
+こぼすことになる。だからスキャンがその代償である。curate された
+ナレッジベースが届く規模では問題無く、それが永遠に問題無いままとは
+限らない。
 
-Scores are not calibrated and are not comparable between the two modes.
-Treat them as an ordering. To bound what comes back, use the byte
-budget rather than a score threshold: `get_context` returns full concepts
-up to the budget and names the rest as outline rows, and `hits` carry a
-ranking only — id, type, title, status, whether it is verified, score —
-never a second copy of the knowledge (design doc
-[0033](design/0033-context-hits-are-a-ranking.md)). Search hits are the
-same kind of thing: a row names a concept and says what ranked it, and the
-document is one fetch away by id (design doc
-[0046](design/0046-bundle-address-space.md) §3.5).
+ベクトル面 — Vertex AI の embeddings で、認証は ADC、持つべき API
+キーは無い。字句面の ranking とは reciprocal rank fusion で融合
+される — は、**ochakai が Google Cloud 上で動いているところでは
+既定で on になる**(設計ドキュメント
+[0053](design/0053-embeddings-by-default.md)。何がそれを決めるか、
+どう断るかは[要件と設定](configuration.md#environment-variables)に
+ある)。ベクトルは concept が書かれたときに書かれるので、embeddings
+が届く前に読み込んだベースや、model を変えた後のベースは、
+`ochakai reembed` を走らせるまで古い concept が埋め込まれないまま
+になる。
 
-## The write-back and verification loop
+score は較正されておらず、二つのモード間で比較できるものでもない。
+順序として扱うこと。返ってくるものを絞るには、score の閾値ではなく
+バイト予算を使う: `get_context` は予算の範囲まで concept を丸ごと
+返し、残りは outline の行として名指すだけであり、`hits` が運ぶのは
+ranking だけである — id、type、title、status、verified かどうか、
+score — ナレッジそのものの二つ目のコピーではない(設計ドキュメント
+[0033](design/0033-context-hits-are-a-ranking.md))。検索の hit も
+同じ種類のものである: 一行が concept を名指し、何がそれを ranking
+したかを言い、文書自体は id で一回取得すれば手に入る(設計
+ドキュメント [0046](design/0046-bundle-address-space.md) §3.5)。
 
-The bet in design doc [0001](design/0001-architecture.md) is that agents
-supply the breadth and humans supply the judgment: an agent writes what it
-learned as a `draft`, a human confirms, deprecates or rejects it with a
-reason, and provenance and revisions make that reviewable after the fact.
-What a curator does with the three feeds this produces, and what each one
-takes to empty, is [the improvement loop](loop.md).
+## 書き戻しと検証のループ
 
-Two things about its shape belong here rather than there. **Verification
-is its own operation rather than an update** — `POST /api/v1/review/{id}`
-with `ruling: verified`, appending to the concept's ledger — because an
-update that changes nothing writes nothing, so "I checked it again and it
-is still right" would land nowhere (design doc
-[0025](design/0025-closing-the-loop.md) §6, extended by design doc
-[0037](design/0037-stale-and-source-lookup.md)). And **`stale_after`
-clears by editing rather than by re-verifying**, because it is a claim its
-author made rather than something the server observed.
+設計ドキュメント [0001](design/0001-architecture.md) が賭けている
+のは、エージェントが広さを、人間が判断を供給するということである:
+エージェントは学んだことを `draft` として書き、人間はそれを
+確認するか、deprecate するか、理由を付けて reject する。provenance
+とリビジョンが、それを後から review 可能にする。この三つのフィード
+に対してキュレーターが何をするか、それぞれを空にするために何が
+要るかは[改善ループ](loop.md)にある。
 
-## How correctness is enforced
+その形について、あちらではなくここに書くべきことが二つある。
+**検証は更新ではなくそれ自身の操作である** — `ruling: verified` を
+付けた `POST /api/v1/review/{id}` が concept の ledger に追記する。
+なぜなら、何も変えない更新は何も書き込まないので、「もう一度確かめた、
+まだ正しい」がどこにも着地しないからである(設計ドキュメント
+[0025](design/0025-closing-the-loop.md) §6。設計ドキュメント
+[0037](design/0037-stale-and-source-lookup.md) が拡張している)。
+そして**`stale_after` は再検証によってではなく編集によって片づく**
+— これはサーバーが観測したものではなく、その著者が立てた主張だから
+である。
 
-Most of ochakai's invariants are not expressible in Go's type system —
-`Status` is a string alias, and a validated id has the same type as any
-other string. Rather than build an abstraction that imitates a type
-system, design doc [0035](design/0035-verifiability.md) puts three
-machines outside the code to check three specific things.
+## 正しさはどう強制されているか
 
-- **Exhaustiveness.** golangci-lint with `exhaustive` as the centerpiece:
-  adding a value to a closed set makes every switch that meant to name
-  them all fail the build. Switches with a `default` are exempt, having
-  already declared how they treat what they did not name. The selection
-  rule for every linter enabled is *zero findings on a clean tree*, so a
-  finding always means new code did something and never means the linter
-  has opinions. Configuration is in [.golangci.yml](../.golangci.yml).
-- **The wire contract.** [api/openapi.yaml](../api/openapi.yaml) is
-  declared the public surface, and a contract test now validates every
-  request and response passing through the REST integration tests against
-  it. No code generator: handlers stay hand-written, because designing
-  each surface's meaning deliberately is the point of design doc 0015,
-  and at this size a test keeps the spec in sync as well as generation
-  would.
-- **Properties.** Go's native fuzzing covers the OKF parser — the one
-  place untrusted input enters — id and link derivation, and the export →
-  import round-trip that design doc 0036 asserts is exact. Seed corpora
-  replay under an ordinary `go test`, so CI needs no new shape.
+ochakai の不変条件のほとんどは Go の型システムでは表現できない —
+`Status` は文字列のエイリアスであり、validate 済みの id もただの
+文字列と同じ型を持つ。型システムを模倣する抽象を作る代わりに、
+設計ドキュメント [0035](design/0035-verifiability.md) はコードの
+外に三つの機械を置き、三つの具体的なことを確認させている。
 
-All of it runs through `scripts/check`, which is also what a contributor
-runs, so CI and the local checks cannot drift —
-[CONTRIBUTING.md](../CONTRIBUTING.md) has the invocations. Images are
-published with SBOM and SLSA provenance, and workflow actions are pinned
-by commit SHA.
+- **Exhaustiveness。** golangci-lint の `exhaustive` を中心に
+  据えている: 閉じた集合に値を一つ足すと、それを全部名指すつもり
+  だったすべての switch がビルドを失敗させる。`default` を持つ
+  switch は免除される — 名指さなかったものをどう扱うか、既に宣言
+  しているからである。有効にしているすべての linter を選ぶ基準は
+  *きれいな木の上で findings がゼロであること*なので、finding は
+  常に新しいコードが何かをしたことを意味し、linter が意見を持って
+  いることを意味することは無い。設定は
+  [.golangci.yml](../.golangci.yml) にある。
+- **ワイヤの契約。** [api/openapi.yaml](../api/openapi.yaml) が
+  公開サーフェスだと宣言されており、契約テストが REST の統合
+  テストを通るすべてのリクエストとレスポンスをこれに照らして
+  検証する。コード生成器は使わない: handler は手書きのままである。
+  各サーフェスの意味を意図して設計することが設計ドキュメント
+  0015 の要点であり、この規模なら生成と同じだけの精度でテストが
+  spec を同期させ続けられるからである。
+- **Properties。** Go 標準の fuzzing が、信頼されない入力が入って
+  くる唯一の場所である OKF parser、id と link の導出、そして設計
+  ドキュメント 0036 が厳密であると主張する export → import の
+  round trip をカバーする。seed corpus は普通の `go test` の下で
+  再生されるので、CI に新しい形は要らない。
 
-## Where to go next
+これらはすべて `scripts/check` を通して動く。これは contributor
+自身が走らせるものでもあるので、CI とローカルのチェックがずれる
+ことはない — 呼び出し方は [CONTRIBUTING.md](../CONTRIBUTING.md) に
+ある。イメージは SBOM と SLSA provenance 付きで公開され、workflow
+の action は commit SHA で固定されている。
 
-- [docs/design/README.md](design/README.md) — the decision records, by
-  area. The authoritative source for everything above.
-- [api/openapi.yaml](../api/openapi.yaml) — the wire surface.
-- [examples/demo](../examples/demo) — a ten-concept knowledge base with
-  the layout, types, and links this page describes.
-- [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) — the
-  deployment walkthrough and the hardening checklist.
+## 次に読むもの
+
+- [docs/design/README.md](design/README.md) — decision record を
+  分野別にまとめた索引。上のすべてについて権威ある情報源である。
+- [api/openapi.yaml](../api/openapi.yaml) — ワイヤサーフェス。
+- [examples/demo](../examples/demo) — このページが説明するレイアウト・
+  type・リンクを備えた、10 concept のナレッジベース。
+- [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) —
+  デプロイの手順と hardening のチェックリスト。
 - [docs/guides/golden-query-canary.md](guides/golden-query-canary.md)
-  (Japanese) — running verified queries as canaries.
+  — verified な query を canary として実行する。

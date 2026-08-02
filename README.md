@@ -170,7 +170,7 @@ in the version you are running.
 
 - **Evaluating** — [FAQ](docs/faq.md) ·
   [Positioning](docs/positioning.md) ·
-  [Architecture](docs/architecture.md) ·
+  [Architecture](docs/architecture.md) (Japanese) ·
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)
 - **Using** — [The improvement loop](docs/loop.md) (Japanese) ·
