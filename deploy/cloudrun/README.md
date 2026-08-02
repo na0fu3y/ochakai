@@ -1,52 +1,55 @@
-# Deploying ochakai on Cloud Run + Cloud SQL
+# ochakai を Cloud Run + Cloud SQL にデプロイする
 
-The recommended setup: an **organization-restricted, tokenless** ochakai.
-Cloud Run IAM decides who can reach it; ochakai records who did what
-(provenance) and performs no authorization of its own. Cloud Run scales to
-zero and the smallest Cloud SQL instance carries the whole knowledge base —
-one container image plus one database.
+推奨構成は、**組織限定でトークンを持たない** ochakai である。誰が届くか
+は Cloud Run の IAM が決め、ochakai は誰が何をしたか(provenance)を記録
+するだけで、自前の認可は行わない。Cloud Run は scale-to-zero し、最小の
+Cloud SQL インスタンス一つでナレッジベース全体を賄う — コンテナイメージ
+一つとデータベース一つで済む。
 
-**Cost (approximate, us-central1):**
+**コスト(概算、us-central1):**
 
-| Component | Configuration | Monthly |
+| コンポーネント | 構成 | 月額 |
 |---|---|---|
-| Cloud SQL | `db-f1-micro` (shared core), 10 GB SSD, single zone, no backups | ~$9–10 |
-| Cloud Run | request-based billing, `min-instances=0` | ~$0 when idle |
-| Vertex AI embeddings (on by default, §4) | `gemini-embedding-001`, pay per token | cents at example scale |
+| Cloud SQL | `db-f1-micro`(shared core)、10 GB SSD、単一ゾーン、バックアップ無し | ~$9–10 |
+| Cloud Run | リクエスト従量課金、`min-instances=0` | アイドル時 ~$0 |
+| Vertex AI embeddings(既定で on、§4) | `gemini-embedding-001`、トークン従量課金 | このガイドの規模では数セント |
 
-Cloud SQL dominates the bill. Regions in Asia (e.g. `asia-northeast1`) cost
-slightly more; pick what matches your latency needs. Teardown commands are
-at the bottom.
+料金のほとんどは Cloud SQL が占める。アジアのリージョン(例:
+`asia-northeast1`)はやや高くなる — レイテンシの要件に合わせて選べば
+よい。取り壊しのコマンドは末尾にある。
 
-**Recommended: stand this up with [deploy/terraform](../terraform)**,
-which turns §1–§4b (plus the web UI and demo posture) into a thirteen-step
-`terraform apply`, reviewable as a diff, reproducible per environment, and
-destroyed cleanly. This guide is what stays the reference — it explains
-why each resource is shaped the way it is, and is the path to use if you
-would rather run the commands by hand. It covers §1–§5, §5d and §9; the
-operating guide covers the web UI, the public demo, org-policy guardrails
-and upgrade notes, and [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
-(Japanese) covers §5c and the rest of what an application embedding the
-REST API needs.
-
-**Already deployed?** [docs/guides/operating.md](../../docs/guides/operating.md)
-covers what happens after: backup and restore, hardening, the team web
-UI, monitoring, capacity, and upgrades.
-
-**Embedding ochakai in your own product?**
+**推奨: [deploy/terraform](../terraform) で立ち上げる** — §1–§4b(web UI
+とデモの姿勢を含む)を 13 手順の `terraform apply` にまとめてあり、diff
+としてレビューでき、環境ごとに再現でき、きれいに壊せる。このガイドは引
+き続きリファレンスであり続ける — 各リソースがなぜそう作られているかを
+説明し、コマンドを手で打ちたい場合の経路でもある。§1–§5、§5d、§9 をカ
+バーし、web UI・公開デモ・org-policy によるガードレール・アップグレー
+ドの注意点は運用ガイドが、
 [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
-(Japanese) covers authenticating, delegated provenance and safe
-concurrent writes for an application calling the REST API directly.
+は §5c と REST API を組み込むアプリケーションに要るその他すべてをカバー
+する。
 
-## 1. Prerequisites
+**すでにデプロイ済みなら?**
+[docs/guides/operating.md](../../docs/guides/operating.md) がその後を扱
+う — バックアップと復元、hardening、team web UI、監視、capacity、アッ
+プグレード。
 
-Local tools this guide uses, beyond `gcloud` itself (authenticated —
-`gcloud auth login`): the [Go toolchain](https://go.dev/dl/) (`go run` /
-`go install`, §5), [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy)
-and `psql` (§3's one-time database setup), `openssl` (§2's admin
-password), and optionally the [`gh` CLI](https://cli.github.com) (the
-version lookup just below — without it, read the version off the
-[releases page](https://github.com/na0fu3y/ochakai/releases) by hand).
+**自分の製品に ochakai を組み込むなら?**
+[docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
+が、REST API を直接叩くアプリケーションのための認証、delegated
+provenance、安全な同時書き込みをカバーする。
+
+## 1. 前提条件
+
+このガイドが使うローカルツールは、`gcloud` 自身(認証済みであること —
+`gcloud auth login`)のほかに: [Go toolchain](https://go.dev/dl/)
+(`go run` / `go install`、§5)、
+[`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy)
+と `psql`(§3 の一度きりのデータベース設定)、`openssl`(§2 の admin パ
+スワード)、それに任意で [`gh` CLI](https://cli.github.com)(すぐ下の
+バージョン検索用 — 無ければ
+[リリースページ](https://github.com/na0fu3y/ochakai/releases)から手で
+読む)。
 
 ```sh
 export PROJECT_ID=<your-project>
@@ -56,10 +59,11 @@ gcloud services enable run.googleapis.com sqladmin.googleapis.com \
   sql-component.googleapis.com artifactregistry.googleapis.com
 ```
 
-Cloud Run cannot pull images from ghcr.io directly, so create an Artifact
-Registry **remote repository** that proxies GHCR. Layers are cached on
-first pull and the image digest stays identical to the GHCR one, so GHCR
-attestations (`gh attestation verify`) remain valid for what you run:
+Cloud Run は ghcr.io から直接イメージを pull できないので、GHCR をプロ
+キシする Artifact Registry の**リモートリポジトリ**を作る。レイヤーは最
+初の pull でキャッシュされ、イメージの digest は GHCR のものと同一のま
+まなので、GHCR の attestation(`gh attestation verify`)は動かすものに
+対してそのまま有効である:
 
 ```sh
 gcloud artifacts repositories create ghcr \
@@ -72,16 +76,16 @@ export VERSION=$(gh release view --repo na0fu3y/ochakai --json tagName -q .tagNa
 export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 ```
 
-Pin a version rather than `:latest`, so a redeploy is a decision. Without
-the `gh` CLI, read the number off the
-[releases page](https://github.com/na0fu3y/ochakai/releases) and set it by
-hand — `export VERSION=0.17.0`.
+`:latest` ではなくバージョンを固定し、再デプロイを意識的な判断にする。
+`gh` CLI が無ければ
+[リリースページ](https://github.com/na0fu3y/ochakai/releases)から番号
+を読み、手で設定する — `export VERSION=0.17.0`。
 
-(This guide assumes 0.9.0 or later; earlier releases are
-[retracted](https://go.dev/ref/mod#go-mod-file-retract) and unsupported —
-if you run one, see §8 for the upgrade path.)
+(このガイドは 0.9.0 以降を前提にしている。それより前のリリースは
+[retract](https://go.dev/ref/mod#go-mod-file-retract) 済みでサポート外
+であり、動かしている場合はアップグレード経路を §8 で見よ。)
 
-## 2. Create the database (cheapest viable instance)
+## 2. データベースを作る(最安構成)
 
 ```sh
 gcloud sql instances create ochakai \
@@ -103,40 +107,42 @@ export DB_PASSWORD=$(openssl rand -hex 24)
 gcloud sql users create ochakai --instance=ochakai --password=$DB_PASSWORD
 ```
 
-Notes:
+補足:
 
-- Instance creation takes 10–15 minutes.
-- `--no-backup` keeps the example cheap; enable backups for anything you
-  care about (`gcloud sql instances patch ochakai --backup-start-time=03:00`
-  — there is no bare `--backup` flag on `patch`; enabling means picking a
-  start time).
-- Users created through the Cloud SQL API (like this admin user) are
-  members of `cloudsqlsuperuser` and can create extensions. The runtime
-  service account deliberately gets neither (§3).
-- **About the public IP**: it is not open to the internet. With the
-  authorized-networks list empty (the default), direct connections are
-  dropped, and the only way in is the Cloud SQL connector — IAM-checked
-  (`cloudsql.instances.connect`) and mTLS'd — followed by database
-  authentication. Local admin access (§3's SQL, §6's maintenance) goes
-  through [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy),
-  which uses the same connector path, so the list never needs a concept.
-  Keep it empty and this posture holds. To remove the reachable endpoint
-  entirely, see §2b.
+- インスタンス作成には 10–15 分かかる。
+- `--no-backup` はこの例を安く保つためのもの。大事なものにはバックアッ
+  プを有効にする
+  (`gcloud sql instances patch ochakai --backup-start-time=03:00` —
+  `patch` に素の `--backup` フラグは無い。有効化とは開始時刻を選ぶこと
+  である)。
+- Cloud SQL の API 経由で作ったユーザー(この admin ユーザーもそう)は
+  `cloudsqlsuperuser` のメンバーになり、拡張を作成できる。ランタイムの
+  サービスアカウントは意図してそのどちらも持たない(§3)。
+- **公開 IP について**: これはインターネットに開かれてはいない。
+  authorized-networks のリストが空(既定)なら直接接続は落とされ、入る
+  経路は Cloud SQL コネクタ — IAM チェック(`cloudsql.instances.connect`)
+  と mTLS を経て、そのあとデータベース認証 — だけになる。ローカルの
+  admin アクセス(§3 の SQL、§6 の保守)は
+  [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy)
+  を通す。これも同じコネクタ経路を使うので、リストに concept を持たせ
+  る必要は無い。空のままにしておけば、この姿勢は保たれる。到達可能な
+  エンドポイントそのものを無くすには §2b を見よ。
 
-### 2b. Optional hardening: private IP only
+### 2b. 任意の hardening: private IP のみにする
 
-For production-like deployments, drop the public IP entirely — free, and
-worth doing for anything beyond a quick trial. The commands and the
-local-admin-access trade-off are in
-[Hardening](../../docs/guides/operating.md#hardening) in the operating
-guide.
+本番に近いデプロイでは、公開 IP を完全に落とす — 無料であり、ちょっと
+した試用を超えるならやる価値がある。コマンドと、ローカルの admin アク
+セスとのトレードオフは運用ガイドの
+[Hardening](../../docs/guides/operating.md#hardening) にある。
 
-## 3. Deploy Cloud Run (dedicated identity, passwordless, org-restricted)
+<a id="3-deploy-cloud-run-dedicated-identity-passwordless-org-restricted"></a>
 
-Create a dedicated service account for ochakai and let it log in to the
-database with **IAM database authentication** — the connection password is
-a short-lived IAM token fetched at connect time, so **no database password
-exists anywhere in the deployment**:
+## 3. Cloud Run をデプロイする(専用の identity、パスワードレス、組織限定)
+
+ochakai 専用のサービスアカウントを作り、**IAM データベース認証**でデー
+タベースにログインさせる — 接続パスワードは、接続時に取得する短命の
+IAM トークンになるので、**デプロイのどこにもデータベースパスワードが
+存在しない**:
 
 ```sh
 gcloud iam service-accounts create ochakai-run --display-name="ochakai service"
@@ -152,16 +158,16 @@ export DB_SA_USER=ochakai-run@$PROJECT_ID.iam
 gcloud sql users create $DB_SA_USER --instance=ochakai --type=cloud_iam_service_account
 ```
 
-Set up the database for the service account (one-time, as the admin
-user — connect with
-`cloud-sql-proxy $PROJECT_ID:$REGION:ochakai --port 55432` and
-`psql "host=localhost port=55432 dbname=ochakai user=ochakai"`, using
-`$DB_PASSWORD` from §2). Extensions are
-pre-created here so the runtime never needs elevated rights: ochakai's
-startup migration only ever hits the privilege-free
-`CREATE EXTENSION IF NOT EXISTS` skip path. Everything else is explicit
-object grants — **no `cloudsqlsuperuser`, no role membership** for the
-runtime identity:
+サービスアカウントのためにデータベースを準備する(一度きり、admin ユー
+ザーとして —
+`cloud-sql-proxy $PROJECT_ID:$REGION:ochakai --port 55432` と
+`psql "host=localhost port=55432 dbname=ochakai user=ochakai"` で接続
+し、§2 の `$DB_PASSWORD` を使う)。拡張はここで先に作っておくので、ラ
+ンタイムが昇格した権限を必要とすることは無い: ochakai の起動時マイグ
+レーションが触れるのは、権限を要しない
+`CREATE EXTENSION IF NOT EXISTS` のスキップ経路だけである。それ以外は
+すべて明示的なオブジェクト権限であり — ランタイムの identity に
+**`cloudsqlsuperuser` も role membership も無い**:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -175,8 +181,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<P
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
 ```
 
-Deploy privately with the dedicated identity and `OCHAKAI_DB_IAM_AUTH`
-(passwordless database), then allow your organization to invoke it:
+専用の identity と `OCHAKAI_DB_IAM_AUTH`(パスワードレスなデータベー
+ス)で非公開にデプロイし、そのあと組織に invoke を許可する:
 
 ```sh
 gcloud run deploy ochakai \
@@ -196,66 +202,68 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
 export OCHAKAI_URL=$(gcloud run services describe ochakai --region=$REGION --format='value(status.url)')
 ```
 
-**One more one-time step, now that the first deploy has run its startup
-migration:** the migration creates the tables, owned by the **runtime
-service account** (imports go through the API, so nothing is ever
-created as the admin). For the admin user to work with those tables
-directly (maintenance, ad-hoc SQL), give it the runtime's role —
-reconnect the same way as above, with `$DB_PASSWORD` from §2:
+**もう一つ、一度きりの手順が残っている。最初のデプロイが起動時マイグ
+レーションを終えたところで**: マイグレーションが作るテーブルの所有者
+は**ランタイムのサービスアカウント**である(import は API 経由なので、
+admin として何かが作られることは無い)。admin ユーザーがそれらのテー
+ブルを直接扱える(保守、ad-hoc な SQL)ようにするには、ランタイムの
+role を与える — 上と同じ要領で、§2 の `$DB_PASSWORD` を使って再接続す
+る:
 
 ```sql
 GRANT "ochakai-run@<PROJECT_ID>.iam" TO "ochakai";
 ```
 
-How this works:
+仕組み:
 
-- **Cloud Run IAM decides who can reach the service** (org members and
-  service accounts you grant `roles/run.invoker`; anonymous requests get
-  Google's 401 without hitting the container), and ochakai records who
-  they were as provenance — see
-  [requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)
-  (Japanese) for the whole access model.
-- **Never make the service publicly invokable (`allUsers`)** — the
-  identity headers ochakai reads are only trustworthy behind Cloud Run's
-  IAM check. The single exception is a deployment that reads no identity
-  and writes nothing at all (§5d's demo); for anything you can write to,
-  this rule has no exception.
-- No `allUsers` grant is needed for this deployment, so it is compatible
-  with — and a good reason to keep — the Domain Restricted Sharing org
-  policy (`iam.allowedPolicyMemberDomains`).
-- With `OCHAKAI_DB_IAM_AUTH` the `OCHAKAI_DATABASE_URL` contains no
-  password, so there is nothing secret in the environment variables.
-  (If you use password auth instead, put the URL in Secret Manager with
-  `--set-secrets`.)
-- The whole deployment is **secret-zero**: clients bring Google
-  identities, ochakai brings its service-account identity to the
-  database, and nothing needs to be issued, stored, or rotated.
+- **誰がサービスに届くかは Cloud Run IAM が決める**(組織のメンバー
+  と、`roles/run.invoker` を付与したサービスアカウント。匿名リクエス
+  トはコンテナに届く前に Google の 401 を受け取る)。ochakai はその
+  identity を provenance として記録する — アクセスモデル全体は
+  [要件と設定](../../docs/configuration.md#authentication-has-no-configuration)
+  を見よ。
+- **サービスを公開 invoke 可能(`allUsers`)にしては絶対にいけない** —
+  ochakai が読む identity ヘッダーは、Cloud Run の IAM チェックの背後
+  にあってはじめて信用できる。唯一の例外は、identity を一切読まず何
+  も書き込まないデプロイ(§5d のデモ)であり、書き込み可能なものには
+  この規則に例外は無い。
+- このデプロイに `allUsers` 付与は要らないので、Domain Restricted
+  Sharing の org policy(`iam.allowedPolicyMemberDomains`)と両立する
+  — そしてそれを維持しておく良い理由でもある。
+- `OCHAKAI_DB_IAM_AUTH` を使うと `OCHAKAI_DATABASE_URL` にパスワード
+  が含まれなくなるので、環境変数に秘密は何も無い。(代わりにパスワー
+  ド認証を使うなら、URL は `--set-secrets` で Secret Manager に置く。)
+- デプロイ全体が **secret-zero** である: クライアントは Google の
+  identity を持ち込み、ochakai は自分のサービスアカウントの identity
+  をデータベースに持ち込む — 発行も保存もローテーションも何一つ要ら
+  ない。
 
-Verify through the
 [Cloud Run proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy)
-(direct `curl` is blocked by IAM, which is the point):
+経由で確認する(直接の `curl` は IAM に阻まれる — それが狙いである):
 
 ```sh
 gcloud run services proxy ochakai --region=$REGION --port=8787 &
 curl http://localhost:8787/health
 ```
 
-Note: use `/health`, not `/healthz` — Google Frontends intercept
-`/healthz` on `run.app` URLs and return their own 404 without ever
-reaching the app.
+注: `/healthz` ではなく `/health` を使う — Google Frontend は
+`run.app` の URL 上で `/healthz` を横取りし、アプリに届く前に自前の
+404 を返す。
 
-## 4. Hybrid semantic search (Vertex AI, on by default)
+<a id="4-hybrid-semantic-search-vertex-ai-on-by-default"></a>
 
-On Cloud Run, ochakai asks the metadata server which project it is
-running in and turns semantic search on with it (design doc 0053) —
-there is no variable to set, and authentication is the service identity
-via ADC, so there are still no API keys.
+## 4. ハイブリッドなセマンティック検索(Vertex AI、既定で on)
 
-**What decides whether you actually get it is IAM, not configuration.**
-Without `roles/aiplatform.user` the service identity cannot call Vertex
-AI: ochakai finds that out with one small embedding at startup, says so
-in one log line, and serves lexical-only search. So this section is two
-commands, and they are the difference between hybrid and lexical:
+Cloud Run 上では、ochakai はメタデータサーバーに自分がどのプロジェク
+トで動いているかを尋ね、それに合わせてセマンティック検索を有効にする
+(設計ドキュメント 0053)— 設定する変数は無く、認証は ADC 経由のサー
+ビス identity なので、ここでも API キーは無い。
+
+**実際に使えるかどうかを決めるのは設定ではなく IAM である。**
+`roles/aiplatform.user` が無ければサービス identity は Vertex AI を呼
+べない: ochakai は起動時に小さな埋め込みを一つ試してそれを知り、ログ
+一行でそう告げて、字句検索だけを提供する。だからこの節はコマンド二つ
+で済み、それがハイブリッドと字句検索だけの違いになる:
 
 ```sh
 gcloud services enable aiplatform.googleapis.com
@@ -264,45 +272,42 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member=serviceAccount:$SERVICE_ACCOUNT --role=roles/aiplatform.user   # ochakai-run SA from §3
 ```
 
-Grant them unless you have a reason not to — above all for a knowledge
-base written in Japanese, where the trigram index cannot serve a
-two-character term and the lexical half is answering by scanning. On the
-next start ochakai creates the pgvector tables and search becomes hybrid
-(trigram + vector); if Vertex AI is ever unavailable afterwards, it
-degrades gracefully back to trigram-only.
+理由が無ければ付与しておく — とりわけ日本語で書かれたナレッジベース
+では、trigram 索引は 2 文字の語を引けず、字句検索の側はスキャンで答え
+ることになる。次の起動で ochakai は pgvector のテーブルを作り、検索は
+ハイブリッド(trigram + vector)になる。その後 Vertex AI が使えなくな
+っても、trigram だけへ穏やかにフォールバックする。
 
-**To refuse it**, either do not grant the role (nothing is called, and
-nothing is charged), or say so:
+**拒むには**、role を付与しないままにするか(何も呼ばれず、課金も発生
+しない)、そう明示する:
 
 ```sh
 gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_EMBEDDINGS=off
 ```
 
-Use `--update-env-vars`, not `--set-env-vars`: the latter **replaces** all
-environment variables and would wipe `OCHAKAI_DATABASE_URL`.
+`--set-env-vars` ではなく `--update-env-vars` を使う: 前者はすべての
+環境変数を**置き換える**ので `OCHAKAI_DATABASE_URL` を消してしまう。
 
-Worth knowing before you grant the role: ochakai has no authorization
-(design doc 0002), so **anyone who can reach the service can cause a
-Vertex AI call by writing** — cents at the scale a curated knowledge base
-reaches.
+role を付与する前に知っておく価値があること: ochakai には認可が無いの
+で(設計ドキュメント 0002)、**サービスに届く誰もが、書き込むことで
+Vertex AI の呼び出しを引き起こせる** — キュレーションされたナレッジ
+ベースの規模では数セントで済む。
 
-The model, location, multimodal file search, `OCHAKAI_EMBEDDING_DIM`
-and `ochakai reembed` — the command that backfills a base loaded before
-the role was granted, or before a model change — are all in
-[Environment variables](../../docs/configuration.md#environment-variables)
-(Japanese);
-what changing the dimension does to an existing database is in
-[Upgrades](../../docs/guides/operating.md#upgrades) in the operating
-guide.
+model、location、マルチモーダルなファイル検索、
+`OCHAKAI_EMBEDDING_DIM`、そして role 付与前や model 変更前に読み込ん
+だベースを埋め直すコマンド `ochakai reembed` は、すべて
+[環境変数](../../docs/configuration.md#environment-variables)にある。
+次元を変えることが既存のデータベースに何をするかは、運用ガイドの
+[Upgrades](../../docs/guides/operating.md#upgrades) にある。
 
-## 4b. Files require GCS
+## 4b. ファイルには GCS が要る
 
-File bytes live only in a GCS bucket — metadata and revisions stay
-in Postgres, and auth is ADC via the service identity, no keys. Without
-`OCHAKAI_GCS_BUCKET` the service runs markdown-only: attach operations
-return 501 and imports report files as failed. Skip this section
-only if you never attach files:
+ファイルの実体は GCS バケットにのみ置かれる — メタデータとリビジョン
+は Postgres に残り、認証はサービス identity 経由の ADC でキーは無い。
+`OCHAKAI_GCS_BUCKET` が無いとサービスは markdown 専用で動く: attach 操
+作は 501 を返し、import はファイルを失敗として報告する。ファイルを一
+切添付しないのでなければ、この節は飛ばさない:
 
 ```sh
 gcloud storage buckets create gs://$PROJECT_ID-ochakai-blobs \
@@ -315,136 +320,147 @@ gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_GCS_BUCKET=$PROJECT_ID-ochakai-blobs
 ```
 
-File bytes go straight to the bucket (objects are
-content-addressed `blob/<sha256>`, create-only, never deleted).
+ファイルの実体はそのままバケットへ行く(オブジェクトは
+`blob/<sha256>` として content-addressed され、作成のみで削除されるこ
+とは無い)。
 
-**Upgrading from ≤0.8.x with attachments and no bucket**: run a 0.8.x
-release with `OCHAKAI_GCS_BUCKET` set once — its startup backfill moves
-the in-Postgres attachment bytes to the bucket. From 0.9.0 on, the
-backfill is gone and migration 0009 refuses to run while attachment
-bytes are still inline — the service fails to start with the
-instruction, nothing is lost. Once migrated, the bytea column is gone,
-so binaries and configurations without the bucket cannot read
-attachments again; keep the var set from then on.
+**添付があってバケットが無い 0.8.x 以下からのアップグレード**:
+`OCHAKAI_GCS_BUCKET` を設定した 0.8.x のリリースを一度動かす — その起
+動時 backfill が、Postgres 内の添付バイトをバケットへ移す。0.9.0 以降
+は backfill が無くなっており、添付バイトがまだ inline のままだと
+migration 0009 が実行を拒む — サービスは指示付きで起動に失敗するだけ
+で、何も失われない。一度移行すれば bytea 列は無くなるので、バケット無
+しのバイナリや設定はもう添付を読めなくなる — その後は変数を設定した
+ままにしておく。
 
-## 5. Load knowledge and connect Claude Code
+## 5. ナレッジを読み込み、Claude Code を接続する
 
-Register a concept through the API. The CLI resolves Google ID tokens
-itself from your gcloud login, so no Cloud SQL proxy or authorized
-network is needed — `$OCHAKAI_URL` was exported when the service was
-deployed above:
+API 経由で concept を一つ登録する。CLI は自分の gcloud ログインから
+Google ID トークンを解決するので、Cloud SQL proxy も authorized
+network も要らない — `$OCHAKAI_URL` は上でサービスをデプロイしたとき
+に export 済みである:
 
 ```sh
 curl -fsSL "https://raw.githubusercontent.com/na0fu3y/ochakai/v$VERSION/examples/golden-query.md" | \
   go run github.com/na0fu3y/ochakai/cmd/ochakai@latest put queries/monthly-revenue
 ```
 
-Point Claude Code — or any agent with a shell — at the same URL; the CLI
-run above already proved it resolves tokens with no proxy needed. This is
-the recommended way in, per the README's
-[Connect an agent](../../README.md#connect-an-agent):
+Claude Code — あるいはシェルを持つ任意のエージェント — を同じ URL に
+向ける。上で走らせた CLI が、proxy 無しでトークンを解決できることをす
+でに証明している。これが README の
+[Connect an agent](../../README.md#connect-an-agent)に沿った、推奨の
+入り方である:
 
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use $OCHAKAI_URL
 ```
 
-If you want MCP tools inside Claude Code instead, the bridge needs no
-proxy either — `claude mcp add ochakai -- ochakai mcp-stdio` (needs
-`gcloud auth login` and `ochakai` on `PATH`; see [connecting an MCP
-client](../../docs/guides/mcp-clients.md#what-the-bridge-needs)) (Japanese).
+代わりに Claude Code の中で MCP ツールを使いたいなら、ブリッジにも
+proxy は要らない — `claude mcp add ochakai -- ochakai mcp-stdio`
+(`gcloud auth login` と `PATH` 上の `ochakai` が要る。
+[MCP クライアントを繋ぐ](../../docs/guides/mcp-clients.md#what-the-bridge-needs)
+を見よ)。
 
-Smoke test over REST through the [Cloud Run
-proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy),
-same as §3 (direct `curl` is blocked by IAM):
+§3 と同じ
+[Cloud Run proxy](https://cloud.google.com/sdk/gcloud/reference/run/services/proxy)
+経由で REST の smoke test を行う(直接の `curl` は IAM に阻まれる):
 
 ```sh
 gcloud run services proxy ochakai --region=$REGION --port=8787 &
 curl "http://localhost:8787/api/v1/search?q=revenue"
 ```
 
-## 5b. Optional: the team web UI behind IAP (separate service, by design)
+## 5b. 任意: IAP の背後の team web UI(意図して別サービス)
 
-The web UI runs as its own service, **not** inside `serve`, behind
+web UI は `serve` の中ではなく、**それ自身のサービス**として
 [Identity-Aware Proxy](https://cloud.google.com/iap/docs/enabling-cloud-run)
-— deploy it when people who cannot run the Go CLI need browser access.
-The commands, including recording the browser user instead of the
-service account, are in
-[The team web UI](../../docs/guides/operating.md#the-team-web-ui) in the
-operating guide.
+の背後で動く — Go の CLI を動かせない人がブラウザからのアクセスを必要
+とするときにデプロイする。サービスアカウントではなくブラウザの本人を
+記録することを含め、コマンドは運用ガイドの
+[The team web UI](../../docs/guides/operating.md#the-team-web-ui) にあ
+る。
 
-## 5c. Optional: an application that serves many people (delegated provenance)
+## 5c. 任意: 多くの人に使わせるアプリケーション(delegated provenance)
 
-Embedding ochakai in your own product — a data-analytics chat app, an
-internal agent with a web front end — hits a problem the §5 path does not:
-the application reaches Cloud Run with *its* service account, so every
-concept its users write is recorded as that one identity. Provenance, which
-is most of what ochakai sells, collapses.
+自分の製品に ochakai を組み込む — データ分析のチャットアプリ、web フ
+ロントエンドを持つ社内エージェント — と、§5 の経路には無かった問題に
+ぶつかる: アプリケーションは*自分の*サービスアカウントで Cloud Run に
+届くので、その利用者が書くすべての concept が、その一つの identity と
+して記録されてしまう。ochakai が売り物にしているものの大半である
+provenance が崩れる。
 
-The fix, the two-command setup, and everything else an application
-embedding the REST API needs — authenticating, delegated provenance,
-`Ochakai-Producer`, and safe concurrent writes — are in
-[Embedding the REST API](../../docs/guides/rest-integration.md)
-(Japanese).
+その直し方、二コマンドの設定、そして REST API を組み込むアプリケーシ
+ョンに要るその他すべて — 認証、delegated provenance、
+`Ochakai-Producer`、安全な同時書き込み — は
+[REST API を自分のサービスに組み込む](../../docs/guides/rest-integration.md)
+にある。
 
-## 5d. Optional: a public read-only demo (the one public posture)
+<a id="5d-optional-a-public-read-only-demo-the-one-public-posture"></a>
 
-Everything above says never `allUsers`, and that stays true for every
-deployment anyone can write to. A demo is the one exception, and only
-because of what it gives up: `OCHAKAI_MODE=public` reads no identity and
-implies no writes (design docs 0040, 0042) — a service that records
-nobody and writes nothing is the one kind safe to open to everyone.
+## 5d. 任意: 公開の read-only なデモ(唯一の public な姿勢)
 
-Seeding it, flipping the mode without a window in which a public service
-still believes a stranger's `Authorization` header, checking the flip
-landed, cost, what you give up, and taking it back down are all in
-[Public demo](../../docs/guides/operating.md#public-demo) in the
-operating guide.
+ここまでは一貫して `allUsers` を禁じており、それは書き込み可能なあら
+ゆるデプロイについて変わらない。デモだけが唯一の例外であり、それも手
+放すものがあるからこそ許される: `OCHAKAI_MODE=public` は identity を
+一切読まず、書き込みも伴わない(設計ドキュメント 0040、0042)— 誰も
+記録せず何も書き込まないサービスだけが、誰にでも開いて安全な唯一の種
+類である。
 
-## 6. Security hardening checklist
+種を入れること、公開サービスが見知らぬ相手の `Authorization` ヘッダー
+をまだ信じてしまう窓を作らずに mode を切り替えること、切り替えが反映
+されたことの確認、コスト、手放すもの、そして元に戻すことは、すべて運
+用ガイドの [Public demo](../../docs/guides/operating.md#public-demo)
+にある。
 
-The default §1–§5 deployment is already secret-zero and least-privilege.
-Org-policy guardrails, TLS enforcement, retiring the last password,
-backups, and deploy-time image gating that raise the bar further are in
-[Hardening](../../docs/guides/operating.md#hardening) in the operating
-guide.
+## 6. セキュリティ hardening のチェックリスト
 
-## 7. Troubleshooting in security-hardened organizations
+既定の §1–§5 のデプロイは、すでに secret-zero かつ least-privilege で
+ある。さらにハードルを上げる org-policy によるガードレール、TLS の強
+制、最後のパスワードの退役、バックアップ、デプロイ時のイメージ
+gating は、すべて運用ガイドの
+[Hardening](../../docs/guides/operating.md#hardening) にある。
 
-- **`allUsers` binding fails with "do not belong to a permitted customer"**:
-  the org enforces Domain Restricted Sharing
-  (`iam.allowedPolicyMemberDomains`). No normal deployment needs
-  `allUsers` (the webui goes behind IAP, §5b), so keep the policy on — if
-  you hit this while setting up §5d's demo, exempt that project rather
-  than the organization.
-- **`run.app` returns Google's HTML 404 ("That's an error") even though
-  the service is Ready**: before suspecting infrastructure, test a real
-  application endpoint (e.g. `/api/v1/search?q=x`) and check request
-  logs. Two Google Frontend behaviors conspire to make a healthy service
-  look dead:
-  1. `/healthz` is intercepted by Google Frontends on `run.app` and 404s
-     without ever reaching the container (and without request logs). Use
-     `/health`.
-  2. Application-level 404 responses are dressed up as Google's branded
-     404 page, so an unhandled path looks like a routing failure.
-  A genuinely unknown service URL returns a much shorter 404 page
-  (~272 bytes vs ~1.5 KB) — comparing `content-length` tells them apart.
-- **Container exits with `cloudsql.instances.get ... NOT_AUTHORIZED`**:
-  the service account is missing `roles/cloudsql.client` (§3, first step).
-- **Cloud SQL socket `connection refused` right after creating the
-  service account**: IAM grants on a freshly created service account can
-  take a minute to propagate. Verify the roles landed
-  (`gcloud projects get-iam-policy ... --filter=bindings.members:ochakai-run@`)
-  and redeploy.
+## 7. セキュリティを固めた組織でのトラブルシューティング
 
-## 8. Upgrading an existing deployment
+- **`allUsers` の binding が "do not belong to a permitted customer" で
+  失敗する**: 組織が Domain Restricted Sharing
+  (`iam.allowedPolicyMemberDomains`)を強制している。通常のデプロイ
+  に `allUsers` は要らない(webui は IAP の背後、§5b)ので、ポリシー
+  は on のままにする — §5d のデモを立てていてこれに当たったら、組織
+  ではなくそのプロジェクトを例外にする。
+- **サービスが Ready なのに `run.app` が Google の HTML 404
+  ("That's an error")を返す**: インフラを疑う前に、実際のアプリケー
+  ションのエンドポイント(例: `/api/v1/search?q=x`)を叩き、リクエス
+  トログを確認する。二つの Google Frontend の挙動が重なって、健全な
+  サービスが死んでいるように見える:
+  1. `/healthz` は `run.app` 上で Google Frontend に横取りされ、コン
+     テナに届くことなく(リクエストログも残さず)404 になる。
+     `/health` を使う。
+  2. アプリケーションレベルの 404 応答は Google のブランド付き 404
+     ページに装われるので、未対応のパスがルーティングの失敗に見え
+     る。
+  本当に存在しないサービス URL は、もっと短い 404 ページを返す
+  (~272 バイト対 ~1.5 KB)— `content-length` を比べれば見分けが付
+  く。
+- **コンテナが `cloudsql.instances.get ... NOT_AUTHORIZED` で終了す
+  る**: サービスアカウントに `roles/cloudsql.client` が無い(§3 の最
+  初の手順)。
+- **サービスアカウントを作った直後に Cloud SQL ソケットが
+  `connection refused` になる**: 作りたてのサービスアカウントへの
+  IAM 付与が反映されるまで 1 分ほどかかることがある。role が届いて
+  いるか確認し
+  (`gcloud projects get-iam-policy ... --filter=bindings.members:ochakai-run@`)、
+  再デプロイする。
 
-Point the service at the new tag; migrations run automatically at
-startup. The full upgrade path, including the version-specific breaking-
-change notes, is [Upgrades](../../docs/guides/operating.md#upgrades) in
-the operating guide.
+## 8. 既存デプロイのアップグレード
 
-## 9. Teardown
+サービスを新しいタグに向ける。マイグレーションは起動時に自動で走る。
+バージョンごとの breaking change の注意点を含む完全なアップグレード経
+路は、運用ガイドの
+[Upgrades](../../docs/guides/operating.md#upgrades) にある。
+
+## 9. 取り壊し
 
 ```sh
 gcloud run services delete ochakai --region=$REGION --quiet

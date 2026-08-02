@@ -2,9 +2,9 @@
 
 Backup and restore, hardening beyond the default, the team web UI,
 monitoring, capacity, supply chain, and upgrades — the Cloud Run guide's
-[§1–§5](../../deploy/cloudrun/README.md) build the deployment and cover
-the Google-side troubleshooting; this page is about running the thing
-afterwards.
+[§1–§5](../../deploy/cloudrun/README.md) (Japanese) build the deployment
+and cover the Google-side troubleshooting; this page is about running the
+thing afterwards.
 
 Where a number here is not measured, it says so. That is deliberate:
 ochakai is a small project, and an invented capacity figure would be
@@ -323,10 +323,11 @@ Release archives for the CLI carry the same attestations, plus a
 ## Hardening
 
 The default deploy guide walkthrough
-([§1–§5](../../deploy/cloudrun/README.md)) is already secret-zero and
-least-privilege — Cloud Run IAM, Google identities, explicit grants only,
-an empty authorized-networks list, provenance-attested images. The steps
-below raise the bar further; pick what matches your risk profile.
+([§1–§5](../../deploy/cloudrun/README.md), Japanese) is already
+secret-zero and least-privilege — Cloud Run IAM, Google identities,
+explicit grants only, an empty authorized-networks list,
+provenance-attested images. The steps below raise the bar further; pick
+what matches your risk profile.
 
 ### Private IP only
 

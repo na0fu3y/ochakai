@@ -179,7 +179,8 @@ in the version you are running.
   [Troubleshooting](docs/guides/troubleshooting.md)
 - **Running** — [Deploy with Terraform](deploy/terraform/README.md)
   (Japanese) ·
-  [the gcloud reference it runs](deploy/cloudrun/README.md) ·
+  [the gcloud reference it runs](deploy/cloudrun/README.md)
+  (Japanese) ·
   [Configuration](docs/configuration.md) (Japanese) ·
   [Operating](docs/guides/operating.md) ·
   [Golden query canary](docs/guides/golden-query-canary.md) (Japanese)

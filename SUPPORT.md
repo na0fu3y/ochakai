@@ -31,8 +31,8 @@ Most answers are already written down, and the docs are short enough to check:
 - [README](README.md) — what ochakai is, and the things it deliberately does
   not do. [docs/configuration.md](docs/configuration.md) (Japanese) has the
   requirements and every environment variable.
-- [deploy/cloudrun/README.md](deploy/cloudrun/README.md) — the full Cloud Run +
-  Cloud SQL walkthrough, including the hardening checklist.
+- [deploy/cloudrun/README.md](deploy/cloudrun/README.md) (Japanese) — the full
+  Cloud Run + Cloud SQL walkthrough, including the hardening checklist.
 - [docs/design/README.md](docs/design/README.md) — the index of numbered design
   docs (mostly Japanese), with [English summaries](docs/design/README.en.md)
   beside it. It says which document describes the current state of an area,

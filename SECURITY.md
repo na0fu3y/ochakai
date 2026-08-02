@@ -35,7 +35,8 @@ ochakai's security posture is deliberately narrow (see
 Especially interesting reports, given that design:
 
 - Ways a request could smuggle or spoof the forwarded identity when
-  deployed as documented in [deploy/cloudrun/README.md](deploy/cloudrun/README.md).
+  deployed as documented in
+  [deploy/cloudrun/README.md](deploy/cloudrun/README.md) (Japanese).
 - Anything that makes `OCHAKAI_MODE=dev` behavior reachable in a
   non-dev configuration.
 
