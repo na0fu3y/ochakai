@@ -31,15 +31,15 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
 | デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
-| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
+| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0069](0069-the-loop-and-what-measures-it.md) §2(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 と [0064](0064-rest-stops-at-api-v1.md) §5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本、`.md` は必須でバンドルパスの一部)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
-| 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
-| サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0062](0062-a-listing-is-not-a-search.md)(一つのコマンドが二役なら割る規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
+| 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0020](0020-attachment-search.md)(ファイル)、[0041](0041-path-scoped-search.md)(prefix)。スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則) |
 | Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0065](0065-identity-and-provenance.md) §5(プロキシと identity) |
-| 検証ループと利用測定 | [0056](0056-one-question-one-command.md)(裁定の面・綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング)、[0062](0062-a-listing-is-not-a-search.md)(一覧の CLI 面) |
+| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -191,11 +191,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   (繰り返し可・セグメント境界で照合・サブツリー全体)。サブツリーを
   1 コールで引き分けるための機構であって、閲覧の制限ではない
   (§4)。索引もマイグレーションも足さない。
-- [0037 宣言した期限と引用元から引けるようにする](0037-stale-and-source-lookup.md)
-  — **Accepted**。0036 が封筒に載せた
-  `stale_after` / `sources` を引けるようにする: `sort=stale_after` の
-  期限切れフィード(verify ではなく編集で空になる — 0025 の 2 フィードとの
-  違いは §2.2)と、引用元からの逆引き `source` フィルタ(+ GIN index)。
+- [0037 宣言した期限と引用元から引けるようにする](0037-stale-and-source-lookup.md) — **Superseded by 0069**。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) —
   **Superseded by 0043**(document-first への全面置き換え)。
   SPEC が定義するキーは封筒に持つ、と基準を引き直し、§5.1(`sources` /
@@ -305,23 +301,25 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 
 ## サーフェス(REST / MCP / CLI / Web UI)
 
-- [0004 リモート CLI](0004-cli.md) — **Accepted**。REST API の薄い
-  クライアントとしての CLI。
-- [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Accepted**。
-  データの出し入れを API 経由に一本化。DB 直結で残るのは `serve` のみ。
-- [0015 サーフェス一貫性の方針](0015-surface-consistency.md) —
-  **Accepted**。4 サーフェスの役割分担と、意図して実装しないもの。
-- [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md)
-  — **Accepted**、**BREAKING**。**第二の住所ではなく、最初から通行量の
-  無かった入口を降ろす**二件。`min_score`(REST・CLI)は**廃止** —
-  スコアはモード依存で較正されておらず(0051 §3.1 が同じ理由で閾値を
-  採らなかった)、同梱の唯一の利用者である recall フックが既定 0 = off
-  で渡していた。応答を絞る手段は較正の要らない `budget` が既に持って
-  いる。`fm.` は **MCP からだけ降ろす**(REST と CLI には残るので
-  0047 の語彙も導出も不変)— 同じ 944 文字の説明が 2 ツールに載って
-  スキーマ説明文の 14%(1,888 / 13,099 文字)を占め、接続するエージェント
-  が毎回払っていたのに、Web UI にも例にもフックにも通行の跡が無かった。
-  **ツール数は 8 のまま、エージェントが払う額だけが減る**(§4)。
+- [0067 四つの面と、それぞれが引き受けないもの](0067-four-faces-and-what-they-decline.md)
+  — **Accepted**。**面の配分の現行ドキュメント**(0004 / 0007 / 0015 /
+  0033 / 0039 の五冊を一冊にまとめたもので、決定は一つも動いていない)。
+  REST は唯一の契約、MCP のツール数は予算、CLI は完全性の面(能力の
+  完全性)、Web UI は BI ツールではない。CLI が REST の薄いクライアントで
+  あること、`mcp-stdio` が面ではなく経路であること、`context` の `hits` が
+  全面で順位に徹すること、そして**面ごとに意図して載せないもの**の一覧を
+  現行の語彙で持つ。
+- [0068 面はどう足され、どう降ろされるか](0068-how-a-face-is-added-and-removed.md)
+  — **Accepted**。**面を足す規則と降ろす規則の現行ドキュメント**(0050 /
+  0056 / 0058 / 0062 の四冊を一冊にまとめたもので、決定は一つも動いて
+  いない)。能力とコマンドは一対一(一つなら畳み、二つなら割る)、一覧は
+  検索ではない(cursor は一覧だけ、順位は `limit` が契約)、通行量の無い
+  入口は降ろす(`min_score` の廃止、`fm.` を MCP から)、裁定は
+  `POST /api/v1/review/{id}` 一本から下し `withdraw` 一語で言う。
+- [0004 リモート CLI](0004-cli.md) — **Superseded by 0067**。
+- [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Superseded by 0067**。
+- [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。
+- [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md) — **Superseded by 0068**。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
   **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは
@@ -342,100 +340,30 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   [0046](0046-bundle-address-space.md) §3.5 の代表表現の表を改訂する
   (概念の既定は JSON の View)。[docs/compatibility.md](../compatibility.md)
   を同 PR で書き換え、REST だけが「不安定」の対象から外れる。
-- [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
-  — **Accepted**。バイト予算の決定を記録し、`hits` から知識の複製を外す
-  (全サーフェスで `id`/`type`/`title`/`status`/`score` のみ)。REST の
-  応答形が変わる。
+- [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md) — **Superseded by 0067**。
 
 ## 検証ループと利用測定
 
-- [0050 一覧はカーソルでページングし、順位はしない](0050-listings-page-rankings-do-not.md)
-  — **Accepted**。フィード(0025 §6、0037 §2.1)と source 逆引き
-  (0037 §2.3)に不透明な keyset `cursor` を足し、`limit` の上限で
-  キューが静かに切れる状態を無くす。**検索は `limit` が契約のままで、
-  `cursor` を 400 で拒否する** — 順位は融合の窓であって再開できる順序では
-  ないという refusal(§2.2)。総件数は返さず、`cursor` の不在が終わりを
-  意味する(§2.3)。REST / MCP / CLI / Web UI の 4 面に載り、CLI が
-  ページを自分で歩かないことだけが意図的な省略(§4)。
-- [0062 一覧は検索ではない](0062-a-listing-is-not-a-search.md)
-  — **Accepted**、**BREAKING**。`ochakai search --sort` を廃し、一覧を
-  `ochakai list [feed]` に分ける。0056 の系の逆向き — **一つのコマンドが
-  二つの能力を持つなら、コマンドも二つ**。`search` は順位(クエリ必須、
-  `--limit` 10/50、cursor 無し)、`list` は全順序(フィードか逆引き、
-  `--limit` 100/1000、`--cursor` で進む)で、0050 が別物と決めた二つが
-  CLI でも別のコマンドになる。**ワイヤは動かない**(`sort=` も
-  `search_concepts` もそのまま)。語彙も動かない(`sort.*` の 4 語が
-  フラグ値からコマンド引数へ移るだけ)。CLI 25 → 26、FLAG 29 → 28。
-  `stats` が印字するコマンド文字列は `ochakai list …` になる
-  (0049 §3.4・0059 の印字形式を改訂)。
-- [0056 一つの問いに一つのコマンド、一つの裁定に一つの語](0056-one-question-one-command.md)
-  — **Accepted**、**BREAKING**。**裁定の面・綴り領域の現行ドキュメント**
-  (0055 の決定を §0 に統合する — REST の三つの裁定面を
-  `POST /api/v1/review/{id}` 一本にした決定)。ワイヤで畳んだ面が CLI にコマンドとして
-  残っていた二件を畳む: `ochakai backlinks` は
-  `ochakai search --links-to`(0046 §3.5 が REST 側を畳んだ先)へ、
-  `ochakai queues` は `ochakai stats` へ。**失われた能力は無い** —
-  各行が次に打つコマンドを持つことも `--exit-code` も `stats` に移り、
-  クエリ無しの `--links-to` はアドレス順の一覧のままである(§3.1、§3.2)。
-  第二の面が高くついていた証拠として、`backlinks --limit` のヘルプは
-  既に嘘になっており(消えた面の既定値を説明していた)、`queues` と
-  `stats` は同じ三つの数を違うキーで印字していた(§1)。あわせて却下の
-  取り消しの綴りを `withdraw` 一語にする — ワイヤの `withdrawn`
-  (0055 §3.2 が選んだ綴り)へ CLI・Web UI・リビジョンの `change` を
-  揃え、既存行はマイグレーション 0034 が書き換える(§3.3)。
-  **`verify` と `reject` は 2 本のまま** — 畳むのは能力が同じ二本で
-  あって、行為が違う二本ではない(§2)。0015 §2 の「CLI は完全性の面」
-  に、完全性とは能力の完全性であるという一行を足す。
+- [0069 検証ループと、それを測るもの](0069-the-loop-and-what-measures-it.md)
+  — **Accepted**。**検証ループと利用測定の現行ドキュメント**(0025 / 0029 /
+  0037 / 0049 / 0051 / 0059 の六冊を一冊にまとめたもので、決定は一つも
+  動いていない)。空にできる三つのキューと、キューではない `verified_at`。
+  失敗報告は証拠にもとづく陳腐化、`stale_after` は書き手の宣言なので編集で
+  しか空かない。利用測定は読み取りパスに触れず best-effort、ヒット 0 の検索は
+  行として残り、`GET /api/v1/stats` がインスタンスを一回で答える
+  (`prefix` はミス以外のすべてを絞る)。押すのは数であって通知ではない。
+- [0050 一覧はカーソルでページングし、順位はしない](0050-listings-page-rankings-do-not.md) — **Superseded by 0068**。
+- [0062 一覧は検索ではない](0062-a-listing-is-not-a-search.md) — **Superseded by 0068**。
+- [0056 一つの問いに一つのコマンド](0056-one-question-one-command.md) — **Superseded by 0068**。
 - [0055 裁定は一つの面から下す](0055-one-ruling-one-face.md) —
   **Superseded by 0056**。verify / reject / 却下の解除という構造の
   同じ三つの REST 面を `POST /api/v1/review/{id}` 一本にした最初の
   決定。0056 §0 に吸収された。
-- [0049 キューの長さを数える](0049-queue-counts.md) — **Accepted**。
-  0025 と 0037 の 3 本のフィードを一覧せずに**数える**ことと、空でない
-  間 2 で終了する `--exit-code`。空にできないカナリアのフィードは数えない
-  (§3.2)。配送・スケジューラ・閾値は持たず、押すのは運用者の cron / CI で
-  ある(§4)という refusal を含む。
-- [0059 キューは、それを一覧する sort の名で呼ぶ](0059-a-queue-is-named-by-its-listing.md)
-  — **Accepted**、**BREAKING**。0049 が数えた 3 つのキューのうち 2 つは、
-  それを一覧する `sort` とは別の綴りを持っていた — `stats` の各行が
-  「`reported_wrong` が 1 件、見るには `--sort failed`」と印字しており、
-  **行そのものが二つの名前を指す証拠になっていた**。`reported_wrong` →
-  `failed`、`past_expiry` → `stale_after` に改名する。方向がこちらなのは
-  sort 側の綴りが既にある語の使い回しだからで(`failed` は report する
-  outcome の値、`stale_after` は OKF SPEC §5 の frontmatter キー)、
-  キュー側の 2 語は**そのためだけに存在する発明語**だった。`drafts` は
-  単一の sort ではない(`sort=usage` + `status=draft`)ので据え置く。
-  あわせて surface.md の VOCAB の数え方に、既存規則の裏面を足す —
-  「一つの綴りが二つの族で別の意味を持つなら 2 語」に対して、
-  **「一つのものが二つの名前を着ているなら 1 語」**。VOCAB は 38 → 36。
-- [0025 書き戻しループを締める](0025-closing-the-loop.md) — **Accepted**。
-  検証の時効と、failed 報告・利用実績による再検証の優先順位づけ。内容の
-  変わらない PUT では再検証を表現できないので、記録は独立した操作にする —
-  0015 §4 の verify 糖衣の判断はここが覆した。
-- [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md)
-  — **Accepted**。利用イベントをメモリにバッファして定期フラッシュし、
-  利用統計は best-effort と明示する(上限超過は破棄、シャットダウンは
-  ドレイン後に最終フラッシュ)。
-- [0051 答えられなかった問いを記録し、ループをインスタンスで測る](0051-instance-metrics-and-search-misses.md)
-  — **Accepted**。0049 がキューの**長さ**(残量)を数えた上で、まだ
-  答えの無かった**通過量と姿**を足す。測定が per-entry しか無く、しかも
-  ヒット 0 の検索は捨てられていた(紐づけるエントリが無かった)状態を、
-  2 つの器で埋める: **ミスという行**(0029 と同じバッファ・同じ刈り取り、
-  クエリ文字列は 500 バイトまで)と、**インスタンスを 1 回で答える
-  `GET /api/v1/stats`**(status / trust 別の内訳、窓の中の検証・報告・
-  ミス、答えの無かった問い上位 10 件)。キューの深さは 0049 §3.1 が
-  空けた場所に `queues` として同じ問い合わせのまま載る — 同じキューを
-  2 度数えない。集計面はこの 1 つで、`prefix` はエントリに紐づく数
-  (`entries` / `queues` / `review` / `outcomes`)をすべて絞る。
-  **`misses` だけは絞られない** — ヒット 0 の検索には結びつく id が
-  存在しないからで、これは §2 の「答えられたかはインスタンスの属性」の
-  帰結である(§3.7)。ロールアップを持たずオンデマンドで計算し、保持期間を
-  超える窓は黙って短く答えず 400 で拒否する。ミスは「0 件」と定義し、
-  スコア閾値は採らない(スコアは検索モード間で未較正)。
-  CLI は `ochakai stats --prefix`(nudge は 0049 の `queues` のまま)、Web UI は
-  Review 画面のタイル、**MCP には載せない**。クエリ文字列の保存は
-  初めてなので `OCHAKAI_RECORD_MISSES` で止められ、公開デプロイ(0042)
-  では記録しない。
+- [0049 キューの長さを数える](0049-queue-counts.md) — **Superseded by 0069**。
+- [0059 キューは、それを一覧する sort の名で呼ぶ](0059-a-queue-is-named-by-its-listing.md) — **Superseded by 0069**。
+- [0025 書き戻しループを締める](0025-closing-the-loop.md) — **Superseded by 0069**。
+- [0029 利用測定を読み取りパスから外す](0029-usage-recording-off-the-read-path.md) — **Superseded by 0069**。
+- [0051 答えられなかった問いを記録する](0051-instance-metrics-and-search-misses.md) — **Superseded by 0069**。
 
 ## 同時実行と削除
 
@@ -462,7 +390,4 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   公開第二サービス。再実装時はこの設計が出発点。
 - [0012 MCP OAuth コネクタサービスの撤去](0012-retire-mcp-oauth-connector.md)
   — **Accepted**。同サービスの撤去。0002 §4 の「必要になったら」に回帰。
-- [0039 stdio クライアントへの橋](0039-mcp-stdio-bridge.md) —
-  **Accepted**。0012 が残した穴(stdio しか話せないクライアントに
-  経路が無い)を、公開サービスではなく CLI の `mcp-stdio` で埋める。
-  JSON-RPC をメッセージ単位で素通しするので、ツール定義を複製しない。
+- [0039 stdio クライアントへの橋](0039-mcp-stdio-bridge.md) — **Superseded by 0067**。

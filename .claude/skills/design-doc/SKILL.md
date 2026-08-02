@@ -80,7 +80,7 @@ Status: Accepted(YYYY-MM-DD)。[00XX](00XX-….md) を Superseded にし、
 Date: YYYY-MM-DD
 ```
 
-Use 0038 or 0015 as models for the header style.
+Use 0038 or 0067 as models for the header style.
 
 **Keep it under the ceiling.** CONTRIBUTING.md declares a `RECORD-LINES:`
 number and `TestDesignRecordsStayUnderTheirCeiling` reads it back; the
@@ -154,7 +154,7 @@ and what can be folded away in exchange. `cmd/ochakai/surface_test.go` fails unt
 what the build offers — the failure prints the section as it should read,
 so the bookkeeping is free and the judgment is the part to spend on.
 
-If the change adds or changes a feature, [0015](../../../docs/design/0015-surface-consistency.md)
+If the change adds or changes a feature, [0067](../../../docs/design/0067-four-faces-and-what-they-decline.md)
 requires the PR to state, per surface, where it lands — **including the
 deliberate omissions**:
 

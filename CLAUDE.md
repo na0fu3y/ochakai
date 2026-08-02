@@ -72,7 +72,7 @@ widens a surface, answer that document's three questions in the PR
 description: who actually got stuck, whether an existing surface already
 covers it (if it does, don't add), and what can be folded away in
 exchange. Per-surface defaults are
-[0015 §3.1](docs/design/0015-surface-consistency.md) — REST is the only
+[0067](docs/design/0067-four-faces-and-what-they-decline.md) — REST is the only
 contract, CLI is the completeness surface, MCP's default is *no* because
 tool schemas are paid for out of the agent's context window, and the web
 UI is a curation surface rather than a BI tool. Proposing the smaller
@@ -97,7 +97,7 @@ fuzzing.
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
   in sync.
 - New features must land consistently across surfaces per
-  [docs/design/0015](docs/design/0015-surface-consistency.md)
+  [docs/design/0067](docs/design/0067-four-faces-and-what-they-decline.md)
   (REST / MCP / CLI / Web UI — including deliberate omissions), and
   [docs/surface.md](docs/surface.md) has to stay true to what shipped.
 - Write commit messages and code comments in English.

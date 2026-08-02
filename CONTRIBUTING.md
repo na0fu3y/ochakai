@@ -451,8 +451,31 @@ sections (§8, §9) carry the four decisions, one migration, and the
 scope boundary that keeps the CLI's `attach`/`detach` commands out of
 it — the same shape §7 itself used for the same reason.
 
-    RECORD-COUNT: 63
-    RECORD-CORPUS-LINES: 8037
+63 → 66 while 8,037 → 6,347 is the same consolidation reaching the two
+areas that had nine current records apiece. Fifteen records became three —
+0067 (what each surface is for), 0068 (the rules that add and retire a
+face) and 0069 (the loop and what measures it) — and the pattern that
+made an area-by-area pass impossible is worth recording: **four of those
+fifteen carried a general rule and a topical decision in one record**.
+0058 held "an entrance nobody arrives through comes down" beside removing
+`min_score`; 0062 held "two capabilities, two commands" beside adding
+`ochakai list`. A record cannot be split — it can only be superseded — so
+consolidating the surface area and the loop area separately would have
+left each pointing into the other's record. They were done as one pass.
+
+The other finding is what a consolidation is for. **Six of the fifteen
+were teaching spellings that no longer exist**: 0015's list of deliberate
+omissions was written entirely in `search_knowledge` / `get_attachment` /
+`POST /api/v1/knowledge`, 0049 taught `ochakai queues` and
+`queues.reported_wrong`, 0051 taught `OCHAKAI_PUBLIC_READ_ONLY`, and
+0058's compatibility note said an unknown query parameter is ignored —
+which 0064 §2 had since reversed. Every one of those records had a
+`Status:` header several revisions long, and none of the headers reached
+the prose. A record is immutable, so the only way its body stops lying is
+for something to supersede it.
+
+    RECORD-COUNT: 66
+    RECORD-CORPUS-LINES: 6347
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
