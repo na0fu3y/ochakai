@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5044
+- DOC-LINES: 5010
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -548,6 +548,17 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 ([faq.md](faq.md) 自身の規則)という代金を払っていた。持ち主を一つに決め、
 残りを一行のリンクに畳んで、#374 の削減が出ている。
 
+5,015 → 4,980 は architecture.md の畳み込みである
+([#447](https://github.com/na0fu3y/ochakai/issues/447))。「これは何か」は
+README の第三の写しだったので README に 2 行だけ残して消え、書き戻し
+ループの節は [loop.md](loop.md) が所有する内容だったのでポインタに畳んだ
+— 残したのは loop.md に無い二つ、**検証が更新ではなく独自の操作である
+理由**と、`stale_after` が編集でしか片づかない理由である。
+**この行は、下げ方向のラチェットが初めて仕事をした記録でもある** —
+畳み込みで 46 行返ったとき、天井をそのままにした PR は
+`DOC-LINES-SLACK` を超えて落ちた。0035 の流儀どおり、規約ではなく CI が
+そう言った。
+
 5,000 → 5,015 は C8 の最初の一ページ、[loop.md](loop.md) を日本語に
 した分である([#398](https://github.com/na0fu3y/ochakai/issues/398))。
 **上がった理由が、この節にとっては発見である** — 翻訳は行数を減らすと
@@ -557,16 +568,17 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 残りのページを日本語にしていく作業は、`DOC-LINES` を下げてはくれない —
 下げるのは畳み込みだけである。
 
-5,015 → 5,044 は C8 の二枚目、
+4,980 → 5,010 は C8 の二枚目、
 [configuration.md](configuration.md) を日本語にした分である
-([#438](https://github.com/na0fu3y/ochakai/issues/438))。ページ自身は 75
-→ 84 行、9 行増えている。次の 7 行はページ自身ではなく、それを指す九つの
+([#438](https://github.com/na0fu3y/ochakai/issues/438))。[#447](https://github.com/na0fu3y/ochakai/issues/447)
+の畳み込みの後を継いでいる。ページ自身は 75 → 84 行、9 行増えている。
+次の 7 行はページ自身ではなく、それを指す九つの
 文書から来た — `#requirements`・`#environment-variables`・
 `#authentication-has-no-configuration` という三つのアンカーを README・
 SECURITY・deploy の両ガイド・SUPPORT・architecture・faq・
 rest-integration・docs/README が指しており、そのどれにも `(Japanese)` を
 足す必要があった。loop.md にはこの被リンクが一本も無かったので、翻訳の
-代金がページの外にも出ることは今回初めて見えた。残る 13 行はこの段落
+代金がページの外にも出ることは今回初めて見えた。残る 14 行はこの段落
 自身の分で、DOC のほかの段落と同じくここに数えている。
 
 [#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
