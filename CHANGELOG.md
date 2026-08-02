@@ -191,10 +191,12 @@ last entry.
   `DOC-LINES` ceiling moves 5,100 → 5,200. Its eight linked headings
   (`#backup-and-restore`, `#capacity`, `#supply-chain`, `#hardening`,
   `#guardrails-against-misconfiguration`, `#the-team-web-ui`,
-  `#public-demo`, `#upgrades`) keep their anchors, and every English page
-  that links to it — `README.md`, `ROADMAP.md`, `docs/compatibility.md`,
-  `docs/faq.md` and `deploy/cloudrun/README.md` — is now marked
-  `(Japanese)`. One capacity claim ("20 files per concept") was already
+  `#public-demo`, `#upgrades`) keep their anchors, and every remaining
+  English page that links to it — `README.md`, `ROADMAP.md`,
+  `docs/compatibility.md` and `docs/faq.md` — is now marked `(Japanese)`.
+  `deploy/cloudrun/README.md`'s own translation (#464) landed first and
+  needs no mark either way, since both pages are Japanese now. One
+  capacity claim ("20 files per concept") was already
   stale before translation — the cap was removed in `[0.16.0]` below —
   and is left in English pending issue
   [#466](https://github.com/na0fu3y/ochakai/issues/466) rather than

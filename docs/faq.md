@@ -5,7 +5,7 @@ Answers that the README implies but never states in one place.
 Several questions here are really about an area another page owns, and
 those get a short answer and a link rather than a second copy — **"why
 not just use X?" is [positioning](positioning.md), every symptom is
-[troubleshooting](guides/troubleshooting.md), every setting is
+[troubleshooting](guides/troubleshooting.md) (Japanese), every setting is
 [requirements and configuration](configuration.md) (Japanese).** Two texts
 saying the same thing means one of them is out of date and nobody can
 tell which.

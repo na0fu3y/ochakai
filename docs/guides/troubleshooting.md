@@ -1,14 +1,15 @@
-# Troubleshooting
+# トラブルシューティング
 
-Symptoms on the local and client side. Google Cloud symptoms — the GFE
-intercepting `/healthz`, `NOT_AUTHORIZED`, IAM propagation delays — are
-[§7 of the deploy guide](../../deploy/cloudrun/README.md). MCP clients
-that will not connect at all are in
-[Connecting an MCP client](mcp-clients.md) (Japanese).
+ローカルとクライアント側の症状。Google Cloud 側の症状 — `/healthz` を
+GFE が横取りする、`NOT_AUTHORIZED`、IAM の伝播遅延 — は
+[デプロイガイドの §7](../../deploy/cloudrun/README.md)にある。MCP
+クライアントがまったく繋がらない場合は
+[MCP クライアントを繋ぐ](mcp-clients.md)にある。
 
-Start with `ochakai whoami`. It prints the whole client-side situation in
-four lines — which server, from where that choice came, as whom, and
-whether the server answers:
+まず `ochakai whoami` から始める。クライアント側の状況をまるごと四行で
+示す — どのサーバーか、その選択がどこから来たか、誰として、そして
+サーバーが応答するか(`$OCHAKAI_PRODUCER` が設定されていれば
+`producer:` の行が五行目として加わる):
 
 ```
 server:    http://localhost:8080 ($OCHAKAI_URL)
@@ -17,159 +18,173 @@ health:    ok
 mode:      read-write
 ```
 
-## The CLI
+## CLI
 
-**`ochakai: unknown command "--url"`.** Flags go after the subcommand, not
-before it: `ochakai whoami --url http://localhost:8080`, never
-`ochakai --url … whoami`. The first word after `ochakai` is always a
-command.
+**`ochakai: unknown command "--url"`。** フラグはサブコマンドの後に置く、
+前ではない: `ochakai whoami --url http://localhost:8080` であり、
+`ochakai --url … whoami` ではない。`ochakai` の直後の単語は常に
+コマンドである。
 
-**`health: error: … connect: connection refused`.** The server named on
-the `server:` line is not listening. That line also says where the choice
-came from — `$OCHAKAI_URL`, `--url`, or the `ochakai use` selection — which
-is usually the actual bug: a shell that still exports `OCHAKAI_URL` from an
-earlier session overrides `ochakai use` every time.
+**`health: error: … connect: connection refused`。** `server:` 行に
+出ているサーバーが listen していない。その行はその選択がどこから来たか
+も示す — `$OCHAKAI_URL`、`--url`、あるいは `ochakai use` の選択 —
+そして実際のバグはたいていここにある: 以前のセッションから
+`OCHAKAI_URL` を export したままのシェルは、毎回 `ochakai use` を
+上書きする。
 
-**Writes fail with 403 and `mode:` says `read-only`.** The deployment sets
-`OCHAKAI_MODE` (`read-only` or `public`). Every write is refused, including yours as the
-operator; it is a property of the deployment, not of the caller.
+**書き込みが 403 で失敗し、`mode:` が `read-only` を示す。** デプロイが
+`OCHAKAI_MODE`(`read-only` または `public`)を設定している。運用者で
+あるあなたのものも含め、すべての書き込みが拒否される — それは呼び出し
+側ではなくデプロイの性質である。
 
-## Search
+## 検索
 
-**`search needs a query`, HTTP 400.** A search wants either a query or a
-`sort` that lists without one (`verified_at`, `usage`, `failed`,
-`stale_after`), or a `--source` to list what cites a resource. Listing
-everything is deliberately not a mode.
+**`search needs a query`、HTTP 400。** search はクエリか、クエリなしで
+一覧できる `sort`(`verified_at`、`usage`、`failed`、`stale_after`)か、
+あるリソースを引用しているものを列挙する `--source` のいずれかを必要と
+する。すべてを一覧するモードは意図的に存在しない。
 
-**Search returns nothing on a base that has concepts.**
+**concept があるはずのベースで検索が何も返さない。**
 
-- *A Japanese query of only hiragana returns no hits.* The lexical half
-  cuts Japanese into two-character windows and keeps only the ones
-  carrying a kanji or katakana, because an all-hiragana window is grammar
-  and would match nearly everything. Search for the noun, not the
-  particle — or check that embeddings are on (see the startup lines under
-  [Startup](#startup): on Google Cloud they are the default, but only if
-  the service identity may call Vertex AI).
-- *An English question returns the wrong concepts.* Lexical search is a bag
-  of words: a concept sharing three function words can outrank the one that
-  names the subject. This is the case embeddings fix.
-- *Nothing matches a term you know is stored.* Rejected and soft-deleted
-  concepts are excluded from default search, and `--status` narrows
-  further. Drop the filters before concluding the concept is missing.
-- *Embeddings are on but ranking did not change.* Vectors are written when
-  a concept is written, so concepts that predate the setting have none. Run
-  `ochakai reembed`.
+- *ひらがなだけの日本語クエリがヒットしない。* lexical 側は日本語を
+  二文字の窓に切り、漢字かカタカナを含む窓だけを残す — ひらがなだけの
+  窓は文法であり、ほとんど何にでもマッチしてしまうからである。助詞では
+  なく名詞で検索する — あるいは embeddings が on になっているか確認する
+  ([起動](#startup)の下の起動ログを見る: Google Cloud では既定で on
+  だが、それはサービス identity が Vertex AI を呼べる場合に限る)。
+- *英語の質問が的外れな concept を返す。* lexical 検索は bag of words
+  であり、機能語を三つ共有する concept が、主題そのものを言い当てている
+  concept より上位に来ることがある。これは embeddings が直す場合であ
+  る。
+- *保存されているはずの語が何にもマッチしない。* rejected と
+  soft-delete された concept は既定の検索から除外され、`--status` は
+  さらに絞り込む。concept が無いと結論する前にフィルタを外す。
+- *embeddings は on なのにランキングが変わらない。* vector は concept
+  が書かれたときに書かれるので、その設定より前からある concept には
+  ベクトルが無い。`ochakai reembed` を実行する。
 
-**Scores look meaningless.** They are an ordering, not a measure, and they
-are not comparable between the lexical and hybrid modes. To bound a
-response, use `budget` rather than a score floor.
+**スコアが無意味に見える。** それは尺度ではなく順序であり、lexical と
+hybrid のモード間で比較できない。レスポンスを絞るには、スコアの下限で
+はなく `budget` を使う。
 
-## Writing concepts
+## concept の書き込み
 
-**412 on `put --only-if-new`.** A live concept already has that id —
-including a `rejected` one. Drop `--only-if-new`, or pick another id.
-Writing over a *soft-deleted* concept revives it, with its prior history
-intact; over MCP, reviving one that was verified, rejected or deprecated
-before deletion is refused instead, because it would put a fresh draft
-where a recorded ruling used to be. REST and the CLI allow that revival:
-they are the surfaces a human curates from.
+**`put --only-if-new` で 412。** その id はすでに live な concept が
+持っている — `rejected` のものも含む。`--only-if-new` を外すか、別の
+id を選ぶ。*soft-delete* された concept への書き込みは、それ以前の
+履歴を保ったまま蘇らせる。MCP 経由では、削除前に verified・rejected・
+deprecated だったものを蘇らせることは拒否される — 記録済みの判断が
+あった場所に真新しい draft を置くことになるからである。REST と CLI
+はその蘇りを許す: どちらも人間がキュレーションする面である。
 
-**404 on `put --if-match`.** `--if-match` replaces a concept that exists;
-it does not create one.
+**`put --if-match` で 404。** `--if-match` は既存の concept を置き
+換えるものであり、新規作成はしない。
 
-**412 on `put --if-match`.** The `If-Match` you sent is not the concept's
-current `ETag` — somebody wrote in between. Re-read the concept, reapply
-your change and retry. Nothing was written.
+**`put --if-match` で 412。** 送った `If-Match` が concept の現在の
+`ETag` と一致していない — 間に誰かが書き込んでいる。concept を読み
+直し、変更を当て直して再試行する。何も書き込まれていない。
 
-**`invalid type "…"`.** A type is one line, no `/`, up to 128 bytes. Any
-value that fits is legal — the recommended vocabulary is a recommendation,
-not a closed set — but a multi-line string is not.
+**`invalid type "…"`。** type は一行、`/` を含まず、128 バイトまで。
+収まる値ならどれも合法である — 推奨語彙はあくまで推奨であり閉じた集合
+ではない — が、複数行の文字列は合法ではない。
 
-**An agent gets `cannot update … it is verified`.** Working as intended:
-MCP refuses to overwrite or delete curated concepts. See the
-[FAQ](../faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified).
+**エージェントが `cannot replace … it is verified` を受け取る。** 意図
+通りの動作: MCP は curate 済みの concept の上書きや削除を拒否する。
+[FAQ](../faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified)
+を参照。
 
-## Import and export
+## インポートとエクスポート
 
-**`import` reports files skipped.** Every skip is printed to stderr with a
-`skip:` prefix and counted in the summary
-(`imported N entries (… , M skipped)`). The reasons:
+**`import` がファイルのスキップを報告する。** スキップは `skip:` の
+プレフィックスを付けて stderr に出力され、サマリで数えられる
+(`imported N concepts (…, M skipped)`)。スキップに見えて数えられない
+二つのこと: frontmatter に `type` が無いファイルはスキップではない —
+type はパスから推測されることは無いので(design doc 0017)、代わりに
+素の bundle ファイルとしてインポートされる。予約済みの `index.md`・
+`log.md`、あるいは隠しパスは黙って捨てられ、出力にも件数にも現れない。
+スキップであるもの:
 
-- the file has no `type` in its frontmatter — the type is never inferred
-  from the path (design doc 0017);
-- it is a reserved `index.md` or `log.md`, or a hidden path;
-- the server rejected it, in which case the message carries the server's
-  own complaint, and the rest of the bundle still imports;
-- it is a file whose concept was not imported.
+- ファイルがそもそも保存できない — 空、サイズ上限超過、あるいは住所に
+  できないパス;
+- サーバーが拒否した場合。このときメッセージはサーバー自身の文句を
+  運び、bundle の残りはそのままインポートされる;
+- その concept がインポートされなかったファイルである。
 
-**Everything imported one directory deeper than expected.** The packed
-shape is the structure: an archive wrapped in a single directory imports
-under that directory, so a bundle keeps its own namespace. That is
-deliberate — unwrap the archive first if you did not want it.
+**すべてが想定より一段深いディレクトリにインポートされる。** 詰められ
+た形がそのまま構造になる: 単一のディレクトリで包まれたアーカイブは、
+そのディレクトリの下にインポートされる — bundle が自分の namespace を
+保つためである。これは意図的な挙動であり、望まないならアーカイブを
+先に展開する。
 
-**Import says `unchanged`.** Concepts identical to what is stored are left
-alone rather than rewritten, so a re-import does not fill the revision
-history with copies.
+**Import が `unchanged` と言う。** 保存済みのものと同一の concept は
+そのままにされ、書き直されない — 再インポートが revision の履歴を
+コピーで埋めないようにするためである。
 
-## Files
+## ファイル
 
-**501 on attach.** The instance has no `OCHAKAI_GCS_BUCKET`, so it stores
-markdown concepts only. This is a whole-deployment setting, not a
-per-request one.
+**attach で 501。** そのインスタンスには `OCHAKAI_GCS_BUCKET` が無く、
+markdown の concept しか保存できない。これはリクエスト単位ではなく
+デプロイ全体の設定である。
 
-**A file is refused.** Only for its size: 5 MiB per file is the limit,
-and there is no limit on how many. No media type is refused — a bundle
-whose files come back missing is not the bundle you handed over. What a
-file *is* is decided by sniffing the bytes, never by what the client
-claims, and what a browser may do with it is decided when it is served:
-an image, a PDF or plain text renders in place, and everything else is
-handed over as a download under a sandbox, so an SVG or an HTML file has
-no origin to run script in.
+**ファイルが拒否される。** 理由はサイズだけである: 1 ファイルあたり
+5 MiB が上限で、件数に上限は無い。メディアタイプを理由に拒否される
+ことは無い — ファイルが消えて戻ってくる bundle は、渡したはずの
+bundle ではない。ファイルが *何であるか* はバイト列を sniff して決ま
+り、クライアントの申告では決まらない。ブラウザがそれで何をしてよいか
+は配信時に決まる: 画像・PDF・プレーンテキストはその場でレンダリング
+され、それ以外はすべて sandbox 下のダウンロードとして渡される — SVG
+や HTML ファイルがスクリプトを走らせる origin を持つことは無い。
 
-**File contents do not turn up in search.** Filenames match in every
-search, but contents join only when embeddings are on, and images and PDFs
-need a file-capable model (`gemini-embedding-2`, with
-`OCHAKAI_VERTEX_LOCATION` set to `global`, `us` or `eu`). Files that
-predate the setting are not backfilled — `ochakai reembed`.
+**ファイルの中身が検索に出てこない。** ファイル名はどの検索でも常に
+マッチするが、中身は embeddings が on のときだけ合流し、画像や PDF は
+ファイルに対応したモデル(`gemini-embedding-2`、`OCHAKAI_VERTEX_LOCATION`
+を `global`・`us`・`eu` のいずれかに設定)を必要とする。その設定より
+前からあるファイルは遡って埋められない — `ochakai reembed`。
 
-## The web UI
+## Web UI
 
-**The UI is empty though the API has concepts.** `ochakai ui` serves the UI
-against the server *it* selected, which is not necessarily the one your
-last curl went to. Its startup line and `ochakai whoami` both say which.
+**API には concept があるのに UI が空。** `ochakai ui` は *自分が*
+選んだサーバーに対して UI を配信する — それは直前に curl した先とは
+限らない。起動時のログと `ochakai whoami` のどちらもどのサーバーかを
+示す。
 
-**Edits are recorded as the wrong identity.** `ochakai ui` acts as you on
-loopback. A deployed `ochakai serve-ui` records the service account
-instead, unless `OCHAKAI_IAP_AUDIENCE` is set and the webui's service
-account is listed in the server's `OCHAKAI_DELEGATING_CALLERS`, which is
-what turns browser edits into `human:you via process:webui-sa` (design doc
-0032).
+**編集が誤った identity で記録される。** `ochakai ui` は loopback では
+あなたとして振る舞う。デプロイされた `ochakai serve-ui` は代わりに
+サービスアカウントを記録する — `OCHAKAI_IAP_AUDIENCE` が設定され、
+webui のサービスアカウントがサーバーの `OCHAKAI_DELEGATING_CALLERS`
+に載っている場合を除く。それがブラウザでの編集を
+`human:you via process:webui-sa` に変える(design doc 0032)。
 
-## Startup
+<a id="startup"></a>
 
-**Semantic search went quiet after an embedding change.** Changing
-`OCHAKAI_EMBEDDING_DIM` on a database that already holds vectors rebuilds
-the vector tables at the new width and says so in the log: the old
-vectors were in a space nothing would query, and a vector is derived from
-the concept it describes, so nothing curated is lost (design doc
-[0053](../design/0053-embeddings-by-default.md) §3). The tables come back
-empty on purpose — run `ochakai reembed` to refill them, which is the
-step that spends money. Ranking is lexical-only until it finishes.
+## 起動
 
-**`pgvector is required for semantic search, and this role may not create
-it`.** Create `vector` once as an admin — the deploy guide's §3 bootstrap
-SQL does exactly this. A deployment that named `OCHAKAI_VERTEX_PROJECT`
-refuses to start until you do, because it asked for semantic search; one
-that discovered its project logs this and runs lexical-only.
+**embedding の設定変更後、semantic search が静かになった。** すでに
+vector を持つデータベースで `OCHAKAI_EMBEDDING_DIM` を変更すると、
+vector テーブルは新しい次元で再構築され、それがログに残る: 古い
+vector は誰も問い合わせない空間にあったものであり、vector は元の
+concept から導出されるものなので、curate されたものは何も失われない
+(design doc [0053](../design/0053-embeddings-by-default.md) §3)。
+テーブルは意図的に空で戻ってくる — `ochakai reembed` を実行して埋め
+直す、これがお金を使う工程である。それが終わるまでランキングは
+lexical のみになる。
 
-**Logs say `semantic search off: Vertex AI did not answer for this
-deployment`.** The startup probe was refused — almost always a service
-identity without `roles/aiplatform.user`, or `aiplatform.googleapis.com`
-not enabled. Grant it and restart (deploy guide §4); embeddings are the
-default on Google Cloud, but only IAM can actually turn them on.
+**`pgvector is required for semantic search, and this role may not
+create it`。** 管理者として一度 `vector` を作成する — デプロイガイドの
+§3 の bootstrap SQL がまさにそれを行う。`OCHAKAI_VERTEX_PROJECT` を
+指定したデプロイは、それをするまで起動を拒否する — semantic search を
+求めたからである。プロジェクトを自動検出しただけのデプロイはこれを
+ログに残して lexical のみで動く。
 
-**Logs say `files disabled` or one of the `semantic search off…`
-lines.** Those are the startup lines confirming which subsystems this
-instance does not have. They are informational, and they are the fastest
-way to check what a running instance actually has enabled —
-[operating.md](operating.md) lists what each of them means.
+**ログに `semantic search off: Vertex AI did not answer for this
+deployment` と出る。** 起動時のプローブが拒否された — ほとんどの場合、
+サービス identity に `roles/aiplatform.user` が無いか、
+`aiplatform.googleapis.com` が有効化されていない。付与して再起動する
+(デプロイガイド §4): embeddings は Google Cloud では既定で on だが、
+実際に on にできるのは IAM だけである。
+
+**ログに `files disabled` や `semantic search off…` のいずれかの行が
+出る。** これらは、そのインスタンスが持っていないサブシステムを確認
+する起動時のログである。あくまで情報であり、稼働中のインスタンスが
+実際に何を有効にしているかを確かめる一番速い方法でもある — それぞれ
+の意味は[operating.md](operating.md)にまとまっている。
