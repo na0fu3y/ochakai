@@ -24,7 +24,7 @@ import (
 // caller can spend a round trip on.
 type ContextResult struct {
 	Hits      []domain.ContextRank    `json:"hits"`
-	Entries   []domain.View           `json:"entries"`
+	Concepts  []domain.View           `json:"concepts"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 }
@@ -130,7 +130,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	}
 	s.recordUsage(ctx, domain.EventFetched, ids)
 	return &ContextResult{
-		Hits: domain.ContextRanks(hits), Entries: kept,
+		Hits: domain.ContextRanks(hits), Concepts: kept,
 		Outline: outline, Truncated: len(outline),
 	}, nil
 }

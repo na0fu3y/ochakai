@@ -130,10 +130,8 @@ last entry.
     JSON key on `View`, `SearchHit` and `ReembedResult`; the archive
     address's `?attachments=` query parameter (now `?files=`); the MCP
     tool `get_attachment` (now `get_file`) and its result key
-    (`attachment` → `file`). `entries` is unaffected —
-    design doc [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md)
-    §3.2 already exempted it, and that stands. The CLI followed past the
-    wire too: `ochakai export --no-attachments` is now `--no-files`.
+    (`attachment` → `file`). The CLI followed past the wire too:
+    `ochakai export --no-attachments` is now `--no-files`.
   - `ochakai import`'s summary line, and its `--dry-run` twin, traded
     `%d attachments, %d files` for `%d attributed, %d loose`. Not a
     rename of the line above — `attributed` counts files a concept's body
@@ -141,6 +139,16 @@ last entry.
     two counts as before under words this PR had not taught anywhere
     else. A script parsing the line by position still works; one
     matching the old words breaks silently.
+  - The JSON key `entries` is renamed to `concepts` on `GET /api/v1/stats`,
+    the bundle listing, and `GET /api/v1/context` (the MCP tool
+    `get_context` carries the same field). Design doc
+    [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md) §3.2
+    had exempted `entries` as naming an array rather than the unit, but
+    that reasoning never reached `stats.entries` (a struct of counts, not
+    an array) and left the bundle listing's `entries` unrenamed beside
+    the `files` key this same PR renamed for the identical reason — issue
+    [#411](https://github.com/na0fu3y/ochakai/issues/411) found the
+    inconsistency; design doc 0064 §7 revokes the exemption.
   - A failed `If-None-Match: *` (the id was already taken) is now 412,
     not 409 — RFC 9110's status for a failed precondition. 409 stays the
     answer for a conflict with no precondition behind it, such as `move`

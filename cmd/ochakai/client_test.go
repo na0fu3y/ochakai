@@ -194,7 +194,7 @@ func TestRenderContext(t *testing.T) {
 			{Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusStable, Title: "Monthly revenue", Score: 0.9},
 			{Type: domain.TypeTerms, ID: "terms/arr", Status: domain.StatusDraft, Title: "ARR", Score: 0.1},
 		},
-		Entries: []domain.View{
+		Concepts: []domain.View{
 			viewOf(t, domain.Knowledge{
 				Type: domain.TypeComputations, ID: "queries/monthly-revenue", Status: domain.StatusStable,
 				Title:         "Monthly revenue",

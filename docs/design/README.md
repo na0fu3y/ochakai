@@ -33,7 +33,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 と [0064](0064-rest-stops-at-api-v1.md) §5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本、`.md` は必須でバンドルパスの一部)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
-| 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語) |
+| 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0062](0062-a-listing-is-not-a-search.md)(一つのコマンドが二役なら割る規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
@@ -269,8 +269,10 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   (issue #353)。型集合は閉じないまま、退役は自由型として存続、
   マイグレーションなし。
 - [0057 concept は読む人が出会う語でもある](0057-concept-is-the-word-a-reader-meets.md)
-  — **Accepted**、**BREAKING(文言のみ)**。**知識の単位の呼び名領域の
-  現行ドキュメント**(0054 の決定を §0 に統合する)。0054 は MCP
+  — **Accepted**、**BREAKING(文言のみ)**(§3.2 の JSON フィールド名
+  `entries` の除外は [0064](0064-rest-stops-at-api-v1.md) §7 が撤回し、
+  `concepts` に改名した)。**知識の単位の呼び名領域の
+  現行ドキュメントの一つ**(0054 の決定を §0 に統合する)。0054 は MCP
   のツール名 5 本の `knowledge` を OKF SPEC §2 の語 `concept` に改めた
   (`search_concepts` 等、ツールは 8 本のまま)。0057 はその数え方が
   取りこぼしていたのが**利用者が読む英語**だったと気づく — 0.16.0 の直後で
@@ -280,12 +282,12 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   読む語をすべて `concept` にする — README・docs・examples・deploy の
   英語、CLI のヘルプと出力、Web UI のラベル、MCP のツール説明と
   jsonschema、OpenAPI の description、エラー文(§3.1)。**境界は
-  「読む語」と「識別子」**で、JSON のキー `entries`(配列の名前で
-  あって単位の名前ではない)、Go の型名(0054 §3.4)、DB の列名、
+  「読む語」と「識別子」**で、Go の型名(0054 §3.4)や DB の列名、
   そして英語として別の意味の "entry"(catalog entry、`sources` の要素、
-  changelog の項目、CSS の `.tree-entry`)は動かさない(§3.2)。
-  ワイヤは 1 バイトも動かないので、影響を受けるのは文言に部分一致で
-  依存しているスクリプトだけである(§5)。
+  changelog の項目、CSS の `.tree-entry`)は動かさない(§3.2)。JSON の
+  キー `entries` も当初は「配列の名前であって単位の名前ではない」として
+  同じ理由で外したが、この除外は 0064 §7 が撤回した — issue #411 参照。
+  ワイヤは元々 1 バイトも動かなかったが、この点は 0064 が変えている。
 
 - [0054 知識の単位は concept と呼ぶ](0054-concept-is-the-okf-word.md)
   — **Superseded by 0057**。MCP のツール名 5 本の `knowledge` を OKF
@@ -372,12 +374,13 @@ JSON キーと MCP ツール名だけである。
   全操作で 400(`fm.` を除く)、リクエストヘッダの `X-` 接頭辞を撤去、
   ファイルの住所が `Accept: application/json` でメタデータを返すように
   なり sha256 をバイト列無しで読める、`attachments` / `Attachment` を
-  wire から `files` / `File` に retire(`entries` は 0057 §3.2 のまま
-  対象外)、If-None-Match の衝突は 412、DELETE が If-Match に対応、
-  ファイル PUT が作成時 201、withdrawn の空振りは 409、`limit` /
+  wire から `files` / `File` に retire、`stats`・バンドル一覧・`context`
+  の JSON キー `entries` を `concepts` に改名(§7、0057 §3.2 の除外を
+  撤回、issue #411)、If-None-Match の衝突は 412、DELETE が If-Match に
+  対応、ファイル PUT が作成時 201、withdrawn の空振りは 409、`limit` /
   `days` の範囲外は全面 400。バージョンや capability の合図は無し、
   CORS も意図して無し。凍結を破ってよい理由はセキュリティ上の欠陥だけ
-  (§8)、DELETE の再実行は 404 のままで安全(§8)。
+  (§9)、DELETE の再実行は 404 のままで安全(§9)。
   [0046](0046-bundle-address-space.md) §3.5 の代表表現の表を改訂する
   (概念の既定は JSON の View)。[docs/compatibility.md](../compatibility.md)
   を同 PR で書き換え、REST だけが「不安定」の対象から外れる。

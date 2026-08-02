@@ -279,7 +279,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			return nil, contextOut{}, err
 		}
 		return nil, contextOut{
-			Hits: res.Hits, Entries: res.Entries, Outline: res.Outline,
+			Hits: res.Hits, Concepts: res.Concepts, Outline: res.Outline,
 			Truncated: res.Truncated, Hint: contextHint(res.Truncated),
 		}, nil
 	}))
@@ -564,7 +564,7 @@ type contextIn struct {
 
 type contextOut struct {
 	Hits      []domain.ContextRank    `json:"hits"`
-	Entries   []domain.View           `json:"entries"`
+	Concepts  []domain.View           `json:"concepts"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 	Hint      string                  `json:"hint"`

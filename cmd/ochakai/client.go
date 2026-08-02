@@ -473,7 +473,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		fmt.Printf("%s/\t%d\n", d.Name, d.Count)
 	}
 	prefix = strings.TrimSuffix(prefix, "/")
-	for _, e := range res.Entries {
+	for _, e := range res.Concepts {
 		seg := e.ID
 		if prefix != "" {
 			seg = strings.TrimPrefix(seg, prefix+"/")
@@ -556,11 +556,11 @@ func cmdContext(ctx context.Context, args []string) error {
 func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 	rendered := map[string]bool{}
 	written, omitted := 0, 0
-	for i := range res.Entries {
-		k := &res.Entries[i]
+	for i := range res.Concepts {
+		k := &res.Concepts[i]
 		sec := renderEntry(k)
 		if budget > 0 && written > 0 && written+len(sec) > budget {
-			omitted = len(res.Entries) - i
+			omitted = len(res.Concepts) - i
 			break
 		}
 		fmt.Fprint(w, sec)
@@ -677,14 +677,14 @@ func cmdStats(ctx context.Context, args []string) error {
 	// Tab-separated key/value, like `usage`: the vocabularies are printed
 	// in their own order (domain.Statuses, domain.Trusts) so a value
 	// added to either shows up here without this command being edited.
-	fmt.Printf("entries\t%d\n", st.Entries.Total)
+	fmt.Printf("concepts\t%d\n", st.Concepts.Total)
 	for _, s := range domain.Statuses {
-		fmt.Printf("%s\t%d\n", s, st.Entries.Status[string(s)])
+		fmt.Printf("%s\t%d\n", s, st.Concepts.Status[string(s)])
 	}
 	for _, t := range domain.Trusts {
-		fmt.Printf("%s\t%d\n", t, st.Entries.Trust[string(t)])
+		fmt.Printf("%s\t%d\n", t, st.Concepts.Trust[string(t)])
 	}
-	fmt.Printf("rejected\t%d\n", st.Entries.Rejected)
+	fmt.Printf("rejected\t%d\n", st.Concepts.Rejected)
 	// The three queues take a third field: the command that lists that
 	// queue, under the scope this call was made with. A number nobody can
 	// act on is a statistic, and these three exist to be emptied (design
@@ -706,7 +706,7 @@ func cmdStats(ctx context.Context, args []string) error {
 		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope)
 	}
 	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
-		st.WindowDays, st.Entries.Created, st.Review.Verifications,
+		st.WindowDays, st.Concepts.Created, st.Review.Verifications,
 		st.Outcomes.Worked, st.Outcomes.Failed)
 	if !st.Misses.Recording {
 		// Not zero — unknown. A deployment that keeps no questions must

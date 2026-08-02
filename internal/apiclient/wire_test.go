@@ -22,7 +22,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 	when := time.Date(2026, 7, 18, 0, 0, 0, 0, time.UTC)
 	server := service.BrowseResult{
 		Dirs: []store.DirCount{{Name: "sales", Count: 4}},
-		Entries: []store.BrowseEntry{
+		Concepts: []store.BrowseConcept{
 			{Type: domain.TypeComputations, ID: "sales/monthly-revenue", Title: "月次売上",
 				Description: "月次の確定売上", Status: domain.StatusStable, UpdatedAt: when},
 		},
@@ -38,7 +38,7 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 	}
 	want := BrowseResult{
 		Dirs: []BrowseDir{{Name: "sales", Count: 4}},
-		Entries: []BrowseEntry{
+		Concepts: []BrowseConcept{
 			{Type: "Attested Computation", ID: "sales/monthly-revenue", Title: "月次売上",
 				Description: "月次の確定売上", Status: domain.StatusStable, UpdatedAt: when},
 		},
@@ -54,7 +54,7 @@ func TestContextResultMatchesServerWire(t *testing.T) {
 		Hits: []domain.ContextRank{
 			{Type: domain.TypeMetrics, ID: "revenue", Title: "Revenue", Score: 0.9},
 		},
-		Entries: []domain.View{
+		Concepts: []domain.View{
 			{ID: "revenue-seasonality", Document: "---\ntype: Insight\ntitle: Seasonality\n---\n\nQ4 peaks.\n",
 				Summary: domain.Summary{Type: domain.TypeInsights, ID: "revenue-seasonality", Title: "Seasonality"}},
 		},
@@ -67,9 +67,9 @@ func TestContextResultMatchesServerWire(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("client cannot decode the server response: %v", err)
 	}
-	if len(got.Hits) != 1 || got.Hits[0].ID != "revenue" || len(got.Entries) != 1 ||
-		!strings.Contains(got.Entries[0].Document, "Q4 peaks.") ||
-		got.Entries[0].Summary.Title != "Seasonality" {
+	if len(got.Hits) != 1 || got.Hits[0].ID != "revenue" || len(got.Concepts) != 1 ||
+		!strings.Contains(got.Concepts[0].Document, "Q4 peaks.") ||
+		got.Concepts[0].Summary.Title != "Seasonality" {
 		t.Errorf("client decoded: %+v", got)
 	}
 }

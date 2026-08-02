@@ -87,7 +87,7 @@ func TestContextIntegration(t *testing.T) {
 		t.Fatalf("Context: %v", err)
 	}
 	got := map[string]bool{}
-	for _, e := range res.Entries {
+	for _, e := range res.Concepts {
 		got[e.ID] = true
 	}
 	for _, want := range []string{metricID, queryID, insightID} {
@@ -196,7 +196,7 @@ func TestContextBudgetIntegration(t *testing.T) {
 		t.Errorf("no budget must not truncate: %d outlined", full.Truncated)
 	}
 	delivered := 0
-	for _, e := range full.Entries {
+	for _, e := range full.Concepts {
 		if mine[e.ID] {
 			delivered++
 		}
@@ -212,15 +212,15 @@ func TestContextBudgetIntegration(t *testing.T) {
 		t.Fatalf("Context with budget: %v", err)
 	}
 	used := 0
-	for i := range capped.Entries {
-		used += serializedSize(&capped.Entries[i])
+	for i := range capped.Concepts {
+		used += serializedSize(&capped.Concepts[i])
 	}
 	if used > budget {
 		t.Errorf("delivered %d bytes over a %d budget", used, budget)
 	}
-	if len(capped.Entries) >= len(full.Entries) {
+	if len(capped.Concepts) >= len(full.Concepts) {
 		t.Errorf("budget delivered %d entries, unbudgeted %d — nothing was capped",
-			len(capped.Entries), len(full.Entries))
+			len(capped.Concepts), len(full.Concepts))
 	}
 	if capped.Truncated != len(capped.Outline) || capped.Truncated == 0 {
 		t.Fatalf("truncated = %d, outline = %d; want both nonzero and equal",
@@ -229,7 +229,7 @@ func TestContextBudgetIntegration(t *testing.T) {
 	// Nothing is lost: every entry the unbudgeted pack carried is either
 	// delivered or named.
 	seen := map[string]bool{}
-	for _, e := range capped.Entries {
+	for _, e := range capped.Concepts {
 		seen[e.ID] = true
 	}
 	for _, o := range capped.Outline {
@@ -241,7 +241,7 @@ func TestContextBudgetIntegration(t *testing.T) {
 			t.Errorf("outline row dropped the description: %+v", o)
 		}
 	}
-	for _, e := range full.Entries {
+	for _, e := range full.Concepts {
 		if !seen[e.ID] {
 			t.Errorf("%s vanished under a budget: neither delivered nor outlined", e.ID)
 		}

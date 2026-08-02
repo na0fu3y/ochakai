@@ -267,8 +267,8 @@ func TestIntegrationBrowseListsTheFilesInADirectory(t *testing.T) {
 	if lvl.Files[0].Size == 0 || lvl.Files[0].MediaType == "" {
 		t.Errorf("a file line has nothing to describe it: %+v", lvl.Files[0])
 	}
-	if len(lvl.Entries) != 1 || lvl.Entries[0].ID != root+"/revenue" {
-		t.Errorf("entries = %+v", lvl.Entries)
+	if len(lvl.Concepts) != 1 || lvl.Concepts[0].ID != root+"/revenue" {
+		t.Errorf("concepts = %+v", lvl.Concepts)
 	}
 	// "revenue" is a subdirectory because a file sits under it, but it
 	// holds no concept, so it is not one of these — and neither is

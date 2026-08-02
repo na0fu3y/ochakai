@@ -660,7 +660,7 @@ paths:
                     One level down. The projection carries no body — a
                     directory listing renders from the description.
                   value:
-                    entries:
+                    concepts:
                       - type: Metric
                         id: metrics/average-order-value
                         description: Revenue divided by completed orders, over the same window.
@@ -1016,7 +1016,7 @@ paths:
         only — id, type, title, status, score. It used to repeat every
         top concept in full, so the knowledge arrived twice and the budget
         bound one copy of it. A client that read bodies out of `hits`
-        reads them from `entries` instead, where they always were.
+        reads them from `concepts` instead, where they always were.
       parameters:
         - name: q
           in: query
@@ -1129,13 +1129,13 @@ paths:
                   hits:
                     description: >
                       The ranking behind the pack, not a second copy of it:
-                      the knowledge travels once, under `entries`. A hit
+                      the knowledge travels once, under `concepts`. A hit
                       with no matching concept ranked below the pack's cut-off
                       — fetch it by id if the ranking suggests it is worth a
                       round trip.
                     type: array
                     items: { $ref: "#/components/schemas/ContextRank" }
-                  entries:
+                  concepts:
                     type: array
                     items: { $ref: "#/components/schemas/View" }
                   outline:
@@ -1157,7 +1157,7 @@ paths:
                     not afford the glossary term the metric rests on, so it
                     is named under outline with what it would have cost.
                     `hits` is the ranking only: every document in this
-                    response appears exactly once, under `entries`.
+                    response appears exactly once, under `concepts`.
                   value:
                     hits:
                       - id: queries/monthly-revenue
@@ -1178,7 +1178,7 @@ paths:
                         status: draft
                         trust: unverified
                         score: 0.43
-                    entries:
+                    concepts:
                       - id: queries/monthly-revenue
                         document: |
                           ---
@@ -1858,7 +1858,7 @@ paths:
                   value:
                     at: "2026-07-28T02:07:44.291508Z"
                     window_days: 30
-                    entries:
+                    concepts:
                       total: 128
                       status: { draft: 31, stable: 92, deprecated: 5 }
                       trust: { unverified: 42, machine-confirmed: 19, human-reviewed: 67 }
@@ -2519,7 +2519,7 @@ components:
       properties:
         at: { type: string, format: date-time, description: When the server computed this. }
         window_days: { type: integer, description: How far back the flow numbers reach. }
-        entries:
+        concepts:
           type: object
           description: What the base is made of. Deleted concepts are in none of it.
           properties:
@@ -2674,7 +2674,7 @@ components:
       type: object
       description: >
         One hit's place in the ranking behind a context pack. The knowledge
-        itself travels once, under `entries` — a rank that repeated it would
+        itself travels once, under `concepts` — a rank that repeated it would
         double the response and leave the byte budget governing one of the
         copies (design doc 0033). Search results keep their full hits: there
         the concepts are the answer, not a duplicate of one.
@@ -2739,7 +2739,7 @@ components:
                   documents and a mixed count would misdescribe every
                   directory that has both.
                 type: integer
-        entries:
+        concepts:
           type: array
           items:
             type: object
