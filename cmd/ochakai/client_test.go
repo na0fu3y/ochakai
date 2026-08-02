@@ -415,6 +415,46 @@ func TestPutIfMatchSendsHeaderAndExplainsConflict(t *testing.T) {
 	}
 }
 
+// `ochakai put --only-if-new` sends If-None-Match "*", and a 412 comes
+// back blaming the id being taken, not a stale --if-match nobody passed
+// (issue #428).
+func TestPutOnlyIfNewExplainsConflictWithoutBlamingIfMatch(t *testing.T) {
+	var gotIfNoneMatch, gotIfMatch string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		gotIfNoneMatch = r.Header.Get("If-None-Match")
+		gotIfMatch = r.Header.Get("If-Match")
+		w.WriteHeader(http.StatusPreconditionFailed)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge already exists"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	doc := filepath.Join(t.TempDir(), "revenue.md")
+	if err := os.WriteFile(doc, []byte("---\ntype: metric\ntitle: 売上\n---\n\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := cmdPut(context.Background(), []string{"metrics/revenue",
+		"-f", doc, "--only-if-new", "--url", srv.URL})
+	if gotIfNoneMatch != "*" {
+		t.Errorf("If-None-Match on the wire = %q, want \"*\"", gotIfNoneMatch)
+	}
+	if gotIfMatch != "" {
+		t.Errorf("If-Match on the wire = %q, want none — --if-match was never passed", gotIfMatch)
+	}
+	if err == nil {
+		t.Fatal("--only-if-new onto a taken id succeeded, want a conflict error")
+	}
+	if strings.Contains(err.Error(), "--if-match") {
+		t.Errorf("conflict error blames --if-match, which was never passed: %v", err)
+	}
+	for _, want := range []string{"conflict", "already exists", "--only-if-new"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("conflict error misses %q: %v", want, err)
+		}
+	}
+}
+
 // A verification's whole product is a timestamp and a name, and the only
 // way to read them back was a second call: verify printed one line and
 // dropped the concept the server had already returned. --json hands the

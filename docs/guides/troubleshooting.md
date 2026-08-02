@@ -66,7 +66,7 @@ response, use `budget` rather than a score floor.
 
 ## Writing concepts
 
-**409 on `put --only-if-new`.** A live concept already has that id —
+**412 on `put --only-if-new`.** A live concept already has that id —
 including a `rejected` one. Drop `--only-if-new`, or pick another id.
 Writing over a *soft-deleted* concept revives it, with its prior history
 intact; over MCP, reviving one that was verified, rejected or deprecated

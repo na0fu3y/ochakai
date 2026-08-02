@@ -145,7 +145,7 @@ confirm what a running instance actually has enabled:
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
 "semantic search enabled" model=gemini-embedding-001 dim=768 project=… discovered=true
-"files disabled (no OCHAKAI_GCS_BUCKET); markdown entries only"
+"files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only"
 ```
 
 `discovered=true` means the project came from the metadata server rather
