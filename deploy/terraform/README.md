@@ -156,10 +156,11 @@ upgrades in the [operating guide](../../docs/guides/operating.md).
   hardening beyond the baseline, one `gcloud` command or console setting
   each.
 - **Upgrading an existing deployment** ([Upgrades](../../docs/guides/operating.md#upgrades))
-  — change `image_tag` and apply; migrations run at startup. The
-  version-specific notes there still apply, and importing an existing
-  gcloud-built deployment into this module's state is not something this
-  module tries to make easy.
+  — change `image_tag` and apply (`webui_image_tag` first, for the one
+  upgrade that must reach the webui before the server); migrations run
+  at startup. The version-specific notes there still apply, and
+  importing an existing gcloud-built deployment into this module's
+  state is not something this module tries to make easy.
 
 ## Teardown
 
