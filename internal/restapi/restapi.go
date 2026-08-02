@@ -1525,6 +1525,15 @@ func parseIfMatch(r *http.Request) *string {
 // no such downstream check, so fm.* left exempt there would be the same
 // silent no-op this function exists to close (issue #409).
 //
+// The literal key "fm." — an empty frontmatter key — is never accepted,
+// even where fm.* is exempt: it has "fm." as a prefix of itself, so the
+// exemption above would wave it through, and it is also the sentinel a
+// caller passes in allowed to grant that exemption, so a plain
+// slices.Contains(allowed, key) would wave it through a second way. Both
+// would hand it to frontmatterFilter, which drops it silently (name ==
+// "") — the third silent no-op issue #409 found, once the first two were
+// closed.
+//
 // This is what makes it safe to add a query parameter after the freeze —
 // an old server 400s a caller that sends one early, rather than silently
 // ignoring it the way ?dry_run= was ignored by a server that did not
@@ -1537,12 +1546,13 @@ func rejectUnknownParams(q url.Values, allowed ...string) error {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if allowFM && strings.HasPrefix(key, "fm.") {
+		if name, ok := strings.CutPrefix(key, "fm."); allowFM && ok && name != "" {
 			continue
 		}
-		if !slices.Contains(allowed, key) {
-			return service.Invalidf("unknown query parameter %q", key)
+		if key != "fm." && slices.Contains(allowed, key) {
+			continue
 		}
+		return service.Invalidf("unknown query parameter %q", key)
 	}
 	return nil
 }
