@@ -41,8 +41,8 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 ## For someone running it
 
-- [Requirements and configuration](configuration.md) — what ochakai needs
-  before it starts, and every environment variable it reads.
+- [Requirements and configuration](configuration.md) (Japanese) — what
+  ochakai needs before it starts, and every environment variable it reads.
 - [Deploy with Terraform](../deploy/terraform/README.md) — the
   recommended path, ~$10/month: `terraform apply` in 13 steps instead of
   the gcloud walkthrough's 36.

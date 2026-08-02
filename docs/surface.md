@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5015
+- DOC-LINES: 5044
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -556,6 +556,19 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 114 → 120 行で、**翻訳はこの天井に対してほぼ中立、わずかに増える**。
 残りのページを日本語にしていく作業は、`DOC-LINES` を下げてはくれない —
 下げるのは畳み込みだけである。
+
+5,015 → 5,044 は C8 の二枚目、
+[configuration.md](configuration.md) を日本語にした分である
+([#438](https://github.com/na0fu3y/ochakai/issues/438))。ページ自身は 75
+→ 84 行、9 行増えている。次の 7 行はページ自身ではなく、それを指す九つの
+文書から来た — `#requirements`・`#environment-variables`・
+`#authentication-has-no-configuration` という三つのアンカーを README・
+SECURITY・deploy の両ガイド・SUPPORT・architecture・faq・
+rest-integration・docs/README が指しており、そのどれにも `(Japanese)` を
+足す必要があった。loop.md にはこの被リンクが一本も無かったので、翻訳の
+代金がページの外にも出ることは今回初めて見えた。残る 13 行はこの段落
+自身の分で、DOC のほかの段落と同じくここに数えている。
+
 [#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
 最初の例である。architecture.md と knowledge.md は同じ六つの主題を二度語り
 、二枚を一枚に畳んだ。DOC が 26 → 25 になった分、天井も合わせている。

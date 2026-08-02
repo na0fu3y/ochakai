@@ -29,8 +29,8 @@ Most answers are already written down, and the docs are short enough to check:
   and their causes on the local and client side, from an empty search to a
   skipped import to a 412.
 - [README](README.md) — what ochakai is, and the things it deliberately does
-  not do. [docs/configuration.md](docs/configuration.md) has the requirements
-  and every environment variable.
+  not do. [docs/configuration.md](docs/configuration.md) (Japanese) has the
+  requirements and every environment variable.
 - [deploy/cloudrun/README.md](deploy/cloudrun/README.md) — the full Cloud Run +
   Cloud SQL walkthrough, including the hardening checklist.
 - [docs/design/README.md](docs/design/README.md) — the index of numbered design

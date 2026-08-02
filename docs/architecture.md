@@ -91,12 +91,14 @@ container image, a different argument (design doc
 per-concept permission, and for some organizations that is a hard stop.**
 What that means operationally, and the postures that narrow it, are in
 [requirements and configuration](configuration.md#authentication-has-no-configuration)
-(design doc [0002](design/0002-authn-authz.md)); this section is the *why*.
+(Japanese) (design doc [0002](design/0002-authn-authz.md)); this section is
+the *why*.
 
 What ochakai does with an identity is *record* it, for one purpose:
 deciding whose name goes on the concept (how the identity itself is read
 is in
-[requirements and configuration](configuration.md#authentication-has-no-configuration)).
+[requirements and configuration](configuration.md#authentication-has-no-configuration)
+(Japanese)).
 Verifying a concept is not restricted either: who verified it is always
 recorded, so the decision about whether to trust it is made by whoever
 reads the provenance, not by a gate at the write. The phrase the record
@@ -141,7 +143,7 @@ so a write endpoint added later is covered without its author knowing
 about it. What each surface does about it, and the sibling **public**
 posture that also stops reading identity at all, are in
 [requirements and configuration](configuration.md#environment-variables)
-(design docs [0040](design/0040-read-only-mode.md),
+(Japanese) (design docs [0040](design/0040-read-only-mode.md),
 [0042](design/0042-public-read-only.md)).
 
 There is one narrow exception to "no authorization", and it is
@@ -413,7 +415,8 @@ key to hold, fused with the lexical ranking by reciprocal rank fusion —
 is **on by default where ochakai runs on Google Cloud** (design doc
 [0053](design/0053-embeddings-by-default.md); what decides it, and how to
 decline, is in
-[requirements and configuration](configuration.md#environment-variables)).
+[requirements and configuration](configuration.md#environment-variables)
+(Japanese)).
 Vectors are written when a concept is written, so a base loaded before
 embeddings were reachable — or a changed model — leaves older concepts
 unembedded until `ochakai reembed` runs.
