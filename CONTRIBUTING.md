@@ -428,8 +428,20 @@ identifier, so 0064 gains a new §12 rather than a new record (0048
 findings, each with the disagreement, the decision and which side
 moved.
 
-    RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8482
+61 → 63 while 8,482 → 7,986 is the first consolidation, and it moves the
+two numbers in opposite directions on purpose. Seven records were current
+for identity and the posture at once — the opening table named all seven,
+so reaching that area's current state meant opening 928 lines — and 0065
+and 0066 replace them, leaving seven tombstones. **The count goes up by
+the two records added**: a tombstoned record keeps its number and its
+file, which is what makes every citation of 0002 still land somewhere,
+so a consolidation can only ever add. Read together the pair says what
+happened — two more records, five hundred fewer lines, and an area that
+now takes two records to read instead of seven. Neither number says that
+alone, and `RECORD-COUNT` rising is not this corpus growing.
+
+    RECORD-COUNT: 63
+    RECORD-CORPUS-LINES: 7986
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
