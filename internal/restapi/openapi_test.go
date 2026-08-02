@@ -437,3 +437,61 @@ func TestUnknownQueryParamsMatchSpec(t *testing.T) {
 		}
 	}
 }
+
+// TestSpecParamsAreAccepted is TestUnknownQueryParamsMatchSpec's other
+// half, closing the gap issue #427 found: #409 asked that each operation
+// "accepts every parameter it declares and rejects every one it does
+// not", and the check above only ever tries the `allowed[name]` branch's
+// opposite. This tries that branch instead — every parameter an
+// operation's own allowlist declares, sent to that same operation, must
+// not come back a 400 naming it unknown. The mutation issue #427
+// describes — dropping trust and cursor off search's allowlist, and
+// trust and budget off context's — leaves TestUnknownQueryParamsMatchSpec
+// fully green, because removing a declared parameter only ever narrows
+// what that check tries; this is the half that would have caught it.
+//
+// It needs a real store: unlike the negative half, a parameter this test
+// sends is — by construction — one the handler is meant to act on, and
+// most of them read all the way through to Handler(&service.Service{})'s
+// nil Store, which panics (see readOnlyServer's comment on the same
+// hazard for writes). Skipped without OCHAKAI_TEST_DATABASE_URL, like
+// every other test that needs one.
+//
+// Not checkedServer, deliberately: this test sends "x" to parameters
+// api/openapi.yaml constrains with an enum (trust) or a stricter type
+// (limit), which the spec's own request validation would refuse before
+// the handler ever saw it. What this test is asking is whether the
+// handler's allowlist recognizes the parameter, not whether "x" is a
+// value the spec would accept — TestBadRequestValidation and its
+// neighbors already hold value validation to account. Matching on the
+// "unknown query parameter" text, the same way the negative half does,
+// is what lets an unrelated 400 — search or context with no q — pass
+// rather than forcing every operation's own required parameters into
+// this loop's URLs.
+func TestSpecParamsAreAccepted(t *testing.T) {
+	h := Handler(newIntegrationService(t))
+	declared := specQueryParams(t)
+
+	for _, op := range restOperations {
+		allowed, ok := declared[op.spec]
+		if !ok {
+			t.Fatalf("%s: openapi.yaml has no operation %q", op.name, op.spec)
+		}
+		for name := range allowed {
+			key := name
+			if name == "fm." {
+				key = "fm.owner"
+			}
+			t.Run(op.name+"/"+key, func(t *testing.T) {
+				url := op.url + "?" + key + "=x"
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, httptest.NewRequest(op.method, url, nil))
+				unknown := fmt.Sprintf("unknown query parameter %q", key)
+				if rec.Code == http.StatusBadRequest && strings.Contains(errMessage(t, rec), unknown) {
+					t.Errorf("%s %s = 400 %q — api/openapi.yaml declares %q on %s, so this should not "+
+						"be rejected as unknown", op.method, url, rec.Body, key, op.spec)
+				}
+			})
+		}
+	}
+}

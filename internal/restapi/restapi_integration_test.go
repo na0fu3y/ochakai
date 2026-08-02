@@ -60,16 +60,15 @@ func lockLiveAttachments(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close(ctx) }) // closing the session releases the lock
 }
 
-// newIntegrationServer serves a real PostgreSQL through the REST handler,
-// skipping the test without OCHAKAI_TEST_DATABASE_URL. The store comes
-// back with it for the tests that swap in a blob fake.
+// newIntegrationService is a Service over a real, migrated PostgreSQL,
+// skipping the test without OCHAKAI_TEST_DATABASE_URL.
 //
-// Like checkedServer's close, the pool's is registered rather than
-// deferred, and registered here so that it is the last cleanup to run:
-// the rows a test wrote are removed over HTTP (removeEntries), and a
-// deferred Close would take the pool out from under those requests —
-// leaving the rows behind in a database the next run reuses (issue #278).
-func newIntegrationServer(t *testing.T) (*httptest.Server, *store.Store) {
+// The pool's cleanup is registered rather than deferred, and registered
+// here so that it is the last cleanup to run: the rows a test wrote are
+// removed over HTTP (removeEntries), and a deferred Close would take the
+// pool out from under those requests — leaving the rows behind in a
+// database the next run reuses (issue #278).
+func newIntegrationService(t *testing.T) *service.Service {
 	t.Helper()
 	ctx := context.Background() // outlives t.Context()'s pre-Cleanup cancel
 	s, err := store.New(ctx, testDatabaseURL(t), false)
@@ -80,8 +79,16 @@ func newIntegrationServer(t *testing.T) (*httptest.Server, *store.Store) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
-	svc := &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	return checkedServer(t, Handler(svc)), s
+	return &service.Service{Store: s, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+}
+
+// newIntegrationServer serves a real PostgreSQL through the REST handler,
+// checked against api/openapi.yaml on every request and response. The
+// store comes back with it for the tests that swap in a blob fake.
+func newIntegrationServer(t *testing.T) (*httptest.Server, *store.Store) {
+	t.Helper()
+	svc := newIntegrationService(t)
+	return checkedServer(t, Handler(svc)), svc.Store
 }
 
 // removeEntries frees the ids a test wrote once it ends, so that a
