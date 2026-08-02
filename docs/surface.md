@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5032
+- DOC-LINES: 5060
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -547,6 +547,20 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 書かれ、二本のテキストが同じことを言えばどちらが古いか分からなくなる
 ([faq.md](faq.md) 自身の規則)という代金を払っていた。持ち主を一つに決め、
 残りを一行のリンクに畳んで、#374 の削減が出ている。
+
+5,032 → 5,060 は C8 の四枚目、
+[rest-integration.md](guides/rest-integration.md) を日本語にした分である
+([#442](https://github.com/na0fu3y/ochakai/issues/442))。ページ自身は
+165 → 178 行、13 行増えている。**委譲された provenance の節だけは
+見出しをそのまま日本語にできなかった** — docs/architecture.md が
+フラグメントで指しているので、configuration.md のときと同じく
+`<a id>` で古いアンカーを残し、見出しの文面は日本語にした。次の 1 行は
+deploy/cloudrun/README.md が拾った `(Japanese)` の折り返し分で、
+docs/architecture.md 側は既存の行に収まり増えていない — api/openapi.yaml
+も同じ印を拾ったが、契約であってこの一覧には無いので数えない。ページ
+自身が configuration.md への被リンクを二本持っていたので、そちらは印を
+外している — 両方とも日本語になった今は要らない印だからである。残る
+14 行はこの段落自身の分で、DOC のほかの段落と同じくここに数えている。
 
 5,019 → 5,032 は、翻訳の途中であることを日本語の索引が言うようになった
 分である。英語の README は日本語のページへのリンクを `(Japanese)` で
