@@ -31,7 +31,7 @@ For the shape of the system rather than the history of it, read
 |---|---|---|
 | [0001 Overall architecture](0001-architecture.md) | Accepted; §6 superseded by 0002/0003, §3/§9.1 revised by 0043 | Context provider for data agents: one Go binary plus PostgreSQL, an envelope with status/provenance/links/revisions, no LLM and no SQL execution — human-verified knowledge returned verbatim; `pg_trgm` lexical search with opt-in pgvector hybrid via Vertex AI; source of the usage telemetry and outcome reporting later records build on. Interpretation stays the agent's job by design. |
 | [0003 Google Cloud only](0003-gcp-only.md) | Accepted; Vertex AI became a default-path dependency in 0053 | Cloud Run + Cloud SQL (optionally Vertex AI) and nothing else. Portability is promised for your data (OKF export), not for the runtime — there is no supported deployment elsewhere. |
-| [0053 Embeddings are the default, and a vector space is disposable](0053-embeddings-by-default.md) | Accepted; revises 0001 §4 | On Google Cloud, semantic search turns on by default via IAM with no variable to set; a deployment lacking `aiplatform.user` or vector support falls back to lexical instead of refusing to start, while a named `OCHAKAI_VERTEX_PROJECT` still fails loudly. A changed embedding dimension rebuilds vector tables itself rather than handing you a `DROP TABLE`. **A default flips** — `OCHAKAI_EMBEDDINGS=off` is the one way to opt out. |
+| [0053 Embeddings are the default](0053-embeddings-by-default.md) | **Superseded by 0073** | |
 
 ## Quality gates
 
@@ -63,34 +63,38 @@ For the shape of the system rather than the history of it, read
 
 | Record | Status | Decision |
 |---|---|---|
-| [0047 The filter vocabulary is the keys OKF defines](0047-fm-carries-okf-keys.md) | Accepted | Keeps typed filter columns (`fm.type` etc. refused with 400 rather than silently answering a different question) and closes `fm.` to only the keys OKF defines — a producer's own key is still stored and returned but not queryable, so a caller can always tell an empty result from a misspelled key. `fm.resource`, `fm.runtime` and the rest of OKF's own keys work on REST/MCP/CLI; `fm.` stays off the web UI. |
-| [0061 A dry run is the write withheld](0061-a-dry-run-is-the-write-withheld.md) | Accepted | Adds `dry_run` and `Ochakai-Plan` to the write path itself, so `ochakai import --dry-run --strict` reaches the same verdict (claim status, refusals, whether anything would change) the real import reaches, sharing one decision step (`settleUpdate`) instead of a second reimplementation. Against an ochakai 0.16.1-or-older server the dry run fails rather than silently writing. |
-| [0046 The bundle is the address space](0046-bundle-address-space.md) | Accepted; the current record for OKF compatibility (supersedes 0043, 0008, 0011, 0013, 0014); §3.11 amended by [0047](0047-fm-carries-okf-keys.md), §3.5's representation table amended by [0064](0064-rest-stops-at-api-v1.md) | ochakai holds one bundle — a path→object map — so any file, not just knowledge entries, is stored and round-tripped as received; a document's own trust family stays a claim under `received`, never entering the ledger or trust tier. REST collapses to `/api/v1/bundle/{path}` plus search/context/ledgers/move; MCP is five tools; an entry written without `status` reads as OKF's default (`stable`) until the ledger says otherwise. |
-| [0043 The document is the truth](0043-document-first.md) | **Superseded by 0046** | |
-| [0041 Narrowing a search by address](0041-path-scoped-search.md) | Accepted | Adds a repeatable `prefix` filter (segment-matched, ORed when repeated) to search and `get_context` for scoping by subtree; explicitly not an access boundary — reading stays bounded by who can reach the service (0002), and passing no prefix returns everything. |
+| [0075 The bundle is the address space](0075-the-bundle-is-the-address-space.md) | Accepted; the current record for the bundle, addressing and the stored form (carries 0017, 0021, 0041, 0046) | ochakai holds one bundle — a path→object map with two kinds of object, concepts (`.md` with a `type`) and files — and **whatever went into the bundle comes out**: a `.md` without a type is kept as a file rather than dropped. The path is the address and the type is an attribute, so layout is the user's (no type is inferred from a path, and a tarball's shape is the structure). What is stored is the bytes received; the canonical form is derived and used only for indexing and for deciding whether the meaning changed, so a reformat moves the ETag but not `generated.at`. Server-owned keys are stripped line-wise and another instance's trust family survives as a claim under `received:`, never entering a ledger. Attribution is derived from the body, `move` carries history, usage and the `<id>/` namespace in one transaction, and `prefix` narrows by address at segment boundaries — explicitly not an access boundary. Consolidates four records; no decision changes. |
+| [0074 The document, and the vocabulary that asks it](0074-the-document-and-the-vocabulary-that-asks-it.md) | Accepted; the current record for a concept document's shape and the filter vocabulary (carries 0019, 0022, 0024, 0047, 0061) | `title` is optional (display falls back to the id's last segment) and the id joins the search haystack; only strings compared as keys are NFC-normalized, never content. Links come from markdown in the body — the structured `rel` was a machine-readable type no machine ever read — and `move` rewrites bodies too. Id segments are bounded by path safety alone. `fm.` answers only the keys OKF defines and refuses the five that have typed columns, so a caller can always tell an empty result from a misspelled key. A `dry_run` on the write path returns the real verdict without writing, because half of what `--strict` decides lives on the server. Consolidates five records; no decision changes. |
+| [0071 The recommended type vocabulary](0071-the-recommended-type-vocabulary.md) | Accepted; the current record for the type vocabulary (carries 0038, 0063) | Nine recommended types, and the set is never closed — an unlisted type is first-class and nothing migrates. Three things decide the list: whether the spelling is self-explanatory on its own, whether OKF gave it a spelling, and whether anyone actually wrote it. The third is what removed `Playbook` and `API Endpoint`: neither appears in ochakai's own examples or in OKF's reference bundles. The vocabulary is stated in one place and checked from outside. Consolidates two records; no decision changes. |
+| [0047 The filter vocabulary is the keys OKF defines](0047-fm-carries-okf-keys.md) | **Superseded by 0074** | |
+| [0061 A dry run is the write withheld](0061-a-dry-run-is-the-write-withheld.md) | **Superseded by 0074** | |
+| [0046 The bundle is the address space](0046-bundle-address-space.md) | **Superseded by 0075** | |
+| [0043 The document is the truth](0043-document-first.md) | **Superseded by 0046, then 0075** | |
+| [0041 Narrowing a search by address](0041-path-scoped-search.md) | **Superseded by 0075** | |
 | [0037 Making declared expiry and cited sources queryable](0037-stale-and-source-lookup.md) | **Superseded by 0069** | |
-| [0036 OKF's schema is ochakai's schema](0036-okf-schema-first.md) | **Superseded by 0043, then 0046** | |
+| [0036 OKF's schema is ochakai's schema](0036-okf-schema-first.md) | **Superseded by 0043, then 0046, then 0075** | |
 | 0034 OKF v0.2 conformance | **Withdrawn — number vacant** | Folded into 0036 and the file deleted before any release carried it; only the document was withdrawn — the implementation shipped. |
-| [0005 OKF compatibility and knowledge structure](0005-okf-compatibility.md) | **Superseded by 0036** | |
-| [0016 Alignment with the knowledge-catalog reference bundles](0016-knowledge-catalog-alignment.md) | **Superseded by 0036** | |
-| [0017 The path is the address; the type is an attribute](0017-path-addressing.md) | Accepted | The full path becomes the id and sole address (no type inferred from a path segment); a file with no frontmatter `type` is kept as a file, not a broken concept. MCP address-taking tools take one argument instead of two; an exported bundle's directory layout comes from ids alone. |
-| [0019 Pre-0.10.0 consistency adjustments](0019-release-review-adjustments.md) | Accepted | Id segments are constrained only by path safety (non-ASCII ids and a leading underscore become legal); a bundle import treats a server rejection as a skip of that one document rather than aborting. |
-| [0022 The filename is the name](0022-filename-as-name.md) | Accepted | `title` becomes optional — display falls back to the id's last segment, and the id joins both the lexical haystack and the embedding text; ids, attachment names, link targets and queries are NFC-normalized everywhere. Clients must tolerate a missing `title` in responses. |
-| [0023 One type vocabulary, OKF's](0023-okf-type-vocabulary.md) | **Superseded by 0038** | |
-| [0038 Realigning the recommended vocabulary](0038-type-vocabulary-realignment.md) | Accepted; §3.2 and §4's table amended by 0063 | Nine recommended types become eleven: `Semantic Model` and `Golden Query` are retired, `Skill`, `Playbook`, `Policy` and `API Endpoint` are added. Nothing migrates and no stored entry changes — retired spellings keep working as free types. |
-| [0063 Two unused recommended types leave](0063-two-unused-recommended-types-leave.md) | Accepted; current record for the type vocabulary | Drops `Playbook` and `API Endpoint`, four days after 0038 added them: neither spelling was ever written by ochakai's own examples or by OKF's own reference bundles, only named in the spec's prose, and a recommended type is taught on every MCP call (0015 §3.1). Nine recommended types remain. Nothing migrates and no stored entry changes — both keep working as free types. |
+| [0005 OKF compatibility and knowledge structure](0005-okf-compatibility.md) | **Superseded by 0036, then 0075** | |
+| [0016 Alignment with the knowledge-catalog reference bundles](0016-knowledge-catalog-alignment.md) | **Superseded by 0036, then 0075** | |
+| [0017 The path is the address; the type is an attribute](0017-path-addressing.md) | **Superseded by 0075** | |
+| [0019 Pre-0.10.0 consistency adjustments](0019-release-review-adjustments.md) | **Superseded by 0074** | |
+| [0022 The filename is the name](0022-filename-as-name.md) | **Superseded by 0074** | |
+| [0023 One type vocabulary, OKF's](0023-okf-type-vocabulary.md) | **Superseded by 0038, then 0071** | |
+| [0038 Realigning the recommended vocabulary](0038-type-vocabulary-realignment.md) | **Superseded by 0071** | |
+| [0063 Two unused recommended types leave](0063-two-unused-recommended-types-leave.md) | **Superseded by 0071** | |
 | [0057 Concept is the word a reader meets too](0057-concept-is-the-word-a-reader-meets.md) | Accepted; **breaking (wording only)**; the current record for the unit of knowledge's name (carries 0054); §3.2's exclusion of the `entries` JSON key is revoked by [0064](0064-rest-stops-at-api-v1.md) §7 | Renames the five MCP tools carrying `knowledge` to OKF's word (`search_concepts`, `get_concept`, `put_concept`, `delete_concept`, `get_concept_usage`; tool count stays 8) and completes that by renaming every word a reader meets — README, docs, examples, CLI help/output, web UI labels, MCP/OpenAPI descriptions, error text — from `entry` to `concept`; identifiers (Go type names, DB columns, the Japanese records) are untouched. The `entries` JSON key was originally excluded too (issue #411 found the exclusion did not hold in two of the three places it applied; 0064 §7 renames it to `concepts`). |
 | [0054 The unit of knowledge is called a concept](0054-concept-is-the-okf-word.md) | **Superseded by 0057** | |
-| [0024 Links are derived from the body](0024-links-from-body.md) | Accepted | Removes the structured `links` input field; links come from markdown in the body (bundle-absolute, relative, `ochakai://`, autolinked), excluding fenced and inline code. Sending `links` on write is ignored — write a markdown link in the body instead. |
+| [0024 Links are derived from the body](0024-links-from-body.md) | **Superseded by 0074** | |
 
 ## Attachments
 
 | Record | Status | Decision |
 |---|---|---|
-| [0008 Image attachments](0008-image-attachments.md) | **Superseded by 0046** | |
-| [0011 Moving attachment bytes to GCS](0011-gcs-attachment-storage.md) | **Superseded by 0046** | |
-| [0013 Any file type, GCS only](0013-attachment-files-gcs-only.md) | **Superseded by 0046** | |
-| [0020 Attachment search](0020-attachment-search.md) | Accepted; rekeyed by bundle path in 0046 | Filenames join the lexical haystack, and attachments are embedded at attach time as a third list in the rank fusion; ochakai still refuses to interpret them (no OCR, no PDF text extraction). Content search needs a file-capable embedding model, and existing attachments aren't backfilled. |
+| [0073 What search fuses, and when embeddings apply](0073-search-and-when-embeddings-apply.md) | Accepted; the current record for search and embeddings (carries 0020, 0053) | On Google Cloud the project is discovered from the metadata server and semantic search is on by default; IAM decides whether it works, not configuration, and a discovered default degrades to lexical while a named one refuses to start. A changed embedding dimension rebuilds the vector tables itself — **vectors are derived, not records** — and refilling is `reembed`, paid for when asked. Search fuses three lists: lexical (filenames included), concept vectors and file vectors, with a file's hit mapped onto the concept that owns it. Files never come back on their own, and ochakai never interprets them. Consolidates two records; no decision changes. |
+| [0008 Image attachments](0008-image-attachments.md) | **Superseded by 0046, then 0075** | |
+| [0011 Moving attachment bytes to GCS](0011-gcs-attachment-storage.md) | **Superseded by 0046, then 0075** | |
+| [0013 Any file type, GCS only](0013-attachment-files-gcs-only.md) | **Superseded by 0046, then 0075** | |
+| [0020 Attachment search](0020-attachment-search.md) | **Superseded by 0073** | |
 
 The wire spelling `attachments`/`Attachment` outlived the concept 0046 §2.1
 already retired. [0064](0064-rest-stops-at-api-v1.md) §6 is the record
@@ -102,10 +106,11 @@ MCP) — it revises none of the records above; the storage model stays
 
 | Record | Status | Decision |
 |---|---|---|
-| [0006 Two serving paths for the web UI](0006-web-ui-serving.md) | Accepted | One embedded page, two commands: `ochakai ui` binds loopback and acts as you (also proxying `/mcp` under your own identity), `ochakai serve-ui` is the deployed team service, and `ochakai serve` never serves the UI. |
-| [0014 Folder browse](0014-folder-browse.md) | **Superseded by 0046** | |
-| [0021 Move, and web UI refinements](0021-move-and-webui-refinements.md) | Accepted | `POST /api/v1/move` rewrites an entry's id in one transaction, carrying revisions, attachments, usage, embeddings and the inbound references that point at it; an occupied destination is a 409 even when soft-deleted. Not on MCP. |
-| [0044 The web UI edits documents](0044-web-ui-edits-documents.md) | Accepted | Editing in the web UI means editing the canonical OKF document as text (a parse check before save, type templates for new entries) rather than a form — the detail view still renders from the projection. Losing row editors for `sources`/`parameters` is a stated cost, not a saving. |
+| [0072 The web UI: two serving paths, and editing documents](0072-the-web-ui-serves-and-edits-documents.md) | Accepted; the current record for the web UI (carries 0006, 0044) | One self-contained page that knows nothing about authentication, served two ways: `ochakai ui` binds loopback and acts as you, `ochakai serve-ui` is the deployed team service, and `ochakai serve` never serves the UI. Splitting them into two commands is what makes the dangerous combinations unrepresentable. Editing means editing the canonical OKF document as text — a form would need a YAML parser in the browser, and a thicker read shape would teach a form the format does not have. Losing the row editors is a stated cost. Consolidates two records; no decision changes. |
+| [0006 Two serving paths for the web UI](0006-web-ui-serving.md) | **Superseded by 0072** | |
+| [0014 Folder browse](0014-folder-browse.md) | **Superseded by 0046, then 0075** | |
+| [0021 Move, and web UI refinements](0021-move-and-webui-refinements.md) | **Superseded by 0075** | |
+| [0044 The web UI edits documents](0044-web-ui-edits-documents.md) | **Superseded by 0072** | |
 | [0032 Recording web UI writes under the IAP identity](0032-webui-iap-identity.md) | **Superseded by 0065** | |
 
 ## Surfaces — REST, MCP, CLI, web UI
@@ -147,15 +152,16 @@ MCP) — it revises none of the records above; the storage model stays
 
 | Record | Status | Decision |
 |---|---|---|
-| [0018 Retiring import-ossie](0018-semantic-model-as-knowledge.md) | Accepted | A semantic model gets no dedicated mechanism — it's an ordinary knowledge entry, gaining revisions, provenance and the OKF round trip like any other. |
-| [0028 Retiring compile_sql](0028-retire-compile-sql.md) | Accepted | Removes deterministic SQL compilation entirely (endpoint, MCP tool, CLI command, web UI tab, write-time validation) — cut for cost, not technique: no users, and its tool schema was the largest consumer of an agent's context. Breaking in 0.13.0; what an agent needs is the verified query and its caveat, both from `get_context`. |
+| [0070 What was retired, and the bar for retiring it](0070-what-was-retired-and-why.md) | Accepted; the current record for what ochakai decided not to do (carries 0012, 0018, 0028) | Three faces came down — the public MCP OAuth connector, deterministic SQL compilation, and any dedicated mechanism for semantic models. In none of them was the design wrong; what flipped was the cost side, and it flipped the same way each time: no users materialized, the documentation had already demoted the feature, and the maintenance surface kept accruing (the connector alone carried the deployment's only secret and its only public service). **Retiring is maintenance, not failure.** No user knowledge is deleted: retired types stay first-class as free types and past usage rows stay. Consolidates three records; no decision changes. |
+| [0018 Retiring import-ossie](0018-semantic-model-as-knowledge.md) | **Superseded by 0070** | |
+| [0028 Retiring compile_sql](0028-retire-compile-sql.md) | **Superseded by 0070** | |
 
 ## The MCP OAuth connector, and what replaced it
 
 | Record | Status | Decision |
 |---|---|---|
-| [0010 An MCP OAuth connector service](0010-mcp-oauth-connector.md) | **Superseded by 0012** | |
-| [0012 Retiring the connector](0012-retire-mcp-oauth-connector.md) | Accepted | Removed on cost, not technique — no user materialized, while the connector alone carried the deployment's only secret and about 1,700 unused lines under security review. Returns to 0002's "not until it is needed". |
+| [0010 An MCP OAuth connector service](0010-mcp-oauth-connector.md) | **Superseded by 0012, then 0070** | |
+| [0012 Retiring the connector](0012-retire-mcp-oauth-connector.md) | **Superseded by 0070** | |
 | [0039 A stdio bridge for MCP clients](0039-mcp-stdio-bridge.md) | **Superseded by 0067** | |
 
 ---

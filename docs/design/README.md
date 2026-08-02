@@ -31,20 +31,20 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
 | デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
-| OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0069](0069-the-loop-and-what-measures-it.md) §2(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
-| 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 と [0064](0064-rest-stops-at-api-v1.md) §5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本、`.md` は必須でバンドルパスの一部)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
-| 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
+| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
+| 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
+| 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
-| 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
-| 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0020](0020-attachment-search.md)(ファイル)、[0041](0041-path-scoped-search.md)(prefix)。スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0073](0073-search-and-when-embeddings-apply.md)(検索) |
+| 検索と埋め込み | [0073](0073-search-and-when-embeddings-apply.md) が現行。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則) |
-| Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0065](0065-identity-and-provenance.md) §5(プロキシと identity) |
+| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
-| バンドル往復と provenance の所有権 | [0046](0046-bundle-address-space.md) §2.2 が現行(主張と観測の分離)。[0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
-| やらないと決めたこと | [0028](0028-retire-compile-sql.md)(compile_sql)、[0018](0018-semantic-model-as-knowledge.md)(専用機構)、[0012](0012-retire-mcp-oauth-connector.md)(OAuth コネクタ) |
+| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。[0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
+| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
 | REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -74,15 +74,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 - [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
-- [0053 埋め込みは既定であり、ベクトル空間は捨ててよい](0053-embeddings-by-default.md)
-  — **Accepted**。Google Cloud の上ではプロジェクトをメタデータサーバから
-  発見して意味的検索を既定で有効にし、使えるかどうかは設定ではなく IAM が
-  決める(起動時に 1 回だけ訊く)。発見された既定は Vertex AI や pgvector が
-  無ければ字句検索に落ち、名指しされた設定は従来どおり起動を拒否する。
-  off は `OCHAKAI_EMBEDDINGS=off` ただ一つ。次元を変えたときの手作業の
-  `DROP TABLE` を廃し、**ベクトルは導出物である**という理由で製品が作り直す
-  (詰め直しは `ochakai reembed` のまま — 支払いは頼まれてから)。添付の
-  昇格は 0046 で完了しており何も足さない。
+- [0053 埋め込みは既定であり、ベクトル空間は捨ててよい](0053-embeddings-by-default.md) — **Superseded by 0073**。
 
 ## 実装の品質ゲート
 
@@ -139,46 +131,29 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
-- [0047 問いの語彙は OKF が定義するキーである](0047-fm-carries-okf-keys.md)
-  — **Accepted**。0046 §3.11 を 2 点改訂する。「named フィルタは式への
-  糖衣」は採らず typed column を残し、`fm.type` / `fm.status` /
-  `fm.tags` / `fm.sources` / `fm.stale_after` は 400 で拒否する
-  — 同じキーが綴りによって別の問いになる状態(沈黙した `status` は
-  `status=stable` に当たり `fm.status=stable` に当たらない)を、解決では
-  なく除去するため。あわせて `fm.` を **OKF が定義するキー**に閉じる
-  — producer が発明したキーは保存され往復するが引けない。開いた語彙は
-  0 件が答えなのか綴り間違いなのかを利用者に判定させず、引けるキーの
-  一覧をどの面にも書けなくするからである。引けるキーは
-  `domain.EnvelopeKeys` から導出するので、OKF が足したキーは列も
-  マイグレーションも無しで引ける(0046 §3.11 の目的)。拒否はサービス層
-  1 か所で、REST / MCP / CLI が共有する。0015 §3 に「`fm.` は Web UI に
-  載せない」という省略を 1 件足す(§4)。**未リリースにつき、同番号の
-  初版を 0048 §2.3 に従って差し替えた**(その規則の最初の適用)。
-- [0061 dry run は書き込みを止めたもの](0061-a-dry-run-is-the-write-withheld.md)
-  — **Accepted**。`PUT /api/v1/bundle/{path}` に `dry_run` と
-  `Ochakai-Plan` を足し、**書き込み経路そのものに「書かないで答えろ」と
-  言う**。`ochakai import --dry-run --strict` は CI の関門として文書化
-  されていたのに、`--strict` が落ちる理由の半分 —— trust family が
-  `received` の claim として残るか(0046 §2.2 の判定は**保存済みとの
-  比較**である)、サーバがその文書を拒むか、書き込みが何も変えないか
-  —— がバンドルからは見えず、**関門が通って本番 import が落ちていた**
-  (§1)。クライアント側で作り直せば表面は増えないが、増えないのは表面
-  だけで、増えるのは書き込み判断の第二の実装である(0007、§2.1)。
-  判定は `settleUpdate` を `Update` と `Plan` が共有して一つの経路から
-  出す(§3.3)。dry run は 200 のみ・ETag 無し・DELETE では 400、
-  ヘッダではなくクエリパラメータ(**落とされたヘッダは書き込みになる**)。
-  副産物として dry run が created / updated / unchanged を出し分ける。
-  PARAM 18 → 19、HEADER 9 → 10 —— **天井を二つ上げる決定**であり、
-  増えるのは口であって能力ではない(§4)。
-- [0046 バンドルがアドレス空間](0046-bundle-address-space.md) —
-  **Accepted**。**OKF 互換領域の現行ドキュメント**。バンドルを
-  「パス → オブジェクト」の写像そのものとし、概念でないファイルも
-  往復させる(取り込みで消えるものが無くなる)。保存は**受け取った
-  バイト列**で正準形は導出値、`index.md` / `log.md` は SPEC §8 / §9 の
-  導出面(browse と revisions を吸収)、本文リンクは SPEC §6 の形だけ、
-  trust は SPEC §5.3 の 3 段、索引は frontmatter の jsonb。REST は
-  `/api/v1/bundle/{path}` を中心とした 8 面に畳まれ、添付という概念が
-  対象消滅する。
+- [0075 バンドルがアドレス空間である](0075-the-bundle-is-the-address-space.md)
+  — **Accepted**。**バンドル・住所・保存形の現行ドキュメント**(0017 / 0021 /
+  0041 / 0046 の四冊を一冊にまとめたもので、決定は一つも動いていない)。
+  ochakai が持つのは一つのバンドル(パス → オブジェクトの写像)で、
+  **バンドルに入ったものは出てくる**。パスが住所で型は属性、保存は受け取った
+  バイト列で正準形は導出値、他者の trust family は `received:` の主張として
+  残る。帰属は本文から導出し、move は名前空間ごと動かし、`prefix` は住所で
+  絞る(認可ではない)。
+- [0074 文書の形と、それに問う語彙](0074-the-document-and-the-vocabulary-that-asks-it.md)
+  — **Accepted**。**concept 文書の形と問いの語彙の現行ドキュメント**
+  (0019 / 0022 / 0024 / 0047 / 0061 の五冊を一冊にまとめたもので、決定は
+  一つも動いていない)。ファイル名が名前(title は任意、鍵として比較される
+  文字列だけ NFC)、リンクは本文から導出、id の文字種はパス安全性だけ、
+  `fm.` が引けるのは OKF が定義するキー、そして dry run は書き込みを止めた
+  ものである。
+- [0071 推奨する型の語彙](0071-the-recommended-type-vocabulary.md) —
+  **Accepted**。**型の語彙の現行ドキュメント**(0038 / 0063 を一冊に
+  まとめたもの)。推奨は 9 型で、型は閉じた集合ではない。語彙を決める根拠は
+  「綴りだけで意味が立つか」「OKF が綴りを与えた証拠」「その綴りで誰かが
+  実際に書いたか」の三つで、三つ目が `Playbook` と `API Endpoint` を外した。
+- [0047 問いの語彙は OKF が定義するキーである](0047-fm-carries-okf-keys.md) — **Superseded by 0074**。
+- [0061 dry run は書き込みを止めたもの](0061-a-dry-run-is-the-write-withheld.md) — **Superseded by 0074**。
+- [0046 バンドルがアドレス空間](0046-bundle-address-space.md) — **Superseded by 0075**。
 - [0043 文書を真とする](0043-document-first.md) —
   **Superseded by 0046**。保存もワイヤも正準化した OKF 文書
   そのものにし、DB は索引とインスタンス台帳(検証・却下・利用・履歴)に
@@ -186,11 +161,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   rejection 台帳、ETag は内容ハッシュ、actor は `process:`。写像が恒等に
   なり、attrs と封筒の二重底・rejected の非可逆往復・外来 `stable` の
   draft 降格・`updated_at` の三役が対象消滅する。
-- [0041 住所で検索の範囲を絞る](0041-path-scoped-search.md) — **Accepted**。
-  0017 の「パスが住所」を検索と context に届かせる `prefix` フィルタ
-  (繰り返し可・セグメント境界で照合・サブツリー全体)。サブツリーを
-  1 コールで引き分けるための機構であって、閲覧の制限ではない
-  (§4)。索引もマイグレーションも足さない。
+- [0041 住所で検索の範囲を絞る](0041-path-scoped-search.md) — **Superseded by 0075**。
 - [0037 宣言した期限と引用元から引けるようにする](0037-stale-and-source-lookup.md) — **Superseded by 0069**。
 - [0036 OKF のスキーマを真とする](0036-okf-schema-first.md) —
   **Superseded by 0043**(document-first への全面置き換え)。
@@ -209,28 +180,14 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 - [0016 knowledge-catalog リファレンスバンドルへの準拠](0016-knowledge-catalog-alignment.md)
   — **Superseded by 0036**。リファレンスバンドルへの準拠
   (`resource` の封筒フィールド化ほか)。
-- [0017 パスが住所、タイプは属性](0017-path-addressing.md) —
-  **Accepted**。ID がアドレスであり、パスはもはや型を主張しない。
-- [0019 v0.10.0 リリース前の整合調整](0019-release-review-adjustments.md)
-  — **Accepted**。ID 文字種の OKF 同等化、バンドルインポートは拒否文書を
-  スキップしてレポート。
-- [0022 ファイル名が名前](0022-filename-as-name.md) — **Accepted**。
-  title の任意化、ID の検索対象化、NFC 正規化。
+- [0017 パスが住所、タイプは属性](0017-path-addressing.md) — **Superseded by 0075**。
+- [0019 v0.10.0 リリース前の整合調整](0019-release-review-adjustments.md) — **Superseded by 0074**。
+- [0022 ファイル名が名前](0022-filename-as-name.md) — **Superseded by 0074**。
 - [0023 型の語彙を OKF に一本化する](0023-okf-type-vocabulary.md) —
   **Superseded by 0038**。内部スラグと OKF 表示名の二重語彙を
   廃止し、型の値は OKF の綴りそのものに。
-- [0038 推奨型の語彙を OKF の証拠に合わせ直す](0038-type-vocabulary-realignment.md)
-  — **Accepted**。`Semantic Model` と `Golden Query` を外し、`Skill` /
-  `Playbook` / `Policy` / `API Endpoint` を足して 11 型に(退役した綴りは
-  自由型として存続、マイグレーションなし)。語彙を述べる箇所を
-  `domain.TypesHint()` と外側のテストで固定する。
-- [0063 使われていない2つの推奨型を外す](0063-two-unused-recommended-types-leave.md)
-  — **Accepted**。**型の語彙領域の現行ドキュメント**。0038 が足した
-  `Playbook` と `API Endpoint` を推奨語彙から外し、11 型を 9 型に。
-  ochakai 自身の `examples/` にも OKF 公式のリファレンスバンドルにも
-  一度も書かれていなかった 2 語で、SPEC の例示だけを根拠にしていた
-  (issue #353)。型集合は閉じないまま、退役は自由型として存続、
-  マイグレーションなし。
+- [0038 推奨型の語彙を OKF の証拠に合わせ直す](0038-type-vocabulary-realignment.md) — **Superseded by 0071**。
+- [0063 使われていない2つの推奨型を外す](0063-two-unused-recommended-types-leave.md) — **Superseded by 0071**。
 - [0057 concept は読む人が出会う語でもある](0057-concept-is-the-word-a-reader-meets.md)
   — **Accepted**、**BREAKING(文言のみ)**。**知識の単位の呼び名領域の
   現行ドキュメントの一つ**(0054 の決定を §0 に統合する)。0054 は MCP
@@ -252,12 +209,16 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   — **Superseded by 0057**。MCP のツール名 5 本の `knowledge` を OKF
   SPEC §2 の語 `concept` に改めた最初の決定。0057 §0 に吸収された。
 
-- [0024 リンクは本文から導出する](0024-links-from-body.md) —
-  **Accepted**。構造化 `links` フィールドを廃止し、リンクは本文 markdown
-  から導出する。
+- [0024 リンクは本文から導出する](0024-links-from-body.md) — **Superseded by 0074**。
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
 
+- [0073 検索が何を融合し、埋め込みがいつ効くか](0073-search-and-when-embeddings-apply.md)
+  — **Accepted**。**検索と埋め込みの現行ドキュメント**(0020 / 0053 を
+  一冊にまとめたもの)。Google Cloud の上では埋め込みが既定で、使えるかを
+  決めるのは設定ではなく IAM。次元変更は製品が行う(**ベクトルは導出物で
+  ある**)。検索は字句・concept のベクトル・ファイルのベクトルの三本を融合し、
+  ファイルは独立して返らず、ochakai はファイルを解釈しない。
 - [0008 画像添付](0008-image-attachments.md) — **Superseded by 0046**。
   画像添付の導入。「原本ではなく根拠」の位置づけと `<id>/<name>` は、
   0046 では帰属の**導出規則**として残る。
@@ -267,8 +228,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   — **Superseded by 0046**。任意ファイル形式への一般化と GCS 一本化。
   sniff によるメディアタイプ判定と markdown-only 運用は 0046 も維持し、
   SVG / HTML の書き込み拒否だけが配信側の防御に置き換わる。
-- [0020 添付ファイルの検索](0020-attachment-search.md) — **Accepted**。
-  ファイル名のレキシカル一致と全ファイルのベクトル検索。
+- [0020 添付ファイルの検索](0020-attachment-search.md) — **Superseded by 0073**。
 
 `attachments` / `Attachment` という wire 上の綴りは 0046 §2.1 が概念と
 しては既に対象消滅させていたが、名前だけ残っていた。**その綴りの retire
@@ -279,20 +239,17 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
 
 ## ブラウズと Web UI
 
-- [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Accepted**。
-  自己完結 1 ファイルの UI を、認証モデルの異なる二経路
-  (`ochakai ui` / `ochakai serve-ui`)で配信する。
+- [0072 Web UI — 二つの配信経路と、文書としての編集](0072-the-web-ui-serves-and-edits-documents.md)
+  — **Accepted**。**Web UI の現行ドキュメント**(0006 / 0044 を一冊に
+  まとめたもの)。ページは認証を知らず、同じ一枚を `ochakai ui` と
+  `ochakai serve-ui` の二経路で配る — 危険な組み合わせはコマンドを分けること
+  で書けなくなる。編集は正準 OKF 文書のテキスト編集一本で、行エディタを
+  失うことは値引きではなく支払いである。
+- [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Superseded by 0072**。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**。
   prefix によるツリー閲覧。
-- [0021 ナレッジの move と Web UI の微調整](0021-move-and-webui-refinements.md)
-  — **Accepted**。move(パス変更)の導入と表示の整理。
-- [0044 Web UI は文書を編集する](0044-web-ui-edits-documents.md) —
-  **Accepted**。0043 §3.11 のフォーム糖衣を撤回し、編集を正準 OKF 文書の
-  テキスト編集一本にする(詳細画面は投影のまま)。ブラウザに YAML パーサを
-  抱えるか、読み取りの既定形を二重にするかの二択を避けた判断で、
-  キュレーション面が形式そのものを教えるという理由づけ。行エディタを失う
-  ことは支払いだと明記し、戻すときはサーバ側に「文書 → 構造」面を足すと
-  条件を書いてある。
+- [0021 ナレッジの move と Web UI の微調整](0021-move-and-webui-refinements.md) — **Superseded by 0075**。
+- [0044 Web UI は文書を編集する](0044-web-ui-edits-documents.md) — **Superseded by 0072**。
 
 Web UI の書き込みが誰として記録されるかは、この節ではなく
 [0065](0065-identity-and-provenance.md) §5 が持つ — 両プロキシがブラウザ
@@ -376,18 +333,19 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 
 ## セマンティックモデルと compile
 
-- [0018 import-ossie の廃止](0018-semantic-model-as-knowledge.md) —
-  **Accepted**。セマンティックモデルは専用機構を持たず、通常のナレッジ
-  エントリ。
-- [0028 compile_sql とセマンティックモデル面の撤去](0028-retire-compile-sql.md)
-  — **Accepted**。決定的 SQL コンパイルとその周辺(API・MCP・CLI・UI)を
-  すべて撤去。
+- [0070 撤去した三つの面と、撤去してよい基準](0070-what-was-retired-and-why.md)
+  — **Accepted**。**「やらないと決めたこと」の現行ドキュメント**
+  (0012 / 0018 / 0028 を一冊にまとめたもの)。三つとも設計が間違っていた
+  のではなく**費用対効果の前提が覆った** — 利用がなく、ドキュメントが自分で
+  降格させており、保守面積と債務だけが残っていた。**撤去は保守であって失敗
+  ではない。** 利用者のナレッジは一件も消さない。
+- [0018 import-ossie の廃止](0018-semantic-model-as-knowledge.md) — **Superseded by 0070**。
+- [0028 compile_sql とセマンティックモデル面の撤去](0028-retire-compile-sql.md) — **Superseded by 0070**。
 
 ## MCP OAuth コネクタ(撤去済み)
 
 - [0010 MCP OAuth コネクタサービス](0010-mcp-oauth-connector.md) —
   **Superseded by 0012**。claude.ai / ChatGPT リモートコネクタ向けの
   公開第二サービス。再実装時はこの設計が出発点。
-- [0012 MCP OAuth コネクタサービスの撤去](0012-retire-mcp-oauth-connector.md)
-  — **Accepted**。同サービスの撤去。0002 §4 の「必要になったら」に回帰。
+- [0012 MCP OAuth コネクタサービスの撤去](0012-retire-mcp-oauth-connector.md) — **Superseded by 0070**。
 - [0039 stdio クライアントへの橋](0039-mcp-stdio-bridge.md) — **Superseded by 0067**。
