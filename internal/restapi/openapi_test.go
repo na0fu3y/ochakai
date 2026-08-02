@@ -13,6 +13,7 @@ package restapi
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,8 +26,10 @@ import (
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 	valerrors "github.com/pb33f/libopenapi-validator/errors"
+	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/service"
 )
 
 const specPath = "../../api/openapi.yaml"
@@ -293,5 +296,144 @@ func TestOpenAPITypeVocabularyMatchesDomain(t *testing.T) {
 		FindAllStringSubmatch(spec, -1) {
 		t.Errorf("an example still writes %q as a type. It is a free type and still works, "+
 			"but the spec is where people copy from (design doc 0038)", m[1])
+	}
+}
+
+// specHTTPMethods are the map keys a path item in api/openapi.yaml can
+// hold besides "parameters" (the path-level parameters shared by every
+// method under it).
+var specHTTPMethods = map[string]bool{"get": true, "put": true, "post": true, "delete": true, "patch": true}
+
+type specParam struct {
+	Name string `yaml:"name"`
+	In   string `yaml:"in"`
+}
+
+// specQueryParams reads api/openapi.yaml and returns, for every
+// "METHOD /path" operation, the query parameter names it declares — real
+// names, plus the sentinel "fm." standing for the `fm.{key}` family that
+// is this contract's one prefix exemption (see the spec's own prose
+// above TestOpenAPISpecIsValid's paths).
+//
+// This is the minimal reader TestUnknownQueryParamsMatchSpec needs, not
+// a second OpenAPI implementation: a $ref among components/parameters
+// resolves to a header on every one of them today (If-Match,
+// If-None-Match, Ochakai-On-Behalf-Of, Ochakai-Producer), so only
+// operations' own inline `parameters` are read — a query parameter added
+// later as a component would need this taught to resolve it, the same
+// way cmd/ochakai/surface_test.go's wireSpec does.
+func specQueryParams(t *testing.T) map[string]map[string]bool {
+	t.Helper()
+	raw, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", specPath, err)
+	}
+	var doc struct {
+		Paths map[string]map[string]yaml.Node `yaml:"paths"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse %s: %v", specPath, err)
+	}
+	if len(doc.Paths) == 0 {
+		t.Fatal("no paths found in openapi.yaml: this check now guards nothing")
+	}
+	out := map[string]map[string]bool{}
+	for path, item := range doc.Paths {
+		var shared []specParam
+		if node, ok := item["parameters"]; ok {
+			if err := node.Decode(&shared); err != nil {
+				t.Fatalf("%s: parameters: %v", path, err)
+			}
+		}
+		for method, node := range item {
+			if !specHTTPMethods[method] {
+				continue
+			}
+			var op struct {
+				Parameters []specParam `yaml:"parameters"`
+			}
+			if err := node.Decode(&op); err != nil {
+				t.Fatalf("%s %s: %v", method, path, err)
+			}
+			names := map[string]bool{}
+			for _, p := range append(append([]specParam{}, shared...), op.Parameters...) {
+				switch {
+				case p.In != "query":
+					continue
+				case p.Name == "fm.{key}":
+					names["fm."] = true
+				default:
+					names[p.Name] = true
+				}
+			}
+			out[strings.ToUpper(method)+" "+path] = names
+		}
+	}
+	return out
+}
+
+// TestUnknownQueryParamsMatchSpec is issue #409's item 3: a hand-picked
+// list of examples cannot tell a per-operation allowlist from a shared or
+// globally-exempt one, because it never tries the one combination that
+// would fail — a parameter real on operation B, sent to operation A,
+// where A does not declare it. This builds that combination from
+// api/openapi.yaml itself, the way cmd/ochakai/surface_test.go's
+// readWireSpec builds the surface count, instead of by hand: every
+// parameter declared anywhere in the contract is tried against every
+// operation that does not declare it, and every one of those must be a
+// 400 naming it. Replacing any of restapi.go's per-operation allowlists
+// with a shared or wider one — the change #409 showed leaves a
+// hand-written five-case test green — fails this test on the first
+// parameter the merge widened.
+func TestUnknownQueryParamsMatchSpec(t *testing.T) {
+	h := Handler(&service.Service{})
+	declared := specQueryParams(t)
+
+	universe := map[string]bool{}
+	for _, names := range declared {
+		for name := range names {
+			universe[name] = true
+		}
+	}
+	if len(universe) == 0 {
+		t.Fatal("no query parameters found in openapi.yaml: this check now guards nothing")
+	}
+
+	for _, op := range restOperations {
+		allowed, ok := declared[op.spec]
+		if !ok {
+			t.Fatalf("%s: openapi.yaml has no operation %q", op.name, op.spec)
+		}
+		for name := range universe {
+			if allowed[name] {
+				continue
+			}
+			// dry_run is DELETE's one deliberate exception: PUT and
+			// DELETE share an allowlist (restapi.go) so DELETE can turn
+			// it into its own refusal ("a delete has no plan beside
+			// it") rather than "unknown query parameter" — pinned by
+			// TestRESTIntegrationDryRunAnswersWithoutWriting's DELETE
+			// ?dry_run=true case in restapi_integration_test.go.
+			// openapi.yaml correctly does not declare it there, since
+			// every value of it is refused; that is not the silent
+			// no-op this test guards against.
+			if op.name == "bundle delete" && name == "dry_run" {
+				continue
+			}
+			key := name
+			if name == "fm." {
+				key = "fm.owner"
+			}
+			t.Run(op.name+"/"+key, func(t *testing.T) {
+				url := op.url + "?" + key + "=x"
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, httptest.NewRequest(op.method, url, nil))
+				want := fmt.Sprintf("unknown query parameter %q", key)
+				if rec.Code != http.StatusBadRequest || !strings.Contains(errMessage(t, rec), want) {
+					t.Errorf("%s %s = %d %q, want 400 %q — api/openapi.yaml declares %q on another "+
+						"operation but not on %s", op.method, url, rec.Code, rec.Body, want, key, op.spec)
+				}
+			})
+		}
 	}
 }

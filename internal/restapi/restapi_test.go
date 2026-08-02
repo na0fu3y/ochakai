@@ -155,36 +155,47 @@ func TestBadRequestValidation(t *testing.T) {
 	}
 }
 
+// restOperations pairs each of REST's eleven operations with a concrete
+// address that reaches it through Handler's router and the
+// api/openapi.yaml operation (method + path template) it implements.
+// Shared by every test below that needs to address all eleven, so there
+// is one list of URLs to keep in sync with the router rather than one
+// per test.
+var restOperations = []struct{ name, method, url, spec string }{
+	{"search", http.MethodGet, "/api/v1/search", "GET /api/v1/search"},
+	{"context", http.MethodGet, "/api/v1/context", "GET /api/v1/context"},
+	{"bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md", "GET /api/v1/bundle/{path}"},
+	{"bundle put", http.MethodPut, "/api/v1/bundle/metrics/revenue.md", "PUT /api/v1/bundle/{path}"},
+	{"bundle delete", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md", "DELETE /api/v1/bundle/{path}"},
+	{"review", http.MethodPost, "/api/v1/review/metrics/revenue", "POST /api/v1/review/{id}"},
+	{"usage get", http.MethodGet, "/api/v1/usage/metrics/revenue", "GET /api/v1/usage/{id}"},
+	{"usage post", http.MethodPost, "/api/v1/usage/metrics/revenue", "POST /api/v1/usage/{id}"},
+	{"stats", http.MethodGet, "/api/v1/stats", "GET /api/v1/stats"},
+	{"move", http.MethodPost, "/api/v1/move", "POST /api/v1/move"},
+	{"reembed", http.MethodPost, "/api/v1/reembed", "POST /api/v1/reembed"},
+}
+
 // TestUnknownQueryParamsAreRejected pins design doc 0064's strict
 // allowlist: after the freeze, an unrecognized query parameter is a 400
 // naming it rather than a silent no-op — the asymmetry with an unknown
 // fm.* key (already checked against the concept's own vocabulary, see
 // TestBadRequestValidation) that made the dry_run false-green possible in
-// the first place. Covers every one of REST's 11 operations.
+// the first place. Covers every one of REST's 11 operations with a key
+// that appears in no allowlist at all; TestUnknownQueryParamsMatchSpec
+// below covers the sharper case, a key that is real on some operation and
+// not this one.
 func TestUnknownQueryParamsAreRejected(t *testing.T) {
 	h := Handler(&service.Service{})
-	cases := []struct{ name, method, url string }{
-		{"search", http.MethodGet, "/api/v1/search?q=x&typo=1"},
-		{"context", http.MethodGet, "/api/v1/context?q=x&typo=1"},
-		{"bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md?typo=1"},
-		{"bundle put", http.MethodPut, "/api/v1/bundle/metrics/revenue.md?typo=1"},
-		{"bundle delete", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?typo=1"},
-		{"review", http.MethodPost, "/api/v1/review/metrics/revenue?typo=1"},
-		{"usage get", http.MethodGet, "/api/v1/usage/metrics/revenue?typo=1"},
-		{"usage post", http.MethodPost, "/api/v1/usage/metrics/revenue?typo=1"},
-		{"stats", http.MethodGet, "/api/v1/stats?typo=1"},
-		{"move", http.MethodPost, "/api/v1/move?typo=1"},
-		{"reembed", http.MethodPost, "/api/v1/reembed?typo=1"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, op := range restOperations {
+		t.Run(op.name, func(t *testing.T) {
+			url := op.url + "?typo=1"
 			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			h.ServeHTTP(rec, httptest.NewRequest(op.method, url, nil))
 			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
+				t.Fatalf("%s %s = %d, want 400 (body: %s)", op.method, url, rec.Code, rec.Body)
 			}
 			if !strings.Contains(rec.Body.String(), "typo") {
-				t.Errorf("%s %s body %q does not name the unknown parameter", c.method, c.url, rec.Body)
+				t.Errorf("%s %s body %q does not name the unknown parameter", op.method, url, rec.Body)
 			}
 		})
 	}
@@ -202,41 +213,43 @@ func TestFrontmatterParamsAreNotUnknown(t *testing.T) {
 	}
 }
 
-// TestUnknownQueryParamsArePerOperation pins the two silent no-ops issue
-// #409 found in the strict allowlist: a parameter declared in
-// api/openapi.yaml on one operation but accepted, and ignored, on
-// another. TestUnknownQueryParamsAreRejected already shows an
-// altogether-foreign key is rejected everywhere; this shows a key that
-// is real on *some* operation is still rejected on the ones that do not
-// declare it — the case a single shared or globally-exempt allowlist
-// cannot distinguish.
-func TestUnknownQueryParamsArePerOperation(t *testing.T) {
+// TestFrontmatterEmptyKeyIsRejected pins the third silent no-op issue
+// #409 found once the first two were closed: "fm." itself — an empty
+// frontmatter key — has "fm." as a prefix of itself, so the fm.*
+// exemption in rejectUnknownParams waved it through; it is also the
+// sentinel a caller passes in allowed to grant that exemption, so a
+// plain membership check waved it through a second way. Either path
+// handed it to frontmatterFilter, which drops a key of "" without
+// telling anyone — a client asking `?fm.=x` got a 200 that quietly
+// dropped the filter it asked for.
+func TestFrontmatterEmptyKeyIsRejected(t *testing.T) {
 	h := Handler(&service.Service{})
-	cases := []struct{ name, method, url string }{
-		// purge is DELETE's own parameter (api/openapi.yaml declares it
-		// there, not on PUT); before issue #409 the two verbs shared one
-		// allowlist and a PUT ?purge= passed it silently.
-		{"purge on PUT", http.MethodPut, "/api/v1/bundle/metrics/revenue.md?purge=true"},
-		// fm.* is real on search and context (frontmatterFilter); before
-		// issue #409 the exemption was unconditional, so it also passed
-		// on every operation that reads no Frontmatter filter at all.
-		{"fm. on stats", http.MethodGet, "/api/v1/stats?fm.owner=finance"},
-		{"fm. on move", http.MethodPost, "/api/v1/move?fm.owner=finance"},
-		{"fm. on reembed", http.MethodPost, "/api/v1/reembed?fm.owner=finance"},
-		{"fm. on bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md?fm.owner=finance"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, url := range []string{"/api/v1/search?q=x&fm.=x", "/api/v1/context?q=x&fm.=x"} {
+		t.Run(url, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, url, nil))
 			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
+				t.Fatalf("GET %s = %d, want 400 (body: %s)", url, rec.Code, rec.Body)
 			}
-			if !strings.Contains(rec.Body.String(), "unknown query parameter") {
-				t.Errorf("%s %s body %q does not say the parameter is unknown", c.method, c.url, rec.Body)
+			if !strings.Contains(errMessage(t, rec), `unknown query parameter "fm."`) {
+				t.Errorf("GET %s body %q does not name fm. as unknown", url, rec.Body)
 			}
 		})
 	}
+}
+
+// errMessage decodes a writeError response's {"error": "..."} envelope,
+// so a check against its text is not defeated by JSON's own quoting: the
+// wire form of `unknown query parameter "fm."` is
+// `unknown query parameter \"fm.\"`, and a literal %q substring never
+// matches that escaped form.
+func errMessage(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %q is not JSON: %v", rec.Body, err)
+	}
+	return body["error"]
 }
 
 // TestUnknownQueryParamNamedIsDeterministic pins that naming the

@@ -33,9 +33,12 @@ info:
     0064) — never a silent no-op. This is what makes it safe to add a
     parameter after the freeze: a client built against an older version
     of this contract finds out at the point of the call, rather than
-    having the parameter quietly ignored. The one exception is `fm.`,
-    whose keys are validated against the concept's own OKF frontmatter
-    (design doc 0047) rather than against a fixed name list.
+    having the parameter quietly ignored. The one exception is `fm.`, and
+    only on the operations that declare `fm.{key}` below (search,
+    context): there, its keys are validated against the concept's own OKF
+    frontmatter (design doc 0047) rather than against a fixed name list.
+    Every other operation has no such downstream check and rejects `fm.*`
+    like any other unrecognized parameter.
 
     **REST is frozen at `/api/v1`** (design doc 0064,
     docs/compatibility.md): this contract is the address list a client can
