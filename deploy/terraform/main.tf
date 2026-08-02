@@ -34,6 +34,10 @@ locals {
   # ghcr.io directly.
   image = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.image_repository}:${var.image_tag}"
 
+  # Same image, normally the same tag. var.webui_image_tag exists only to be
+  # set ahead of var.image_tag for a staged upgrade — see its description.
+  webui_image = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_registry_repository_id}/${var.image_repository}:${coalesce(var.webui_image_tag, var.image_tag)}"
+
   connection_name = google_sql_database_instance.ochakai.connection_name
 
   # The database principal for a service account is its email with the
@@ -497,8 +501,8 @@ resource "google_cloud_run_v2_service_iam_member" "webui_invokes_ochakai" {
 }
 
 # The same image as the server, started with serve-ui instead of the default
-# serve. There is no second image to build, and the UI is always the exact
-# version of the server it fronts.
+# serve. There is no second image to build, and by default (local.webui_image)
+# the UI is the exact version of the server it fronts.
 resource "google_cloud_run_v2_service" "webui" {
   count    = var.enable_webui ? 1 : 0
   provider = google-beta
@@ -523,7 +527,7 @@ resource "google_cloud_run_v2_service" "webui" {
     }
 
     containers {
-      image = local.image
+      image = local.webui_image
       args  = ["serve-ui"]
 
       resources {
@@ -544,11 +548,14 @@ resource "google_cloud_run_v2_service" "webui" {
     }
   }
 
-  # Ordering matters and Terraform gets it right for free here: the webui's
-  # OCHAKAI_URL reads the server's uri, so the server — carrying the
-  # delegation grant this UI depends on — is always settled first. The server
-  # answers 403 rather than downgrading silently, so the reverse order would
-  # leave a window where browser edits fail.
+  # Ordering matters and Terraform gets it right for free within one apply:
+  # the webui's OCHAKAI_URL reads the server's uri, so the server — carrying
+  # the delegation grant this UI depends on — is always settled first. That
+  # is also the wrong order for the one upgrade docs/guides/operating.md
+  # warns about (a header rename): the webui must land before or with the
+  # server, never after. var.webui_image_tag exists so that case can be
+  # driven as two applies — webui first, server second — without disturbing
+  # this resource's ordering within either one.
   depends_on = [google_project_service.this]
 }
 

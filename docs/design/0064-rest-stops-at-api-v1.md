@@ -204,8 +204,8 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 **BREAKING**。REST を組み込んでいるクライアントが直す必要があるもの:
 
 - `X-Ochakai-On-Behalf-Of` / `X-Ochakai-Producer` を送っているなら
-  `X-` を外す。`On-Behalf-Of` は API 先行だと 400 でなく黙って誤身元に
-  書き込む([Upgrades](../guides/operating.md#upgrades))。
+  `X-` を外す。`On-Behalf-Of` は古い綴りのままだと 400 でなく黙って誤
+  身元に書き込む。段階アップグレード中に限らない([Upgrades](../guides/operating.md#upgrades))。
 - 未知のクエリパラメータを送っていたら 400 になる。
 - `attachments` という JSON キー・クエリパラメータ・MCP ツール名を
   読み書きしていたら `files` に読み替える。

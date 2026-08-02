@@ -39,6 +39,13 @@ last entry.
   the web UI first, or both together, never the API alone while the web
   UI lags. See [Upgrades](docs/guides/operating.md#upgrades) (issue
   [#418](https://github.com/na0fu3y/ochakai/issues/418)).
+- **Security** — the Terraform module made that order impossible: the
+  webui's `OCHAKAI_URL` reads the server's `uri`, so a single
+  `terraform apply` bumping `image_tag` always settled the API first —
+  the one order #418 says never to use. `webui_image_tag` now lets an
+  operator stage the two: apply it ahead of `image_tag` to land the web
+  UI first, then apply again with `image_tag` caught up (issue
+  [#426](https://github.com/na0fu3y/ochakai/issues/426)).
 - The quick start's demo import needed the Go toolchain
   (`go run ./cmd/ochakai import examples/demo`) despite the README
   promising "Docker and nothing else locally", and there was no

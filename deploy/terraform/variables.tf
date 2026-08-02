@@ -284,12 +284,36 @@ variable "enable_webui" {
   description = <<-EOT
     Deploy `serve-ui` as a second Cloud Run service behind Identity-Aware
     Proxy, for people who need browser access and cannot run the Go CLI. It
-    is the same image as the server, so there is no second thing to build and
-    the UI is always the exact version of the server it fronts. Personal use
-    needs none of this: `ochakai ui` serves the same page on loopback.
+    is the same image as the server, so there is no second thing to build and,
+    by default (see `webui_image_tag`), the UI is always the exact version of
+    the server it fronts. Personal use needs none of this: `ochakai ui` serves
+    the same page on loopback.
   EOT
   type        = bool
   default     = false
+}
+
+variable "webui_image_tag" {
+  description = <<-EOT
+    Override the webui's image tag independently of `image_tag`. Defaults to
+    `image_tag`, so a plain tag bump upgrades both services together.
+
+    A single `terraform apply` always settles the server first regardless of
+    either tag, because the webui's `OCHAKAI_URL` reads the server's `uri`
+    (main.tf's webui resource). That is the wrong order for an upgrade that
+    renames the delegation header, per the operating guide's Upgrades
+    section: the webui must be upgraded before or together with the server,
+    never after. Set this variable ahead of `image_tag` and apply, then
+    apply again with `image_tag` caught up, to upgrade the webui first
+    without touching the server in between.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.webui_image_tag != "latest"
+    error_message = "Pin a released version instead of \"latest\", so that a redeploy is a decision (deploy/cloudrun/README.md §1)."
+  }
 }
 
 variable "webui_iap_members" {

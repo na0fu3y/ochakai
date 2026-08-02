@@ -815,7 +815,10 @@ Three upgrade-adjacent traps worth knowing here:
   strips the spelling its own build knows. An old web UI in front of an
   API that has already adopted 0064 forwards the current spelling
   untouched — silently misattributing a write, not a 400 (issue
-  [#418](https://github.com/na0fu3y/ochakai/issues/418)).
+  [#418](https://github.com/na0fu3y/ochakai/issues/418)). The Terraform
+  module always applies the API first; stage `webui_image_tag` ahead of
+  `image_tag` for this one (issue
+  [#426](https://github.com/na0fu3y/ochakai/issues/426)).
 - **Changing `OCHAKAI_EMBEDDING_DIM` on a database that already holds
   vectors rebuilds the vector tables at the new width**, because a vector
   is derived from the concept it describes and nothing curated is involved
