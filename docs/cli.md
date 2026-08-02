@@ -240,8 +240,10 @@ markdown file without one is not a concept, and is kept as a file),
 reserved index.md / log.md files are skipped, keys the format does
 not define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical
 to what is stored are left untouched and reported as unchanged;
-concepts the server rejects as invalid — e.g. one whose type is not a
-single line — are skipped and reported).
+a document the server refuses as a concept — e.g. an Attested
+Computation with no runtime — is not stored, and is reported by path
+and reason; the bundle you imported from still has it, and the files
+it pointed at are written anyway).
 Files referenced by a concept's body markdown links become
 attributed to it, wherever they sit in the bundle (their location is
 preserved for re-export); unreferenced data files inside a concept's

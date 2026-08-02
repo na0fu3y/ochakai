@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -983,4 +984,186 @@ func captureStderr(t *testing.T, f func()) string {
 	out := <-done
 	_ = r.Close()
 	return out
+}
+
+// The document the CLI sends is the document it was given. The server
+// stores the bytes it receives (design doc 0046 §2.2), so a rendering
+// here is a rewrite there — and `ochakai put` rendered okf.Canonical
+// from the parsed fields until design doc 0079, which dropped the
+// producer's comments, key order and scalar style, and everything the
+// family readers had no field for.
+//
+// SPEC §4.1 asks a consumer to preserve unknown keys when round-tripping;
+// preserving the bytes is how ochakai does it, and it is the only way the
+// CLI and the REST face store the same thing for the same file.
+func TestPutSendsTheDocumentItWasGiven(t *testing.T) {
+	const doc = "---\n" +
+		"# the producer's note to the next reader\n" +
+		"type: Attested Computation\n" +
+		"runtime: bigquery\n" +
+		"title: 'Quarterly revenue'\n" +
+		"executor:\n" +
+		"  resource: references/skills/run-on-bq.md\n" +
+		"attester:\n" +
+		"  resource: ''\n" +
+		"quarter_start_month: 4\n" +
+		"---\n" +
+		"\n" +
+		"# Computation\n" +
+		"\n" +
+		"    SELECT 1\n"
+
+	var sent string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		sent = string(body)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: strings.TrimSuffix(r.PathValue("path"), ".md"), Document: sent})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "quarterly.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdPut(context.Background(),
+		[]string{"computations/quarterly", "-f", path, "--url", srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if sent != doc {
+		t.Errorf("`ochakai put` rewrote the document it was handed:\ngot:\n%s\nwant:\n%s", sent, doc)
+	}
+
+	// JSON input carries no document, so the canonical rendering is still
+	// what it turns into (design doc 0043 §5).
+	jsonPath := filepath.Join(t.TempDir(), "k.json")
+	if err := os.WriteFile(jsonPath, []byte(`{"type":"Metric","title":"Revenue"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdPut(context.Background(),
+		[]string{"metrics/revenue", "-f", jsonPath, "--url", srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sent, "type: Metric") || !strings.Contains(sent, "title: Revenue") {
+		t.Errorf("JSON input did not render as an OKF document:\n%s", sent)
+	}
+}
+
+// A document the write path refuses does not enter the knowledge base,
+// and design doc 0079 §1 says why that stays the answer: the source
+// bundle is untouched, so the refusal is reported rather than worked
+// around, and storing the bytes as a file instead would have meant a
+// rule frozen into the wire forever (design doc 0064).
+//
+// What the refusal must not do is spread. A file the refused concept's
+// body pointed at is an object of the bundle at its own path, and
+// attribution is derived rather than stored (design doc 0075 §5) — it
+// used to be dropped along with the concept, so one refusal cost every
+// file the document named. It is written now, and the line says nobody
+// claims it.
+func TestImportReportsARefusedConceptAndKeepsItsFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "computations"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doc := "---\ntype: Attested Computation\ntitle: Quarterly revenue\n---\n\n" +
+		"See [the chart](/computations/quarterly/chart.png).\n"
+	if err := os.WriteFile(filepath.Join(dir, "computations", "quarterly.md"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "computations", "quarterly"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chart := []byte("\x89PNG\r\n\x1a\nnot really a png")
+	if err := os.WriteFile(filepath.Join(dir, "computations", "quarterly", "chart.png"), chart, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stored []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		path := r.PathValue("path")
+		// The write path refuses an Attested Computation with no runtime
+		// (SPEC §10.2, design doc 0036 §3.4) — at every Content-Type,
+		// because the bytes decide what an object is and nothing about a
+		// refusal is negotiable (design doc 0079 §1).
+		if strings.HasSuffix(path, "quarterly.md") {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "an Attested Computation needs a runtime (e.g. bigquery, postgres, dbt, python)"})
+			return
+		}
+		stored = append(stored, path)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.File{Path: path, Size: int64(len(body))})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	out, errOut := captureOutput(t, func() error {
+		return cmdImport(context.Background(), []string{dir, "--url", srv.URL})
+	})
+	if !slices.Contains(stored, "computations/quarterly/chart.png") {
+		t.Errorf("a refused concept took its file down with it; stored = %v", stored)
+	}
+	if slices.Contains(stored, "computations/quarterly.md") {
+		t.Errorf("the refused document was stored anyway; stored = %v", stored)
+	}
+	for _, want := range []string{
+		"refused as a concept and not stored",
+		"needs a runtime",
+		"still in the bundle you imported from",
+	} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("the skip does not say %q:\n%s", want, errOut)
+		}
+	}
+	if want := "imported 0 concepts (0 created, 0 updated, 0 unchanged, 0 attributed, 1 loose, 1 skipped, 1 notes)"; !strings.Contains(out, want) {
+		t.Errorf("summary = %q, want %q", out, want)
+	}
+
+	// --strict is the posture for a sync nobody watches, and a document
+	// the knowledge base does not hold is exactly what it must catch —
+	// including through --dry-run, which has to reach the same verdict
+	// (design doc 0061).
+	if _, _, err := captureRun(t, func() error {
+		return cmdImport(context.Background(), []string{dir, "--strict", "--url", srv.URL})
+	}); err == nil {
+		t.Error("--strict accepted a bundle with a refused concept")
+	}
+}
+
+// captureOutput runs fn with stdout and stderr redirected, failing the
+// test if fn does.
+func captureOutput(t *testing.T, fn func() error) (out, errOut string) {
+	t.Helper()
+	out, errOut, err := captureRun(t, fn)
+	if err != nil {
+		t.Fatalf("%v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
+	}
+	return out, errOut
+}
+
+func captureRun(t *testing.T, fn func() error) (out, errOut string, err error) {
+	t.Helper()
+	outR, outW, perr := os.Pipe()
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	errR, errW, perr := os.Pipe()
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	origOut, origErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	err = fn()
+	os.Stdout, os.Stderr = origOut, origErr
+	outW.Close()
+	errW.Close()
+	o, _ := io.ReadAll(outR)
+	e, _ := io.ReadAll(errR)
+	return string(o), string(e), err
 }

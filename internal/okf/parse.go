@@ -2,6 +2,7 @@ package okf
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,6 +84,35 @@ func yamlScalar(v any) any {
 		return out
 	}
 	return v
+}
+
+// scalarText renders a decoded YAML scalar as the text a producer wrote,
+// reporting false for a mapping or a list — a collection is not a scalar
+// misspelled, so there is nothing to read it as.
+//
+// It exists because SPEC §4.1 gives title, description, resource, status,
+// status_note, stale_after, runtime and computation no YAML type, and
+// §11 lets a consumer refuse a document only for unparseable frontmatter
+// or a missing type. `title: 2026` and `status: 3` are documents ochakai
+// must take (design doc 0079); this is what it takes them as.
+func scalarText(v any) (string, bool) {
+	switch v := v.(type) {
+	case string:
+		return v, true
+	case bool:
+		return strconv.FormatBool(v), true
+	case int:
+		return strconv.Itoa(v), true
+	case int64:
+		return strconv.FormatInt(v, 10), true
+	case uint64:
+		return strconv.FormatUint(v, 10), true
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64), true
+	case nil:
+		return "", true
+	}
+	return "", false
 }
 
 // Frontmatter returns a document's frontmatter as a plain map, which is
@@ -174,16 +204,30 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	if err := yaml.Unmarshal([]byte(fmPart), &raw); err != nil {
 		return nil, "", nil, fmt.Errorf("invalid frontmatter: %w", err)
 	}
-	var str = func(key string) (string, error) {
+	var notes []string
+	// SPEC §4.1 gives none of these keys a YAML type, and §11 makes an
+	// unparseable frontmatter or a missing type the only reasons a
+	// consumer may refuse a document — so `title: 2026` is a title a
+	// producer wrote without quotes, not a broken document (design doc
+	// 0079). The scalar is read as the text it is written as, with a
+	// note; only a collection where a scalar belongs is dropped, because
+	// there is no text to read it as.
+	str := func(key string) string {
 		v, ok := raw[key]
 		if !ok || v == nil {
-			return "", nil
+			return ""
 		}
-		s, ok := yamlScalar(v).(string)
+		scalar := yamlScalar(v)
+		if s, ok := scalar.(string); ok {
+			return s
+		}
+		s, ok := scalarText(scalar)
 		if !ok {
-			return "", fmt.Errorf("invalid frontmatter: %s is not a string", key)
+			notes = append(notes, fmt.Sprintf("%s is not a scalar; dropped", key))
+			return ""
 		}
-		return s, nil
+		notes = append(notes, fmt.Sprintf("%s is not a string; read as %q", key, s))
+		return s
 	}
 	var fm struct {
 		typ, resource, id, title, description, status, statusNote, staleAfter string
@@ -199,34 +243,42 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		{"stale_after", &fm.staleAfter},
 		{"runtime", &fm.runtime}, {"computation", &fm.computation},
 	} {
-		var err error
-		if *f.dst, err = str(f.key); err != nil {
-			return nil, "", nil, err
-		}
+		*f.dst = str(f.key)
 	}
 	var tags []string
 	if v, ok := raw["tags"]; ok && v != nil {
-		switch v := v.(type) {
+		switch v := yamlScalar(v).(type) {
 		case []any:
-			for _, t := range v {
-				s, ok := t.(string)
-				if !ok {
-					return nil, "", nil, fmt.Errorf("invalid frontmatter: tags is not a list of strings")
+			for i, t := range v {
+				if _, wasString := t.(string); wasString {
+					tags = append(tags, t.(string))
+					continue
 				}
-				tags = append(tags, s)
+				// Not a string: a number is the tag its producer wrote, a
+				// mapping and an empty entry are not tags at all.
+				if s, ok := scalarText(t); ok && s != "" {
+					notes = append(notes, fmt.Sprintf("tags[%d] is not a string; read as %q", i, s))
+					tags = append(tags, s)
+					continue
+				}
+				notes = append(notes, fmt.Sprintf("tags[%d] is not a tag; dropped", i))
 			}
-		case string:
+		default:
 			// The knowledge-catalog reference bundles sometimes write tags as
 			// one comma-separated string ("tags: sales, orders"); OKF's
 			// permissive consumption model (SPEC §11) says take it, not
-			// reject the document.
-			for _, s := range strings.Split(v, ",") {
-				if s = strings.TrimSpace(s); s != "" {
-					tags = append(tags, s)
+			// reject the document. A bare scalar of any other kind is read
+			// the same way, for the same reason.
+			s, ok := scalarText(v)
+			if !ok {
+				notes = append(notes, "tags is neither a list nor a scalar; dropped")
+				break
+			}
+			for _, t := range strings.Split(s, ",") {
+				if t = strings.TrimSpace(t); t != "" {
+					tags = append(tags, t)
 				}
 			}
-		default:
-			return nil, "", nil, fmt.Errorf("invalid frontmatter: tags is not a list")
 		}
 	}
 
@@ -257,7 +309,6 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		typ = ""
 	}
 
-	var notes []string
 	_, hasVerified := raw["verified"]
 	if !hasVerified {
 		// A v0.1 document says the same thing with the flat keys.
@@ -489,8 +540,16 @@ func executorFrom(v any) (*domain.Executor, []string) {
 			e.Receipt = []string{strings.TrimSpace(r)}
 		}
 	}
+	// SPEC §10.2 names only runtime as REQUIRED; of executor it says
+	// "`resource` names run instructions or code" and "`receipt` declares
+	// the fields a run must return", with no requirement word on either.
+	// The resource is what makes the key mean anything at all — an
+	// executor naming nothing to run is not a contract — but a missing
+	// receipt is a missing optional field, which §11 forbids rejecting
+	// for (design doc 0079). ochakai used to cite §10.2 for a rule §10.2
+	// does not state.
 	if !e.Valid() {
-		return nil, []string{"executor needs both a resource and a non-empty receipt (SPEC §10.2); dropped"}
+		return nil, []string{"executor needs a resource (the run instructions or code); dropped"}
 	}
 	return e, nil
 }

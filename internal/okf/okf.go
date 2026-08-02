@@ -115,9 +115,13 @@ type parameter struct {
 }
 
 type executor struct {
-	Resource text           `yaml:"resource"`
-	Receipt  []text         `yaml:"receipt"`
-	Extra    map[string]any `yaml:",inline"`
+	Resource text `yaml:"resource"`
+	// omitempty because SPEC §10.2 does not require a receipt: a contract
+	// that named none is a document that said nothing about the evidence
+	// a run returns, and ochakai does not write a key its writer left out
+	// (design docs 0046 §3.9, 0079).
+	Receipt []text         `yaml:"receipt,omitempty"`
+	Extra   map[string]any `yaml:",inline"`
 }
 
 type attester struct {
@@ -396,6 +400,21 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 // Like the rest of the trust family, none of this is read back on import:
 // a bundle carries knowledge, and provenance is the receiving instance's
 // own observation (design doc 0009).
+// actorText renders an actor as the created_by value, and an actor that
+// is no actor as nothing at all: Actor.String would write a bare ":",
+// which is a value no reader can parse back into one and which OKF's
+// convention (SPEC §7) does not have a form for. It is the guard
+// actorEvent already applies to `by`, applied to the one other place an
+// actor reaches frontmatter. Unreachable for a stored row since
+// migration 0022_actor_process.sql; the entries that can still be
+// rendered without one are composed in memory.
+func actorText(a domain.Actor) text {
+	if a.Kind == "" && a.Name == "" {
+		return ""
+	}
+	return text(a.String())
+}
+
 func actorEvent(a *domain.Actor, at *time.Time) event {
 	var e event
 	if a != nil && (a.Kind != "" || a.Name != "") {
@@ -485,7 +504,7 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 	if serverKeys {
 		g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
 		fm.Generated = &g
-		fm.CreatedBy = text(k.CreatedBy.String())
+		fm.CreatedBy = actorText(k.CreatedBy)
 	}
 	for _, p := range k.Parameters {
 		fm.Parameters = append(fm.Parameters, parameter{

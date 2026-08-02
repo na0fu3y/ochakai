@@ -699,14 +699,20 @@ func (p Parameter) sameAs(o Parameter) bool {
 // runs it: executing the computation and checking the receipt belong to
 // the consumer (SPEC §10.5, design docs 0001, 0036 §5).
 type Executor struct {
-	Resource string   `json:"resource"` // REQUIRED within executor: run instructions or code
-	Receipt  []string `json:"receipt"`  // REQUIRED within executor: the fields a run must return
+	Resource string   `json:"resource"`          // run instructions or code — what the key is for
+	Receipt  []string `json:"receipt,omitempty"` // optional: the fields a run must return
 	Extra    Extra    `json:"extra,omitempty"`
 }
 
-func (e *Executor) Valid() bool {
-	return e == nil || (e.Resource != "" && len(e.Receipt) > 0)
-}
+// Valid holds an executor to what SPEC §10.2 actually says. Only runtime
+// is marked REQUIRED there; of executor the spec says "`resource` names
+// run instructions or code" and "`receipt` declares the fields a run must
+// return", neither with a requirement word. A resource is still the whole
+// content of the key — an executor naming nothing to run says nothing —
+// but a receipt is an optional field, and SPEC §11 forbids rejecting a
+// concept for missing one. ochakai demanded it until 0079, citing a §10.2
+// requirement §10.2 does not state.
+func (e *Executor) Valid() bool { return e == nil || e.Resource != "" }
 
 // Attester is the deterministic, LLM-free checker that a run of an
 // Attested Computation was performed correctly (OKF SPEC §10.2). As with

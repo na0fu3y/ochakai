@@ -251,8 +251,13 @@ func TestFromBundleForeign(t *testing.T) {
 // testdata/foreign-bundle mirrors the shape of the OKF sample bundles
 // (GoogleCloudPlatform/knowledge-catalog): nested type directories,
 // top-level resource/timestamp/custom keys, reserved index.md and log.md,
-// a non-markdown viz.html. Importing it must keep every frontmatter key a
-// bundle owns and re-export it at the same path with the same spelling.
+// a non-markdown viz.html, and — since design doc 0079 — a computation
+// whose producer wrote unquoted scalars where ochakai wanted strings and
+// an executor with no receipt. Importing it must keep every frontmatter
+// key a bundle owns and re-export it at the same path with the same
+// spelling, and every one of those documents must stay a *concept*: SPEC
+// §11 makes unparseable frontmatter and a missing type the only reasons
+// to refuse one.
 func TestFromBundleFixture(t *testing.T) {
 	files := map[string][]byte{}
 	root := filepath.Join("testdata", "foreign-bundle")
@@ -272,15 +277,15 @@ func TestFromBundleFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	entries, _, loose, skipped, _ := FromBundle(files)
+	entries, _, loose, skipped, notes := FromBundle(files)
 	if len(loose) != 1 || loose[0].Path != "viz.html" {
 		t.Errorf("loose = %+v, want only viz.html", loose)
 	}
 	if len(skipped) != 0 {
 		t.Errorf("skipped = %v, want nothing", skipped)
 	}
-	if len(entries) != 3 {
-		t.Fatalf("entries = %d, want 3", len(entries))
+	if len(entries) != 4 {
+		t.Fatalf("entries = %d, want 4", len(entries))
 	}
 	byURI := map[string]domain.Knowledge{}
 	for _, e := range entries {
@@ -314,6 +319,41 @@ func TestFromBundleFixture(t *testing.T) {
 	if doc := string(out["tables/orders_.md"]); !strings.Contains(doc, "type: BigQuery Table") ||
 		!strings.Contains(doc, "resource: https://bigquery.googleapis.com/v2/projects/demo/datasets/shop/tables/orders_*") {
 		t.Errorf("tables/orders_ re-export wrong:\n%s", doc)
+	}
+
+	// The producer wrote `title: 2026`, `description: 3.14`, `status: 3`
+	// and `tags: [1, revenue]`. SPEC §4.1 gives none of those keys a YAML
+	// type and §11 forbids refusing a document for one, so each is read
+	// as the text it was written as, with a note — and the document stays
+	// a concept instead of being demoted to a loose markdown file, which
+	// is what happened silently before design doc 0079.
+	q := byURI["ochakai://computations/quarterly_revenue"]
+	if q.Type != domain.TypeComputations {
+		t.Fatalf("computations/quarterly_revenue was not read as a concept: %+v", q)
+	}
+	if q.Title != "2026" || q.Description != "3.14" || !slices.Equal(q.Tags, []string{"1", "revenue"}) {
+		t.Errorf("loose scalars read as %q / %q / %v", q.Title, q.Description, q.Tags)
+	}
+	// SPEC §10.2 marks only runtime REQUIRED and describes receipt with
+	// no requirement word; §11 forbids rejecting a concept for a missing
+	// optional field, so an executor naming code to run is a contract
+	// whether or not it declares the evidence.
+	if q.Executor == nil || q.Executor.Resource != "../references/skills/run-on-bq.md" {
+		t.Errorf("executor without a receipt was dropped: %+v", q.Executor)
+	}
+	for _, want := range []string{
+		`title is not a string; read as "2026"`,
+		`description is not a string; read as "3.14"`,
+		`tags[0] is not a string; read as "1"`,
+		// The reserved files are regenerated rather than stored (SPEC
+		// §3.1), and this is the note that stops a hand-written one
+		// disappearing without a word.
+		"index.md is a filename OKF reserves",
+		"log.md is a filename OKF reserves",
+	} {
+		if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, want) }) {
+			t.Errorf("no note mentions %q: %v", want, notes)
+		}
 	}
 }
 

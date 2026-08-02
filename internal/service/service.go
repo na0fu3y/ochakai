@@ -684,7 +684,7 @@ func validateOKF(k *domain.Knowledge) error {
 		}
 	}
 	if !k.Executor.Valid() {
-		return Invalidf("executor needs both a resource and a non-empty receipt (SPEC §10.2); ochakai records the contract and never runs it")
+		return Invalidf("executor needs a resource (the run instructions or code); ochakai records the contract and never runs it")
 	}
 	if !k.Attester.Valid() {
 		return Invalidf("attester needs a resource (SPEC §10.2)")

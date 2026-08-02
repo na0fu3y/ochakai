@@ -31,7 +31,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
 | デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
-| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
+| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
@@ -131,6 +131,19 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
+- [0079 文書を受け取る](0079-taking-the-document.md) —
+  **Accepted**。**取り込みが文書を拒む条件と、CLI が送るバイト列の現行
+  ドキュメント**(0075 §3 / §4.2 と 0074 §1 を改訂。**REST は変えない**)。
+  SPEC §11 で consumer の仕事は文書を受け取ることであり、ochakai が文書を
+  拒んでいたところはどれも利用者のバイト列が消えうる場所だった。
+  **`executor.receipt` の要求と、型の書かれていないキーの文字列強制は、
+  ochakai 自身の規則を SPEC のものと取り違えていた** — どちらの note も
+  `SPEC §10.2` を引いていたが、§10.2 はその要求をしていない。手書きの
+  `index.md` / `log.md` が消えたことも note に出る。`ochakai put` /
+  `import` は正準形を描き直さず、渡された文書のバイト列をそのまま送る。
+  書き込み経路が拒む文書は**保存しないまま報告する** — 残すには 0064 で
+  凍るワイヤに規則を足すしかなく、それはやらないと決めた(§1)。拒否が
+  その文書の指すファイルまで道連れにしていたほうは直した。
 - [0075 バンドルがアドレス空間である](0075-the-bundle-is-the-address-space.md)
   — **Accepted**。**バンドル・住所・保存形の現行ドキュメント**(0017 / 0021 /
   0041 / 0046 の四冊を一冊にまとめたもので、決定は一つも動いていない)。

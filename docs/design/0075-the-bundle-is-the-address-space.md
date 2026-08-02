@@ -7,7 +7,11 @@ Status: Accepted(2026-08-03)。**バンドル・住所・保存形の現行
 [0046](0046-bundle-address-space.md) を Superseded にする。
 **四つが決めたことは何一つ変えない**(§0)。文書そのものの形と、それに問う
 語彙は同じ統合の片割れである
-[0074](0074-the-document-and-the-vocabulary-that-asks-it.md) が持つ
+[0074](0074-the-document-and-the-vocabulary-that-asks-it.md) が持つ。
+§3(CLI が送るバイト列)と §4.2(予約ファイルの note)は
+[0079](0079-taking-the-document.md) が改訂している。§3.3 は変わらない —
+0079 §1 は、拒まれた文書を残すために書き込み面へ規則を足すことを
+**やらないと決めている**
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

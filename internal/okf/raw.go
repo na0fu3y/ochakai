@@ -412,7 +412,7 @@ func serverKeysFor(k *domain.Knowledge) *serverKeysOnly {
 	// last meaningfully changed" — so the timestamp is the content's, not
 	// the row's (design doc 0046 §3.4).
 	g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
-	own := &serverKeysOnly{Generated: &g, CreatedBy: text(k.CreatedBy.String())}
+	own := &serverKeysOnly{Generated: &g, CreatedBy: actorText(k.CreatedBy)}
 	for i := range k.Verifications {
 		v := &k.Verifications[i]
 		own.Verified = append(own.Verified, actorEvent(&v.By, &v.At))
