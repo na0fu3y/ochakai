@@ -8,7 +8,8 @@ that will not connect at all are in
 
 Start with `ochakai whoami`. It prints the whole client-side situation in
 four lines — which server, from where that choice came, as whom, and
-whether the server answers:
+whether the server answers (a fifth `producer:` line joins these when
+`$OCHAKAI_PRODUCER` is set):
 
 ```
 server:    http://localhost:8080 ($OCHAKAI_URL)
@@ -85,19 +86,23 @@ your change and retry. Nothing was written.
 value that fits is legal — the recommended vocabulary is a recommendation,
 not a closed set — but a multi-line string is not.
 
-**An agent gets `cannot update … it is verified`.** Working as intended:
+**An agent gets `cannot replace … it is verified`.** Working as intended:
 MCP refuses to overwrite or delete curated concepts. See the
 [FAQ](../faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified).
 
 ## Import and export
 
-**`import` reports files skipped.** Every skip is printed to stderr with a
+**`import` reports files skipped.** A skip is printed to stderr with a
 `skip:` prefix and counted in the summary
-(`imported N entries (… , M skipped)`). The reasons:
+(`imported N concepts (…, M skipped)`). Two things that look like skips
+are not counted here: a file with no `type` in its frontmatter is not
+skipped — the type is never inferred from the path (design doc 0017), so
+it is imported as a plain bundle file instead; a reserved `index.md` or
+`log.md`, or a hidden path, is dropped silently, never printed or
+counted. What is a skip:
 
-- the file has no `type` in its frontmatter — the type is never inferred
-  from the path (design doc 0017);
-- it is a reserved `index.md` or `log.md`, or a hidden path;
+- the file cannot be stored at all — empty, over the size limit, or an
+  unaddressable path;
 - the server rejected it, in which case the message carries the server's
   own complaint, and the rest of the bundle still imports;
 - it is a file whose concept was not imported.
