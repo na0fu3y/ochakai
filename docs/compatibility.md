@@ -89,9 +89,9 @@ practices that make an unstable dependency survivable:
   breaking notes are written for the person doing exactly that.
 - **Keep an export.** `ochakai export` is both your backup and your exit
   ([operating guide](guides/operating.md)).
-- **Run the [golden query canary](guides/golden-query-canary.md) from CI**,
-  so a knowledge base that quietly stopped matching reality says so
-  without waiting for someone to notice.
+- **Run the [golden query canary](guides/golden-query-canary.md)
+  (Japanese) from CI**, so a knowledge base that quietly stopped matching
+  reality says so without waiting for someone to notice.
 - **Upgrade the CLI with the server.** They are versioned together, and a
   client one minor behind may be reading a shape that moved.
 
