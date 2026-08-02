@@ -1,34 +1,37 @@
-# Embedding the REST API in your own service
+# REST API を自分のサービスに組み込む
 
-ochakai's REST API is a small surface meant to be called directly by your
-own web service — a data-analytics chat app, an internal agent with a
-browser front end — rather than only from the CLI or an MCP client. One
-[OpenAPI file](../../api/openapi.yaml) is the whole contract; this page is
-everything else that file's schemas alone do not say: how to authenticate,
-how not to collapse every user of your product into one identity, and how
-to write without racing another writer.
+ochakai の REST API は、CLI や MCP クライアントからだけでなく、あなた
+自身の Web サービス — データ分析のチャットアプリや、ブラウザの
+フロントエンドを持つ内部エージェント — から直接呼ばれることを想定した
+小さな面である。[OpenAPI ファイル](../../api/openapi.yaml)一つがその
+契約のすべてであり、このページはそのスキーマだけでは語られないそれ
+以外のすべて — どう認証するか、あなたの製品の利用者全員を一つの
+identity に潰さない方法、そして他の書き手と競合せずに書く方法 — を
+扱う。
 
-If you are deploying ochakai itself rather than building against one that
-is already running, start with the
-[deploy guide](../../deploy/cloudrun/README.md) instead.
+ochakai 自体をデプロイしようとしていて、すでに動いているものに対して
+組み込もうとしているのでなければ、代わりに
+[デプロイガイド](../../deploy/cloudrun/README.md)から始めるとよい。
 
-**REST is frozen at `/api/v1`** (design doc
-[0064](../design/0064-rest-stops-at-api-v1.md)): the contract this page
-walks through does not move except for a security fix, unlike MCP, the
-CLI and the stored shape, which can still change in a minor release —
-[docs/compatibility.md](../compatibility.md) has the full policy.
+**REST は `/api/v1` で凍結されている**(設計ドキュメント
+[0064](../design/0064-rest-stops-at-api-v1.md)): このページが説明する
+契約は、セキュリティ修正を除いて動かない — マイナーリリースでも変わり
+うる MCP・CLI・保存形式とは違う。完全な方針は
+[docs/compatibility.md](../compatibility.md)にある。
 
-## Authenticating
+## 認証する
 
-Cloud Run IAM decides who reaches ochakai (design docs
-[0002](../design/0002-authn-authz.md), [0003](../design/0003-gcp-only.md))
-— there is no API key or bearer token ochakai itself issues or checks.
-Every request carries a Google-signed **ID token**, audience-bound to your
-ochakai service's URL, as `Authorization: Bearer <token>`; Cloud Run
-verifies it before the request ever reaches the container, and ochakai
-reads the identity it forwards only to record provenance.
+Cloud Run IAM が ochakai に届く者を決め(設計ドキュメント
+[0002](../design/0002-authn-authz.md)、
+[0003](../design/0003-gcp-only.md)) — ochakai 自身が発行したり検証したり
+する API キーやベアラートークンは無い。すべてのリクエストは、あなたの
+ochakai サービスの URL に audience が紐づいた Google 署名の **ID
+トークン**を `Authorization: Bearer <token>` として運ぶ。Cloud Run は
+リクエストがコンテナに届く前にそれを検証し、ochakai は転送されてきた
+identity を provenance の記録にのみ使う。
 
-Your service account needs `roles/run.invoker` on the ochakai service:
+あなたのサービスアカウントには、ochakai サービスへの
+`roles/run.invoker` が要る:
 
 ```sh
 gcloud run services add-iam-policy-binding ochakai \
@@ -37,16 +40,16 @@ gcloud run services add-iam-policy-binding ochakai \
   --role=roles/run.invoker
 ```
 
-From a shell, mint a token with the CLI you already have:
+シェルからは、すでに持っている CLI でトークンを発行する:
 
 ```sh
 TOKEN=$(gcloud auth print-identity-token --audiences="$OCHAKAI_URL")
 curl -H "Authorization: Bearer $TOKEN" "$OCHAKAI_URL/api/v1/search?q=revenue"
 ```
 
-From your own service, mint one with a client library instead of shelling
-out — every major Google Cloud client library has an ID-token helper.
-Python's:
+あなた自身のサービスからは、シェルアウトせずクライアントライブラリで
+発行する — 主要な Google Cloud クライアントライブラリはどれも ID
+トークンのヘルパーを持つ。Python の例:
 
 ```python
 import google.auth.transport.requests
@@ -57,81 +60,91 @@ token = google.oauth2.id_token.fetch_id_token(request, audience=OCHAKAI_URL)
 ```
 
 [`examples/bigquery-catalog`](../../examples/bigquery-catalog/bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py)
-is a complete, working example of this — reading BigQuery with Application
-Default Credentials and writing to ochakai with a minted ID token, holding
-no secret of its own.
+はこれの完全に動く例である — Application Default Credentials で
+BigQuery を読み、発行した ID トークンで ochakai に書き込む。自前の
+秘密は一つも持たない。
 
-## Delegated provenance: forwarding who used your product
+<a id="delegated-provenance-forwarding-who-used-your-product"></a>
 
-Without this, every concept your users write is recorded under your
-application's one service-account identity, and provenance — most of what
-ochakai sells — collapses into a single name.
+## 委譲された provenance: あなたの製品を使った人を転送する
 
-Let ochakai know your application forwards identities on behalf of its
-users (design doc [0027](../design/0027-delegated-provenance.md)). Both
-identities are recorded — `human:tanaka@… via process:app-sa@…` — never
-just the forwarded one, so a write made through your application stays
-distinguishable from one the person made directly.
+これが無いと、あなたの利用者が書くすべての concept は、あなたの
+アプリケーションの一つのサービスアカウント identity の下に記録され、
+provenance — ochakai が売るものの大半 — が一つの名前に潰れる。
+
+あなたのアプリケーションが利用者に代わって identity を転送すること
+を ochakai に伝える(設計ドキュメント
+[0027](../design/0027-delegated-provenance.md))。記録されるのは常に
+両方の identity であり — `human:tanaka@… via process:app-sa@…` —
+転送された側だけになることは無い。だから、あなたのアプリケーション
+を通した書き込みは、その人が直接行った書き込みと区別できるままに
+なる。
 
 ```sh
-# In addition to roles/run.invoker (Authenticating, above): allow your
-# application's identity, and only it, to speak for its users.
+# roles/run.invoker(認証する、前述)に加えて: あなたのアプリケーション
+# の identity だけに、利用者の代わりに話すことを許可する。
 gcloud run services update ochakai --region="$REGION" \
   --update-env-vars="OCHAKAI_DELEGATING_CALLERS=$YOUR_SERVICE_ACCOUNT"
 ```
 
-Send the header with each request:
+各リクエストにこのヘッダーを付ける:
 
 ```
 Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
 ```
 
-The kind (`human:` / `process:`) is required and never guessed — your
-application knows whether it is forwarding a person or another piece of
-software.
+種別(`human:` / `process:`)は必須で、推測されることは無い —
+転送しているのが人なのか別のソフトウェアなのかは、あなたの
+アプリケーションが知っている。
 
-Notes:
+注記:
 
-- **Delegation is off by default.** With `OCHAKAI_DELEGATING_CALLERS`
-  unset, the header is a **403**, not a silent downgrade: an application
-  that believes it writes as its users must not discover months later
-  that every concept says otherwise.
-- **A 403 mentioning the header means the caller is not on the list.**
-  Compare the service account you granted `run.invoker` to (Authenticating,
-  above) with the value here — they are the same email, and a mismatch is
-  the usual cause. A **400** means the header itself is malformed (missing
-  kind, whitespace in the identity).
-- `OCHAKAI_DELEGATING_CALLERS` takes a comma-separated list; `*` trusts
-  every authenticated caller, sensible only when IAM already admits
-  nothing but your own applications.
-- **This is not authorization.** It decides whose identity is recorded,
-  not what anyone may do — every caller that reaches ochakai can already
-  read and write everything (design doc
-  [0002](../design/0002-authn-authz.md)). Reachability stays IAM's job.
+- **委譲は既定で off である。** `OCHAKAI_DELEGATING_CALLERS` が未設定
+  だと、このヘッダーは静かにダウングレードされるのではなく **403**
+  になる — 利用者として書き込んでいるつもりのアプリケーションが、
+  何か月も経ってからすべての concept がそう言っていないと気づく、
+  ということがあってはならない。
+- **このヘッダーに言及する 403 は、呼び出し元が一覧に無いことを
+  意味する。** `run.invoker` を付与したサービスアカウント(認証する、
+  前述)とここの値を見比べるとよい — 同じメールアドレスであるはずで、
+  食い違いがたいていの原因である。**400** はヘッダー自体が不正な形で
+  ある(種別が無い、identity に空白が入っている)ことを意味する。
+- `OCHAKAI_DELEGATING_CALLERS` はカンマ区切りの一覧を取る。`*` は
+  認証済みの呼び出し元すべてを信頼する — IAM がすでに自分の
+  アプリケーション以外を通していない場合にのみ理にかなう。
+- **これは認可ではない。** 決めるのは誰の identity が記録されるかで
+  あって、誰が何をしてよいかではない — ochakai に届く呼び出し元は
+  誰でもすでにすべてを読み書きできる(設計ドキュメント
+  [0002](../design/0002-authn-authz.md))。到達性は引き続き IAM の
+  仕事である。
 
-## Declaring what wrote it: Ochakai-Producer
+## 何が書いたかを宣言する: Ochakai-Producer
 
-Name your software beside the identity that vouches for it (design doc
+それを保証する identity の隣に、あなたのソフトウェアの名前を置く
+(設計ドキュメント
 [0052](../design/0052-producer-beside-the-actor.md)):
 
 ```
 Ochakai-Producer: insightflow/1.4.0
 ```
 
-One slash, both halves non-empty — `<producer>/<version>`. It is recorded
-as `Actor.producer`, beside the authenticated actor and never in place of
-it (`human:tanaka@… using insightflow/1.4.0`), so a concept written through
-your product still says who wrote it. No allowlist gates it: it names your
-own build, not somebody else's identity. A malformed value is a 400.
+スラッシュ一つ、両側とも空でない `<producer>/<version>` の形。
+`Actor.producer` として、認証された行為者の隣に記録され、決してその
+代わりにはならない(`human:tanaka@… using insightflow/1.4.0`)。だから、
+あなたの製品を通して書かれた concept は、それでも誰が書いたかを言い
+続ける。許可リストで絞られることは無い — 名乗るのはあなた自身の
+ビルドであって他人の identity ではないからである。不正な値は 400 に
+なる。
 
-## Concurrent writes: ETag and If-Match
+## 同時書き込み: ETag と If-Match
 
-Last write wins, unless you ask for better. Every read and write against
-`/api/v1/bundle/{path}` returns an `ETag` — the hash of the concept's
-canonical OKF document, quoted, and also in the body as
-`summary.content_hash` — and a `PUT` carrying `If-Match` with a stale value
-gets `412` and writes nothing (design docs
-[0030](../design/0030-optimistic-locking.md), 0043 §3.4):
+より良い方法を求めない限り、最後に書いた者が勝つ。
+`/api/v1/bundle/{path}` への読み書きはすべて `ETag` を返す — concept
+の正規の OKF ドキュメントのハッシュを引用符付きで、本文にも
+`summary.content_hash` として返す — そして、古い値を持った
+`If-Match` を添えた `PUT` は `412` になり、何も書き込まない
+(設計ドキュメント [0030](../design/0030-optimistic-locking.md)、
+0043 §3.4):
 
 ```sh
 etag=$(curl -si "$OCHAKAI_URL/api/v1/bundle/metrics/revenue.md" \
@@ -141,25 +154,25 @@ curl -X PUT "$OCHAKAI_URL/api/v1/bundle/metrics/revenue.md" \
   -H "Content-Type: text/markdown" --data-binary @revenue.md
 ```
 
-It is a hash of the content alone, so verifying, rejecting or attaching a
-file to a concept leaves a held precondition valid — only an edit
-invalidates it.
+これは内容だけのハッシュなので、concept を検証する・却下する・
+ファイルを添付するだけでは、保持している precondition は有効なまま
+である — 無効にするのは編集だけである。
 
-## Local development
+## ローカルでの開発
 
-`deploy/compose.yaml` and `OCHAKAI_MODE=dev` both turn authentication off:
-every caller is `human:anonymous`, so a malformed `Ochakai-On-Behalf-Of`
-or `Ochakai-Producer` header fails on your machine instead of on first
-deploy against Cloud Run. See
-[Requirements and configuration](../configuration.md#environment-variables)
-(Japanese) for `OCHAKAI_MODE`'s other postures.
+`deploy/compose.yaml` と `OCHAKAI_MODE=dev` はどちらも認証を off に
+する: 呼び出し元は全員 `human:anonymous` になるので、不正な形の
+`Ochakai-On-Behalf-Of` や `Ochakai-Producer` ヘッダーは、Cloud Run
+への最初のデプロイではなく、あなたの手元で失敗する。
+`OCHAKAI_MODE` の他の姿勢については
+[要件と設定](../configuration.md#environment-variables)を見よ。
 
-## See also
+## 関連ページ
 
-- [api/openapi.yaml](../../api/openapi.yaml) — the checked contract: every
-  request and response is validated against it in CI.
-- [Requirements and configuration](../configuration.md) (Japanese) — every
-  environment variable named above.
-- [examples/bigquery-catalog](../../examples/bigquery-catalog) — a
-  complete application-shaped integration: reads a warehouse, writes
-  ochakai, holds no secret.
+- [api/openapi.yaml](../../api/openapi.yaml) — 検査される契約: すべて
+  のリクエストとレスポンスは CI でこれと照合される。
+- [要件と設定](../configuration.md) — 上で名前を挙げたすべての環境
+  変数。
+- [examples/bigquery-catalog](../../examples/bigquery-catalog) —
+  完全なアプリケーション形の統合例: ウェアハウスを読み、ochakai に
+  書き込み、秘密は一つも持たない。

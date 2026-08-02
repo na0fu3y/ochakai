@@ -85,7 +85,7 @@ The consequences to plan around:
   app that calls ochakai with its own service account records every one
   of its users as that service account.
   [Delegated provenance](guides/rest-integration.md#delegated-provenance-forwarding-who-used-your-product)
-  fixes this for callers an operator lists explicitly (design doc
+  (Japanese) fixes this for callers an operator lists explicitly (design doc
   [0027](design/0027-delegated-provenance.md)); the team web UI does the
   same from an IAP-signed JWT (design doc
   [0032](design/0032-webui-iap-identity.md)).

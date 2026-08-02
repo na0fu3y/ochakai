@@ -26,8 +26,8 @@ why each resource is shaped the way it is, and is the path to use if you
 would rather run the commands by hand. It covers §1–§5, §5d and §9; the
 operating guide covers the web UI, the public demo, org-policy guardrails
 and upgrade notes, and [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
-covers §5c and the rest of what an application embedding the REST API
-needs.
+(Japanese) covers §5c and the rest of what an application embedding the
+REST API needs.
 
 **Already deployed?** [docs/guides/operating.md](../../docs/guides/operating.md)
 covers what happens after: backup and restore, hardening, the team web
@@ -35,8 +35,8 @@ UI, monitoring, capacity, and upgrades.
 
 **Embedding ochakai in your own product?**
 [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
-covers authenticating, delegated provenance and safe concurrent writes for
-an application calling the REST API directly.
+(Japanese) covers authenticating, delegated provenance and safe
+concurrent writes for an application calling the REST API directly.
 
 ## 1. Prerequisites
 
@@ -384,7 +384,8 @@ is most of what ochakai sells, collapses.
 The fix, the two-command setup, and everything else an application
 embedding the REST API needs — authenticating, delegated provenance,
 `Ochakai-Producer`, and safe concurrent writes — are in
-[Embedding the REST API](../../docs/guides/rest-integration.md).
+[Embedding the REST API](../../docs/guides/rest-integration.md)
+(Japanese).
 
 ## 5d. Optional: a public read-only demo (the one public posture)
 
