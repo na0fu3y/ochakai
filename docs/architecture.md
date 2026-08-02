@@ -1,6 +1,11 @@
 # Architecture
 
-This page is a summary. The decisions it describes are recorded in the
+This page is the reference half of the manual: what a concept is, how it
+is addressed, what search does, and how the pieces fit. **What ochakai is
+and why you would pick it** is the [README](../README.md); this page
+assumes you have read it and are working.
+
+The decisions it describes are recorded in the
 numbered decision records under [docs/design](design) — mostly in
 Japanese, and authoritative where this page and they disagree. Start from
 [the index](design/README.md): it groups every record by area and marks
@@ -9,40 +14,6 @@ which ones still describe the current state, and
 English. Sections below cite the
 record they rest on as `(design doc NNNN)`, the way the
 [README](../README.md) does.
-
-## What it is
-
-ochakai is one Go binary in front of a PostgreSQL database. It stores
-knowledge concepts — metric definitions, verified golden queries,
-interpretation notes, glossary terms, table catalog entries — and serves
-them to data agents over MCP, a REST API, a CLI, and a bundled web UI.
-Every concept carries who wrote it, who verified it, and when.
-
-Two refusals shape everything else (design doc
-[0001](design/0001-architecture.md)):
-
-- **No LLM.** Nothing in the request path summarizes, rewrites, or
-  interprets. What comes back is what a human or an agent wrote and a
-  human verified. Embeddings are the one exception in spirit and not in
-  fact: an encoder is deterministic and produces no text.
-- **No SQL execution.** ochakai holds no warehouse credentials and has no
-  way to reach your data. It returns the query; your agent runs it.
-
-It also has no connector ingestion, no user database, and no
-authorization system. The last of those is not an omission — see below.
-
-The supported runtime is Google Cloud: Cloud Run for the process, Cloud
-SQL for the database, and Vertex AI for embeddings — which is on by
-default there rather than optional (design docs
-[0003](design/0003-gcp-only.md),
-[0053](design/0053-embeddings-by-default.md)). That decision superseded an earlier
-"runs anywhere" position, and it was made for a reason worth knowing
-before you adopt: the identity model — no tokens, no passwords, no
-secrets — is built entirely on Google Cloud's IAM, and keeping a non-GCP
-path alive meant keeping a second authentication path alive with it.
-Portability is promised for the *data*, not the runtime: the knowledge
-base round-trips through OKF bundles, which are plain markdown in git.
-Local development runs against a plain PostgreSQL in Docker.
 
 ## Component layout
 
@@ -432,39 +403,21 @@ document is one fetch away by id (design doc
 ## The write-back and verification loop
 
 The bet in design doc [0001](design/0001-architecture.md) is that agents
-supply the breadth and humans supply the judgment. An agent writes what
-it learned as a `draft`; a human confirms it, promotes it to `stable`,
-deprecates it, or rejects it with a reason. Provenance and revisions make
-that reviewable after the fact.
+supply the breadth and humans supply the judgment: an agent writes what it
+learned as a `draft`, a human confirms, deprecates or rejects it with a
+reason, and provenance and revisions make that reviewable after the fact.
+What a curator does with the three feeds this produces, and what each one
+takes to empty, is [the improvement loop](loop.md).
 
-What closes the loop is the machinery for noticing that verified
-knowledge has stopped being true (design doc
-[0025](design/0025-closing-the-loop.md), extended by design doc
-[0037](design/0037-stale-and-source-lookup.md)):
-
-| Feed | What it lists | What empties it |
-|---|---|---|
-| `sort=verified_at` | Verified concepts by verification age, oldest first | Re-verifying — `POST /api/v1/review/{id}` with `ruling: verified` appends to the concept's ledger |
-| `sort=failed` | Concepts with unanswered `failed` outcome reports, worst first | Re-verifying, same call |
-| `sort=stale_after` | Concepts past the expiry their own author declared | Editing the concept to re-declare the date |
-
-`report_outcome` is the evidence-based half: an agent that ran a golden
-query and got a wrong number says so, and the concept rises in the second
-feed instead of being trusted blind by the next agent. Verification is
-its own operation rather than an update, for a reason the record spells
-out: an update that changes nothing writes nothing, so "I checked it
-again and it is still right" would land nowhere (design doc
-[0025](design/0025-closing-the-loop.md) §6). The third feed clears
-differently because `stale_after` is a claim its author made rather than
-something the server observed — re-verifying does not answer it; editing
-does. The reverse lookup added alongside it answers the other direction:
-`?source=<uri>` lists every concept derived from a document that has
-changed.
-
-Running verified golden queries on a schedule and writing the result back
-is the operational form of all this:
-[docs/guides/golden-query-canary.md](guides/golden-query-canary.md). The
-execution stays on your side, since ochakai does not run SQL.
+Two things about its shape belong here rather than there. **Verification
+is its own operation rather than an update** — `POST /api/v1/review/{id}`
+with `ruling: verified`, appending to the concept's ledger — because an
+update that changes nothing writes nothing, so "I checked it again and it
+is still right" would land nowhere (design doc
+[0025](design/0025-closing-the-loop.md) §6, extended by design doc
+[0037](design/0037-stale-and-source-lookup.md)). And **`stale_after`
+clears by editing rather than by re-verifying**, because it is a claim its
+author made rather than something the server observed.
 
 ## How correctness is enforced
 
@@ -493,13 +446,11 @@ machines outside the code to check three specific things.
   import round-trip that design doc 0036 asserts is exact. Seed corpora
   replay under an ordinary `go test`, so CI needs no new shape.
 
-Alongside those, CI runs `gofmt -l .`, `go vet`, `go test -race`, a
-`CGO_ENABLED=0` build, and `govulncheck` — all of it through
-`scripts/check`, which is also what a contributor runs, so the two cannot
-drift. [CONTRIBUTING.md](../CONTRIBUTING.md) has the invocations and the
-setup for the store integration tests.
-Images are published with SBOM and SLSA provenance, and workflow actions
-are pinned by commit SHA.
+All of it runs through `scripts/check`, which is also what a contributor
+runs, so CI and the local checks cannot drift —
+[CONTRIBUTING.md](../CONTRIBUTING.md) has the invocations. Images are
+published with SBOM and SLSA provenance, and workflow actions are pinned
+by commit SHA.
 
 ## Where to go next
 
