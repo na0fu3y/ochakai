@@ -1026,6 +1026,9 @@ func cmdPut(ctx context.Context, args []string) error {
 	if err != nil {
 		var apiErr *apiclient.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
+			if *onlyIfNew {
+				return fmt.Errorf("conflict: ochakai://%s already exists — --only-if-new refuses to replace it; drop the flag to overwrite, or pick a different id", k.ID)
+			}
 			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, redo the edit, and retry with the new content_hash", k.ID, k.ID)
 		}
 		return err
