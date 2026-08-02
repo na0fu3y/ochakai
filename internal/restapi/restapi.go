@@ -408,6 +408,15 @@ func Handler(svc *service.Service) http.Handler {
 				k, err := svc.Get(r.Context(), id)
 				if err == nil {
 					w.Header().Set("ETag", etagOf(k))
+					// Both file branches below already answer a matched
+					// If-None-Match with a 304; a concept computed the
+					// same ETag and never compared it (design doc 0064
+					// §12.2, issue #470). The spec declared the header
+					// for this GET as a whole, not just for a file.
+					if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, k.ContentHash) {
+						w.WriteHeader(http.StatusNotModified)
+						return
+					}
 					if wantsDocument(r) {
 						writeDocument(w, http.StatusOK, k)
 					} else {
@@ -613,6 +622,10 @@ func Handler(svc *service.Service) http.Handler {
 				writeJSON(w, http.StatusOK, att)
 				return
 			}
+			// The spec has declared this header on both 200 and 201 since
+			// design doc 0064 (matching the concept PUT, which already
+			// sets it); the file write never did (§12.3, issue #470).
+			w.Header().Set("ETag", `"`+att.SHA256+`"`)
 			status := http.StatusOK
 			if created {
 				status = http.StatusCreated
