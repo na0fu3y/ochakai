@@ -28,6 +28,15 @@ info:
     path, so it is `Accept: application/gzip` on that path, and the root
     is the whole knowledge base. §3.5's fold is complete.
 
+
+    **An unrecognized query parameter is a 400, naming it** (design doc
+    0064) — never a silent no-op. This is what makes it safe to add a
+    parameter after the freeze: a client built against an older version
+    of this contract finds out at the point of the call, rather than
+    having the parameter quietly ignored. The one exception is `fm.`,
+    whose keys are validated against the concept's own OKF frontmatter
+    (design doc 0047) rather than against a fixed name list.
+
     Every interface is unstable while the major version is 0
     (docs/compatibility.md): a removal arrives in a minor release with a
     changelog entry, not after a deprecation window.
@@ -51,7 +60,7 @@ security:
 # docs/guides/rest-integration.md for a walkthrough of minting a token and
 # what it takes to embed this API in your own service. An application on
 # the delegator allowlist may forward the end user it acts for with
-# X-Ochakai-On-Behalf-Of (design doc 0027) — the header is honored on
+# Ochakai-On-Behalf-Of (design doc 0027) — the header is honored on
 # every call; it is declared below (components/parameters/OnBehalfOf)
 # on the operations that record provenance.
 paths:
@@ -225,8 +234,9 @@ paths:
           description: >
             Searching: default 10, max 50. With any sort the feed reads
             more per page:
-            default 100, max 1000. Out-of-range values fall back to the
-            default; non-integer values are a 400.
+            default 100, max 1000. 0 or absent is the default; anything
+            else outside that range is a 400, the same as a non-integer
+            value (design doc 0064).
 
             For a listing this bounds the page, not the answer — walk the
             rest with cursor.
@@ -293,7 +303,7 @@ paths:
                     with GET /api/v1/bundle/{id}.md, or ask
                     GET /api/v1/context for the documents behind the top
                     hits in one call.
-                    Attachment metadata rides along (filled in one batch),
+                    File metadata rides along (filled in one batch),
                     which is what lets a UI render thumbnails from a search.
                   value:
                     hits:
@@ -329,7 +339,7 @@ paths:
                         content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
                         created_at: "2026-06-02T04:11:38.201044Z"
                         updated_at: "2026-07-14T02:33:41.019778Z"
-                        attachments:
+                        files:
                           - name: revenue-2026h1.png
                             media_type: image/png
                             size: 48213
@@ -540,6 +550,20 @@ paths:
             be written as empty in OpenAPI, so this is said here rather
             than in the path — as with the slashes above, the prose is as
             precise as the format allows.
+
+            **`.md` is a representation selector, not part of the
+            identifier** (design doc 0064): it is sugar for
+            `Accept: text/markdown` on the same concept, not a second
+            spelling of its id. `id`, `Summary.id`, `File.path` and
+            `Change.path` are always bare for exactly this reason — the
+            suffix exists only at this address, and only because a
+            browser or `curl` cannot set a header as easily as it can
+            follow a link. A single-target operation (this one,
+            `/api/v1/review/{id}`, `/api/v1/usage/{id}`) addresses its
+            concept with a path segment; `/api/v1/move`, which names two,
+            addresses both in the body instead — not a second
+            inconsistency, but the shape a two-target operation has to
+            take.
           schema: { type: string }
         - name: history
           in: query
@@ -557,7 +581,7 @@ paths:
           description: log.md and ?history only — maximum concepts (default and max 1000).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
-        - name: attachments
+        - name: files
           in: query
           description: >
             `Accept: application/gzip` only — `false` archives the
@@ -569,8 +593,9 @@ paths:
       responses:
         "200":
           description: >
-            The object: a concept's document or View, a file's bytes, a
-            generated file and its structured form, or — under
+            The object: a concept's document or View, a file's bytes or
+            (`Accept: application/json`) its metadata, a generated file
+            and its structured form, or — under
             `Accept: application/gzip` — the subtree at this path as an
             OKF bundle.
           headers:
@@ -596,11 +621,11 @@ paths:
                 description: >
                   Which shape arrives is decided by the path, not by a
                   parameter: a concept answers with its View, `index.md`
-                  with the listing, `log.md` with the history. A file
-                  answers with its bytes rather than JSON, so it is not
-                  here.
+                  with the listing, `log.md` with the history, a file
+                  with its metadata (design doc 0064) — the only address
+                  that answers a file's `sha256` without its bytes.
 
-                  `anyOf` rather than `oneOf` because the three are not
+                  `anyOf` rather than `oneOf` because the four are not
                   disjoint as schemas — a listing level with no
                   subdirectories and no concepts is `{}`, which every
                   object satisfies. The path is the discriminator, and
@@ -610,6 +635,7 @@ paths:
                   - $ref: "#/components/schemas/BundleListing"
                   - $ref: "#/components/schemas/BundleLog"
                   - $ref: "#/components/schemas/ObjectHistory"
+                  - $ref: "#/components/schemas/File"
               examples:
                 root:
                   summary: "GET /api/v1/bundle/index.md (Accept: application/json)"
@@ -829,23 +855,39 @@ paths:
               schema:
                 anyOf:
                   - $ref: "#/components/schemas/View"
-                  - $ref: "#/components/schemas/Attachment"
+                  - $ref: "#/components/schemas/File"
             text/markdown:
               schema: { type: string }
         "201":
-          description: A concept was created (If-None-Match "*", or the path was free).
+          description: >
+            The path held nothing before this write — a concept (design
+            doc 0064: a file answers 201 on creation too, matching this).
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Note: { $ref: "#/components/headers/Note" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/View" }
+              schema:
+                anyOf:
+                  - $ref: "#/components/schemas/View"
+                  - $ref: "#/components/schemas/File"
             text/markdown:
               schema: { type: string }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "412": { $ref: "#/components/responses/Error" }
+        "412":
+          description: >
+            An If-Match or If-None-Match "*" precondition failed — the
+            concept changed since it was read, or (design doc 0064,
+            matching RFC 9110) the path was already occupied when
+            If-None-Match "*" asked for a create only.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
         "413": { $ref: "#/components/responses/Error" }
         "415": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
@@ -884,9 +926,19 @@ paths:
         at a file's path it changes nothing and the file is removed, the
         way it is without the parameter. A 404 there would say a file was
         gone while it was still being served.
+
+        **`If-Match` is honored on a concept** (design doc 0064, the same
+        precondition PUT already took, design doc 0030): a stale version
+        is a 412 and nothing is deleted. It is not honored on `purge=true`
+        — purge is already the second, deliberate call in a two-step
+        sequence, and asking for a fresh ETag on it would tax the common
+        case with a round trip 0030 §3.5 avoids elsewhere — and a file has
+        no version to precondition on, so the header is ignored there the
+        way it is ignored on a bare-file GET.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
+        - $ref: "#/components/parameters/IfMatch"
         - name: purge
           in: query
           description: >
@@ -907,6 +959,16 @@ paths:
           description: A generated file is not one anybody deletes.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+        "412":
+          description: >
+            If-Match named a version the concept no longer has (design doc
+            0064) — nothing was deleted.
           content:
             application/json:
               schema:
@@ -1224,7 +1286,7 @@ paths:
       description: >
         The id is the address (design doc 0017), so a move carries
         everything keyed by it along in one transaction — revisions,
-        usage, attachments, embeddings — and rewrites inbound references
+        usage, files, embeddings — and rewrites inbound references
         (link targets in both of SPEC §6's forms, and the producer
         key `model` where a document carries one)
         so nothing breaks (design doc 0021). The destination must be a
@@ -1255,7 +1317,7 @@ paths:
                 summary: Move a metric one level deeper
                 description: >
                   Everything keyed by the id follows — revisions, usage,
-                  attachments, embeddings — and every concept linking to the
+                  files, embeddings — and every concept linking to the
                   old id is rewritten to the new one.
                 value:
                   from: metrics/revenue
@@ -1400,9 +1462,11 @@ paths:
                     the history worth keeping.
 
                     `withdrawn` removes the live rejection, returning the
-                    concept to the ordinary pool. A 404 when the concept
-                    carries none: lifting nothing is a mistake worth
-                    reporting rather than a silent success. It is spelled
+                    concept to the ordinary pool. A live concept that
+                    carries no rejection is a 409, not a 404 (design doc
+                    0064): lifting nothing is a mistake worth reporting
+                    rather than a silent success, and a missing concept is
+                    a different mistake — a 404 stays that. It is spelled
                     as a ruling rather than as a DELETE because **nothing
                     is deleted** — the verifications stay, and the
                     withdrawal is its own row in the concept's history,
@@ -1565,6 +1629,18 @@ paths:
                     error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: >
+            `ruling: withdrawn` against a live concept that carries no
+            rejection (design doc 0064) — nothing to lift.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+              example:
+                error: knowledge carries no rejection to withdraw
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
@@ -1794,11 +1870,11 @@ paths:
         more (design doc 0020). This fills the gap.
 
 
-        Attachment vectors are covered too: only `attach` writes them, so
+        File vectors are covered too: only writing a file records one, so
         a corpus loaded before semantic search — or one whose embedding
         tables were dropped to change dimensions — has files that are
         findable by name alone until this runs. Concepts go first and
-        attachments fill the rest of the pass.
+        files fill the rest of the pass.
 
 
         Bounded per call — repeat while `missing` is above zero, passing
@@ -1832,15 +1908,20 @@ paths:
                 type: object
                 properties:
                   embedded:
-                    description: Knowledge concepts embedded by this pass.
+                    description: >
+                      Knowledge concepts embedded by this pass — progress
+                      of this pass, not a census of the corpus (design doc
+                      0064): a later re-keying of how a file's vector is
+                      stored changes what this counts without that being
+                      a second breaking change.
                     type: integer
-                  attachments:
-                    description: Attachments embedded by this pass.
+                  files:
+                    description: Files embedded by this pass — the same "this pass" caveat as embedded.
                     type: integer
                   failed: { type: integer }
                   missing:
                     description: >
-                      Concepts and attachments still unembedded once the
+                      Concepts and files still unembedded once the
                       pass was over — counted after the fact, so items
                       this pass failed on are included.
                     type: integer
@@ -1856,11 +1937,11 @@ paths:
                   description: >
                     missing is above zero, so call again with this cursor.
                     The cursor is opaque — it carries the concept and the
-                    attachment position in one token; pass it back unchanged
+                    file position in one token; pass it back unchanged
                     rather than parsing it.
                   value:
                     embedded: 200
-                    attachments: 0
+                    files: 0
                     failed: 0
                     missing: 613
                     cursor: "MQByZWVtYmVkAG1ldHJpY3MvcmV2ZW51ZQAA"
@@ -1869,7 +1950,7 @@ paths:
                   description: Nothing is missing, so no cursor comes back.
                   value:
                     embedded: 13
-                    attachments: 4
+                    files: 4
                     failed: 0
                     missing: 0
         "400": { $ref: "#/components/responses/Error" }
@@ -1973,7 +2054,7 @@ components:
         prior read returned, answered with a 304 when it still matches.
       schema: { type: string }
     OnBehalfOf:
-      name: X-Ochakai-On-Behalf-Of
+      name: Ochakai-On-Behalf-Of
       in: header
       required: false
       description: >
@@ -1990,7 +2071,7 @@ components:
         provenance.
       schema: { type: string, maxLength: 320 }
     Producer:
-      name: X-Ochakai-Producer
+      name: Ochakai-Producer
       in: header
       required: false
       description: >
@@ -2028,7 +2109,7 @@ components:
         this deployment declines it. Two things answer 403, and the
         message says which: a write against a read-only deployment
         (design doc 0040 §4 — 403 rather than 404, because the endpoint
-        did not go away), and X-Ochakai-On-Behalf-Of from a caller that
+        did not go away), and Ochakai-On-Behalf-Of from a caller that
         is not on the delegator allowlist (design doc 0027, which refuses
         rather than silently downgrading to the caller's own identity).
         The second reaches every operation, since the header is honored
@@ -2048,9 +2129,9 @@ components:
               value:
                 error: "this ochakai is read-only: it serves knowledge but does not change it"
             notADelegator:
-              summary: X-Ochakai-On-Behalf-Of from a caller not permitted to delegate
+              summary: Ochakai-On-Behalf-Of from a caller not permitted to delegate
               value:
-                error: "auth: X-Ochakai-On-Behalf-Of: app@example.iam.gserviceaccount.com is not permitted to act on behalf of others (add it to OCHAKAI_DELEGATING_CALLERS)"
+                error: "auth: Ochakai-On-Behalf-Of: app@example.iam.gserviceaccount.com is not permitted to act on behalf of others (add it to OCHAKAI_DELEGATING_CALLERS)"
   schemas:
     Type:
       type: string
@@ -2147,7 +2228,7 @@ components:
         via:
           description: >
             The delegating caller, when an application forwarded an end
-            user's identity with X-Ochakai-On-Behalf-Of (design doc
+            user's identity with Ochakai-On-Behalf-Of (design doc
             0027) — e.g. "process:app@project.iam.gserviceaccount.com" on
             a concept whose actor is the person who used that application.
             Absent when the caller acted as itself. Recorded rather than
@@ -2157,7 +2238,7 @@ components:
         producer:
           description: >
             The software that made this write, as the caller declared it
-            with X-Ochakai-Producer — OKF SPEC §7's
+            with Ochakai-Producer — OKF SPEC §7's
             "<producer>/<version>" form, e.g. "insightflow/1.4.0" (design
             doc 0052). Absent when the caller named none.
             It is the one field of an actor that is self-declared rather
@@ -2201,7 +2282,7 @@ components:
             no control characters, at most 128 bytes each (512 total).
             The final segment must not be "index" or "log"
             (OKF-reserved filenames). Stored NFC-normalized, as are
-            link targets and attachment names (design doc 0022).
+            link targets and file names (design doc 0022).
           pattern: "^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
         type: { $ref: "#/components/schemas/Type" }
         title:
@@ -2259,7 +2340,7 @@ components:
             recomputed on every write. OKF SPEC §6's two forms are read:
             bundle-absolute (/metrics/revenue.md) and relative
             (./revenue.md). http(s) URLs and non-.md files are not (the
-            latter are attachments).
+            latter are files).
         content_hash:
           type: string
           description: >
@@ -2267,7 +2348,7 @@ components:
             the same value the ETag header carries (design docs 0043
             §3.4, 0046 §3.4). Send it back as If-Match to write only if
             nothing changed meanwhile. Opaque — it covers the document
-            alone, so a verification or an attachment leaves a held
+            alone, so a verification or a file leaves a held
             precondition valid, while a reformat moves it.
         created_at: { type: string, format: date-time }
         updated_at:
@@ -2351,20 +2432,20 @@ components:
             with "Accept: text/markdown".
         summary: { $ref: "#/components/schemas/Summary" }
         observed: { $ref: "#/components/schemas/Observed" }
-        attachments:
+        files:
           type: array
-          items: { $ref: "#/components/schemas/Attachment" }
+          items: { $ref: "#/components/schemas/File" }
           description: >
-            Attachment metadata (no bytes — fetch them via
+            File metadata (no bytes — fetch them via
             /api/v1/bundle/{path}, which is also where they are written).
             Absent when the concept has none.
-    Attachment:
+    File:
       type: object
       description: >
-        A file attached to a knowledge concept — a dashboard screenshot, an
-        ER diagram, a seeds file (design docs 0008, 0013). Metadata
-        travels with the concept; bytes are a separate, deliberate fetch so
-        agent context is never flooded with base64.
+        A file beside a knowledge concept — a dashboard screenshot, an
+        ER diagram, a seeds file (design docs 0008, 0013, 0046 §2.1).
+        Metadata travels with the concept; bytes are a separate,
+        deliberate fetch so agent context is never flooded with base64.
       properties:
         name: { type: string, description: Filename, unique within the concept. }
         media_type:
@@ -2374,7 +2455,7 @@ components:
             a bundle carries what it carries (design doc 0046 §3.2), and
             what a browser may do with it is decided when it is served.
         size: { type: integer }
-        sha256: { type: string, description: Content hash; attachments are content-addressed and immutable. }
+        sha256: { type: string, description: Content hash; files are content-addressed and immutable. }
         path:
           type: string
           description: >
@@ -2531,7 +2612,7 @@ components:
         not. The document is one fetch away by id, and GET
         /api/v1/context is the call that returns concepts.
 
-        REST hits carry attachment metadata (filled in batch) so UIs can
+        REST hits carry file metadata (filled in batch) so UIs can
         render image previews without a fetch per concept; MCP search
         results omit it to keep agent context lean (design doc 0015).
       allOf:
@@ -2546,12 +2627,12 @@ components:
                 Usage totals, present in the sort=usage listing (the draft
                 review feed) and the sort=failed listing (the re-verification
                 feed); absent for search results and the verified_at feed.
-            attachments:
+            files:
               type: array
-              items: { $ref: "#/components/schemas/Attachment" }
+              items: { $ref: "#/components/schemas/File" }
               readOnly: true
               description: >
-                Attachment metadata for this row — a file beside the
+                File metadata for this row — a file beside the
                 concept rather than part of its projection, which is why it
                 is here and not in Summary. REST only.
     ContextRank:

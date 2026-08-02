@@ -83,7 +83,7 @@ func TestIntegrationUnderscoreIsNotAWildcard(t *testing.T) {
 	mine, theirs := root+"/sales_2024", root+"/salesX2024"
 	mkConcept(t, s, ctx, mine)
 	mkConcept(t, s, ctx, theirs)
-	if _, err := s.PutFile(ctx, theirs+"/chart.png", "image/png", []byte("theirs"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, theirs+"/chart.png", "image/png", []byte("theirs"), actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -114,7 +114,7 @@ func TestIntegrationUnderscoreIsNotAWildcard(t *testing.T) {
 	})
 
 	t.Run("purge", func(t *testing.T) {
-		if err := s.SoftDelete(ctx, root+"/moved", actor); err != nil {
+		if err := s.SoftDelete(ctx, root+"/moved", actor, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.Purge(ctx, root+"/moved", actor); err != nil {
@@ -135,7 +135,7 @@ func TestIntegrationLogCarriesFiles(t *testing.T) {
 	s, ctx, root := newObjectPathStore(t)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	mkConcept(t, s, ctx, root+"/revenue")
-	if _, err := s.PutFile(ctx, root+"/revenue/chart.png", "image/png", []byte("bytes"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, root+"/revenue/chart.png", "image/png", []byte("bytes"), actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -186,7 +186,7 @@ func TestIntegrationFileHistoryFollowsAMove(t *testing.T) {
 	s, ctx, root := newObjectPathStore(t)
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	mkConcept(t, s, ctx, root+"/before")
-	if _, err := s.PutFile(ctx, root+"/before/chart.png", "image/png", []byte("bytes"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, root+"/before/chart.png", "image/png", []byte("bytes"), actor); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Move(ctx, root+"/before", root+"/after", actor); err != nil {
@@ -218,7 +218,7 @@ func TestIntegrationFileHistoryFollowsAMove(t *testing.T) {
 func TestIntegrationConceptCannotLandOnAFile(t *testing.T) {
 	s, ctx, root := newObjectPathStore(t)
 	actor := domain.Actor{Kind: "human", Name: "test"}
-	if _, err := s.PutFile(ctx, root+"/notes.md", "text/markdown", []byte("carries no type"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, root+"/notes.md", "text/markdown", []byte("carries no type"), actor); err != nil {
 		t.Fatal(err)
 	}
 	k := &domain.Knowledge{
@@ -252,7 +252,7 @@ func TestIntegrationBrowseListsTheFilesInADirectory(t *testing.T) {
 	// One file beside the concept, one under it, one in a directory that
 	// holds nothing else.
 	for _, p := range []string{root + "/seed.csv", root + "/revenue/chart.png", root + "/seeds/orders.csv"} {
-		if _, err := s.PutFile(ctx, p, "text/plain", []byte("bytes here"), actor); err != nil {
+		if _, _, err := s.PutFile(ctx, p, "text/plain", []byte("bytes here"), actor); err != nil {
 			t.Fatal(err)
 		}
 	}

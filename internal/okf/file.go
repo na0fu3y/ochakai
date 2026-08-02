@@ -8,7 +8,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// Attachments in OKF bundles (design docs 0008, 0013). The OKF spec is
+// Files in OKF bundles (design docs 0008, 0013). The OKF spec is
 // silent on non-markdown files — nothing forbids them, consumers must be
 // permissive, and only the index.md / log.md *filenames* are reserved.
 // Four rules keep ochakai consistent with that world:
@@ -20,7 +20,7 @@ import (
 //     "<id>/<name>" next to "<id>.md" — everything about an entry lives
 //     in its OKF namespace, and `<name>` relative links render on
 //     GitHub. Sharing the directory with hierarchical child entries is
-//     harmless: concept parsers ignore non-md files, and attachment
+//     harmless: concept parsers ignore non-md files, and file
 //     names may not end in .md.
 //   - The canonical layout also reads backwards (design doc 0013): a
 //     non-markdown file no body references, sitting at "<id>/<name>"
@@ -32,35 +32,35 @@ import (
 //     body links that use the original location keep working
 //     byte-for-byte without a second field recording the difference.
 
-// AttachmentPath returns the bundle path for one attachment. It is the
-// attachment's own path, and falls back to the canonical layout for a
+// FilePath returns the bundle path for one file. It is the
+// file's own path, and falls back to the canonical layout for a
 // caller that composed one in memory without a path.
-func AttachmentPath(id string, att *domain.Attachment) string {
+func FilePath(id string, att *domain.File) string {
 	if att.Path != "" {
 		return att.Path
 	}
 	return id + "/" + att.Name
 }
 
-// BundleAttachment is one image found in a bundle, attributed to the
+// AttributedFile is one image found in a bundle, attributed to the
 // entry whose body references it.
-type BundleAttachment struct {
+type AttributedFile struct {
 	ID   string
 	Name string // filename (last segment of Path)
 	Path string // bundle path — the file's address, kept so it round-trips
 	Data []byte
 }
 
-// resolveAttachments walks each entry's body markdown links and collects
+// resolveFiles walks each entry's body markdown links and collects
 // the bundle files they reference: relative links resolve against the
 // concept document's directory (its id), /-rooted links against the
 // bundle root (both OKF SPEC §5 forms). A second pass attributes by the
 // canonical namespace (design doc 0013): an unreferenced non-markdown
 // file at "<id>/<name>" attaches to the bundle's entry <id>. Only files
-// that pass the attachment allowlist (sniffed bytes, not *.md) and fit
+// that pass the file allowlist (sniffed bytes, not *.md) and fit
 // the size limit attach; everything else is left for the skip report.
 // The returned used set holds the consumed bundle paths.
-func resolveAttachments(files map[string][]byte, concepts []*domain.Knowledge) (atts []BundleAttachment, used map[string]bool) {
+func resolveFiles(files map[string][]byte, concepts []*domain.Knowledge) (atts []AttributedFile, used map[string]bool) {
 	used = map[string]bool{}
 	index := map[string][]byte{}
 	for p, data := range files {
@@ -72,15 +72,15 @@ func resolveAttachments(files map[string][]byte, concepts []*domain.Knowledge) (
 		if seen[k] == nil {
 			seen[k] = map[string]bool{}
 		}
-		if seen[k][name] || !domain.ValidAttachmentName(name) || len(data) > domain.MaxAttachmentSize || len(data) == 0 {
+		if seen[k][name] || !domain.ValidFileName(name) || len(data) > domain.MaxFileSize || len(data) == 0 {
 			return
 		}
-		if _, err := domain.DetectAttachmentMediaType(data); err != nil {
+		if _, err := domain.DetectFileMediaType(data); err != nil {
 			return
 		}
 		seen[k][name] = true
 		used[p] = true
-		atts = append(atts, BundleAttachment{ID: k.ID, Name: name, Path: p, Data: data})
+		atts = append(atts, AttributedFile{ID: k.ID, Name: name, Path: p, Data: data})
 	}
 	for _, k := range concepts {
 		docDir := path.Dir(k.ID)
@@ -127,7 +127,7 @@ func resolveAttachments(files map[string][]byte, concepts []*domain.Knowledge) (
 // bodyLinkTargets extracts markdown link and image targets from body:
 // ![alt](target) and [text](target). Good-enough scanning, not a full
 // markdown parser — targets that don't resolve to a bundle file are
-// simply not attachments (the spec requires tolerating broken links).
+// simply not files (the spec requires tolerating broken links).
 func bodyLinkTargets(body string) []string {
 	var targets []string
 	for i := 0; i < len(body); i++ {
@@ -178,6 +178,6 @@ func resolveTarget(docDir, target string) (string, bool) {
 		return "", false
 	}
 	// A body written on macOS can spell the target NFD while the bundle
-	// index is NFC — same visible path, same attachment.
+	// index is NFC — same visible path, same file.
 	return domain.Normalize(p), true
 }

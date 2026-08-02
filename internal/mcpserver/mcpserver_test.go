@@ -280,7 +280,7 @@ func TestToolAnnotations(t *testing.T) {
 		"search_concepts":   {readOnly: true},
 		"get_context":       {readOnly: true},
 		"get_concept":       {readOnly: true},
-		"get_attachment":    {readOnly: true},
+		"get_file":          {readOnly: true},
 		"get_concept_usage": {readOnly: true},
 		"put_concept":       {destructive: &no},
 		"delete_concept":    {destructive: &yes},
@@ -748,7 +748,7 @@ func TestOneWriteFace(t *testing.T) {
 	// saving was in the merge above.
 	want := []string{
 		"search_concepts", "get_context", "get_concept", "put_concept", "report_outcome",
-		"delete_concept", "get_concept_usage", "get_attachment",
+		"delete_concept", "get_concept_usage", "get_file",
 	}
 	for _, w := range want {
 		if !names[w] {

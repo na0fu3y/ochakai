@@ -82,7 +82,7 @@ func FuzzLinksFromBody(f *testing.F) {
 	f.Add("metrics/revenue", "Self [me](ochakai://metrics/revenue) and <ochakai://a/b>.")
 	f.Add("a/b", "Relative [x](./c.md) and absolute [y](/d/e.md).")
 	f.Add("a/b", "Bare ochakai://tables/orders を参照。 And http://example.com/x.md.")
-	f.Add("a/b", "![img](b/weekly.png) is an attachment, not a link.")
+	f.Add("a/b", "![img](b/weekly.png) is a file, not a link.")
 	f.Add("a/b", "```\n[fenced](ochakai://x/y)\n```\nand `[code](ochakai://z)`.")
 	f.Add("", "")
 

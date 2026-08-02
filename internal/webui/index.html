@@ -8,7 +8,7 @@
      is its path, design docs 0014/0016), directory index pages (each
      tree level rendered like the OKF export's index.md — subdirectories
      with counts, entries with descriptions), search, entry details with
-     usage, revision history, backlinks, attachments, create/edit with
+     usage, revision history, backlinks, files, create/edit with
      the draft → verified workflow, move with reference rewriting (a Move
      action and tree drag & drop), the draft review queue (sort=usage),
      the two feeds that empty by verifying — reported wrong (sort=failed)
@@ -387,7 +387,7 @@
   /* Drag-and-drop move targets (directories and the root). */
   .browse details.node > summary.drop-hover, #tree.drop-hover { background: var(--accent-weak); border-radius: 6px; }
 
-  /* ---- attachments ---- */
+  /* ---- files ---- */
   .att-card { display: flex; gap: 1rem; align-items: flex-start; }
   .att-card a.thumb { flex-shrink: 0; }
   .att-card img {
@@ -612,7 +612,7 @@ function crumbTrail(dirs, leaf) {
 }
 
 /* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
-// resolveFile maps a reference from the body to an attachment URL (the
+// resolveFile maps a reference from the body to a file URL (the
 // detail view resolves entry-relative references against the entry's
 // files); references it cannot resolve stay literal text rather than
 // rendering broken images and dead links. resolveEntry does the same for
@@ -627,9 +627,9 @@ function md(src, resolveFile, resolveEntry) {
   };
   // An http(s) target leaves the app; anything else is a bundle reference,
   // and becomes a link when it names an entry or a file attached to this
-  // one. Since design doc 0013 an attachment is any file, not only an
+  // one. Since design doc 0013 a bundle file may be any type, not only an
   // image, and a link is the only way to reference a non-image one — the
-  // attachments tab tells authors to write exactly this — so the same
+  // files tab tells authors to write exactly this — so the same
   // resolver serves both notations.
   const link = (m, text, ref) => {
     if (/^https?:/.test(ref)) return `<a href="${ref}" target="_blank" rel="noopener">${text}</a>`;
@@ -730,7 +730,7 @@ async function api(path, opts = {}) {
   // §§3.7-3.8).
   const init = { method: opts.method || 'GET', headers: { Accept: 'application/json' } };
   if (opts.raw !== undefined) {
-    init.body = opts.raw; // raw bytes (attachment upload), no JSON envelope
+    init.body = opts.raw; // raw bytes (file upload), no JSON envelope
   } else if (opts.doc !== undefined) {
     init.headers['Content-Type'] = 'text/markdown';
     init.body = opts.doc; // an OKF document — the one way to write knowledge
@@ -1091,12 +1091,12 @@ async function runSearch(append = false) {
   }
 }
 
-// Image attachments as small previews on a result card. The metadata
+// Image files as small previews on a result card. The metadata
 // rides along on REST hits; the bytes are separate GETs the browser
 // caches (ETag revalidation — repeat renders cost a 304, not a
 // re-download).
 function cardThumbs(h) {
-  const imgs = (h.attachments || []).filter(a => (a.media_type || '').startsWith('image/')).slice(0, 4);
+  const imgs = (h.files || []).filter(a => (a.media_type || '').startsWith('image/')).slice(0, 4);
   if (!imgs.length) return '';
   const src = a => BASE + '/api/v1/bundle/' + idPath(a.path);
   return `<div class="thumbs">${imgs.map(a =>
@@ -1287,7 +1287,7 @@ document.addEventListener('keydown', e => {
 /* ============================== move ============================== */
 
 // moveEntry renames an entry (POST /api/v1/move) — the server carries
-// revisions, usage, and attachments along and rewrites inbound
+// revisions, usage, and files along and rewrites inbound
 // references, so nothing breaks. Shared by tree drag & drop and the
 // detail view's Move action.
 async function moveEntry(from, to) {
@@ -1408,7 +1408,7 @@ function fileCard(f) {
 
 // loadDirIndex fetches one browse level and renders it into container
 // (which the caller seeded with a placeholder). Entry cards reuse the
-// search result card — browse entries carry no attrs/attachments, so
+// search result card — browse entries carry no attrs/files, so
 // they render as title, status, and description.
 async function loadDirIndex(container, prefix, emptyText) {
   try {
@@ -1498,11 +1498,11 @@ async function viewDetail(id) {
   view.innerHTML = '<div class="empty">…</div>';
   let entry, observed, document_;
   try {
-    // A read is {id, document, summary, observed, attachments} (design
+    // A read is {id, document, summary, observed, files} (design
     // doc 0043 §3.5). The summary is flattened onto entry so the header
     // reads one object; the document is the entry itself.
     const v = await api(conceptURL(id));
-    entry = Object.assign({ id: v.id, attachments: v.attachments || [] }, v.summary);
+    entry = Object.assign({ id: v.id, files: v.files || [] }, v.summary);
     observed = v.observed || {};
     document_ = v.document || '';
   } catch (e) {
@@ -1542,7 +1542,7 @@ async function viewDetail(id) {
     : '';
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
-  const atts = entry.attachments || [];
+  const atts = entry.files || [];
 
   view.innerHTML = `
     <nav class="crumbs mono">${crumbTrail(entry.id.split('/').slice(0, -1))} <span class="badge">${esc(entry.type)}</span></nav>
@@ -1587,7 +1587,7 @@ async function viewDetail(id) {
         <button class="btn small" id="move-cancel">Cancel</button>
       </div>
       <p class="provenance" style="margin-top:.3rem">The entry's new path. Inbound references are rewritten;
-      revisions, usage, and attachments follow the entry.</p>
+      revisions, usage, and files follow the entry.</p>
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     ${staleNote}
@@ -1596,14 +1596,14 @@ async function viewDetail(id) {
       <button data-tab="overview" class="active">Overview</button>
       <button data-tab="document">Document</button>
       <button data-tab="links">Links${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
-      <button data-tab="attachments">Attachments${atts.length ? ' (' + atts.length + ')' : ''}</button>
+      <button data-tab="files">Files${atts.length ? ' (' + atts.length + ')' : ''}</button>
       <button data-tab="linked">Linked from</button>
       <button data-tab="usage">Usage</button>
       <button data-tab="history">History</button>
     </div>
     <div id="tab-body"></div>`;
 
-  // Attachment paths and image resolution (design doc 0008). Body links
+  // File paths and image resolution (design doc 0008). Body links
   // are OKF bundle references: relative to the entry document's directory
   // (the id's parent), or bundle-root when they start with "/".
   const lastSeg = entry.id.split('/').pop();
@@ -1635,14 +1635,14 @@ async function viewDetail(id) {
   // Links to other entries, resolved the way the server derives them from
   // this same body (design doc 0024): SPEC §6's two forms, bundle-absolute
   // "/x/y.md" and relative "./y.md" against the document's directory. A
-  // reference to anything else — an attachment, an external URL, an
+  // reference to anything else — a file, an external URL, an
   // anchor, a URI scheme — is not an entry link and stays literal text.
   const resolveEntry = ref => {
     const target = String(ref).split(/[#?]/)[0];
     if (!target) return null;
     let id;
     if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) return null; // a scheme: outside the bundle
-    else if (!target.endsWith('.md')) return null; // an attachment, not an entry
+    else if (!target.endsWith('.md')) return null; // a file, not an entry
     else {
       const rel = target.slice(0, -'.md'.length);
       id = normalize(rel.startsWith('/') ? rel : (docDir ? docDir + '/' : '') + rel);
@@ -1680,7 +1680,7 @@ async function viewDetail(id) {
           <td>${href ? `<a class="mono" href="${href}">${esc(target)}</a>` : `<span class="mono">${esc(target)}</span>`}</td></tr>`;
       }).join('') + '</table>';
     },
-    attachments: () => {
+    files: () => {
       const cards = atts.map(a => {
         const isImage = (a.media_type || '').startsWith('image/');
         const thumb = isImage
@@ -1699,7 +1699,7 @@ async function viewDetail(id) {
         </div>`;
       }).join('');
       return `
-        ${cards || '<div class="empty">No attachments.</div>'}
+        ${cards || '<div class="empty">No files.</div>'}
         <div class="toolbar write-only" style="margin-top:1rem">
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
           <button class="btn small" id="att-choose">Choose files…</button>
@@ -1714,7 +1714,7 @@ async function viewDetail(id) {
     history: () => '<div class="empty">…</div>',
   };
 
-  function wireAttachments() {
+  function wireFiles() {
     const fileInput = $('#att-file');
     $('#att-choose').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
@@ -1785,7 +1785,7 @@ async function viewDetail(id) {
   async function showTab(name) {
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     body.innerHTML = tabs[name]();
-    if (name === 'attachments') wireAttachments();
+    if (name === 'files') wireFiles();
     if (lazy[name]) {
       try {
         tabs[name] = await lazy[name]();

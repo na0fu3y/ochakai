@@ -88,7 +88,7 @@ _ochakai() {
     'reembed:embed concepts that have no vector for the configured model'
     'move:move (rename) a concept; references are rewritten'
     'attach:attach files to a concept'
-    'detach:remove an attachment'
+    'detach:remove a file from a concept'
     'usage:show usage totals for a concept'
     'stats:the whole loop: what is stored, what each queue holds, what review did'
     'report:report an outcome (worked/failed) for a concept'
@@ -157,7 +157,7 @@ _ochakai() {
         '--url[server URL]:url:'
       ;;
     get)
-      _arguments '--json[print JSON instead of the OKF document]' '--download[save attachments into this directory]:directory:_files -/' '--url[server URL]:url:'
+      _arguments '--json[print JSON instead of the OKF document]' '--download[save files into this directory]:directory:_files -/' '--url[server URL]:url:'
       ;;
     usage)
       _arguments '--json[print JSON]' '--url[server URL]:url:'
@@ -191,17 +191,20 @@ _ochakai() {
     reject)
       _arguments '--note[why it was not accepted]:note:' '--withdraw[take back the rejection]' '--json[print the concept as JSON]' '--url[server URL]:url:'
       ;;
-    delete|purge|detach|move)
+    delete)
+      _arguments '--if-match[delete only if the concept still has this version]:version:' '--url[server URL]:url:'
+      ;;
+    purge|detach|move)
       _arguments '--url[server URL]:url:'
       ;;
     attach)
-      _arguments '--name[attachment name]:name:' '--json[print the attachment metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
+      _arguments '--name[file name]:name:' '--json[print the file metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
       ;;
     reembed)
       _arguments '--limit[max concepts per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     export)
-      _arguments '--no-attachments[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
+      _arguments '--no-files[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
       ;;
     import)
       _arguments '--dry-run[parse and list, write nothing]' '--strict[fail on any note or skip]' '--url[server URL]:url:' '1:bundle:_files'
@@ -277,10 +280,11 @@ _ochakai() {
     put)           opts="-f --only-if-new --if-match --json --url" ;;
     verify)        opts="--json --url" ;;
     reject)        opts="--note --withdraw --json --url" ;;
-    delete|purge|detach|move) opts="--url" ;;
+    delete)        opts="--if-match --url" ;;
+    purge|detach|move) opts="--url" ;;
     attach)        opts="--name --json --url" ;;
     reembed)       opts="--limit --once --json --url" ;;
-    export)        opts="--url --no-attachments" ;;
+    export)        opts="--url --no-files" ;;
     import)        opts="--dry-run --strict --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
@@ -321,7 +325,7 @@ complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-del
 complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that have no vector for the configured model'
 complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept; references are rewritten'
 complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to a concept'
-complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove an attachment'
+complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove a file from a concept'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for a concept'
 complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for a concept'
@@ -348,8 +352,8 @@ complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow w
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
-complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save attachments into this directory'
-complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'attachment name'
+complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save files into this directory'
+complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'file name'
 complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search list context' -l type -x -a '@TYPES@' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search list context' -l status -x -a '@STATUSES@' -d 'filter by status'
@@ -372,9 +376,10 @@ complete -c ochakai -n '__fish_seen_subcommand_from context' -l budget -x -d 'st
 complete -c ochakai -n '__fish_seen_subcommand_from put' -s f -r -F -d 'input file'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l only-if-new -d 'write only if the id is free'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the concept still has this version'
+complete -c ochakai -n '__fish_seen_subcommand_from delete' -l if-match -x -d 'delete only if the concept still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
-complete -c ochakai -n '__fish_seen_subcommand_from export' -l no-attachments -d 'export the markdown only'
+complete -c ochakai -n '__fish_seen_subcommand_from export' -l no-files -d 'export the markdown only'
 complete -c ochakai -n '__fish_seen_subcommand_from export' -a '(__fish_complete_directories)'
 `

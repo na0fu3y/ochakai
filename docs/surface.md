@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 4929
+- DOC-LINES: 4937
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -183,11 +183,11 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 なる**からである。同じ PR で `Ochakai-Plan` も足しており、HEADER の
 天井も上がっている。
 
-- `attachments`
 - `budget`
 - `cursor`
 - `days`
 - `dry_run`
+- `files`
 - `fm.{key}`
 - `history`
 - `limit`
@@ -223,19 +223,19 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `If-Match`
 - `If-None-Match`
 - `Ochakai-Note`
+- `Ochakai-On-Behalf-Of`
 - `Ochakai-Plan`
+- `Ochakai-Producer`
 - `Ochakai-Read-Only`
 - `Ochakai-Unchanged`
-- `X-Ochakai-On-Behalf-Of`
-- `X-Ochakai-Producer`
 
 ## MCP (8)
 
 - `delete_concept`
-- `get_attachment`
 - `get_concept`
 - `get_concept_usage`
 - `get_context`
+- `get_file`
 - `put_concept`
 - `report_outcome`
 - `search_concepts`
@@ -331,7 +331,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `limit`
 - `links-to`
 - `name`
-- `no-attachments`
+- `no-files`
 - `note`
 - `once`
 - `only-if-new`

@@ -191,7 +191,7 @@ func ownedSchemas() map[string]any {
 		"ContextOutline":       domain.ContextOutline{},
 		"Usage":                domain.Usage{},
 		"QueueCounts":          domain.QueueCounts{},
-		"Attachment":           domain.Attachment{},
+		"File":                 domain.File{},
 		"Actor":                domain.Actor{},
 		"Link":                 domain.Link{},
 		"Verification":         domain.Verification{},

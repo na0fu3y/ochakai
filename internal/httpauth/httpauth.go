@@ -40,7 +40,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 // must therefore never run publicly invokable.
 //
 // With cfg.InsecureDev (local development only), every request acts as
-// human:anonymous instead — but X-Ochakai-On-Behalf-Of is still honored,
+// human:anonymous instead — but Ochakai-On-Behalf-Of is still honored,
 // from any caller, so a delegating integration can be developed and its
 // mistakes seen locally.
 func Middleware(cfg *config.Config, next http.Handler) http.Handler {
@@ -122,12 +122,16 @@ func authenticated(cfg *config.Config, h http.Header) (domain.Actor, int, error)
 }
 
 // OnBehalfOfHeader carries the end-user identity a trusted caller is
-// acting for: "human:tanaka@example.co.jp" (design doc 0027).
-const OnBehalfOfHeader = "X-Ochakai-On-Behalf-Of"
+// acting for: "human:tanaka@example.co.jp" (design doc 0027). No "X-"
+// prefix (design doc 0064): RFC 6648 deprecated it for new headers, and
+// it was the one spelling in this pair that disagreed with the five
+// response headers, which never carried it.
+const OnBehalfOfHeader = "Ochakai-On-Behalf-Of"
 
 // ProducerHeader carries the software the caller is running, in SPEC §7's
-// "<producer>/<version>" form: "insightflow/1.4.0" (design doc 0052).
-const ProducerHeader = "X-Ochakai-Producer"
+// "<producer>/<version>" form: "insightflow/1.4.0" (design doc 0052). No
+// "X-" prefix, for the same reason as OnBehalfOfHeader (design doc 0064).
+const ProducerHeader = "Ochakai-Producer"
 
 // producerFrom reads the caller's self-declaration of what software it is.
 //

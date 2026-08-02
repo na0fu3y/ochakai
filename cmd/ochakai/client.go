@@ -823,10 +823,10 @@ func cmdLog(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
-		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge concept as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as attachment metadata\ndoes; --download saves the attachment files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
+		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge concept as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as file metadata\ndoes; --download saves the files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
 		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n")
 	asJSON := fs.Bool("json", false, "print the whole read as JSON (document, summary, observed) instead of the document alone")
-	download := fs.String("download", "", "save the concept's attachments into this directory")
+	download := fs.String("download", "", "save the concept's files into this directory")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -839,14 +839,14 @@ func cmdGet(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if *download != "" && len(k.Attachments) > 0 {
+	if *download != "" && len(k.Files) > 0 {
 		if err := os.MkdirAll(*download, 0o755); err != nil {
 			return err
 		}
-		for _, att := range k.Attachments {
-			data, _, err := c.Attachment(ctx, att.Path)
+		for _, att := range k.Files {
+			data, _, err := c.File(ctx, att.Path)
 			if err != nil {
-				return fmt.Errorf("attachment %s: %w", att.Name, err)
+				return fmt.Errorf("file %s: %w", att.Name, err)
 			}
 			dst := filepath.Join(*download, att.Name)
 			if err := os.WriteFile(dst, data, 0o644); err != nil {
@@ -864,15 +864,15 @@ func cmdGet(ctx context.Context, args []string) error {
 	// stdout stays the document and nothing else, so `ochakai get | …
 	// | ochakai put` is one pipe. What this instance observed is not
 	// part of the document (design docs 0009, 0043 §3.5), so it goes
-	// where the attachment hints already go.
+	// where the file hints already go.
 	prov := "created by " + k.Observed.CreatedBy.String()
 	if lv := k.Observed.LastVerified(); lv != nil {
 		prov = fmt.Sprintf("verified by %s on %s; ", lv.By.String(), lv.At.Format("2006-01-02")) + prov
 	}
 	fmt.Fprintln(os.Stderr, prov)
 	if *download == "" {
-		for _, att := range k.Attachments {
-			fmt.Fprintf(os.Stderr, "attachment: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
+		for _, att := range k.Files {
+			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
 				att.Name, att.MediaType, att.Size, id)
 		}
 	}
@@ -884,8 +884,8 @@ func cmdAttach(ctx context.Context, args []string) error {
 		"attach",
 		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge concept (any file, up to 5 MiB each — the\nmedia type is sniffed from the bytes). A file of the same name is\nreplaced (the change is kept as a revision). Reference the file from the concept's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
 		"  ochakai attach insights/reading-revenue weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
-	name := fs.String("name", "", "attachment name (default: the file's basename; single file only)")
-	asJSON := fs.Bool("json", false, "print the attachment metadata as JSON")
+	name := fs.String("name", "", "file name (default: the file's basename; single file only)")
+	asJSON := fs.Bool("json", false, "print the file metadata as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -937,7 +937,7 @@ func cmdAttach(ctx context.Context, args []string) error {
 func cmdDetach(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"detach",
-		"Usage: ochakai detach [flags] <id> <name>\n\nRemove an attachment from a knowledge concept (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
+		"Usage: ochakai detach [flags] <id> <name>\n\nRemove a file from a knowledge concept (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
 		"  ochakai detach insights/reading-revenue weekly.png\n")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
@@ -953,7 +953,7 @@ func cmdDetach(ctx context.Context, args []string) error {
 	// 0046 §3.3).
 	path := id + "/" + rest[0]
 	if k, err := c.Get(ctx, id); err == nil {
-		for _, a := range k.Attachments {
+		for _, a := range k.Files {
 			if a.Name == rest[0] && a.Path != "" {
 				path = a.Path
 				break
@@ -1142,8 +1142,9 @@ func cmdReject(ctx context.Context, args []string) error {
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"delete",
-		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge concept (history is retained server-side).",
+		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge concept (history is retained server-side).\nWith --if-match it lands only if the concept still has the version you\nread, and fails instead of deleting someone else's edit.",
 		"  ochakai delete terms/obsolete-kpi\n")
+	ifMatch := fs.String("if-match", "", "delete only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1152,7 +1153,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Delete(ctx, id); err != nil {
+	if err := c.Delete(ctx, id, *ifMatch); err != nil {
 		return err
 	}
 	fmt.Printf("deleted ochakai://%s\n", id)
@@ -1167,7 +1168,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 func cmdPurge(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"purge",
-		"Usage: ochakai purge [flags] <id>\n\nHard-delete an already soft-deleted concept: the concept, its revisions,\nusage, and attachment metadata are erased and the id is freed for a\nmove. History is gone — `ochakai delete` first, then purge. A live\nconcept is refused.",
+		"Usage: ochakai purge [flags] <id>\n\nHard-delete an already soft-deleted concept: the concept, its revisions,\nusage, and file metadata are erased and the id is freed for a\nmove. History is gone — `ochakai delete` first, then purge. A live\nconcept is refused.",
 		"  ochakai delete terms/obsolete-kpi\n  ochakai purge terms/obsolete-kpi\n")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -1208,7 +1209,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 	// request timeout — which makes "run it until it is done" the client's
 	// job. Looping here also means an operator types one command instead
 	// of watching a number and deciding when to stop.
-	var embedded, attachments, failed int
+	var embedded, files, failed int
 	cursor := ""
 	for pass := 1; ; pass++ {
 		res, err := c.Reembed(ctx, cursor, *limit)
@@ -1216,15 +1217,15 @@ func cmdReembed(ctx context.Context, args []string) error {
 			return err
 		}
 		embedded += res.Embedded
-		attachments += res.Attachments
+		files += res.Files
 		failed += res.Failed
 		if *asJSON {
 			if err := printJSON(res); err != nil {
 				return err
 			}
 		} else {
-			fmt.Printf("pass %d: embedded %d concepts, %d attachments, failed %d, still missing %d\n",
-				pass, res.Embedded, res.Attachments, res.Failed, res.Missing)
+			fmt.Printf("pass %d: embedded %d concepts, %d files, failed %d, still missing %d\n",
+				pass, res.Embedded, res.Files, res.Failed, res.Missing)
 		}
 		if *once || res.Missing == 0 {
 			break
@@ -1243,7 +1244,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 		cursor = res.Cursor
 	}
 	if !*asJSON {
-		fmt.Printf("done: embedded %d concepts, %d attachments, failed %d\n", embedded, attachments, failed)
+		fmt.Printf("done: embedded %d concepts, %d files, failed %d\n", embedded, files, failed)
 	}
 	return nil
 }
@@ -1251,7 +1252,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 func cmdMove(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"move",
-		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nattachments follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.",
+		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nfiles follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.",
 		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
@@ -1277,8 +1278,8 @@ func cmdExport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"export",
 		"Usage: ochakai export [flags] <dir | ->\n\nDownload the whole knowledge base as an OKF bundle (markdown + YAML\nfrontmatter) into dir, or stream the tar.gz to stdout with \"-\".\nYour knowledge is yours.",
-		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-attachments - > concepts.tar.gz   # bytes are in GCS; copy them from there\n")
-	noAtt := fs.Bool("no-attachments", false, "export the markdown only, skipping attachment files")
+		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-files - > concepts.tar.gz   # bytes are in GCS; copy them from there\n")
+	noFiles := fs.Bool("no-files", false, "export the markdown only, skipping file bytes")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1287,7 +1288,7 @@ func cmdExport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc, err := c.Export(ctx, !*noAtt)
+	rc, err := c.Export(ctx, !*noFiles)
 	if err != nil {
 		return err
 	}
@@ -1307,7 +1308,7 @@ func cmdExport(ctx context.Context, args []string) error {
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\nconcepts the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by a concept's body markdown links become its\nattachments, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attach to that concept. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\nconcepts the server rejects as invalid — e.g. one whose type is not a\nsingle line — are skipped and reported).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate")
@@ -1450,7 +1451,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		written++
 		fmt.Printf("wrote %s\n", f.Path)
 	}
-	fmt.Printf("imported %d concepts (%d created, %d updated, %d unchanged, %d attachments, %d files, %d skipped, %d notes)\n",
+	fmt.Printf("imported %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
 		created+updated+unchanged, created, updated, unchanged, attached, written, len(skipped), noted)
 	// The parse-time gate above cannot see what the server read differently
 	// or refused, so --strict asks again with the writes already done. The
@@ -1475,7 +1476,7 @@ func cmdImport(ctx context.Context, args []string) error {
 // bundle alone, so a CI gate on the dry run passed bundles the import
 // then failed on.
 func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
-	atts []okf.BundleAttachment, loose []okf.BundleFile, skipped []string, noted int, strict bool,
+	atts []okf.AttributedFile, loose []okf.BundleFile, skipped []string, noted int, strict bool,
 ) error {
 	var created, updated, unchanged int
 	refused := map[string]bool{}
@@ -1560,7 +1561,7 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		wrote++
 		fmt.Printf("would write %s\n", f.Path)
 	}
-	fmt.Printf("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attachments, %d files, %d skipped, %d notes)\n",
+	fmt.Printf("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
 		created+updated+unchanged, created, updated, unchanged, attached, wrote, len(skipped), noted)
 	// The whole point of the dry run under --strict: the same verdict the
 	// import would reach, reached with nothing written.

@@ -55,18 +55,21 @@ func (s *Service) embedBytes() int {
 	return embed.ConservativeInputBytes
 }
 
-// ReembedResult reports what a Reembed pass did. Missing is how many
-// concepts and attachments still have no vector once the pass is over —
-// the number that decides whether the operator runs it again, so it
-// counts what is actually left rather than what this pass did not get
+// ReembedResult reports what a Reembed pass did. Embedded and Files are
+// this pass's own progress, not a census of the corpus — re-keying
+// attachment_embedding by path later would change what they count
+// without this being a second breaking change (design doc 0064). Missing
+// is how many concepts and files still have no vector once the pass is
+// over — the number that decides whether the operator runs it again, so
+// it counts what is actually left rather than what this pass did not get
 // to. Cursor is where the next pass resumes; empty means the corpus is
 // exhausted.
 type ReembedResult struct {
-	Embedded    int    `json:"embedded"`
-	Attachments int    `json:"attachments"`
-	Failed      int    `json:"failed"`
-	Missing     int    `json:"missing"`
-	Cursor      string `json:"cursor,omitempty"`
+	Embedded int    `json:"embedded"`
+	Files    int    `json:"files"`
+	Failed   int    `json:"failed"`
+	Missing  int    `json:"missing"`
+	Cursor   string `json:"cursor,omitempty"`
 }
 
 // A reembed pass is one HTTP request, and one concept is one call to the
@@ -101,8 +104,9 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	if s.Embedder == nil {
 		return nil, Unsupportedf("semantic search is not enabled on this deployment: it is the default on Google Cloud once the service identity may call Vertex AI (design doc 0053)")
 	}
-	if limit <= 0 || limit > maxReembedPass {
-		limit = defaultReembedPass
+	limit, err := checkedLimit(limit, defaultReembedPass, maxReembedPass)
+	if err != nil {
+		return nil, err
 	}
 	entryCursor, attachID, attachName, err := decodeReembedCursor(cursor)
 	if err != nil {
@@ -190,7 +194,7 @@ func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, af
 		before := s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name)
 		s.updateAttachmentEmbedding(ctx, a.KnowledgeID, att, data)
 		if s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name) > before {
-			res.Attachments++
+			res.Files++
 		} else {
 			res.Failed++
 		}

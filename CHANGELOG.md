@@ -66,6 +66,59 @@ last entry.
   gzip, valid tar, empty. A backup script pointed one path too deep
   succeeded forever.
 
+### Changed
+
+- **BREAKING** — REST is frozen at `/api/v1` (design doc
+  [0064](docs/design/0064-rest-stops-at-api-v1.md), issue
+  [#379](https://github.com/na0fu3y/ochakai/issues/379)):
+  [docs/compatibility.md](docs/compatibility.md) no longer lists REST
+  among the unstable interfaces. This entry is the last batch of breaking
+  changes that made the freeze possible:
+  - An unrecognized query parameter is now a 400 naming it, on every REST
+    operation (`fm.*` keys excepted — those are checked against the
+    concept's own frontmatter, not a fixed name list). It used to be a
+    silent no-op, which is what let a 0.16.1 server ignore `dry_run` and
+    write anyway; this closes the same shape of hole for anything added
+    to the wire from here on.
+  - `X-Ochakai-On-Behalf-Of` and `X-Ochakai-Producer` lose their `X-`
+    prefix — `Ochakai-On-Behalf-Of` and `Ochakai-Producer`, matching the
+    five response headers, which never carried one. No dual-accept
+    window; send the new spelling.
+  - `Accept: application/json` on a file's own bundle path now answers
+    its metadata (name, media_type, size, sha256, path, created_by,
+    created_at) instead of being ignored in favor of the bytes — the only
+    way to read a file's `sha256` without downloading it.
+  - `attachments`/`Attachment` are renamed to `files`/`File` everywhere
+    they named the wire concept: the `Attachment` OpenAPI schema and the
+    JSON key on `View`, `SearchHit` and `ReembedResult`; the archive
+    address's `?attachments=` query parameter (now `?files=`); the MCP
+    tool `get_attachment` (now `get_file`). `entries` is unaffected —
+    design doc [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md)
+    §3.2 already exempted it, and that stands.
+  - A failed `If-None-Match: *` (the id was already taken) is now 412,
+    not 409 — RFC 9110's status for a failed precondition. 409 stays the
+    answer for a conflict with no precondition behind it, such as `move`
+    onto an occupied id.
+  - `DELETE` on a concept now honors `If-Match`, the same optimistic-
+    concurrency precondition `PUT` already took (design doc
+    [0030](docs/design/0030-optimistic-locking.md)) — a stale delete now
+    fails with a 412 instead of silently removing a version the caller
+    never read. Not extended to `?purge=true`, which stays unconditional.
+  - A file `PUT` answers 201 when it creates the object and 200 when it
+    replaces one, matching what a concept `PUT` already did — it used to
+    always answer 200.
+  - `ruling: withdrawn` against a live concept with nothing to withdraw
+    is now 409, the same shape purge-on-a-live-concept already answers,
+    instead of 404 — a missing concept is still a genuine 404.
+  - Out-of-range `limit` (search, context, bundle log/history, usage
+    revisions, reembed) and `days` (stats) are now a 400 naming the valid
+    range, everywhere. Most `limit`s used to clamp silently to a default
+    instead; `days` was already the strict one, and the rest now match
+    it.
+  - No version or capability-discovery signal ships, and CORS stays
+    deliberately absent — both are decided in 0064 rather than left
+    open.
+
 ## [0.17.0] - 2026-07-31
 
 ### Added

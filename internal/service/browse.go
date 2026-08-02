@@ -143,8 +143,9 @@ func (s *Service) LogDocument(ctx context.Context, prefix string, limit int) ([]
 	if err != nil {
 		return nil, err
 	}
-	if limit <= 0 || limit > MaxLogLines {
-		limit = MaxLogLines
+	limit, err = checkedLimit(limit, MaxLogLines, MaxLogLines)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := s.Store.ListRevisionsUnder(ctx, prefix, limit)
 	if err != nil {
@@ -168,8 +169,9 @@ func (s *Service) LogRows(ctx context.Context, prefix string, limit int) ([]stor
 	if err != nil {
 		return nil, err
 	}
-	if limit <= 0 || limit > MaxLogLines {
-		limit = MaxLogLines
+	limit, err = checkedLimit(limit, MaxLogLines, MaxLogLines)
+	if err != nil {
+		return nil, err
 	}
 	return s.Store.ListRevisionsUnder(ctx, prefix, limit)
 }
@@ -221,8 +223,9 @@ func renderLog(title, dir string, rows []store.LogRow) []byte {
 // because a history of an object that never existed is not an empty
 // history.
 func (s *Service) ObjectHistory(ctx context.Context, path string, limit int) ([]store.LogRow, error) {
-	if limit <= 0 || limit > MaxLogLines {
-		limit = MaxLogLines
+	limit, err := checkedLimit(limit, MaxLogLines, MaxLogLines)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := s.Store.ListRevisionsAt(ctx, domain.Normalize(path), limit)
 	if err != nil {

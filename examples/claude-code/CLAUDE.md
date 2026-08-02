@@ -28,13 +28,13 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
   body). Follow the body's markdown links to related concepts — a link to
   another concept's path, `[revenue](/metrics/revenue.md)`, is how concepts
   relate, and writing one is how you create a relationship. If stderr lists
-  attachments (dashboard screenshots, ER diagrams), fetch them with
+  files (dashboard screenshots, ER diagrams), fetch them with
   `ochakai get <id> --download <dir>` and Read the saved files when
   the body's image references matter to the question.
 - `ochakai attach <id> <file>` — attach a file to a concept
   (png/jpeg/webp, pdf, plain text; reference it from the body so the
-  caption is searchable). If you learn something by looking at an
-  attachment, write it into the body with `ochakai put` — knowledge
+  caption is searchable). If you learn something by looking at a
+  file, write it into the body with `ochakai put` — knowledge
   locked in pixels is invisible to search.
 - `ochakai report <id> worked|failed [--note "what went wrong"]`
   — after acting on knowledge (running an attested computation, running SQL you

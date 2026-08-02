@@ -69,6 +69,25 @@ func Unsupportedf(format string, args ...any) error {
 	return &UnsupportedError{msg: fmt.Sprintf(format, args...)}
 }
 
+// checkedLimit is the one rule every paged or windowed read applies to
+// its limit (design doc 0064): 0 (unset — queryInt cannot tell that
+// apart from an explicit 0, and there is no meaningful request for zero
+// rows) is def, and anything else out of [1, max] is refused rather than
+// silently substituted. Before this, a request over max was clamped down
+// on some endpoints and refused on others (days was already the strict
+// one) — a caller sending a stale limit got a smaller answer it read as
+// complete, the same silent-success shape design doc 0061 refused for
+// dry_run.
+func checkedLimit(limit, def, max int) (int, error) {
+	if limit == 0 {
+		return def, nil
+	}
+	if limit < 0 || limit > max {
+		return 0, Invalidf("limit must be between 1 and %d, not %d", max, limit)
+	}
+	return limit, nil
+}
+
 // --- knowledge CRUD ---
 
 func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
@@ -79,7 +98,7 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 	}
 	// Metadata only — the bytes are a separate, deliberate fetch
 	// (design doc 0008): images are heavy in agent context.
-	if k.Attachments, err = s.Store.ListAttachments(ctx, id); err != nil {
+	if k.Files, err = s.Store.ListAttachments(ctx, id); err != nil {
 		return nil, err
 	}
 	s.recordUsage(ctx, domain.EventFetched, []string{id})
@@ -448,11 +467,14 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 		"the id from the web UI or CLI.", id, ruling, instead)
 }
 
-func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor) error {
+// ifMatch is the same optional If-Match precondition Put takes (design
+// docs 0030, 0064): non-nil, the delete lands only if the concept still
+// has that version.
+func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifMatch *string) error {
 	if err := s.readOnly(); err != nil {
 		return err
 	}
-	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor)
+	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor, ifMatch)
 }
 
 // Verify appends a verification against the concept as it stands, whether
@@ -515,9 +537,11 @@ func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Acto
 	return k, nil
 }
 
-// WithdrawRejection withdraws a ruling, returning the concept to the ordinary
-// pool. ErrNotFound when the concept carries no rejection: lifting nothing
-// is a mistake worth reporting rather than a silent success.
+// WithdrawRejection withdraws a ruling, returning the concept to the
+// ordinary pool. ErrNotFound when the concept is gone, ErrNoRejection
+// when it is live but carries no rejection: lifting nothing is a mistake
+// worth reporting rather than a silent success, and design doc 0064 tells
+// the two apart on the wire rather than answering both as 404.
 func (s *Service) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err

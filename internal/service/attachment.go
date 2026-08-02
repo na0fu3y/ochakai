@@ -13,8 +13,8 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
-// Attachment operations (design docs 0008, 0013). ochakai stores and
-// serves attachment bytes; it never interprets them — no OCR, no
+// File operations (design docs 0008, 0013, 0046). ochakai stores and
+// serves file bytes; it never interprets them — no OCR, no
 // captioning, no parsing. Reading a file and writing what it says back
 // into the body is the client agent's job, like every other
 // interpretation.
@@ -26,7 +26,7 @@ import (
 // takes file input (gemini-embedding-2) and are skipped otherwise —
 // the file stays findable by name. Failures are logged, not returned:
 // attach must not depend on the embedding provider being up.
-func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att *domain.Attachment, data []byte) {
+func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att *domain.File, data []byte) {
 	if s.Embedder == nil {
 		return
 	}
@@ -73,11 +73,11 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 	}
 }
 
-// FillAttachments fills attachment metadata on entries in one batch
+// FillFiles fills file metadata on entries in one batch
 // query. The REST list surfaces (search hits, backlinks) carry it so a
 // UI can render image previews without a fetch per entry; MCP search
 // results stay lean for agent context (design doc 0015).
-func (s *Service) FillAttachments(ctx context.Context, ks []*domain.Knowledge) error {
+func (s *Service) FillFiles(ctx context.Context, ks []*domain.Knowledge) error {
 	if len(ks) == 0 {
 		return nil
 	}
@@ -90,7 +90,7 @@ func (s *Service) FillAttachments(ctx context.Context, ks []*domain.Knowledge) e
 		return err
 	}
 	for _, k := range ks {
-		k.Attachments = atts[k.ID]
+		k.Files = atts[k.ID]
 	}
 	return nil
 }
@@ -104,14 +104,17 @@ func (s *Service) FillAttachments(ctx context.Context, ks []*domain.Knowledge) e
 // shown by this file is a question its body answers (§3.3), so a file
 // written under an entry's namespace, or one an entry already links,
 // arrives attributed and one nothing points at is simply a file.
-func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+//
+// created reports which way it went, so a surface can answer 201 or 200
+// — the same signal Put already gives a concept (design doc 0064).
+func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor domain.Actor) (att *domain.File, created bool, err error) {
 	p, mediaType, err := s.settleFile(p, data)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	att, err := s.Store.PutFile(ctx, p, mediaType, data, actor)
+	att, created, err = s.Store.PutFile(ctx, p, mediaType, data, actor)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// The vector is keyed by the entry the file is attributed to, which
 	// a file at a path nothing points at has none of. Reembed picks it up
@@ -119,7 +122,7 @@ func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor doma
 	if owner, ok := strings.CutSuffix(p, "/"+att.Name); ok {
 		s.updateAttachmentEmbedding(ctx, owner, att, data)
 	}
-	return att, nil
+	return att, created, nil
 }
 
 // settleFile is everything a file write decides before it writes: where
@@ -139,10 +142,10 @@ func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err
 	if len(data) == 0 {
 		return "", "", Invalidf("the file is empty")
 	}
-	if len(data) > domain.MaxAttachmentSize {
-		return "", "", Invalidf("the file exceeds %d MiB", domain.MaxAttachmentSize>>20)
+	if len(data) > domain.MaxFileSize {
+		return "", "", Invalidf("the file exceeds %d MiB", domain.MaxFileSize>>20)
 	}
-	mediaType, err = domain.DetectAttachmentMediaType(data)
+	mediaType, err = domain.DetectFileMediaType(data)
 	if err != nil {
 		return "", "", Invalidf("%v", err)
 	}
@@ -157,7 +160,7 @@ func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err
 // the store says so only from inside the write. Asking here is what keeps
 // a bundle carrying a markdown file that lost its type key from passing a
 // dry run and failing the import.
-func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *domain.Attachment, created, changed bool, err error) {
+func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *domain.File, created, changed bool, err error) {
 	p, mediaType, err := s.settleFile(p, data)
 	if err != nil {
 		return nil, false, false, err
@@ -176,18 +179,29 @@ func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *dom
 			return nil, false, false, fmt.Errorf("%w: %s is a concept", store.ErrAlreadyExists, p)
 		}
 	}
-	return &domain.Attachment{
+	return &domain.File{
 		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
 		Size: int64(len(data)), SHA256: hash, Path: p,
 	}, true, true, nil
 }
 
 // GetFile returns the file at a bundle path with its bytes.
-func (s *Service) GetFile(ctx context.Context, p string) (*domain.Attachment, []byte, error) {
+func (s *Service) GetFile(ctx context.Context, p string) (*domain.File, []byte, error) {
 	if !s.Store.HasBlobStore() {
 		return nil, nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
 	}
 	return s.Store.GetFile(ctx, domain.Normalize(p))
+}
+
+// GetFileMeta returns a file's metadata without its bytes — the only way
+// to answer Accept: application/json on a file's own address without
+// paying for the download (design doc 0064; 0046 §3.5's table already
+// promised this column, the REST face just ignored the header).
+func (s *Service) GetFileMeta(ctx context.Context, p string) (*domain.File, error) {
+	if !s.Store.HasBlobStore() {
+		return nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
+	}
+	return s.Store.GetFileMeta(ctx, domain.Normalize(p))
 }
 
 // DeleteFile removes the file at a bundle path.

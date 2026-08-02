@@ -152,13 +152,13 @@ func TestDeleteIntegration(t *testing.T) {
 		Type: domain.TypeTerms, ID: id, Title: "to delete"}, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Delete(ctx, id, actor); err != nil {
+	if err := svc.Delete(ctx, id, actor, nil); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if _, err := svc.Get(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("deleted entry still readable: %v", err)
 	}
-	if err := svc.Delete(ctx, id, actor); !errors.Is(err, store.ErrNotFound) {
+	if err := svc.Delete(ctx, id, actor, nil); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
 	}
 }
