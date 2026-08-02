@@ -716,7 +716,7 @@ paths:
                         changed_by: { kind: human, name: sato@example.co.jp }
                         changed_at: "2026-07-14T02:33:41.019778Z"
                       - path: metrics/revenue/chart.png
-                        change: attach
+                        change: add_file
                         changed_by: { kind: human, name: sato@example.co.jp }
                         changed_at: "2026-07-13T11:02:07.401221Z"
                 history:
@@ -1173,9 +1173,6 @@ paths:
                       nothing was dropped.
                     type: array
                     items: { $ref: "#/components/schemas/ContextOutline" }
-                  truncated:
-                    description: How many concepts went to the outline.
-                    type: integer
               examples:
                 pack:
                   summary: GET /api/v1/context?q=monthly+revenue&limit=2&budget=4000
@@ -1327,7 +1324,6 @@ paths:
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
                         bytes: 1104
-                    truncated: 1
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "405": { $ref: "#/components/responses/Error" }
@@ -1968,7 +1964,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  embedded:
+                  concepts:
                     description: >
                       Knowledge concepts embedded by this pass — progress
                       of this pass, not a census of the corpus (design doc
@@ -1977,7 +1973,7 @@ paths:
                       a second breaking change.
                     type: integer
                   files:
-                    description: Files embedded by this pass — the same "this pass" caveat as embedded.
+                    description: Files embedded by this pass — the same "this pass" caveat as concepts.
                     type: integer
                   failed: { type: integer }
                   missing:
@@ -2005,7 +2001,7 @@ paths:
                     file position in one token; pass it back unchanged
                     rather than parsing it.
                   value:
-                    embedded: 200
+                    concepts: 200
                     files: 0
                     failed: 0
                     missing: 613
@@ -2014,7 +2010,7 @@ paths:
                   summary: The last pass
                   description: Nothing is missing, so no cursor comes back.
                   value:
-                    embedded: 13
+                    concepts: 13
                     files: 4
                     failed: 0
                     missing: 0
@@ -2794,7 +2790,7 @@ components:
               path: { type: string, description: The object's bundle path, which is what it is addressed by. }
               media_type: { type: string, description: Sniffed from the bytes when it was written, never taken from the caller. }
               size: { type: integer, description: Bytes. }
-              updated_at: { type: string, format: date-time }
+              created_at: { type: string, format: date-time }
         truncated:
           type: boolean
           description: The concept or file list hit the 1000-per-level cap.
@@ -2826,7 +2822,7 @@ components:
       properties:
         path: { type: string, description: The object's bundle path. }
         title: { type: string, description: "The object's title as it stands; absent for a file and for a concept since purged." }
-        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, attach, detach] }
+        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
     ObjectHistory:
@@ -2848,7 +2844,7 @@ components:
         how, when, and the whole concept as it stood, as an OKF document.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per concept. }
-        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, attach, detach] }
+        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         document:

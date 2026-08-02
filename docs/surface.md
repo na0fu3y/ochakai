@@ -459,12 +459,12 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 — SPEC の例示にはあったが、ochakai 自身の examples にも OKF 公式の
 リファレンスバンドルにも一度も書かれていなかった。
 
-- `change.attach`
+- `change.add_file`
 - `change.create`
 - `change.delete`
-- `change.detach`
 - `change.move`
 - `change.reject`
+- `change.remove_file`
 - `change.update`
 - `change.verify`
 - `change.withdraw`

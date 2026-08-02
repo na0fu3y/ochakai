@@ -55,7 +55,7 @@ func (s *Service) embedBytes() int {
 	return embed.ConservativeInputBytes
 }
 
-// ReembedResult reports what a Reembed pass did. Embedded and Files are
+// ReembedResult reports what a Reembed pass did. Concepts and Files are
 // this pass's own progress, not a census of the corpus — re-keying
 // attachment_embedding by path later would change what they count
 // without this being a second breaking change (design doc 0064). Missing
@@ -65,7 +65,7 @@ func (s *Service) embedBytes() int {
 // to. Cursor is where the next pass resumes; empty means the corpus is
 // exhausted.
 type ReembedResult struct {
-	Embedded int    `json:"embedded"`
+	Concepts int    `json:"concepts"`
 	Files    int    `json:"files"`
 	Failed   int    `json:"failed"`
 	Missing  int    `json:"missing"`
@@ -135,7 +135,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 			s.Log.Warn("reembed: storing failed", "id", id, "error", err)
 			continue
 		}
-		res.Embedded++
+		res.Concepts++
 	}
 	if len(ids) > 0 {
 		entryCursor = ids[len(ids)-1]

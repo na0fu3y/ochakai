@@ -35,7 +35,7 @@ type BrowseFile struct {
 	Path      string    `json:"path"`
 	MediaType string    `json:"media_type"`
 	Size      int64     `json:"size"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // BrowseConcept is the light projection of a concept in a tree listing:

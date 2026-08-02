@@ -156,7 +156,7 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
 			return err
 		}
-		return s.touchAndRevise(ctx, tx, k, "attach", actor)
+		return s.touchAndRevise(ctx, tx, k, "add_file", actor)
 	})
 	if err != nil {
 		return nil, err
@@ -278,7 +278,7 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
 			return err
 		}
-		return s.touchAndRevise(ctx, tx, k, "detach", actor)
+		return s.touchAndRevise(ctx, tx, k, "remove_file", actor)
 	})
 }
 

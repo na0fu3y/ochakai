@@ -603,10 +603,10 @@ func TestReembedIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reembed after a model change: %v", err)
 	}
-	// Only Embedded is assertable here: a corpus-wide pass runs over
+	// Only Concepts is assertable here: a corpus-wide pass runs over
 	// whatever the other packages have in the shared database, including
 	// entries they delete while it runs (counted as Failed).
-	if res.Embedded == 0 {
+	if res.Concepts == 0 {
 		t.Fatalf("reembed did nothing: %+v", res)
 	}
 	if unembedded(t, "test-embedder-v2") {
@@ -685,8 +685,8 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.Embedded > 2 {
-			t.Fatalf("bounded pass embedded %d, over its limit of 2", res.Embedded)
+		if res.Concepts > 2 {
+			t.Fatalf("bounded pass embedded %d, over its limit of 2", res.Concepts)
 		}
 		// Missing is a fresh count taken after the pass, so the assertion
 		// is an equality against a count taken the same way — not
@@ -702,7 +702,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 		// candidates mid-pass leaves the pass short, and one writing
 		// entries moves the baseline under it. Neither says anything
 		// about the reporting, so that attempt measured nothing.
-		if res.Embedded < 2 || base-res.Embedded != after {
+		if res.Concepts < 2 || base-res.Concepts != after {
 			continue
 		}
 		stable, missing, left = true, res.Missing, after

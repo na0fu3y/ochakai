@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 313
+    RECORD-LINES: 364
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -423,7 +423,7 @@ disagreed — `?history`'s `limit` stated one ceiling while the code
 enforced two, a concept's GET declared `If-None-Match` without ever
 answering 304, and a file `PUT` declared an `ETag` response header it
 never sent. None of the three change a stored shape or a wire
-identifier, so 0064 gains a new §12 rather than a new record (0048
+identifier, so 0064 gains a new section rather than a new record (0048
 §2.3: still unreleased, so revised in place) — 60 more lines for three
 findings, each with the disagreement, the decision and which side
 moved.
@@ -440,8 +440,19 @@ happened — two more records, five hundred fewer lines, and an area that
 now takes two records to read instead of seven. Neither number says that
 alone, and `RECORD-COUNT` rising is not this corpus growing.
 
+313 → 364, 7,986 → 8,037 is issue #470's third and last 0064 PR. §6
+retired `attachments`/`Attachment` from the wire but left its own
+change-verbs, `attach`/`detach`, behind, and three more places carried
+the same "named for the act, not the object" gap §7 closed for
+`entries`: `/context`'s redundant `truncated` count, a bundle listing
+row spelled `updated_at` where `created_at` was the only fact the
+underlying object actually held, and `reembed`'s `embedded`. Two new
+sections (§8, §9) carry the four decisions, one migration, and the
+scope boundary that keeps the CLI's `attach`/`detach` commands out of
+it — the same shape §7 itself used for the same reason.
+
     RECORD-COUNT: 63
-    RECORD-CORPUS-LINES: 7986
+    RECORD-CORPUS-LINES: 8037
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

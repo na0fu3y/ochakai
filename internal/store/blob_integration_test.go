@@ -232,7 +232,7 @@ func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
 		t.Errorf("refused attach left %d attachment rows on the tombstone", atts)
 	}
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM knowledge_revision WHERE id = $1 AND change = 'attach'`, id).Scan(&revs); err != nil {
+		`SELECT count(*) FROM knowledge_revision WHERE id = $1 AND change = 'add_file'`, id).Scan(&revs); err != nil {
 		t.Fatal(err)
 	}
 	if revs != 0 {

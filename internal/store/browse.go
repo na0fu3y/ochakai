@@ -46,7 +46,7 @@ type BrowseFile struct {
 	Path      string    `json:"path"`
 	MediaType string    `json:"media_type"`
 	Size      int64     `json:"size"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // BrowseConcept is the light projection of a concept for tree listings:
@@ -149,7 +149,7 @@ func (s *Store) Browse(ctx context.Context, prefix string) (*Level, error) {
 	// thousand files is as unreadable as a directory of ten thousand
 	// concepts.
 	rows, err = s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT path, media_type, size, updated_at
+		SELECT path, media_type, size, created_at
 		FROM object
 		WHERE id IS NULL AND deleted_at IS NULL
 		  AND left(path, length($1::text)) = $1
@@ -160,7 +160,7 @@ func (s *Store) Browse(ctx context.Context, prefix string) (*Level, error) {
 	}
 	lvl.Files, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BrowseFile, error) {
 		var f BrowseFile
-		if err := row.Scan(&f.Path, &f.MediaType, &f.Size, &f.UpdatedAt); err != nil {
+		if err := row.Scan(&f.Path, &f.MediaType, &f.Size, &f.CreatedAt); err != nil {
 			return f, err
 		}
 		f.Name = f.Path[strings.LastIndex(f.Path, "/")+1:]

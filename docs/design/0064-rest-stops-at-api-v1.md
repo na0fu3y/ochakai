@@ -183,7 +183,50 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 0054 §3.4 が対象外とした内部専用の識別子(`domain.Knowledge` 等)とは
 違い、この 3 つは §6 の `Attachment` → `File` と同じ扱いになる。
 
-## 8. 小さな修正、まとめて
+## 8. `attach` / `detach` を `add_file` / `remove_file` に改める
+
+issue [#470](https://github.com/na0fu3y/ochakai/issues/470) の指摘: §6 は
+`attachments` / `Attachment` を wire から退役させたが、`Change.change` と
+`Revision.change` の列挙(`domain.Changes`、
+`internal/domain/knowledge.go`)には `attach` / `detach` がまだ残っている
+— `internal/store/attachment.go` の `PutAttachment` / `DeleteAttachment`
+が書き込む値そのものである。§7 が `entries` に対してやったのと同じ形の
+取りこぼしが、隣の語彙にもう一つあった。
+
+`log.md` 先頭の太字は 0046 §3.8 が「`change` の語彙をそのまま出す」と
+決めた導出であり、そこに挙げた `create` / `update` / `move` / `delete`
+は例示であって網羅ではない(現行の語彙は既に `verify` / `reject` /
+`withdraw` を含み、0046 §3.8 はそのどれも列挙していない)。したがって
+この改名は 0046 の改訂を要さず、本書だけで閉じる。
+
+**決定: `attach` → `add_file`、`detach` → `remove_file` にする。**
+`PutAttachment` / `DeleteAttachment` という内部の Go 識別子と
+`attachment` / `attachment_embedding` の SQL テーブルは §6 が引いた
+境界のとおり対象外のまま — 動くのは `touchAndRevise` に渡す文字列と、
+`Change.change` / `Revision.change` の列挙だけである。保存済みの行は
+マイグレーション `0035_a_file_is_added_or_removed.sql` が書き換える
+— design doc 0056 §3.3 が `unreject` → `withdraw` で使った形と同じ
+`UPDATE knowledge_revision SET change = ... WHERE change = ...` である。
+[docs/surface.md](../surface.md) の VOCAB は `change.attach` /
+`change.detach` を `change.add_file` / `change.remove_file` に差し替え、
+アルファベット順で並べ直す(数は 34 のまま)。
+
+CLI コマンド `ochakai attach` / `ochakai detach` は凍結の対象外のまま
+— issue #470 も別 issue に切り出している。Web UI の同名ボタンも wire の
+値ではなく CLI と同じ利用者向けの語であるため、対称に残す。
+
+## 9. 残る三箇所を閉じる
+
+issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同じ形の
+不整合が三つ残っていた。
+
+| 何 | 直った形 | なぜ |
+|---|---|---|
+| `GET /api/v1/context` の `truncated`(整数) | 撤去 | `service.ContextResult` は常に `len(outline)` を入れており、`outline` 自身の長さが同じ合図を運ぶ。バンドル一覧の `truncated`(真偽値、1000 件上限に当たったかを言う)とは別物で、そちらは変えない |
+| バンドル一覧のファイル行の `updated_at` | `created_at` | `File` はコンテンツアドレスで不変だとすでに言っている(`domain.File.CreatedAt`)。同じ path への上書きでも `object.created_at` は動かない(`ON CONFLICT DO UPDATE` の `SET` に無い)ので、`updated_at` という綴りは同じ値を違う名前で呼んでいただけだった。隣の `concepts` 行の `updated_at` は本物の更新日時なので変えない |
+| `POST /api/v1/reembed` の `embedded` | `concepts` | 数えているのは概念の数で、隣の `files`(対象の名前)と同じ形に揃える — §7 が `entries` に対してやったのと同じ理由 |
+
+## 10. 小さな修正、まとめて
 
 | 何 | 直った形 | なぜ |
 |---|---|---|
@@ -193,7 +236,7 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 | `ruling: withdrawn` で取り消す物が無い | 409(旧 404) | purge-on-live と同じ「状態の衝突」であって「概念が無い」ではない。id が本当に無い場合は引き続き 404 |
 | `limit` / `days` の範囲外 | 全面 400(旧: 大半は既定へ黙って丸め、`days` だけ 400) | 黙った丸めは `dry_run` が false green を生んだのと同じ形の沈黙。0 または省略は既定、それ以外の範囲外は 400 で範囲を名指す |
 
-## 9. 決めて書くだけ、コードは動かさない
+## 11. 決めて書くだけ、コードは動かさない
 
 - **6 通りの表現の優先順位**は §4 に書いた規則がそれである。
 - **`api/openapi.yaml` は `{path}` を本物のパスパラメータとして表現
@@ -221,12 +264,12 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
   盲目的な再試行は安全 — どちらも「その id に生きているものは無い」と
   いう終着点は同じだからである。
 
-## 10. 死んだコード
+## 12. 死んだコード
 
 `internal/restapi/restapi.go` の `queryFloat` を削除した — 0058 が
 `min_score` を撤去して以来、呼び出し元が無かった。
 
-## 11. 壊れるもの
+## 13. 壊れるもの
 
 **BREAKING**。REST を組み込んでいるクライアントが直す必要があるもの:
 
@@ -249,16 +292,24 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 - `ruling: withdrawn` の失敗を 404 として扱っていたら、取り消す物が無い場合は 409 になる。
 - 範囲外の `limit` / `days` が黙って既定値に丸まることを当てにして
   いたら、400 として扱う。
+- `change` の値・保存済みの `knowledge_revision.change` 行を `attach` /
+  `detach` として読んでいたら、`add_file` / `remove_file` に読み替える。
+- `GET /api/v1/context`(MCP `get_context` も)の `truncated` を読んで
+  いたら、`outline` の長さで代える。
+- バンドル一覧のファイル行の `updated_at` を読んでいたら、`created_at`
+  に読み替える(値そのものは動かない)。
+- `POST /api/v1/reembed` の `embedded` を読んでいたら、`concepts` に
+  読み替える。
 
 保存形とワイヤの識別子(id・path)は 1 バイトも動かない。
 
-## 12. 契約と実装の食い違いを閉じる(issue #470 C)
+## 14. 契約と実装の食い違いを閉じる(issue #470 C)
 
 §4 は「表は『エクスポート形』、コードは JSON の View」という食い違いを
 一件、手で直した。残りは issue #470 の監査が見つけた 3 件で、いずれも
 スペックとコードのどちらが正しいかを決め、もう一方をそれに合わせる。
 
-### 12.1 `?history` の `limit`: 二つの上限を書き分ける
+### 14.1 `?history` の `limit`: 二つの上限を書き分ける
 
 `api/openapi.yaml` は「log.md と `?history` のみ――既定・上限とも
 1000」と一枚岩に書いていたが、実装は二通りある: 概念自身の
@@ -273,11 +324,11 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 **決定:** コードは変えない。概念の JSON 履歴は改訂 1 件ごとに文書
 全体を運ぶので、1000 件は知識ベースの複数コピー分になる――`Change`
 自身の説明がドキュメントを埋め込まない理由に挙げるのと同じ論拠
-(§9)。log.md やファイルの履歴はドキュメントを運ばないので、そこまで
+(§11)。log.md やファイルの履歴はドキュメントを運ばないので、そこまで
 の重さがない。**スペックを直す**: `limit` の説明に、対象によって上限
 が違うと書き、両方の数字(50/200 と 1000/1000)を名指す。
 
-### 12.2 概念の GET に ETag はあるが 304 が無かった
+### 14.2 概念の GET に ETag はあるが 304 が無かった
 
 `api/openapi.yaml` は `If-None-Match` をこの GET 全体のパラメータと
 して宣言していたが、304 の説明は「ファイル」としか書いていなかった。
@@ -292,7 +343,7 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 説明と `If-None-Match` パラメータの説明の双方を、概念にも 304 が
 返ることを言うよう直す。
 
-### 12.3 ファイル PUT は宣言した ETag を送っていなかった
+### 14.3 ファイル PUT は宣言した ETag を送っていなかった
 
 `api/openapi.yaml` はファイル PUT の 200・201 双方に `ETag` レスポンス
 ヘッダを宣言していた(概念 PUT と同じ形)が、実装は JSON を書くだけで
@@ -302,11 +353,11 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 
 **決定:** 実装する。GET が返すのと同じ形(`"` + sha256 + `"`)で、
 書き込んだファイルの ETag を PUT の応答にも立てる。ダウンロードは
-今までどおり無し(§9 の一覧のとおり、そこには precondition を掛ける
+今までどおり無し(§11 の一覧のとおり、そこには precondition を掛ける
 状態がない)。
 
-これら 3 件はいずれも破壊的変更ではない――§11 の一覧に加わるものは
-無い。12.2 は観測できる挙動が変わる(概念に `If-None-Match` を送って
+これら 3 件はいずれも破壊的変更ではない――§13 の一覧に加わるものは
+無い。14.2 は観測できる挙動が変わる(概念に `If-None-Match` を送って
 一致したクライアントは、200 の代わりに 304 を受け取るようになる)が、
 このヘッダはこの GET 全体のパラメータとしてスペックがすでに宣言して
 いたので、これは契約を破る変更ではなく、実装が最初からの契約に追いつ
