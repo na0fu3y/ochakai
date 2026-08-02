@@ -181,7 +181,7 @@ in the version you are running.
   [the gcloud reference it runs](deploy/cloudrun/README.md) ·
   [Configuration](docs/configuration.md) (Japanese) ·
   [Operating](docs/guides/operating.md) ·
-  [Golden query canary](docs/guides/golden-query-canary.md)
+  [Golden query canary](docs/guides/golden-query-canary.md) (Japanese)
 - **Building on it** — [REST API](api/openapi.yaml) ·
   [Examples](examples) · [All docs](docs/README.md) (Japanese)
 - **Deciding** — [The surface](docs/surface.md), the eight conditions
