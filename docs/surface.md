@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5020
+- DOC-LINES: 5019
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -548,6 +548,17 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 ([faq.md](faq.md) 自身の規則)という代金を払っていた。持ち主を一つに決め、
 残りを一行のリンクに畳んで、#374 の削減が出ている。
 
+5,015 → 4,980 は architecture.md の畳み込みである
+([#447](https://github.com/na0fu3y/ochakai/issues/447))。「これは何か」は
+README の第三の写しだったので README に 2 行だけ残して消え、書き戻し
+ループの節は [loop.md](loop.md) が所有する内容だったのでポインタに畳んだ
+— 残したのは loop.md に無い二つ、**検証が更新ではなく独自の操作である
+理由**と、`stale_after` が編集でしか片づかない理由である。
+**この行は、下げ方向のラチェットが初めて仕事をした記録でもある** —
+畳み込みで 46 行返ったとき、天井をそのままにした PR は
+`DOC-LINES-SLACK` を超えて落ちた。0035 の流儀どおり、規約ではなく CI が
+そう言った。
+
 5,000 → 5,015 は C8 の最初の一ページ、[loop.md](loop.md) を日本語に
 した分である([#398](https://github.com/na0fu3y/ochakai/issues/398))。
 **上がった理由が、この節にとっては発見である** — 翻訳は行数を減らすと
@@ -557,15 +568,33 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 残りのページを日本語にしていく作業は、`DOC-LINES` を下げてはくれない —
 下げるのは畳み込みだけである。
 
-C8 の二枚目、[docs/README.md](README.md) を日本語にした分
-([#439](https://github.com/na0fu3y/ochakai/issues/439))は、その
-「下げてはくれない」を裏切った — ページ単体では 101 → 96 行、実数は
-5 行減っている。loop.md は手順と考え方を積む地の文のページで、
+4,980 → 5,010 は C8 の二枚目、
+[configuration.md](configuration.md) を日本語にした分である
+([#438](https://github.com/na0fu3y/ochakai/issues/438))。[#447](https://github.com/na0fu3y/ochakai/issues/447)
+の畳み込みの後を継いでいる。ページ自身は 75 → 84 行、9 行増えている。
+次の 7 行はページ自身ではなく、それを指す九つの
+文書から来た — `#requirements`・`#environment-variables`・
+`#authentication-has-no-configuration` という三つのアンカーを README・
+SECURITY・deploy の両ガイド・SUPPORT・architecture・faq・
+rest-integration・docs/README が指しており、そのどれにも `(Japanese)` を
+足す必要があった。loop.md にはこの被リンクが一本も無かったので、翻訳の
+代金がページの外にも出ることは今回初めて見えた。残る 14 行はこの段落
+自身の分で、DOC のほかの段落と同じくここに数えている。
+
+C8 の三枚目、[docs/README.md](README.md) を日本語にした分
+([#439](https://github.com/na0fu3y/ochakai/issues/439))は、直前の二枚
+と逆に動いた — ページ単体では 101 → 96 行、実数は 5 行減っている。
+loop.md と configuration.md は手順と考え方を積む地の文のページで、
 docs/README.md はリンク先の一行要約を並べるナビゲーションページである
 — 要約の一文は短く、日本語にしても改行がほとんど増えない。増えるか
-減るかはページの形で決まる、というのがここまでの二枚が言っている
-ことである。**それでも天井は上がる** — その発見を書くこの段落自身が
-地の文を足すからで、この段落を含めて 5,015 → 5,020。
+減るかはページの形で決まる、というのがここまでの三枚が言っている
+ことである。このページ自身が configuration.md への被リンクの一本
+だったので、`(Japanese)` の付け外しも一箇所あった — README・
+docs/README の両方が Japanese になった今、docs/README.md 内の
+loop.md・configuration.md へのリンクからは印を外している。互いに
+日本語のページの間には要らない印だからである。**それでも天井は
+上がる** — その発見を書くこの段落自身が地の文を足すからで、この段落
+を含めて 5,010 → 5,019。
 [#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
 最初の例である。architecture.md と knowledge.md は同じ六つの主題を二度語り
 、二枚を一枚に畳んだ。DOC が 26 → 25 になった分、天井も合わせている。

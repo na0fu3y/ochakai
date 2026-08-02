@@ -6,9 +6,9 @@ Several questions here are really about an area another page owns, and
 those get a short answer and a link rather than a second copy — **"why
 not just use X?" is [positioning](positioning.md), every symptom is
 [troubleshooting](guides/troubleshooting.md), every setting is
-[requirements and configuration](configuration.md).** Two texts saying
-the same thing means one of them is out of date and nobody can tell
-which.
+[requirements and configuration](configuration.md) (Japanese).** Two texts
+saying the same thing means one of them is out of date and nobody can
+tell which.
 
 ### Can I run this without Google Cloud?
 
@@ -18,7 +18,7 @@ no secret of its own. `deploy/compose.yaml` runs the same binary locally
 against plain PostgreSQL with authentication disabled — a development
 harness, not the small end of production. What is portable is the
 knowledge, not the runtime. In full:
-[requirements](configuration.md#requirements).
+[requirements](configuration.md#requirements) (Japanese).
 
 ### Does my data leave my project?
 
@@ -58,7 +58,7 @@ content. Search still works without them — lexical-only, calling no
 external API. What that costs, and why Japanese is the case that needs
 them, is in [architecture's search section](architecture.md#search);
 the three ways to decline are in
-[configuration](configuration.md#environment-variables).
+[configuration](configuration.md#environment-variables) (Japanese).
 
 ### Can an agent overwrite or delete knowledge a human verified?
 
@@ -100,7 +100,8 @@ Anyone who can reach the deployment — reachability is the whole access
 model, and there is no authorization on top of it. What identity ochakai
 records, and the postures (`read-only`, `public`) that narrow what a
 reachable caller can do, are in
-[requirements and configuration](configuration.md#authentication-has-no-configuration).
+[requirements and configuration](configuration.md#authentication-has-no-configuration)
+(Japanese).
 
 ### What happens to my knowledge if I stop using ochakai?
 

@@ -35,7 +35,7 @@ docker compose -f deploy/compose.yaml up -d
 
 This runs with `OCHAKAI_MODE=dev`: authentication is off and every
 request acts as `human:anonymous` — never do this on a deployment
-([every mode](docs/configuration.md#environment-variables)).
+([every mode](docs/configuration.md#environment-variables) (Japanese)).
 
 Load the demo knowledge base — [ten concepts](examples/demo) about one
 invented retail domain, linked to each other, some of them drafts — and
@@ -138,27 +138,30 @@ ochakai loses, and says who should pick something else.
 
 | ochakai has no… | because |
 |---|---|
-| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job |
+| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. Embeddings are the exception in spirit and not in fact — an encoder is deterministic and produces no text |
 | SQL execution | it holds no warehouse credentials. Your agent executes |
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
-| authorization | reachability is the access model — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) |
+| authorization | reachability is the access model — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) (Japanese) |
 | telemetry | nothing is reported anywhere. The only hosts ochakai contacts are Google Cloud APIs in your own project |
 
 ## Requirements
 
 - **Google Cloud**, for a real deployment: Cloud Run IAM and Cloud SQL
   IAM are how ochakai holds no secret of its own, and there is no
-  supported way to run it elsewhere. What is portable is the knowledge,
-  not the runtime.
+  supported way to run it elsewhere. This superseded an earlier "runs
+  anywhere" position, for a reason worth knowing before you adopt:
+  keeping a non-GCP path alive meant keeping a second authentication path
+  alive with it, and that is the one thing secret-zero cannot afford.
+  What is portable is the knowledge, not the runtime.
 - **PostgreSQL 17 with `pg_trgm`**; `vector` (pgvector) as well where
   semantic search is on, which on Google Cloud is the default.
 - **No authorization**, as above. Deciding who may reach a deployment is
   Cloud Run IAM's job.
 
 Details, and every environment variable:
-[requirements and configuration](docs/configuration.md).
+[requirements and configuration](docs/configuration.md) (Japanese).
 
 ## Documentation
 
@@ -176,7 +179,7 @@ in the version you are running.
   [Troubleshooting](docs/guides/troubleshooting.md)
 - **Running** — [Deploy with Terraform](deploy/terraform/README.md) ·
   [the gcloud reference it runs](deploy/cloudrun/README.md) ·
-  [Configuration](docs/configuration.md) ·
+  [Configuration](docs/configuration.md) (Japanese) ·
   [Operating](docs/guides/operating.md) ·
   [Golden query canary](docs/guides/golden-query-canary.md)
 - **Building on it** — [REST API](api/openapi.yaml) ·

@@ -12,7 +12,8 @@ window and no backporting ([docs/compatibility.md](docs/compatibility.md)).
 
 ochakai's security posture is deliberately narrow (see
 [docs/design/0002-authn-authz.md](docs/design/0002-authn-authz.md) and
-[requirements and configuration](docs/configuration.md#authentication-has-no-configuration)):
+[requirements and configuration](docs/configuration.md#authentication-has-no-configuration)
+(Japanese)):
 
 - It holds **no warehouse credentials** and never executes SQL.
 - It does **no authorization**: whoever can reach a deployment can read
