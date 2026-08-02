@@ -31,11 +31,12 @@ a metric), glossary terms, and table catalog entries. Search it before writing a
   files (dashboard screenshots, ER diagrams), fetch them with
   `ochakai get <id> --download <dir>` and Read the saved files when
   the body's image references matter to the question.
-- `ochakai attach <id> <file>` — attach a file to a concept
-  (png/jpeg/webp, pdf, plain text; reference it from the body so the
-  caption is searchable). If you learn something by looking at a
-  file, write it into the body with `ochakai put` — knowledge
-  locked in pixels is invisible to search.
+- `ochakai put <id>/<name> -f <file>` — put a file in the bundle
+  (any bytes; the path is its address). Link it from the concept's
+  body — `![name](<id last segment>/<name>)` — so the caption is
+  searchable and the file has an owner. If you learn something by
+  looking at a file, write it into the body with `ochakai put` too —
+  knowledge locked in pixels is invisible to search.
 - `ochakai report <id> worked|failed [--note "what went wrong"]`
   — after acting on knowledge (running an attested computation, running SQL you
   wrote from a metric definition), report whether the result was actually correct. `failed` reports

@@ -37,7 +37,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0073](0073-search-and-when-embeddings-apply.md)(検索) |
 | 検索と埋め込み | [0073](0073-search-and-when-embeddings-apply.md) が現行。埋め込みの設定面(`OCHAKAI_EMBEDDINGS` 一つ)は [0078](0078-one-variable-says-how-it-embeds.md)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
-| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md) |
+| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
@@ -296,6 +296,15 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   `get_concept` に既に載っている。**能力が落ちるのは MCP からだけ**で、
   REST・CLI(`ochakai delete` / `ochakai usage`)・Web UI には一つも
   欠けない。0067 §5.1・§6・§7 を改訂する。
+
+- [0077 ファイルの住所は一つである](0077-one-address-for-a-file.md)
+  — **Accepted**。**CLI がファイルを名指す綴りの現行ドキュメント**。
+  `ochakai attach` / `ochakai detach` を `ochakai put` / `ochakai delete`
+  に畳む(CLI 26 → 24、新しいフラグは無し)。ファイルはバンドルパスで
+  名指し、書き込みで concept かファイルかを決めるのはサーバーと同じく
+  バイト列である。本文に貼る相対リンクのヒントは `put` が引き継ぐ —
+  帰属が本文からの導出である以上、誰もリンクしないファイルは誰にも
+  見つからない。Web UI のボタンも同じ語に揃える。
 - [0004 リモート CLI](0004-cli.md) — **Superseded by 0067**。
 - [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Superseded by 0067**。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。

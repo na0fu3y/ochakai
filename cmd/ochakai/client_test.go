@@ -828,3 +828,159 @@ func TestListStandsAloneOnAReverseLookup(t *testing.T) {
 		t.Error("an unknown feed was accepted")
 	}
 }
+
+// `ochakai put` writes both kinds of object at one address space: the
+// bytes say which, exactly as they do on the wire (design docs 0075 §1,
+// 0077). A concept keeps the id spelling every other command uses and
+// lands at "<id>.md"; a file lands at the path it was given, untouched.
+func TestPutWritesAConceptOrAFileByItsBytes(t *testing.T) {
+	var gotPath, gotType string
+	var gotBody []byte
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotType = r.URL.Path, r.Header.Get("Content-Type")
+		gotBody, _ = io.ReadAll(r.Body)
+		if strings.HasSuffix(gotPath, ".png") {
+			_ = json.NewEncoder(w).Encode(domain.File{Name: "weekly.png", MediaType: "image/png", Size: 4})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(domain.View{ID: "insights/reading-revenue"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "concept.md")
+	if err := os.WriteFile(doc, []byte("---\ntype: Insight\n---\n\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	png := filepath.Join(dir, "weekly.png")
+	pngBytes := []byte("\x89PNG")
+	if err := os.WriteFile(png, pngBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdPut(context.Background(),
+		[]string{"insights/reading-revenue", "-f", doc, "--url", srv.URL}); err != nil {
+		t.Fatalf("put a concept: %v", err)
+	}
+	if gotPath != "/api/v1/bundle/insights/reading-revenue.md" {
+		t.Errorf("a concept went to %s, want its own address", gotPath)
+	}
+	if !strings.HasPrefix(gotType, "text/markdown") {
+		t.Errorf("a concept travelled as %q, want the OKF document type", gotType)
+	}
+
+	if err := cmdPut(context.Background(),
+		[]string{"insights/reading-revenue/weekly.png", "-f", png, "--url", srv.URL}); err != nil {
+		t.Fatalf("put a file: %v", err)
+	}
+	if gotPath != "/api/v1/bundle/insights/reading-revenue/weekly.png" {
+		t.Errorf("a file went to %s, want the path it was given", gotPath)
+	}
+	if !bytes.Equal(gotBody, pngBytes) {
+		t.Errorf("the file's bytes were rewritten on the way out: %q", gotBody)
+	}
+
+	// A file has no version, so the concept preconditions are refused
+	// rather than dropped on the floor.
+	err := cmdPut(context.Background(),
+		[]string{"insights/reading-revenue/weekly.png", "-f", png, "--only-if-new", "--url", srv.URL})
+	if err == nil || !strings.Contains(err.Error(), "--only-if-new") {
+		t.Errorf("--only-if-new on a file = %v, want a refusal naming the flag", err)
+	}
+}
+
+// The hint `ochakai attach` printed is what a file's attribution now
+// rests on: nothing derives it from where the file sits, so the relative
+// markdown link to paste into a body is the whole of the help (design
+// doc 0075 §5). It goes to stderr, where the file hints already go.
+func TestPutPrintsTheBodyLinkForAFile(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(domain.File{Name: "weekly.png", MediaType: "image/png", Size: 4})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	png := filepath.Join(t.TempDir(), "weekly.png")
+	if err := os.WriteFile(png, []byte("\x89PNG"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stderr := captureStderr(t, func() {
+		if err := cmdPut(context.Background(),
+			[]string{"insights/reading-revenue/weekly.png", "-f", png, "--url", srv.URL}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(stderr, "![weekly.png](reading-revenue/weekly.png)") {
+		t.Errorf("stderr = %q, want the relative link to paste into the body", stderr)
+	}
+}
+
+// `ochakai delete` removes either kind, and the argument's spelling
+// picks which address it asks first. The other one is tried only when
+// the first holds nothing, so a dotted id and a file whose name carries
+// no extension both stay reachable and neither can shadow an object
+// that is there (design doc 0077).
+func TestDeleteAddressesBothKindsOfObject(t *testing.T) {
+	var asked []string
+	live := map[string]bool{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		asked = append(asked, r.PathValue("path"))
+		if !live[r.PathValue("path")] {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		name, arg string
+		there     string
+		want      []string
+	}{
+		{"a concept by its id", "terms/obsolete-kpi", "terms/obsolete-kpi.md", []string{"terms/obsolete-kpi.md"}},
+		{"a file by its path", "insights/reading/weekly.png", "insights/reading/weekly.png", []string{"insights/reading/weekly.png"}},
+		{"a concept whose id has a dot", "metrics/revenue.v2", "metrics/revenue.v2.md",
+			[]string{"metrics/revenue.v2", "metrics/revenue.v2.md"}},
+		{"a file with no extension", "tables/orders/Makefile", "tables/orders/Makefile",
+			[]string{"tables/orders/Makefile.md", "tables/orders/Makefile"}},
+	} {
+		asked, live = nil, map[string]bool{tc.there: true}
+		if err := cmdDelete(context.Background(), []string{tc.arg, "--url", srv.URL}); err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+		if !reflect.DeepEqual(asked, tc.want) {
+			t.Errorf("%s: asked %v, want %v", tc.name, asked, tc.want)
+		}
+	}
+}
+
+// captureStderr runs f with os.Stderr redirected, and returns what was
+// written to it.
+func captureStderr(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Stderr
+	os.Stderr = w
+	done := make(chan string, 1)
+	go func() {
+		var b bytes.Buffer
+		_, _ = io.Copy(&b, r)
+		done <- b.String()
+	}()
+	f()
+	os.Stderr = saved
+	_ = w.Close()
+	out := <-done
+	_ = r.Close()
+	return out
+}

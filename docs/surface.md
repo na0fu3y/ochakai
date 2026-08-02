@@ -77,7 +77,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - PARAM: 19
 - HEADER: 10
 - MCP: 6
-- CLI: 26
+- CLI: 24
 - FLAG: 28
 - ENV: 11
 - VOCAB: 34
@@ -287,14 +287,12 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 であって、能力も引数も応答も変わらない。応答の JSON キーも
 `attachment` から `file` に変わっている。
 
-## CLI (26)
+## CLI (24)
 
-- `ochakai attach`
 - `ochakai browse`
 - `ochakai completion`
 - `ochakai context`
 - `ochakai delete`
-- `ochakai detach`
 - `ochakai export`
 - `ochakai get`
 - `ochakai import`
@@ -331,6 +329,17 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 変わる**規則が二つ消えた — クエリ無しの `search` が一覧に化けること、
 `--source` / `--links-to` だけを渡すと順位付けをやめること。
 そして `search -h` の前置き散文は 30 行から 9 行になった。
+
+26 → 24 は [0077](design/0077-one-address-for-a-file.md) が、退役した語で
+綴られていた attach / detach の二本を畳んだぶんである。**能力は落ちて
+いない** — バンドルは一つのアドレス空間で、`PUT` / `DELETE` は既に両方の
+オブジェクトを取るので([0075](design/0075-the-bundle-is-the-address-space.md)
+§§1・4)、二本はファイルを**バンドルパスではなく「concept の id と名前」で
+名指す第二の住所**だった。落ちたのは便宜だけである — 一度に複数ファイルは
+シェルのループであり、`--name` はパスそのものが名前になる。貼る用の
+リンクのヒントは `ochakai put` が引き継いだ: 帰属が本文からの導出に
+なった以上(0075 §5)、誰もリンクしないファイルは誰にも見つからない。
+`--name` は `ochakai use` にも付いているので FLAG は 28 のままである。
 
 ## FLAG (28)
 

@@ -80,15 +80,13 @@ _ochakai() {
     'browse:list one level of the ID hierarchy (folder view)'
     'context:the one-call read before a data question (full concepts)'
     'get:print one concept as an OKF document'
-    'put:write a concept from OKF markdown or JSON, creating or replacing'
+    'put:write one object of the bundle: a concept from OKF markdown or JSON, or a file'
     'verify:append a verification (also re-affirms a verified concept)'
     'reject:record that a concept was reviewed and not accepted'
-    'delete:soft-delete a concept'
+    'delete:remove one object: a concept by id, or a file by its bundle path'
     'purge:hard-delete a soft-deleted concept, freeing its id'
     'reembed:embed concepts that have no vector for the configured model'
     'move:move (rename) a concept; references are rewritten'
-    'attach:attach files to a concept'
-    'detach:remove a file from a concept'
     'usage:show usage totals for a concept'
     'stats:the whole loop: what is stored, what each queue holds, what review did'
     'report:report an outcome (worked/failed) for a concept'
@@ -183,7 +181,7 @@ _ochakai() {
       _arguments '--note[context recorded with the report]:note:' '--json[print JSON]' '--url[server URL]:url:' '2:outcome:(worked failed)'
       ;;
     put)
-      _arguments '-f[input file]:file:_files' '--only-if-new[write only if the id is free]' '--if-match[write only if the concept still has this version]:version:' '--json[print the concept as JSON]' '--url[server URL]:url:'
+      _arguments '-f[input file]:file:_files' '--only-if-new[write only if the id is free]' '--if-match[write only if the concept still has this version]:version:' '--json[print the written object as JSON]' '--url[server URL]:url:'
       ;;
     verify)
       _arguments '--json[print the concept as JSON]' '--url[server URL]:url:'
@@ -194,11 +192,8 @@ _ochakai() {
     delete)
       _arguments '--if-match[delete only if the concept still has this version]:version:' '--url[server URL]:url:'
       ;;
-    purge|detach|move)
+    purge|move)
       _arguments '--url[server URL]:url:'
-      ;;
-    attach)
-      _arguments '--name[file name]:name:' '--json[print the file metadata as JSON]' '--url[server URL]:url:' '*:file:_files'
       ;;
     reembed)
       _arguments '--limit[max concepts per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
@@ -245,7 +240,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search list browse context get put verify reject delete purge reembed move attach detach usage stats report revisions export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search list browse context get put verify reject delete purge reembed move usage stats report revisions export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -281,8 +276,7 @@ _ochakai() {
     verify)        opts="--json --url" ;;
     reject)        opts="--note --withdraw --json --url" ;;
     delete)        opts="--if-match --url" ;;
-    purge|detach|move) opts="--url" ;;
-    attach)        opts="--name --json --url" ;;
+    purge|move)    opts="--url" ;;
     reembed)       opts="--limit --once --json --url" ;;
     export)        opts="--url --no-files" ;;
     import)        opts="--dry-run --strict --url" ;;
@@ -317,15 +311,13 @@ complete -c ochakai -n __fish_use_subcommand -a list -d 'list a review feed or a
 complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
 complete -c ochakai -n __fish_use_subcommand -a context -d 'the one-call read before a data question (full concepts)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one concept as an OKF document'
-complete -c ochakai -n __fish_use_subcommand -a put -d 'write a concept from OKF markdown or JSON, creating or replacing'
+complete -c ochakai -n __fish_use_subcommand -a put -d 'write one object of the bundle: a concept from OKF markdown or JSON, or a file'
 complete -c ochakai -n __fish_use_subcommand -a verify -d 'append a verification (also re-affirms a verified concept)'
 complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that a concept was reviewed and not accepted'
-complete -c ochakai -n __fish_use_subcommand -a delete -d 'soft-delete a concept'
+complete -c ochakai -n __fish_use_subcommand -a delete -d 'remove one object: a concept by id, or a file by its bundle path'
 complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted concept, freeing its id'
 complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that have no vector for the configured model'
 complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept; references are rewritten'
-complete -c ochakai -n __fish_use_subcommand -a attach -d 'attach files to a concept'
-complete -c ochakai -n __fish_use_subcommand -a detach -d 'remove a file from a concept'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for a concept'
 complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for a concept'
@@ -342,19 +334,17 @@ complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST s
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse context get put verify reject delete purge reembed move attach detach usage stats report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse context get put verify reject delete purge reembed move usage stats report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse context get put verify reject reembed attach usage stats report revisions whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse context get put verify reject reembed usage stats report revisions whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -a 'worked failed'
 complete -c ochakai -n '__fish_seen_subcommand_from get' -l download -r -a '(__fish_complete_directories)' -d 'save files into this directory'
-complete -c ochakai -n '__fish_seen_subcommand_from attach' -l name -x -d 'file name'
-complete -c ochakai -n '__fish_seen_subcommand_from attach' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search list context' -l type -x -a '@TYPES@' -d 'filter by type'
 complete -c ochakai -n '__fish_seen_subcommand_from search list context' -l status -x -a '@STATUSES@' -d 'filter by status'
 complete -c ochakai -n '__fish_seen_subcommand_from list' -a 'verified_at usage failed stale_after' -d 'the feed to list'

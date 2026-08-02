@@ -511,17 +511,22 @@ func etagValue(v string) string {
 	return `"` + v + `"`
 }
 
-// Delete soft-deletes the concept at id (DELETE /api/v1/bundle/{path}).
+// Delete removes the object at a bundle path (DELETE
+// /api/v1/bundle/{path}): a concept at "<id>.md" — soft-deleted, history
+// retained — or a file at its own path. One verb for one address space
+// (design doc 0075 §4), so the caller passes the address rather than
+// choosing between two methods.
+//
 // A non-empty ifMatch is sent as If-Match, the same precondition Put
 // takes: the delete lands only if the concept still has that version,
 // and a stale one fails with a conflict instead of deleting someone
 // else's edit (design doc 0064). "" means unconditional, as before.
-func (c *Client) Delete(ctx context.Context, id, ifMatch string) error {
+func (c *Client) Delete(ctx context.Context, path, ifMatch string) error {
 	hdr := http.Header{}
 	if ifMatch != "" {
 		hdr.Set("If-Match", etagValue(ifMatch))
 	}
-	resp, err := c.doRaw(ctx, http.MethodDelete, entryPath(id), nil, "", hdr, nil)
+	resp, err := c.doRaw(ctx, http.MethodDelete, bundlePath(path), nil, "", hdr, nil)
 	if err != nil {
 		return err
 	}
@@ -589,24 +594,6 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 	return &moved, nil
 }
 
-// Attach writes data as a file of the entry, at the canonical
-// <id>/<name> (PUT /api/v1/bundle/{path}). A file that lives elsewhere
-// in the bundle is written with PutBundleFile, at the path it lives at —
-// there is one address for a file, and it is where the file is.
-func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.File, error) {
-	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(id+"/"+name), nil,
-		"application/octet-stream", nil, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var att domain.File
-	if err := json.NewDecoder(resp.Body).Decode(&att); err != nil {
-		return nil, err
-	}
-	return &att, nil
-}
-
 // File fetches one file's bytes and media type by its bundle path
 // (GET /api/v1/bundle/{path}). Metadata travels with the entry that
 // shows it (Get → Knowledge.Files), each carrying its path.
@@ -621,11 +608,6 @@ func (c *Client) File(ctx context.Context, path string) (data []byte, mediaType 
 		return nil, "", err
 	}
 	return data, resp.Header.Get("Content-Type"), nil
-}
-
-// Detach removes the file at a bundle path (DELETE /api/v1/bundle/{path}).
-func (c *Client) Detach(ctx context.Context, path string) error {
-	return c.doJSON(ctx, http.MethodDelete, bundlePath(path), nil, nil, nil)
 }
 
 func bundlePath(p string) string {
@@ -832,16 +814,25 @@ func (c *Client) doJSON(ctx context.Context, method, path string, query url.Valu
 
 // PutBundleFile writes one object of the bundle at its path
 // (PUT /api/v1/bundle/{path}, design doc 0046 §3.5). It is how an import
-// keeps what a bundle carried besides its concepts: a file no entry
+// keeps what a bundle carried besides its concepts — a file no entry
 // references, or a markdown file with no type, which the server stores
-// as a file rather than reading as a concept.
-func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) error {
+// as a file rather than reading as a concept — and how `ochakai put`
+// writes a single file, at the one address a file has (design doc 0075
+// §1).
+//
+// The stored file comes back: the media type is sniffed from the bytes
+// rather than taken from the caller, so what the object became is the
+// server's answer and not the request's.
+func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) (*domain.File, error) {
 	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(path), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil
+	var f domain.File
+	if err := json.NewDecoder(resp.Body).Decode(&f); err != nil {
+		return nil, err
+	}
+	return &f, nil
 }
