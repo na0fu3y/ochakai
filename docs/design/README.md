@@ -29,7 +29,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0001](0001-architecture.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
-| 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用)、[0060](0060-one-word-for-the-posture.md)(姿勢の綴り) |
+| 認証と identity | [0065](0065-identity-and-provenance.md) |
+| デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
 | 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 と [0064](0064-rest-stops-at-api-v1.md) §5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本、`.md` は必須でバンドルパスの一部)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
@@ -37,7 +38,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
 | 検索と埋め込み | [0053](0053-embeddings-by-default.md)(既定・次元変更)、[0058](0058-filters-nobody-arrived-through.md)(スコアの床は持たない)、[0020](0020-attachment-search.md)(添付)、[0041](0041-path-scoped-search.md)(prefix)、[0033](0033-context-hits-are-a-ranking.md)(context) |
 | サーフェスの配分 | [0015](0015-surface-consistency.md)、[0056](0056-one-question-one-command.md)(CLI の第二の住所を畳む規則)、[0062](0062-a-listing-is-not-a-search.md)(一つのコマンドが二役なら割る規則)、[0058](0058-filters-nobody-arrived-through.md)(通行量の無い入口を降ろす規則)、[0004](0004-cli.md)(CLI)、[0007](0007-api-only-cli.md)、[0033](0033-context-hits-are-a-ranking.md)(context)、[0039](0039-mcp-stdio-bridge.md)(MCP stdio)、[0050](0050-listings-page-rankings-do-not.md)(一覧と順位の分け方) |
-| Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0032](0032-webui-iap-identity.md)(identity) |
+| Web UI | [0006](0006-web-ui-serving.md)(配信)、[0044](0044-web-ui-edits-documents.md)(編集)、[0065](0065-identity-and-provenance.md) §5(プロキシと identity) |
 | 検証ループと利用測定 | [0056](0056-one-question-one-command.md)(裁定の面・綴り)、[0025](0025-closing-the-loop.md)、[0029](0029-usage-recording-off-the-read-path.md)、[0037](0037-stale-and-source-lookup.md)、[0049](0049-queue-counts.md)(キューの長さ)、[0059](0059-a-queue-is-named-by-its-listing.md)(キューの名前)、[0051](0051-instance-metrics-and-search-misses.md)(インスタンスの指標と検索ミス)、[0050](0050-listings-page-rankings-do-not.md)(一覧のページング)、[0062](0062-a-listing-is-not-a-search.md)(一覧の CLI 面) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
@@ -102,46 +103,39 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## 認証・認可と provenance
 
-- [0002 認証・認可](0002-authn-authz.md) — **Accepted**。認可機構を
-  持たない —「到達できた者は読み書きできる」。ヘッダから読むのは
-  provenance だけで、信頼の判断は参照側が provenance を見て行う。
-- [0040 デプロイ単位の read-only](0040-read-only-mode.md) —
-  **Accepted**。デプロイ全体を読み取り専用にする。
-  呼び出し元を区別しないので 0002 の「認可を持たない」は維持される。
-  強制点はサービス層 1 箇所、各面は自分の語彙で告げる(REST は 403 と
-  ヘッダ、MCP は書き込みツールを出さない)。
-- [0042 公開読み取り専用という姿勢](0042-public-read-only.md) —
-  **Accepted**。誰でも到達できるデプロイのために、identity を一切読まない
-  (トークンも委譲ヘッダも見ない、全員 anonymous、401 を返さない)。
-  read-only を含意するので「公開かつ書き込み可能」は設定として存在しない。
-- [0060 姿勢は一語で言う](0060-one-word-for-the-posture.md) —
-  **Accepted**、**BREAKING**。`OCHAKAI_READ_ONLY` /
-  `OCHAKAI_PUBLIC_READ_ONLY` / `OCHAKAI_INSECURE_DEV` の 3 つのブールを
-  `OCHAKAI_MODE`(未設定 / `read-only` / `public` / `dev`)一本に畳む。
-  0040 と 0042 が**決めたことは何も変えない** — 3 つのブールが書き下せた
-  8 通りのうち意味を持つのは 4 つだけで、差は規則 3 つ(黙って補正する
-  含意 2 つと、起動を拒否する組み合わせ 1 つ)で埋められていた。実際に
-  あるのは「呼び出し元が特定されるか」「誰かが書けるか」の 2 軸 4 象限で
-  あり、`INSECURE_DEV` が姿勢に見えなかったのは名前が機構を言っていた
-  からである(§1.1)。**規則は消えるのではなく、書き下せなくなる。**
-  読めない綴りは既定に落とさず起動エラーにする(0053 §2.4 と同じ理由)。
-  ENV は 16 → 14 で、姿勢の 3 綴りは VOCAB に数えない — 姿勢はデプロイ
-  する人の語であり、それは ENV が既に数えている(§4)。
-- [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
-  — **Accepted**(ヘッダの綴りは 0064 が `X-` を落として改訂)。信頼済みの
-  呼び出し元が `Ochakai-On-Behalf-Of` でエンドユーザーを名乗り、
-  provenance がサービスアカウント 1 つに潰れる問題を解く。
-- [0052 名乗りは actor の隣に置く](0052-producer-beside-the-actor.md)
-  — **Accepted**(ヘッダの綴りは 0064 が `X-` を落として改訂)。0043 §3.8
-  (0046 §2.4 が継承)の「SPEC §7 の `<producer>/<version>` は使わない」を
-  改訂し、`Ochakai-Producer` / MCP の `clientInfo` / `OCHAKAI_PRODUCER`
-  から来る自称を `Actor.producer` として**認証済みの actor の隣に**記録
-  する。actor の綴りは `human:` / `process:` のまま、trust tier も不変。
+- [0065 認可は持たず、誰として記録するかだけを決める](0065-identity-and-provenance.md)
+  — **Accepted**。**identity と provenance の現行ドキュメント**
+  (0002 / 0027 / 0032 / 0052 の四冊を一冊にまとめたもので、決定は一つも
+  動いていない)。認可機構を持たず「到達できた者は読み書きできる」、
+  ヘッダから読むのは provenance だけ。actor は認証から来て綴りは
+  `human:` / `process:` の 2 つ、委譲は置き換えではなく合成(`via` が
+  必ず残る)、producer の自称は actor の**隣**にだけ置ける、そして
+  identity を差し替えるプロキシは identity の自称を運ばない。
+- [0066 四つの姿勢を、一語で言う](0066-four-postures-one-word.md) —
+  **Accepted**。**デプロイの姿勢の現行ドキュメント**(0040 / 0042 / 0060 の
+  三冊を一冊にまとめたもので、決定は一つも動いていない)。「呼び出し元が特定
+  されるか」「誰かが書けるか」の 2 軸 4 象限を `OCHAKAI_MODE` 一語で言う
+  (未設定 / `read-only` / `public` / `dev`)。read-only の強制点はサービス層
+  1 箇所で利用測定だけが凍結の外、public は identity を一切読まず 401 も
+  返さない。読めない綴りは既定に落とさず起動エラーにする。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
   — **Proposed**。export → Git → import の往復で provenance が誰のものに
   なるかの整理(バンドルは知識のみを運び、provenance はインスタンス固有)。
   文書の trust family は台帳にも trust tier にも入らないまま、
   `received:` の下に主張として保存される(0046 §2.2)。
+- [0002 認証・認可](0002-authn-authz.md) — **Superseded by 0065**。
+- [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
+  — **Superseded by 0065**。
+- [0032 Web UI の書き込みを IAP の identity で記録する](0032-webui-iap-identity.md)
+  — **Superseded by 0065**。
+- [0052 名乗りは actor の隣に置く](0052-producer-beside-the-actor.md)
+  — **Superseded by 0065**。
+- [0040 デプロイ単位の read-only](0040-read-only-mode.md) —
+  **Superseded by 0066**。
+- [0042 公開読み取り専用という姿勢](0042-public-read-only.md) —
+  **Superseded by 0066**。
+- [0060 姿勢は一語で言う](0060-one-word-for-the-posture.md) —
+  **Superseded by 0066**。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
@@ -302,9 +296,11 @@ JSON キーと MCP ツール名だけである。
   キュレーション面が形式そのものを教えるという理由づけ。行エディタを失う
   ことは支払いだと明記し、戻すときはサーバ側に「文書 → 構造」面を足すと
   条件を書いてある。
-- [0032 Web UI の書き込みを IAP の identity で記録する](0032-webui-iap-identity.md)
-  — **Accepted**。両プロキシはブラウザ由来の委譲ヘッダを常に削り、
-  serve-ui は IAP の検証済み JWT からのみ作り直す(0027 §6 の実装)。
+
+Web UI の書き込みが誰として記録されるかは、この節ではなく
+[0065](0065-identity-and-provenance.md) §5 が持つ — 両プロキシがブラウザ
+由来の委譲ヘッダを常に削り、serve-ui が IAP の検証済み JWT からのみ作り直す
+という規則は、identity の領域の決定だからである(0032 を統合した)。
 
 ## サーフェス(REST / MCP / CLI / Web UI)
 
