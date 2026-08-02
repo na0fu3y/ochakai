@@ -109,6 +109,24 @@ last entry.
   for detail. `api/openapi.yaml` declares 405 alongside the 500 already
   on all eleven operations.
 
+- Issue [#470](https://github.com/na0fu3y/ochakai/issues/470) audited
+  the not-yet-tagged freeze (design doc
+  [0064](docs/design/0064-rest-stops-at-api-v1.md)) against
+  `api/openapi.yaml` and found three places the spec and the code
+  disagreed, closed here as 0064 §12 (none of the three are breaking):
+  - `?history`'s `limit` was one number in the spec (1000, default and
+    max) and two in the code — 50/200 for a concept's own history read
+    as JSON, 1000/1000 for log.md and every markdown rendering. The code
+    was already right for a reason (a concept's JSON history carries the
+    whole document at every revision); the spec now names both ceilings.
+  - A concept's GET computed an ETag but never compared it against
+    `If-None-Match`, even though both file branches on the same address
+    already answered a match with 304 and the spec declared the header
+    for the GET as a whole. A concept now answers 304 too.
+  - A file `PUT`'s 200 and 201 responses have declared an `ETag` header
+    since design doc 0064 (to match a concept `PUT`, which already sends
+    one); the code never set it. It does now.
+
 ### Changed
 
 - **BREAKING** — REST is frozen at `/api/v1` (design doc
