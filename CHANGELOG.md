@@ -129,9 +129,18 @@ last entry.
     they named the wire concept: the `Attachment` OpenAPI schema and the
     JSON key on `View`, `SearchHit` and `ReembedResult`; the archive
     address's `?attachments=` query parameter (now `?files=`); the MCP
-    tool `get_attachment` (now `get_file`). `entries` is unaffected —
+    tool `get_attachment` (now `get_file`) and its result key
+    (`attachment` → `file`). `entries` is unaffected —
     design doc [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md)
-    §3.2 already exempted it, and that stands.
+    §3.2 already exempted it, and that stands. The CLI followed past the
+    wire too: `ochakai export --no-attachments` is now `--no-files`.
+  - `ochakai import`'s summary line, and its `--dry-run` twin, traded
+    `%d attachments, %d files` for `%d attributed, %d loose`. Not a
+    rename of the line above — `attributed` counts files a concept's body
+    claims and `loose` counts files that belong to no concept, the same
+    two counts as before under words this PR had not taught anywhere
+    else. A script parsing the line by position still works; one
+    matching the old words breaks silently.
   - A failed `If-None-Match: *` (the id was already taken) is now 412,
     not 409 — RFC 9110's status for a failed precondition. 409 stays the
     answer for a conflict with no precondition behind it, such as `move`

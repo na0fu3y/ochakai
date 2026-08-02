@@ -1594,11 +1594,6 @@ func isInvalid(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest
 }
 
-func isConflict(err error) bool {
-	var apiErr *apiclient.APIError
-	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict
-}
-
 // readBundle loads an OKF bundle into a path→content map from a directory,
 // a tar.gz file, or stdin ("-", tar.gz).
 func readBundle(path string) (map[string][]byte, error) {

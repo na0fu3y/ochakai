@@ -408,7 +408,7 @@ func (c *Client) Get(ctx context.Context, id string) (*domain.View, error) {
 // body's content_hash). The write then lands only if the entry still has
 // that version; a stale one is a 412 APIError and nothing is written. ""
 // means last write wins. onlyIfAbsent sends If-None-Match "*", which
-// makes an occupied id a 409 instead of a replacement.
+// makes an occupied id a 412 instead of a replacement.
 //
 // created reports which way it went; changed=false reports the server
 // wrote nothing because the document matched the stored content (the

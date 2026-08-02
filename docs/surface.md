@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 4948
+- DOC-LINES: 4984
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -184,6 +184,11 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 なる**からである。同じ PR で `Ochakai-Plan` も足しており、HEADER の
 天井も上がっている。
 
+19 のまま、PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
+(design doc [0064](design/0064-rest-stops-at-api-v1.md)) が `attachments`
+を `files` に改めた。下の MCP の `get_attachment` → `get_file` と同じ
+改名で、**変わったのは利用者が知る語そのもの**である。
+
 - `budget`
 - `cursor`
 - `days`
@@ -219,6 +224,11 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 は片方しか読まなくなる — だから dry run では `Ochakai-Unchanged` を
 出さず、`Ochakai-Plan` が置き換える。
 
+10 のまま、同じ PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
+が `Ochakai-On-Behalf-Of` / `Ochakai-Producer` から `X-` 接頭辞を落とし、
+他の八本と同じ綴りの型([0064](design/0064-rest-stops-at-api-v1.md))に
+した。
+
 - `Content-Disposition`
 - `ETag`
 - `If-Match`
@@ -245,6 +255,13 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 改名した — 知識の単位は OKF SPEC §2 の語で **concept** であり、文書が
 既にその語で書いていたのにツール名だけが `knowledge` を名乗っていた。
 能力も引数も応答も変わらない。
+
+8 本のまま、もう一度。PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
+(design doc [0064](design/0064-rest-stops-at-api-v1.md)) が
+`get_attachment` を `get_file` に改めた — ワイヤの `attachments` が
+`files` になったのと同じ改名で、**変わったのは利用者が知る語そのもの**
+であって、能力も引数も応答も変わらない。応答の JSON キーも
+`attachment` から `file` に変わっている。
 
 ## CLI (26)
 
@@ -318,6 +335,10 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 
 `serve` / `serve-ui` のフラグは数えない。CLI の節が `serve` を数えないのと
 同じ理由で、バイナリの動かし方であって ochakai が知っていることではない。
+
+28 のまま、PR [#407](https://github.com/na0fu3y/ochakai/issues/407) が
+`ochakai export` の一本を `no-files` に改めた — PARAM の `attachments`
+→ `files` に揃えただけで、ワイヤの外で名前だけ遅れていた。
 
 - `budget`
 - `cursor`
@@ -501,7 +522,7 @@ REST は 19 → 11 に減り、非テストの Go は 2.3 倍になり、この 
 置いた(上限の節の `DOC-LINES`)。0059 のキュー改名がこの文書に段落を
 足したとき、動いた数は一つも無かった。
 
-**この天井は、置いた後に三度上がり、一度下がっている。**
+**この天井は、置いた後に四度上がり、一度下がっている。**
 [0062](design/0062-a-listing-is-not-a-search.md) が `ochakai search` を
 二つに割ったとき、[cli.md](cli.md) は 9 つのフィルタを二度書くことに
 なった — コマンドを割るのは**参照文の重複を買う**という、それまでどこ
@@ -517,7 +538,7 @@ deploy/cloudrun/README.md 分割は逆方向でも同じ代金を払った — �
 docs/guides/rest-integration.md を一枚足し、deploy/cloudrun/README.md
 の §5c(委譲された provenance の全文)をそこへの一段落に畳んだ。ページが
 増えたぶんは畳み込みで相殺されず、5,808 から 5,942 まで上げている —
-C6 が七つの条件の一つであり、これまで YAML のコメント一つに委ねられて
+C6 が八つの条件の一つであり、これまで YAML のコメント一つに委ねられて
 いたことが、その代金である。
 
 [#374](https://github.com/na0fu3y/ochakai/issues/374) は逆方向をもう一度
@@ -539,11 +560,26 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 いた。[CONTRIBUTING.md](../CONTRIBUTING.md) に移し、DOC は 24 → 23 に
 なった。
 
+**PR [#407](https://github.com/na0fu3y/ochakai/issues/407) は四つの
+綴りを書き換えた。** design doc [0064](design/0064-rest-stops-at-api-v1.md)
+の最後の破壊的変更が、PARAM の `attachments` を `files` に、HEADER の
+`Ochakai-On-Behalf-Of` / `Ochakai-Producer` から `X-` 接頭辞を落とし、
+MCP の `get_attachment` を `get_file` に、FLAG の `no-attachments` を
+`no-files` に改めた。[0054](design/0054-concept-is-the-okf-word.md) の
+ツール改名・[0059](design/0059-a-queue-is-named-by-its-listing.md) の
+キュー改名と同じ理由で——**変わったのは利用者が知る語そのもの**であって
+四つのどの一覧も本数は動かない——このページも同じだけの分量を払っている。
+4,930 → 4,938。
+
 **[#408](https://github.com/na0fu3y/ochakai/issues/408) はページを
 増やさず数行だけ足した。** REST の凍結を書いた直後の docs/README.md と
 docs/guides/rest-integration.md が、まだ「すべての面が不安定」と言って
 いた・凍結に触れていなかった箇所を直し、この段落自身もその天井を動かす
 分を数えている — 折り畳みではなく訂正なので、4,938 → 4,948。
+
+[#412](https://github.com/na0fu3y/ochakai/issues/412) も同じ形の訂正
+である。PARAM・HEADER・MCP・FLAG の四つの一覧に前回抜けていた説明を
+足し、この段落を含めてその分を数えている — 4,948 → 4,984。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 

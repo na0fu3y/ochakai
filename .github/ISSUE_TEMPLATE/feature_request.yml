@@ -1,11 +1,11 @@
 name: Feature request
-description: Propose something ochakai should do.
+description: Propose something `ochakai` should do.
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        ochakai stays small by refusing things — the README table and
+        `ochakai` stays small by refusing things — the README table and
         [docs/design/0015](https://github.com/na0fu3y/ochakai/blob/main/docs/design/0015-surface-consistency.md)
         list what is deliberately absent, and
         [ROADMAP.md](https://github.com/na0fu3y/ochakai/blob/main/ROADMAP.md)
@@ -27,7 +27,7 @@ body:
     id: proposal
     attributes:
       label: The proposal
-      description: What ochakai would do instead. Sketch the request and response, or the command, if you have one in mind.
+      description: What `ochakai` would do instead. Sketch the request and response, or the command, if you have one in mind.
     validations:
       required: true
 
@@ -69,7 +69,7 @@ body:
         out of scope rather than a matter of priority. Check both.
       options:
         - label: >-
-            No LLM inside, no SQL execution — ochakai stores and serves
+            No LLM inside, no SQL execution — `ochakai` stores and serves
             knowledge; interpretation and execution belong to the client agent
             (design doc 0001).
           required: true
