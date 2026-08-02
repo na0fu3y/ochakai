@@ -235,7 +235,7 @@ func Handler(svc *service.Service) http.Handler {
 		q := r.URL.Query()
 		if err := rejectUnknownParams(q,
 			"limit", "rejected", "type", "status", "tag", "source", "links_to",
-			"prefix", "trust", "q", "sort", "cursor"); err != nil {
+			"prefix", "trust", "q", "sort", "cursor", "fm."); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -486,9 +486,21 @@ func Handler(svc *service.Service) http.Handler {
 	// Ochakai-Plan. It is a query parameter and not a header because a
 	// header a proxy drops turns a dry run into a write.
 	for _, m := range []string{"PUT", "DELETE"} {
+		// purge is DELETE's own parameter (api/openapi.yaml declares it
+		// there and not on PUT): a PUT that carries it is a caller who
+		// meant the two-step delete-then-purge and sent it to the wrong
+		// verb, and that deserves the 400 rejectUnknownParams gives every
+		// other misdirected parameter — not the silent no-op it was
+		// before (issue #409). dry_run stays allowed on both: DELETE's
+		// own handling below turns it into a more specific refusal than
+		// "unknown query parameter" would.
+		allowed := []string{"dry_run"}
+		if m == "DELETE" {
+			allowed = append(allowed, "purge")
+		}
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
-			if err := rejectUnknownParams(r.URL.Query(), "dry_run", "purge"); err != nil {
+			if err := rejectUnknownParams(r.URL.Query(), allowed...); err != nil {
 				writeError(w, err)
 				return
 			}
@@ -625,7 +637,7 @@ func Handler(svc *service.Service) http.Handler {
 	mux.HandleFunc("GET /api/v1/context", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if err := rejectUnknownParams(q,
-			"q", "type", "status", "tag", "prefix", "trust", "limit", "budget"); err != nil {
+			"q", "type", "status", "tag", "prefix", "trust", "limit", "budget", "fm."); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -1499,19 +1511,33 @@ func parseIfMatch(r *http.Request) *string {
 	return &v
 }
 
-// rejectUnknownParams 400s on the first query key outside allowed,
-// naming it. Before design doc 0064 an unrecognized key was a silent
-// no-op on every endpoint but one — an unrecognized fm.* key already
-// 400s downstream, once the service checks it against the concept's own
-// vocabulary (checkedFilter), which is why frontmatterFilter's keys are
-// exempt here rather than enumerated: they are validated by content, not
-// by a fixed list. This is what makes it safe to add a query parameter
-// after the freeze — an old server 400s a caller that sends one early,
-// rather than silently ignoring it the way ?dry_run= was ignored by a
-// server that did not know it yet.
+// rejectUnknownParams 400s on the lowest unknown query key, naming it —
+// sorted rather than range order, so which key gets named does not
+// depend on Go's randomized map iteration. Before design doc 0064 an
+// unrecognized key was a silent no-op on every endpoint but one.
+//
+// fm.* is exempt only for a caller that passes "fm." among allowed: an
+// unrecognized fm.* key already 400s downstream, once the service checks
+// it against the concept's own vocabulary (checkedFilter), which is why
+// frontmatterFilter's keys are validated by content there rather than
+// enumerated here — but only on the two operations that read a
+// Frontmatter filter at all (search, context). Every other operation has
+// no such downstream check, so fm.* left exempt there would be the same
+// silent no-op this function exists to close (issue #409).
+//
+// This is what makes it safe to add a query parameter after the freeze —
+// an old server 400s a caller that sends one early, rather than silently
+// ignoring it the way ?dry_run= was ignored by a server that did not
+// know it yet.
 func rejectUnknownParams(q url.Values, allowed ...string) error {
+	allowFM := slices.Contains(allowed, "fm.")
+	keys := make([]string, 0, len(q))
 	for key := range q {
-		if strings.HasPrefix(key, "fm.") {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if allowFM && strings.HasPrefix(key, "fm.") {
 			continue
 		}
 		if !slices.Contains(allowed, key) {
