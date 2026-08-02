@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 253
+    RECORD-LINES: 313
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -417,7 +417,18 @@ decides both, and §11 gains the two BREAKING bullets that follow from
 deciding them. 31 lines on the one record still unreleased enough to
 revise in place.
 
-61 → 63 while 8,422 → 7,926 is the first consolidation, and it moves the
+253 → 313, 8,422 → 8,482 is the same issue's audit closing its third
+part: three places where `api/openapi.yaml` and the code it describes
+disagreed — `?history`'s `limit` stated one ceiling while the code
+enforced two, a concept's GET declared `If-None-Match` without ever
+answering 304, and a file `PUT` declared an `ETag` response header it
+never sent. None of the three change a stored shape or a wire
+identifier, so 0064 gains a new §12 rather than a new record (0048
+§2.3: still unreleased, so revised in place) — 60 more lines for three
+findings, each with the disagreement, the decision and which side
+moved.
+
+61 → 63 while 8,482 → 7,986 is the first consolidation, and it moves the
 two numbers in opposite directions on purpose. Seven records were current
 for identity and the posture at once — the opening table named all seven,
 so reaching that area's current state meant opening 928 lines — and 0065
@@ -430,7 +441,7 @@ now takes two records to read instead of seven. Neither number says that
 alone, and `RECORD-COUNT` rising is not this corpus growing.
 
     RECORD-COUNT: 63
-    RECORD-CORPUS-LINES: 7926
+    RECORD-CORPUS-LINES: 7986
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

@@ -600,10 +600,15 @@ paths:
         - name: limit
           in: query
           description: >
-            log.md and ?history only — maximum concepts (default and max
-            1000). Sent anywhere else on this address it is a 400 naming
-            the mode it belongs to, rather than a silently ignored value
-            (design doc 0064 §2).
+            log.md and ?history only — maximum rows, and a 400 naming
+            the mode when sent anywhere else on this address (design doc
+            0064 §2). A concept's own `?history`, read as JSON, is 50 by
+            default and 200 at most: each row carries the whole document
+            as it stood at that revision, so 1000 of them is the
+            knowledge base several times over. log.md and every other
+            `?history` (a file's, or any of the two rendered as
+            markdown) carries no document and is 1000 by default and at
+            most (design doc 0064 §12.1).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
         - name: files
@@ -742,7 +747,11 @@ paths:
                           Revenue is the sum of `net_amount` over every
                           completed order.
         "304":
-          description: Not modified — a file whose If-None-Match matched its content hash.
+          description: >
+            Not modified — a concept or a file whose If-None-Match
+            matched its content hash (design doc 0064 §12.2: a concept
+            answered this GET's `If-None-Match` parameter with a 200
+            always, until now).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
@@ -2104,11 +2113,13 @@ components:
       in: header
       required: false
       description: >
-        The other precondition (design doc 0030). On a concept, `*` means
-        "only if the path is free": the write creates or fails with a 412,
-        which is how a caller states that it is not replacing anything.
-        On a file it is the ordinary cache validator — the content hash a
-        prior read returned, answered with a 304 when it still matches.
+        The other precondition (design doc 0030). On a PUT to a concept,
+        `*` means "only if the path is free": the write creates or fails
+        with a 412, which is how a caller states that it is not replacing
+        anything. On a GET, of a concept or a file, it is the ordinary
+        cache validator — the content hash a prior read returned,
+        answered with a 304 when it still matches (design doc 0064
+        §12.2: a concept's GET did not compare it until now).
       schema: { type: string }
     OnBehalfOf:
       name: Ochakai-On-Behalf-Of
