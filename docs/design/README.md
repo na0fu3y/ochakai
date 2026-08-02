@@ -31,7 +31,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0002](0002-authn-authz.md)、[0027](0027-delegated-provenance.md)(委譲)、[0052](0052-producer-beside-the-actor.md)(producer)、[0032](0032-webui-iap-identity.md)(IAP)、[0040](0040-read-only-mode.md)(read-only)、[0042](0042-public-read-only.md)(公開読み取り専用)、[0060](0060-one-word-for-the-posture.md)(姿勢の綴り) |
 | OKF 互換・バンドル・保存形 | [0046](0046-bundle-address-space.md) が現行。[0061](0061-a-dry-run-is-the-write-withheld.md)(書き込み面の dry run)、[0047](0047-fm-carries-okf-keys.md)(フィルタの語彙)、[0037](0037-stale-and-source-lookup.md)(期限と引用元)、[0024](0024-links-from-body.md)(リンク)、[0022](0022-filename-as-name.md)(名前)、[0019](0019-release-review-adjustments.md)(ID 文字種) |
-| 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
+| 住所とパス | [0046](0046-bundle-address-space.md) §§3.1・3.5 と [0064](0064-rest-stops-at-api-v1.md) §5 が現行(バンドルのパスが住所、面は `/api/v1/bundle/{path}` 一本、`.md` は必須でバンドルパスの一部)。[0017](0017-path-addressing.md)(「パスが住所、タイプは属性」の決定そのもの)、[0041](0041-path-scoped-search.md)(prefix)、[0021](0021-move-and-webui-refinements.md)(move) |
 | 型の語彙 | [0063](0063-two-unused-recommended-types-leave.md)。改訂の履歴は [0038](0038-type-vocabulary-realignment.md) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語) |
 | 添付ファイル | [0046](0046-bundle-address-space.md)(バンドルのオブジェクト)、[0020](0020-attachment-search.md)(検索) |
@@ -376,8 +376,11 @@ JSON キーと MCP ツール名だけである。
   対象外)、If-None-Match の衝突は 412、DELETE が If-Match に対応、
   ファイル PUT が作成時 201、withdrawn の空振りは 409、`limit` /
   `days` の範囲外は全面 400。バージョンや capability の合図は無し、
-  CORS も意図して無し。[docs/compatibility.md](../compatibility.md) を
-  同 PR で書き換え、REST だけが「不安定」の対象から外れる。
+  CORS も意図して無し。凍結を破ってよい理由はセキュリティ上の欠陥だけ
+  (§8)、DELETE の再実行は 404 のままで安全(§8)。
+  [0046](0046-bundle-address-space.md) §3.5 の代表表現の表を改訂する
+  (概念の既定は JSON の View)。[docs/compatibility.md](../compatibility.md)
+  を同 PR で書き換え、REST だけが「不安定」の対象から外れる。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
   — **Accepted**(0046 §3.10 が行に trust tier を足す)。バイト予算の決定を記録し、`hits` から知識の複製を外す
   (全サーフェスで `id`/`type`/`title`/`status`/`score` のみ)。REST の

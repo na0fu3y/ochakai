@@ -48,7 +48,10 @@ Status: Accepted(2026-07-28)。[0043](0043-document-first.md) を Superseded に
 §3.5 の書き込み面は [0061](0061-a-dry-run-is-the-write-withheld.md) が
 `dry_run` パラメータと `Ochakai-Plan` ヘッダで拡げた — §2.2 の claim の
 判定も §3.4 の unchanged の判定も**変わらず**、書き込みを止めたまま
-同じ判定を返す口が増えただけである
+同じ判定を返す口が増えただけである。
+§3.5 の代表表現の表は [0064](0064-rest-stops-at-api-v1.md) §4 が訂正した
+— 概念の既定(Accept 無し)は「エクスポート形」ではなく「JSON の View」
+である。表の他の列とファイルの `application/json` 対応は変わらない。
 Date: 2026-07-28
 
 ## 1. 目的

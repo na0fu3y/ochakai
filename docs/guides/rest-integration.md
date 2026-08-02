@@ -12,6 +12,12 @@ If you are deploying ochakai itself rather than building against one that
 is already running, start with the
 [deploy guide](../../deploy/cloudrun/README.md) instead.
 
+**REST is frozen at `/api/v1`** (design doc
+[0064](../design/0064-rest-stops-at-api-v1.md)): the contract this page
+walks through does not move except for a security fix, unlike MCP, the
+CLI and the stored shape, which can still change in a minor release —
+[docs/compatibility.md](../compatibility.md) has the full policy.
+
 ## Authenticating
 
 Cloud Run IAM decides who reaches ochakai (design docs

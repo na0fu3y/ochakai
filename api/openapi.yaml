@@ -37,9 +37,12 @@ info:
     whose keys are validated against the concept's own OKF frontmatter
     (design doc 0047) rather than against a fixed name list.
 
-    Every interface is unstable while the major version is 0
-    (docs/compatibility.md): a removal arrives in a minor release with a
-    changelog entry, not after a deprecation window.
+    **REST is frozen at `/api/v1`** (design doc 0064,
+    docs/compatibility.md): this contract is the address list a client can
+    hold onto, and the only thing that can still break it after this point
+    is a security defect, shipped in the next release with no deprecation
+    window (SECURITY.md). MCP, the CLI and the stored shape stay unstable
+    while the major version is 0 and may still change in a minor release.
   version: 0.17.0
   license:
     name: MIT
@@ -552,19 +555,22 @@ paths:
             than in the path — as with the slashes above, the prose is as
             precise as the format allows.
 
-            **`.md` is a representation selector, not part of the
-            identifier** (design doc 0064): it is sugar for
-            `Accept: text/markdown` on the same concept, not a second
-            spelling of its id. `id`, `Summary.id`, `File.path` and
-            `Change.path` are always bare for exactly this reason — the
-            suffix exists only at this address, and only because a
-            browser or `curl` cannot set a header as easily as it can
-            follow a link. A single-target operation (this one,
-            `/api/v1/review/{id}`, `/api/v1/usage/{id}`) addresses its
-            concept with a path segment; `/api/v1/move`, which names two,
-            addresses both in the body instead — not a second
-            inconsistency, but the shape a two-target operation has to
-            take.
+            **`.md` is mandatory and is part of a concept's bundle path**
+            (design doc 0064), not a representation selector: dropping it
+            does not fall back to `Accept: text/markdown` on the same
+            concept, it stops finding the concept at all. `id` (used bare
+            by `/api/v1/review/{id}` and `/api/v1/usage/{id}`) and
+            `Summary.id` are the identifiers that are always bare — `.md`
+            is never part of an id. `File.path` is bare in the sense of
+            being a file's own real path, not in the sense of never
+            carrying `.md`. `Change.path` is **not** bare either: it is
+            the object's bundle path (see `BundleLog` above), and for a
+            concept that includes `.md` the same way this address does.
+            A single-target operation (this one, `/api/v1/review/{id}`,
+            `/api/v1/usage/{id}`) addresses its concept with a path
+            segment; `/api/v1/move`, which names two, addresses both in
+            the body instead — not a second inconsistency, but the shape
+            a two-target operation has to take.
           schema: { type: string }
         - name: history
           in: query
@@ -957,7 +963,21 @@ paths:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/Error" }
+        "404":
+          description: >
+            Nothing lives at the path — whether the id never existed or
+            was already deleted; the two are not distinguished (design doc
+            0064). Repeating a DELETE therefore answers 404 the second
+            time, deliberately: the end state (nothing live there) is the
+            same either way, so retrying blindly stays safe.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
         "409":
           description: A generated file is not one anybody deletes.
           headers:
@@ -1933,7 +1953,11 @@ paths:
                     description: >
                       Concepts and files still unembedded once the
                       pass was over — counted after the fact, so items
-                      this pass failed on are included.
+                      this pass failed on are included. This is also
+                      progress of this pass, not a census of the corpus
+                      (design doc 0064): a later re-keying of how a
+                      file's vector is stored changes what this counts
+                      without that being a second breaking change.
                     type: integer
                   cursor:
                     description: >

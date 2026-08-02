@@ -1,11 +1,12 @@
 # ochakai 設計ドキュメント 0064: REST は /api/v1 で止まる
 
-Status: Accepted(2026-08-02)。既存のドキュメントを Superseded にも
-改訂にもしない — [0046](0046-bundle-address-space.md) §§2.1・3.3・3.5、
+Status: Accepted(2026-08-02)。[0046](0046-bundle-address-space.md) §3.5 の
+代表表現の表を改訂する(概念の既定表現は「エクスポート形」ではなく
+「JSON の View」— §4)。同ドキュメントの §2.1・§3.3、
 [0057](0057-concept-is-the-word-a-reader-meets.md) §3.2、
 [0058](0058-filters-nobody-arrived-through.md)、
 [0061](0061-a-dry-run-is-the-write-withheld.md)、
-[0030](0030-optimistic-locking.md) を引用するのみ。実装は同 PR
+[0030](0030-optimistic-locking.md) は引用するのみで改訂しない。実装は同 PR
 (issue [#379](https://github.com/na0fu3y/ochakai/issues/379))。
 Date: 2026-08-02
 
@@ -69,18 +70,33 @@ REST の 11 操作すべてで、宣言していないクエリキーは 400 に
 これは issue #379 が指摘した「0046 §3.5 と実装がひそかに食い違っている」
 点の一つである。**ここではコードではなく表を直す** — 凍結の直前に
 既定の表現を変えれば、既存のあらゆる REST クライアントを黙って壊す。
+この訂正は 0046 §3.5 の表そのものへの改訂として記録する(本書の
+`Status:` を参照)。
 
-## 5. 住所の綴り: 宣言だけで足りる
+## 5. 住所の綴り: `.md` はバンドルパスの一部
 
 `/api/v1/bundle/{path}` の `.md`、`/api/v1/review|usage/{id}`
-の裸の id、`/api/v1/move` の body 内 id — 3 通りに見えるが、コードを
-見ると実は矛盾していない。`.md` は既に `Accept: text/markdown` の糖衣
-であって識別子の一部ではなく(`Summary.id`・`File.path`・`Change.path`
-は元から裸である)、単一対象の操作(bundle・review・usage)はパス
-セグメントで、二つの対象を持つ `move` だけが body で名指す — 後者は
-二対象という形の必然であって、もう一つの非一貫性ではない。**この規則を
-一度だけ書き下す**: 識別子は常に裸の id / path。`.md` は表現選択子。
-単一対象はパス、複数対象は body。コード変更は無い。
+の裸の id、`/api/v1/move` の body 内 id — 3 通りに見えるが、実装を見ると
+矛盾していない。ただし `.md` の扱いは以前この書が言った形とは違う:
+**`.md` は必須で、バンドルパスの一部である** — `.md` が外れないと
+`internal/restapi/restapi.go` は概念に辿り着かない
+(`strings.CutSuffix(path, ".md")`)。`Accept: text/markdown` のための
+糖衣ではなく、`{path}` パラメータの例(`"metrics/revenue.md"`)がそもそも
+示すとおり住所そのものの綴りである。
+
+裸なのは `id`(`/review/{id}`・`/usage/{id}`)と `Summary.id` — 識別子で
+あって住所ではない。`File.path` はファイル自身の拡張子を持つという意味
+の裸で、`.md` が付かないという意味ではない。**`Change.path` は裸では
+ない** — `BundleLog` 自身が「オブジェクトを住所で名指す」と書くとおり
+バンドルパスであり、概念の行では `domain.ConceptPath(id) = id + ".md"`
+がそのまま `knowledge_revision.path`(`internal/store/revision.go`)から
+返ってくる。id と path は別の語で、裸なのは id だけだった。
+
+単一対象(bundle・review・usage)はパスセグメント、二つの対象を持つ
+`move` だけが body で名指す — 二対象という形の必然であって、もう一つの
+非一貫性ではない。**この規則を一度だけ書き下す**: id は常に裸、バンドル
+パスは概念なら `.md` を持つ、単一対象はパス・複数対象は body。コード
+変更は無い — 今回直るのは記述だけである。
 
 ## 6. `attachments` / `Attachment` を wire から退役させる
 
@@ -134,6 +150,15 @@ path 鍵に付け替えても、進捗という定義なら二度目の破壊的
 - **CORS は意図して無い**。C6(「小さな埋め込み可能な REST API」)は
   「自分の Web サービスに埋め込む」であって「任意のブラウザ起源に直接
   応答する」ではない。`Access-Control-*` を出さないのは見落としではない。
+- **凍結を破ってよい唯一の理由はセキュリティ上の欠陥**である。それ以外は
+  メジャーバージョンを待つ。セキュリティ修正は [SECURITY.md](../../SECURITY.md)
+  の「最新リリースのみサポート・バックポート無し」のとおり、猶予期間を
+  置かず次のリリースで出す — 凍結前と同じ扱いである。
+- **DELETE の再実行は 404 のままで、それが意図した挙動**である。ソフト
+  削除済みの id も最初から無い id も `Store.Get` は区別せず
+  `ErrNotFound` を返す(`internal/store/store.go` の `SoftDelete`)。
+  盲目的な再試行は安全 — どちらも「その id に生きているものは無い」と
+  いう終着点は同じだからである。
 
 ## 9. 死んだコード
 
