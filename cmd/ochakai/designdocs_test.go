@@ -46,19 +46,54 @@ var supersededByRe = regexp.MustCompile(`Superseded by \[(\d{4})\]`)
 // English is allowed (CONTRIBUTING.md), so both spellings count.
 var supersedesRe = regexp.MustCompile(`\[(\d{4})\]\([^)]*\)\s*を\s*\*{0,2}Superseded|[Ss]upersedes \[(\d{4})\]`)
 
-// amendsRe reads "amends 00YY" out of a record's own header — 00YY stays
-// current, but one of its sections is revised rather than the whole record
-// retired. Unlike Superseded, the verb the *older* record uses to record
-// this is not one fixed spelling: the corpus says it as 改名した, 訂正した,
-// or 現行ドキュメントは depending on what changed, so unlike supersededByRe
-// there is no single pattern to read it back with there. The verb the
-// *new* record uses when declaring the intent is consistently 改訂する
-// (design-doc skill's own template spells it this way), so that is the
-// half read here: a link immediately followed, before the next link or
-// sentence end, by that verb. TestSupersessionIsRecordedAtBothEnds below
-// checks the other end only for the link itself being present, not for
-// which of its several spellings acknowledges it.
-var amendsRe = regexp.MustCompile(`\[(\d{4})\]\([^)]*\)[^。\[]*(?:を|は)改訂する|[Aa]mends \[(\d{4})\]`)
+// An amendment leaves 00YY current and revises one of its sections rather
+// than retiring the whole record. Unlike Superseded, the verb the *older*
+// record uses to acknowledge one is not one fixed spelling — the corpus
+// says 改名した, 訂正した, or 現行ドキュメントは depending on what changed —
+// so only the *new* record's declaration can be read by pattern, and
+// TestSupersessionIsRecordedAtBothEnds checks the other end for the link
+// alone. The verb there is consistently 改訂する (the design-doc skill's
+// template spells it that way).
+//
+// What amendedNumbers deliberately does not read is 足す. "Add one entry
+// to 0015 §3's list" is an amendment and the corpus says it that way — but
+// so is "take 0040's read-only as given and add a posture beside it",
+// which is not one. Telling those apart is a question about which noun a
+// に governs, and a regexp that guesses at it fails in the direction that
+// costs most: a false positive blocks a PR that did nothing wrong. Those
+// stay a reviewer's job, and CONTRIBUTING.md says so.
+var amendsRe = regexp.MustCompile(`\[(\d{4})\]\([^)]*\)`)
+
+// amendedNumbers reads every record a header declares it amends. It scans
+// link by link rather than matching one pattern across the header, because
+// one clause routinely amends two records at once — 0062 revises both
+// 0049 §3.4 and 0059's printed form in a single sentence — and a match
+// that spanned from the first link to the verb would consume the second
+// link with it and report only one of them.
+//
+// Whitespace goes first so a line wrap inside the verb (改訂\nする, which
+// the corpus wraps that way) does not hide an amendment; Japanese does not
+// space its words, so removing it is lossless. A link counts when the verb
+// follows it before the sentence ends.
+func amendedNumbers(status string) []string {
+	squeezed := strings.Join(strings.Fields(status), "")
+	var out []string
+	for _, m := range amendsRe.FindAllStringSubmatchIndex(squeezed, -1) {
+		rest := squeezed[m[1]:]
+		if end := strings.Index(rest, "。"); end >= 0 {
+			rest = rest[:end]
+		}
+		if strings.Contains(rest, "を改訂する") || strings.Contains(rest, "は改訂する") {
+			out = append(out, squeezed[m[2]:m[3]])
+		}
+	}
+	for _, m := range amendsEnglishRe.FindAllStringSubmatch(squeezed, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+var amendsEnglishRe = regexp.MustCompile(`[Aa]mends\[(\d{4})\]`)
 
 func designRecords(t *testing.T) []designRecord {
 	t.Helper()
@@ -215,7 +250,7 @@ func TestSupersessionIsRecordedAtBothEnds(t *testing.T) {
 					r.file, number)
 			}
 		}
-		for _, number := range capturedNumbers(amendsRe, r.status) {
+		for _, number := range amendedNumbers(r.status) {
 			amended, ok := byNumber[number]
 			if !ok {
 				t.Errorf("docs/design/%s says it amends %s, which is not a record",

@@ -385,8 +385,19 @@ line in 0004 saying so — the one line 0004 gains points back at 0058, the
 sole deliberate exception to "not one line rewritten" this pass makes,
 since the record predates the check and cannot pass it any other way.
 
+8,378 → 8,383 is five more lines of the same kind. Reading the amendment
+by pattern hid two of them: 0062's header revises 0049 §3.4 and 0059's
+printed form in one clause, and the check read a header the way the file
+wraps rather than the way a sentence runs, so a line break inside 改訂す
+る hid one and the first match consumed the second. Both records now say
+so. The verb is still the only half read by pattern — 足す is not, because
+"add an entry to 0015 §3's list" and "take 0040's read-only as given and
+add a posture beside it" differ by which noun a に governs, and a guess
+there fails by blocking a PR that did nothing wrong. That one stays a
+reviewer's job.
+
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8378
+    RECORD-CORPUS-LINES: 8383
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
@@ -436,9 +447,10 @@ reader, not split across two files that both happen to hold a number.
 Most of that list is checked rather than remembered
 (`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
 indexes, the two indexes have to agree with the record's own `Status:`
-header about whether it is current or superseded, a supersession has
-to be recorded at both ends — the new record naming what it retires, and
-the retired one saying so — a new record has to fit under its own
+header about whether it is current or superseded, a supersession **or an
+amendment** has to be recorded at both ends — the new record naming what
+it retires or revises, and the older one saying so — a new record has to
+fit under its own
 ceiling, a Superseded one has to be a tombstone
 (`TestSupersededRecordsAreTombstones`), and the corpus as a whole has to
 fit under `RECORD-COUNT` and `RECORD-CORPUS-LINES`, with no more slack than

@@ -372,6 +372,30 @@ func specQueryParams(t *testing.T) map[string]map[string]bool {
 	return out
 }
 
+// TestRESTOperationsCoverTheSpec keeps restOperations honest. Both halves
+// of the parameter check iterate that hand-written list rather than the
+// contract, and each looks its own spec key up — so an operation the
+// contract declares and the list omits is checked by neither, and both
+// tests go on passing while guarding one operation less. That is the
+// shape design doc 0064 §2 exists to prevent on the wire, applied to the
+// check itself: the freeze makes a twelfth operation a declared decision,
+// and this fails the moment one lands without a row here.
+func TestRESTOperationsCoverTheSpec(t *testing.T) {
+	covered := map[string]bool{}
+	for _, op := range restOperations {
+		covered[op.spec] = true
+	}
+	declared := specQueryParams(t)
+	if len(declared) == 0 {
+		t.Fatal("no operations found in openapi.yaml: this check now guards nothing")
+	}
+	for spec := range declared {
+		if !covered[spec] {
+			t.Errorf("api/openapi.yaml declares %s and restOperations does not name it, so the parameter checks skip that operation", spec)
+		}
+	}
+}
+
 // TestUnknownQueryParamsMatchSpec is issue #409's item 3: a hand-picked
 // list of examples cannot tell a per-operation allowlist from a shared or
 // globally-exempt one, because it never tries the one combination that
