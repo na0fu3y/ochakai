@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 220
+    RECORD-LINES: 222
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -385,7 +385,15 @@ line in 0004 saying so — the one line 0004 gains points back at 0058, the
 sole deliberate exception to "not one line rewritten" this pass makes,
 since the record predates the check and cannot pass it any other way.
 
-8,378 → 8,383 is five more lines of the same kind. Reading the amendment
+220 → 222 is what recording an amendment at both ends costs the record
+doing the amending. 0064 sat at exactly 220 and revises four records now,
+not two: #435 found that it renames the two request headers 0027 and 0052
+decided and said so in neither place, so a reader opening either one met
+the retired spelling with nothing pointing forward. Two lines of header is
+what that back-link costs on the amending end; the ceiling says so rather
+than the record being squeezed to hide it.
+
+8,378 → 8,383 → 8,391 is more of the same kind. Reading the amendment
 by pattern hid two of them: 0062's header revises 0049 §3.4 and 0059's
 printed form in one clause, and the check read a header the way the file
 wraps rather than the way a sentence runs, so a line break inside 改訂す
@@ -397,7 +405,7 @@ there fails by blocking a PR that did nothing wrong. That one stays a
 reviewer's job.
 
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8383
+    RECORD-CORPUS-LINES: 8391
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
