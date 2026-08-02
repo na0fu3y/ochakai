@@ -1567,6 +1567,14 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// A concept is written as text/markdown: the spec declares the PUT
+		// body under that media type and application/octet-stream, and a
+		// request that names neither is off-contract even though the
+		// handler decides by the bytes and would accept it (design doc
+		// 0064 §15).
+		if strings.HasSuffix(path, ".md") && okf.CarriesType(body) {
+			req.Header.Set("Content-Type", "text/markdown")
+		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -2789,5 +2797,171 @@ func TestRESTIntegrationDeleteIfMatch(t *testing.T) {
 	getResp.Body.Close()
 	if getResp.StatusCode != http.StatusNotFound {
 		t.Errorf("concept after the delete = %d, want gone (404)", getResp.StatusCode)
+	}
+}
+
+// A concept whose document declared no title comes back with the key
+// absent — on a search hit, in a View, and in a context pack.
+//
+// `title` is RECOMMENDED with no default (OKF SPEC §4.1: "If omitted,
+// consumers MAY derive a title from the filename"), so a wire that
+// resolved it to the id's last segment asserted a value the document
+// never declared, and a client could not tell a title from a filename
+// (design docs 0064, 0074 §1). `status` stays resolved, because SPEC
+// §5.4 does give it a normative default — a resolved status reports what
+// the spec says the document means.
+//
+// Nothing else fails if this is only half done: the schema-vs-Go check
+// compares property names and cannot see `omitempty`, and the contract
+// validator cannot flag a key that is merely present. So this reads the
+// JSON as a map and asks whether the key is there at all.
+func TestRESTIntegrationTitlelessConceptCarriesNoTitleKey(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restnotitle")
+	id := typ + "/revenue"
+	removeEntries(t, srv, id)
+	// No title: key, and a body distinctive enough for one search to find
+	// exactly this concept.
+	doc := fmt.Sprintf("---\ntype: %s\ndescription: %s\n---\n\n%s\n", typ, typ, typ)
+	resp := putDoc(t, srv.URL, id, []byte(doc), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+
+	hasTitle := func(m map[string]any) bool { _, ok := m["title"]; return ok }
+
+	// The View at the concept's own address.
+	var view map[string]any
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &view)
+	summary, _ := view["summary"].(map[string]any)
+	if summary == nil {
+		t.Fatalf("view carries no summary: %v", view)
+	}
+	if hasTitle(summary) {
+		t.Errorf("View summary declares a title the document did not: %v", summary["title"])
+	}
+	// The display name is still available to whoever needs one — derived
+	// from the id, which is what SPEC §4.1 points a reader at.
+	if got := domain.DisplayTitle("", id); got != "revenue" {
+		t.Errorf("DisplayTitle fallback = %q, want revenue", got)
+	}
+
+	// A search hit, which inherits Summary through allOf.
+	var search struct {
+		Hits []map[string]any `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?q="+typ+"&type="+typ, &search)
+	if len(search.Hits) != 1 {
+		t.Fatalf("search hits = %d, want 1", len(search.Hits))
+	}
+	if hasTitle(search.Hits[0]) {
+		t.Errorf("search hit declares a title the document did not: %v", search.Hits[0]["title"])
+	}
+
+	// A context pack: the ranking rows and the packed concepts' summaries.
+	var pack struct {
+		Hits     []map[string]any `json:"hits"`
+		Concepts []struct {
+			Summary map[string]any `json:"summary"`
+		} `json:"concepts"`
+	}
+	getJSON(t, srv.URL+"/api/v1/context?q="+typ+"&type="+typ, &pack)
+	if len(pack.Hits) != 1 || len(pack.Concepts) != 1 {
+		t.Fatalf("context pack = %d hits, %d concepts", len(pack.Hits), len(pack.Concepts))
+	}
+	if hasTitle(pack.Hits[0]) {
+		t.Errorf("context rank declares a title the document did not: %v", pack.Hits[0]["title"])
+	}
+	if hasTitle(pack.Concepts[0].Summary) {
+		t.Errorf("packed summary declares a title the document did not: %v", pack.Concepts[0].Summary["title"])
+	}
+
+	// A budget too small for the document pushes the same concept into the
+	// outline, which carries the third spelling of the key.
+	var outlined struct {
+		Outline []map[string]any `json:"outline"`
+	}
+	getJSON(t, srv.URL+"/api/v1/context?q="+typ+"&type="+typ+"&budget=1", &outlined)
+	if len(outlined.Outline) != 1 {
+		t.Fatalf("outline rows = %d, want 1", len(outlined.Outline))
+	}
+	if hasTitle(outlined.Outline[0]) {
+		t.Errorf("outline row declares a title the document did not: %v", outlined.Outline[0]["title"])
+	}
+
+	// A concept that does declare one still carries it.
+	titled := typ + "/orders"
+	removeEntries(t, srv, titled)
+	resp = putDoc(t, srv.URL, titled,
+		[]byte(fmt.Sprintf("---\ntype: %s\ntitle: 受注\n---\n\n%s\n", typ, typ)), true)
+	resp.Body.Close()
+	var titledView map[string]any
+	getJSON(t, srv.URL+"/api/v1/bundle/"+titled+".md", &titledView)
+	s, _ := titledView["summary"].(map[string]any)
+	if s["title"] != "受注" {
+		t.Errorf("a declared title did not survive: %v", s["title"])
+	}
+}
+
+// observed.generated.at is OKF SPEC §5.2's "last meaningful change", so a
+// write that only reformats the document must not move it — and the JSON
+// must report the same instant the exported document's own generated.at
+// carries. The two used to disagree: the document rendered
+// ContentChangedAt and the JSON rendered UpdatedAt, which the store bumps
+// on every write (design doc 0064).
+func TestRESTIntegrationGeneratedAtIsTheContentsInstant(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restgen")
+	id := typ + "/revenue"
+	removeEntries(t, srv, id)
+
+	resp := putDoc(t, srv.URL, id,
+		[]byte(fmt.Sprintf("---\ntype: %s\ntitle: 売上\n---\n\n本文。\n", typ)), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	var first domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &first)
+
+	// Different bytes saying the same thing: a comment and a reordered
+	// frontmatter. The row's version moves; what the concept says does not.
+	resp = putDoc(t, srv.URL, id,
+		[]byte(fmt.Sprintf("---\n# 財務の合意による\ntitle: 売上\ntype: %s\n---\n\n本文。\n", typ)), false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Ochakai-Unchanged") == "true" {
+		t.Fatalf("reformat = %d, Ochakai-Unchanged = %q",
+			resp.StatusCode, resp.Header.Get("Ochakai-Unchanged"))
+	}
+
+	var after domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &after)
+	if !after.Observed.Generated.At.Equal(first.Observed.Generated.At) {
+		t.Errorf("a reformat moved observed.generated.at: %s → %s",
+			first.Observed.Generated.At, after.Observed.Generated.At)
+	}
+	if !after.Summary.UpdatedAt.After(first.Summary.UpdatedAt) {
+		t.Errorf("a reformat left updated_at where it was: %s", after.Summary.UpdatedAt)
+	}
+
+	// And the two renderings of the one address agree: the exported
+	// document's generated.at is the instant the JSON reports.
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/bundle/"+id+".md", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Accept", "text/markdown")
+	docResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, _ := io.ReadAll(docResp.Body)
+	docResp.Body.Close()
+	want := `at: "` + after.Observed.Generated.At.UTC().Format(time.RFC3339) + `"`
+	if !strings.Contains(string(served), want) {
+		t.Errorf("the document's generated.at is not the JSON's %s:\n%s", want, served)
 	}
 }

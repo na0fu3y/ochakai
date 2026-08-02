@@ -75,7 +75,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 
 - REST: 11
 - PARAM: 19
-- HEADER: 10
+- HEADER: 13
 - MCP: 6
 - CLI: 24
 - FLAG: 28
@@ -217,7 +217,7 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 - `trust`
 - `type`
 
-## HEADER (10)
+## HEADER (13)
 
 表面が隠れる三つ目の場所。`Ochakai-Read-Only` と `Ochakai-Unchanged` は
 クライアントが実装しなければならないプロトコルで、`If-Match` は
@@ -237,7 +237,28 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 他の八本と同じ綴りの型([0064](design/0064-rest-stops-at-api-v1.md))に
 した。
 
+10 → 13 は `Cache-Control` / `X-Content-Type-Options` /
+`Content-Security-Policy` である。**新しく出すようになったのではなく、
+前から出していたのに数えていなかった。** この節は数える元をコードでは
+なく `api/openapi.yaml` に置いており(`cmd/ochakai/surface_test.go`)、
+サーバが立てて契約が宣言していないヘッダは、**誰も数えていない表面**と
+してここを素通りしていた。三本ともファイル読み出しの応答に立っており、
+後ろの二本は散文では説明されていたのにヘッダとしては宣言が無かった。
+0064 が契約にその宣言を足し、この数がそれに追いついた。
+
+これは PARAM・FLAG・VOCAB がそれぞれ塞いだのと同じ形の死角が、今度は
+**数え方そのもの**に見つかった、というだけである。**上げるのは敗北では
+なく、仕組みが働いた跡である** — 三本は前から利用者が受け取っていた
+もので、増えたのは数であって表面ではない。数えられない表面より、数えて
+天井を上げるほうがよい。除外(ENV が OS 定義の変数にしているような)に
+しなかったのは、この三本が**ochakai の選択**だからである — `sandbox` を
+いつ出すかは 0046 §3.2 が決めた挙動であり、ブラウザに何を許すかを
+クライアントが読む値である。標準で定義されている名前だから数えない、
+という線は、ここでは意味を運んでいる値を落とす。
+
+- `Cache-Control`
 - `Content-Disposition`
+- `Content-Security-Policy`
 - `ETag`
 - `If-Match`
 - `If-None-Match`
@@ -247,6 +268,7 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 - `Ochakai-Producer`
 - `Ochakai-Read-Only`
 - `Ochakai-Unchanged`
+- `X-Content-Type-Options`
 
 ## MCP (6)
 

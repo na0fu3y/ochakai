@@ -108,15 +108,25 @@ func BuiltinType(t Type) bool {
 	return false
 }
 
-// ValidType reports whether t can be a knowledge type: one non-empty line,
-// no "/" so a type never reads as an address, within 128 bytes. Types are
-// the OKF vocabulary verbatim (design doc 0023) — "BigQuery Table", not a
-// slug — and OKF registers no taxonomy, so the spelling is the meaning.
-// They are ochakai vocabulary spoken in filters, frontmatter, and tool
-// arguments, never file paths, so a space is fine but a separator is not.
+// ValidType reports whether t can be a knowledge type: one non-empty
+// line, within 128 bytes. Types are the OKF vocabulary verbatim (design
+// doc 0071) — "BigQuery Table", not a slug — and OKF registers no
+// taxonomy, so the spelling is the meaning.
+//
+// "/" used to be banned here so a type never read as an address. That was
+// ochakai's own rule with no SPEC behind it, and SPEC §4.1 ("Type values
+// are not registered centrally… consumers MUST tolerate unknown types
+// gracefully") and §11 ("Unknown type values" is not grounds to reject a
+// bundle) are against it: `type: acme/Table` is legal OKF, and ochakai
+// answered 400 to it and demoted it to a loose bundle file on import.
+// A type is never a path — it is spoken in filters, frontmatter and tool
+// arguments — so nothing needed the ban (design doc 0064).
+//
+// The length cap stays. It is ordinary defensive practice rather than
+// anything SPEC derives, and no realistic bundle trips it.
 func ValidType(t Type) bool {
 	s := strings.TrimSpace(string(t))
-	if s == "" || len(s) > 128 || strings.Contains(s, "/") {
+	if s == "" || len(s) > 128 {
 		return false
 	}
 	return strings.IndexFunc(s, func(r rune) bool {
@@ -892,11 +902,13 @@ func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s", k.ID) }
 
 // DisplayTitle returns the entry's display name: the title when one is
 // set, else the id's final segment — with title optional (design doc
-// 0022), the filename usually is the name.
+// 0074 §1), the filename usually is the name.
 func (k *Knowledge) DisplayTitle() string { return DisplayTitle(k.Title, k.ID) }
 
 // DisplayTitle is the package-level form for projections that carry
-// title and id without a full Knowledge (browse entries).
+// title and id without a full Knowledge (browse entries, and every wire
+// projection since design doc 0064 stopped resolving the title on the
+// wire — deriving it is the reader's job, as OKF SPEC §4.1 says).
 func DisplayTitle(title, id string) string {
 	if title != "" {
 		return title
@@ -1091,9 +1103,16 @@ func ToStatuses(ss []string) []Status {
 // ledgers themselves: "has anyone confirmed this" is what a reader of a
 // list wants, and who and when is a question about one entry.
 type Summary struct {
-	ID          string   `json:"id"`
-	Type        Type     `json:"type"`
-	Title       string   `json:"title"`
+	ID   string `json:"id"`
+	Type Type   `json:"type"`
+	// Title is the concept's own, and absent when the document declared
+	// none: OKF SPEC §4.1 gives title no default — it is RECOMMENDED, and
+	// "If omitted, consumers MAY derive a title from the filename". A
+	// resolved title asserted a value the document never declared. Status
+	// is resolved (Lifecycle below) because SPEC §5.4 does give it a
+	// normative default, so filling that one in reports what the spec says
+	// the document means (design doc 0064).
+	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Resource    string   `json:"resource,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
@@ -1114,11 +1133,13 @@ type Summary struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
-// SummaryOf projects an entry. Title falls back to the id's last segment
-// (design doc 0022), so a row never has to work that out for itself.
+// SummaryOf projects an entry. Title travels raw — absent when the
+// document declared none — so the projection never claims a title the
+// writer did not write (design doc 0064). A reader that needs a display
+// name calls DisplayTitle, the way every listing row already did.
 func SummaryOf(k *Knowledge) Summary {
 	s := Summary{
-		ID: k.ID, Type: k.Type, Title: k.DisplayTitle(), Description: k.Description,
+		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
 		Resource: k.Resource, Tags: k.Tags, Status: k.Lifecycle(), StaleAfter: k.StaleAfter,
 		Trust: TrustOf(k.Verifications), Rejected: k.Rejection != nil, Links: k.Links,
 		ContentHash: k.ContentHash, CreatedAt: k.CreatedAt, UpdatedAt: k.UpdatedAt,
@@ -1156,7 +1177,13 @@ type Observed struct {
 func ObservedOf(k *Knowledge) Observed {
 	return Observed{
 		CreatedBy: k.CreatedBy,
-		Generated: Generated{By: k.UpdatedBy, At: k.UpdatedAt},
+		// generated.at is OKF SPEC §5.2's "last meaningful change", which
+		// is ContentChangedAt — the same instant the exported document's
+		// generated.at carries (internal/okf). UpdatedAt is the row's
+		// version and moves for a write that only reformats the document,
+		// so the JSON used to report a different instant from the
+		// document rendered beside it (design doc 0064).
+		Generated: Generated{By: k.UpdatedBy, At: k.ContentChangedAt},
 		Verified:  k.Verifications,
 		Rejection: k.Rejection,
 	}
@@ -1226,9 +1253,11 @@ type SearchHit struct {
 // round trip on an id it was not handed: search results below the pack's
 // own cut-off arrive only this way.
 type ContextRank struct {
-	ID     string `json:"id"`
-	Type   Type   `json:"type"`
-	Title  string `json:"title"`
+	ID   string `json:"id"`
+	Type Type   `json:"type"`
+	// Title is the concept's own, absent when the document declared none
+	// (design doc 0064; OKF SPEC §4.1).
+	Title  string `json:"title,omitempty"`
 	Status Status `json:"status"`
 	// Trust is the ledger's answer in OKF's vocabulary (SPEC §5.3), which
 	// the lifecycle status does not carry (design docs 0043 §3.2, 0046
@@ -1262,9 +1291,11 @@ func ContextRanks(hits []SearchHit) []ContextRank {
 // unbounded field, so the packer caps it: these rows are counted against
 // the same budget as the entries.
 type ContextOutline struct {
-	ID          string `json:"id"`
-	Type        Type   `json:"type"`
-	Title       string `json:"title"`
+	ID   string `json:"id"`
+	Type Type   `json:"type"`
+	// Title is the concept's own, absent when the document declared none
+	// (design doc 0064; OKF SPEC §4.1).
+	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 	Status      Status `json:"status"`
 	Bytes       int    `json:"bytes"`

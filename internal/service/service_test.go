@@ -296,7 +296,9 @@ func TestValidateRejectsBadInput(t *testing.T) {
 		t.Errorf("titleless concept rejected: %v", err)
 	}
 	for name, mutate := range map[string]func(*domain.Knowledge){
-		"bad type":   func(k *domain.Knowledge) { k.Type = "no/slash" },
+		// "/" is legal in a type since design doc 0064 (OKF SPEC §4.1);
+		// what is left is one line, non-empty, up to 128 bytes.
+		"bad type":   func(k *domain.Knowledge) { k.Type = "two\nlines" },
 		"bad id":     func(k *domain.Knowledge) { k.ID = "UPPER//bad" },
 		"index id":   func(k *domain.Knowledge) { k.ID = "sales/index" },
 		"log id":     func(k *domain.Knowledge) { k.ID = "sales/log" },

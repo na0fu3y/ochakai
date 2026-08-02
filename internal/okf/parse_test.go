@@ -82,11 +82,11 @@ Body text here.
 func TestParseRejectsGarbage(t *testing.T) {
 	for _, doc := range []string{
 		"just markdown, no frontmatter",
-		"---\ntype: metric\n",             // unterminated
-		"---\ntitle: x\n---\n",            // no type at all
-		"---\ntype: a/b\ntitle: x\n---\n", // reads as an address
-		"---\ntype: \ntitle: x\n---\n",    // empty
-		"---\ntype: [a]\ntitle: x\n---\n", // type is not a string
+		"---\ntype: metric\n",                   // unterminated
+		"---\ntitle: x\n---\n",                  // no type at all
+		"---\ntype: \ntitle: x\n---\n",          // empty
+		"---\ntype: [a]\ntitle: x\n---\n",       // type is not a string
+		"---\ntype: \"a\\nb\"\ntitle: x\n---\n", // more than one line
 	} {
 		if _, _, err := Parse([]byte(doc)); err == nil {
 			t.Errorf("Parse(%q) succeeded, want error", doc)
@@ -113,6 +113,18 @@ func TestParseFreeTypes(t *testing.T) {
 	}
 	if k.Type != "Data Contract" || len(k.Attrs) != 0 {
 		t.Errorf("spelled type: got type=%q attrs=%v", k.Type, k.Attrs)
+	}
+
+	// A namespaced type is legal OKF — SPEC §4.1 registers no taxonomy and
+	// requires a consumer to tolerate unknown types, and §11 forbids
+	// rejecting a bundle over one. ochakai used to answer 400 and, on
+	// import, demote the document to a loose bundle file (design doc 0064).
+	ns, _, err := Parse([]byte("---\ntype: acme/Table\nid: warehouse/orders\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ns.Type != "acme/Table" {
+		t.Errorf("namespaced type: got %q, want acme/Table", ns.Type)
 	}
 
 	doc, err := Document(&k.Knowledge)

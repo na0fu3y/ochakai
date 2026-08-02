@@ -8,7 +8,10 @@ Status: Accepted(2026-08-03)。**concept 文書の形と、問いの語彙の現
 [0061](0061-a-dry-run-is-the-write-withheld.md) を Superseded にする。
 **五つが決めたことは何一つ変えない**(§0)。バンドルがアドレス空間である
 ことは同じ統合の片割れである [0075](0075-the-bundle-is-the-address-space.md)
-が持つ
+が持つ。§3・§7 が置いた型の文字種の除外は、`/` の一点だけ
+[0064](0064-rest-stops-at-api-v1.md) §18 が撤回した(OKF SPEC §4.1・§11 が
+未知の型への寛容を MUST で求めるため)。§1 の「title は任意」は同 §15 が
+wire にも届かせた。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

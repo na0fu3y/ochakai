@@ -13,6 +13,12 @@ Status: Accepted(2026-08-02)。[0046](0046-bundle-address-space.md) §3.5 の
 (issue [#379](https://github.com/na0fu3y/ochakai/issues/379))。
 [0027](0027-delegated-provenance.md) と
 [0052](0052-producer-beside-the-actor.md) が決めたヘッダ名を改訂する(§3)。
+[0074](0074-the-document-and-the-vocabulary-that-asks-it.md) は §1 の
+「title は任意」を wire に届かせるために引用するのみだが、§3・§7 が
+置いた「型の文字種の緩和はしない」という除外のうち **`/` の一点は改訂
+する**(§18)—— 理由は id の規則ではなく OKF SPEC §4.1・§11 である。
+同じ一点について [0071](0071-the-recommended-type-vocabulary.md) §1 の
+「`/` 不可」も改訂する。
 Date: 2026-08-02
 
 ## 1. 目的
@@ -243,7 +249,9 @@ issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同
   できない**(id が `/` を含み、ルートは空文字になる) — 既知の恒久的な
   欠落として受け入れる。契約テストはリクエストを書き換えて経路を通し、
   どんなジェネレータもこの一つの住所については動くクライアントを
-  生成しない。
+  生成しない。**契約テストが見ないものがもう一つある**: 宣言されて
+  いない `requestBody` に本文が来ても、バリデータは何も言わない
+  (§16)。宣言の欠落そのものは、読む人が気付くしかない。
 - **バージョンや capability の合図は無い**。凍結後に未対応のパラメータ
   を送ったクライアントは、その場で名指しの 400 を受け取る — 事前に
   読んで信じる capability 一覧より確実である。残る穴はリクエストヘッダ
@@ -300,6 +308,17 @@ issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同
   に読み替える(値そのものは動かない)。
 - `POST /api/v1/reembed` の `embedded` を読んでいたら、`concepts` に
   読み替える。
+- `title` を必ずあるものとして読んでいたら、**不在を扱う**(§15)。
+  `Summary`(検索の全ヒットと `View` を含む)・`ContextRank`・
+  `ContextOutline` の `title` はキーごと無くなり得る。表示名が要るなら
+  id の末尾セグメントで補う — OKF SPEC §4.1 がそう書いている。
+- `observed.generated.at` を「行が最後に書かれた時刻」として読んで
+  いたら、**内容が最後に変わった時刻**に読み替える(§17)。整形だけの
+  書き込みでは動かなくなる。行の時刻が要るなら `summary.updated_at`
+  である。
+- 型を「`/` を含まない文字列」として検証していたら、**`/` を許す**
+  (§18)。`acme/Table` は正当な OKF の型であり、これからは 400 に
+  ならず concept として保存される。
 
 保存形とワイヤの識別子(id・path)は 1 バイトも動かない。
 
@@ -362,3 +381,174 @@ issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同
 このヘッダはこの GET 全体のパラメータとしてスペックがすでに宣言して
 いたので、これは契約を破る変更ではなく、実装が最初からの契約に追いつ
 く完成である。
+
+## 15. `title` は wire でも任意になる
+
+OKF SPEC §4.1 は `title` に既定を与えていない — RECOMMENDED であり、
+「省略されていれば consumer はファイル名から題を導いてよい(MAY)」と
+書く。[0074](0074-the-document-and-the-vocabulary-that-asks-it.md) §1 は
+これを保存形で受け取り、「title は任意、無ければ id の末尾セグメント」
+と決めていた。**wire だけが追いついていなかった** — `Summary.title` は
+`required` かつ解決済みで、文書が一度も宣言していない値を「これがこの
+concept の題である」と言い切っていた。
+
+同じキーが 5 箇所に、**二つの相反する契約**で綴られていた。解決して
+必須の `Summary.title`(`SearchHit` が `allOf` で継承するので、検索の
+全ヒットと `View` に届く)・`ContextRank.title`・`ContextOutline.title`
+に対して、生のまま `omitempty` のバンドル一覧 `concepts[].title` と
+`Change.title`。同じ名前が、片方では「文書の題またはファイル名」、
+もう片方では「文書の題、無ければキーごと不在」を意味していた。
+
+**決定: 5 箇所とも任意にし、生の値を運ぶ。** `Summary` の `required`
+から `title` を外し、`SummaryOf` は `DisplayTitle()` ではなく `k.Title`
+を入れる。表示名が要る読み手は id の末尾セグメントから導く — SPEC が
+名指しでそう書いている作業であり、`domain.DisplayTitle` は残る。
+
+**なぜ `status` は解決したままなのか。** SPEC §5.4 は `status` に
+**規範的な既定**を与えている(「`status` が無ければ `stable`」)。
+解決した status は「文書が何を意味するとスペックが言っているか」を
+報告しているのであって、書かれていない値を主張してはいない。title に
+既定は無い。この非対称はここに書いておく — でなければ次の読み手が
+「なぜ status はそのままなのか」を最初から調べ直すことになる。
+
+反対向き(全部を解決する)は成立しない。`Change.title` はファイルの行
+(題を持たない)にも purge 済み concept の行にも解決しようがなく、
+**「どこでも解決する」という綴りは存在し得ない**。分裂を閉じる綴りは
+「どこでも任意」の一つだけである。
+
+契約の例のうち、id の末尾セグメントと同一の `title` を書いていたもの
+(`queries/monthly-revenue` に `title: monthly-revenue` など)は落とす。
+不在を示すのが例の仕事であって、不在を否定するのはその逆である。
+
+半端に直しても何も落ちない — `TestOpenAPISchemasMatchGoTypes` は
+プロパティ名の集合しか見ず `omitempty` を見ないので、`title:` を持たない
+文書がヒット・`View`・context pack のそれぞれでキーごと不在になることを
+`internal/restapi` の統合テストが直接読む。
+
+## 16. `PUT /api/v1/bundle/{path}` に `requestBody` が無かった
+
+スペックの PUT は description → parameters → responses と続き、
+`requestBody` が無い。実装は必須の本文を読み、**そのバイト列が concept
+かファイルかを決める**(§4)。**どんなジェネレータも、この契約からは
+動く書き込みクライアントを生成できない。**
+
+生き延びた理由は契約テストの側にあった。`carriesOpaqueBytes`
+(`internal/restapi/openapi_test.go`)が `/api/v1/bundle/` 配下の PUT を
+**すべて**バリデータから外していた — ファイルのバイト列(宣言できる
+media type が `*/*` しかない)のために書かれた除外が、**concept の PUT
+まで巻き込んでいた**。書き込み面の 200/201 の本体・`ETag`・
+`Ochakai-Note`・`Ochakai-Plan`・`Ochakai-Unchanged`・412/413/415 が、
+どれも何にも検査されていなかった。§11 が「契約テストはリクエストを
+書き換えて経路を通す」と書いた既知の欠落の隣に、**書かれていない欠落**
+がもう一つあった。
+
+**決定: `requestBody` を宣言し(`required: true`、concept は
+`text/markdown`、ファイルは `application/octet-stream` の binary)、
+除外をファイルだけに絞る。** 絞り方はハンドラと同じ規則にする —
+markdown のパスで、本文が `type` を持てば concept、それ以外はファイル。
+ヘッダの綴りではなく本文で決めるので、除外に穴が残らない。
+
+絞ったことで出たもの、二つ。**(1)** `Content-Type` を送らずに concept を
+書く呼び出しがあった。サーバは受け取る(`.md` パスで JSON 以外なら
+concept 候補)が、OpenAPI には「Content-Type 不在」を綴る文法が無いので、
+宣言した media type を名乗らないリクエストは契約の外である。テストを
+`text/markdown` を送る形に直した — サーバは寛容なままでよく、契約は
+`text/markdown` か `application/octet-stream` を求める。**(2)** バリデータ
+自身は「`requestBody` を宣言していない操作に本文が来たこと」を報告
+しない。**つまりこの欠落は、契約テストには最初から見えなかった** —
+宣言を消して走らせても緑のままである。§11 の一覧に、契約テストが
+見ないもののもう一つとして書き足した。
+
+## 17. `observed.generated.at` が別の瞬間を報告していた
+
+SPEC §5.2: 「`generated.at`: 内容が**最後に意味のある変更**を受けた
+ISO 8601 の日時」。
+
+二つのレンダリングが食い違っていた。**文書**は `ContentChangedAt` を
+書く(`internal/okf`)—— 正しい。**JSON の wire** は `UpdatedAt` を書く
+(`domain.ObservedOf`)—— 誤り。二つは本当にずれる:
+`internal/service` は、**言っていることを変えずに整形だけした書き込み**
+では `ContentChangedAt` を動かさないと決めており(0046 §3.4)、store は
+`UpdatedAt` を必ず動かす。同じ concept の同じ応答の中で、埋め込まれた
+文書の `generated.at` と `observed.generated.at` が違う値になっていた。
+
+`api/openapi.yaml` は正しい意味論を**二度**約束していた(`Generated`
+スキーマの「when it last changed」、`View` スキーマの「撤去した
+`content_changed_at` は冗長だった、四つ目は `observed.generated.at` で
+ある」)。`domain.Knowledge.ContentChangedAt` 自身のコメントも「これが
+OKF の generated.at の意味である(SPEC §5.2)」と書いている。**スペックと
+意図は互いに一致しており、JSON だけが違っていた。**
+
+**決定: `ObservedOf` は `At: k.ContentChangedAt` にする。** 凍結される
+フィールドの値が変わる変更であり、**今しかない**。整形だけの PUT が
+`observed.generated.at` を動かさず、それがエクスポート形の文書の
+`generated.at` と同じ瞬間であることを統合テストが読む。
+
+## 18. 型の文字種: `/` の禁止をやめる
+
+SPEC §4.1: 「型の値は中央登録されない…… consumer は未知の型を
+**寛容に扱わなければならない(MUST)**」。§11: consumer は
+「未知の `type` の値」を理由にバンドルを拒んではならない。
+
+`api/openapi.yaml` の `Type` は `pattern: "^[^/\\r\\n]{1,128}$"` を持ち、
+`domain.ValidType` は `/` を禁じていた。`type: acme/Table` は正当な OKF
+なのに ochakai は 400 を返し、取り込みでは**黙って loose なバンドル
+ファイルに降格**していた — バイト列は残るが concept ではなくなり、note
+も出ず `skipped` にも載らない。SPEC が MUST で求めている寛容さの、
+ちょうど反対である。
+
+`/` の禁止は「型が住所として読めないように」という **ochakai 自身の
+規則**で、SPEC の裏付けは無い。型はフィルタ・frontmatter・ツール引数で
+綴られるものであってパスではないので([0071](0071-the-recommended-type-vocabulary.md))、
+`/` が入っても住所にはならない。**長さの上限は残す** — ある種の上限は
+普通の防御であり、現実のバンドルは踏まない。ただし「SPEC 由来」と
+書くのはやめる。
+
+**決定: 型に `/` を許す。** 契約の `pattern` を `^[^\r\n]{1,128}$` に
+広げ、`domain.ValidType` も揃える。応答のパターンは検証するクライアント
+が保持するものなので、**これも凍結後には広げられない**。
+
+禁止に依存していたものを調べた結果: `FuzzParse` は `ValidType` に対して
+主張するだけなので広がりに追随する、store の `type` 列は制約の無い
+`text`、型を path や URL に組み立てているコードは無い(検索の `type=` は
+クエリ値、MCP はツール引数、frontmatter は文字列)。**依存は無かった。**
+[0074](0074-the-document-and-the-vocabulary-that-asks-it.md) §3・§7 が
+「型の文字種の緩和はしない」として置いた除外は、id の緩和を型に及ぼさ
+ないという意味では今も生きているが、`/` の一点についてはここで撤回する
+— 撤回の理由は id の規則ではなく SPEC §4.1・§11 である。
+
+非文字列スカラの `title:` や `tags` 要素の扱い(SPEC の寛容な適合性が
+coercion と note を求めるところで、パーサが文書ごと拒む)は別 PR の
+保存形の話であり、ここでは扱わない。
+
+## 19. サーバがすでにそう振る舞っているのに、契約が黙っていたもの
+
+いずれも追加であって、クライアントは壊れない。
+
+- **`Ochakai-Read-Only` を宣言していない応答が三つ**あった:
+  `PUT /api/v1/bundle/{path}` の 412、`DELETE /api/v1/bundle/{path}` の
+  412、`POST /api/v1/review/{id}` の 409。`announceReadOnly` は
+  **すべての**応答に立てる。
+- **返しているのに書いていない状態コード**: `GET /api/v1/usage/{id}` の
+  400(§2 は 11 操作すべてに未知クエリキーの 400 を与えたが、応答一覧が
+  更新されなかった唯一の操作である)、`POST /api/v1/move` ・
+  `POST /api/v1/review/{id}` ・ `POST /api/v1/usage/{id}` の 413
+  (三つとも 4 MiB の `MaxBytesReader` 越しに本文を読む)。
+- **どこにも宣言の無いレスポンスヘッダが三本**: `Cache-Control`
+  (ファイル読み出しの両分岐)、`X-Content-Type-Options: nosniff`、
+  `Content-Security-Policy: sandbox`。後ろの二本は散文では説明されて
+  いたのにヘッダとしては宣言が無かった。`ETag` は 304 分岐の手前で
+  concept にもファイルにも立つので、304 にも宣言する。
+- `Trust` スキーマの散文に、**tier はこのインスタンスの検証台帳から
+  導かれる**こと、文書自身の `verified` キーは `received:` の下に保たれ
+  一度も採点されないことを書く(0009 の決定)。SPEC §5.3 だけを読んだ
+  consumer は、文書自身のキーが読まれると期待する。
+- コードとスペックに残っていた `0064 §12.x` という参照を、実際の節
+  番号 §14.x に直す。凍結される契約が存在しない節を指しているのは、
+  §14 が閉じようとした食い違いと同じ形である。
+
+三本のヘッダは [docs/surface.md](../surface.md) の HEADER を 10 → 13 に
+動かす。同ファイルの surface_test はヘッダを**コードではなくスペックから**
+数えるので、サーバが立てて契約が宣言していないヘッダは「誰も数えて
+いない表面」だった。**数え方そのものの死角**であり、上げるのは敗北では
+なく仕組みが働いた跡である。

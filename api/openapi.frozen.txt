@@ -30,6 +30,7 @@ DELETE /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 412
 DELETE /api/v1/bundle/{path} response 412 content application/json type=object
 DELETE /api/v1/bundle/{path} response 412 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 500 ref=Error
 GET /api/v1/bundle/{path}
 GET /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
@@ -47,10 +48,15 @@ GET /api/v1/bundle/{path} response 200 content application/json/anyOf/2 ref=Bund
 GET /api/v1/bundle/{path} response 200 content application/json/anyOf/3 ref=ObjectHistory
 GET /api/v1/bundle/{path} response 200 content application/json/anyOf/4 ref=File
 GET /api/v1/bundle/{path} response 200 content text/markdown type=string
+GET /api/v1/bundle/{path} response 200 header Cache-Control ref=CacheControl
 GET /api/v1/bundle/{path} response 200 header Content-Disposition
+GET /api/v1/bundle/{path} response 200 header Content-Security-Policy ref=Sandbox
 GET /api/v1/bundle/{path} response 200 header ETag ref=ETag
 GET /api/v1/bundle/{path} response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/bundle/{path} response 200 header X-Content-Type-Options ref=NoSniff
 GET /api/v1/bundle/{path} response 304
+GET /api/v1/bundle/{path} response 304 header Cache-Control ref=CacheControl
+GET /api/v1/bundle/{path} response 304 header ETag ref=ETag
 GET /api/v1/bundle/{path} response 304 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/bundle/{path} response 400 ref=Error
 GET /api/v1/bundle/{path} response 403 ref=Forbidden
@@ -144,6 +150,7 @@ GET /api/v1/usage/{id} path id required=true type=string
 GET /api/v1/usage/{id} response 200
 GET /api/v1/usage/{id} response 200 content application/json ref=Usage
 GET /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/usage/{id} response 400 ref=Error
 GET /api/v1/usage/{id} response 403 ref=Forbidden
 GET /api/v1/usage/{id} response 404 ref=Error
 GET /api/v1/usage/{id} response 405 ref=Error
@@ -163,6 +170,7 @@ POST /api/v1/move response 403 ref=Forbidden
 POST /api/v1/move response 404 ref=Error
 POST /api/v1/move response 405 ref=Error
 POST /api/v1/move response 409 ref=Error
+POST /api/v1/move response 413 ref=Error
 POST /api/v1/move response 500 ref=Error
 POST /api/v1/reembed
 POST /api/v1/reembed query cursor required=false type=string
@@ -201,6 +209,8 @@ POST /api/v1/review/{id} response 405 ref=Error
 POST /api/v1/review/{id} response 409
 POST /api/v1/review/{id} response 409 content application/json type=object
 POST /api/v1/review/{id} response 409 content application/json.error required=false type=string
+POST /api/v1/review/{id} response 409 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/review/{id} response 413 ref=Error
 POST /api/v1/review/{id} response 500 ref=Error
 POST /api/v1/usage/{id}
 POST /api/v1/usage/{id} body application/json required=true type=object
@@ -216,8 +226,11 @@ POST /api/v1/usage/{id} response 400 ref=Error
 POST /api/v1/usage/{id} response 403 ref=Forbidden
 POST /api/v1/usage/{id} response 404 ref=Error
 POST /api/v1/usage/{id} response 405 ref=Error
+POST /api/v1/usage/{id} response 413 ref=Error
 POST /api/v1/usage/{id} response 500 ref=Error
 PUT /api/v1/bundle/{path}
+PUT /api/v1/bundle/{path} body application/octet-stream required=true type=string
+PUT /api/v1/bundle/{path} body text/markdown required=true type=string
 PUT /api/v1/bundle/{path} header If-Match ref=IfMatch
 PUT /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
 PUT /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
@@ -251,18 +264,25 @@ PUT /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 412
 PUT /api/v1/bundle/{path} response 412 content application/json type=object
 PUT /api/v1/bundle/{path} response 412 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 413 ref=Error
 PUT /api/v1/bundle/{path} response 415 ref=Error
 PUT /api/v1/bundle/{path} response 500 ref=Error
 PUT /api/v1/bundle/{path} response 501 ref=Error
+components/headers/CacheControl
+components/headers/CacheControl schema type=string
 components/headers/ETag
 components/headers/ETag schema type=string
+components/headers/NoSniff
+components/headers/NoSniff schema type=string enum=["nosniff"]
 components/headers/Note
 components/headers/Note schema type=string
 components/headers/Plan
 components/headers/Plan schema type=string enum=["created" "updated" "unchanged"]
 components/headers/ReadOnly
 components/headers/ReadOnly schema type=string enum=["true"]
+components/headers/Sandbox
+components/headers/Sandbox schema type=string enum=["sandbox"]
 components/parameters/IfMatch name=If-Match in=header required=false
 components/parameters/IfMatch schema type=string
 components/parameters/IfNoneMatch name=If-None-Match in=header required=false
@@ -415,7 +435,7 @@ components/schemas/Summary.stale_after required=false type=string
 components/schemas/Summary.status required=true ref=Status
 components/schemas/Summary.tags required=false type=array
 components/schemas/Summary.tags[] type=string
-components/schemas/Summary.title required=true type=string
+components/schemas/Summary.title required=false type=string
 components/schemas/Summary.trust required=true
 components/schemas/Summary.trust/allOf/0 ref=Trust
 components/schemas/Summary.type required=true ref=Type

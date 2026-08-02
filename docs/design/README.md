@@ -33,7 +33,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
-| 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md) |
+| 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0073](0073-search-and-when-embeddings-apply.md)(検索) |
 | 検索と埋め込み | [0073](0073-search-and-when-embeddings-apply.md) が現行。埋め込みの設定面(`OCHAKAI_EMBEDDINGS` 一つ)は [0078](0078-one-variable-says-how-it-embeds.md)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
@@ -326,8 +326,21 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   `limit` / `days` の範囲外は全面 400。バージョンや capability の合図は
   無し、CORS も意図して無し。凍結を破ってよい理由はセキュリティ上の欠陥
   だけ(§11)、DELETE の再実行は 404 のままで安全(§11)。
+  同じ最後の機会として、`title` が wire でも任意になり(§15、OKF SPEC
+  §4.1 は既定を与えていない。既定を持つ `status` は解決したまま)、
+  `observed.generated.at` が行の書き込み時刻ではなく内容が最後に変わった
+  時刻を報告するようになり(§17、SPEC §5.2)、型に `/` を許すようになる
+  (§18、SPEC §4.1・§11)。追加として、PUT がようやく `requestBody` を
+  宣言し(§16 — 宣言が無いままでは動く書き込みクライアントを生成できず、
+  契約テストはバンドルの PUT を全部素通りさせていたので気付けなかった)、
+  サーバが前から返していた `Ochakai-Read-Only`・400・413・
+  `Cache-Control`・`X-Content-Type-Options`・`Content-Security-Policy`・
+  304 の `ETag` を契約に書く(§19、HEADER は 10 → 13)。
   [0046](0046-bundle-address-space.md) §3.5 の代表表現の表を改訂する
-  (概念の既定は JSON の View)。[docs/compatibility.md](../compatibility.md)
+  (概念の既定は JSON の View)。型の `/` については
+  [0071](0071-the-recommended-type-vocabulary.md) §1 と
+  [0074](0074-the-document-and-the-vocabulary-that-asks-it.md) §3・§7 を
+  改訂する。[docs/compatibility.md](../compatibility.md)
   を同 PR で書き換え、REST だけが「不安定」の対象から外れる。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md) — **Superseded by 0067**。
 

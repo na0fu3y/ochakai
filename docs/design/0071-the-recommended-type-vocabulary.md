@@ -3,7 +3,11 @@
 Status: Accepted(2026-08-03)。**型の語彙の現行ドキュメント。**
 [0038](0038-type-vocabulary-realignment.md) を Superseded にし、
 [0063](0063-two-unused-recommended-types-leave.md) を Superseded にする。
-**二つが決めたことは何一つ変えない**(§0)
+**二つが決めたことは何一つ変えない**(§0)。§1 が挙げる規則のうち
+「`/` 不可」は [0064](0064-rest-stops-at-api-v1.md) §18 が撤回した — OKF
+SPEC §4.1・§11 が未知の型への寛容を MUST で求めており、`acme/Table` は
+正当な OKF の型である。残る規則(自由文字列・照合は大小文字非依存・
+保存は原表記・NFC・128 バイト以内)は生きている。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

@@ -630,7 +630,7 @@ func deriveLinks(k *domain.Knowledge) {
 
 func validate(k *domain.Knowledge) error {
 	if !domain.ValidType(k.Type) {
-		return Invalidf(`invalid type %q (one line, no "/", up to 128 bytes; recommended: %s)`, k.Type, domain.TypesHint())
+		return Invalidf(`invalid type %q (one line, up to 128 bytes; recommended: %s)`, k.Type, domain.TypesHint())
 	}
 	if !domain.ValidID(k.ID) {
 		return Invalidf(`invalid id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, k.ID)

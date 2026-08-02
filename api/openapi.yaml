@@ -323,7 +323,6 @@ paths:
                     hits:
                       - id: queries/monthly-revenue
                         type: Attested Computation
-                        title: monthly-revenue
                         description: Monthly net revenue for the last 12 complete months.
                         tags: [finance]
                         status: stable
@@ -407,7 +406,6 @@ paths:
                           last_used_at: "2026-07-26T23:58:07.336114Z"
                       - id: glossary/completed-order
                         type: Glossary Term
-                        title: completed-order
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
                         trust: unverified
@@ -609,7 +607,7 @@ paths:
             knowledge base several times over. log.md and every other
             `?history` (a file's, or any of the two rendered as
             markdown) carries no document and is 1000 by default and at
-            most (design doc 0064 §12.1).
+            most (design doc 0064 §14.1).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
         - name: files
@@ -636,6 +634,9 @@ paths:
             Content-Disposition:
               description: Files and archives — inline for an image, a PDF or plain text; attachment otherwise (design doc 0046 §3.2).
               schema: { type: string }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
+            X-Content-Type-Options: { $ref: "#/components/headers/NoSniff" }
+            Content-Security-Policy: { $ref: "#/components/headers/Sandbox" }
           content:
             application/gzip:
               schema: { type: string, format: binary, description: The subtree at this path as an OKF bundle. }
@@ -750,11 +751,13 @@ paths:
         "304":
           description: >
             Not modified — a concept or a file whose If-None-Match
-            matched its content hash (design doc 0064 §12.2: a concept
+            matched its content hash (design doc 0064 §14.2: a concept
             answered this GET's `If-None-Match` parameter with a 200
             always, until now).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/CacheControl" }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "501":
@@ -873,6 +876,39 @@ paths:
             because the one wrong outcome here is writing for a caller who
             asked what would happen.
           schema: { type: boolean, default: false }
+      requestBody:
+        required: true
+        description: >
+          The bytes to store. They are the whole of what the object
+          becomes: there is no typed write surface beside the format, and
+          no parameter that overrides them.
+
+          `text/markdown` is a concept — an OKF document, frontmatter and
+          body. `application/octet-stream` is a file. The server accepts
+          any other media type as a file too and records none of them:
+          what a file is stored under is sniffed from the bytes, not
+          taken from this header, because it is the header a caller most
+          often gets wrong and a bundle has to serve what it holds. Those
+          two are the spellings this contract names, and a generated
+          client that sends one of them is always right.
+
+          `application/json` at a `.md` path is the one refusal: it is a
+          415 naming the document form, because stored as bytes it would
+          carry no `type` and be kept as a *file* called `x.md`.
+        content:
+          text/markdown:
+            schema: { type: string }
+            example: |
+              ---
+              type: Metric
+              title: Revenue
+              description: Net revenue from completed orders, excluding tax and shipping.
+              status: stable
+              ---
+
+              Revenue is the sum of `net_amount` over every completed order.
+          application/octet-stream:
+            schema: { type: string, format: binary }
       responses:
         "200":
           description: >
@@ -919,6 +955,8 @@ paths:
             concept changed since it was read, or (design doc 0064,
             matching RFC 9110) the path was already occupied when
             If-None-Match "*" asked for a create only.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1021,6 +1059,8 @@ paths:
           description: >
             If-Match named a version the concept no longer has (design doc
             0064) — nothing was deleted.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1188,7 +1228,6 @@ paths:
                     hits:
                       - id: queries/monthly-revenue
                         type: Attested Computation
-                        title: monthly-revenue
                         status: stable
                         trust: human-reviewed
                         score: 1.35
@@ -1237,7 +1276,6 @@ paths:
                         summary:
                           id: queries/monthly-revenue
                           type: Attested Computation
-                          title: monthly-revenue
                           description: Monthly net revenue for the last 12 complete months.
                           tags: [finance]
                           status: stable
@@ -1321,7 +1359,6 @@ paths:
                     outline:
                       - id: glossary/completed-order
                         type: Glossary Term
-                        title: completed-order
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
                         bytes: 1104
@@ -1440,6 +1477,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/review/{id}:
@@ -1686,6 +1724,8 @@ paths:
           description: >
             `ruling: withdrawn` against a live concept that carries no
             rejection (design doc 0064) — nothing to lift.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
             application/json:
               schema:
@@ -1694,6 +1734,7 @@ paths:
                   error: { type: string }
               example:
                 error: knowledge carries no rejection to withdraw
+        "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
@@ -1733,6 +1774,7 @@ paths:
                     worked: 23
                     failed: 2
                     last_used_at: "2026-07-26T23:58:07.336114Z"
+        "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
@@ -1804,6 +1846,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/stats:
@@ -2087,6 +2130,29 @@ components:
         client reads it to stop offering writes that would only ever be
         refused with 403.
       schema: { type: string, enum: ["true"] }
+    CacheControl:
+      description: >
+        `private, no-cache` on a file read — the bytes and the metadata
+        alike. A file is content-addressed and its ETag never lies, so a
+        cache may hold it; `no-cache` asks that it revalidate rather than
+        serve a copy without asking, and `private` keeps a shared proxy
+        out of bytes an IAP session was allowed to see. Also on the 304 a
+        revalidation earns.
+      schema: { type: string }
+    NoSniff:
+      description: >
+        `nosniff`, on a file's bytes. The media type was decided here, by
+        sniffing what was stored; a browser that overrode it from a
+        filename or a guess would be deciding it a second time (design doc
+        0046 §3.2).
+      schema: { type: string, enum: [nosniff] }
+    Sandbox:
+      description: >
+        `sandbox`, on a file that is not rendered in place — anything but
+        an image, a PDF or plain text. The web UI is served from this
+        origin, so a stored document that happens to carry script (an SVG,
+        an HTML file) must have nowhere to run (design doc 0046 §3.2).
+      schema: { type: string, enum: [sandbox] }
   parameters:
     IfMatch:
       name: If-Match
@@ -2210,8 +2276,15 @@ components:
         single-line value works as a type; OKF registers no taxonomy, so
         the spelling is the meaning and it round-trips unchanged. Matching
         is case-insensitive; the spelling you write is the one stored.
+
+        "/" is allowed: SPEC §4.1 says type values are not registered
+        centrally and a consumer "MUST tolerate unknown types
+        gracefully", and §11 does not let an unknown type reject a
+        bundle — so a namespaced type like `acme/Table` is legal OKF and
+        is stored as written (design doc 0064). The 128-byte cap is
+        ochakai's own defensive bound, not something SPEC derives.
       examples: [Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
-      pattern: "^[^/\\r\\n]{1,128}$"
+      pattern: "^[^\\r\\n]{1,128}$"
     Status:
       type: string
       description: >
@@ -2240,6 +2313,17 @@ components:
         and never accepted from a payload — and independent of status,
         which says whether the concept may be consumed (design doc 0046
         §3.10).
+
+        The ledger it is derived from is **this instance's own**: the
+        confirmations recorded here through
+        `POST /api/v1/review/{id}` with `ruling: verified`. SPEC §5.3
+        would lead a reader to expect the document's own `verified` key to
+        decide this; it does not. A document that arrives carrying one
+        keeps it — under `received:`, as a claim its writer made — and it
+        is never scored, because a claim of confirmation is not a
+        confirmation this instance observed (design doc 0009). Import an
+        exported bundle back into a different ochakai and every concept
+        reads unverified there until somebody confirms it.
       enum: [unverified, machine-confirmed, human-reviewed]
     Verification:
       type: object
@@ -2335,7 +2419,7 @@ components:
         the concept says, and this is an index over it. A client that needs
         a key not listed here reads the document; the projection carries
         what listing surfaces sort and filter by, and stops there.
-      required: [id, type, title, status, trust, rejected, content_hash, created_at, updated_at]
+      required: [id, type, status, trust, rejected, content_hash, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2353,9 +2437,15 @@ components:
         title:
           type: string
           description: >
-            The display name, already resolved: the concept's own title, or
-            the id's last segment when it declared none (design doc
-            0022). A row never has to work that fallback out for itself.
+            The concept's own title, and absent when the document declared
+            none — a reader derives one from the id's last segment (OKF
+            SPEC §4.1: title is RECOMMENDED with no default, and "If
+            omitted, consumers MAY derive a title from the filename";
+            design doc 0074 §1). Not resolved here, unlike `status`, which
+            SPEC §5.4 does give a normative default: filling that one in
+            reports what the spec says the document means, while filling
+            this one in would assert a value the document never declared
+            (design doc 0064).
         description: { type: string }
         resource:
           type: string
@@ -2712,7 +2802,10 @@ components:
         id: { type: string }
         type: { $ref: "#/components/schemas/Type" }
         title:
-          description: The display title — the concept's own, or its filename.
+          description: >
+            The concept's own title, absent when the document declared none
+            — a reader derives one from the id's last segment (OKF SPEC
+            §4.1, design doc 0074 §1).
           type: string
         status: { $ref: "#/components/schemas/Status" }
         trust:
@@ -2734,7 +2827,10 @@ components:
         id: { type: string }
         type: { $ref: "#/components/schemas/Type" }
         title:
-          description: The display title — the concept's own, or its filename.
+          description: >
+            The concept's own title, absent when the document declared none
+            — a reader derives one from the id's last segment (OKF SPEC
+            §4.1, design doc 0074 §1).
           type: string
         description: { type: string }
         status: { $ref: "#/components/schemas/Status" }
@@ -2776,7 +2872,7 @@ components:
             properties:
               type: { $ref: "#/components/schemas/Type" }
               id: { type: string }
-              title: { type: string, description: "Absent when the id's last segment is the name (design doc 0022)." }
+              title: { type: string, description: "The concept's own title, absent when the document declared none — a reader derives one from the id's last segment (OKF SPEC §4.1, design doc 0074 §1)." }
               description: { type: string, description: The one-line summary, so a directory listing can render as an index page. }
               status: { $ref: "#/components/schemas/Status" }
               updated_at: { type: string, format: date-time }
@@ -2822,7 +2918,7 @@ components:
         several times over. `?history` on the object is where those are.
       properties:
         path: { type: string, description: The object's bundle path. }
-        title: { type: string, description: "The object's title as it stands; absent for a file and for a concept since purged." }
+        title: { type: string, description: "The object's own title as it stands — absent when the document declared none, for a file, and for a concept since purged; a reader derives one from the path's last segment (OKF SPEC §4.1, design doc 0074 §1)." }
         change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }

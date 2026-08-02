@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 364
+    RECORD-LINES: 554
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -326,6 +326,22 @@ What the ceiling must not buy is denser prose. Records earlier than 0063
 are not measured: they are immutable, and immutability is a promise about
 decisions somebody could be depending on, not a licence to keep writing
 at whatever length the last one happened to be.
+
+364 → 554 is the third case, and 0064 is the record it was written for.
+0064 is `RECORD-CAP-FROM`'s first real customer — it is numbered at or
+after 0063, so the ceiling does apply to it, and it landed exactly on the
+line — and it is not one decision the way most records are: it is the
+*last* batch that can break REST, so every breaking change anyone still
+wanted has to be in it or never happen. Five more went in this pass —
+`title` becoming optional on the wire, the PUT's missing `requestBody`,
+`observed.generated.at`, the `type` character set, and the responses the
+server already sent that the contract never declared. None of them is a
+second subject: each is one wire decision that the freeze makes
+irreversible, and splitting them across new numbers would say the
+opposite of what the record is for, that they were separable from the
+freeze. 554 is still under 0046's 601, which rebuilt the address space
+and is the precedent for a record that really is that large. The ceiling
+goes back down when the freeze's record stops being the one that sets it.
 
 ### What a superseded record keeps
 

@@ -29,6 +29,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
 
@@ -125,7 +126,7 @@ func forSpecRouting(p string) string {
 const bundlePath = "/api/v1/bundle/"
 
 // carriesOpaqueBytes reports whether this request stores raw bytes: a
-// PUT of a file, whose body is the file and whose Content-Type is
+// PUT of a *file*, whose body is the file and whose Content-Type is
 // whatever the client sent, or nothing at all.
 //
 // The validator resolves media types by exact match — it reads "*/*" as
@@ -133,8 +134,23 @@ const bundlePath = "/api/v1/bundle/"
 // undeclared. Skipping costs nothing that could have drifted:
 // `{type: string, format: binary}` asserts nothing about the bytes,
 // which is the whole point of a file.
-func carriesOpaqueBytes(r *http.Request) bool {
-	return r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, bundlePath)
+//
+// It used to skip *every* PUT under the bundle address, concepts
+// included, which took the whole write face out from under the validator
+// — the 200/201 bodies, ETag, Ochakai-Note, Ochakai-Plan,
+// Ochakai-Unchanged, and the 412/413/415 shapes were checked by nothing,
+// and the operation went years without declaring a requestBody at all
+// (design doc 0064 §15). A concept PUT sends text/markdown, which the
+// spec now declares, so it belongs under the validator like any other
+// request.
+func carriesOpaqueBytes(r *http.Request, body []byte) bool {
+	if r.Method != http.MethodPut || !strings.HasPrefix(r.URL.Path, bundlePath) {
+		return false
+	}
+	// The same rule the handler applies: a markdown path whose document
+	// carries a type is a concept, and everything else is a file.
+	_, isMarkdown := domain.ConceptID(strings.TrimPrefix(r.URL.Path, bundlePath))
+	return !isMarkdown || !okf.CarriesType(body)
 }
 
 // sniffedResponse reports whether a response's media type was decided by
@@ -168,10 +184,6 @@ func sniffedResponse(res *http.Response) bool {
 func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 	v := openAPIValidator(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if carriesOpaqueBytes(r) {
-			h.ServeHTTP(w, r)
-			return
-		}
 		// The handler consumes the body, and so does the validator; read
 		// it once here and hand each of them its own reader.
 		body, err := io.ReadAll(r.Body)
@@ -181,6 +193,11 @@ func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 			return
 		}
 		_ = r.Body.Close()
+		if carriesOpaqueBytes(r, body) {
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			h.ServeHTTP(w, r)
+			return
+		}
 
 		specReq := func() *http.Request {
 			c := r.Clone(r.Context())

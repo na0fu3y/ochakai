@@ -29,8 +29,12 @@ Attested Computation である。これより前のベースなら、`Golden Que
 
 ```sh
 ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100 --json \
-  | jq -r '.hits[] | [.id, .verified_at, .title] | @tsv'
+  | jq -r '.hits[] | [.id, .verified_at, (.title // (.id | split("/") | last))] | @tsv'
 ```
+
+`title` は任意である(OKF SPEC §4.1)。宣言していない concept では
+キーごと無いので、表示名は id の末尾セグメントで補う — 上の `//` が
+それである。
 
 hit は concept を手渡すのではなく名指すだけである: 順位付けこそが
 フィードの仕事であり、「このうちどれが期限切れか」に答えるために
