@@ -182,7 +182,7 @@ in the version you are running.
   [the gcloud reference it runs](deploy/cloudrun/README.md)
   (Japanese) ·
   [Configuration](docs/configuration.md) (Japanese) ·
-  [Operating](docs/guides/operating.md) ·
+  [Operating](docs/guides/operating.md) (Japanese) ·
   [Golden query canary](docs/guides/golden-query-canary.md) (Japanese)
 - **Building on it** — [REST API](api/openapi.yaml) ·
   [Examples](examples) · [All docs](docs/README.md) (Japanese)

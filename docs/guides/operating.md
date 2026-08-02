@@ -1,146 +1,151 @@
-# Operating a deployment
+# デプロイの運用
 
-Backup and restore, hardening beyond the default, the team web UI,
-monitoring, capacity, supply chain, and upgrades — the Cloud Run guide's
-[§1–§5](../../deploy/cloudrun/README.md) (Japanese) build the deployment
-and cover the Google-side troubleshooting; this page is about running the
-thing afterwards.
+バックアップとリストア、既定を超えるハードニング、チーム向け web UI、
+モニタリング、キャパシティ、サプライチェーン、アップグレード — Cloud
+Run デプロイガイドの
+[§1–§5](../../deploy/cloudrun/README.md)がデプロイを組み立て、Google
+側のトラブルシューティングを扱う。このページが扱うのは、その後動かし
+続けることである。
 
-Where a number here is not measured, it says so. That is deliberate:
-ochakai is a small project, and an invented capacity figure would be
-worth less than an admission.
+ここで測っていない数字は、そう書く。それは意図的である — ochakai は
+小さなプロジェクトであり、でっち上げたキャパシティの数字は、正直に
+「分からない」と言うより値打ちが低い。
 
-## Backup and restore
+<a id="backup-and-restore"></a>
 
-**There are two backups, and they recover different things.** Neither is
-a superset of the other, which is the one fact to take away.
+## バックアップとリストア
 
-| | Cloud SQL backup | `ochakai export` |
+**バックアップは二種類あり、それぞれ違うものを復旧する。** どちらかが
+もう一方を包含するわけではない、というのが持ち帰るべき唯一の事実である。
+
+| | Cloud SQL バックアップ | `ochakai export` |
 |---|---|---|
-| The knowledge | yes | yes |
-| Provenance — who wrote it, who verified it, when | yes | **no** |
-| Revision history | yes | **no** |
-| Usage counts and outcome reports | yes | **no** |
-| Attachment bytes | no — they are in GCS | yes, as files |
-| Readable without ochakai | no | yes: markdown and YAML |
-| Restores to | the same database | any instance, any version, any OKF consumer |
+| ナレッジ | yes | yes |
+| provenance — 誰が書き、誰が検証し、いつか | yes | **no** |
+| リビジョン履歴 | yes | **no** |
+| 利用回数と結果報告 | yes | **no** |
+| 添付ファイルのバイト列 | no — GCS にある | yes、ファイルとして |
+| ochakai なしで読めるか | no | yes: markdown と YAML |
+| リストア先 | 同じデータベース | 任意のインスタンス、任意のバージョン、任意の OKF consumer |
 
-A Cloud SQL backup is the operational one: it restores the deployment as
-it was. An OKF export is the portability one: it is the copy that
-survives ochakai, and the reason the README can promise that the
-knowledge is never a hostage.
+Cloud SQL バックアップは運用上のもの: デプロイをそのときの状態に復旧
+する。OKF export は可搬性のためのもの: ochakai より長生きするコピーで
+あり、README が「ナレッジが人質になることはない」と約束できる理由で
+ある。
 
-### Cloud SQL backups
+### Cloud SQL バックアップ
 
-The example instance ships with `--no-backup` to stay at ~$10/month, so
-enabling backups is a deliberate step, not a default — see
-[Hardening](#hardening) below for the command.
+example インスタンスは `--no-backup` を付けて出荷されており、月 ~$10
+に収まっている。だからバックアップを有効にするのは既定ではなく意図的な
+一歩である — コマンドは下の[ハードニング](#hardening)を見よ。
 
-Restoring is Cloud SQL's own procedure, and it restores the database
-only. **File bytes are not in it**: they live in GCS as
-content-addressed objects, so an instance restored from a database backup
-finds file metadata whose bytes are whatever the bucket holds
-today. Turn on object versioning, or a retention policy, if that matters
-to you — and note that `purge` deliberately does not reclaim GCS blobs
-(design doc 0031), so the bucket only grows.
+リストアは Cloud SQL 自身の手順であり、データベースだけを復旧する。
+**ファイルのバイト列はそこに含まれない**: それらは content-addressed な
+オブジェクトとして GCS に住んでいるので、データベースのバックアップから
+リストアしたインスタンスは、バイト列が今日のバケットの中身のままである
+ファイルのメタデータを見つけることになる。それが重要なら object
+versioning か retention policy を有効にせよ — そして `purge` は意図的に
+GCS の blob を回収しない(設計ドキュメント 0031)ので、バケットは増える
+一方であることに注意せよ。
 
-### Exporting
+### エクスポートする
 
 ```sh
-ochakai export ./knowledge          # a directory
-ochakai export - > okf.tar.gz       # or a stream
-ochakai export --no-files -   # concepts only; bytes are already in GCS
+ochakai export ./knowledge          # ディレクトリへ
+ochakai export - > okf.tar.gz       # あるいはストリームへ
+ochakai export --no-files -   # concept のみ; バイト列はすでに GCS にある
 ```
 
-The bundle is an OKF v0.2 directory: one markdown file per concept with
-YAML frontmatter, files beside their concept, and an
-`index.md` per directory. Exporting the ten-concept demo base writes 20
-files — ten concepts and ten indexes.
+バンドルは OKF v0.2 のディレクトリである: concept ごとに YAML
+frontmatter 付きの markdown ファイルが一つ、ファイルはその concept の
+隣に、そしてディレクトリごとに `index.md` が一つ。10 個の concept を
+持つデモベースを export すると 20 ファイルになる — concept 10 個と
+index 10 個である。
 
-This is the backup to run on a schedule if you want one that a human can
-read, diff and commit. It is also the migration path between instances,
-and the only way to move knowledge into a project that has never heard of
-ochakai.
+スケジュール実行するなら、これが人間に読め、diff でき、commit できる
+バックアップである。インスタンス間の移行経路でもあり、ochakai を聞いた
+ことも無いプロジェクトへナレッジを移す唯一の方法でもある。
 
-### Restoring from a bundle
+### バンドルからのリストア
 
 ```sh
 ochakai import ./knowledge
 ```
 
-Import is a client-side loop over ordinary endpoints — there is no
-server-side bulk import, by decision (design doc 0015 §3.2) — so a
-restore needs the CLI, or a client that reproduces the loop. Plan for
-that: a disaster-recovery runbook that assumes a web console will not
-work here.
+import は普通のエンドポイントに対するクライアント側のループである —
+サーバー側の一括 import は決定として存在しない(設計ドキュメント
+0015 §3.2) — なのでリストアには CLI か、そのループを再現するクライアント
+が要る。それを見込んでおくこと: Web コンソールを前提にした
+disaster-recovery の runbook はここでは動かない。
 
-**What a bundle restore does not bring back.** Measured, on a fresh
-database, by exporting a ten-concept base and importing it into an empty
-instance:
+**バンドルのリストアが持ち帰らないもの。** 10 個の concept を持つ
+ベースを export し、空のインスタンスへ import して測定した:
 
-- **Timestamps become the restore.** `created_at`, `updated_at` and
-  `verified_at` on the restored concept are all the moment of the import,
-  not the moment the work happened.
-- **History collapses.** A concept with two revisions came back with one.
-  Revisions are the audit trail of what this instance did, and a bundle
-  is not that trail.
-- **Provenance is re-recorded as the importer.** A bundle that *claims*
-  someone else wrote and verified a concept does not get believed: editing
-  the exported frontmatter to say `generated.by: human:tanaka@…` and
-  `verified.by: human:sato@…`, then importing, stored the body change and
-  kept both actors as the importing identity. Provenance is what an
-  instance observed, never what a document asserts (design doc 0009).
-- **Usage counts and outcome reports do not travel** at all.
+- **タイムスタンプは復元した瞬間になる。** リストアされた concept の
+  `created_at`、`updated_at`、`verified_at` はすべて import した瞬間で
+  あり、実際に作業した瞬間ではない。
+- **履歴は潰れる。** 2 回のリビジョンを持っていた concept は 1 回で
+  戻ってくる。リビジョンはそのインスタンスが何をしたかの監査証跡で
+  あり、バンドルはその証跡ではない。
+- **provenance は import した者として再記録される。** 別の誰かが書き
+  検証したと*主張する*バンドルは、そのまま信じられることはない: export
+  した frontmatter を編集して `generated.by: human:tanaka@…` と
+  `verified.by: human:sato@…` にしてから import すると、本文の変更は
+  保存されたが、両方の行為者は import した identity のまま記録された。
+  provenance はインスタンスが観測したものであって、文書が主張するもの
+  では決してない(設計ドキュメント 0009)。
+- **利用回数と結果報告はまったく持ち越されない。**
 
-What *does* survive is the knowledge and its trust: the verifications
-came back verified, through the OKF `verified` key rather than an ochakai
-alias, along with every envelope field.
+持ち帰る*のは*ナレッジとその trust である: 検証は、ochakai 独自の
+エイリアスではなく OKF の `verified` キーを通じて、検証済みとして
+戻ってくる。envelope のフィールドもすべて同様である。
 
-So: **run the import under an identity you are willing to see on every
-concept**, and if provenance matters to you, keep a database backup as
-well. Neither of these is a bug — a bundle carries knowledge, and
-provenance belongs to the instance that watched it happen — but a runbook
-that expects a full-fidelity restore from an export will be wrong at the
-worst moment.
+つまり: **すべての concept 上で見えても構わない identity で import を
+実行せよ**。provenance が重要なら、データベースバックアップも合わせて
+持て。どちらもバグではない — バンドルが運ぶのはナレッジであり、
+provenance はそれが起きるのを見ていたインスタンスに属する — が、export
+からの完全な復元を期待する runbook は、最悪の瞬間に間違っていることに
+なる。
 
-## Monitoring
+## モニタリング
 
-### `/health` is a liveness check, and nothing more
+### `/health` は liveness チェックであり、それ以上のものではない
 
-`GET /health` returns `ok` unconditionally
-([cmd/ochakai/main.go](../../cmd/ochakai/main.go)). It does not touch the
-database. An uptime check on it answers "is the process serving?", not
-"is the deployment working" — a server whose database has gone away
-answers `ok` right up until a request needs a row.
+`GET /health` は無条件に `ok` を返す
+([cmd/ochakai/main.go](../../cmd/ochakai/main.go))。データベースには
+触れない。uptime チェックがこれに答えるのは「プロセスは応答しているか」
+であって「デプロイはちゃんと動いているか」ではない — データベースが
+落ちたサーバーも、行が要るリクエストが来るまでは `ok` と答え続ける。
 
-It is `/health` and not `/healthz` because Google Frontends intercept
-`/healthz` on `run.app` URLs and return their own 404.
+`/healthz` ではなく `/health` なのは、Google のフロントエンドが
+`run.app` の URL 上で `/healthz` を横取りし、自前の 404 を返すからで
+ある。
 
-A stricter check, if you want one, is any read that touches the store:
-`GET /api/v1/search?sort=verified_at&limit=1` succeeds only when the
-database answers. `ochakai whoami` does the same thing from a shell and
-also prints which identity the server sees.
+もっと厳格なチェックが欲しければ、store に触れる read なら何でもよい:
+`GET /api/v1/search?sort=verified_at&limit=1` は、データベースが答える
+ときにだけ成功する。`ochakai whoami` はシェルから同じことをしつつ、
+サーバーがどの identity を見ているかも表示する。
 
-### Logs
+### ログ
 
-Everything is JSON through `slog`, so Cloud Logging parses it without
-help. The messages worth building an alert or a saved query on, all of
-them warnings that describe **degraded but running**:
+すべては `slog` を通した JSON なので、Cloud Logging は手を加えずに
+パースできる。アラートや保存クエリを組む価値があるメッセージは、
+すべて**劣化しているが動いている**ことを表す warning である:
 
-| Message | What it means |
+| メッセージ | 意味 |
 |---|---|
-| `usage flush failed` | a batch of usage events was lost. Best-effort by design (0029); a *stream* of these means the database is unhappy |
-| `usage recording failed` | the in-memory buffer was full — 20,000 events — and events were dropped |
-| `search miss recording failed` | same buffer, same bargain (0051): a question that found no answer was not kept. The knowledge is unaffected; `ochakai stats` undercounts |
-| `query embedding failed; falling back to lexical-only` | Vertex AI did not answer a search; results are still returned, ranked by the lexical half alone |
-| `document embedding failed; concept remains findable by the lexical half of search` / `storing embedding failed` | a concept was written but is not in the vector index. `ochakai reembed` repairs it |
-| `attachment embedding failed; attachment remains findable by name` | same, for a file. The message still says *attachment*: 0064 renamed the word on the wire, not in the log |
-| `backlink lookup failed` | one concept's backlinks are missing from a response |
-| `export truncated after the response began` | an export failed midway. **The bytes the client received are not a complete backup** — this is the one in the list that can quietly cost you |
-| `knowledge verified` / `knowledge purged` | not errors: the audit line for a curation event, with the actor |
+| `usage flush failed` | usage イベントのバッチが失われた。設計として best-effort であり(0029)、これが*連続*するならデータベースの調子が悪いということである |
+| `usage recording failed` | メモリ上のバッファが満杯 — 20,000 イベント — になり、イベントが捨てられた |
+| `search miss recording failed` | 同じバッファ、同じ取引(0051): 答えの無かった問いが記録されなかった。ナレッジには影響しない; `ochakai stats` が過小に数える |
+| `query embedding failed; falling back to lexical-only` | Vertex AI が検索に答えなかった; 結果は lexical 側だけでランクされて返る |
+| `document embedding failed; concept remains findable by the lexical half of search` / `storing embedding failed` | concept は書き込まれたがベクトル索引には無い。`ochakai reembed` が直す |
+| `attachment embedding failed; attachment remains findable by name` | 同じことがファイルについて起きた。メッセージは今も *attachment* と言う: 0064 が変えたのはワイヤ上の語であって、ログの語ではない |
+| `backlink lookup failed` | ある concept の backlink がレスポンスから欠けている |
+| `export truncated after the response began` | export が途中で失敗した。**クライアントが受け取ったバイト列は完全なバックアップではない** — このリストの中で静かに損害を与えうるのはこれだけである |
+| `knowledge verified` / `knowledge purged` | エラーではない: 行為者付きの、キュレーション行為の監査ログである |
 
-At startup the server states its own posture, which is the fastest way to
-confirm what a running instance actually has enabled:
+起動時にサーバーは自分の姿勢を述べる。動いているインスタンスが実際に
+何を有効にしているかを確認する、いちばん速い方法である:
 
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
@@ -148,44 +153,48 @@ confirm what a running instance actually has enabled:
 "files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only"
 ```
 
-`discovered=true` means the project came from the metadata server rather
-than `OCHAKAI_VERTEX_PROJECT` — semantic search is the default on Google
-Cloud (design doc [0053](../design/0053-embeddings-by-default.md)). The
-line that replaces it says which way it went instead:
+`discovered=true` は、project がメタデータサーバーから来たのであって
+`OCHAKAI_VERTEX_PROJECT` からではないことを意味する — semantic search
+は Google Cloud 上での既定だからである(設計ドキュメント
+[0053](../design/0053-embeddings-by-default.md))。これに代わる行は
+どちらに転んだかを言う:
 
-| Line | What it means |
+| 行 | 意味 |
 |---|---|
-| `semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on` | the startup probe was refused. The message carries its own remedy; restart after granting |
-| `semantic search is off: this database cannot hold vectors` | pgvector is not there and this role may not create it. Create the extension as the admin user (deploy guide §3) |
-| `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only` | asked for — the one line here that is not worth investigating |
-| `semantic search disabled; using lexical search only` | no project was configured and none was discovered — ochakai is not running on Google Cloud |
+| `semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on` | 起動時の probe が拒否された。メッセージ自体が対処法を運んでいる; 権限を付与してから再起動せよ |
+| `semantic search is off: this database cannot hold vectors` | pgvector が無く、このロールには作成できないかもしれない。admin ユーザーとして extension を作成せよ(デプロイガイド §3) |
+| `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only` | 頼んだ通り — ここにある行の中で、調べる価値の無い唯一のものである |
+| `semantic search disabled; using lexical search only` | project が設定されておらず、発見もされなかった — ochakai は Google Cloud 上で動いていない |
 
-If `insecure_dev=true` appears anywhere but a laptop, stop and fix that
-first: every caller is `human:anonymous` and nothing is authenticated.
+`insecure_dev=true` がラップトップ以外のどこかに出ていたら、そこで
+止めて直せ: すべての呼び出し元が `human:anonymous` になり、何も認証
+されていない。
 
-### What is worth alerting on
+### アラートを張る価値があるもの
 
-Nothing here is prescriptive — this is a knowledge base, not a payment
-system — but in rough order of what actually costs you something:
+ここに規範的なものは無い — これは決済システムではなくナレッジベース
+である — が、実際に損害になる順に並べると:
 
-1. **Cloud Run 5xx rate**, which is where a broken deployment shows up
-   first.
-2. **`export truncated`**, because a truncated backup looks like a
-   backup.
-3. **Cloud SQL disk usage**, since the example instance is 10 GB with
-   `--no-storage-auto-increase`: it will stop rather than grow.
-4. **A sustained stream of `usage flush failed`**, as a database-health
-   signal rather than for the statistics themselves.
+1. **Cloud Run の 5xx 率**。壊れたデプロイがまず最初に現れる場所で
+   ある。
+2. **`export truncated`**。切り詰められたバックアップはバックアップの
+   ように見えるからである。
+3. **Cloud SQL のディスク使用量**。example インスタンスは
+   `--no-storage-auto-increase` 付きの 10 GB だからである: 育つのでは
+   なく止まる。
+4. **`usage flush failed` の持続的な連続**。統計そのものというより、
+   データベースの健康シグナルとして。
 
-### Knowing there is reviewing to do
+### レビューすべきものがあると知る
 
-The list above is about the deployment. The other thing worth watching is
-the knowledge, and it fails silently: a review queue nobody opens looks
-exactly like a review queue with nothing in it.
+上のリストはデプロイについてである。もう一つ見る価値があるのはナレッジ
+の方であり、それは静かに失敗する: 誰も開かないレビューキューは、何も
+入っていないレビューキューとまったく同じに見える。
 
-`ochakai stats` is the whole answer (design doc
-[0049](../design/0049-queue-counts.md)). Among its lines are the three
-queues a curator empties, each carrying the command that lists it:
+`ochakai stats` がその答えのすべてである(設計ドキュメント
+[0049](../design/0049-queue-counts.md))。その中の行のうち、キュレー
+ターが空にする三つのキューは、それぞれ一覧表示するコマンドを添えて
+出てくる:
 
 ```console
 $ ochakai stats
@@ -196,31 +205,32 @@ stale_after	0	ochakai list stale_after
 …
 ```
 
-Each queue is named after the `sort` that lists it, so the count and the
-way to see what it counts are one word (design doc
-[0059](../design/0059-a-queue-is-named-by-its-listing.md)). `drafts` is
-the exception, because no single sort lists it.
+それぞれのキューは、それを一覧表示する `sort` にちなんで名付けられて
+いるので、数とそれを見る方法は同じ一語である(設計ドキュメント
+[0059](../design/0059-a-queue-is-named-by-its-listing.md))。`drafts`
+は例外で、単一の sort がそれを一覧表示することは無いからである。
 
-`--exit-code` turns that into something a scheduler watches: **2 while
-any of the three is non-empty, 0 when all are** — and 1 stays what it
-always was, an error, so an unreachable server cannot be read as "nothing
-to do". `--prefix teams/growth` scopes it, which is how one team on a
-shared deployment asks about its own queue.
+`--exit-code` はそれをスケジューラーが見張れるものに変える:
+**三つのうちどれかが空でない間は 2、すべて空なら 0** — そして 1 は
+これまで通りエラーのままなので、到達できないサーバーが「やることが
+無い」と読み違えられることは無い。`--prefix teams/growth` はそれを
+絞る、共有デプロイ上の一つのチームが自分たちのキューについて尋ねる方法
+である。
 
-That is enough for a weekly nudge through whatever channel your team
-already watches for red builds — no address list, no secret, nothing new
-to run:
+これで、チームがすでに赤いビルドを見張っているどんなチャンネルでも、
+週次の通知には十分である — 宛先リストも要らず、秘密も要らず、新しく
+動かすものも無い:
 
 ```yaml
 name: ochakai-review-queue
 on:
   schedule:
-    - cron: "0 0 * * 1" # Mondays, 09:00 JST
+    - cron: "0 0 * * 1" # 月曜、09:00 JST
 jobs:
   queues:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # Workload Identity Federation (keyless)
+      id-token: write # Workload Identity Federation(鍵レス)
     steps:
       - uses: google-github-actions/auth@v3
         with:
@@ -234,16 +244,17 @@ jobs:
           [ "$waiting" -eq 0 ] || { echo "::error::$waiting waiting for review"; exit 1; }
 ```
 
-ochakai delivers nothing itself — no mail, no chat, no webhooks (design
-doc 0049 §4). The job above is the delivery, and it is yours.
+ochakai 自身は何も配送しない — メールも chat も webhook も無い(設計
+ドキュメント 0049 §4)。上のジョブが配送であり、それはあなたのもので
+ある。
 
-The same command answers the question one step further out — not "is
-anything waiting" but "is this working": how much of the base is
-confirmed, how much moved through review this month, and what people
-searched for and did not find (design doc
-[0051](../design/0051-instance-metrics-and-search-misses.md)). One number
-per line, so the same cron that watches the queues can keep a history of
-it with `>>` and a date:
+同じコマンドは、もう一歩先の問いにも答える — 「何か待っているか」では
+なく「これはうまくいっているか」: ベースのどれだけが確認済みか、今月
+どれだけがレビューを通ったか、そして人々が何を検索して見つけられなかった
+か(設計ドキュメント
+[0051](../design/0051-instance-metrics-and-search-misses.md))。1 行に
+1 数字なので、キューを見張るのと同じ cron が `>>` と日付でその履歴も
+残せる:
 
 ```console
 $ ochakai stats --days 7
@@ -256,91 +267,100 @@ gap	5	解約率の定義
 gap	3	arr by segment
 ```
 
-The `gap` lines are the questions that came back empty, most-asked first
-— the one list that says what to write next. A deployment that keeps none
-prints `misses -` rather than `misses 0`, because those are not the same
-answer (`OCHAKAI_RECORD_MISSES`, and a public deployment keeps none at
-all).
+`gap` の行は空振りに終わった問いであり、最も多く聞かれた順である —
+次に何を書くべきかを言う唯一のリストである。何も記録しないデプロイは
+`misses 0` ではなく `misses -` と出す。両者は同じ答えではないからで
+ある(`OCHAKAI_RECORD_MISSES`、そして公開デプロイは一件も記録しない)。
 
-## Capacity
+<a id="capacity"></a>
 
-### What is known
+## キャパシティ
 
-- **Search**: about 16 ms per Japanese search across 5000 concepts, against
-  0.2 ms for a latin word. Japanese terms are answered by scanning,
-  because a trigram index cannot serve a two-character pattern.
+### 分かっていること
+
+- **検索**: 5000 件の concept に対する日本語検索で約 16 ms、ラテン文字
+  の語なら 0.2 ms。日本語の語がスキャンで答えられているのは、trigram
+  索引が二文字のパターンを引けないからである。
 - **Attachments**: 5 MiB per file, 20 files per concept, enforced by the
   server.
-- **Usage buffer**: 20,000 events in memory, flushed every 5 seconds.
-  Past the cap, events are dropped rather than queued (design doc 0029).
-- **Raw usage events** are pruned after 180 days; the per-concept totals
-  are not.
-- **Shutdown**: in-flight requests get 5 seconds after SIGTERM, then the
-  final usage flush runs. Cloud Run allows 10 seconds before SIGKILL.
+- **usage バッファ**: メモリ上に 20,000 イベント、5 秒ごとに flush
+  される。上限を超えるとイベントはキューイングされず捨てられる(設計
+  ドキュメント 0029)。
+- **生の usage イベント**は 180 日後に pruning される; concept ごとの
+  合計は pruning されない。
+- **シャットダウン**: 処理中のリクエストは SIGTERM の後 5 秒をもらい、
+  それから最後の usage flush が走る。Cloud Run は SIGKILL まで 10 秒
+  許容する。
 
-### Raising `--max-instances`
+### `--max-instances` を上げる
 
-The deploy guide sets `--max-instances=1`, and that is a cost decision
-rather than a correctness one: nothing in the server is single-instance.
-The usage buffer is per-instance and best-effort either way, and the
-database is the only shared state.
+デプロイガイドは `--max-instances=1` を設定しているが、それは正しさで
+はなくコストの決定である: サーバーの中に single-instance でなければ
+ならないものは何も無い。usage バッファはインスタンスごとであり、
+どちらにせよ best-effort である。データベースだけが共有された状態で
+ある。
 
-The ceiling to watch when raising it is **database connections**. Each
-instance opens its own pool, and `pgxpool`'s default is four connections
-(or one per CPU, whichever is larger), so *N* instances is roughly *4N*
-connections. `db-f1-micro` is a shared-core instance with a small
-connection limit; if you plan to run several instances, check
-`SHOW max_connections` before assuming it fits, and set `pool_max_conns`
-in `OCHAKAI_DATABASE_URL` if you need to bound it.
+上げるときに見るべき天井は**データベース接続数**である。各インスタンス
+は自分のプールを開き、`pgxpool` の既定は 4 接続(あるいは CPU 一つに
+つき 1、どちらか大きい方)である。つまり *N* インスタンスはおよそ *4N*
+接続になる。`db-f1-micro` は shared-core インスタンスで接続数の上限が
+小さいので、複数インスタンスを走らせるつもりなら、収まるかどうか
+`SHOW max_connections` で確認し、絞りたいなら `OCHAKAI_DATABASE_URL`
+に `pool_max_conns` を設定せよ。
 
-### What has not been measured
+### 測っていないこと
 
-Honestly: most of it. There is no measured concept-count ceiling, no
-throughput figure, no latency distribution under concurrency, and no
-guidance on when `db-f1-micro` stops being enough. The project is one
-person's, and these numbers would be invented rather than observed.
+正直に言えば、大半である。measured な concept 数の天井も、スループット
+の数字も、並行時のレイテンシ分布も無く、いつ `db-f1-micro` が足りなく
+なるかの指針も無い。このプロジェクトは一人のものであり、これらの数字は
+観測するのではなくでっち上げることになってしまう。
 
-If you are running ochakai at a scale where this matters, the useful
-thing is to say so in
-[Discussions](https://github.com/na0fu3y/ochakai/discussions) with what
-you actually see. That is how this section gets numbers.
+これが重要になる規模で ochakai を動かしているなら、役に立つのは
+[Discussions](https://github.com/na0fu3y/ochakai/discussions) で実際に
+見えているものを話すことである。この節に数字が増えるのはそうやって
+である。
 
-## Supply chain
+<a id="supply-chain"></a>
 
-Images are published to `ghcr.io/na0fu3y/ochakai` by GitHub Actions with
-SBOM and SLSA provenance; workflow actions are pinned by commit SHA. The
-binary is a static, trimmed-path Go build on `distroless/static`. Verify
-what you are about to deploy:
+## サプライチェーン
+
+イメージは GitHub Actions によって SBOM と SLSA provenance 付きで
+`ghcr.io/na0fu3y/ochakai` に公開される; workflow のアクションはコミット
+SHA で固定されている。バイナリは `distroless/static` 上の静的で
+trimmed-path な Go ビルドである。デプロイしようとしているものを検証
+せよ:
 
 ```sh
 gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai
 ```
 
-Release archives for the CLI carry the same attestations, plus a
-`checksums.txt`. Binary Authorization can enforce the check at deploy time
-— see [Hardening](#hardening) below.
+CLI のリリースアーカイブも同じ attestation に加えて `checksums.txt` を
+運ぶ。Binary Authorization はデプロイ時にこのチェックを強制できる —
+下の[ハードニング](#hardening)を見よ。
 
-## Hardening
+<a id="hardening"></a>
 
-The default deploy guide walkthrough
-([§1–§5](../../deploy/cloudrun/README.md), Japanese) is already
-secret-zero and least-privilege — Cloud Run IAM, Google identities,
-explicit grants only, an empty authorized-networks list,
-provenance-attested images. The steps below raise the bar further; pick
-what matches your risk profile.
+## ハードニング
 
-### Private IP only
+既定のデプロイガイドの手順
+([§1–§5](../../deploy/cloudrun/README.md))は、すでに secret-zero かつ
+最小権限である — Cloud Run IAM、Google の identity、明示的な付与のみ、
+空の authorized-networks 一覧、provenance が証明されたイメージ。下の
+手順はさらにバーを上げる; 自分たちのリスクプロファイルに合うものを
+選べ。
 
-For production-like deployments, drop the Cloud SQL public IP entirely.
-Costs nothing extra (VPC, private services access, and Cloud Run's Direct
-VPC egress are free); the trade-off is that local admin access (the
-deploy guide's §3 SQL, this section's password-retirement work below —
-§5's import is unaffected, it goes over the API) needs a temporary public
-IP or a VPC-attached workstation.
+### Private IP のみにする
 
-One-time per VPC — allocate a peering range and connect it (if the
-Compute API was just enabled, the `addresses create` may need a minute
-before it stops returning `SERVICE_DISABLED`):
+本番相当のデプロイでは、Cloud SQL のパブリック IP を完全に外せ。
+追加コストは無い(VPC、private services access、Cloud Run の Direct
+VPC egress はすべて無料である); トレードオフは、ローカルの admin
+アクセス(デプロイガイド §3 の SQL、この節の下にあるパスワード退役の
+作業 — §5 の import は影響を受けない、API 経由だからである)に一時的な
+public IP か VPC に接続したワークステーションが要ることである。
+
+VPC ごとに一度だけ — peering range を確保して接続する(Compute API を
+今有効にしたばかりなら、`addresses create` が `SERVICE_DISABLED` を
+返さなくなるまで 1 分ほど要ることがある):
 
 ```sh
 gcloud services enable servicenetworking.googleapis.com compute.googleapis.com
@@ -350,87 +370,90 @@ gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com 
   --ranges=google-managed-services-default --network=default
 ```
 
-Then create the instance with `--network=default --no-assign-ip`
-(instead of the deploy guide's §2 defaults) — or convert an existing
-one, which is the same patch and takes 15–20 minutes:
+それからインスタンスを `--network=default --no-assign-ip` で作成する
+(デプロイガイド §2 の既定の代わりに) — あるいは既存のものを変換する。
+これは同じパッチで、15–20 分かかる:
 
 ```sh
 gcloud sql instances patch ochakai --network=default --no-assign-ip
 ```
 
-Add Direct VPC egress to the Cloud Run service so it can reach the
-private IP (the `/cloudsql` connector socket follows automatically; the
-`OCHAKAI_DATABASE_URL` doesn't change):
+Cloud Run サービスに Direct VPC egress を追加し、private IP に届く
+ようにする(`/cloudsql` コネクタソケットは自動で追随する;
+`OCHAKAI_DATABASE_URL` は変わらない):
 
 ```sh
 gcloud run services update ochakai --region=$REGION \
   --network=default --subnet=default
 ```
 
-Local admin access no longer routes from outside the VPC. Temporarily
-attach a public IP and detach it after:
+ローカルの admin アクセスはもう VPC の外からは届かない。一時的に
+public IP を付け、作業後に外す:
 
 ```sh
-gcloud sql instances patch ochakai --assign-ip       # + cloud-sql-proxy, do the work
-gcloud sql instances patch ochakai --no-assign-ip    # afterwards
+gcloud sql instances patch ochakai --assign-ip       # + cloud-sql-proxy、作業する
+gcloud sql instances patch ochakai --no-assign-ip    # 終わったら
 ```
 
-(If the `sql.restrictPublicIp` org policy below is enforced, the
-temporary `--assign-ip` is blocked too — lift the policy for the window
-or use a VPC-attached workstation.)
+(下の `sql.restrictPublicIp` org policy が強制されている場合、一時的な
+`--assign-ip` もブロックされる — その間だけポリシーを外すか、VPC に
+接続したワークステーションを使え。)
 
-### Guardrails against misconfiguration
+<a id="guardrails-against-misconfiguration"></a>
 
-Org-policy; needs the Org Policy Administrator role. These make the risky
-states unrepresentable rather than merely avoided:
+### 設定ミスに対するガードレール
+
+org policy が要る; Org Policy Administrator ロールが要る。これらは
+危険な状態を「避けられる」のではなく「表現できない」ものにする:
 
 ```sh
-# forbid adding ANY authorized network on Cloud SQL (not just broad
-# ranges — the empty-list posture becomes unrepresentable to leave)
+# Cloud SQL への authorized network の追加を一切禁止する(広い範囲だけ
+# でなく — 空の一覧という姿勢そのものを、離脱できないものにする)
 gcloud resource-manager org-policies enable-enforce \
   sql.restrictAuthorizedNetworks --project=$PROJECT_ID
-# forbid public IPs on Cloud SQL — pair with private IP only, above.
-# Existing public IPs are grandfathered: the instance keeps running and
-# unrelated patches still work; only changes to the IP configuration are
-# blocked
+# Cloud SQL のパブリック IP を禁止する — 上の private IP only と組み合わ
+# せる。既存のパブリック IP は既得権として残る: インスタンスは動き続け、
+# 無関係なパッチも動き続ける; IP 設定への変更だけがブロックされる
 gcloud resource-manager org-policies enable-enforce \
   sql.restrictPublicIp --project=$PROJECT_ID
 ```
 
-Enforcement takes a minute or two to propagate — a violating patch
-issued immediately after can still succeed. Verify the guardrail is
-live by trying one: `gcloud sql instances patch ochakai
---authorized-networks=203.0.113.1/32` should fail with an
-`Organization Policy check failure` (and if it succeeded, you were too
-fast — `--clear-authorized-networks` and try again).
+強制が反映されるまでは 1、2 分かかる — その直後に出した違反パッチは
+それでも成功しうる。ガードレールが効いているかどうかは、一つ試して
+確かめよ: `gcloud sql instances patch ochakai
+--authorized-networks=203.0.113.1/32` は `Organization Policy check
+failure` で失敗するはずである(成功したなら、早すぎただけである —
+`--clear-authorized-networks` してもう一度)。
 
-Keep Domain Restricted Sharing (`iam.allowedPolicyMemberDomains`) on at
-the org level; nothing in a working deployment needs `allUsers` — every
-service, [the team web UI](#the-team-web-ui) included, stays
-`--no-allow-unauthenticated`. The deploy guide's §5d public demo is the
-one thing this policy blocks, and it is a fair trade: exempt a dedicated
-demo project if you want one, and leave the org policy alone.
+Domain Restricted Sharing(`iam.allowedPolicyMemberDomains`)は org
+レベルでオンにしておけ; 動いているデプロイの中で `allUsers` を必要と
+するものは無い — [チーム向け web UI](#the-team-web-ui) を含むすべての
+サービスが `--no-allow-unauthenticated` のままである。デプロイガイドの
+§5d の公開デモだけがこのポリシーにブロックされるが、それは正しい
+トレードオフである: デモが欲しいなら専用のプロジェクトを一つ免除せよ、
+org policy 自体はそのままにして。
 
-**Enforce TLS on direct connections** (Cloud SQL connector traffic is
-always mTLS; this covers the authorized-network path):
+**直接接続に TLS を強制する**(Cloud SQL コネクタの通信は常に mTLS で
+ある; これは authorized-network の経路をカバーする):
 
 ```sh
 gcloud sql instances patch ochakai --ssl-mode=ENCRYPTED_ONLY
 ```
 
-**Retire the last password.** The admin user's password is the only
-stored secret in the whole system, and it too can go: create a personal
-IAM login for maintenance, transfer the admin user's objects to it, and
-delete the password user. Future maintenance goes through
-`cloud-sql-proxy --auto-iam-authn` with your own identity.
+**最後のパスワードを退役させる。** admin ユーザーのパスワードはシステム
+全体で唯一保存されている secret であり、それも無くせる: メンテナンス用
+の個人 IAM ログインを作り、admin ユーザーの持ち物をそちらへ移管し、
+パスワードユーザーを削除する。以後のメンテナンスは自分自身の identity
+で `cloud-sql-proxy --auto-iam-authn` を通す。
 
-Two Postgres facts shape the sequence. Tables created by startup
-migrations are owned by the **runtime service account**, so the admin
-cannot `GRANT` on them — you inherit them via role membership instead.
-And a role that still owns objects or appears in grants cannot be
-dropped, so the admin's footprint must be reassigned and dropped first —
-which also **revokes every grant the admin ever made, breaking the
-running service until the re-grant below**. Do this in one sitting:
+この順序を形作る Postgres の事実が二つある。起動時のマイグレーションが
+作るテーブルは**ランタイムのサービスアカウント**が所有するので、admin
+はそれらに `GRANT` できない — ロールメンバーシップ経由で継承すること
+になる。そして、まだオブジェクトを所有しているか grant に現れている
+ロールは drop できないので、admin の足跡は先に再割り当てして drop しな
+ければならない — それは同時に**admin がこれまでに与えたすべての grant
+を取り消し、下の再付与までサービスを壊す**。これは一つの作業時間の中で
+終わらせること:
 
 ```sh
 gcloud projects add-iam-policy-binding $PROJECT_ID \
@@ -438,21 +461,22 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud sql users create you@your-org.example --instance=ochakai --type=cloud_iam_user
 ```
 
-As the admin user (`cloud-sql-proxy` + `psql`, deploy guide §3), in one
-session:
+admin ユーザーとして(`cloud-sql-proxy` + `psql`、デプロイガイド §3)、
+一つのセッションの中で:
 
 ```sql
-GRANT "ochakai-run@<PROJECT_ID>.iam" TO "you@your-org.example";  -- inherit runtime-owned tables, present and future
+GRANT "ochakai-run@<PROJECT_ID>.iam" TO "you@your-org.example";  -- ランタイムが所有する、現在と将来のテーブルを継承する
 REASSIGN OWNED BY "ochakai" TO "you@your-org.example";
-DROP OWNED BY "ochakai";  -- clears its grants; the service is degraded from here until re-granted
+DROP OWNED BY "ochakai";  -- その grant をクリアする; 再付与するまでサービスは劣化する
 GRANT USAGE, CREATE ON SCHEMA public
   TO "ochakai-run@<PROJECT_ID>.iam", "you@your-org.example";
 ```
 
-(The schema grant must come from a `cloudsqlsuperuser` member — the
-admin still qualifies; your IAM login never will.) Then as yourself
-(`cloud-sql-proxy --auto-iam-authn`, connect as `you@your-org.example`),
-re-grant the runtime on the tables you now own:
+(スキーマの grant は `cloudsqlsuperuser` のメンバーから出さなければ
+ならない — admin は今も要件を満たすが、あなたの IAM ログインは決して
+満たさない。)それから自分自身として(`cloud-sql-proxy
+--auto-iam-authn`、`you@your-org.example` として接続)、今あなたが所有
+しているテーブルに対してランタイムを再付与する:
 
 ```sql
 GRANT ALL ON ALL TABLES IN SCHEMA public TO "ochakai-run@<PROJECT_ID>.iam";
@@ -461,83 +485,89 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<P
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
 ```
 
-Finally delete the password user and verify a cold start (the startup
-migration needs the schema grant — a warm instance can mask a mistake):
+最後にパスワードユーザーを削除し、コールドスタートを確認する(起動時
+マイグレーションにはスキーマの grant が要る — ウォームなインスタンスは
+ミスを覆い隠しうる):
 
 ```sh
 gcloud sql users delete ochakai --instance=ochakai
-gcloud run services update ochakai --region=$REGION --update-labels=grants=rotated  # forces a new instance
-# then deploy guide §3's proxy + curl /health
+gcloud run services update ochakai --region=$REGION --update-labels=grants=rotated  # 新しいインスタンスを強制する
+# それからデプロイガイド §3 の proxy + curl /health
 ```
 
-(URL-encode the `@` as `%40` in connection strings:
-`postgres://you%40your-org.example@localhost:55432/ochakai`.)
+(接続文字列では `@` を `%40` に URL エンコードすること:
+`postgres://you%40your-org.example@localhost:55432/ochakai`。)
 
-What "secret-zero" means afterwards: the built-in `postgres` user still
-exists, and anyone with Cloud SQL admin IAM can mint it a throwaway
-password (`gcloud sql users set-password postgres ...`) for break-glass
-schema-level work — no *stored* secret remains, and admin access stays
-IAM-gated.
+その後の「secret-zero」が意味すること: 組み込みの `postgres` ユーザー
+は今も存在し、Cloud SQL admin の IAM を持つ誰でも、break-glass の
+スキーマレベル作業のために使い捨てのパスワードを発行できる
+(`gcloud sql users set-password postgres ...`) — *保存された* secret
+は残らず、admin アクセスは引き続き IAM で守られる。
 
-**Backups and point-in-time recovery** — the example skips them for
-cost; real knowledge deserves them:
+**バックアップと point-in-time recovery** — example ではコスト削減の
+ために省いているが、本物のナレッジにはそれらがふさわしい:
 
 ```sh
 gcloud sql instances patch ochakai --backup-start-time=03:00 --enable-point-in-time-recovery
 ```
 
-(Enabling backups means picking a start time — there is no bare
-`--backup` flag on `patch`. To turn both off again, disable PITR first:
-`--no-backup` refuses to combine with `--no-enable-point-in-time-recovery`.)
+(バックアップを有効にするとは開始時刻を選ぶことである — `patch` に
+素の `--backup` フラグは無い。両方をまた off にするには、先に PITR を
+無効にせよ: `--no-backup` は `--no-enable-point-in-time-recovery` と
+組み合わせないと拒否される。)
 
-**Deploy-time image gating**: releases ship SLSA provenance ([Supply
-chain](#supply-chain) above); Binary Authorization can enforce that check
-automatically on every deploy instead of relying on operator diligence.
+**デプロイ時のイメージゲーティング**: リリースは SLSA provenance を
+運ぶ(上の[サプライチェーン](#supply-chain)); Binary Authorization は
+運用担当者の注意力に頼る代わりに、すべてのデプロイでそのチェックを
+自動的に強制できる。
 
-**Audit trails**: knowledge changes are fully recorded by ochakai itself
-(`knowledge_revision`, actor per change). For infrastructure-level
-trails, enable Cloud SQL Data Access audit logs in the Console — admin
-activity is logged by default.
+**監査証跡**: ナレッジの変更は ochakai 自身によって完全に記録されている
+(`knowledge_revision`、変更ごとの actor)。インフラレベルの証跡には、
+Console で Cloud SQL の Data Access 監査ログを有効にせよ — admin の
+活動は既定で記録されている。
 
-Everything above — private IP, [the team web UI](#the-team-web-ui)'s IAP
-commands, the org-policy guardrails, TLS enforcement, backups, and the
-password-retirement sequence — has been exercised end-to-end on the
-deploy guide's example deployment (2026-07, Postgres 17, gcloud 575). The
-one exception is Binary Authorization, which remains a pointer; report
-anything that doesn't work as written.
+上のすべて — private IP、[チーム向け web UI](#the-team-web-ui) の IAP
+コマンド、org-policy のガードレール、TLS の強制、バックアップ、そして
+パスワード退役の手順 — は、デプロイガイドの example デプロイに対して
+最初から最後まで実際に試されている(2026-07、Postgres 17、gcloud
+575)。唯一の例外は Binary Authorization であり、これは今もポインタの
+ままである; 書かれた通りに動かないものがあれば報告してほしい。
 
-## The team web UI
+<a id="the-team-web-ui"></a>
 
-The web UI runs as its own service, **not** inside `serve` — the core
-keeps its serving surface minimal. For personal use it needs no
-deployment at all: `ochakai ui` serves the same page on loopback with
-your own identity. Deploy this service when people who cannot run the Go
-CLI need browser access.
+## チーム向け web UI
 
-It is the **same container image** as ochakai itself — `$IMAGE` from the
-deploy guide's §1 — started with `--args=serve-ui` instead of the default
-`serve`: a static page plus a reverse proxy that attaches its service
-identity (`X-Serverless-Authorization`) to API calls, so ochakai stays
-organization-restricted — no second image to build, and the UI is always
-the exact version of the server it fronts. The webui itself is
-non-public too: [Identity-Aware Proxy](https://cloud.google.com/iap/docs/enabling-cloud-run)
-sits in front, so browsers sign in with their Google account and only
-your organization gets through — no `allUsers` grant anywhere. By default
-writes through the UI are recorded as the webui's service account
-(`process:ochakai-webui@…`); set `OCHAKAI_IAP_AUDIENCE` (below) to record
-the person in the browser instead. MCP and CLI clients get per-user
-identity via the deploy guide's §5 proxy path.
+web UI は `serve` の中ではなく、それ自身のサービスとして動く — core が
+自分の serving surface を最小限に保つためである。個人利用ではデプロイ
+そのものが要らない: `ochakai ui` が loopback 上で自分自身の identity
+のまま同じページを配る。Go の CLI を動かせない人にブラウザアクセスが
+必要になったときに、このサービスをデプロイせよ。
+
+これは ochakai 自身と**同じコンテナイメージ**である — デプロイガイド
+§1 の `$IMAGE` — 既定の `serve` の代わりに `--args=serve-ui` で起動する:
+静的ページと、自分のサービス identity(`X-Serverless-Authorization`)を
+API 呼び出しに添えるリバースプロキシであり、ochakai は組織限定のまま
+でいられる — 二つ目のイメージをビルドする必要は無く、UI は常に自分が
+前面に立つサーバーとまったく同じバージョンである。webui 自体も
+非公開である: [Identity-Aware
+Proxy](https://cloud.google.com/iap/docs/enabling-cloud-run) が前段に
+立ち、ブラウザは Google アカウントでサインインし、組織のメンバーだけが
+通れる — `allUsers` の付与はどこにも無い。既定では UI 経由の書き込みは
+webui のサービスアカウント(`process:ochakai-webui@…`)として記録される;
+ブラウザにいる本人を記録したいなら下の `OCHAKAI_IAP_AUDIENCE` を設定
+せよ。MCP と CLI のクライアントは、デプロイガイド §5 の proxy 経路経由で
+ユーザーごとの identity を得る。
 
 ```sh
-# dedicated identity, allowed to invoke ochakai only
+# 専用の identity。ochakai を呼び出すことだけを許可する
 gcloud iam service-accounts create ochakai-webui
 gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=serviceAccount:ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --role=roles/run.invoker
 
-# deploy non-public, with IAP in front — same $IMAGE as the deploy guide's §3.
-# (--iap needs the gcloud beta component; the iap web command below
-#  needs the Resource Manager API)
+# IAP を前段に立てて非公開でデプロイする — デプロイガイド §3 と同じ $IMAGE。
+# (--iap には gcloud beta コンポーネントが要る; 下の iap web コマンドには
+#  Resource Manager API が要る)
 gcloud services enable iap.googleapis.com cloudresourcemanager.googleapis.com
 gcloud beta run deploy ochakai-webui \
   --image=$IMAGE --args=serve-ui \
@@ -546,236 +576,248 @@ gcloud beta run deploy ochakai-webui \
   --min-instances=0 --max-instances=1 --cpu=1 --memory=256Mi \
   --set-env-vars=OCHAKAI_URL=$OCHAKAI_URL
 
-# let your organization through IAP (the deploy already granted IAP's
-# service agent run.invoker on the service — "Setting IAP service agent"
-# in its output)
+# 組織を IAP 経由で通す(デプロイはすでにサービスに対して IAP の
+# サービスエージェントに run.invoker を付与している — 出力の
+# "Setting IAP service agent")
 gcloud beta iap web add-iam-policy-binding \
   --resource-type=cloud-run --service=ochakai-webui --region=$REGION \
   --member=domain:your-org.example --role=roles/iap.httpsResourceAccessor
 ```
 
-Open the webui service URL: IAP presents the Google sign-in, then the
-page loads. The UI and API are same-origin through the proxy, so nothing
-else to configure. To check IAP is actually fronting the service, request
-it unauthenticated — the response is a 302 to `accounts.google.com`
-with an `x-goog-iap-generated-response: true` header, not the page.
+webui サービスの URL を開く: IAP が Google のサインインを提示し、それ
+からページが読み込まれる。UI と API は proxy を通じて同一オリジンなので、
+他に設定することは無い。IAP が本当にサービスの前段にいるか確認するには、
+未認証でリクエストしてみよ — 応答はページではなく、
+`x-goog-iap-generated-response: true` ヘッダー付きの
+`accounts.google.com` への 302 である。
 
-### Recording the browser user instead of the service account
+### サービスアカウントではなくブラウザの利用者を記録する
 
-Out of the box every edit from the UI reads `process:ochakai-webui@…`,
-which is one author for the whole team. To record who actually made it,
-tell serve-ui which IAP audience to trust and let ochakai accept the
-webui as a delegator (design docs 0027, 0032):
+そのままでは UI からの編集はすべて `process:ochakai-webui@…` と読める。
+チーム全員に対して著者が一人だけということである。実際に誰が編集したか
+を記録するには、どの IAP audience を信頼するかを serve-ui に伝え、
+webui を delegator として ochakai に受け入れさせる(設計ドキュメント
+0027、0032):
 
-**Set them in this order.** The moment serve-ui starts forwarding
-identities, ochakai answers 403 unless it already accepts this caller
-(it never downgrades silently) — so grant the delegation first, and the
-UI never sees the window in between.
+**この順序で設定すること。** serve-ui が identity を転送し始めた瞬間、
+ochakai はこの呼び出し元をすでに受け入れていない限り 403 を返す
+(静かに格下げすることは無い) — だから委譲を先に付与せよ、そうすれば
+UI がその間の窓を見ることは無い。
 
 ```sh
-# 1. ochakai must accept this caller's forwarded identities.
+# 1. ochakai はこの呼び出し元が転送する identity を受け入れなければならない
 gcloud run services update ochakai --region=$REGION \
   --update-env-vars="OCHAKAI_DELEGATING_CALLERS=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com"
 
-# 2. Tell serve-ui which IAP audience to trust. It refuses to guess:
-# a wrong value would mean verifying nothing. For IAP enabled directly
-# on Cloud Run — what this section deploys — the audience is
-# /projects/PROJECT_NUMBER/locations/REGION/services/SERVICE_NAME.
-# (Behind a load balancer it is the backend service instead, and the
-# IAP console gives it: ⋮ next to the resource → "Get JWT audience code".)
+# 2. serve-ui にどの IAP audience を信頼するか伝える。推測はしない:
+# 間違った値は何も検証しないのと同じことになるからである。IAP を
+# Cloud Run に直接有効にした場合 — この節がデプロイしているのはこれ
+# である — audience は
+# /projects/PROJECT_NUMBER/locations/REGION/services/SERVICE_NAME である。
+# (ロードバランサの背後では代わりに backend service になる。IAP の
+# コンソールがそれをくれる: リソース横の ⋮ → "Get JWT audience code"。)
 IAP_AUDIENCE="/projects/$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')/locations/$REGION/services/ochakai-webui"
 
 gcloud run services update ochakai-webui --region=$REGION \
   --update-env-vars="OCHAKAI_IAP_AUDIENCE=$IAP_AUDIENCE"
 ```
 
-The startup log says which way it went: `recording browser users by
-their IAP identity` with the audience it will require, or `no
-OCHAKAI_IAP_AUDIENCE; writes are recorded as this service account`.
+起動時のログはどちらに転んだかを言う: 要求する audience と共に
+`recording browser users by their IAP identity`、あるいは `no
+OCHAKAI_IAP_AUDIENCE; writes are recorded as this service account` で
+ある。
 
-Writes then read `human:tanaka@example.co.jp via process:ochakai-webui@…`
-— both identities, never just one. serve-ui verifies IAP's signature,
-audience, expiry and issuer on every request, and **refuses (403) any
-request IAP did not sign** once the audience is set: if IAP is not
-really in front of the service, you find out immediately instead of
-discovering months of writes attributed to the wrong author. The
-audience it received is logged next to the one you configured, so a
-mismatch is a one-line fix.
+その後、書き込みは `human:tanaka@example.co.jp via
+process:ochakai-webui@…` と読める — 片方だけになることは無く、常に
+両方の identity である。serve-ui は IAP の署名、audience、有効期限、
+issuer をすべてのリクエストで検証し、audience を設定した後は**IAP が
+署名していないリクエストを(403 で)拒否する**: IAP が本当にサービスの
+前段にいないなら、何か月分もの書き込みが間違った著者に帰属して
+いたと気づくのではなく、すぐに気づくことになる。受け取った audience は
+設定したものと並べてログに出るので、食い違いは一行で直せる。
 
-Whether or not you set this, both proxies discard any
-`Ochakai-On-Behalf-Of` the browser sends — a page cannot name its own
-author (design doc 0032).
+これを設定していてもいなくても、両方の proxy はブラウザが送ってくる
+どんな `Ochakai-On-Behalf-Of` も破棄する — ページは自分自身の著者を
+名乗れない(設計ドキュメント 0032)。
 
-Notes from exercising this end-to-end:
+最初から最後まで試してみて分かったこと:
 
-- **Upgrading a pre-0.9.0 webui deployment** (a separately built image,
-  or one exposed with `allUsers`): the same `gcloud beta run deploy`
-  converts it in place — enabling IAP replaces the service's invoker
-  policy, so a leftover `allUsers` binding is removed automatically.
-- **Programmatic access** (curl, scripts) is limited with the
-  Google-managed OAuth client that `--iap` uses: ordinary ID tokens are
-  rejected. A service account granted `roles/iap.httpsResourceAccessor`
-  can get through with a self-signed JWT whose `aud` is the service URL
-  plus `/*` (`gcloud iam service-accounts sign-jwt`); for anything more,
-  configure IAP with a custom OAuth client. Browsers are the intended
-  clients here — MCP and CLI use the deploy guide's §5 path.
+- **0.9.0 より前の webui デプロイのアップグレード**(別にビルドされた
+  イメージ、あるいは `allUsers` で公開されていたもの): 同じ `gcloud
+  beta run deploy` がそのまま変換する — IAP を有効にするとサービスの
+  invoker ポリシーが置き換わるので、残っていた `allUsers` の binding は
+  自動的に外れる。
+- **プログラムからのアクセス**(curl、スクリプト)は、`--iap` が使う
+  Google 管理の OAuth クライアントによって制限される: 普通の ID
+  トークンは拒否される。`roles/iap.httpsResourceAccessor` を付与された
+  サービスアカウントは、`aud` がサービス URL に `/*` を足したものである
+  自己署名 JWT で通れる(`gcloud iam service-accounts sign-jwt`); それ
+  以上のことをしたいなら、カスタム OAuth クライアントで IAP を設定
+  せよ。ここで想定しているクライアントはブラウザである — MCP と CLI は
+  デプロイガイド §5 の経路を使う。
 
-## Public demo
+<a id="public-demo"></a>
 
-Everything in the deploy guide says never `allUsers`, and that stays true
-for every deployment anyone can write to. A demo is the exception, and it
-is an exception only because of what it gives up. Two settings, and the
-second implies the first:
+## 公開デモ
 
-- **`OCHAKAI_MODE=read-only`** — the deployment changes no knowledge (design
-  doc 0040). Writes are 403, MCP does not offer the write tools at all, and
-  the web UI stops drawing buttons that would only fail. Useful on its own,
-  private, for a reference-only copy or for freezing a base during a
-  migration.
-- **`OCHAKAI_MODE=public`** — the deployment reads no identity
-  (design doc 0042). The `Authorization` header is ignored: without Cloud Run
-  IAM in front its signature is unverifiable, and a forged unsigned token
-  would otherwise be believed. `Ochakai-On-Behalf-Of` is ignored. Every
-  caller is `human:anonymous`, and nothing returns 401. It **implies
-  read-only** and cannot be separated from it — a publicly readable *and*
-  writable ochakai is not a configuration this program accepts, so the
-  dangerous half of "public" has no configuration.
+デプロイガイドのすべては、誰かが書き込めるあらゆるデプロイに対して
+「`allUsers` は決してだめ」と言っており、それは今も正しい。デモは
+例外であり、それは何を諦めるかがあるからこそ例外である。設定は二つ、
+そして二つ目が一つ目を含意する:
 
-That is the whole trade: a service that believes nobody is safe to open,
-because it records nobody and writes nothing.
+- **`OCHAKAI_MODE=read-only`** — このデプロイはナレッジを何も変えない
+  (設計ドキュメント 0040)。書き込みは 403 になり、MCP は書き込み用の
+  ツールを一切提供せず、web UI はどうせ失敗するだけのボタンを描くのを
+  やめる。これ単体でも有用で、参照専用のコピーや、移行中にベースを
+  凍結する用途に向く。
+- **`OCHAKAI_MODE=public`** — このデプロイは identity を何も読まない
+  (設計ドキュメント 0042)。`Authorization` ヘッダーは無視される: 前段に
+  Cloud Run IAM が無ければその署名は検証しようがなく、偽造された未署名
+  トークンがそのまま信じられてしまうからである。`Ochakai-On-Behalf-Of`
+  も無視される。すべての呼び出し元は `human:anonymous` になり、401 が
+  返ることは無い。これは**read-only を含意し**、それと切り離すことは
+  できない — 公開で読めて*かつ*書き込める ochakai は、このプログラムが
+  受け付ける設定ではないので、「public」の危険な半分には設定そのものが
+  存在しない。
 
-### The ordering problem
+それが取引のすべてである: 誰も安全に開けないと信じているサービスで
+ある。誰も記録せず、何も書き込まないからである。
 
-**A read-only deployment cannot be seeded.** `ochakai import` is a
-client-side loop over the ordinary write endpoints (deploy guide §5) —
-there is no bulk import path that bypasses the refusal. So the sequence
-is always: deploy **writable and private**, import, then flip. Getting
-this backwards is the one way to end up with an empty demo and no way to
-fill it.
+### 順序の問題
 
-**Terraform** — [deploy/terraform](../../deploy/terraform) has both
-variables:
+**read-only なデプロイはシードできない。** `ochakai import` は普通の
+書き込みエンドポイント(デプロイガイド §5)に対するクライアント側の
+ループである — その拒否を迂回する一括 import の経路は無い。だから順序
+は常に: **書き込み可能かつ非公開**でデプロイし、import し、それから
+切り替える。これを逆にすると、空のデモが残り、埋める方法が無くなる。
+
+**Terraform** — [deploy/terraform](../../deploy/terraform) は両方の
+変数を持つ:
 
 ```sh
 cd deploy/terraform
-# 1. Normal private deployment: public_read_only stays false.
-#    (invoker_members = ["user:you@your-org.example"] is enough for a demo.)
+# 1. 通常の非公開デプロイ: public_read_only は false のまま。
+#    (invoker_members = ["user:you@your-org.example"] でデモには十分。)
 terraform apply
 export OCHAKAI_URL=$(terraform output -raw service_url)
-# ... the one-time schema bootstrap, as always (module README) ...
+# ... 一度だけのスキーマ bootstrap は、いつも通り(module の README)...
 
-# 2. Seed it while it is still private and writable — see below.
+# 2. まだ非公開で書き込み可能なうちにシードする — 下を見よ。
 
-# 3. Flip. This sets OCHAKAI_MODE=public and grants allUsers in the
-#    same apply; the module has no way to do one without the other.
+# 3. 切り替える。これは同じ apply の中で OCHAKAI_MODE=public を設定し
+#    allUsers を付与する; module には片方だけをやる方法が無い。
 terraform apply -var public_read_only=true
 terraform output -raw demo_url
 ```
 
-**gcloud** — deploy per the deploy guide's §3 (private,
-`--no-allow-unauthenticated`), seed, then flip in this order:
+**gcloud** — デプロイガイド §3 の通りにデプロイし(非公開、
+`--no-allow-unauthenticated`)、シードしてから、この順序で切り替える:
 
 ```sh
-# 1. Stop believing identities and stop writing, while still private.
+# 1. まだ非公開のうちに、identity を信じるのと書き込みをやめる。
 gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_MODE=public
 
-# 2. Only then open it.
+# 2. それから初めて開く。
 gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=allUsers --role=roles/run.invoker
 ```
 
-The order is the point: between the two commands the service is harmless, and
-the reverse order leaves a window in which a public ochakai still believes
-whatever `Authorization` header a stranger sends. As everywhere in the
-deploy guide, `--update-env-vars` — `--set-env-vars` would wipe
-`OCHAKAI_DATABASE_URL`.
+順序こそが要点である: 二つのコマンドの間、サービスは無害であり、逆の
+順序だと、公開された ochakai が見知らぬ人の送る `Authorization`
+ヘッダーを何であれ信じてしまう窓が残る。デプロイガイド全体と同じく、
+`--update-env-vars` を使うこと — `--set-env-vars` は
+`OCHAKAI_DATABASE_URL` を消してしまう。
 
-### Seeding
+### シードする
 
-[examples/demo](../../examples/demo) is a ten-concept knowledge base built to be
-read: linked concepts, mixed types, and enough usage for `sort=usage` to mean
-something. Import it while the service is still private, where you
-authenticate exactly as in the deploy guide's §5 — the CLI resolves a
-Google ID token from your gcloud login, nothing special:
+[examples/demo](../../examples/demo) は読ませるために作られた 10 個の
+concept を持つナレッジベースである: リンクされた concept、混在した
+type、そして `sort=usage` が何かを意味するだけの利用実績。サービスが
+まだ非公開のうちに import せよ。認証の方法はデプロイガイド §5 とまったく
+同じである — CLI は自分の gcloud ログインから Google の ID トークンを
+解決する。特別なことは何も無い:
 
 ```sh
 git clone --depth 1 https://github.com/na0fu3y/ochakai && cd ochakai
-go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL from above
+go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL は上で
 ```
 
-Those ten concepts are recorded as `human:you@your-org.example` — the last
-provenance this base will ever receive, and after the flip the only
-`created_by` any visitor sees. (The sequence has been rehearsed against a
-local server: import writable — 10 created, 0 skipped — then restart with
-`OCHAKAI_MODE=public`, after which reads serve anonymously and
-every write is refused. Cloud Run adds only the IAM binding.)
+その 10 個の concept は `human:you@your-org.example` として記録される —
+このベースが受け取る最後の provenance であり、切り替えの後に訪問者が
+見る唯一の `created_by` である。(この手順はローカルサーバーに対して
+リハーサル済みである: 書き込み可能な状態で import — 10 created、0
+skipped — それから `OCHAKAI_MODE=public` で再起動すると、読み取りは
+匿名で応答し、すべての書き込みが拒否される。Cloud Run が足すのは IAM の
+binding だけである。)
 
-### Checking the flip landed
+### 切り替えが反映されたことを確認する
 
-The demo is the one deployment where a plain `curl` is supposed to work, so
-it is also the one you can verify without a proxy:
+デモは、素の `curl` が動くはずの唯一のデプロイなので、proxy 無しで
+検証できる唯一のものでもある:
 
 ```sh
-curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue"  # 200, no token
+curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue"  # 200、トークン無し
 curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/bundle/queries/monthly-revenue.md"  # 403
 ```
 
-200 without a token proves the public grant and `OCHAKAI_MODE=public`
-both landed (before the flip this is Google's 401); 403 on the write proves
-the implied read-only. Sending a bogus `Authorization` header changes
-neither answer — that is the property, not a side effect.
+トークン無しでの 200 は、public の付与と `OCHAKAI_MODE=public` の両方が
+反映されたことを証明する(切り替え前ならこれは Google の 401 である);
+書き込みでの 403 は含意された read-only を証明する。でたらめな
+`Authorization` ヘッダーを送っても、どちらの答えも変わらない — それは
+副作用ではなく、その性質そのものである。
 
-If you want the demo to show **hybrid search** (deploy guide §4), grant
-the Vertex AI role *before* the import: vectors are written when a
-concept is written, and `ochakai reembed` is itself a write, so it is
-refused once read-only is on. The demo bundle has no files, so the
-deploy guide's §4b bucket is not needed for it.
+デモに**hybrid search**(デプロイガイド §4)を見せたいなら、import の
+*前に* Vertex AI のロールを付与せよ: ベクトルは concept が書き込まれた
+ときに書き込まれ、`ochakai reembed` それ自体が書き込みなので、
+read-only になった後では拒否される。デモのバンドルにはファイルが無い
+ので、デプロイガイド §4b のバケットはこれには要らない。
 
-### Cost
+### コスト
 
-The same shape as the table at the top of the deploy guide — a demo is
-one Cloud Run service and one `db-f1-micro`, with nothing extra to pay
-for. One difference in kind, not in the numbers: Cloud Run is
-request-billed and the requests no longer come only from your
-organization. `--max-instances=1` (deploy guide §3) is what keeps that
-bounded; leave it in place.
+デプロイガイド冒頭の表と同じ形である — デモは一つの Cloud Run サービス
+と一つの `db-f1-micro` で、余分に払うものは無い。種類として違うのは
+一つだけ: Cloud Run はリクエスト課金であり、リクエストはもはや自分の
+組織からだけ来るのではない。それを抑えているのは `--max-instances=1`
+(デプロイガイド §3)であり、そのままにしておくこと。
 
-### What you give up, and why that is acceptable
+### 何を諦めるか、そしてなぜそれで構わないか
 
-- **No identity, at all.** Nothing about a visitor is known or recorded.
-  `created_by` / `updated_by` on anything written through a public service
-  would be a value the server invented — which is precisely why nothing can
-  be written. Provenance is most of what ochakai sells; a public demo does
-  not weaken it, it declines to pretend.
-- **Everything in the base is public.** There is no 401 anywhere, so the
-  concepts, their revisions, and their authors' email addresses are on the
-  open internet. Put a demo bundle in it. Never point this posture at a real
-  knowledge base because "it is only read-only".
-- **Delegation is gone** (deploy guide §5c) — an embedding application
-  cannot forward its users' identities here, because none of it would be
-  believed.
-- **Domain Restricted Sharing rejects the `allUsers` binding** — see
-  [Guardrails against misconfiguration](#guardrails-against-misconfiguration)
-  above; the deploy guide's §7 has the exact error message. It should be
-  rejected — lift it for a dedicated demo project if you want one, not for
-  the organization.
+- **identity が一切無い。** 訪問者について知られ、記録されるものは
+  何も無い。公開サービスを通して書き込まれた何かの `created_by` /
+  `updated_by` は、サーバーがでっち上げた値になってしまう — だからこそ
+  何も書き込めないようになっている。provenance は ochakai が売るものの
+  大半であり、公開デモはそれを弱めるのではなく、それを装うことを拒否
+  しているだけである。
+- **ベースの中身はすべて公開される。** どこにも 401 は無いので、
+  concept、そのリビジョン、そして著者のメールアドレスがオープンな
+  インターネット上にある。デモ用のバンドルを入れよ。「read-only
+  だから」という理由で、この姿勢を本物のナレッジベースに向けては
+  決していけない。
+- **委譲は無くなる**(デプロイガイド §5c) — 埋め込んだアプリケーション
+  は自分の利用者の identity をここへ転送できない。何であれ信じられない
+  からである。
+- **Domain Restricted Sharing は `allUsers` の binding を拒否する** —
+  上の[設定ミスに対するガードレール](#guardrails-against-misconfiguration)
+  を見よ; デプロイガイドの §7 に正確なエラーメッセージがある。拒否
+  されて正しい — 欲しいなら組織全体ではなく専用のデモプロジェクトの
+  ためにそれを外せ。
 
-**The demo database still grows.** Usage telemetry — search hits and fetch
-counts (design doc 0029) — keeps recording under read-only on purpose: it is
-the server's own observation rather than a caller's write, and switching it
-off would freeze the `sort=usage` feed that a demo most wants to show (design
-doc 0040 §2.2). Two consequences: the 10 GB disk is a hard ceiling with
-auto-growth off (deploy guide §2), so watch it on a demo that gets
-attention; and those counts are driven by anonymous strangers, so treat
-them as a public popularity signal, never as evidence about the knowledge.
+**デモのデータベースはそれでも育つ。** usage テレメトリ — 検索のヒット
+と fetch の回数(設計ドキュメント 0029)— は、read-only の下でも意図的
+に記録され続ける: それは呼び出し元の書き込みではなくサーバー自身の
+観測であり、それを止めれば、デモがいちばん見せたい `sort=usage` の
+フィードが凍りついてしまうからである(設計ドキュメント 0040 §2.2)。
+帰結は二つ: auto-growth が off の 10 GB ディスクは硬い天井なので、
+注目を集めるデモではそれを見張ること; そしてそれらの数は匿名の
+見知らぬ人々によって動いているので、ナレッジについての証拠としてでは
+なく、公開の人気シグナルとして扱うこと。
 
-### Taking it back down
+### 元に戻す
 
-Full teardown is the deploy guide's §9. To retract just the posture and
-keep the deployment, reverse the order it was set in — the public grant
-goes first, so the service is never open while it is anything but
-read-only:
+完全な取り壊しはデプロイガイドの §9 である。姿勢だけを取り下げてデプロイ
+は残すには、設定したときと逆の順序を辿る — public の付与を先に外す
+ので、read-only 以外の何かのままサービスが開いている瞬間は無い:
 
 ```sh
 gcloud run services remove-iam-policy-binding ochakai --region=$REGION \
@@ -784,82 +826,91 @@ gcloud run services update ochakai --region=$REGION \
   --remove-env-vars=OCHAKAI_MODE
 ```
 
-With Terraform, `terraform apply -var public_read_only=false` does both, in
-that order.
+Terraform では、`terraform apply -var public_read_only=false` がその
+順序で両方をやる。
 
-## Upgrades
+<a id="upgrades"></a>
 
-Migrations run automatically at startup, so an upgrade is a new image
-tag. The two things to read first are the
-[changelog](../../CHANGELOG.md) — which marks breaking changes and says
-what an operator has to do about each one — and the version notes below.
+## アップグレード
+
+マイグレーションは起動時に自動で走るので、アップグレードとは新しい
+イメージタグのことである。最初に読むべき二つは、
+[changelog](../../CHANGELOG.md) — 破壊的変更に印を付け、それぞれに
+ついて運用担当者が何をすべきかを言う — と、下のバージョンごとの注記
+である。
 
 ```sh
 gcloud run services update ochakai --region=$REGION \
   --image=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:<new-tag>
 ```
 
-The Artifact Registry remote repository set up in the deploy guide's §1
-fetches new tags from GHCR on demand; verify what you got with the
-[Supply chain](#supply-chain) command above. Rolling back Cloud Run
-traffic to a previous revision does **not** roll back database
-migrations; migrations are additive, so older binaries keep working
-against a newer schema.
+デプロイガイド §1 でセットアップした Artifact Registry のリモート
+リポジトリは、新しいタグを GHCR からオンデマンドで取得する; 何を得たか
+は上の[サプライチェーン](#supply-chain)のコマンドで検証せよ。Cloud Run
+のトラフィックを以前のリビジョンにロールバックしても、データベースの
+マイグレーションはロールバック**されない**; マイグレーションは追加的な
+ので、古いバイナリは新しいスキーマに対しても動き続ける。
 
-Pin a version rather than `:latest`, so a redeploy is a decision.
+`:latest` ではなくバージョンを固定せよ。再デプロイが決定であるように。
 
-Three upgrade-adjacent traps worth knowing here:
+ここで知っておく価値のある、アップグレードに付随する罠が三つある:
 
-- **Upgrade the web UI before or together with the API, never after.**
-  Design doc [0064](../design/0064-rest-stops-at-api-v1.md) renamed the
-  delegation header with no dual-accept window; the web UI proxy only
-  strips the spelling its own build knows. An old web UI in front of an
-  API that has already adopted 0064 forwards the current spelling
-  untouched — silently misattributing a write, not a 400 (issue
-  [#418](https://github.com/na0fu3y/ochakai/issues/418)). The Terraform
-  module always applies the API first; stage `webui_image_tag` ahead of
-  `image_tag` for this one (issue
-  [#426](https://github.com/na0fu3y/ochakai/issues/426)).
-- **Changing `OCHAKAI_EMBEDDING_DIM` on a database that already holds
-  vectors rebuilds the vector tables at the new width**, because a vector
-  is derived from the concept it describes and nothing curated is involved
-  (design doc [0053](../design/0053-embeddings-by-default.md) §3). The
-  startup log says it happened. Search is lexical-only until
-  `ochakai reembed` refills them — that part is deliberate, since
-  refilling spends money.
-- **Semantic search becoming reachable, or a changed model, does not
-  backfill.** Existing concepts stay unembedded until `ochakai reembed`,
-  which costs Vertex AI tokens proportional to the base.
+- **web UI は API より前か、API と一緒にアップグレードせよ。決して
+  後にしてはいけない。** 設計ドキュメント
+  [0064](../design/0064-rest-stops-at-api-v1.md)は、dual-accept の
+  窓を設けずに委譲用のヘッダーの名前を変えた。web UI の proxy は自分の
+  ビルドが知っているスペルしか剥がさない。0064 をすでに取り込んだ API
+  の前に、古い web UI がいると、今のスペルのヘッダーをそのまま素通り
+  させてしまう — 400 ではなく、静かな書き込みの誤帰属になる(issue
+  [#418](https://github.com/na0fu3y/ochakai/issues/418))。Terraform
+  module は常に API を先に適用する; この一件のためだけに、
+  `webui_image_tag` を `image_tag` より先に進めよ(issue
+  [#426](https://github.com/na0fu3y/ochakai/issues/426))。
+- **すでにベクトルを持つデータベースで `OCHAKAI_EMBEDDING_DIM` を変える
+  と、ベクトルテーブルが新しい幅で再構築される。** ベクトルはそれが
+  記述する concept から導出されるものであり、キュレーションされた
+  何かが関わっているわけではないからである(設計ドキュメント
+  [0053](../design/0053-embeddings-by-default.md) §3)。起動時のログは
+  それが起きたことを言う。`ochakai reembed` がそれらを埋め直すまで、
+  検索は lexical のみになる — 埋め直しは費用がかかるので、それは意図
+  的である。
+- **semantic search が到達可能になったり、モデルが変わったりしても、
+  backfill はされない。** 既存の concept は `ochakai reembed` まで
+  embedding が無いままである。これは Vertex AI のトークンをベースの
+  規模に比例して消費する。
 
-### Version notes
+### バージョンごとの注記
 
-- **→ 0.9.0 (breaking)**: the MCP OAuth connector service is retired.
-  `OCHAKAI_CONNECTOR_PUBLIC_URL` is now silently ignored — **never point
-  a connector deployment at this image**: that service was publicly
-  invokable, and this image would serve the trust-the-headers private
-  surface on it. Delete the connector service instead of upgrading it
-  (`gcloud run services delete ochakai-connector --region=$REGION`), and
-  clean up its Google OAuth client, the Secret Manager client secret,
-  and any Domain Restricted Sharing exemption. The private service is
-  unaffected; its startup migration drops the now-unused `oauth_*`
-  tables (which the private service never read, so rolling it back
-  afterwards remains safe).
-  Also removed in 0.9.0: the `DATABASE_URL` alias (use
-  `OCHAKAI_DATABASE_URL`), `OCHAKAI_ADDR` (use `PORT`), the `/healthz`
-  alias (use `/health`), the startup bytea→GCS backfill (upgrade through
-  0.8.x with `OCHAKAI_GCS_BUCKET` set if attachment bytes are still in
-  Postgres, deploy guide §4b), and OKF import of the pre-0.4 nested
-  `attrs:` frontmatter form (re-export old bundles, or lift the keys to
-  the top level — SPEC §4.1).
-- **From anything older than 0.8.0**: all pre-0.9.0 releases are
-  [retracted](https://go.dev/ref/mod#go-mod-file-retract) and their
-  per-version upgrade notes have been removed from here — recover them
-  from git history if needed
-  (`git log -- docs/guides/operating.md deploy/cloudrun/README.md`). The
-  short of it: remove pre-0.3 configuration (`OCHAKAI_CLIENTS`,
-  `OCHAKAI_AUTH`, `OCHAKAI_CORS_ORIGINS`, `OCHAKAI_EMBEDDING_PROVIDER` —
-  stale variables are silently ignored, so check they are unset), adopt
-  the deploy guide's §3 posture (`--no-allow-unauthenticated` + IAM
-  invoker grants, identity headers, passwordless database), step through
-  **0.8.x** for the attachment backfill if applicable (deploy guide
-  §4b), then land on 0.9.0 with the note above.
+- **→ 0.9.0(破壊的変更)**: MCP OAuth コネクタサービスは廃止された。
+  `OCHAKAI_CONNECTOR_PUBLIC_URL` は今は黙って無視される — **コネクタの
+  デプロイをこのイメージに向けては決していけない**: あのサービスは
+  公開で呼び出し可能であり、このイメージはそこに、ヘッダーを信じる
+  非公開向けの surface を提供してしまう。コネクタサービスはアップ
+  グレードするのではなく削除せよ(`gcloud run services delete
+  ochakai-connector --region=$REGION`)。そして Google OAuth クライアント、
+  Secret Manager のクライアント secret、そして Domain Restricted
+  Sharing の免除があればそれも片付けよ。非公開サービスは影響を受けない;
+  その起動時マイグレーションは、もう使われていない `oauth_*` テーブルを
+  drop する(非公開サービスはそれらを読んだことが無いので、後で
+  ロールバックしても安全なままである)。
+  0.9.0 で他に削除されたもの: `DATABASE_URL` のエイリアス
+  (`OCHAKAI_DATABASE_URL` を使うこと)、`OCHAKAI_ADDR`(`PORT` を使う
+  こと)、`/healthz` のエイリアス(`/health` を使うこと)、起動時の
+  bytea→GCS backfill(添付ファイルのバイト列がまだ Postgres にあるなら
+  `OCHAKAI_GCS_BUCKET` を設定した状態で 0.8.x を経由してアップグレード
+  すること、デプロイガイド §4b)、そして 0.4 より前のネストした
+  `attrs:` frontmatter 形式の OKF import(古いバンドルを再 export する
+  か、キーをトップレベルに上げること — SPEC §4.1)。
+- **0.8.0 より古い何からでも**: 0.9.0 より前のリリースはすべて
+  [retract](https://go.dev/ref/mod#go-mod-file-retract) されており、
+  バージョンごとのアップグレード注記はここから取り除かれている —
+  必要なら git の履歴から回収すること(`git log --
+  docs/guides/operating.md deploy/cloudrun/README.md`)。かいつまむと:
+  0.3 より前の設定(`OCHAKAI_CLIENTS`、`OCHAKAI_AUTH`、
+  `OCHAKAI_CORS_ORIGINS`、`OCHAKAI_EMBEDDING_PROVIDER` — 古い変数は
+  黙って無視されるので、設定されていないことを確認すること)を外し、
+  デプロイガイド §3 の姿勢(`--no-allow-unauthenticated` + IAM の
+  invoker 付与、identity ヘッダー、パスワード無しのデータベース)を
+  採用し、該当するなら添付ファイルの backfill のために **0.8.x** を
+  経由し(デプロイガイド §4b)、それから上の注記と共に 0.9.0 に着地
+  すること。
