@@ -2,7 +2,8 @@
 
 Symptoms on the local and client side. Google Cloud symptoms — the GFE
 intercepting `/healthz`, `NOT_AUTHORIZED`, IAM propagation delays — are
-[§7 of the deploy guide](../../deploy/cloudrun/README.md). MCP clients
+[§7 of the deploy guide](../../deploy/cloudrun/README.md) (Japanese). MCP
+clients
 that will not connect at all are in
 [Connecting an MCP client](mcp-clients.md) (Japanese).
 
