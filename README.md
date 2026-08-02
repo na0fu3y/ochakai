@@ -16,8 +16,8 @@ data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
 a bundled web UI. More at [ochak.ai](https://ochak.ai).
 
 One Go binary and Postgres: [Terraform stands up Cloud Run + Cloud
-SQL](deploy/terraform/README.md) for about $10/month, or Docker and
-nothing else locally.
+SQL](deploy/terraform/README.md) (Japanese) for about $10/month, or Docker
+and nothing else locally.
 
 [Quick start](#quick-start) · [Why ochakai](#why-ochakai) ·
 [Requirements](#requirements) · [All docs](docs/README.md) (Japanese) ·
@@ -177,7 +177,8 @@ in the version you are running.
   [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) ·
   [Troubleshooting](docs/guides/troubleshooting.md)
-- **Running** — [Deploy with Terraform](deploy/terraform/README.md) ·
+- **Running** — [Deploy with Terraform](deploy/terraform/README.md)
+  (Japanese) ·
   [the gcloud reference it runs](deploy/cloudrun/README.md) ·
   [Configuration](docs/configuration.md) (Japanese) ·
   [Operating](docs/guides/operating.md) ·
