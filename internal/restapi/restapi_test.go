@@ -202,6 +202,60 @@ func TestFrontmatterParamsAreNotUnknown(t *testing.T) {
 	}
 }
 
+// TestUnknownQueryParamsArePerOperation pins the two silent no-ops issue
+// #409 found in the strict allowlist: a parameter declared in
+// api/openapi.yaml on one operation but accepted, and ignored, on
+// another. TestUnknownQueryParamsAreRejected already shows an
+// altogether-foreign key is rejected everywhere; this shows a key that
+// is real on *some* operation is still rejected on the ones that do not
+// declare it — the case a single shared or globally-exempt allowlist
+// cannot distinguish.
+func TestUnknownQueryParamsArePerOperation(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct{ name, method, url string }{
+		// purge is DELETE's own parameter (api/openapi.yaml declares it
+		// there, not on PUT); before issue #409 the two verbs shared one
+		// allowlist and a PUT ?purge= passed it silently.
+		{"purge on PUT", http.MethodPut, "/api/v1/bundle/metrics/revenue.md?purge=true"},
+		// fm.* is real on search and context (frontmatterFilter); before
+		// issue #409 the exemption was unconditional, so it also passed
+		// on every operation that reads no Frontmatter filter at all.
+		{"fm. on stats", http.MethodGet, "/api/v1/stats?fm.owner=finance"},
+		{"fm. on move", http.MethodPost, "/api/v1/move?fm.owner=finance"},
+		{"fm. on reembed", http.MethodPost, "/api/v1/reembed?fm.owner=finance"},
+		{"fm. on bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md?fm.owner=finance"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), "unknown query parameter") {
+				t.Errorf("%s %s body %q does not say the parameter is unknown", c.method, c.url, rec.Body)
+			}
+		})
+	}
+}
+
+// TestUnknownQueryParamNamedIsDeterministic pins that naming the
+// offending key in a 400 does not depend on Go's randomized map
+// iteration: with two unknown keys, the same one is named every time.
+func TestUnknownQueryParamNamedIsDeterministic(t *testing.T) {
+	h := Handler(&service.Service{})
+	for i := 0; i < 20; i++ {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats?zzz=1&aaa=1", nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("run %d: = %d, want 400 (body: %s)", i, rec.Code, rec.Body)
+		}
+		if !strings.Contains(rec.Body.String(), "aaa") {
+			t.Errorf("run %d: body %q does not name the lexicographically first unknown key", i, rec.Body)
+		}
+	}
+}
+
 // TestReviewRefusesRulingsItCannotRecord pins the two ways a ruling is
 // refused before any store access (design doc 0055 §§3.2-3.3): a value
 // outside the vocabulary, and a note where nothing can carry one.
