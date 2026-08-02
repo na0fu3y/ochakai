@@ -46,8 +46,8 @@ if the proposal is concrete.
   the way in poor. Most of what it raised has landed: the quick start loads a
   ten-concept knowledge base and says what ochakai requires before you need it,
   every MCP client the README names has setup instructions
-  ([docs/guides/mcp-clients.md](docs/guides/mcp-clients.md)), the CLI's help —
-  still the best documentation here — is rendered into
+  ([docs/guides/mcp-clients.md](docs/guides/mcp-clients.md)) (Japanese), the
+  CLI's help — still the best documentation here — is rendered into
   [docs/cli.md](docs/cli.md) before you have a binary, every design record
   carries an English abstract, and the half of the product that is not Cloud
   Run has a [FAQ](docs/faq.md),

@@ -1,146 +1,156 @@
-# Connecting an MCP client
+# MCP クライアントを繋ぐ
 
-ochakai serves MCP at `/mcp` over streamable HTTP. Two facts decide what
-you put in a client's config, and neither is a preference:
+ochakai は `/mcp` で streamable HTTP による MCP を提供する。クライアント
+の設定に何を書くかは二つの事実だけが決め、どちらも好みの問題ではない:
 
-**Where the server is.** Against Cloud Run, every request has to carry a
-Google ID token that no MCP client mints, so the connection goes through
-`ochakai mcp-stdio` — it speaks MCP on stdin/stdout, resolves your
-identity the way every other client command does, and forwards each
-JSON-RPC message untouched (design doc
-[0039](../design/0039-mcp-stdio-bridge.md)). The client ends up
-configured with no credentials, because there are none to configure.
-Locally that requirement disappears and the URL works directly.
+**サーバーがどこにあるか。** Cloud Run に対しては、すべてのリクエスト
+が MCP クライアントの誰も発行できない Google ID トークンを運ばなければ
+ならないので、接続は `ochakai mcp-stdio` を通す — stdin/stdout で MCP
+を話し、他のクライアントコマンドと同じ方法で identity を解決し、
+JSON-RPC メッセージをそのまま転送する(設計ドキュメント
+[0039](../design/0039-mcp-stdio-bridge.md))。クライアント側の設定に
+資格情報は要らない、そもそも設定するものが無いからである。ローカル
+ではこの要件が消え、URL がそのまま使える。
 
-**What the client can open.** Some clients only launch a command and talk
-over stdio. For those, the bridge is the answer whatever the server is.
+**クライアントが何を開けるか。** コマンドを起動して stdio で話すこと
+しかできないクライアントもある。そうしたクライアントには、サーバーが
+どちらであってもブリッジが答えになる。
 
-So: **local server, capable client → the URL. Anything else → the
-bridge** — which has prerequisites of its own, listed
-[below](#what-the-bridge-needs) before any of the configs.
+つまり: **ローカルサーバー、かつ対応できるクライアントなら URL。それ
+以外はブリッジ** — ブリッジには独自の前提条件があり、どの設定より前に
+[下](#what-the-bridge-needs)で挙げる。
 
-| Client | Local `docker compose` | Cloud Run | Config lives in |
+| クライアント | ローカル `docker compose` | Cloud Run | 設定の置き場所 |
 |---|---|---|---|
-| [Claude Code](#claude-code)* | URL | bridge | `.mcp.json`, or `claude mcp add` |
-| [Claude Desktop](#claude-desktop) | bridge | bridge | `claude_desktop_config.json` |
-| [Cursor](#cursor) | URL | bridge | `~/.cursor/mcp.json` or `.cursor/mcp.json` |
-| [VS Code](#vs-code) | URL | bridge | `.vscode/mcp.json` |
-| [Windsurf](#windsurf) | URL | bridge | `~/.codeium/windsurf/mcp_config.json` |
-| [Cline](#cline) | URL | bridge | its own settings file — use the panel |
-| [Zed](#zed) | URL | bridge | `~/.config/zed/settings.json` |
-| [Gemini CLI](#gemini-cli) | URL | bridge | `~/.gemini/settings.json` |
-| [Hosted assistants](#clients-that-cannot-reach-your-deployment) | — | — | not reachable, by design |
+| [Claude Code](#claude-code)* | URL | ブリッジ | `.mcp.json`、または `claude mcp add` |
+| [Claude Desktop](#claude-desktop) | ブリッジ | ブリッジ | `claude_desktop_config.json` |
+| [Cursor](#cursor) | URL | ブリッジ | `~/.cursor/mcp.json` または `.cursor/mcp.json` |
+| [VS Code](#vs-code) | URL | ブリッジ | `.vscode/mcp.json` |
+| [Windsurf](#windsurf) | URL | ブリッジ | `~/.codeium/windsurf/mcp_config.json` |
+| [Cline](#cline) | URL | ブリッジ | 専用の設定ファイル — パネルから開く |
+| [Zed](#zed) | URL | ブリッジ | `~/.config/zed/settings.json` |
+| [Gemini CLI](#gemini-cli) | URL | ブリッジ | `~/.gemini/settings.json` |
+| [ホスト型アシスタント](#clients-that-cannot-reach-your-deployment) | — | — | 設計上、届かない |
 
-The local URL below is `http://localhost:8080/mcp`, which is what
-`deploy/compose.yaml` gives you.
+下にあるローカル URL は `http://localhost:8080/mcp` で、
+`deploy/compose.yaml` が渡すものそのものである。
 
-\* Claude Code is the one exception to this table: it also has a shell,
-and the [recommended path there is the CLI](#claude-code), not MCP at
-all.
+\* Claude Code はこの表の唯一の例外である: シェルを持っているので、
+[推奨される経路は CLI](#claude-code) であって MCP ではない。
 
-Claude Code and the bridge are what this project exercises. The rest is
-transcribed from each client's own documentation as of July 2026 and
-marked where nobody here has run it — a config that turns out to be wrong
-is worth an issue.
+Claude Code とブリッジはこのプロジェクトが実際に動かしているものである。
+残りは各クライアント自身のドキュメントから 2026 年 7 月時点で書き写した
+もので、ここで誰も動かしていない箇所には印を付けてある — 違っていた
+設定は issue にする価値がある。
 
-## What an agent gets
+## エージェントが手にするもの
 
-| Tool | Description |
+| ツール | 説明 |
 |---|---|
-| `get_context` | The one call before answering a data question: full concepts behind the top hits, links expanded both ways |
-| `search_concepts` | Cross-type search; verified concepts rank higher |
-| `get_concept` | Fetch one concept as an OKF document, with its links and file metadata |
-| `get_file` | Fetch a file attached to a concept (dashboard screenshots, ER diagrams, seeds files) |
-| `put_concept` | Write learnings back — creates if the id is free, replaces if it is taken; every change is kept as a revision |
-| `delete_concept` | Soft-delete (history retained) |
-| `get_concept_usage` | Usage totals per concept — draft-promotion evidence, staleness signal |
-| `report_outcome` | Report worked/failed after acting on knowledge — failed reports flag verified concepts for re-verification |
+| `get_context` | データの質問に答える前に呼ぶ一回のコール: 上位ヒットの concept 全文を、双方向に展開したリンクとともに返す |
+| `search_concepts` | 型をまたいだ検索。verified な concept が上位に来る |
+| `get_concept` | concept を一件、OKF ドキュメントとして、リンクとファイルのメタデータ付きで取得する |
+| `get_file` | concept に添付されたファイルを取得する(ダッシュボードのスクリーンショット、ER 図、seeds ファイルなど) |
+| `put_concept` | 学びを書き戻す — id が空いていれば作成し、埋まっていれば置き換える。変更はすべてリビジョンとして残る |
+| `delete_concept` | ソフトデリート(履歴は残る) |
+| `get_concept_usage` | concept ごとの利用回数の合計 — draft を昇格させる根拠、古びのシグナル |
+| `report_outcome` | ナレッジをもとに行動した後、worked/failed を報告する — failed の報告は verified な concept を再検証フィードに乗せる |
 
-Every one of these is a knowledge operation: ochakai never executes SQL and
-never calls an LLM. `compile_sql` — deterministic SQL generation from a
-semantic model — existed until 0.13.0 and was retired (design doc
-[0028](../design/0028-retire-compile-sql.md)): what an agent actually needs
-is the verified query and the caveat around it, and both arrive from
-`get_context`.
+これらはすべて知識に関する操作である。ochakai は SQL を実行せず、LLM も
+呼ばない。`compile_sql` — セマンティックモデルからの決定的な SQL 生成 —
+は 0.13.0 まで存在し、その後退役した(設計ドキュメント
+[0028](../design/0028-retire-compile-sql.md)): エージェントが実際に
+必要としているのは検証済みのクエリとそれに添う注意書きであり、両方とも
+`get_context` から届く。
 
-Every concept is also an **MCP resource** addressable by its canonical URI —
-`ochakai://` plus its id (the concept's path), e.g. `ochakai://metrics/revenue`
-or `ochakai://queries/sales/top-customers`. Clients that support resource
-references (`@`-mentions) can pull a concept in as an OKF document —
-frontmatter and body — without a tool call; discovery stays with
-`get_context`/`search_concepts`. Read tools carry `readOnly` annotations and
-`delete_concept` a `destructive` one, so client auto-approval policies work
-without parsing descriptions.
+すべての concept は正規の URI で参照できる **MCP リソース**でもある —
+`ochakai://` の後ろに id(concept のパス)を続ける、例えば
+`ochakai://metrics/revenue` や `ochakai://queries/sales/top-customers`。
+リソース参照(`@` メンション)に対応するクライアントは、ツール呼び出し
+無しで concept を OKF ドキュメント — frontmatter と本文 — として引き
+込める。発見のための手段は引き続き `get_context`/`search_concepts`
+である。読み取り系のツールには `readOnly` の、`delete_concept` には
+`destructive` のアノテーションが付いているので、クライアントの
+自動承認ポリシーは説明文を解析しなくても機能する。
 
-The tool count is a budget, not a mirror of REST: schemas are paid for out of
-the agent's context window, so the REST API is a superset — bulk export, the
-human-facing reads, file writes, and no bulk import at all (design doc
-[0015 §3.1-3.2](../design/0015-surface-consistency.md)). For an agent with a
-shell, the [CLI](../cli.md) covers everything and costs no schema.
+ツール数は REST の写しではなく予算である: スキーマはエージェントの
+コンテキストウィンドウから支払われるので、REST API はその上位互換に
+なる — 一括エクスポート、人が読むための取得、ファイルの書き込み、
+そして一括インポートは無い(設計ドキュメント
+[0015 §3.1-3.2](../design/0015-surface-consistency.md))。シェルを
+持つエージェントには、[CLI](../cli.md) が全機能をカバーしつつスキーマ
+の代金を一切要求しない。
 
-## What the bridge needs
+<a id="what-the-bridge-needs"></a>
 
-Every config below that launches a command needs `ochakai` on the
-client's `PATH`. Against Cloud Run it needs two more things, and neither
-is present on a machine by default:
+## ブリッジが必要とするもの
 
-- **The `gcloud` CLI**, which is where the ID token comes from. The
-  bridge tries service-account ADC first and otherwise shells out to
-  `gcloud auth print-identity-token` — a user's application-default
-  credentials cannot mint the audience-bound token Cloud Run wants, so
-  on a personal machine it is the `gcloud` path that runs.
-- **`gcloud auth login` having happened**, as a principal holding
-  `roles/run.invoker` on the service.
+下の設定のうちコマンドを起動するものはどれも、クライアントの `PATH`
+上に `ochakai` を必要とする。Cloud Run に対してはさらに二つ必要で、
+どちらもマシンに既定では入っていない:
 
-The CLI resolves the same token the same way when you point it straight
-at a Cloud Run URL (`ochakai use https://your-service.run.app`) — this
-list is really what reaching Cloud Run needs, bridge or not.
+- **`gcloud` CLI。** ID トークンの出どころである。ブリッジはまず
+  サービスアカウントの ADC を試し、それが無ければ
+  `gcloud auth print-identity-token` にフォールバックする —
+  ユーザー自身の application-default credentials では Cloud Run が
+  求める audience 束縛のトークンを発行できないので、個人のマシンでは
+  `gcloud` の経路が実際に動く。
+- **`gcloud auth login` を済ませていること。** サービスに対する
+  `roles/run.invoker` を持つ principal としてである。
 
-"The client is configured with no credentials" is a claim about the
-config file, not about the machine. The credential exists; it lives in
-your gcloud session instead of in JSON, which is what keeps it out of
-the client's config and off disk in any form ochakai has to rotate.
+CLI は Cloud Run の URL を直接指したとき(`ochakai use
+https://your-service.run.app`)にも同じ方法で同じトークンを解決する —
+この一覧は実質、ブリッジであるかどうかによらず Cloud Run に届くために
+必要なものである。
 
-`ochakai whoami` is the check. It prints which server the CLI targets,
-as whom, and whether it answers — so run it in a terminal before editing
-any config below, because a client that launches a bridge with no
-identity usually reports it as "the server has no tools".
+「クライアントは資格情報無しで設定される」というのは設定ファイルに
+ついての主張であって、マシンについての主張ではない。資格情報自体は
+存在する。ただそれが JSON の中ではなく gcloud のセッションに住んで
+いるだけであり、それがクライアントの設定からも、ochakai がローテー
+ションしなければならないどんな形のディスク上からも、資格情報を締め
+出している。
 
-None of this applies to a local `docker compose` server, which takes no
-token at all.
+`ochakai whoami` が確認の手段である。CLI がどのサーバーに、誰として
+話しかけていて、それが応答するかを表示するので、下の設定を編集する
+前に端末で走らせておく — identity を持たずにブリッジを起動した
+クライアントは、たいてい「サーバーにツールが無い」という形でそれを
+報告するからである。
+
+これはすべて Cloud Run に対する話で、トークンを一切要求しないローカル
+の `docker compose` サーバーには当てはまらない。
 
 ## Claude Code
 
-**Recommended: the CLI, not MCP.** Claude Code has a shell, so the CLI's
-tool schemas cost the agent no context — `--help` is read on demand —
-and against Cloud Run it needs no proxy or bridge process, because it
-resolves the ID token itself. See the README's
-[Connect an agent](../../README.md#connect-an-agent).
+**推奨は CLI、MCP ではない。** Claude Code はシェルを持つので、CLI の
+ツールスキーマはエージェントのコンテキストを消費しない —
+`--help` はその場で読める — し、Cloud Run に対してもプロキシやブリッジ
+プロセスを要らない。ID トークンを自分で解決するからである。README の
+[エージェントを繋ぐ](../../README.md#connect-an-agent)を見よ。
 
-### If you want MCP tools instead
+### それでも MCP のツールが欲しい場合
 
-Against a local server:
+ローカルサーバーに対して:
 
 ```sh
 claude mcp add --transport http ochakai http://localhost:8080/mcp
 ```
 
-Against Cloud Run, the bridge:
+Cloud Run に対して、ブリッジ経由:
 
 ```sh
 claude mcp add ochakai -- ochakai mcp-stdio
 ```
 
-`-s user` puts it in your user config instead of the project's; the
-default scope is local to the project directory. `-s project` writes
-`.mcp.json`, which is the committed form — this repository's own
-`.mcp.json` targets its local `docker compose` server and connects
-automatically once that's running.
+`-s user` はプロジェクトではなくユーザーの設定に置く。既定のスコープは
+プロジェクトディレクトリに閉じたローカルである。`-s project` は
+`.mcp.json` に書き込む — これはコミットされる形で、このリポジトリ自身
+の `.mcp.json` はローカルの `docker compose` サーバーを指し、それが
+動いていれば自動的に繋がる。
 
 ## Claude Desktop
 
-The desktop app's config file takes a command, not a URL, so the bridge
-is the route in both cases:
+デスクトップアプリの設定ファイルは URL ではなくコマンドを取るので、
+どちらの場合もブリッジが経路になる:
 
 ```json
 {
@@ -150,21 +160,23 @@ is the route in both cases:
 }
 ```
 
-The file is at `~/Library/Application Support/Claude/claude_desktop_config.json`
-on macOS and `%APPDATA%\Claude\claude_desktop_config.json` on Windows —
-Settings → Developer → Edit Config opens it. Restart the app after
-editing.
+ファイルは macOS では
+`~/Library/Application Support/Claude/claude_desktop_config.json`、
+Windows では `%APPDATA%\Claude\claude_desktop_config.json` にある —
+設定 → Developer → Edit Config が開いてくれる。編集後はアプリを
+再起動する。
 
-Use an absolute path for `command` (`which ochakai`). A desktop app does
-not inherit the `PATH` your shell has, which is the usual reason a config
-that looks right produces no tools.
+`command` には絶対パスを使う(`which ochakai`)。デスクトップアプリは
+シェルの `PATH` を継承しないので、正しく見える設定がツールを一つも
+出さないのはたいていこれが理由である。
 
-Against Cloud Run this config does nothing until the machine has gcloud
-and a login — [what the bridge needs](#what-the-bridge-needs). There is
-no way to supply that from inside the app, and no bundle or installer
-that removes it.
+Cloud Run に対しては、この設定だけではマシンに gcloud とログインが
+揃うまで何も起きない —
+[ブリッジが必要とするもの](#what-the-bridge-needs)。アプリの中から
+それを与える方法は無く、それを不要にするバンドルやインストーラも無い。
 
-Add `--url` when the server is not the one `ochakai use` selected:
+`ochakai use` が選んだのと違うサーバーを使うときは、下のように
+`--url` を足す:
 
 ```json
 {
@@ -177,13 +189,14 @@ Add `--url` when the server is not the one `ochakai use` selected:
 }
 ```
 
-The app's **custom connector** UI takes a URL rather than a command, but
-that connection is opened from Anthropic's infrastructure, not your
-machine — see [below](#clients-that-cannot-reach-your-deployment).
+アプリの**カスタムコネクタ** UI はコマンドではなく URL を取るが、
+その接続はあなたのマシンではなく Anthropic のインフラから開かれる —
+[下](#clients-that-cannot-reach-your-deployment)を見よ。
 
 ## Cursor
 
-`~/.cursor/mcp.json` for every project, `.cursor/mcp.json` for one:
+`~/.cursor/mcp.json` はすべてのプロジェクトに、`.cursor/mcp.json` は
+一つのプロジェクトに:
 
 ```json
 {
@@ -193,26 +206,26 @@ machine — see [below](#clients-that-cannot-reach-your-deployment).
 }
 ```
 
-Cloud Run: replace the `url` entry with the bridge form from
-[Claude Desktop](#claude-desktop) above — Cursor uses the same
-`mcpServers` shape.
+Cloud Run: `url` の項目を [Claude Desktop](#claude-desktop) 上のブリッジ
+形式に置き換える — Cursor は同じ `mcpServers` の形を使う。
 
-For a local server there is also an install link, which encodes exactly
-the config above:
+ローカルサーバーに対しては、上と同じ設定をそのままエンコードした
+インストールリンクもある:
 
 ```markdown
 [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=ochakai&config=eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjgwODAvbWNwIn0%3D)
 ```
 
-To point one at your own deployment, base64 the server object alone —
-`{"url":"https://your-service.run.app/mcp"}` — and note that this only
-helps for a server the client can reach unauthenticated.
+自分のデプロイを指すものを作るには、サーバーオブジェクトだけを
+base64 化する —
+`{"url":"https://your-service.run.app/mcp"}` — ただしこれは認証無しで
+クライアントが届けるサーバーにしか役立たないことに注意する。
 
 ## VS Code
 
-`.vscode/mcp.json` in the workspace, or the user-level file that
-**MCP: Open User Configuration** opens. The key is `servers`, not
-`mcpServers`:
+ワークスペースの `.vscode/mcp.json`、あるいは **MCP: Open User
+Configuration** が開くユーザーレベルのファイル。キーは `mcpServers`
+ではなく `servers` である:
 
 ```json
 {
@@ -222,7 +235,7 @@ helps for a server the client can reach unauthenticated.
 }
 ```
 
-Cloud Run, same file:
+Cloud Run、同じファイル:
 
 ```json
 {
@@ -232,21 +245,21 @@ Cloud Run, same file:
 }
 ```
 
-Install links for the local case (the second is for Insiders):
+ローカルの場合のインストールリンク(二つ目は Insiders 用):
 
 ```markdown
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=ochakai&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22http%3A%2F%2Flocalhost%3A8080%2Fmcp%22%7D)
 [![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=ochakai&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22http%3A%2F%2Flocalhost%3A8080%2Fmcp%22%7D&quality=insiders)
 ```
 
-MCP configuration moved out of `settings.json` in VS Code 1.102 and
-existing concepts were migrated; if you find a `"mcp"` key in your
-settings, that is where it came from.
+MCP の設定は VS Code 1.102 で `settings.json` の外に移り、既存の
+concept は移行された。設定の中に `"mcp"` キーが見つかったら、それは
+そこから来たものである。
 
 ## Windsurf
 
-`~/.codeium/windsurf/mcp_config.json`. The URL field is `serverUrl`, not
-`url`:
+`~/.codeium/windsurf/mcp_config.json`。URL のフィールドは `url` では
+なく `serverUrl` である:
 
 ```json
 {
@@ -256,15 +269,15 @@ settings, that is where it came from.
 }
 ```
 
-Cloud Run: the bridge form, as in [Claude Desktop](#claude-desktop).
-Untested here.
+Cloud Run: [Claude Desktop](#claude-desktop) と同じブリッジ形式。ここでは
+未検証。
 
 ## Cline
 
-Cline's own documentation and its source disagree about where the
-settings file lives, so open it from the panel — **MCP Servers →
-Configure MCP Servers** — rather than by path. `type` is required and
-misspelling it silently falls back to SSE:
+Cline 自身のドキュメントとソースコードは設定ファイルの置き場所に
+ついて食い違っているので、パスではなくパネルから開く —
+**MCP Servers → Configure MCP Servers**。`type` は必須で、綴りを
+間違えると黙って SSE にフォールバックする:
 
 ```json
 {
@@ -277,11 +290,11 @@ misspelling it silently falls back to SSE:
 }
 ```
 
-Cloud Run: the bridge form. Untested here.
+Cloud Run: ブリッジ形式。ここでは未検証。
 
 ## Zed
 
-`~/.config/zed/settings.json`, under `context_servers`:
+`~/.config/zed/settings.json` の `context_servers` の下:
 
 ```json
 {
@@ -291,14 +304,15 @@ Cloud Run: the bridge form. Untested here.
 }
 ```
 
-Cloud Run: `{ "command": "ochakai", "args": ["mcp-stdio"] }` in the same
-place. Untested here.
+Cloud Run: 同じ場所に `{ "command": "ochakai", "args": ["mcp-stdio"] }`。
+ここでは未検証。
 
 ## Gemini CLI
 
-`~/.gemini/settings.json`, or `.gemini/settings.json` per project. The
-field for streamable HTTP is **`httpUrl`** — `url` in this client means
-SSE, and pointing it at `/mcp` fails in a way that does not say so:
+`~/.gemini/settings.json`、またはプロジェクトごとの
+`.gemini/settings.json`。streamable HTTP 用のフィールドは
+**`httpUrl`** である — このクライアントで `url` は SSE を意味し、
+それを `/mcp` に向けると、原因の分からない形で失敗する:
 
 ```json
 {
@@ -308,58 +322,62 @@ SSE, and pointing it at `/mcp` fails in a way that does not say so:
 }
 ```
 
-Or `gemini mcp add -t http ochakai http://localhost:8080/mcp`. Cloud Run:
-the bridge form. Untested here.
+あるいは `gemini mcp add -t http ochakai http://localhost:8080/mcp`。
+Cloud Run: ブリッジ形式。ここでは未検証。
 
-## A URL that works against Cloud Run
+## Cloud Run に対して機能する URL
 
-If a client insists on a URL and the server is on Cloud Run, `ochakai ui`
-is the local proxy that gives it one. It authenticates with your identity
-and exposes `/mcp` alongside the web UI, bound to loopback:
+クライアントが URL を要求し、サーバーが Cloud Run 上にあるなら、
+`ochakai ui` がそれを与えるローカルのプロキシである。あなたの identity
+で認証し、web UI と並べて `/mcp` を、ループバックに束縛して公開する:
 
 ```sh
 ochakai ui        # http://127.0.0.1:8098/mcp
 ```
 
-`gcloud run services proxy` is the third way — a plain HTTP tunnel with
-no MCP-specific behavior. The deploy guide uses it for verifying a
-deployment over `curl` ([§3](../../deploy/cloudrun/README.md)), not for
-connecting a client; prefer the bridge or `ochakai ui` above for that.
+`gcloud run services proxy` が三つ目の方法である — MCP 固有の振る舞い
+を持たない、ただの HTTP トンネル。deploy ガイドはこれを `curl` 越しの
+デプロイ検証に使っているが([§3](../../deploy/cloudrun/README.md))、
+クライアントを繋ぐためではない。そちらにはブリッジか上の
+`ochakai ui` を使う。
 
-## Clients that cannot reach your deployment
+<a id="clients-that-cannot-reach-your-deployment"></a>
 
-ChatGPT's connectors, the OpenAI Responses API, and Claude Desktop's
-custom-connector UI all open the connection **from the vendor's
-infrastructure**, not from your machine. Neither `localhost` nor an
-IAM-restricted Cloud Run service is reachable from there, and no config
-syntax changes that.
+## デプロイに届かないクライアント
 
-This is the access model working, not a gap: reachability *is* the
-authorization (design doc [0002](../design/0002-authn-authz.md)), so
-making a deployment reachable by a third party's servers means making it
-reachable — running ochakai publicly invokable is a misconfiguration
-rather than a deployment mode. A hosted assistant that also runs local
-code (Claude Desktop through the bridge, Claude Code, Cursor) is the
-supported path.
+ChatGPT のコネクタ、OpenAI の Responses API、Claude Desktop のカスタム
+コネクタ UI は、いずれも接続を**あなたのマシンからではなくベンダーの
+インフラから**開く。`localhost` も IAM で制限された Cloud Run サービス
+も、そこからは届かず、どんな設定の書き方もそれを変えない。
 
-## When it does not connect
+これはギャップではなく、アクセスモデルが働いている証拠である:
+到達できることそのものが認可である(設計ドキュメント
+[0002](../design/0002-authn-authz.md))ので、デプロイを第三者のサーバー
+から届くようにすることは、そのまま公開到達可能にすることを意味する —
+ochakai を公開で呼び出せる状態にすることは、デプロイの一形態ではなく
+設定ミスである。ローカルコードも動かせるホスト型アシスタント
+(ブリッジ越しの Claude Desktop、Claude Code、Cursor)が、サポートされる
+経路である。
 
-- **No tools appear, and no error.** The client launched the bridge and
-  the bridge could not reach a server, or `ochakai` was not on the
-  client's `PATH`. Run `ochakai whoami` in a terminal — it prints which
-  server the CLI is talking to, as whom, and whether it answers. Then use
-  an absolute path in `command`.
-- **Tools appear and every call fails.** Usually identity: against Cloud
-  Run the bridge needs `gcloud auth login` (or ADC) to have happened, and
-  the caller needs `roles/run.invoker`. The deploy guide's
-  [§7](../../deploy/cloudrun/README.md) covers the Google-side symptoms.
-- **The server answers curl but not the client.** Check the path — `/mcp`,
-  not the root. `GET /` on an ochakai server prints the endpoints it
-  serves.
-- **Searches come back empty on a base that has concepts.** Not a
-  connection problem. Japanese knowledge bases want embeddings on; see
-  [architecture's search section](../architecture.md#search).
+## 繋がらないとき
 
-`ochakai mcp-stdio` writes diagnostics to stderr and keeps stdout for the
-protocol, so a client that surfaces server logs will show you what it
-saw.
+- **ツールが一つも出ず、エラーも出ない。** クライアントはブリッジを
+  起動したが、ブリッジがサーバーに届かなかったか、`ochakai` が
+  クライアントの `PATH` に無かった。端末で `ochakai whoami` を走らせる
+  — どのサーバーに誰として話していて、応答するかを表示する。その上で
+  `command` に絶対パスを使う。
+- **ツールは出るが、呼び出しがすべて失敗する。** たいてい identity の
+  問題である: Cloud Run に対してはブリッジが `gcloud auth login`
+  (または ADC)を済ませている必要があり、呼び出し元は
+  `roles/run.invoker` を持っている必要がある。deploy ガイドの
+  [§7](../../deploy/cloudrun/README.md) が Google 側の症状を扱う。
+- **サーバーは curl には応答するがクライアントには応答しない。** パス
+  を確認する — `/mcp` であって、ルートではない。ochakai サーバーへの
+  `GET /` は、それが提供するエンドポイントを表示する。
+- **concept があるはずのベースで検索が空を返す。** 接続の問題ではない。
+  日本語のナレッジベースは埋め込みを有効にしておきたい —
+  [architecture の検索の節](../architecture.md#search)を見よ。
+
+`ochakai mcp-stdio` は診断情報を stderr に書き、stdout はプロトコル
+専用に残すので、サーバーのログを表示するクライアントは、それが見た
+ものをそのまま表示する。
