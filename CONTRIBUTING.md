@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 222
+    RECORD-LINES: 282
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -404,8 +404,19 @@ add a posture beside it" differ by which noun a に governs, and a guess
 there fails by blocking a PR that did nothing wrong. That one stays a
 reviewer's job.
 
+222 → 282, and 8,391 → 8,451, is issue #470's audit of what the freeze
+would make permanent closing its own third of the findings: three
+places where `api/openapi.yaml` and the code it describes disagreed —
+`?history`'s `limit` stated one ceiling while the code enforced two, a
+concept's GET declared `If-None-Match` without ever answering 304, and
+a file `PUT` declared an `ETag` response header it never sent. None of
+the three change a stored shape or a wire identifier, so 0064 gains a
+new §12 rather than a new record (0048 §2.3: still unreleased, so
+revised in place) — 60 lines for three findings, each with the
+disagreement, the decision and which side moved.
+
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8391
+    RECORD-CORPUS-LINES: 8451
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
