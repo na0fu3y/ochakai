@@ -152,13 +152,13 @@ every caller is `human:anonymous`, so a malformed `Ochakai-On-Behalf-Of`
 or `Ochakai-Producer` header fails on your machine instead of on first
 deploy against Cloud Run. See
 [Requirements and configuration](../configuration.md#environment-variables)
-for `OCHAKAI_MODE`'s other postures.
+(Japanese) for `OCHAKAI_MODE`'s other postures.
 
 ## See also
 
 - [api/openapi.yaml](../../api/openapi.yaml) — the checked contract: every
   request and response is validated against it in CI.
-- [Requirements and configuration](../configuration.md) — every
+- [Requirements and configuration](../configuration.md) (Japanese) — every
   environment variable named above.
 - [examples/bigquery-catalog](../../examples/bigquery-catalog) — a
   complete application-shaped integration: reads a warehouse, writes

@@ -214,7 +214,7 @@ How this works:
   Google's 401 without hitting the container), and ochakai records who
   they were as provenance — see
   [requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)
-  for the whole access model.
+  (Japanese) for the whole access model.
 - **Never make the service publicly invokable (`allUsers`)** — the
   identity headers ochakai reads are only trustworthy behind Cloud Run's
   IAM check. The single exception is a deployment that reads no identity
@@ -290,7 +290,8 @@ reaches.
 The model, location, multimodal file search, `OCHAKAI_EMBEDDING_DIM`
 and `ochakai reembed` — the command that backfills a base loaded before
 the role was granted, or before a model change — are all in
-[Environment variables](../../docs/configuration.md#environment-variables);
+[Environment variables](../../docs/configuration.md#environment-variables)
+(Japanese);
 what changing the dimension does to an existing database is in
 [Upgrades](../../docs/guides/operating.md#upgrades) in the operating
 guide.

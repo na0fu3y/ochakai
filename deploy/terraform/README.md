@@ -53,7 +53,8 @@ Two consequences worth knowing before you read further:
 `invoker_members` refuses `allUsers` and `allAuthenticatedUsers` — the
 headers ochakai trusts for provenance are only trustworthy behind Cloud
 Run's IAM check
-([requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)).
+([requirements and configuration](../../docs/configuration.md#authentication-has-no-configuration)
+(Japanese)).
 The same rule keeps the deployment compatible with the Domain Restricted
 Sharing org policy.
 
