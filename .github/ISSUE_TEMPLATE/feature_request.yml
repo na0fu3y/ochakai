@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose something `ochakai` should do.
+description: Propose a feature for ochakai.
 labels: ["enhancement"]
 body:
   - type: markdown
