@@ -28,7 +28,7 @@ and what it refuses to do. It is deliberately short; the manual is here.
 
 ## For someone using it
 
-- [The improvement loop](loop.md) — recall, write-back, review, outcome
+- [The improvement loop](loop.md) (Japanese) — recall, write-back, review, outcome
   reports: four prompts that walk it end to end, the web UI's three
   feeds, and what gets measured.
 - [CLI reference](cli.md) — every command's synopsis, flags and worked

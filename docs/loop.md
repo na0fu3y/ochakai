@@ -1,114 +1,120 @@
-# The improvement loop
+# 改善ループ
 
-Agents draft, a human verifies, and what happened next is measured. This
-page walks that loop once, end to end, against the quick start's knowledge
-base — the [demo bundle](../examples/demo) has enough in it that each step
-comes back with something.
+エージェントが下書きし、人が検証し、その後どうなったかを測る。この
+ページはそのループを端から端まで一周する — クイックスタートで入れた
+[デモバンドル](../examples/demo)には、どの段でも何かが返ってくるだけの
+中身がある。
 
-## Try four prompts
+## 四つのプロンプト
 
-Once an agent is connected ([README](../README.md#connect-an-agent)), four
-prompts walk the whole thing.
+エージェントを繋いだら([README](../README.md#connect-an-agent))、
+四つのプロンプトで全体を歩ける。
 
-**Recall.** Ask something the knowledge base can answer and watch the agent
-reach for it rather than guess:
+**思い出す。** ナレッジベースが答えられることを訊いて、エージェントが
+推測ではなくそちらへ手を伸ばすのを見る:
 
-> What do we already know about revenue? Use ochakai before answering.
+> 売上について既に分かっていることは? 答える前に ochakai を見て。
 
-One `get_context` call comes back with the concepts in full, so the agent
-starts from your definitions instead of inventing one.
+`get_context` 一回で concept が全文返るので、エージェントはあなたの
+定義から始める — 自分で定義を作らない。
 
-**Write back.** Tell it something worth keeping:
+**書き戻す。** 残す価値のあることを伝える:
 
-> Revenue in August runs about 15% below a normal month — it's seasonal,
-> not a problem. Save that to ochakai so the next session has it.
+> 8月の売上は通常月より 15% ほど低い。季節性であって異常ではない。
+> 次のセッションが使えるよう ochakai に保存して。
 
-It lands as a **draft**, attributed to the agent that wrote it. It is not
-trusted yet, and search says so.
+**draft** として着地し、書いたエージェントの名で provenance が残る。
+まだ信頼されておらず、検索もそう言う。
 
-**Review.** Open `ochakai ui`, find it in the review queue, and press
-Verify — or Reject with a reason, which is kept so agents stop re-proposing
-it. This is the half no agent does for you.
+**裁定する。** `ochakai ui` を開き、レビューキューでそれを見つけて
+Verify を押す — あるいは理由を付けて Reject する。理由は保存され、
+エージェントは同じ提案を繰り返さなくなる。**ここだけは、どのエージェント
+も代わりにやってくれない。**
 
-**Close the loop.** When knowledge turns out to be wrong, say so:
+**ループを閉じる。** ナレッジが間違っていたと分かったら、そう言う:
 
-> That golden query returned a number that doesn't match the finance
-> close. Report it as failed in ochakai, with why.
+> あの golden query の数字が月次決算の確定値と合わない。理由を付けて
+> failed として ochakai に報告して。
 
-`report_outcome` moves the concept into the re-verification feed instead of
-letting the next agent trust it blind. Verifying it again empties the feed.
+`report_outcome` はその concept を再検証フィードに移す — 次のエージェント
+に黙って信じさせない。もう一度検証すればフィードから消える。
 
-If nothing comes back on the first prompt, the agent has not actually
-connected — `ochakai whoami` says which server it is talking to and as whom.
+最初のプロンプトで何も返ってこないなら、エージェントは実は繋がって
+いない。`ochakai whoami` がどのサーバーに誰として話しているかを言う。
 
-To make the loop automatic rather than habitual, install the [Claude Code
-hooks](../examples/claude-code): a UserPromptSubmit hook injects relevant
-knowledge before the agent starts (recall), and a Stop hook asks it once per
-data session to save what it learned (write-back) and whether a recalled
-concept held up when acted on (`report_outcome`) — all without an LLM.
+ループを習慣ではなく自動にするには
+[Claude Code のフック](../examples/claude-code)を入れる。
+UserPromptSubmit フックがエージェントの開始前に関連ナレッジを差し込み
+(思い出す)、Stop フックがデータセッションごとに一度、学んだことを
+保存するか(書き戻す)、思い出した concept が実際に使って持ちこたえた
+か(`report_outcome`)を訊く — どれも LLM を使わない。
 
-## The web UI: the human half
+## Web UI: 人が担う半分
 
-Agents write drafts; somebody has to read them. The bundled web UI is where a
-human reviews what agents learned — search and filter by status, browse the
-knowledge as a folder tree (hierarchical IDs are directories), read a concept
-with its links and usage counts, then verify / deprecate / reject (with the
-reason) in one click. One self-contained page, no build step; deliberately
-**not** a BI tool — no charts, no query execution, no chat.
+エージェントは下書きを書く。誰かがそれを読まなければならない。同梱の
+Web UI は、人がエージェントの学んだことを裁定する場所である — status で
+絞って検索し、ナレッジをフォルダツリーとして辿り(階層 id はそのまま
+ディレクトリ)、リンクと利用回数を添えて concept を読み、その場で
+verify / deprecate / reject(理由付き)する。ビルドステップの無い一枚
+のページで、**BI ツールではない** — グラフも、クエリ実行も、チャットも
+持たない。
 
-![The draft review queue: concepts agents wrote back, waiting for a human to
-verify or reject them](images/webui-review.png)
+![レビュー待ちの draft キュー: エージェントが書き戻し、人の verify か
+reject を待っている concept](images/webui-review.png)
 
-![The knowledge base as a folder tree: a concept's id is its path, so the
-sidebar is the way in](images/webui-tree.png)
+![フォルダツリーとしてのナレッジベース: concept の id がそのままパスな
+ので、サイドバーが入口になる](images/webui-tree.png)
 
-![A concept: status, provenance, and the tabs for its attributes, links,
-backlinks, usage and revision history](images/webui-entry.png)
+![concept の画面: status と provenance、そして属性・リンク・被リンク・
+利用・リビジョン履歴のタブ](images/webui-entry.png)
 
-Same page, two identities: `ochakai ui` serves it on loopback acting as *you*
-(zero deploy, edits recorded as `human:<you>`), and `ochakai serve-ui`
-deploys it as a team-shared service — same container image as the server,
-just `--args=serve-ui`
-([operating guide](guides/operating.md#the-team-web-ui)).
+同じページ、二つの身元。`ochakai ui` はループバックで**あなた自身**と
+して出し(デプロイ不要、編集は `human:<あなた>` として記録される)、
+`ochakai serve-ui` はチームで共有するサービスとして配る — サーバーと
+同じコンテナイメージに `--args=serve-ui` を渡すだけである
+([運用ガイド](guides/operating.md#the-team-web-ui))。
 
-## Three feeds, and finishing them
+## 三つのフィードと、その終わらせ方
 
-Two feeds put the re-verification queue in front of that reviewer: a
-*verification age* feed (oldest `verified_at` first) so stale golden queries
-surface, and a *needs review* feed (`sort=failed`) that lists the concepts
-agents reported wrong, worst first. Both empty the same way: re-verifying a
-concept — "I checked it again and it is still right" — stamps a fresh
-`verified_at` and takes it out of either feed, so the queues are something a
-reviewer can finish rather than a ledger that only grows.
+再検証キューを裁定者の前に置くフィードが二つある。**検証の古さ**の
+フィード(`verified_at` の古い順)は、古びた golden query を浮かせる。
+**要レビュー**のフィード(`sort=failed`)は、エージェントが間違いだと
+報告した concept を、ひどい順に並べる。どちらも空になり方は同じである —
+concept を再検証すること、つまり「もう一度確かめた、まだ正しい」と
+言うことが `verified_at` を新しくし、どちらのフィードからも外す。
+だからこのキューは、増える一方の台帳ではなく**裁定者が終わらせられる
+もの**である。
 
-![The re-verification feed, filtered to concepts agents reported wrong, with
-the type and status filters above it](images/webui-wrong.png)
+![エージェントが間違いだと報告した concept に絞った再検証フィード。上に
+型と status のフィルタが並ぶ](images/webui-wrong.png)
 
-A third feed, *stale* (`sort=stale_after`), lists concepts past the expiry
-their own author declared — that one clears by editing the concept to
-re-declare the date, since the date is a claim the writer made rather than
-something the server observed.
+三つ目のフィード **stale**(`sort=stale_after`)は、書き手自身が宣言した
+期限を過ぎた concept を並べる。これは concept を編集して期限を宣言し直す
+ことで片づく — その日付はサーバーが観測したものではなく、書き手が立てた
+主張だからである。
 
-Whether any of the three is holding anything is one call — `ochakai stats`,
-and the Review tab's badge — so a queue going quiet stops looking like a
-queue being empty; with `--exit-code` it is a cron job away from telling your
-team (design doc [0049](design/0049-queue-counts.md)). And when a cited
-document changes, `?source=<uri>` answers the other direction: every concept
-derived from it, straight from the source's own line on the concept page.
+三つのどれかが何かを抱えているかどうかは一回の呼び出しで分かる —
+`ochakai stats`、そして Review タブのバッジである。おかげで**静かな
+キューが、空のキューに見えなくなる**。`--exit-code` を付ければ、チームに
+知らせる cron ジョブまであと一歩である(設計ドキュメント
+[0049](design/0049-queue-counts.md))。そして引用元の文書が変わったときは、
+`?source=<uri>` が逆向きに答える — そこから導かれた concept を、concept
+ページの出典行からそのまま辿れる。
 
-## What is measured
+## 何が測られているか
 
-Per-concept usage counts show whether the knowledge is being used;
-`ochakai stats` reports the instance's totals, including the searches that
-came back with nothing (design doc
-[0051](design/0051-instance-metrics-and-search-misses.md)). Outcome reports
-(`report_outcome`: worked / failed) are the evidence-based half of staleness,
-next to the time-based `verified_at` and `stale_after` — an agent that ran a
-golden query and got a wrong number says so, and the concept rises in the
-re-verification feed for a human or agent to re-check. Re-checking is itself
-recorded (`ochakai verify`, or the web UI's Verify), which is what empties
-the feed (design doc [0025](design/0025-closing-the-loop.md)).
+concept ごとの利用回数は、そのナレッジが使われているかを示す。
+`ochakai stats` はインスタンス全体の集計を返し、**何も返さなかった検索**
+もそこに含まれる(設計ドキュメント
+[0051](design/0051-instance-metrics-and-search-misses.md))。結果報告
+(`report_outcome`: worked / failed)は、古びの**証拠にもとづく半分**で
+あり、時間にもとづく `verified_at` / `stale_after` の隣に立つ — golden
+query を実行して違う数字を得たエージェントがそう言い、その concept が
+再検証フィードに浮かんで、人かエージェントが確かめ直す。確かめ直したこと
+自体も記録され(`ochakai verify`、または Web UI の Verify)、それが
+フィードを空にする(設計ドキュメント
+[0025](design/0025-closing-the-loop.md))。
 
-To keep golden queries trustworthy without waiting for an agent to trip over
-one, run them as canaries from your CI:
-[golden query canary](guides/golden-query-canary.md).
+エージェントが躓くのを待たずに golden query を信頼できる状態に保つには、
+CI からカナリアとして実行する:
+[golden query canary](guides/golden-query-canary.md)。

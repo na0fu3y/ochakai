@@ -85,7 +85,7 @@ Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 into your project's CLAUDE.md, or install the
 [hooks](examples/claude-code) to make recall and write-back automatic
 instead of habitual — both without an LLM.
-**[Walk the whole loop in four prompts →](docs/loop.md)**
+**[Walk the whole loop in four prompts →](docs/loop.md)** (Japanese)
 
 ## Why ochakai
 
@@ -170,7 +170,7 @@ in the version you are running.
   [Architecture](docs/architecture.md) ·
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)
-- **Using** — [The improvement loop](docs/loop.md) ·
+- **Using** — [The improvement loop](docs/loop.md) (Japanese) ·
   [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) ·
   [Troubleshooting](docs/guides/troubleshooting.md)
