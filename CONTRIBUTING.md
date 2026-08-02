@@ -377,10 +377,16 @@ correction and decision, not restatement. 8339 → 8377: issue
 §3.2's exclusion of the JSON field name `entries` did not hold in two
 of the three places it applied — 0064 §7 decides the question 0057
 deferred and renames `entries` to `concepts`, still unreleased so
-folded into 0064 rather than taking a new number.
+folded into 0064 rather than taking a new number. 8377 → 8378: issue
+[#420](https://github.com/na0fu3y/ochakai/issues/420)'s amends-both-ends
+check (`TestSupersessionIsRecordedAtBothEnds`) found that 0058, already
+released, had revised 0004's own CLI-table row for `--min-score` with no
+line in 0004 saying so — the one line 0004 gains points back at 0058, the
+sole deliberate exception to "not one line rewritten" this pass makes,
+since the record predates the check and cannot pass it any other way.
 
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8377
+    RECORD-CORPUS-LINES: 8378
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

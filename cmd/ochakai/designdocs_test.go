@@ -46,6 +46,20 @@ var supersededByRe = regexp.MustCompile(`Superseded by \[(\d{4})\]`)
 // English is allowed (CONTRIBUTING.md), so both spellings count.
 var supersedesRe = regexp.MustCompile(`\[(\d{4})\]\([^)]*\)\s*を\s*\*{0,2}Superseded|[Ss]upersedes \[(\d{4})\]`)
 
+// amendsRe reads "amends 00YY" out of a record's own header — 00YY stays
+// current, but one of its sections is revised rather than the whole record
+// retired. Unlike Superseded, the verb the *older* record uses to record
+// this is not one fixed spelling: the corpus says it as 改名した, 訂正した,
+// or 現行ドキュメントは depending on what changed, so unlike supersededByRe
+// there is no single pattern to read it back with there. The verb the
+// *new* record uses when declaring the intent is consistently 改訂する
+// (design-doc skill's own template spells it this way), so that is the
+// half read here: a link immediately followed, before the next link or
+// sentence end, by that verb. TestSupersessionIsRecordedAtBothEnds below
+// checks the other end only for the link itself being present, not for
+// which of its several spellings acknowledges it.
+var amendsRe = regexp.MustCompile(`\[(\d{4})\]\([^)]*\)[^。\[]*(?:を|は)改訂する|[Aa]mends \[(\d{4})\]`)
+
 func designRecords(t *testing.T) []designRecord {
 	t.Helper()
 	paths, err := filepath.Glob(designDir + "/[0-9]*.md")
@@ -73,9 +87,13 @@ func designRecords(t *testing.T) []designRecord {
 }
 
 // statusHeader returns the record's Status: header — from the line that
-// opens it to the Date: line or the blank line that ends it, whichever
-// comes first. It runs to several lines: it carries a link to every record
-// this one supersedes or amends.
+// opens it to the Date: line that ends it. It runs to several lines: it
+// carries a link to every record this one supersedes or amends. A record
+// revised in place before release (0048 §2.3) states that as a second
+// paragraph, blank-line separated from the first — 0047 and 0049 both do
+// this — so an internal blank line does not end the header the way it
+// ends most other Markdown blocks; only Date: does, and every record has
+// exactly one such line (TestDesignRecordsCarryAHeader).
 func statusHeader(content string) string {
 	var header []string
 	for _, line := range strings.Split(content, "\n") {
@@ -86,7 +104,7 @@ func statusHeader(content string) string {
 			header = append(header, line)
 			continue
 		}
-		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "Date:") {
+		if strings.HasPrefix(line, "Date:") {
 			break
 		}
 		header = append(header, line)
@@ -155,12 +173,20 @@ func TestEnglishDesignIndexCoversEveryRecord(t *testing.T) {
 	}
 }
 
-// Guard: supersession is recorded at both ends. The new record's header
-// names what it retires, and every record it retires says so itself — the
-// second half is step 4 of the design-doc procedure, "the step that is
-// easiest to forget and the one the whole scheme rests on". Half of it
-// leaves a retired decision reading as current to anyone who opens it
-// directly.
+// Guard: supersession and amendment are both recorded at both ends. The
+// new record's header names what it retires or revises, and every record
+// it touches says so itself — the second half is step 4 of the design-doc
+// procedure, "the step that is easiest to forget and the one the whole
+// scheme rests on". Half of it leaves a retired or revised decision
+// reading as current, or as untouched, to anyone who opens it directly.
+//
+// The amends half checks only that the older record's header links back
+// to the newer one, not which of its several spellings acknowledges it
+// (amendsRe's doc comment) — a record already Superseded is exempt on
+// that side, since 0048 §2.5 already moves its detail to whatever
+// superseded it, which is where a later amendment's note lands instead
+// (0046's header, not 0043's, carries what 0052 changed in what used to
+// be 0043 §3.8).
 func TestSupersessionIsRecordedAtBothEnds(t *testing.T) {
 	records := designRecords(t)
 	byNumber := map[string]designRecord{}
@@ -187,6 +213,23 @@ func TestSupersessionIsRecordedAtBothEnds(t *testing.T) {
 			if _, ok := byNumber[number]; !ok {
 				t.Errorf("docs/design/%s says it is superseded by %s, which is not a record",
 					r.file, number)
+			}
+		}
+		for _, number := range capturedNumbers(amendsRe, r.status) {
+			amended, ok := byNumber[number]
+			if !ok {
+				t.Errorf("docs/design/%s says it amends %s, which is not a record",
+					r.file, number)
+				continue
+			}
+			if supersededByRe.MatchString(amended.status) {
+				continue // its detail already moved to whatever superseded it
+			}
+			if !strings.Contains(amended.status, "["+r.number+"]") {
+				t.Errorf("docs/design/%s amends %s, but %s's own `Status:` header never "+
+					"links back to %s — a reader who opens %s directly has only that header "+
+					"to tell them the section moved",
+					r.file, amended.file, amended.file, r.number, amended.file)
 			}
 		}
 	}
