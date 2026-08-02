@@ -156,9 +156,13 @@ type wireOperation struct {
 
 var httpMethods = map[string]bool{"get": true, "put": true, "post": true, "delete": true, "patch": true}
 
+// The contract itself, read by the counters here and by the freeze ratchet
+// in frozenwire_test.go.
+const openAPISpec = "../../api/openapi.yaml"
+
 func readWireSpec(t *testing.T) *wireSpec {
 	t.Helper()
-	content, err := os.ReadFile("../../api/openapi.yaml")
+	content, err := os.ReadFile(openAPISpec)
 	if err != nil {
 		t.Fatalf("read openapi.yaml: %v", err)
 	}

@@ -29,7 +29,13 @@ moves:
   `/api/v1/attachments/{id}/{name}`, `/api/v1/backlinks/{id}`,
   `/api/v1/export`) rather than deprecating them. That history does not
   repeat: [api/openapi.yaml](../api/openapi.yaml) is now the address list
-  a client can hold onto.
+  a client can hold onto. **The freeze is checked, not promised.**
+  [api/openapi.frozen.txt](../api/openapi.frozen.txt) is a fingerprint of
+  everything that file lets a client observe — every operation, parameter,
+  header, status code and schema field — and CI fails when the two disagree
+  (`cmd/ochakai/frozenwire_test.go`), so a rename that keeps every count
+  still cannot land quietly. Prose is deliberately outside it: the
+  documentation in the contract stays free to improve.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now, and the five
   tools that said `knowledge` say `concept`.

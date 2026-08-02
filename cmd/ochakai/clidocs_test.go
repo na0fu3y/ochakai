@@ -20,7 +20,11 @@ import (
 // the OpenAPI contract test does for the REST surface (design doc 0035).
 const cliDocsPath = "../../docs/cli.md"
 
-var updateCLIDocs = flag.Bool("update", false, "rewrite docs/cli.md from the CLI's own help")
+// -update rewrites the files this package checks in and regenerates:
+// docs/cli.md from the CLI's own help, and api/openapi.frozen.txt from the
+// REST contract (frozenwire_test.go). One flag, because a contributor
+// should not have to learn which golden takes which switch.
+var updateGolden = flag.Bool("update", false, "rewrite the checked-in generated files (docs/cli.md, api/openapi.frozen.txt)")
 
 const cliDocsHeader = `<!-- Generated from the CLI's own help. Do not edit by hand:
      go test ./cmd/ochakai -run TestCLIReferenceIsCurrent -update -->
@@ -50,7 +54,7 @@ either command still prints its own copy in full.
 // the checked-in copy.
 func TestCLIReferenceIsCurrent(t *testing.T) {
 	got := renderCLIDocs(t)
-	if *updateCLIDocs {
+	if *updateGolden {
 		if err := os.WriteFile(cliDocsPath, []byte(got), 0o600); err != nil {
 			t.Fatal(err)
 		}

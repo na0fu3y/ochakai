@@ -17,6 +17,10 @@ context, including the store integration test and the fuzz targets).
       integration test, which is what puts it under the OpenAPI contract check
 - [ ] The change lands on every surface it belongs on — REST / MCP / CLI /
       Web UI — and what it stays off is deliberate (design doc 0015)
+- [ ] `api/openapi.frozen.txt` is untouched. REST is frozen at `/api/v1`
+      (design doc 0064), and `cmd/ochakai/frozenwire_test.go` fails on any
+      wire change; regenerating that file is a decision, and §11 leaves a
+      security defect as the only reason — say which one, here
 - [ ] Widens a surface — a REST operation, an MCP tool, a CLI command, an
       environment variable? `docs/surface.md` is updated
       (`cmd/ochakai/surface_test.go` says so), the description names which of
