@@ -247,7 +247,7 @@ it with `>>` and a date:
 
 ```console
 $ ochakai stats --days 7
-entries	128
+concepts	128
 draft	31
 stable	92
 …

@@ -123,7 +123,7 @@ func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, err
 		// silently is a listing that misdescribes the directory
 		// (design doc 0014's decision, now visible to whoever reads
 		// the file rather than only to whoever read the JSON).
-		notes = append(notes, fmt.Sprintf("_This listing was cut off at %d entries._", store.MaxBrowseEntries))
+		notes = append(notes, fmt.Sprintf("_This listing was cut off at %d concepts._", store.MaxBrowseEntries))
 	}
 	return okf.IndexDocument(dir, []okf.IndexSection{
 		{Lines: dirs}, {Lines: concepts}, {Heading: okf.FileSection, Lines: files},
