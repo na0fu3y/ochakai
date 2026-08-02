@@ -185,6 +185,22 @@ last entry.
     deliberately absent — both are decided in 0064 rather than left
     open.
 
+- `docs/guides/operating.md` is now Japanese (issue #446, part of C8,
+  #398). It is the largest page translated under C8 so far and the first
+  to cross a `DOC-LINES-SLACK` block on its own: [docs/surface.md](docs/surface.md)'s
+  `DOC-LINES` ceiling moves 5,100 → 5,200. Its eight linked headings
+  (`#backup-and-restore`, `#capacity`, `#supply-chain`, `#hardening`,
+  `#guardrails-against-misconfiguration`, `#the-team-web-ui`,
+  `#public-demo`, `#upgrades`) keep their anchors, and every English page
+  that links to it — `README.md`, `ROADMAP.md`, `docs/compatibility.md`,
+  `docs/faq.md` and `deploy/cloudrun/README.md` — is now marked
+  `(Japanese)`. One capacity claim ("20 files per concept") was already
+  stale before translation — the cap was removed in `[0.16.0]` below —
+  and is left in English pending issue
+  [#466](https://github.com/na0fu3y/ochakai/issues/466) rather than
+  translated as written (CONTRIBUTING.md's "check the English before
+  translating it").
+
 ## [0.17.0] - 2026-07-31
 
 ### Added

@@ -88,7 +88,7 @@ practices that make an unstable dependency survivable:
 - **Read the changelog before upgrading**, and read the whole entry: the
   breaking notes are written for the person doing exactly that.
 - **Keep an export.** `ochakai export` is both your backup and your exit
-  ([operating guide](guides/operating.md)).
+  ([operating guide](guides/operating.md) (Japanese)).
 - **Run the [golden query canary](guides/golden-query-canary.md)
   (Japanese) from CI**, so a knowledge base that quietly stopped matching
   reality says so without waiting for someone to notice.

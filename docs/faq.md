@@ -111,7 +111,8 @@ v0.2 bundle that another OKF consumer reads without knowing ochakai
 exists; `ochakai import` is the inverse, for any producer's bundle, not
 just ours. What does and does not survive the round trip — provenance
 does not — is in
-[operating a deployment](guides/operating.md#backup-and-restore).
+[operating a deployment](guides/operating.md#backup-and-restore)
+(Japanese).
 
 ### Is there a hosted version?
 
@@ -133,7 +134,8 @@ Nobody has measured a ceiling, and the honest answer is that ochakai is
 built for the scale a *curated* base reaches — thousands of concepts, not
 millions, because every one of them passed a human. What has been
 measured, and what has not, is in
-[operating a deployment](guides/operating.md#capacity). If you are
+[operating a deployment](guides/operating.md#capacity) (Japanese). If you
+are
 planning a deployment materially larger than that, say so in
 [Discussions](https://github.com/na0fu3y/ochakai/discussions) — it is the
 kind of thing that should be measured before it is promised.

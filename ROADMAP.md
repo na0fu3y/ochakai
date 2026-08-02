@@ -52,7 +52,7 @@ if the proposal is concrete.
   carries an English abstract, and the half of the product that is not Cloud
   Run has a [FAQ](docs/faq.md),
   [troubleshooting](docs/guides/troubleshooting.md) and an
-  [operating guide](docs/guides/operating.md). What is left is
+  [operating guide](docs/guides/operating.md) (Japanese). What is left is
   [open as issues](https://github.com/na0fu3y/ochakai/issues) rather than a
   paragraph here. The compatibility policy the wire surfaces actually follow
   has since been written down

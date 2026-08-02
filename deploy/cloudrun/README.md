@@ -30,8 +30,8 @@ and upgrade notes, and [docs/guides/rest-integration.md](../../docs/guides/rest-
 REST API needs.
 
 **Already deployed?** [docs/guides/operating.md](../../docs/guides/operating.md)
-covers what happens after: backup and restore, hardening, the team web
-UI, monitoring, capacity, and upgrades.
+(Japanese) covers what happens after: backup and restore, hardening, the
+team web UI, monitoring, capacity, and upgrades.
 
 **Embedding ochakai in your own product?**
 [docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
@@ -128,8 +128,8 @@ Notes:
 For production-like deployments, drop the public IP entirely — free, and
 worth doing for anything beyond a quick trial. The commands and the
 local-admin-access trade-off are in
-[Hardening](../../docs/guides/operating.md#hardening) in the operating
-guide.
+[Hardening](../../docs/guides/operating.md#hardening) (Japanese) in the
+operating guide.
 
 ## 3. Deploy Cloud Run (dedicated identity, passwordless, org-restricted)
 
@@ -293,8 +293,8 @@ the role was granted, or before a model change — are all in
 [Environment variables](../../docs/configuration.md#environment-variables)
 (Japanese);
 what changing the dimension does to an existing database is in
-[Upgrades](../../docs/guides/operating.md#upgrades) in the operating
-guide.
+[Upgrades](../../docs/guides/operating.md#upgrades) (Japanese) in the
+operating guide.
 
 ## 4b. Files require GCS
 
@@ -370,8 +370,8 @@ The web UI runs as its own service, **not** inside `serve`, behind
 — deploy it when people who cannot run the Go CLI need browser access.
 The commands, including recording the browser user instead of the
 service account, are in
-[The team web UI](../../docs/guides/operating.md#the-team-web-ui) in the
-operating guide.
+[The team web UI](../../docs/guides/operating.md#the-team-web-ui)
+(Japanese) in the operating guide.
 
 ## 5c. Optional: an application that serves many people (delegated provenance)
 
@@ -398,16 +398,16 @@ nobody and writes nothing is the one kind safe to open to everyone.
 Seeding it, flipping the mode without a window in which a public service
 still believes a stranger's `Authorization` header, checking the flip
 landed, cost, what you give up, and taking it back down are all in
-[Public demo](../../docs/guides/operating.md#public-demo) in the
-operating guide.
+[Public demo](../../docs/guides/operating.md#public-demo) (Japanese) in
+the operating guide.
 
 ## 6. Security hardening checklist
 
 The default §1–§5 deployment is already secret-zero and least-privilege.
 Org-policy guardrails, TLS enforcement, retiring the last password,
 backups, and deploy-time image gating that raise the bar further are in
-[Hardening](../../docs/guides/operating.md#hardening) in the operating
-guide.
+[Hardening](../../docs/guides/operating.md#hardening) (Japanese) in the
+operating guide.
 
 ## 7. Troubleshooting in security-hardened organizations
 
@@ -441,8 +441,8 @@ guide.
 
 Point the service at the new tag; migrations run automatically at
 startup. The full upgrade path, including the version-specific breaking-
-change notes, is [Upgrades](../../docs/guides/operating.md#upgrades) in
-the operating guide.
+change notes, is [Upgrades](../../docs/guides/operating.md#upgrades)
+(Japanese) in the operating guide.
 
 ## 9. Teardown
 
