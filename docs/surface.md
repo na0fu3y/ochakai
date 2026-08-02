@@ -79,7 +79,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP: 8
 - CLI: 26
 - FLAG: 28
-- ENV: 15
+- ENV: 11
 - VOCAB: 34
 - DOC: 23
 - DOC-LINES: 5200
@@ -377,7 +377,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `url`
 - `withdraw`
 
-## ENV (15)
+## ENV (11)
 
 環境変数も表面である — デプロイする人が読み、間違えられる。No FDE(C4)
 を掲げる以上、**設定の数は「自分で立ち上げられるか」に直接効く**。
@@ -400,20 +400,28 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 この文書が数えているのは名前であって規則ではないから、この行は
 16 → 14 としか言わない。
 
+15 → 11 は [0078](design/0078-one-variable-says-how-it-embeds.md) が同じ
+形を埋め込みに適用したぶんである。一つの機能に五つの変数
+(`OCHAKAI_EMBEDDINGS` / `OCHAKAI_VERTEX_PROJECT` /
+`OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` /
+`OCHAKAI_EMBEDDING_DIM`)が並び、間違えられる場所が五つあった。残るのは
+`OCHAKAI_EMBEDDINGS` 一つで、取るのは未設定 / `on` / `off` と、Vertex AI
+のモデル resource name — **プロジェクト・リージョン・モデルを一度に運ぶ
+綴りが既に存在していた**ので、三つの変数はそれを分解して持っていただけ
+である。次元は消えて戻らない: ベクトルは導出物であって運用者のつまみでは
+なく([0073](design/0073-search-and-when-embeddings-apply.md) §2)、
+モデルごとの定数としてコードに移った。
+
 - `OCHAKAI_DATABASE_URL`
 - `OCHAKAI_DB_IAM_AUTH`
 - `OCHAKAI_DELEGATING_CALLERS`
 - `OCHAKAI_EMBEDDINGS`
-- `OCHAKAI_EMBEDDING_DIM`
 - `OCHAKAI_GCS_BUCKET`
 - `OCHAKAI_IAP_AUDIENCE`
 - `OCHAKAI_MODE`
 - `OCHAKAI_PRODUCER`
 - `OCHAKAI_RECORD_MISSES`
 - `OCHAKAI_URL`
-- `OCHAKAI_VERTEX_LOCATION`
-- `OCHAKAI_VERTEX_MODEL`
-- `OCHAKAI_VERTEX_PROJECT`
 - `PORT`
 
 ## VOCAB (34)

@@ -498,8 +498,14 @@ only thing that can stop its body from describing a world that ended is
 something superseding it** — which is the whole argument for this program,
 now with numbers.
 
-    RECORD-COUNT: 72
-    RECORD-CORPUS-LINES: 4270
+72 → 73 while 4,270 → 4,430 is 0078, which folds five environment
+variables into one the way 0066 folded three. It amends 0073 rather than
+replacing it: what changes is how a deployment writes its embedding
+configuration down, not what embeddings are or when they apply, and 0073's
+own header now says which of its sections that reaches.
+
+    RECORD-COUNT: 73
+    RECORD-CORPUS-LINES: 4430
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

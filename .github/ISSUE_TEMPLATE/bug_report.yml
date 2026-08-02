@@ -68,12 +68,13 @@ body:
     attributes:
       label: Embeddings
       description: >-
-        Whether `OCHAKAI_VERTEX_PROJECT` is set. Lexical-only and hybrid search
-        rank by different means and their scores are not comparable, so search
-        reports need this.
+        What `OCHAKAI_EMBEDDINGS` says, or what the startup log's "semantic
+        search …" line says. Lexical-only and hybrid search rank by different
+        means and their scores are not comparable, so search reports need this.
       options:
-        - "Off: OCHAKAI_VERTEX_PROJECT unset, lexical-only"
-        - "On: OCHAKAI_VERTEX_PROJECT set"
+        - "Off: OCHAKAI_EMBEDDINGS=off, or Vertex AI unreachable, lexical-only"
+        - "On: the default (project discovered, gemini-embedding-001)"
+        - "On: a model named in OCHAKAI_EMBEDDINGS"
         - Not sure, or not about search
     validations:
       required: true

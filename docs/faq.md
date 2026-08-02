@@ -27,8 +27,10 @@ nothing to opt out of. The only hosts it ever contacts are Google Cloud
 APIs in your own project: Cloud SQL always, GCS if you set
 `OCHAKAI_GCS_BUCKET`, and Vertex AI where semantic search is enabled —
 which, running on Google Cloud, is the default (design doc
-[0053](design/0053-embeddings-by-default.md)). `OCHAKAI_EMBEDDINGS=off`
-declines it, and so does simply not granting `roles/aiplatform.user`;
+[0073](design/0073-search-and-when-embeddings-apply.md)).
+`OCHAKAI_EMBEDDINGS=off` — the one variable that says how a deployment
+embeds (design doc [0078](design/0078-one-variable-says-how-it-embeds.md))
+— declines it, and so does simply not granting `roles/aiplatform.user`;
 either way an instance then talks to its database and nothing else.
 
 Usage counts are rows in your own database. They exist so a reviewer can

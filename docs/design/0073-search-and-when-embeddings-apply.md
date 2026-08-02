@@ -3,7 +3,10 @@
 Status: Accepted(2026-08-03)。**検索と埋め込みの現行ドキュメント。**
 [0020](0020-attachment-search.md) を Superseded にし、
 [0053](0053-embeddings-by-default.md) を Superseded にする。
-**二つが決めたことは何一つ変えない**(§0)。スコアの床を持たないことは
+**二つが決めたことは何一つ変えない**(§0)。埋め込みの**設定面** —
+§1.4 の off スイッチ、§2 の次元、§4 のモデル選択がどう書かれるか — は
+[0078](0078-one-variable-says-how-it-embeds.md) が改訂する。
+スコアの床を持たないことは
 [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` が
 順位に徹することは [0067](0067-four-faces-and-what-they-decline.md) §4、
 住所で絞る `prefix` は [0041](0041-path-scoped-search.md) が持つ

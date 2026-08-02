@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0073](0073-search-and-when-embeddings-apply.md)(検索) |
-| 検索と埋め込み | [0073](0073-search-and-when-embeddings-apply.md) が現行。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| 検索と埋め込み | [0073](0073-search-and-when-embeddings-apply.md) が現行。埋め込みの設定面(`OCHAKAI_EMBEDDINGS` 一つ)は [0078](0078-one-variable-says-how-it-embeds.md)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
@@ -218,7 +218,18 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   一冊にまとめたもの)。Google Cloud の上では埋め込みが既定で、使えるかを
   決めるのは設定ではなく IAM。次元変更は製品が行う(**ベクトルは導出物で
   ある**)。検索は字句・concept のベクトル・ファイルのベクトルの三本を融合し、
-  ファイルは独立して返らず、ochakai はファイルを解釈しない。
+  ファイルは独立して返らず、ochakai はファイルを解釈しない。設定面は
+  0078 が改訂した。
+- [0078 このデプロイがどう埋め込むかを、一つの変数で言う](0078-one-variable-says-how-it-embeds.md)
+  — **Accepted**。**埋め込みの設定面の現行ドキュメント**(0073 を改訂)。
+  五つの変数(`OCHAKAI_EMBEDDINGS` / `OCHAKAI_VERTEX_PROJECT` /
+  `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` /
+  `OCHAKAI_EMBEDDING_DIM`)を `OCHAKAI_EMBEDDINGS` 一つに畳む — 未設定 /
+  `on` / `off` / Vertex AI のモデル resource name で、どれでもない綴りは
+  起動エラー(0066 と同じ形)。次元は設定面から消えてモデルごとの定数に
+  なり、幅を知らないモデルは拒否する。モデルを名指すことは意味的検索を
+  要求することであり、0073 §1.3 の「発見は落ちてよい、名指しは落ちない」
+  はそのまま効く。
 - [0008 画像添付](0008-image-attachments.md) — **Superseded by 0046**。
   画像添付の導入。「原本ではなく根拠」の位置づけと `<id>/<name>` は、
   0046 では帰属の**導出規則**として残る。

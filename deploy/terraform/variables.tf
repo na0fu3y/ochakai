@@ -229,6 +229,8 @@ variable "enable_vertex_embeddings" {
 
     Set it to false to run lexical-only: the role is not granted and
     OCHAKAI_EMBEDDINGS=off is set, so ochakai calls no external API at all.
+    To pick a particular model, region or project instead, see
+    var.embedding_model — the same one variable carries all three.
     Worth knowing before leaving it on: ochakai performs no authorization, so
     every write by anyone who can reach the service is one Vertex AI call.
   EOT
@@ -236,22 +238,32 @@ variable "enable_vertex_embeddings" {
   default     = true
 }
 
-variable "vertex_model" {
-  description = "OCHAKAI_VERTEX_MODEL. Leave null for the default (gemini-embedding-001). Use \"gemini-embedding-2\" to also search image and PDF attachments by content — it requires var.vertex_location of global, us or eu."
+variable "embedding_model" {
+  description = <<-EOT
+    OCHAKAI_EMBEDDINGS as a Vertex AI model resource name, for a deployment that
+    needs a particular model, region or project:
+    "projects/<project>/locations/<location>/publishers/google/models/<model>".
+    Leave null for the product's default — the project ochakai runs in,
+    gemini-embedding-001 in us-central1 (design doc 0078). Use
+    .../locations/global/publishers/google/models/gemini-embedding-2 to also
+    search image and PDF files by content; that model wants a location of
+    global, us or eu.
+
+    Naming a model asks for semantic search by name, so the service refuses to
+    start where Vertex AI or pgvector is unavailable, where the default would
+    have degraded to lexical search (design doc 0073 §1.3) — the pgvector
+    bootstrap below is manual, so run it first. Changing the model leaves the
+    vectors already stored invisible to the new one: `ochakai reembed` refills
+    them, and search is lexical-only meanwhile. The vector width is not
+    settable — it belongs to the model, not to the deployment.
+  EOT
   type        = string
   default     = null
-}
 
-variable "vertex_location" {
-  description = "OCHAKAI_VERTEX_LOCATION. Leave null for the default (us-central1)."
-  type        = string
-  default     = null
-}
-
-variable "embedding_dim" {
-  description = "OCHAKAI_EMBEDDING_DIM. Leave null for the default (768). Changing this on a base that already holds vectors rebuilds the vector tables at the new width on the next start — nothing curated is lost, since a vector is derived, but search is lexical-only until `ochakai reembed` refills them (design doc 0053 §3)."
-  type        = number
-  default     = null
+  validation {
+    condition     = var.embedding_model == null || can(regex("^projects/[^/]+/locations/[^/]+/publishers/google/models/[^/]+$", coalesce(var.embedding_model, "")))
+    error_message = "embedding_model must be projects/<project>/locations/<location>/publishers/google/models/<model>, or null for the default."
+  }
 }
 
 # --- Optional: attachments in GCS (guide §4b) -----------------------------

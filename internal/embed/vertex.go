@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -52,6 +53,47 @@ func NewVertex(ctx context.Context, project, location, model string, dim int) (*
 }
 
 func (v *Vertex) Model() string { return v.model }
+
+// modelDims is the vector width ochakai asks each model it knows for, and
+// stores. It lives here rather than in a setting because a vector is a
+// derived value the product owns (design doc 0073 §2): the width is a
+// property of the model, not of the deployment, and the two numbers a
+// deployment could disagree about — the column it created and the vector
+// it writes — must never be two numbers.
+//
+// 768 is what every deployment that ever ran has stored. Changing a value
+// here invalidates every vector already written at the old width: the
+// tables are rebuilt at the new one on the next start and `ochakai
+// reembed` pays to refill them, so this is a decision, not a default to
+// tune. Gemini's embedding models are trained with Matryoshka
+// representation learning, so a shorter output is a prefix of the full
+// one rather than a different embedding, which is why one width serves
+// both models.
+var modelDims = map[string]int{
+	"gemini-embedding-001": 768,
+	"gemini-embedding-2":   768,
+}
+
+// Dimension returns the vector width for a model, and whether ochakai
+// knows the model at all. A model it does not know has no width it could
+// ask for, and guessing at one is the failure that shows up in the
+// knowledge rather than in the log — every write rejected for its width,
+// search quietly lexical (design doc 0078 §3).
+func Dimension(model string) (int, bool) {
+	dim, ok := modelDims[model]
+	return dim, ok
+}
+
+// Models lists the models ochakai knows, sorted, for the startup error
+// that names them.
+func Models() []string {
+	names := make([]string, 0, len(modelDims))
+	for name := range modelDims {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
 
 // MaxInputBytes is the text budget for this model's input window, in
 // UTF-8 bytes: 2048 tokens for gemini-embedding-001, 8192 for
