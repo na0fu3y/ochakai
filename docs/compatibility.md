@@ -2,10 +2,10 @@
 
 The short version, so nobody has to infer it:
 
-> **REST is frozen at `/api/v1`.** Everything else is still unstable while
-> the major version is 0: MCP, the CLI and the stored shape may all change
-> in a minor release. There is no deprecation window for any of them. Only
-> the latest release is supported.
+> **REST is frozen at `/api/v1`.** Everything else is still unstable while the
+> major version is 0: MCP, the CLI and the stored shape may all change in a
+> minor release. There is no deprecation window for any of them. Only the
+> latest release is supported. Only a security defect can still break it.
 
 That is the actual policy, not a disclaimer. If you are deciding whether
 to build on ochakai, decide against *this*, not against what "SemVer"
@@ -47,21 +47,21 @@ anything that stores bundles in git.
 
 Not a promise that nothing breaks. A promise that you are told what did:
 
-- **Every breaking change is marked `BREAKING` in
-  [the changelog](../CHANGELOG.md)**, with what an operator has to do about
-  it — which migration runs, whether `updated_at` moves, whether
+- **Every breaking change to MCP, the CLI or the stored shape is marked
+  `BREAKING` in [the changelog](../CHANGELOG.md)**, with what an operator has
+  to do about it — which migration runs, whether `updated_at` moves, whether
   re-embedding is needed, what a client reading the old shape must change.
 - **Changes arrive in batches.** A minor release usually carries several
   at once rather than trickling them out, so upgrading is one reading of
   one changelog entry rather than a standing tax. `0.15.0` landed five
   design records together, including the type-vocabulary realignment and
   two new deployment postures.
-- **Every removal has a design record** that says why, and what to use
-  instead. `compile_sql` went with
+- **Every removal from MCP, the CLI or the stored shape has a design record**
+  that says why, and what to use instead. `compile_sql` went with
   [0028](design/0028-retire-compile-sql.md), the OAuth connector with
-  [0012](design/0012-retire-mcp-oauth-connector.md). Features are removed
-  when they stop earning their place, and that is treated as maintenance
-  rather than as a failure.
+  [0012](design/0012-retire-mcp-oauth-connector.md). Features are removed when
+  they stop earning their place, and that is treated as maintenance rather than
+  as a failure.
 - **Your knowledge outlives any of it.** `ochakai export` writes an OKF
   bundle that another tool can read, which is the guarantee the project
   actually makes.
