@@ -1,101 +1,96 @@
-# Documentation
+# ドキュメント
 
-Start with the [README](../README.md) — what ochakai is, the quick start,
-and what it refuses to do. It is deliberately short; the manual is here.
+まずは [README](../README.md) を読む — ochakai とは何か、クイックスタート、
+そして何をしないか。README はわざと短くしてあり、詳しい説明はここにある。
 
-## For someone evaluating ochakai
+## 導入を検討している人へ
 
-- [FAQ](faq.md) — what an agent may do to verified knowledge, what
-  happens when two people edit one concept, who can read and write, and
-  what leaving looks like. Questions another page owns get a short
-  answer and a link there rather than a second copy.
-- [Positioning](positioning.md) — every "why not just use X?" in one
-  place: semantic layers, catalogs, memory layers, RAG, the verified-query
-  store inside an AI-analyst product, and a markdown vault with an MCP
-  server. Includes where ochakai loses, and who should pick something
-  else.
-- [Architecture](architecture.md) — how the pieces fit, the data model —
-  types, ids as addresses, links that come from the prose, the OKF
-  frontmatter that carries trust — and why there is no authorization
-  layer. English summary of the decision records.
-- [Compatibility and support](compatibility.md) — REST is frozen at
-  `/api/v1`; MCP, the CLI and the stored shape are still unstable at 0.x
-  with no deprecation window, and only the latest release is supported.
-  Read this before building on ochakai.
-- [Roadmap](../ROADMAP.md) — what is being worked on, and what is
-  deliberately refused.
-- [Changelog](../CHANGELOG.md) — what changed between releases.
+- [FAQ](faq.md) — 検証済みナレッジに対してエージェントが何をしてよいか、
+  二人が同じ concept を編集したらどうなるか、誰が読み書きできるか、そして
+  辞めるときは何が起こるか。他のページが持っている問いには短い答えと
+  そこへのリンクだけを置き、二重に書かない。
+- [ポジショニング](positioning.md) — 「X を使えばいいのでは」への答えを
+  一箇所に集めたページ: semantic layer、カタログ、メモリ層、RAG、
+  AI アナリスト製品に内蔵された検証済みクエリストア、MCP サーバー付きの
+  markdown vault。ochakai が劣る場面と、そのとき何を選ぶべきかも含む。
+- [アーキテクチャ](architecture.md) — 各部品がどう組み合わさるか、データ
+  モデル — type、住所としての id、本文から導かれるリンク、trust を運ぶ
+  OKF の frontmatter — そしてなぜ authorization 層が無いか。設計記録の
+  英語要約。
+- [互換性とサポート](compatibility.md) — REST は `/api/v1` で凍結済み。
+  MCP・CLI・保存形式はまだ 0.x のままで不安定、非推奨化の猶予期間も無く、
+  サポートされるのは最新リリースのみ。ochakai の上に何かを組む前に読む。
+- [ROADMAP](../ROADMAP.md) — いま取り組んでいること、そして意図して
+  断っていること。
+- [CHANGELOG](../CHANGELOG.md) — リリース間で何が変わったか。
 
-## For someone using it
+## 使う人へ
 
-- [The improvement loop](loop.md) (Japanese) — recall, write-back, review, outcome
-  reports: four prompts that walk it end to end, the web UI's three
-  feeds, and what gets measured.
-- [CLI reference](cli.md) — every command's synopsis, flags and worked
-  examples. It is `ochakai <command> -h` rendered, and a test fails when
-  the two disagree, so it is readable before you have a binary and cannot
-  go stale after you do.
-- [Connecting an MCP client](guides/mcp-clients.md) — the eight tools an
-  agent sees, and the URL or the `mcp-stdio` bridge per client, with the
-  config file each one reads.
+- [改善ループ](loop.md) — 思い出す・書き戻す・裁定する・結果報告の四つ:
+  それを端から端まで歩く四つのプロンプト、Web UI の三つのフィード、
+  そして何が測られているか。
+- [CLI リファレンス](cli.md) — 全コマンドの synopsis、フラグ、実例。
+  `ochakai <command> -h` をそのまま出力したもので、両者が食い違えば
+  テストが落ちる。バイナリを持つ前から読め、持った後も古びない。
+- [MCP クライアントを繋ぐ](guides/mcp-clients.md) — エージェントに見える
+  八つのツール、そしてクライアントごとの URL か `mcp-stdio` ブリッジ、
+  各クライアントが読む設定ファイル。
 
-## For someone running it
+## 運用する人へ
 
-- [Requirements and configuration](configuration.md) (Japanese) — what
-  ochakai needs before it starts, and every environment variable it reads.
-- [Deploy with Terraform](../deploy/terraform/README.md) — the
-  recommended path, ~$10/month: `terraform apply` in 13 steps instead of
-  the gcloud walkthrough's 36.
-- [Deploy on Cloud Run](../deploy/cloudrun/README.md) — the gcloud
-  walkthrough the module runs underneath. Read it instead of the module
-  when you want to run the commands by hand, or as the reference for
-  what each resource is and why: private IP, the IAP-fronted web UI, a
-  security hardening checklist, and the upgrade path.
-- [deploy/compose.yaml](../deploy/compose.yaml) — the local stack. Docker
-  and nothing else; no Google account needed.
-- [Operating a deployment](guides/operating.md) — the two backups and what
-  each one recovers, what a restore from an OKF bundle does *not* bring
-  back, what the logs say when the deployment is degraded but running, and
-  what is known — and not known — about scale.
-- [Golden query canary](guides/golden-query-canary.md) — running verified
-  queries from CI so a knowledge base that has quietly gone wrong says so.
-- [Troubleshooting](guides/troubleshooting.md) — the local and client-side
-  half: an empty search, a skipped import, a 409 or 412, an empty web UI,
-  a server that refuses to start. Google Cloud symptoms stay in the deploy
-  guide's §7.
+- [動作要件と設定](configuration.md) — ochakai が起動前に必要とするもの、
+  そして読み込むすべての環境変数。
+- [Terraform でデプロイ](../deploy/terraform/README.md) — 推奨される
+  経路で、月 $10 程度: `terraform apply` を 13 手順で済ませる。gcloud を
+  直接叩く手順は 36 手順ある。
+- [Cloud Run にデプロイ](../deploy/cloudrun/README.md) — module の内側で
+  実際に走っている gcloud の手順そのもの。コマンドを自分の手で打ちたい
+  ときは module の代わりにここを読む。各リソースが何で、なぜ必要かの
+  リファレンスでもある: private IP、IAP 越しの web UI、security
+  hardening のチェックリスト、アップグレードの経路。
+- [deploy/compose.yaml](../deploy/compose.yaml) — ローカルのスタック。
+  Docker だけで足り、Google アカウントは要らない。
+- [デプロイの運用](guides/operating.md) — 二種類のバックアップとそれぞれ
+  が何を復旧するか、OKF バンドルからの復元が持ち帰ら*ない*もの、デプロイ
+  が劣化しつつも動いているときログが何と言うか、スケールについて分かって
+  いること — そして分かっていないこと。
+- [golden query canary](guides/golden-query-canary.md) — 検証済みクエリ
+  を CI から実行し、静かに壊れたナレッジベースがそうと分かるようにする。
+- [トラブルシューティング](guides/troubleshooting.md) — ローカルとクライ
+  アント側の半分: 空の検索結果、スキップされた import、409 や 412、空の
+  web UI、起動を拒むサーバー。Google Cloud 側の症状はデプロイガイドの
+  §7 にある。
 
-## For someone building against it
+## 組み込んで使う人へ
 
-- [api/openapi.yaml](../api/openapi.yaml) — the REST contract. It is
-  checked rather than described: the integration tests validate every
-  request and response against it, so an endpoint that drifts fails CI.
-- [examples/demo](../examples/demo) — a ten-concept knowledge base to import
-  and poke at (`ochakai import examples/demo`). Linked concepts, mixed
-  statuses, and a concept past its declared expiry, so the feeds and
-  `get_context` have something to show.
-- [examples/claude-code](../examples/claude-code) — drop-in agent
-  instructions and the recall / write-back hooks.
-- [Embedding the REST API](guides/rest-integration.md) — authenticating,
-  forwarding your users' identity without collapsing them into your
-  service account, and writing without racing another caller.
+- [api/openapi.yaml](../api/openapi.yaml) — REST の契約。説明ではなく
+  検査される対象で、統合テストがすべてのリクエストとレスポンスをこれと
+  突き合わせるので、乖離したエンドポイントは CI で落ちる。
+- [examples/demo](../examples/demo) — import して触れる 10 concept の
+  ナレッジベース(`ochakai import examples/demo`)。リンクした concept、
+  混在する status、宣言された期限を過ぎた concept があり、フィードと
+  `get_context` に何か表示するものがある。
+- [examples/claude-code](../examples/claude-code) — そのまま使える
+  エージェント向けの指示と、思い出す/書き戻すのフック。
+- [REST API を組み込む](guides/rest-integration.md) — 認証の方法、
+  利用者本人の identity をサービスアカウントに潰さず転送する方法、他の
+  書き込みと競合しない書き方。
 
-## For someone changing it
+## 変更する人へ
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — local setup, the exact checks CI
-  runs, and how design docs work.
-- [The surface](surface.md) — the eight conditions ochakai exists to
-  satisfy, and every REST operation, query parameter, header, MCP tool,
-  CLI command, CLI flag, environment variable, word of vocabulary and page
-  of this manual counted in one place, with the three questions a change
-  that adds one has to answer. The default answer is no. A test reads all
-  nine lists back out of the build, so the count cannot drift and a
-  feature cannot arrive without the diff saying so — nor can the prose
-  explaining it, which is the ninth list and the fastest-growing one.
-- [docs/design](design) — the numbered, immutable decision records, and
-  the [index](design/README.md) that says which ones still describe the
-  current state. Mostly Japanese; authoritative where they and the English
-  prose disagree. [README.en.md](design/README.en.md) summarizes every one
-  of them in English — what was decided, and what it means for somebody
-  using ochakai.
-- [SECURITY.md](../SECURITY.md) — reporting a vulnerability, and what
-  counts as one.
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — ローカルのセットアップ、CI が
+  走らせる正確なチェック、design doc の仕組み。
+- [表面](surface.md) — ochakai が存在する理由となる八つの条件、そして
+  REST operation・クエリパラメータ・ヘッダ・MCP ツール・CLI コマンド・
+  CLI フラグ・環境変数・語彙・このマニュアルのページを一箇所で数えた
+  もの。表面を一つ足す変更が答えるべき三つの問いもここにある。既定の
+  答えは no である。九つの一覧すべてをビルドから読み戻すテストがある
+  ので数はずれず、機能は diff に出ないままでは現れない — それを説明
+  する散文も同じで、これが九つ目の一覧であり、最も速く増えている。
+- [docs/design](design) — 番号付きの、書き換えない決定記録、そしてどれ
+  が今の状態を説明しているかを言う [index](design/README.md)。ほとんど
+  は日本語で、英語の記述と食い違えば記録本体が正しい。
+  [README.en.md](design/README.en.md) はその全部を英語で要約する — 何が
+  決まったか、それが ochakai を使う人にとって何を意味するか。
+- [SECURITY.md](../SECURITY.md) — 脆弱性の報告方法、そして何が脆弱性に
+  数えられるか。

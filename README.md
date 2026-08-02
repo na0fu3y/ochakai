@@ -20,7 +20,7 @@ SQL](deploy/terraform/README.md) for about $10/month, or Docker and
 nothing else locally.
 
 [Quick start](#quick-start) · [Why ochakai](#why-ochakai) ·
-[Requirements](#requirements) · [All docs](docs/README.md) ·
+[Requirements](#requirements) · [All docs](docs/README.md) (Japanese) ·
 [REST API](api/openapi.yaml) · [Changelog](CHANGELOG.md)
 
 ![The draft review queue: concepts agents wrote back, waiting for a human
@@ -183,7 +183,7 @@ in the version you are running.
   [Operating](docs/guides/operating.md) ·
   [Golden query canary](docs/guides/golden-query-canary.md)
 - **Building on it** — [REST API](api/openapi.yaml) ·
-  [Examples](examples) · [All docs](docs/README.md)
+  [Examples](examples) · [All docs](docs/README.md) (Japanese)
 - **Deciding** — [The surface](docs/surface.md), the eight conditions
   ochakai exists to satisfy and everything counted against them, and
   [docs/design](docs/design/README.md), the numbered decision records

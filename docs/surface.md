@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5010
+- DOC-LINES: 5019
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -581,6 +581,20 @@ rest-integration・docs/README が指しており、そのどれにも `(Japanes
 代金がページの外にも出ることは今回初めて見えた。残る 14 行はこの段落
 自身の分で、DOC のほかの段落と同じくここに数えている。
 
+C8 の三枚目、[docs/README.md](README.md) を日本語にした分
+([#439](https://github.com/na0fu3y/ochakai/issues/439))は、直前の二枚
+と逆に動いた — ページ単体では 101 → 96 行、実数は 5 行減っている。
+loop.md と configuration.md は手順と考え方を積む地の文のページで、
+docs/README.md はリンク先の一行要約を並べるナビゲーションページである
+— 要約の一文は短く、日本語にしても改行がほとんど増えない。増えるか
+減るかはページの形で決まる、というのがここまでの三枚が言っている
+ことである。このページ自身が configuration.md への被リンクの一本
+だったので、`(Japanese)` の付け外しも一箇所あった — README・
+docs/README の両方が Japanese になった今、docs/README.md 内の
+loop.md・configuration.md へのリンクからは印を外している。互いに
+日本語のページの間には要らない印だからである。**それでも天井は
+上がる** — その発見を書くこの段落自身が地の文を足すからで、この段落
+を含めて 5,010 → 5,019。
 [#372](https://github.com/na0fu3y/ochakai/issues/372) は逆方向に動いた
 最初の例である。architecture.md と knowledge.md は同じ六つの主題を二度語り
 、二枚を一枚に畳んだ。DOC が 26 → 25 になった分、天井も合わせている。
