@@ -30,7 +30,7 @@ const cliDocsHeader = `<!-- Generated from the CLI's own help. Do not edit by ha
 ` + "`ochakai`" + ` is a thin client of the REST API — every client command
 below is one HTTP call against the server named by ` + "`--url`" + `, ` + "`$OCHAKAI_URL`" + `,
 or the ` + "`ochakai use`" + ` selection, in that order (design docs
-[0004](design/0004-cli.md), [0007](design/0007-api-only-cli.md)). ` + "`serve`" + `
+[0067](design/0067-four-faces-and-what-they-decline.md) §2). ` + "`serve`" + `
 and ` + "`serve-ui`" + ` are the exception: they are the deployed services, and they
 take their configuration from the environment rather than from flags —
 [Requirements and configuration](configuration.md) (Japanese) lists it.
@@ -38,7 +38,7 @@ take their configuration from the environment rather than from flags —
 Every section is what ` + "`ochakai <command> -h`" + ` prints, so nothing here
 can disagree with the binary you are running — except ` + "`search`" + ` and
 ` + "`list`" + `, which narrow the same way (design doc
-[0062](design/0062-a-listing-is-not-a-search.md)) and point at
+[0068](design/0068-how-a-face-is-added-and-removed.md) §2) and point at
 [Shared filters](#shared-filters) instead of repeating it; ` + "`-h`" + ` on
 either command still prints its own copy in full.
 
@@ -113,7 +113,7 @@ func renderCLIDocs(t *testing.T) string {
 		if name == "list" {
 			fmt.Fprintf(&b, "\n## Shared filters\n\n"+
 				"What `ochakai search -h` and `ochakai list -h` share (design doc\n"+
-				"[0062](design/0062-a-listing-is-not-a-search.md)), once.\n\n"+
+				"[0068](design/0068-how-a-face-is-added-and-removed.md) §2), once.\n\n"+
 				"```\nFlags:\n%s```\n", shared)
 		}
 		fmt.Fprintf(&b, "\n## ochakai %s\n\n", name)
