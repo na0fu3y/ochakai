@@ -474,6 +474,51 @@ Two decisions worth knowing before proposing features:
 - **Google Cloud only, secret-zero.** Auth is Cloud Run IAM + Cloud SQL
   IAM; features must not introduce tokens or passwords (0002, 0003).
 
+## Translating a manual page
+
+C8 (`docs/surface.md`) says ochakai should be one of the best choices
+available to a Japanese-speaking team, and the manual it hands that team
+was written in English while the contributor material — `docs/surface.md`
+and the design records — is Japanese. The pages a person reads **to
+operate and curate** are moving to Japanese, one page per PR.
+`docs/loop.md` is the worked example (#434).
+
+**English stays** for the front door and the contract: `README.md` (an
+OSS landing page is where somebody decides *whether* to use this, and
+those readers are international), `api/openapi.yaml`, `docs/cli.md`
+(generated from the commands' own `-h`, so translating the page means
+translating the binary — a separate decision about the binary),
+`docs/compatibility.md`, `ROADMAP.md`, `SECURITY.md`, `SUPPORT.md`, this
+file and `CLAUDE.md`.
+
+**No mirror.** One page, one language. A translated pair is two texts
+saying the same thing, and which one went stale is exactly what nobody
+can tell (`docs/faq.md`'s own rule, and the mechanism behind every stale
+command this repository has shipped). The single deliberate exception is
+`docs/design/README.en.md`, which a test keeps honest in both directions.
+
+What does **not** change, because it is the product's vocabulary rather
+than prose: command names, flags, environment variables, JSON keys, the
+`status` / `trust` / `sort` values, HTTP header names, error strings
+quoted from the binary, and design-doc citations. Quoted output — a log
+line, a `--help` excerpt, a `stats` transcript — is a transcript of what
+the binary prints, so it stays as printed; that is what
+`docs/guides/operating.md` got wrong twice.
+
+**Translate the example prompts.** A page showing a curator what to type
+to their agent, in English, does not demonstrate the thing C8 claims.
+
+Two pieces of bookkeeping, both easy to forget:
+
+- **Mark the page where an English page links to it** — `(Japanese)`
+  after the link text — so a reader is not surprised mid-click.
+- **`DOC-LINES` goes up, not down.** Japanese puts no spaces between
+  words, so a line was expected to carry more; a full-width character
+  takes two columns, so the same 70-column wrap holds about half as many.
+  Measured on `loop.md`: 114 → 120. Raise the ceiling in the same PR and
+  narrate it in the DOC section, the way every other raise is narrated.
+  Translation never returns budget — only folding does.
+
 ## Pull requests
 
 - Keep PRs small and focused; include tests for behavior changes.
