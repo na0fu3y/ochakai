@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 4938
+- DOC-LINES: 4948
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -538,6 +538,12 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 と同じ理由がこのページにも当てはまっていたのに、置き場所だけが違って
 いた。[CONTRIBUTING.md](../CONTRIBUTING.md) に移し、DOC は 24 → 23 に
 なった。
+
+**[#408](https://github.com/na0fu3y/ochakai/issues/408) はページを
+増やさず数行だけ足した。** REST の凍結を書いた直後の docs/README.md と
+docs/guides/rest-integration.md が、まだ「すべての面が不安定」と言って
+いた・凍結に触れていなかった箇所を直し、この段落自身もその天井を動かす
+分を数えている — 折り畳みではなく訂正なので、4,938 → 4,948。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 

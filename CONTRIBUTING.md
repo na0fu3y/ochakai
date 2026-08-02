@@ -367,10 +367,15 @@ the larger half of the same residue, and until now none of it was counted
 anywhere. 60 → 61 is the one addition that does not fold into that
 pattern: freezing REST at `/api/v1` (0064) is its own decision, not a
 restatement of anything the other 60 already say, so there was no
-existing record to fold it into.
+existing record to fold it into. 8311 → 8339: issue
+[#408](https://github.com/na0fu3y/ochakai/issues/408) found that 0064,
+written the same week, stated two rules the implementation did not
+follow and left two questions the freeze needs answered (a bar for
+breaking it, whether DELETE is safe to retry) unwritten — 28 lines of
+correction and decision, not restatement.
 
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8311
+    RECORD-CORPUS-LINES: 8339
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

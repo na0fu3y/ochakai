@@ -4,9 +4,10 @@ All notable changes to ochakai are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — while
 the major version is 0, a minor bump may break compatibility, and those
-breaks are marked **BREAKING** below. Every interface is unstable at 0.x
-and only the latest release is supported:
-[docs/compatibility.md](docs/compatibility.md) states the policy in full.
+breaks are marked **BREAKING** below. **REST is frozen at `/api/v1`**;
+MCP, the CLI and the stored shape are still unstable at 0.x, and only the
+latest release is supported: [docs/compatibility.md](docs/compatibility.md)
+states the policy in full.
 
 Dates are the tag dates (JST). Each released version also has a GitHub
 release with longer prose; this file keeps what an operator upgrading
