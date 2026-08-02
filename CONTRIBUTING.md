@@ -474,8 +474,32 @@ which 0064 §2 had since reversed. Every one of those records had a
 the prose. A record is immutable, so the only way its body stops lying is
 for something to supersede it.
 
-    RECORD-COUNT: 66
-    RECORD-CORPUS-LINES: 6347
+66 → 72 while 6,347 → 4,270 is the pass that reached everything left. Six
+records replace eighteen: 0070 (what was retired and the bar for it), 0071
+(the type vocabulary), 0072 (the web UI), 0073 (search and embeddings),
+0074 (the document and the vocabulary that asks it) and 0075 (the bundle
+as the address space).
+
+Two things this pass settled that the earlier ones only hinted at.
+**An area with two or three records is not automatically fine.** The
+first two passes went after areas with seven and nine current records and
+left the rest, on the theory that small areas are healthy. That was the
+wrong test: 0038 was 241 lines that the opening table already told nobody
+to read, and 0017 was 229 lines the table called superseded in substance
+while the file called itself current. **What matters is whether the area's
+current picture is in one place, not how many records the area has.**
+
+**And a record can outlive its own subject.** 0018's 233 lines were mostly
+the specification of a compile path 0028 removed; 0019's third section
+decided a model-resolution rule for the same removed feature; 0046's
+604 lines still listed an eight-operation wire that six later records had
+moved. None of it was wrong when written. **A record is immutable, so the
+only thing that can stop its body from describing a world that ended is
+something superseding it** — which is the whole argument for this program,
+now with numbers.
+
+    RECORD-COUNT: 72
+    RECORD-CORPUS-LINES: 4270
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

@@ -1,101 +1,10 @@
 # ochakai 設計ドキュメント 0006: Web UI の二つの配信経路
 
-Status: Accepted(2026-07-17)、改訂(2026-07-19: examples/webui を `ochakai serve-ui` に昇格)。§6 の「IAP を前置しても記録されるのはサービスの SA」は [0032](0032-webui-iap-identity.md) が覆した(`OCHAKAI_IAP_AUDIENCE` 設定時はブラウザ利用者を記録する)
+Status: Superseded by [0072](0072-the-web-ui-serves-and-edits-documents.md)
 Date: 2026-07-17
 
-## 1. 目的
-
-バンドルされた Web UI(自己完結の `index.html` 1 ファイル、ビルド不要・
-フレームワークなし・CDN なし)を、認証モデルの異なる二つの経路で配信する。
-
-UI 自体は認証を知らない — 自オリジンの相対パス(`/api/v1`)を叩くだけで、
-資格情報の付与は手前に立つリバースプロキシの仕事。この分離により同じ
-ページが両経路で共有できる。ページの実体は `internal/webui/index.html`
-(`go:embed`)で、`ochakai ui` と `ochakai serve-ui` の両方が配信する。
-
-| | `ochakai ui`(クライアントコマンド) | `ochakai serve-ui`(サーバーコマンド) |
-|---|---|---|
-| 想定用途 | 個人利用。デプロイ不要 | チーム共有の常設 URL(Cloud Run) |
-| トークンの出所 | 利用者の ADC / gcloud(0004 §4 と同一) | サービスのメタデータサーバー |
-| ヘッダ | `Authorization` | `X-Serverless-Authorization` |
-| 記録される識別 | `human:<本人の email>` | `agent:<サービスの SA>` |
-| 待受 | 127.0.0.1 のみ | `:$PORT` 全インターフェース(保護は Cloud Run IAM / IAP) |
-| 設定 | フラグ + `use` 選択 | 環境変数(`OCHAKAI_URL`, `PORT`) |
-
-両者は同一バイナリ・同一コンテナイメージに同居する。デプロイは
-`serve` と同じイメージに `--args=serve-ui` を渡すだけで、UI とサーバーの
-バージョンは常に一致する(deploy ガイド §5b)。
-
-## 2. 先行例
-
-サーバー同梱型(Consul/Vault/Gitea 等、単一バイナリのサーバーが UI も配信)は
-採らない。Cloud Run IAM の背後ではブラウザが ID トークンを付けられず、
-0002/0003 の認証モデルと衝突するうえ、サーバーの提供面を最小に保つ方針
-(deploy ガイド §5b)にも反する。採るのはクライアント側ローカル UI 型 —
-`kubectl proxy` + Dashboard、`argocd admin dashboard`、`go tool pprof -http`
-と同型で、「CLI が資格情報を貸してローカルに UI を立てる」。
-
-`serve-ui` は同一バイナリだが**別プロセス・別サービス**であり、この判断を
-覆さない: `serve` の提供面(/mcp, /api/v1, /health)は変わらず、UI 側の
-公開範囲・認証(IAP 等)はデプロイの関心事として分離されたままである。
-
-## 3. `ochakai ui` の安全上の設計
-
-利用者のトークンで書き込めるプロキシなので:
-
-- **127.0.0.1 固定バインド**(`--port` のみ可変)。LAN 共有の要件は
-  `serve-ui` 経路が担う。
-- **Host ヘッダ検証**: loopback 名(`localhost` / `127.0.0.1` / `::1`)
-  以外は 403。DNS リバインディング(攻撃ページが自ドメインを 127.0.0.1 に
-  解決させ same-origin でプロキシを叩く)への防御。kubectl proxy の前例。
-- **ブラウザ由来の `Authorization` は転送前に必ず破棄**し、CLI が解決した
-  トークンで置き換える。
-
-`/mcp` もプロキシするため、`gcloud run services proxy` なしで
-`claude mcp add --transport http ochakai http://127.0.0.1:8098/mcp` が
-本人の識別で動く副効果がある。
-
-## 4. `ui` / `serve-ui` をコマンドとして分ける理由
-
-一つのコマンドのフラグ(`ui --public` 等)にはしない。二つのモードは
-バインド先・識別の出所・ヘッダ・ブラウザガードの要否がすべて反転し、
-共有されるのは静的ページとプロキシの骨組みだけである。分離により
-危険な組み合わせが**表現不能**になる:
-
-- `ui` は決して loopback 以外にバインドしない(本人のトークンで書き込める
-  プロキシを LAN に晒す事故が構造的に起きない)。
-- `serve-ui` は決して個人の資格情報を使わない(常にサービス識別)。
-
-## 5. UI のスコープ
-
-UI は公開 REST API(`/api/v1`)の薄いクライアントに留める — **UI に
-できることはすべてエージェントにもできる**。サーバー側状態や LLM を
-要する機能は UI ではなく別の場所(エージェント側)に属する。1 ファイル・
-ビルド無しの構造は読める/フォークできる/リブランドできるための意図的な
-制約であり、維持する。API の全機能を UI が追随する義務はなく、表面の
-一貫性は 0015 のレビュー対象として都度判断する。
-
-## 6. 非目標
-
-- UI のための新しい認証機構(OAuth 等)は導入しない。ブラウザの per-user
-  識別を公開 URL で得る話は Issue #5(MCP OAuth)/ IAP の領域のまま。
-  IAP を前置した `serve-ui` でも、記録される識別はサービスの SA であって
-  ブラウザ利用者ではない(per-user provenance には IAP JWT 検証が要る —
-  0002 §4)。
-- UI をサーバーコマンド(`ochakai serve`)から配信することはしない。
-
-## 改訂履歴
-
-- 2026-07-19 (2): ページの接続先を自オリジンに固定し、右上の base URL
-  設定(localStorage)を廃止。資格情報はどちらの経路でも手前のプロキシが
-  付ける設計なので、オリジン以外を指す設定は CORS と認証の両方で必ず
-  失敗する誤操作の入り口でしかなかった(ファイルとして直接開いた開発時
-  のみ `http://localhost:8080` にフォールバック)。これに伴い、利用者の
-  入力する base URL が前提だった `serve-ui` の OCHAKAI_URL なし
-  (静的ページのみ)モードを廃止し、OCHAKAI_URL を必須化。
-- 2026-07-19: examples/webui(サンプル、別イメージ)を `ochakai serve-ui`
-  として本体に昇格。動機: (1) UI ページは `ochakai ui` 経由で既に製品
-  バイナリに埋め込まれており「サンプル」の立て付けは配信経路だけだった、
-  (2) チーム共有デプロイの実需が生じ、別イメージのビルド・バージョン
-  同期の運用負担を除きたかった。§4(コマンド分離の理由)と §5(UI の
-  スコープ)を明文化。
+自己完結一ファイルの UI を、認証モデルの異なる二経路(`ochakai ui` と
+`ochakai serve-ui`)で配信すると決めた — ページは認証を知らず、危険な
+組み合わせはコマンドを分けることで書けなくなる。全文は Superseded 直前のコミット
+[f2bab02](https://github.com/na0fu3y/ochakai/blob/f2bab028f8553e6a2e9134613d638d6224683bac/docs/design/0006-web-ui-serving.md)
+にある。
