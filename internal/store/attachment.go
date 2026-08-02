@@ -53,27 +53,27 @@ const attributedTo = `f.id IS NULL AND f.deleted_at IS NULL
 const fileCols = `f.path, f.media_type, f.size, f.blob_hash,
 	f.created_by_kind, f.created_by_name, f.created_at`
 
-// asAttachment renders one file object the way the surfaces name it: at
+// asFile renders one file object the way the surfaces name it: at
 // its path, with the last segment as the name every surface calls it by.
-func asAttachment(path, mediaType string, size int64, hash string,
+func asFile(path, mediaType string, size int64, hash string,
 	by domain.Actor, at time.Time,
-) domain.Attachment {
-	return domain.Attachment{
+) domain.File {
+	return domain.File{
 		Name: path[strings.LastIndex(path, "/")+1:], MediaType: mediaType,
 		Size: size, SHA256: hash, Path: path, CreatedBy: by, CreatedAt: at,
 	}
 }
 
-// scanFile pairs fileCols with asAttachment.
-func scanFile(row pgx.CollectableRow) (domain.Attachment, error) {
+// scanFile pairs fileCols with asFile.
+func scanFile(row pgx.CollectableRow) (domain.File, error) {
 	var path, mediaType, hash string
 	var size int64
 	var by domain.Actor
 	var at time.Time
 	if err := row.Scan(&path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
-		return domain.Attachment{}, err
+		return domain.File{}, err
 	}
-	return asAttachment(path, mediaType, size, hash, by, at), nil
+	return asFile(path, mediaType, size, hash, by, at), nil
 }
 
 // filePath is where a file with this name, written against this entry,
@@ -99,12 +99,12 @@ func filePath(k *domain.Knowledge, name, at string) string {
 
 // PutAttachment stores data as an attachment of a live entry, replacing
 // any attachment of the same name. mediaType must already be validated
-// (domain.DetectAttachmentMediaType). Attach and detach count as changes
+// (domain.DetectFileMediaType). Attach and detach count as changes
 // to the entry: updated_at is bumped and a revision (with the attachment
 // list in the snapshot) is recorded.
-func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at string, data []byte, actor domain.Actor) (*domain.File, error) {
 	sum := sha256.Sum256(data)
-	att := &domain.Attachment{
+	att := &domain.File{
 		Name:      name,
 		MediaType: mediaType,
 		Size:      int64(len(data)),
@@ -167,11 +167,11 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 // errNoBlobStore is the backstop for attachment operations on an
 // instance without a blob store; the service layer checks first and
 // wraps the condition in a client-facing error (design doc 0013).
-var errNoBlobStore = errors.New("attachments are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
+var errNoBlobStore = errors.New("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
 
 // GetAttachment returns one attachment with its bytes. Attachments of
 // soft-deleted entries are gone with the entry.
-func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.Attachment, []byte, error) {
+func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.File, []byte, error) {
 	att, err := s.GetAttachmentMeta(ctx, id, name)
 	if err != nil {
 		return nil, nil, err
@@ -188,7 +188,7 @@ func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.Att
 
 // ListAttachments returns the metadata (no bytes) of the files a live
 // entry is shown by, in name order.
-func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.Attachment, error) {
+func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.File, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+fileCols+`
 		FROM object k JOIN object f ON `+attributedTo+`
 		WHERE k.id=$1 AND k.deleted_at IS NULL ORDER BY f.path`, id)
@@ -202,7 +202,7 @@ func (s *Store) ListAttachments(ctx context.Context, id string) ([]domain.Attach
 // query, keyed by entry id. Entries with no files have no key. The
 // callers pass entries they already know are live (search hits,
 // backlinks), so no liveness join is needed.
-func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[string][]domain.Attachment, error) {
+func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[string][]domain.File, error) {
 	rows, err := s.pool.Query(ctx, `SELECT k.id, `+fileCols+`
 		FROM object k
 		JOIN unnest($1::text[]) AS want(id) ON k.id = want.id
@@ -212,7 +212,7 @@ func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[str
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string][]domain.Attachment{}
+	out := map[string][]domain.File{}
 	for rows.Next() {
 		var owner, path, mediaType, hash string
 		var size int64
@@ -221,7 +221,7 @@ func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[str
 		if err := rows.Scan(&owner, &path, &mediaType, &size, &hash, &by.Kind, &by.Name, &at); err != nil {
 			return nil, err
 		}
-		out[owner] = append(out[owner], asAttachment(path, mediaType, size, hash, by, at))
+		out[owner] = append(out[owner], asFile(path, mediaType, size, hash, by, at))
 	}
 	return out, rows.Err()
 }
@@ -233,7 +233,7 @@ func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[str
 // The name is the last segment of a path, so a file the entry shows from
 // elsewhere in the bundle answers to its filename here, which is the
 // name every surface has always called it by.
-func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain.Attachment, error) {
+func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain.File, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+fileCols+`
 		FROM object k JOIN object f ON `+attributedTo+`
 		WHERE k.id=$1 AND k.deleted_at IS NULL
@@ -286,12 +286,12 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 // OKF exporter consumes it.
 type ExportAttachment struct {
 	ID   string
-	Att  domain.Attachment
+	Att  domain.File
 	Data []byte
 }
 
 // AttachmentBytes returns the content-addressed bytes behind an
-// attachment. Paired with ExportSnapshot.AttachmentMeta for streaming
+// attachment. Paired with ExportSnapshot.FileMeta for streaming
 // export.
 func (s *Store) AttachmentBytes(ctx context.Context, sha256 string) ([]byte, error) {
 	if s.blobs == nil {
@@ -325,13 +325,13 @@ func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowled
 	if err != nil {
 		return err
 	}
-	k.Attachments = atts
+	k.Files = atts
 	return s.addRevision(ctx, tx, k, change, actor)
 }
 
 // listAttachmentsTx reads the file list inside the writing transaction,
 // so the revision snapshot sees the change it records.
-func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.Attachment, error) {
+func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.File, error) {
 	rows, err := tx.Query(ctx, `SELECT `+fileCols+`
 		FROM object k JOIN object f ON `+attributedTo+`
 		WHERE k.id=$1 ORDER BY f.path`, id)
@@ -350,9 +350,9 @@ func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.Atta
 // A concept at that path is not overwritten. The two kinds share one
 // address space, so the path is taken, and a caller who meant to edit
 // the entry there means PUT on the entry.
-func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, actor domain.Actor) (*domain.Attachment, error) {
+func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, actor domain.Actor) (att *domain.File, created bool, err error) {
 	if s.blobs == nil {
-		return nil, errNoBlobStore
+		return nil, false, errNoBlobStore
 	}
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
@@ -360,14 +360,18 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 	// Outside the transaction, and content-addressed, so a failure after
 	// it leaves only an unreferenced object the next write reuses.
 	if err := s.blobs.Put(ctx, hash, mediaType, data); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	err := s.withTx(ctx, func(tx pgx.Tx) error {
+	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO blob (sha256, media_type, size)
 			VALUES ($1, $2, $3) ON CONFLICT (sha256) DO NOTHING`, hash, mediaType, int64(len(data))); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `INSERT INTO object
+		// (xmax = 0) is Postgres's own tell for "this row was inserted,
+		// not updated by the ON CONFLICT arm" — one query, no second
+		// round trip to ask created (design doc 0064: a file PUT answers
+		// 201 on create the same way a concept PUT already does).
+		row := tx.QueryRow(ctx, `INSERT INTO object
 			(path, type, title, body, blob_hash, size, media_type,
 			 created_by_kind, created_by_name, updated_by_kind, updated_by_name,
 			 created_at, updated_at, content_changed_at)
@@ -376,28 +380,29 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 				blob_hash=EXCLUDED.blob_hash, size=EXCLUDED.size, media_type=EXCLUDED.media_type,
 				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
 				updated_at=EXCLUDED.updated_at
-			WHERE object.id IS NULL`,
+			WHERE object.id IS NULL
+			RETURNING (xmax = 0)`,
 			p, hash, int64(len(data)), mediaType, actor.Kind, actor.Name, at)
-		if err != nil {
+		if err := row.Scan(&created); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("%w: %s is a concept", ErrAlreadyExists, p)
+			}
 			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("%w: %s is a concept", ErrAlreadyExists, p)
 		}
 		return s.addFileRevision(ctx, tx, p, "create", actor)
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return &domain.Attachment{
+	return &domain.File{
 		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
 		Size: int64(len(data)), SHA256: hash, Path: p,
 		CreatedBy: actor, CreatedAt: at,
-	}, nil
+	}, created, nil
 }
 
 // GetFile returns the file object at a bundle path with its bytes.
-func (s *Store) GetFile(ctx context.Context, p string) (*domain.Attachment, []byte, error) {
+func (s *Store) GetFile(ctx context.Context, p string) (*domain.File, []byte, error) {
 	att, err := s.GetFileMeta(ctx, p)
 	if err != nil {
 		return nil, nil, err
@@ -413,8 +418,8 @@ func (s *Store) GetFile(ctx context.Context, p string) (*domain.Attachment, []by
 }
 
 // GetFileMeta is GetFile without the bytes, for a conditional request.
-func (s *Store) GetFileMeta(ctx context.Context, p string) (*domain.Attachment, error) {
-	var a domain.Attachment
+func (s *Store) GetFileMeta(ctx context.Context, p string) (*domain.File, error) {
+	var a domain.File
 	var at time.Time
 	err := s.pool.QueryRow(ctx, `SELECT media_type, size, blob_hash,
 		created_by_kind, created_by_name, created_at

@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-// Attachment is a file attached to a knowledge entry (design docs 0008,
-// 0013). Attachments never stand alone: search and get return the entry —
-// body text first, attachment metadata alongside — and the bytes are
+// File is a file attached to a knowledge entry (design docs 0008,
+// 0013). Files never stand alone: search and get return the entry —
+// body text first, file metadata alongside — and the bytes are
 // fetched on demand, so an agent's context is never flooded with base64.
 // Bytes are content-addressed by SHA-256 and immutable.
-type Attachment struct {
+type File struct {
 	Name      string `json:"name"` // filename, unique within the entry
 	MediaType string `json:"media_type"`
 	Size      int64  `json:"size"`
@@ -30,7 +30,7 @@ type Attachment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// MaxAttachmentSize bounds one file (screenshots, diagrams, seed files —
+// MaxFileSize bounds one file (screenshots, diagrams, seed files —
 // not originals).
 //
 // There is no bound on how many files an entry may carry. There was one,
@@ -41,7 +41,7 @@ type Attachment struct {
 // ochakai's to set, any more than it sets how many entries a directory
 // may hold. A bundle whose files come back missing is not a bundle that
 // round-trips (§3.2).
-const MaxAttachmentSize = 5 << 20
+const MaxFileSize = 5 << 20
 
 // embeddableMediaTypes is what the file-embedding model takes as input
 // (gemini-embedding-2, design doc 0020). Anything else is stored and
@@ -86,17 +86,17 @@ func InlineServable(mediaType string) bool {
 	return strings.HasPrefix(mt, "image/") || mt == "application/pdf" || mt == "text/plain"
 }
 
-// ValidAttachmentName reports whether name can be an attachment filename:
+// ValidFileName reports whether name can be a file's filename:
 // one path segment (so it embeds in bundle paths and URLs unchanged, with
 // the same path-safety-only character rule as ID segments, design doc
-// 0019), not markdown — a ".md" attachment could masquerade as a concept
+// 0019), not markdown — a ".md" file could masquerade as a concept
 // document in an exported bundle (index.md / log.md fall out of the same
 // rule).
-func ValidAttachmentName(name string) bool {
+func ValidFileName(name string) bool {
 	return validSegment(name) && !strings.HasSuffix(strings.ToLower(name), ".md")
 }
 
-// DetectAttachmentMediaType is the media type of these bytes, as
+// DetectFileMediaType is the media type of these bytes, as
 // sniffed. The client's declared type is never trusted; bytes decide.
 //
 // Nothing is refused. It used to be: an allowlist of five types stood
@@ -117,7 +117,7 @@ func ValidAttachmentName(name string) bool {
 // The signature still decides what the type *is*, so a file that only
 // claims to be an image is stored as what it sniffs as, never as what it
 // was called.
-func DetectAttachmentMediaType(data []byte) (string, error) {
+func DetectFileMediaType(data []byte) (string, error) {
 	mt, _, _ := strings.Cut(http.DetectContentType(data), ";")
 	mt = strings.TrimSpace(mt)
 	if mt == "" {
@@ -126,16 +126,16 @@ func DetectAttachmentMediaType(data []byte) (string, error) {
 	return mt, nil
 }
 
-// ValidateAttachment checks the parts of an attachment writers control.
-func ValidateAttachment(name string, size int) error {
-	if !ValidAttachmentName(name) {
-		return fmt.Errorf("invalid attachment name %q (one filename segment, not *.md)", name)
+// ValidateFile checks the parts of a file writers control.
+func ValidateFile(name string, size int) error {
+	if !ValidFileName(name) {
+		return fmt.Errorf("invalid file name %q (one filename segment, not *.md)", name)
 	}
 	if size == 0 {
-		return fmt.Errorf("attachment is empty")
+		return fmt.Errorf("file is empty")
 	}
-	if size > MaxAttachmentSize {
-		return fmt.Errorf("attachment exceeds %d MiB", MaxAttachmentSize>>20)
+	if size > MaxFileSize {
+		return fmt.Errorf("file exceeds %d MiB", MaxFileSize>>20)
 	}
 	return nil
 }

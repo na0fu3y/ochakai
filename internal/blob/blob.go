@@ -1,4 +1,4 @@
-// Package blob stores attachment bytes outside PostgreSQL (design doc
+// Package blob stores file bytes outside PostgreSQL (design doc
 // 0011). Content is addressed by SHA-256 and immutable: Put is
 // create-only, and blobs are never deleted — like knowledge revisions,
 // history is retained. The interface exists for the store and for test

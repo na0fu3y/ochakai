@@ -156,10 +156,11 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 // to tell a full page from the last one — without it, a listing whose
 // length happens to equal the limit would hand out a cursor onto nothing.
 func (s *Service) list(ctx context.Context, sort, cursor string, f store.Filter, limit int) (*Listing, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 100
+	limit, err := checkedLimit(limit, 100, 1000)
+	if err != nil {
+		return nil, err
 	}
-	f, err := checkedFilter(f)
+	f, err = checkedFilter(f)
 	if err != nil {
 		return nil, err
 	}

@@ -26,9 +26,11 @@ func TestWriteErrorStatuses(t *testing.T) {
 	}{
 		{"not found", store.ErrNotFound, http.StatusNotFound},
 		{"already exists", store.ErrAlreadyExists, http.StatusConflict},
+		{"not deleted", store.ErrNotDeleted, http.StatusConflict},
+		{"no rejection to withdraw", store.ErrNoRejection, http.StatusConflict},
 		{"if-match conflict", store.ErrConflict, http.StatusPreconditionFailed},
 		{"invalid input", service.Invalidf("title is required"), http.StatusBadRequest},
-		{"unsupported", service.Unsupportedf("attachments need GCS"), http.StatusNotImplemented},
+		{"unsupported", service.Unsupportedf("files need GCS"), http.StatusNotImplemented},
 		{"unknown", errors.New("connection reset"), http.StatusInternalServerError},
 	}
 	for _, c := range cases {
@@ -119,6 +121,13 @@ func TestBadRequestValidation(t *testing.T) {
 		{"bad links_to limit", "/api/v1/search?links_to=metrics/revenue&limit=1.5", "invalid limit"},
 		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
 		{"bad index prefix", "/api/v1/bundle/..%2Fescape/index.md", "invalid prefix"},
+		// A limit in range is a well-formed number that is still refused:
+		// design doc 0064 unifies every endpoint on reject-over-clamp, the
+		// policy `days` already had.
+		{"search limit too large", "/api/v1/search?q=x&limit=51", "between 1 and 50"},
+		{"context limit too large", "/api/v1/context?q=x&limit=21", "between 1 and 20"},
+		{"log limit too large", "/api/v1/bundle/metrics/log.md?limit=1001", "between 1 and 1000"},
+		{"revisions limit too large", "/api/v1/bundle/metrics/revenue.md?history&limit=1001", "between 1 and 1000"},
 		// "fm." carries the OKF keys nothing else asks about (design
 		// doc 0047). The five with a column behind them, and every key
 		// OKF does not define, are refused on both surfaces that take a
@@ -143,6 +152,53 @@ func TestBadRequestValidation(t *testing.T) {
 				t.Errorf("GET %s body %q does not mention %q", c.url, rec.Body, c.wantSubstr)
 			}
 		})
+	}
+}
+
+// TestUnknownQueryParamsAreRejected pins design doc 0064's strict
+// allowlist: after the freeze, an unrecognized query parameter is a 400
+// naming it rather than a silent no-op — the asymmetry with an unknown
+// fm.* key (already checked against the concept's own vocabulary, see
+// TestBadRequestValidation) that made the dry_run false-green possible in
+// the first place. Covers every one of REST's 11 operations.
+func TestUnknownQueryParamsAreRejected(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct{ name, method, url string }{
+		{"search", http.MethodGet, "/api/v1/search?q=x&typo=1"},
+		{"context", http.MethodGet, "/api/v1/context?q=x&typo=1"},
+		{"bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md?typo=1"},
+		{"bundle put", http.MethodPut, "/api/v1/bundle/metrics/revenue.md?typo=1"},
+		{"bundle delete", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md?typo=1"},
+		{"review", http.MethodPost, "/api/v1/review/metrics/revenue?typo=1"},
+		{"usage get", http.MethodGet, "/api/v1/usage/metrics/revenue?typo=1"},
+		{"usage post", http.MethodPost, "/api/v1/usage/metrics/revenue?typo=1"},
+		{"stats", http.MethodGet, "/api/v1/stats?typo=1"},
+		{"move", http.MethodPost, "/api/v1/move?typo=1"},
+		{"reembed", http.MethodPost, "/api/v1/reembed?typo=1"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, nil))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), "typo") {
+				t.Errorf("%s %s body %q does not name the unknown parameter", c.method, c.url, rec.Body)
+			}
+		})
+	}
+}
+
+// TestFrontmatterParamsAreNotUnknown confirms fm.* stays exempt from the
+// allowlist above — it is validated by content against the concept's own
+// vocabulary (checkedFilter), not by a fixed list of names.
+func TestFrontmatterParamsAreNotUnknown(t *testing.T) {
+	h := Handler(&service.Service{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/search?q=x&fm.owner=finance", nil))
+	if strings.Contains(rec.Body.String(), "unknown query parameter") {
+		t.Errorf("fm.owner was treated as an unknown top-level parameter: %s", rec.Body)
 	}
 }
 
@@ -247,7 +303,7 @@ func TestAttachWithoutBlobStore(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut,
 		"/api/v1/bundle/insights/revenue/weekly.png", bytes.NewReader(png)))
 	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("PUT attachment without GCS = %d, want 501 (body: %s)", rec.Code, rec.Body)
+		t.Fatalf("PUT file without GCS = %d, want 501 (body: %s)", rec.Code, rec.Body)
 	}
 	if !strings.Contains(rec.Body.String(), "OCHAKAI_GCS_BUCKET") {
 		t.Errorf("body %q does not carry the config hint", rec.Body)
@@ -264,8 +320,8 @@ func TestOversizedBodies(t *testing.T) {
 		size              int
 		wantSubstr        string
 	}{
-		{"attachment", http.MethodPut, "/api/v1/bundle/insights/revenue/weekly.png",
-			domain.MaxAttachmentSize + 1, "object exceeds"},
+		{"file", http.MethodPut, "/api/v1/bundle/insights/revenue/weekly.png",
+			domain.MaxFileSize + 1, "object exceeds"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -351,7 +407,7 @@ func TestETagRoundTrip(t *testing.T) {
 	}
 }
 
-// An oversized document is a 413, matching what the attachment path
+// An oversized document is a 413, matching what the file path
 // (readBody) already answers. Calling it a parse failure sent the caller
 // hunting for a syntax error in a payload that merely did not fit.
 func TestOversizedDocumentIsTooLarge(t *testing.T) {
@@ -405,7 +461,7 @@ func TestBooleanQueryParamsRejectUnreadableValues(t *testing.T) {
 		// The archive of the whole bundle: the parameter is read before
 		// the snapshot is opened, which is what lets this run against a
 		// service with no store at all.
-		{"attachments=0", http.MethodGet, "/api/v1/bundle/?attachments=0", "application/gzip", "invalid attachments"},
+		{"files=0", http.MethodGet, "/api/v1/bundle/?files=0", "application/gzip", "invalid files"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -154,7 +154,7 @@ What the vault does not have is everything that is not the file format:
   web service are not there.
 - **Retrieval.** Hybrid search with embeddings on by default
   ([0053](design/0053-embeddings-by-default.md)), path-scoped search,
-  attachment search over image and PDF content, and `get_context` — a
+  file search over image and PDF content, and `get_context` — a
   one-call read shaped for an agent's question rather than a human's
   browse.
 - **Types.** A vault is type-agnostic, which is right for notes and

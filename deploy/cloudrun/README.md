@@ -287,7 +287,7 @@ Worth knowing before you grant the role: ochakai has no authorization
 Vertex AI call by writing** — cents at the scale a curated knowledge base
 reaches.
 
-The model, location, multimodal attachment search, `OCHAKAI_EMBEDDING_DIM`
+The model, location, multimodal file search, `OCHAKAI_EMBEDDING_DIM`
 and `ochakai reembed` — the command that backfills a base loaded before
 the role was granted, or before a model change — are all in
 [Environment variables](../../docs/configuration.md#environment-variables);
@@ -295,12 +295,12 @@ what changing the dimension does to an existing database is in
 [Upgrades](../../docs/guides/operating.md#upgrades) in the operating
 guide.
 
-## 4b. Attachments require GCS
+## 4b. Files require GCS
 
-Attachment bytes live only in a GCS bucket — metadata and revisions stay
+File bytes live only in a GCS bucket — metadata and revisions stay
 in Postgres, and auth is ADC via the service identity, no keys. Without
 `OCHAKAI_GCS_BUCKET` the service runs markdown-only: attach operations
-return 501 and imports report attachments as failed. Skip this section
+return 501 and imports report files as failed. Skip this section
 only if you never attach files:
 
 ```sh
@@ -314,7 +314,7 @@ gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_GCS_BUCKET=$PROJECT_ID-ochakai-blobs
 ```
 
-Attachment bytes go straight to the bucket (objects are
+File bytes go straight to the bucket (objects are
 content-addressed `blob/<sha256>`, create-only, never deleted).
 
 **Upgrading from ≤0.8.x with attachments and no bucket**: run a 0.8.x
@@ -382,7 +382,7 @@ is most of what ochakai sells, collapses.
 
 The fix, the two-command setup, and everything else an application
 embedding the REST API needs — authenticating, delegated provenance,
-`X-Ochakai-Producer`, and safe concurrent writes — are in
+`Ochakai-Producer`, and safe concurrent writes — are in
 [Embedding the REST API](../../docs/guides/rest-integration.md).
 
 ## 5d. Optional: a public read-only demo (the one public posture)

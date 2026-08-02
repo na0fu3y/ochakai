@@ -32,10 +32,10 @@ is the computation itself. It is named by the concept's `computation` key as
 a file rather than pasted into a `# Computation` fence — the form
 [OKF SPEC](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 §10.2 gives for a computation too long to inline — and it travels with the
-concept as an attachment, so `ochakai get jobs/sync-bigquery-catalog
+concept as a file, so `ochakai get jobs/sync-bigquery-catalog
 --download .` brings back the code with the contract. It sits in the
 concept-named directory beside the document, which is where `ochakai export`
-puts an attachment and what the web UI's attachments tab tells you to
+puts a file and what the web UI's files tab tells you to
 reference (design doc [0013](../../docs/design/0013-attachment-files-gcs-only.md)).
 
 That shape is the point as much as the sync is. An agent told to refresh

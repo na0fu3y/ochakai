@@ -54,9 +54,9 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	if strings.TrimSpace(req.Query) == "" {
 		return nil, Invalidf("invalid context request: query is required")
 	}
-	limit := req.Limit
-	if limit <= 0 || limit > 20 {
-		limit = 5
+	limit, err := checkedLimit(req.Limit, 5, 20)
+	if err != nil {
+		return nil, err
 	}
 	hits, err := s.Search(ctx, req.Query, req.Filter, 2*limit)
 	if err != nil {

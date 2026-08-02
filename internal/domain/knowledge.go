@@ -750,12 +750,12 @@ type Knowledge struct {
 	Links         []Link         `json:"links,omitempty"`
 	Attrs         map[string]any `json:"attrs,omitempty"`
 	Body          string         `json:"body,omitempty"`
-	// Attachments is read-only metadata (no bytes), populated on single-
-	// entry reads. Attachments are managed through their own endpoints,
+	// Files is read-only metadata (no bytes), populated on single-
+	// entry reads. Files are managed through their own endpoints,
 	// never through create/update payloads.
-	Attachments []Attachment `json:"attachments,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	Files     []File    `json:"files,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// ContentChangedAt is when what the entry says last changed, which is
 	// what OKF's generated.at means (SPEC §5.2). It parted ways with
 	// UpdatedAt when the document became the writer's own bytes:
@@ -907,7 +907,7 @@ func DisplayTitle(title, id string) string {
 	return id
 }
 
-// Normalize returns s in Unicode NFC. IDs, link targets, attachment
+// Normalize returns s in Unicode NFC. IDs, link targets, file
 // names, and search queries are compared byte-wise against stored text,
 // and macOS filesystems hand paths back NFD-decomposed — the same
 // visible path must land on the same entry, so every boundary that
@@ -920,7 +920,7 @@ func Normalize(s string) string { return norm.NFC.String(s) }
 // sources, usage_window, status, status_note, stale_after, the Attested
 // Computation contract, links, attrs, body). Server-managed provenance and
 // timestamps (created_*, updated_by, verified_*, rejected_*, updated_at)
-// and the attachment list are not content. Attrs are compared as canonical
+// and the file list are not content. Attrs are compared as canonical
 // JSON, so the same value decoded from YAML (int) and from JSONB (float64)
 // compares equal; values JSON cannot encode compare as different.
 //
@@ -1171,11 +1171,11 @@ func ObservedOf(k *Knowledge) Observed {
 // to be the thing that was written: a rendering here would mean every
 // edit through the web UI or `ochakai get` silently reformatted the entry.
 type View struct {
-	ID          string       `json:"id"`
-	Document    string       `json:"document"`
-	Summary     Summary      `json:"summary"`
-	Observed    Observed     `json:"observed"`
-	Attachments []Attachment `json:"attachments,omitempty"`
+	ID       string   `json:"id"`
+	Document string   `json:"document"`
+	Summary  Summary  `json:"summary"`
+	Observed Observed `json:"observed"`
+	Files    []File   `json:"files,omitempty"`
 }
 
 // URI is the entry's canonical address, as on Knowledge and Summary.
@@ -1206,11 +1206,11 @@ type SearchHit struct {
 	Summary
 	Score float64 `json:"score"`
 	Usage *Usage  `json:"usage,omitempty"`
-	// Attachments is metadata only, and only on the REST list surface,
+	// Files is metadata only, and only on the REST list surface,
 	// so a UI can draw a thumbnail without a round trip per row (design
 	// doc 0015). It is not part of Summary: a row is a projection of the
-	// entry, and an attachment is a file beside it.
-	Attachments []Attachment `json:"attachments,omitempty"`
+	// entry, and a file is an object beside it.
+	Files []File `json:"files,omitempty"`
 }
 
 // ContextRank is what a hit is worth once the entries travel in the same

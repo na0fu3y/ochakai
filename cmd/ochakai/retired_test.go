@@ -176,7 +176,7 @@ func repoTextFiles(t *testing.T) []string {
 func TestOneSpellingDecidesWhatIsReserved(t *testing.T) {
 	forms := []string{`== "index.md"`, `== "log.md"`, `!= "index.md"`, `!= "log.md"`,
 		`"index.md", "log.md"`, `"log.md", "index.md"`}
-	const decides = "internal/domain/attachment.go" // where the decision lives
+	const decides = "internal/domain/file.go" // where the decision lives
 	found := false
 	for _, path := range repoTextFiles(t) {
 		content, err := os.ReadFile(path)

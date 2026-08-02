@@ -90,6 +90,12 @@ For the shape of the system rather than the history of it, read
 | [0013 Any file type, GCS only](0013-attachment-files-gcs-only.md) | **Superseded by 0046** | |
 | [0020 Attachment search](0020-attachment-search.md) | Accepted; rekeyed by bundle path in 0046 | Filenames join the lexical haystack, and attachments are embedded at attach time as a third list in the rank fusion; ochakai still refuses to interpret them (no OCR, no PDF text extraction). Content search needs a file-capable embedding model, and existing attachments aren't backfilled. |
 
+The wire spelling `attachments`/`Attachment` outlived the concept 0046 §2.1
+already retired. [0064](0064-rest-stops-at-api-v1.md) §6 is the record
+that retires the name itself (`files`/`File` on the wire, `get_file` on
+MCP) — it revises none of the records above; the storage model stays
+0046's.
+
 ## Browse and the web UI
 
 | Record | Status | Decision |
@@ -109,6 +115,7 @@ For the shape of the system rather than the history of it, read
 | [0015 Surface consistency](0015-surface-consistency.md) | Accepted | Fixes what each surface is for and what it deliberately omits: REST is the contract; MCP's tool count is a context budget (browse, revisions, backlinks, bulk export/import, purge and reembed stay off it), and MCP refuses to overwrite or delete an entry a human has judged since it can't carry an `If-Match` precondition. An agent that finds verified knowledge wrong reports the outcome or drafts a replacement; humans edit from REST, CLI or the web UI. |
 | [0058 Two filters nobody arrived through](0058-filters-nobody-arrived-through.md) | Accepted; **breaking** | `min_score` is removed entirely from REST and the CLI (scores are mode-dependent and uncalibrated, so a floor is nonsense under RRF rank fusion); `fm.` comes off MCP only, staying on REST and the CLI. If you passed `min_score`, use `budget` instead; an MCP client filtering with `fm` now uses the CLI or REST. Tool count stays 8. |
 | [0033 Context hits are a ranking](0033-context-hits-are-a-ranking.md) | Accepted | `/context`'s `hits` strip out entry bodies, carrying only `id`/`type`/`title`/`status`/`score` on every surface, so the byte budget can't be bypassed by a duplicate copy. Breaking REST change in 0.13.0 — read bodies from `entries`, not `hits`. |
+| [0064 REST stops at /api/v1](0064-rest-stops-at-api-v1.md) | Accepted | The last breaking REST batch before the wire is declared frozen (issue #379); `docs/compatibility.md` is rewritten in the same PR to say so. **Breaking**: unknown query parameters now 400 on every operation (`fm.` excepted); `X-Ochakai-On-Behalf-Of`/`X-Ochakai-Producer` lose their `X-` prefix; a file's own address answers `Accept: application/json` with metadata instead of ignoring the header; `attachments`/`Attachment` are renamed to `files`/`File` on the wire and the MCP tool `get_attachment` becomes `get_file` (`entries` stays exempt per 0057 §3.2); a failed `If-None-Match: *` is 412 not 409; DELETE on a concept honors `If-Match`; a file PUT answers 201 on creation; `ruling: withdrawn` with nothing to withdraw is 409 not 404; out-of-range `limit`/`days` is 400 everywhere instead of silently clamping. No version or capability signal ships, and CORS stays deliberately absent.
 
 ## The verification loop and usage measurement
 

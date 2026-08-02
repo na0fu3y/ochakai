@@ -63,7 +63,7 @@ flowchart LR
   end
 
   PG[("Cloud SQL for PostgreSQL<br/>+ pgvector")]
-  GCS[("Cloud Storage<br/>attachment bytes")]
+  GCS[("Cloud Storage<br/>file bytes")]
   VX["Vertex AI Embeddings<br/>default on Google Cloud"]
 
   A -->|MCP over HTTP| M
@@ -119,7 +119,7 @@ The consequences to plan around:
 - **The identity says who, not what.** An agent that writes under a
   person's own credentials — an MCP client, a CLI in a script — records
   that person, and the record then reads as if they wrote the prose.
-  `X-Ochakai-Producer: insightflow/1.4.0` (or, on MCP, the client's
+  `Ochakai-Producer: insightflow/1.4.0` (or, on MCP, the client's
   `initialize` info) names the software; it is recorded beside the actor
   and never in place of it, because it is the one thing here the caller
   declares about itself rather than something authentication observed
@@ -253,7 +253,7 @@ stores no relationship vocabulary of its own (design doc
 prose. Renaming a concept rewrites the references pointing at it, prose
 included.
 
-**Attachments** live beside a concept — the dashboard screenshot behind
+**Files** live beside a concept — the dashboard screenshot behind
 an insight, the ER diagram behind a table concept, the seeds.txt or spec
 PDF behind a dataset — and round-trip through OKF bundles as plain files
 next to it. Accepted formats are the intersection of what Claude reads
@@ -265,7 +265,7 @@ one object up to 5 MiB, with the database keeping what addresses them
 (design doc [0046](design/0046-bundle-address-space.md) §3.2, which
 keeps design doc 0013's judgment); with `OCHAKAI_GCS_BUCKET` unset the
 instance stores markdown concepts only and a non-markdown write is
-refused. Attachments are searchable: filenames match in every search,
+refused. Files are searchable: filenames match in every search,
 and contents join hybrid search wherever embeddings are enabled — text
 with any embedding model, images and PDFs with `gemini-embedding-2` —
 and a hit is always the owning concept, never the file itself (design
@@ -345,7 +345,7 @@ reviewable. MCP carries no `browse` (walking a tree is multi-round-trip
 exploration, the opposite of `get_context`), no `revisions` and no
 `links_to` reverse lookup (duplicated or too heavy in tokens — an agent
 that wants what points at a concept gets it inside `get_context`, which
-follows the same edge), no attachment writes
+follows the same edge), no file writes
 (base64 in a tool argument wastes tokens, and an agent's write-back
 should be searchable text), no bulk export or import, and no `verify` —
 re-verification is a human judgment. The web UI carries no outcome
@@ -372,7 +372,7 @@ SQL and a plain Postgres both provide, so hybrid search adds no
 infrastructure (design doc [0001](design/0001-architecture.md) §4).
 There is no Redis, no separate vector database, and no search cluster.
 Migrations ship in the binary. Non-markdown bytes are the exception —
-they live in Cloud Storage instead, as covered under Attachments above.
+they live in Cloud Storage instead, as covered under Files above.
 
 Usage recording is deliberately off the read path: events are buffered in
 memory and flushed periodically, statistics are documented as
@@ -389,7 +389,7 @@ Search has a lexical half and an optional vector half.
 The lexical half exists in the shape it does because of Japanese.
 PostgreSQL's full-text search does not tokenize it, so ochakai matches
 query *fragments* against a stored haystack — id, title, description,
-tags, body, attachment filenames. Latin tokens stay whole; a run of
+tags, body, and its files' names. Latin tokens stay whole; a run of
 Japanese, which has no spaces to split on, is cut into sliding
 two-character windows, and only the windows carrying a kanji or katakana
 are kept, since an all-hiragana window is grammar and matches nearly

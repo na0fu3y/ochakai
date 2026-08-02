@@ -126,7 +126,7 @@ it.
   ([0015 §3.2](docs/design/0015-surface-consistency.md)). The same reasoning
   closed the `ochakai sync` / diff-only-import-from-CI request (issue #43).
 - **A one-to-one MCP mirror of REST.** Tool schemas cost the agent's context,
-  so the tool count is a budget: browse, revisions, backlinks, attachment
+  so the tool count is a budget: browse, revisions, backlinks, file
   writes, bulk export/import, purge, and reembed stay off MCP, as does
   overwriting or deleting a concept a human has curated — an agent that finds a
   verified concept wrong reports the outcome or drafts a replacement

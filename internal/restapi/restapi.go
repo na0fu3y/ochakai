@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,14 +51,14 @@ const exportBatch = 100
 // Your knowledge is yours.
 func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, prefix string) {
 	// Every read below comes from one snapshot. Streaming means the id
-	// list, the attachment metadata and the concepts are read at
+	// list, the file metadata and the concepts are read at
 	// different moments, and a write landing between them produces an
 	// archive that disagrees with its own index — an index.md naming a
 	// file that is not there, a concept that moved appearing twice or
 	// not at all. The archive would look fine.
 	// Parsed before the snapshot: a rejected parameter should not
 	// have held a pooled connection open, however briefly.
-	withAttachments, err := queryBool(r.URL.Query(), "attachments", true)
+	withFiles, err := queryBool(r.URL.Query(), "files", true)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -75,8 +76,8 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		writeError(w, err)
 		return
 	}
-	var atts []domain.Attachment
-	if withAttachments {
+	var atts []domain.File
+	if withFiles {
 		// Metadata only; bytes are pulled one file at a time below.
 		if atts, err = snap.FileMeta(r.Context(), prefix); err != nil {
 			writeError(w, err)
@@ -84,7 +85,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		}
 	}
 	// The generated index.md files list the concepts and the files that
-	// sit beside them (design doc 0046 §3.7). With ?attachments=false
+	// sit beside them (design doc 0046 §3.7). With ?files=false
 	// there are no file bytes to carry, and an index naming files the
 	// archive does not contain would describe a bundle nobody received.
 	indexes := okf.Indexes(rows, atts) // also sorts rows by id
@@ -232,6 +233,12 @@ func Handler(svc *service.Service) http.Handler {
 	// (design doc 0050).
 	mux.HandleFunc("GET /api/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		if err := rejectUnknownParams(q,
+			"limit", "rejected", "type", "status", "tag", "source", "links_to",
+			"prefix", "trust", "q", "sort", "cursor"); err != nil {
+			writeError(w, err)
+			return
+		}
 		limit, err := queryInt(q, "limit")
 		if err != nil {
 			writeError(w, err)
@@ -282,6 +289,10 @@ func Handler(svc *service.Service) http.Handler {
 	// of them has (design doc 0046 §3.5).
 	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
+		if err := rejectUnknownParams(r.URL.Query(), "history", "limit", "files"); err != nil {
+			writeError(w, err)
+			return
+		}
 		// An archive is the bundle at a path: everything under it, as
 		// OKF, in the layout it lives at (design doc 0046 §3.5). The
 		// root is the whole knowledge base, which is what
@@ -412,6 +423,25 @@ func Handler(svc *service.Service) http.Handler {
 					return
 				}
 			}
+			// application/json on a file's own address answers metadata,
+			// not bytes: the only way to read a file's sha256 without
+			// downloading it (design doc 0064; the table at 0046 §3.5
+			// already promised this column).
+			if wantsJSON(r) {
+				att, err := svc.GetFileMeta(r.Context(), path)
+				if err != nil {
+					writeError(w, missingObject(err, isMarkdown))
+					return
+				}
+				w.Header().Set("ETag", `"`+att.SHA256+`"`)
+				w.Header().Set("Cache-Control", "private, no-cache")
+				if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, att.SHA256) {
+					w.WriteHeader(http.StatusNotModified)
+					return
+				}
+				writeJSON(w, http.StatusOK, att)
+				return
+			}
 			att, data, err := svc.GetFile(r.Context(), path)
 			if err != nil {
 				writeError(w, missingObject(err, isMarkdown))
@@ -458,6 +488,10 @@ func Handler(svc *service.Service) http.Handler {
 	for _, m := range []string{"PUT", "DELETE"} {
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
+			if err := rejectUnknownParams(r.URL.Query(), "dry_run", "purge"); err != nil {
+				writeError(w, err)
+				return
+			}
 			if refuseReserved(w, path, "and a generated file is not one anybody writes") {
 				return
 			}
@@ -506,9 +540,15 @@ func Handler(svc *service.Service) http.Handler {
 				err = store.ErrNotFound
 				switch {
 				case isMarkdown && purge:
+					// No If-Match here: purge is already the second,
+					// irreversible call in a deliberate two-step sequence
+					// (soft-delete, then purge), and asking for a fresh
+					// ETag on the second step would tax it with the round
+					// trip 0030 §3.5 avoids for the common case (design
+					// doc 0064).
 					err = svc.Purge(r.Context(), id, actor)
 				case isMarkdown:
-					err = svc.Delete(r.Context(), id, actor)
+					err = svc.Delete(r.Context(), id, actor, parseIfMatch(r))
 				}
 				if errors.Is(err, store.ErrNotFound) {
 					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
@@ -544,13 +584,13 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 			var (
-				att              *domain.Attachment
+				att              *domain.File
 				created, changed bool
 			)
 			if dry {
 				att, created, changed, err = svc.PlanFile(r.Context(), path, body)
 			} else {
-				att, err = svc.PutFile(r.Context(), path, body, actor)
+				att, created, err = svc.PutFile(r.Context(), path, body, actor)
 			}
 			if err != nil {
 				writeError(w, err)
@@ -558,8 +598,14 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			if dry {
 				w.Header().Set(planHeader, planOf(created, changed))
+				writeJSON(w, http.StatusOK, att)
+				return
 			}
-			writeJSON(w, http.StatusOK, att)
+			status := http.StatusOK
+			if created {
+				status = http.StatusCreated
+			}
+			writeJSON(w, status, att)
 		})
 	}
 
@@ -578,6 +624,11 @@ func Handler(svc *service.Service) http.Handler {
 	// capping.
 	mux.HandleFunc("GET /api/v1/context", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		if err := rejectUnknownParams(q,
+			"q", "type", "status", "tag", "prefix", "trust", "limit", "budget"); err != nil {
+			writeError(w, err)
+			return
+		}
 		limit, err := queryInt(q, "limit")
 		if err != nil {
 			writeError(w, err)
@@ -641,6 +692,10 @@ func Handler(svc *service.Service) http.Handler {
 	// "/review" suffix after the hierarchical {id...} would be
 	// indistinguishable from an ID segment.
 	mux.HandleFunc("POST /api/v1/review/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
 		var in struct {
 			Ruling string `json:"ruling"`
 			Note   string `json:"note"`
@@ -692,6 +747,10 @@ func Handler(svc *service.Service) http.Handler {
 	// /knowledge/ so a "/usage" suffix can never be confused with an ID
 	// segment.
 	mux.HandleFunc("GET /api/v1/usage/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
 		u, err := svc.Usage(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -703,6 +762,10 @@ func Handler(svc *service.Service) http.Handler {
 	// write half of the same usage resource, so no new API surface is
 	// added (issue #41). Responds with the updated totals.
 	mux.HandleFunc("POST /api/v1/usage/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
 		var in struct {
 			Outcome string `json:"outcome"`
 			Note    string `json:"note"`
@@ -734,6 +797,10 @@ func Handler(svc *service.Service) http.Handler {
 	// on a shared deployment could count its own queue and could not
 	// count its own knowledge.
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query(), "days", "prefix"); err != nil {
+			writeError(w, err)
+			return
+		}
 		days, err := queryInt(r.URL.Query(), "days")
 		if err != nil {
 			writeError(w, err)
@@ -757,12 +824,16 @@ func Handler(svc *service.Service) http.Handler {
 
 	// POST /api/v1/move {"from": ..., "to": ...} — rename a concept: the
 	// id is the address (design doc 0017), so the move carries revisions,
-	// usage, and attachments along and rewrites inbound references (link
+	// usage, and files along and rewrites inbound references (link
 	// targets, attrs.model) so nothing breaks (design doc 0021). Its own
 	// top-level path for the same reason /usage and /review have one:
 	// a suffix after the hierarchical {id...} wildcard could be confused
 	// with an ID segment.
 	mux.HandleFunc("POST /api/v1/move", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
 		var in struct {
 			From string `json:"from"`
 			To   string `json:"to"`
@@ -780,12 +851,16 @@ func Handler(svc *service.Service) http.Handler {
 	})
 
 	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for
-	// concepts and attachments that have none for the configured model.
+	// concepts and files that have none for the configured model.
 	// The response's cursor feeds the next call: a pass whose concepts all
 	// fail would otherwise hand back the same window forever. Not an MCP
 	// tool: an operator task with an unbounded runtime and no place in an
 	// agent's turn (design doc 0015).
 	mux.HandleFunc("POST /api/v1/reembed", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query(), "limit", "cursor"); err != nil {
+			writeError(w, err)
+			return
+		}
 		limit, err := queryInt(r.URL.Query(), "limit")
 		if err != nil {
 			writeError(w, err)
@@ -866,7 +941,7 @@ func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 	})
 }
 
-// writeHits responds with a hit list, attachment metadata filled in one
+// writeHits responds with a hit list, file metadata filled in one
 // batch — the REST list surface carries it so UIs can render image
 // previews; MCP search results stay lean (design doc 0015).
 // The page's cursor rides along when a listing has more behind it
@@ -879,12 +954,12 @@ func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, pag
 	for i := range page.Hits {
 		ptrs[i] = &domain.Knowledge{ID: page.Hits[i].ID}
 	}
-	if err := svc.FillAttachments(r.Context(), ptrs); err != nil {
+	if err := svc.FillFiles(r.Context(), ptrs); err != nil {
 		writeError(w, err)
 		return
 	}
 	for i := range page.Hits {
-		page.Hits[i].Attachments = ptrs[i].Attachments
+		page.Hits[i].Files = ptrs[i].Files
 	}
 	body := map[string]any{"hits": page.Hits}
 	if page.Cursor != "" {
@@ -1067,7 +1142,7 @@ func refuseReserved(w http.ResponseWriter, path, because string) bool {
 // directory nothing lives under, and reports whether it did. It goes
 // straight to the store rather than through svc.Get: this is a check of
 // whether the address is a subtree, not a read of the object living
-// there, and must not count as a fetch or fault on missing attachments.
+// there, and must not count as a fetch or fault on missing files.
 //
 // A prefix that is not an object's own address but still matches
 // nothing — a typo one level too deep, as much as a directory that is
@@ -1118,6 +1193,34 @@ func splitReserved(path string) (dir, base string) {
 	return "", path
 }
 
+// wantsJSON, wantsDocument and wantsArchive are the whole of content
+// negotiation at the bundle address, and design doc 0064 is where their
+// precedence is written down as one rule rather than left implicit in
+// three independent call sites:
+//
+//  1. application/gzip, checked once at the top of the GET handler,
+//     outranks everything — but only a directory answers it; an object's
+//     own address refuses it with 409 (refuseObjectAsArchive) rather
+//     than falling through to one of the forms below.
+//  2. Below that, each kind of object answers a fixed pair — one
+//     representation for an explicit Accept, one default for everything
+//     else (including no Accept at all, and an Accept neither predicate
+//     recognizes):
+//     index.md / log.md   — application/json: structured; default: the
+//     generated markdown document.
+//     a concept (<id>.md) — text/markdown: the export-form document;
+//     default: the JSON View. 0046 §3.5's table said the unmarked
+//     default should be the export form; the code has answered the
+//     View by default since the address landed — what "every existing
+//     client reads" (see wantsDocument below) — and 0064 corrects the
+//     table to match the code rather than the other way around, since
+//     changing the default now would break every existing REST client
+//     silently, at the moment the wire is meant to stop moving.
+//     a file               — application/json: its metadata, with no
+//     bytes (design doc 0064 — the one way to read a sha256 without
+//     downloading it, closing the gap 0046 §3.5's table had already
+//     promised); default: the bytes.
+//
 // wantsJSON reports whether the caller asked for the structured form of
 // a derived file. Only an explicit JSON Accept counts: a browser or a
 // curl sends */* and should get the file that lives at the path.
@@ -1188,6 +1291,17 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	case onlyIfAbsent(r):
 		out, err = svc.Create(r.Context(), k, actor)
 		created, changed = true, true
+		if errors.Is(err, store.ErrAlreadyExists) {
+			// The If-None-Match "*" precondition failed: the path is
+			// occupied, which is what the caller asked to be told rather
+			// than have overwritten. RFC 9110 and the spec both say 412
+			// here — 409 is writeError's answer for every other
+			// ErrAlreadyExists (move onto an occupied id, a file where a
+			// concept already sits), none of which came with a
+			// precondition to fail (design doc 0064).
+			writeJSON(w, http.StatusPreconditionFailed, map[string]string{"error": err.Error()})
+			return
+		}
 	default:
 		out, created, changed, err = svc.Put(r.Context(), k, actor, parseIfMatch(r))
 	}
@@ -1318,7 +1432,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrConflict):
 		// The If-Match precondition failed: the concept changed since read.
 		status = http.StatusPreconditionFailed
-	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrNotDeleted):
+	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrNotDeleted), errors.Is(err, store.ErrNoRejection):
 		status = http.StatusConflict
 	case errors.As(err, &inputErr):
 		status = http.StatusBadRequest
@@ -1385,9 +1499,31 @@ func parseIfMatch(r *http.Request) *string {
 	return &v
 }
 
-// queryInt and queryFloat parse optional numeric query parameters,
-// rejecting malformed values instead of silently treating them as unset
-// (matching the MCP surface, where the JSON schema enforces types).
+// rejectUnknownParams 400s on the first query key outside allowed,
+// naming it. Before design doc 0064 an unrecognized key was a silent
+// no-op on every endpoint but one — an unrecognized fm.* key already
+// 400s downstream, once the service checks it against the concept's own
+// vocabulary (checkedFilter), which is why frontmatterFilter's keys are
+// exempt here rather than enumerated: they are validated by content, not
+// by a fixed list. This is what makes it safe to add a query parameter
+// after the freeze — an old server 400s a caller that sends one early,
+// rather than silently ignoring it the way ?dry_run= was ignored by a
+// server that did not know it yet.
+func rejectUnknownParams(q url.Values, allowed ...string) error {
+	for key := range q {
+		if strings.HasPrefix(key, "fm.") {
+			continue
+		}
+		if !slices.Contains(allowed, key) {
+			return service.Invalidf("unknown query parameter %q", key)
+		}
+	}
+	return nil
+}
+
+// queryInt parses an optional numeric query parameter, rejecting a
+// malformed value instead of silently treating it as unset (matching the
+// MCP surface, where the JSON schema enforces types).
 func queryInt(q url.Values, name string) (int, error) {
 	s := q.Get(name)
 	if s == "" {
@@ -1433,18 +1569,6 @@ func queryTriBool(q url.Values, name string) (*bool, error) {
 	return &b, nil
 }
 
-func queryFloat(q url.Values, name string) (float64, error) {
-	s := q.Get(name)
-	if s == "" {
-		return 0, nil
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0, service.Invalidf("invalid %s %q (want a number)", name, s)
-	}
-	return f, nil
-}
-
 // mediaTypeHeader is a stored media type as a Content-Type header. Plain
 // text without a charset invites browser guessing, and the sniffer only
 // passes UTF-8/UTF-16 text through, so it says which.
@@ -1482,7 +1606,7 @@ func serveDefensively(w http.ResponseWriter, mediaType, name string) {
 		w.Header().Set("Content-Security-Policy", "sandbox")
 	}
 	// The name is one path segment with no control characters
-	// (domain.ValidAttachmentName), so the only character left that could
+	// (domain.ValidFileName), so the only character left that could
 	// end the quoted string early is the quote itself.
 	w.Header().Set("Content-Disposition",
 		disposition+`; filename="`+strings.ReplaceAll(name, `"`, `\"`)+`"`)

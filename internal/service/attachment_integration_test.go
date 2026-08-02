@@ -138,7 +138,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	// doc 0046 §3.3), so deleting the entry leaves the files in its
 	// namespace exactly where they are.
 	defer func() {
-		_ = s.SoftDelete(ctx, id, actor)
+		_ = s.SoftDelete(ctx, id, actor, nil)
 		_ = s.Purge(ctx, id, actor)
 	}()
 
@@ -154,10 +154,10 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 		}, actor); err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = s.SoftDelete(ctx, decoy, actor) }()
+		defer func() { _ = s.SoftDelete(ctx, decoy, actor, nil) }()
 	}
 
-	if _, err := svc.PutFile(ctx, id+"/expected.txt", []byte(content), actor); err != nil {
+	if _, _, err := svc.PutFile(ctx, id+"/expected.txt", []byte(content), actor); err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
 
@@ -181,7 +181,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 	// Non-text attachments are not embeddable yet (design doc 0020 §3):
 	// attach must succeed without leaving an embedding row.
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("fake image bytes")...)
-	if _, err := svc.PutFile(ctx, id+"/chart.png", png, actor); err != nil {
+	if _, _, err := svc.PutFile(ctx, id+"/chart.png", png, actor); err != nil {
 		t.Fatalf("Attach png: %v", err)
 	}
 	att, data, err := svc.GetFile(ctx, id+"/chart.png")
@@ -210,7 +210,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 		stubEmbedder: emb,
 		files:        map[string][]float32{"chart.png": {0, 0, 1, 0}},
 	}, Log: slog.New(slog.DiscardHandler)}
-	if _, err := fsvc.PutFile(ctx, id+"/chart.png", png, actor); err != nil {
+	if _, _, err := fsvc.PutFile(ctx, id+"/chart.png", png, actor); err != nil {
 		t.Fatalf("re-attach png with file embedder: %v", err)
 	}
 	vhits, err = s.SearchVectorAttachments(ctx, []float32{0, 0, 1, 0}, "stub", store.Filter{}, 50)
@@ -269,11 +269,11 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	// package runs then resolves their bytes against a blob fake it
 	// does not have.
 	t.Cleanup(func() {
-		_ = svc.Delete(ctx, id, actor)
+		_ = svc.Delete(ctx, id, actor, nil)
 		_ = svc.Purge(ctx, id, actor)
 	})
 	for _, name := range []string{"a.txt", "b.txt"} {
-		if _, err := svc.PutFile(ctx, id+"/"+name, []byte("some text for "+name), actor); err != nil {
+		if _, _, err := svc.PutFile(ctx, id+"/"+name, []byte("some text for "+name), actor); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestValidAttachmentName(t *testing.T) {
+func TestValidFileName(t *testing.T) {
 	for name, want := range map[string]bool{
 		"weekly.png":             true,
 		"er-diagram.webp":        true,
@@ -18,8 +18,8 @@ func TestValidAttachmentName(t *testing.T) {
 		"INDEX.MD":               false,
 		strings.Repeat("a", 200): false,
 	} {
-		if got := ValidAttachmentName(name); got != want {
-			t.Errorf("ValidAttachmentName(%q) = %v, want %v", name, got, want)
+		if got := ValidFileName(name); got != want {
+			t.Errorf("ValidFileName(%q) = %v, want %v", name, got, want)
 		}
 	}
 }
@@ -28,7 +28,7 @@ func TestValidAttachmentName(t *testing.T) {
 // is (design doc 0046 §3.2): a bundle whose files come back missing is
 // not the bundle that was handed over. What a browser may do with them
 // is decided on the way out, by InlineServable.
-func TestDetectAttachmentMediaType(t *testing.T) {
+func TestDetectFileMediaType(t *testing.T) {
 	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)
 	mustSniff(t, png, "image/png")
 	mustSniff(t, append([]byte("GIF89a"), make([]byte, 16)...), "image/gif")
@@ -53,7 +53,7 @@ func TestDetectAttachmentMediaType(t *testing.T) {
 
 func mustSniff(t *testing.T, data []byte, want string) string {
 	t.Helper()
-	mt, err := DetectAttachmentMediaType(data)
+	mt, err := DetectFileMediaType(data)
 	if err != nil {
 		t.Errorf("sniffing %q: %v", want, err)
 	}
@@ -63,18 +63,18 @@ func mustSniff(t *testing.T, data []byte, want string) string {
 	return mt
 }
 
-func TestValidateAttachment(t *testing.T) {
-	if err := ValidateAttachment("ok.png", 100); err != nil {
-		t.Errorf("valid attachment refused: %v", err)
+func TestValidateFile(t *testing.T) {
+	if err := ValidateFile("ok.png", 100); err != nil {
+		t.Errorf("valid file refused: %v", err)
 	}
-	if err := ValidateAttachment("ok.png", 0); err == nil {
-		t.Error("empty attachment accepted")
+	if err := ValidateFile("ok.png", 0); err == nil {
+		t.Error("empty file accepted")
 	}
-	if err := ValidateAttachment("ok.png", MaxAttachmentSize+1); err == nil {
-		t.Error("oversized attachment accepted")
+	if err := ValidateFile("ok.png", MaxFileSize+1); err == nil {
+		t.Error("oversized file accepted")
 	}
-	if err := ValidateAttachment("bad.md", 100); err == nil {
-		t.Error(".md attachment accepted")
+	if err := ValidateFile("bad.md", 100); err == nil {
+		t.Error(".md file accepted")
 	}
 }
 

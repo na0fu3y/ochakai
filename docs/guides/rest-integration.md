@@ -77,7 +77,7 @@ gcloud run services update ochakai --region="$REGION" \
 Send the header with each request:
 
 ```
-X-Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
+Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
 ```
 
 The kind (`human:` / `process:`) is required and never guessed — your
@@ -103,13 +103,13 @@ Notes:
   read and write everything (design doc
   [0002](../design/0002-authn-authz.md)). Reachability stays IAM's job.
 
-## Declaring what wrote it: X-Ochakai-Producer
+## Declaring what wrote it: Ochakai-Producer
 
 Name your software beside the identity that vouches for it (design doc
 [0052](../design/0052-producer-beside-the-actor.md)):
 
 ```
-X-Ochakai-Producer: insightflow/1.4.0
+Ochakai-Producer: insightflow/1.4.0
 ```
 
 One slash, both halves non-empty — `<producer>/<version>`. It is recorded
@@ -142,8 +142,8 @@ invalidates it.
 ## Local development
 
 `deploy/compose.yaml` and `OCHAKAI_MODE=dev` both turn authentication off:
-every caller is `human:anonymous`, so a malformed `X-Ochakai-On-Behalf-Of`
-or `X-Ochakai-Producer` header fails on your machine instead of on first
+every caller is `human:anonymous`, so a malformed `Ochakai-On-Behalf-Of`
+or `Ochakai-Producer` header fails on your machine instead of on first
 deploy against Cloud Run. See
 [Requirements and configuration](../configuration.md#environment-variables)
 for `OCHAKAI_MODE`'s other postures.

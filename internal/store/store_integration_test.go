@@ -422,11 +422,11 @@ func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-delete-me", Title: "delete me",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
-	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy) // clean rerun
+	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy, nil) // clean rerun
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy, nil); err != nil {
 		t.Fatalf("SoftDelete: %v", err)
 	}
 	if _, err := s.Get(ctx, k.ID); err == nil {
@@ -473,7 +473,7 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.SoftDelete(ctx, "it-link-gone", actor); err != nil {
+	if err := s.SoftDelete(ctx, "it-link-gone", actor, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -769,7 +769,7 @@ func TestIntegrationMove(t *testing.T) {
 	if _, err := s.Move(ctx, "it-move-src/metric", "it-move-taken", actor); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
-	if err := s.SoftDelete(ctx, "it-move-taken", actor); err != nil {
+	if err := s.SoftDelete(ctx, "it-move-taken", actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Move(ctx, "it-move-src/metric", "it-move-taken", actor); !errors.Is(err, ErrAlreadyExists) {
@@ -915,7 +915,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		t.Fatalf("create over a live entry = %v, want ErrAlreadyExists", err)
 	}
 
-	if err := s.SoftDelete(ctx, first.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, first.ID, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1098,7 +1098,7 @@ func TestIntegrationAttachments(t *testing.T) {
 	if _, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.GetAttachment(ctx, k.ID, "weekly.png"); !errors.Is(err, ErrNotFound) {
@@ -1140,7 +1140,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 	if err := s.Update(ctx, k, actor, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1326,7 +1326,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
 
-	if err := s.SoftDelete(ctx, dst, actor); err != nil {
+	if err := s.SoftDelete(ctx, dst, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Still taken — but the error must say so, or the caller goes looking
@@ -1425,7 +1425,7 @@ func TestIntegrationPurgeLosesToRevival(t *testing.T) {
 	}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, id, actor); err != nil {
+	if err := s.SoftDelete(ctx, id, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2108,7 +2108,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 	}
 
 	// The world moves on while the archive is being written.
-	if err := s.SoftDelete(ctx, doomed, actor); err != nil {
+	if err := s.SoftDelete(ctx, doomed, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2158,7 +2158,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 			t.Fatal(err)
 		}
 		rule(id)
-		if err := s.SoftDelete(ctx, id, actor); err != nil {
+		if err := s.SoftDelete(ctx, id, actor, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -2506,7 +2506,7 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 		t.Errorf("move dropped the ledgers: %+v %+v", moved.Verifications, moved.Rejection)
 	}
 
-	if err := s.SoftDelete(ctx, to, actor); err != nil {
+	if err := s.SoftDelete(ctx, to, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Purge(ctx, to, actor); err != nil {
@@ -2975,7 +2975,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	}
 	// Each reports where it lives, which is what an export puts it back
 	// as — the one under the namespace and the one elsewhere alike.
-	byName := map[string]domain.Attachment{}
+	byName := map[string]domain.File{}
 	for _, a := range atts {
 		byName[a.Name] = a
 	}
@@ -3191,7 +3191,7 @@ func TestIntegrationAFileReportsItsPath(t *testing.T) {
 	if _, err := s.PutAttachment(ctx, id, "chart.png", "image/png", "", []byte("png"), actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PutFile(ctx, base+"/seeds/orders.csv", "text/plain", []byte("a,b\n"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, base+"/seeds/orders.csv", "text/plain", []byte("a,b\n"), actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3214,9 +3214,9 @@ func TestIntegrationAFileReportsItsPath(t *testing.T) {
 		t.Errorf("paths = %v, want %v", got, want)
 	}
 	for _, a := range atts {
-		if okf.AttachmentPath(id, &a) != a.Path {
+		if okf.FilePath(id, &a) != a.Path {
 			t.Errorf("the export path of %s disagrees with its own: %q vs %q",
-				a.Name, okf.AttachmentPath(id, &a), a.Path)
+				a.Name, okf.FilePath(id, &a), a.Path)
 		}
 	}
 }

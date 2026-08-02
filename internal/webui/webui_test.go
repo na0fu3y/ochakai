@@ -193,7 +193,7 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 	for _, aff := range []struct{ what, marker string }{
 		{"the directory view's New entry here", `href="${newHref}"`}, // the fifth, built as a variable
 		{"the status picker on an entry", `id="act-status"`},
-		{"Detach on an attachment", "data-detach="},
+		{"Detach on a file", "data-detach="},
 		{"the editor's save button", `type="submit"`},
 	} {
 		if _, tag := tagAt(t, page, indexOf(t, page, aff.marker)); !hidesOnReadOnly(tag) {
@@ -324,14 +324,14 @@ func section(t *testing.T, page, open, close string) string {
 	return rest[:end]
 }
 
-// Since design doc 0013 an attachment is any file, not only an image, and
+// Since design doc 0013 a bundle file may be any type, not only an image, and
 // a plain link is the only notation that can reference a non-image one —
-// the attachments tab prints exactly that form for authors to paste. The
+// the files tab prints exactly that form for authors to paste. The
 // link renderer used to consult only the entry resolver, which returns
 // null for anything that is not a *.md, so those references rendered as
 // raw markdown: the page told people to write a reference it would not
 // draw. Both notations resolve through the same file resolver now.
-func TestBodyLinksToAttachmentsResolve(t *testing.T) {
+func TestBodyLinksToFilesResolve(t *testing.T) {
 	page := string(Index)
 	i := strings.Index(page, "const link = (m, text, ref)")
 	if i < 0 {
@@ -342,12 +342,12 @@ func TestBodyLinksToAttachmentsResolve(t *testing.T) {
 		body = body[:end]
 	}
 	if !strings.Contains(body, "resolveFile") {
-		t.Errorf("a body link no longer falls back to the entry's attachments:\n%s", body)
+		t.Errorf("a body link no longer falls back to the entry's files:\n%s", body)
 	}
 	// The image notation shares the resolver; a rename that split them
 	// again would take one of the two back to literal text.
 	if !strings.Contains(page, "const img = (m, alt, ref)") || !strings.Contains(page, "resolveFile && resolveFile(ref)") {
-		t.Error("the image renderer no longer shares the attachment resolver")
+		t.Error("the image renderer no longer shares the file resolver")
 	}
 }
 

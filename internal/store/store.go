@@ -52,6 +52,13 @@ var ErrCuratedTombstone = errors.New("knowledge id holds a curated tombstone")
 // no single call can erase history that was in use a moment ago.
 var ErrNotDeleted = errors.New("knowledge is live; soft-delete it before purging")
 
+// ErrNoRejection is returned by WithdrawRejection for a live entry that
+// carries no rejection to withdraw — a state conflict, the same shape as
+// ErrNotDeleted, not a missing resource (design doc 0064: this used to
+// come back as ErrNotFound, indistinguishable on the wire from "no such
+// concept").
+var ErrNoRejection = errors.New("knowledge carries no rejection to withdraw")
+
 // NowStored is the current UTC time truncated to the microsecond precision
 // PostgreSQL timestamptz stores. Setting entity timestamps from it means an
 // in-memory updated_at always equals the value that round-trips through the
@@ -882,9 +889,12 @@ func (s *Store) Reject(ctx context.Context, id string, actor domain.Actor, note 
 	return k, nil
 }
 
-// WithdrawRejection withdraws a ruling. ErrNotFound when the entry is gone or
-// was never rejected — lifting nothing is a mistake worth reporting, not
-// a no-op to swallow.
+// WithdrawRejection withdraws a ruling. ErrNotFound when the entry is
+// gone; ErrNoRejection when it is live but was never rejected — lifting
+// nothing is a mistake worth reporting, not a no-op to swallow, and the
+// two are told apart on the wire (design doc 0064): a missing concept is
+// still a 404, a live one with nothing to withdraw is a 409, the same
+// shape purge-on-a-live-concept already answers.
 func (s *Store) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
@@ -895,6 +905,15 @@ func (s *Store) WithdrawRejection(ctx context.Context, id string, actor domain.A
 			return err
 		}
 		if tag.RowsAffected() == 0 {
+			var live bool
+			if err := tx.QueryRow(ctx,
+				`SELECT EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`,
+				id).Scan(&live); err != nil {
+				return err
+			}
+			if live {
+				return ErrNoRejection
+			}
 			return ErrNotFound
 		}
 		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
@@ -909,23 +928,47 @@ func (s *Store) WithdrawRejection(ctx context.Context, id string, actor domain.A
 }
 
 // SoftDelete hides an entry from reads while keeping full history.
-// Create on the same id revives it.
-func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor) error {
+// Create on the same id revives it. ifMatch is the same optional
+// optimistic-concurrency precondition Update takes (design docs 0030,
+// 0064): non-nil, the delete lands only if the stored content_hash still
+// equals it, closing the same read-then-act race a stale write would —
+// deleting a version the caller never saw because a delete request
+// crossed with somebody else's edit.
+func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, ifMatch *string) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		k, err := s.Get(ctx, id)
 		if err != nil {
 			return err
+		}
+		cond, args := "", []any{id}
+		if ifMatch != nil {
+			args = append(args, *ifMatch)
+			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
 		}
 		// deleted_at IS NULL guards the race with a concurrent delete: the
 		// Get above ran outside this transaction, and a double delete must
 		// not record a second "delete" revision.
 		tag, err := tx.Exec(ctx,
 			`UPDATE object SET deleted_at = now(), updated_at = now()
-			 WHERE id=$1 AND deleted_at IS NULL`, id)
+			 WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
+			// No row matched. With a precondition, tell a live-but-changed
+			// entry (ErrConflict) apart from a missing one (ErrNotFound) —
+			// the same distinction Update makes.
+			if ifMatch != nil {
+				var live bool
+				if err := tx.QueryRow(ctx,
+					`SELECT EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`,
+					id).Scan(&live); err != nil {
+					return err
+				}
+				if live {
+					return ErrConflict
+				}
+			}
 			return ErrNotFound
 		}
 		if err := execTolerateMissingTable(ctx, tx, `DELETE FROM knowledge_embedding WHERE id=$1`, id); err != nil {

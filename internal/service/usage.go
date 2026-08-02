@@ -18,8 +18,9 @@ import (
 // audit surface behind "every change kept as a revision". Not a search:
 // no usage is recorded (auditing a concept is not using it).
 func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain.Revision, error) {
-	if limit <= 0 || limit > 200 {
-		limit = 50
+	limit, err := checkedLimit(limit, 50, 200)
+	if err != nil {
+		return nil, err
 	}
 	return s.Store.ListRevisions(ctx, domain.Normalize(id), limit)
 }

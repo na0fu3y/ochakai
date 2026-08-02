@@ -37,9 +37,9 @@ enabling backups is a deliberate step, not a default — see
 [Hardening](#hardening) below for the command.
 
 Restoring is Cloud SQL's own procedure, and it restores the database
-only. **Attachment bytes are not in it**: they live in GCS as
+only. **File bytes are not in it**: they live in GCS as
 content-addressed objects, so an instance restored from a database backup
-finds attachment metadata whose bytes are whatever the bucket holds
+finds file metadata whose bytes are whatever the bucket holds
 today. Turn on object versioning, or a retention policy, if that matters
 to you — and note that `purge` deliberately does not reclaim GCS blobs
 (design doc 0031), so the bucket only grows.
@@ -49,11 +49,11 @@ to you — and note that `purge` deliberately does not reclaim GCS blobs
 ```sh
 ochakai export ./knowledge          # a directory
 ochakai export - > okf.tar.gz       # or a stream
-ochakai export --no-attachments -   # concepts only; bytes are already in GCS
+ochakai export --no-files -   # concepts only; bytes are already in GCS
 ```
 
 The bundle is an OKF v0.2 directory: one markdown file per concept with
-YAML frontmatter, attachments as plain files beside their concept, and an
+YAML frontmatter, files beside their concept, and an
 `index.md` per directory. Exporting the ten-concept demo base writes 20
 files — ten concepts and ten indexes.
 
@@ -145,7 +145,7 @@ confirm what a running instance actually has enabled:
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
 "semantic search enabled" model=gemini-embedding-001 dim=768 project=… discovered=true
-"attachments disabled (no OCHAKAI_GCS_BUCKET); markdown entries only"
+"files disabled (no OCHAKAI_GCS_BUCKET); markdown entries only"
 ```
 
 `discovered=true` means the project came from the metadata server rather
@@ -602,7 +602,7 @@ audience it received is logged next to the one you configured, so a
 mismatch is a one-line fix.
 
 Whether or not you set this, both proxies discard any
-`X-Ochakai-On-Behalf-Of` the browser sends — a page cannot name its own
+`Ochakai-On-Behalf-Of` the browser sends — a page cannot name its own
 author (design doc 0032).
 
 Notes from exercising this end-to-end:
@@ -634,7 +634,7 @@ second implies the first:
 - **`OCHAKAI_MODE=public`** — the deployment reads no identity
   (design doc 0042). The `Authorization` header is ignored: without Cloud Run
   IAM in front its signature is unverifiable, and a forged unsigned token
-  would otherwise be believed. `X-Ochakai-On-Behalf-Of` is ignored. Every
+  would otherwise be believed. `Ochakai-On-Behalf-Of` is ignored. Every
   caller is `human:anonymous`, and nothing returns 401. It **implies
   read-only** and cannot be separated from it — a publicly readable *and*
   writable ochakai is not a configuration this program accepts, so the
@@ -728,7 +728,7 @@ neither answer — that is the property, not a side effect.
 If you want the demo to show **hybrid search** (deploy guide §4), grant
 the Vertex AI role *before* the import: vectors are written when a
 concept is written, and `ochakai reembed` is itself a write, so it is
-refused once read-only is on. The demo bundle has no attachments, so the
+refused once read-only is on. The demo bundle has no files, so the
 deploy guide's §4b bucket is not needed for it.
 
 ### Cost

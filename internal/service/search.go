@@ -54,8 +54,9 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 }
 
 func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
-	if limit <= 0 || limit > 50 {
-		limit = 10
+	limit, err := checkedLimit(limit, 10, 50)
+	if err != nil {
+		return nil, err
 	}
 	lexical, err := s.Store.SearchLexical(ctx, query, f, limit*2)
 	if err != nil {

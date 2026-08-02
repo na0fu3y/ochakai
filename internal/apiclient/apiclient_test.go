@@ -303,7 +303,7 @@ func TestPutSendsADocumentAndDelete204(t *testing.T) {
 	if len(notes) != 1 {
 		t.Errorf("notes = %v, want the one the server reported", notes)
 	}
-	if err := c.Delete(context.Background(), "metrics/revenue"); err != nil {
+	if err := c.Delete(context.Background(), "metrics/revenue", ""); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -333,11 +333,11 @@ func TestPutReportsAnUnchangedWrite(t *testing.T) {
 
 func TestExportStreamsBody(t *testing.T) {
 	for _, tc := range []struct {
-		name        string
-		attachments bool
-		wantParam   string
+		name      string
+		files     bool
+		wantParam string
 	}{
-		{"with attachments", true, ""},
+		{"with files", true, ""},
 		{"markdown only", false, "false"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -348,12 +348,12 @@ func TestExportStreamsBody(t *testing.T) {
 				if a := r.Header.Get("Accept"); a != "application/gzip" {
 					t.Errorf("Accept = %q, want the archive representation", a)
 				}
-				if got := r.URL.Query().Get("attachments"); got != tc.wantParam {
-					t.Errorf("attachments = %q, want %q", got, tc.wantParam)
+				if got := r.URL.Query().Get("files"); got != tc.wantParam {
+					t.Errorf("files = %q, want %q", got, tc.wantParam)
 				}
 				_, _ = w.Write([]byte("tarball-bytes"))
 			})
-			rc, err := c.Export(context.Background(), tc.attachments)
+			rc, err := c.Export(context.Background(), tc.files)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -413,7 +413,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 // A file goes to the address it lives at, with nothing beside it saying
 // where it really lives (design doc 0046 §3.3).
 func TestAttachSendsBytesToTheAddress(t *testing.T) {
-	body := []byte("attachment bytes")
+	body := []byte("file bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/bundle/insights/sales/reading/weekly.png" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -425,18 +425,18 @@ func TestAttachSendsBytesToTheAddress(t *testing.T) {
 		if string(got) != string(body) {
 			t.Errorf("body = %q", got)
 		}
-		_ = json.NewEncoder(w).Encode(domain.Attachment{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
+		_ = json.NewEncoder(w).Encode(domain.File{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
 	})
 	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", body)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if att.Name != "weekly.png" || att.MediaType != "image/png" {
-		t.Errorf("attachment = %+v", att)
+		t.Errorf("file = %+v", att)
 	}
 }
 
-func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
+func TestFileFetchesBytesAndMediaType(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/bundle/insights/reading/weekly.png" {
 			t.Errorf("path = %s", r.URL.Path)
@@ -444,7 +444,7 @@ func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write([]byte("png bytes"))
 	})
-	data, mediaType, err := c.Attachment(context.Background(), "insights/reading/weekly.png")
+	data, mediaType, err := c.File(context.Background(), "insights/reading/weekly.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +453,7 @@ func TestAttachmentFetchesBytesAndMediaType(t *testing.T) {
 	}
 }
 
-func TestDetachHitsAttachmentPath(t *testing.T) {
+func TestDetachHitsFilePath(t *testing.T) {
 	called := false
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		called = true

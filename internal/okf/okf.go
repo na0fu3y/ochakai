@@ -276,13 +276,13 @@ var reservedKeys = func() map[string]bool {
 // documents, and OKF says nothing about a directory of pure data, so
 // there is no index.md there to list it in. The file is in the archive
 // either way, at its own path — what enters the bundle leaves it (§3.2).
-func Indexes(entries []domain.Knowledge, files []domain.Attachment) map[string][]byte {
+func Indexes(entries []domain.Knowledge, files []domain.File) map[string][]byte {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	root := &dir{}
 	for _, k := range entries {
 		root.insert(strings.Split(k.ID, "/"), k)
 	}
-	sorted := append([]domain.Attachment(nil), files...)
+	sorted := append([]domain.File(nil), files...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Path < sorted[j].Path })
 	for _, f := range sorted {
 		root.insertFile(strings.Split(f.Path, "/"), f)
@@ -295,9 +295,9 @@ func Indexes(entries []domain.Knowledge, files []domain.Attachment) map[string][
 // dir is one directory level of a bundle, used to generate index.md files.
 type dir struct {
 	subdirs map[string]*dir
-	entries []dirEntry          // concepts directly in this directory, in bundle order
-	files   []domain.Attachment // file objects directly in this directory, by path
-	count   int                 // concepts in this directory and below
+	entries []dirEntry    // concepts directly in this directory, in bundle order
+	files   []domain.File // file objects directly in this directory, by path
+	count   int           // concepts in this directory and below
 }
 
 type dirEntry struct {
@@ -327,7 +327,7 @@ func (d *dir) insert(segs []string, k domain.Knowledge) {
 // here because a concept put it there, and count stays the number of
 // concepts beneath — a subdirectory line saying "4 concepts" for four
 // data files would misdescribe every directory that has both.
-func (d *dir) insertFile(segs []string, f domain.Attachment) {
+func (d *dir) insertFile(segs []string, f domain.File) {
 	if len(segs) == 1 {
 		d.files = append(d.files, f)
 		return
@@ -578,19 +578,19 @@ func ViewOf(k *domain.Knowledge) (domain.View, error) {
 		}
 	}
 	return domain.View{
-		ID:          k.ID,
-		Document:    string(doc),
-		Summary:     domain.SummaryOf(k),
-		Observed:    domain.ObservedOf(k),
-		Attachments: k.Attachments,
+		ID:       k.ID,
+		Document: string(doc),
+		Summary:  domain.SummaryOf(k),
+		Observed: domain.ObservedOf(k),
+		Files:    k.Files,
 	}, nil
 }
 
 // TarGzWriter writes a bundle one file at a time. A caller that can
-// produce its files lazily — the export endpoint, pulling attachment
+// produce its files lazily — the export endpoint, pulling file
 // bytes from the blob store as it goes — then never holds more than one
 // file in memory, instead of the whole knowledge base plus every
-// attachment.
+// file.
 type TarGzWriter struct {
 	gz      *gzip.Writer
 	tw      *tar.Writer

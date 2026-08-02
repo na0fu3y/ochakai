@@ -65,7 +65,7 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 	// Leave no live attachment behind: the bytes below exist only in this
 	// test's blob fake, and other packages' export scans resolve every
 	// live attachment against their own. Runs before the deferred Close.
-	defer func() { _ = s.SoftDelete(ctx, k.ID, actor) }()
+	defer func() { _ = s.SoftDelete(ctx, k.ID, actor, nil) }()
 
 	// Migration 0009 dropped the bytea column.
 	var hasBytes bool

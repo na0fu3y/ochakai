@@ -7,7 +7,7 @@ import (
 
 // The two forms SPEC §6 defines (design docs 0024 §3.3, 0046 §3.6), and
 // the things that look like links but are not: external URLs,
-// attachments, anchors.
+// files, anchors.
 func TestLinksFromBody(t *testing.T) {
 	for _, tc := range []struct {
 		name, id, body string
@@ -36,7 +36,7 @@ func TestLinksFromBody(t *testing.T) {
 			id:   "insights/a",
 			body: "See [the dashboard](https://example.com/metrics/revenue) and https://example.com/x.",
 		}, {
-			name: "attachments are not entry links",
+			name: "files are not entry links",
 			id:   "tables/orders",
 			body: "![chart](orders/chart.png) and [the csv](orders/rows.csv).",
 		}, {

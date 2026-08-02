@@ -22,7 +22,7 @@ import (
 // AppleDouble ._* siblings, .DS_Store).
 //
 // Files referenced by a concept's body markdown links become that
-// entry's attachments — attribution is by reference first, so any
+// entry's files — attribution is by reference first, so any
 // producer's layout works (design doc 0008); the original path is
 // preserved for re-export. Unreferenced non-markdown files sitting in an
 // entry's canonical namespace ("<id>/<name>") attach to that entry
@@ -41,7 +41,7 @@ import (
 // There is no archive unwrapping: `tar czf ga4.tgz ga4/` imports under
 // "ga4/" — the packed shape is the structure, and a wrapper directory is
 // how a bundle keeps its own namespace (design doc 0017 §4.3).
-func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment, loose []BundleFile, skipped, notes []string) {
+func FromBundle(files map[string][]byte) (entries []Doc, atts []AttributedFile, loose []BundleFile, skipped, notes []string) {
 	paths := make([]string, 0, len(files))
 	for p := range files {
 		paths = append(paths, p)
@@ -82,7 +82,7 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []BundleAttachment
 	for i := range entries {
 		concepts[i] = &entries[i].Knowledge
 	}
-	atts, used := resolveAttachments(files, concepts)
+	atts, used := resolveFiles(files, concepts)
 	for _, p := range nonMarkdown {
 		clean := cleanPath(p)
 		if used[clean] {
@@ -123,8 +123,8 @@ func loadable(clean string, data []byte) error {
 	if len(data) == 0 {
 		return fmt.Errorf("empty file")
 	}
-	if len(data) > domain.MaxAttachmentSize {
-		return fmt.Errorf("exceeds %d MiB", domain.MaxAttachmentSize>>20)
+	if len(data) > domain.MaxFileSize {
+		return fmt.Errorf("exceeds %d MiB", domain.MaxFileSize>>20)
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ func loadable(clean string, data []byte) error {
 // cleanPath canonicalizes one bundle path: relative prefix stripped,
 // path.Clean'd, and NFC-normalized (design doc 0022) — macOS
 // filesystems hand names back NFD-decomposed, and the same visible path
-// must yield the same entry id and attachment references.
+// must yield the same entry id and file references.
 func cleanPath(p string) string {
 	return domain.Normalize(path.Clean(strings.TrimPrefix(p, "./")))
 }

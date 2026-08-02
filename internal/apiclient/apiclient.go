@@ -512,8 +512,21 @@ func etagValue(v string) string {
 	return `"` + v + `"`
 }
 
-func (c *Client) Delete(ctx context.Context, id string) error {
-	return c.doJSON(ctx, http.MethodDelete, entryPath(id), nil, nil, nil)
+// Delete soft-deletes the concept at id (DELETE /api/v1/bundle/{path}).
+// A non-empty ifMatch is sent as If-Match, the same precondition Put
+// takes: the delete lands only if the concept still has that version,
+// and a stale one fails with a conflict instead of deleting someone
+// else's edit (design doc 0064). "" means unconditional, as before.
+func (c *Client) Delete(ctx context.Context, id, ifMatch string) error {
+	hdr := http.Header{}
+	if ifMatch != "" {
+		hdr.Set("If-Match", etagValue(ifMatch))
+	}
+	resp, err := c.doRaw(ctx, http.MethodDelete, entryPath(id), nil, "", hdr, nil)
+	if err != nil {
+		return err
+	}
+	return resp.Body.Close()
 }
 
 // review records one human ruling on the entry (POST
@@ -563,7 +576,7 @@ func (c *Client) Purge(ctx context.Context, id string) error {
 }
 
 // Move renames the entry at id to newID (POST /api/v1/move). The server
-// carries revisions, usage, and attachments along and rewrites inbound
+// carries revisions, usage, and files along and rewrites inbound
 // references so nothing breaks (design doc 0021).
 func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, error) {
 	in := struct {
@@ -581,24 +594,24 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 // <id>/<name> (PUT /api/v1/bundle/{path}). A file that lives elsewhere
 // in the bundle is written with PutBundleFile, at the path it lives at —
 // there is one address for a file, and it is where the file is.
-func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.Attachment, error) {
+func (c *Client) Attach(ctx context.Context, id, name string, data []byte) (*domain.File, error) {
 	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(id+"/"+name), nil,
 		"application/octet-stream", nil, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	var att domain.Attachment
+	var att domain.File
 	if err := json.NewDecoder(resp.Body).Decode(&att); err != nil {
 		return nil, err
 	}
 	return &att, nil
 }
 
-// Attachment fetches one file's bytes and media type by its bundle path
+// File fetches one file's bytes and media type by its bundle path
 // (GET /api/v1/bundle/{path}). Metadata travels with the entry that
-// shows it (Get → Knowledge.Attachments), each carrying its path.
-func (c *Client) Attachment(ctx context.Context, path string) (data []byte, mediaType string, err error) {
+// shows it (Get → Knowledge.Files), each carrying its path.
+func (c *Client) File(ctx context.Context, path string) (data []byte, mediaType string, err error) {
 	resp, err := c.get(ctx, bundlePath(path), nil)
 	if err != nil {
 		return nil, "", err
@@ -672,10 +685,10 @@ func (c *Client) Stats(ctx context.Context, days int, prefixes []string) (*domai
 // (design doc 0046 §3.5): an archive is the bundle at a path, so it is
 // answered at the address of that path rather than at an endpoint named
 // after downloading.
-func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, error) {
+func (c *Client) Export(ctx context.Context, files bool) (io.ReadCloser, error) {
 	var q url.Values
-	if !attachments {
-		q = url.Values{"attachments": {"false"}}
+	if !files {
+		q = url.Values{"files": {"false"}}
 	}
 	resp, err := c.doAccept(ctx, http.MethodGet, "/api/v1/bundle/", q, nil, "application/gzip")
 	if err != nil {
@@ -686,14 +699,14 @@ func (c *Client) Export(ctx context.Context, attachments bool) (io.ReadCloser, e
 
 // ReembedResult mirrors the /api/v1/reembed response.
 type ReembedResult struct {
-	Embedded    int    `json:"embedded"`
-	Attachments int    `json:"attachments"`
-	Failed      int    `json:"failed"`
-	Missing     int    `json:"missing"`
-	Cursor      string `json:"cursor,omitempty"`
+	Embedded int    `json:"embedded"`
+	Files    int    `json:"files"`
+	Failed   int    `json:"failed"`
+	Missing  int    `json:"missing"`
+	Cursor   string `json:"cursor,omitempty"`
 }
 
-// Reembed fills in vectors for entries and attachments that have none
+// Reembed fills in vectors for entries and files that have none
 // for the configured model (POST /api/v1/reembed). limit 0 uses the
 // server default. One pass is bounded: Missing reports what is still
 // left and Cursor where to resume, and the caller repeats (see

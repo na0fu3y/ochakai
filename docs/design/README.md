@@ -44,6 +44,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0046](0046-bundle-address-space.md) §2.2 が現行(主張と観測の分離)。[0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
 | やらないと決めたこと | [0028](0028-retire-compile-sql.md)(compile_sql)、[0018](0018-semantic-model-as-knowledge.md)(専用機構)、[0012](0012-retire-mcp-oauth-connector.md)(OAuth コネクタ) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
@@ -310,6 +311,12 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   (鍵は 0046 §3.3 でバンドルパスになる)。ファイル名のレキシカル一致と
   全ファイルのベクトル検索。
 
+`attachments` / `Attachment` という wire 上の綴りは 0046 §2.1 が概念と
+しては既に対象消滅させていたが、名前だけ残っていた。**その綴りの retire
+自体は [0064](0064-rest-stops-at-api-v1.md) §6 の決定**であり、この節の
+どのドキュメントも改訂しない — 保存モデルは 0046 のまま、動いたのは
+JSON キーと MCP ツール名だけである。
+
 ## ブラウズと Web UI
 
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Accepted**
@@ -357,6 +364,18 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   スキーマ説明文の 14%(1,888 / 13,099 文字)を占め、接続するエージェント
   が毎回払っていたのに、Web UI にも例にもフックにも通行の跡が無かった。
   **ツール数は 8 のまま、エージェントが払う額だけが減る**(§4)。
+- [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
+  **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
+  する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは
+  全操作で 400(`fm.` を除く)、リクエストヘッダの `X-` 接頭辞を撤去、
+  ファイルの住所が `Accept: application/json` でメタデータを返すように
+  なり sha256 をバイト列無しで読める、`attachments` / `Attachment` を
+  wire から `files` / `File` に retire(`entries` は 0057 §3.2 のまま
+  対象外)、If-None-Match の衝突は 412、DELETE が If-Match に対応、
+  ファイル PUT が作成時 201、withdrawn の空振りは 409、`limit` /
+  `days` の範囲外は全面 400。バージョンや capability の合図は無し、
+  CORS も意図して無し。[docs/compatibility.md](../compatibility.md) を
+  同 PR で書き換え、REST だけが「不安定」の対象から外れる。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md)
   — **Accepted**(0046 §3.10 が行に trust tier を足す)。バイト予算の決定を記録し、`hits` から知識の複製を外す
   (全サーフェスで `id`/`type`/`title`/`status`/`score` のみ)。REST の

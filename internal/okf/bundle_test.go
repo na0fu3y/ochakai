@@ -168,7 +168,7 @@ func TestBundleTitleOptional(t *testing.T) {
 }
 
 // macOS filesystems hand paths back NFD-decomposed; the bundle path,
-// the body link, and the attachment file must all converge on the same
+// the body link, and the file file must all converge on the same
 // NFC spelling (design doc 0022).
 func TestFromBundleNFCPaths(t *testing.T) {
 	nfd := "サンプル" // "サンプル" with the handakuten decomposed
@@ -344,7 +344,7 @@ func TestFromBundleWrappedArchive(t *testing.T) {
 
 // What enters the bundle leaves it (design doc 0046 §3.2). The reading
 // that FromBundle used to take — anything that is not a concept and not
-// an attachment is reported and dropped — meant a producer's bundle came
+// an file is reported and dropped — meant a producer's bundle came
 // back smaller than it went in, which is the one thing a bundle store
 // must not do. The only paths still reported are the ones that cannot be
 // stored at all.
@@ -372,7 +372,7 @@ func TestFromBundleKeepsWhatItCannotAttribute(t *testing.T) {
 	}
 	entries, atts, loose, skipped, _ := FromBundle(files)
 	if len(entries) != 1 || len(atts) != 1 {
-		t.Fatalf("entries = %d, attachments = %d, want 1 and 1", len(entries), len(atts))
+		t.Fatalf("entries = %d, files = %d, want 1 and 1", len(entries), len(atts))
 	}
 	var kept []string
 	for _, f := range loose {

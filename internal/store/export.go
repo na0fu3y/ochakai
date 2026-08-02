@@ -118,7 +118,7 @@ func (e *ExportSnapshot) ListByIDs(ctx context.Context, ids []string) ([]domain.
 // still fails when it is reached. The metadata being consistent is what
 // makes that failure visible as a missing file rather than as an archive
 // quietly disagreeing with its own index.
-func (e *ExportSnapshot) FileMeta(ctx context.Context, prefix string) ([]domain.Attachment, error) {
+func (e *ExportSnapshot) FileMeta(ctx context.Context, prefix string) ([]domain.File, error) {
 	rows, err := e.tx.Query(ctx, `SELECT `+fileCols+`
 		FROM object f
 		WHERE f.id IS NULL AND f.deleted_at IS NULL

@@ -102,7 +102,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   reembed                 embed concepts missing a vector for the current model
   move <id> <new-id>      move (rename) a concept; references are rewritten
   attach <id> <file...>   attach files to a concept (png/jpeg/webp/pdf/text)
-  detach <id> <name>      remove an attachment
+  detach <id> <name>      remove a file from a concept
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
@@ -145,16 +145,16 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if cfg.Embedding != nil {
 		embedDim = cfg.Embedding.Dim
 	}
-	// Attachment bytes live only on GCS (design doc 0013).
+	// File bytes live only on GCS (design doc 0013).
 	if cfg.GCSBucket != "" {
 		bs, err := blob.NewGCS(ctx, cfg.GCSBucket)
 		if err != nil {
 			return nil, nil, err
 		}
 		st.UseBlobStore(bs)
-		log.Info("attachment bytes on GCS", "bucket", cfg.GCSBucket)
+		log.Info("file bytes on GCS", "bucket", cfg.GCSBucket)
 	} else {
-		log.Info("attachments disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only")
+		log.Info("files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only")
 	}
 	if err := st.Migrate(ctx, embedDim); err != nil {
 		// A database that cannot hold vectors is not a reason to refuse

@@ -93,8 +93,8 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 	// The export scan resolves every live attachment against its own
 	// blob fake and would trip over this test's leftovers.
 	defer func() {
-		_ = s.SoftDelete(ctx, a.ID, actor)
-		_ = s.SoftDelete(ctx, b.ID, actor)
+		_ = s.SoftDelete(ctx, a.ID, actor, nil)
+		_ = s.SoftDelete(ctx, b.ID, actor, nil)
 	}()
 	if _, err := s.PutAttachment(ctx, a.ID, "sales-seeds.txt", "text/plain", "", []byte("region,amount\n"), actor); err != nil {
 		t.Fatal(err)
@@ -178,7 +178,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 
 	// A soft-deleted entry's attachment vectors stay stored (revival
 	// restores them, design doc 0020) but never surface in search.
-	if err := s.SoftDelete(ctx, b.ID, actor); err != nil {
+	if err := s.SoftDelete(ctx, b.ID, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	if n := countEmbeddings(b.ID, "other.txt"); n != 1 {

@@ -100,7 +100,7 @@ MCP refuses to overwrite or delete curated concepts. See the
 - it is a reserved `index.md` or `log.md`, or a hidden path;
 - the server rejected it, in which case the message carries the server's
   own complaint, and the rest of the bundle still imports;
-- it is an attachment whose concept was not imported.
+- it is a file whose concept was not imported.
 
 **Everything imported one directory deeper than expected.** The packed
 shape is the structure: an archive wrapped in a single directory imports
@@ -111,7 +111,7 @@ deliberate — unwrap the archive first if you did not want it.
 alone rather than rewritten, so a re-import does not fill the revision
 history with copies.
 
-## Attachments
+## Files
 
 **501 on attach.** The instance has no `OCHAKAI_GCS_BUCKET`, so it stores
 markdown concepts only. This is a whole-deployment setting, not a
@@ -126,10 +126,10 @@ an image, a PDF or plain text renders in place, and everything else is
 handed over as a download under a sandbox, so an SVG or an HTML file has
 no origin to run script in.
 
-**Attachment contents do not turn up in search.** Filenames match in every
+**File contents do not turn up in search.** Filenames match in every
 search, but contents join only when embeddings are on, and images and PDFs
 need a file-capable model (`gemini-embedding-2`, with
-`OCHAKAI_VERTEX_LOCATION` set to `global`, `us` or `eu`). Attachments that
+`OCHAKAI_VERTEX_LOCATION` set to `global`, `us` or `eu`). Files that
 predate the setting are not backfilled — `ochakai reembed`.
 
 ## The web UI
@@ -168,7 +168,7 @@ identity without `roles/aiplatform.user`, or `aiplatform.googleapis.com`
 not enabled. Grant it and restart (deploy guide §4); embeddings are the
 default on Google Cloud, but only IAM can actually turn them on.
 
-**Logs say `attachments disabled` or one of the `semantic search off…`
+**Logs say `files disabled` or one of the `semantic search off…`
 lines.** Those are the startup lines confirming which subsystems this
 instance does not have. They are informational, and they are the fastest
 way to check what a running instance actually has enabled —

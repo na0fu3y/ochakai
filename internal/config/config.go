@@ -30,7 +30,7 @@ type Config struct {
 	// that had to be refused or corrected unspellable (design doc 0060).
 	InsecureDev bool
 	// Delegators lists the caller identities allowed to forward an end
-	// user's identity with X-Ochakai-On-Behalf-Of (design doc 0027): the
+	// user's identity with Ochakai-On-Behalf-Of (design doc 0027): the
 	// service accounts of applications that embed ochakai and serve many
 	// people. "*" trusts every authenticated caller. Empty (the default)
 	// disables delegation, and a header from anyone not listed is an
@@ -66,9 +66,9 @@ type Config struct {
 	// there is no second variable to disagree with it.
 	PublicReadOnly bool
 
-	// GCSBucket names the bucket holding attachment bytes as GCS objects
+	// GCSBucket names the bucket holding file bytes as GCS objects
 	// (blob/<sha256>, design doc 0013). Auth is ADC. When empty,
-	// attachments are unsupported — markdown entries only.
+	// files are unsupported — markdown entries only.
 	GCSBucket string
 
 	// RecordMisses keeps the searches that found nothing, with the query
@@ -102,7 +102,7 @@ type Config struct {
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
 // (ADC auth, no API keys); see design doc 0001 §4.
 // Model gemini-embedding-2 (locations global/us/eu) also embeds image
-// and PDF attachments for search (design doc 0020).
+// and PDF files for search (design doc 0020).
 type EmbeddingConfig struct {
 	Project  string
 	Location string // e.g. "us-central1"; "global" for gemini-embedding-2

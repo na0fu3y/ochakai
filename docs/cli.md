@@ -41,7 +41,7 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   reembed                 embed concepts missing a vector for the current model
   move <id> <new-id>      move (rename) a concept; references are rewritten
   attach <id> <file...>   attach files to a concept (png/jpeg/webp/pdf/text)
-  detach <id> <name>      remove an attachment
+  detach <id> <name>      remove a file from a concept
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
@@ -79,9 +79,9 @@ the server to have GCS configured (OCHAKAI_GCS_BUCKET).
 
 Flags:
   -json
-    	print the attachment metadata as JSON
+    	print the file metadata as JSON
   -name string
-    	attachment name (default: the file's basename; single file only)
+    	file name (default: the file's basename; single file only)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
@@ -184,8 +184,12 @@ Examples:
 Usage: ochakai delete [flags] <id>
 
 Soft-delete a knowledge concept (history is retained server-side).
+With --if-match it lands only if the concept still has the version you
+read, and fails instead of deleting someone else's edit.
 
 Flags:
+  -if-match version
+    	delete only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
@@ -198,7 +202,7 @@ Examples:
 ```
 Usage: ochakai detach [flags] <id> <name>
 
-Remove an attachment from a knowledge concept (the change is kept as a
+Remove a file from a knowledge concept (the change is kept as a
 revision; content-addressed bytes stay referenced by history).
 
 Flags:
@@ -219,15 +223,15 @@ frontmatter) into dir, or stream the tar.gz to stdout with "-".
 Your knowledge is yours.
 
 Flags:
-  -no-attachments
-    	export the markdown only, skipping attachment files
+  -no-files
+    	export the markdown only, skipping file bytes
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai export ./knowledge
   ochakai export - > ochakai-okf.tar.gz
-  ochakai export --no-attachments - > concepts.tar.gz   # bytes are in GCS; copy them from there
+  ochakai export --no-files - > concepts.tar.gz   # bytes are in GCS; copy them from there
 ```
 
 ## ochakai get
@@ -238,15 +242,15 @@ Usage: ochakai get [flags] <id>
 Print one knowledge concept as an OKF document (YAML frontmatter +
 markdown body), and nothing else, so the output round-trips through
 `ochakai put`. Who wrote and confirmed it is an observation rather
-than part of the document, so it goes to stderr, as attachment metadata
-does; --download saves the attachment files themselves (an agent can
+than part of the document, so it goes to stderr, as file metadata
+does; --download saves the files themselves (an agent can
 then read them from disk). --json prints the whole read instead: the
 document, the projection under .summary, and the provenance under
 .observed.
 
 Flags:
   -download string
-    	save the concept's attachments into this directory
+    	save the concept's files into this directory
   -json
     	print the whole read as JSON (document, summary, observed) instead of the document alone
   -url ochakai use
@@ -273,10 +277,10 @@ not define are kept as written, and existing concepts are replaced (kept as revi
 to what is stored are left untouched and reported as unchanged;
 concepts the server rejects as invalid — e.g. one whose type is not a
 single line — are skipped and reported).
-Files referenced by a concept's body markdown links become its
-attachments, wherever they sit in the bundle (their location is
+Files referenced by a concept's body markdown links become
+attributed to it, wherever they sit in the bundle (their location is
 preserved for re-export); unreferenced data files inside a concept's
-directory (<id>/<name>) attach to that concept. Everything else the
+directory (<id>/<name>) attribute to that concept the same way. Everything else the
 bundle carried is written at the path it arrived at — what enters
 leaves, so nothing is dropped for belonging to no concept. The packed shape is
 the structure: an archive wrapped in a single directory imports
@@ -450,7 +454,7 @@ Examples:
 Usage: ochakai move [flags] <id> <new-id>
 
 Move (rename) a knowledge concept to a new id. Revisions, usage, and
-attachments follow, and inbound references (link targets, and
+files follow, and inbound references (link targets, and
 a `model` key where a document carries one) are rewritten so nothing
 breaks.
 
@@ -468,7 +472,7 @@ Examples:
 Usage: ochakai purge [flags] <id>
 
 Hard-delete an already soft-deleted concept: the concept, its revisions,
-usage, and attachment metadata are erased and the id is freed for a
+usage, and file metadata are erased and the id is freed for a
 move. History is gone — `ochakai delete` first, then purge. A live
 concept is refused.
 

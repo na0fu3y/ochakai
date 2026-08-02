@@ -358,16 +358,19 @@ record is still carrying prose nobody rereads.
 
 `RECORD-LINES` bounds one record's thickness. Nothing bounded how many
 records there are, and that turned out to be the number that moved: 19
-records at v0.10.0, 60 now — 4.6x, against 2.3x for non-test Go and REST's
+records at v0.10.0, 61 now — 4.6x, against 2.3x for non-test Go and REST's
 own retreat from 19 operations to 11. Folding a surface leaves a record
 behind, and [docs/surface.md](docs/surface.md)'s DOC section already names
 that residue — an index entry in each language, an English summary, a
 paragraph in that file or this one — for the manual it counts. Records are
 the larger half of the same residue, and until now none of it was counted
-anywhere.
+anywhere. 60 → 61 is the one addition that does not fold into that
+pattern: freezing REST at `/api/v1` (0064) is its own decision, not a
+restatement of anything the other 60 already say, so there was no
+existing record to fold it into.
 
-    RECORD-COUNT: 60
-    RECORD-CORPUS-LINES: 8152
+    RECORD-COUNT: 61
+    RECORD-CORPUS-LINES: 8311
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

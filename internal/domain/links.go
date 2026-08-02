@@ -25,13 +25,13 @@ import (
 // for a resource, and that URI never leaves this server.)
 //
 // http(s) URLs are not links between entries (design doc 0024 §4), and
-// non-.md file references are attachments (design doc 0008), so both are
+// non-.md file references are files (design doc 0008), so both are
 // left alone.
 
 var (
 	// mdLinkRe matches an inline markdown link, capturing text and target.
 	// A leading "!" (image) is excluded by the caller — images are
-	// attachment references, never entry links.
+	// file references, never entry links.
 	mdLinkRe = regexp.MustCompile(`(!?)\[([^\]]*)\]\(([^)\s]+)\)`)
 	// fenceRe matches the opening or closing line of a fenced code block.
 	fenceRe = regexp.MustCompile("^\\s{0,3}(```|~~~)")
@@ -62,7 +62,7 @@ func LinksFromBody(id, body string) []Link {
 	}
 	for _, line := range proseLines(body) {
 		for _, m := range mdLinkRe.FindAllStringSubmatch(line, -1) {
-			if m[1] == "!" { // image: an attachment reference
+			if m[1] == "!" { // image: a file reference
 				continue
 			}
 			add(m[3], m[2])
@@ -72,7 +72,7 @@ func LinksFromBody(id, body string) []Link {
 }
 
 // resolveTarget turns one link target into an entry id, or "" when the
-// target does not address an entry (an external URL, an attachment, an
+// target does not address an entry (an external URL, a file, an
 // anchor). id is the referring entry, whose directory relative targets
 // resolve against.
 func resolveTarget(id, target string) string {
@@ -90,7 +90,7 @@ func resolveTarget(id, target string) string {
 	}
 	rest, ok := strings.CutSuffix(target, ".md")
 	if !ok {
-		return "" // a non-markdown file is an attachment (design doc 0008)
+		return "" // a non-markdown file is a file, not an entry (design doc 0008)
 	}
 	if strings.HasPrefix(rest, "/") {
 		return strings.Trim(rest, "/")

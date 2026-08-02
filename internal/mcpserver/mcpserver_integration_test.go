@@ -174,7 +174,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 
 	id := testdb.Unique(t, "mcpput") + "/revenue"
 	defer func() {
-		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"})
+		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"}, nil)
 	}()
 
 	put := func(t *testing.T, doc string) *mcp.CallToolResult {

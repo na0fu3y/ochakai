@@ -332,7 +332,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 		version, err := svc.RefuseIfCurated(ctx, id, "update")
 		if err != nil {
 			t.Fatalf("draft must be writable: %v", err)
@@ -361,7 +361,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+			t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 			tc.rule(t, k)
 
 			for _, op := range []string{"update", "delete"} {
@@ -404,7 +404,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 		if _, err := svc.Reject(ctx, id, "duplicate of an existing golden query", human); err != nil {
 			t.Fatal(err)
 		}
@@ -442,7 +442,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			}
 			tc.rule(t, k)
 			// A human deletes it: legitimate on the REST/CLI surfaces.
-			if err := svc.Delete(ctx, id, human); err != nil {
+			if err := svc.Delete(ctx, id, human, nil); err != nil {
 				t.Fatal(err)
 			}
 			err = svc.RefuseIfRevivingCurated(ctx, id)
@@ -459,7 +459,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("a human surface must still be able to reuse the id: %v", err)
 			}
-			t.Cleanup(func() { _ = svc.Delete(ctx, revived.ID, human) })
+			t.Cleanup(func() { _ = svc.Delete(ctx, revived.ID, human, nil) })
 		}
 	})
 
@@ -471,7 +471,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			Type: domain.TypeMetrics, ID: id, Title: "abandoned draft"}, actor); err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.Delete(ctx, id, actor); err != nil {
+		if err := svc.Delete(ctx, id, actor, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
@@ -481,7 +481,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			Type: domain.TypeMetrics, ID: id, Title: "second attempt"}, actor); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 	})
 
 	// A free id is not a refusal, and neither is a live one: Create's own
@@ -496,7 +496,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 		if _, err := svc.Reject(ctx, k.ID, "duplicate", human); err != nil {
 			t.Fatal(err)
 		}
@@ -530,7 +530,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = svc.Delete(ctx, id, human) })
+			t.Cleanup(func() { _ = svc.Delete(ctx, id, human, nil) })
 			{
 				tc.rule(t, k)
 			}
@@ -574,7 +574,7 @@ func TestReembedIntegration(t *testing.T) {
 	}, actor); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 
 	// Assertions are about this entry, not about counts: the test database
 	// is shared by every package, so a corpus-wide pass legitimately picks
@@ -651,7 +651,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 		}, actor); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
 	}
 	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
 

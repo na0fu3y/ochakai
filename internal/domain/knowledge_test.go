@@ -115,7 +115,7 @@ func TestSameContent(t *testing.T) {
 	same.CreatedBy = actor
 	same.CreatedAt, same.UpdatedAt = now, now
 	same.Verifications = []Verification{{By: actor, At: now}}
-	same.Attachments = []Attachment{{Name: "chart.png"}}
+	same.Files = []File{{Name: "chart.png"}}
 	// The same number decoded from JSONB arrives as float64, from YAML as
 	// int — both are the value 5.
 	same.Attrs = map[string]any{"threshold": float64(5), "model": "sales"}

@@ -19,6 +19,38 @@ import (
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
+// TestCheckedLimit pins design doc 0064's single rule for every paged or
+// windowed read: 0 (unset) is the default, and anything else out of
+// [1, max] is refused rather than silently substituted.
+func TestCheckedLimit(t *testing.T) {
+	cases := []struct {
+		name          string
+		limit         int
+		wantLimit     int
+		wantErrSubstr string
+	}{
+		{"unset uses the default", 0, 10, ""},
+		{"in range passes through", 7, 7, ""},
+		{"at the max passes through", 50, 50, ""},
+		{"over the max is refused", 51, 0, "between 1 and 50"},
+		{"negative is refused", -1, 0, "between 1 and 50"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := checkedLimit(c.limit, 10, 50)
+			if c.wantErrSubstr == "" {
+				if err != nil || got != c.wantLimit {
+					t.Fatalf("checkedLimit(%d, 10, 50) = %d, %v; want %d, nil", c.limit, got, err, c.wantLimit)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.wantErrSubstr) {
+				t.Fatalf("checkedLimit(%d, 10, 50) error = %v, want it to mention %q", c.limit, err, c.wantErrSubstr)
+			}
+		})
+	}
+}
+
 func hit(id string, status domain.Status) domain.SearchHit {
 	return domain.SearchHit{Summary: domain.Summary{Type: domain.TypeMetrics, ID: id, Status: status}}
 }

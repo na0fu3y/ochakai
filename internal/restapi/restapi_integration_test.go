@@ -253,16 +253,16 @@ func TestRESTIntegration(t *testing.T) {
 		t.Errorf("export bundle misses %s/sales/orders.md", typ)
 	}
 
-	// ?attachments=false skips the bytes: a CI backup can take the
+	// ?files=false skips the bytes: a CI backup can take the
 	// entries from here and the files straight from GCS, which is both
 	// cheaper and the only sane path once attachments outweigh the text.
-	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "attachments=false")
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "files=false")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("export without attachments: status = %d", resp.StatusCode)
+		t.Fatalf("export without files: status = %d", resp.StatusCode)
 	}
 	gz, err = gzip.NewReader(resp.Body)
 	if err != nil {
@@ -278,14 +278,14 @@ func TestRESTIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !strings.HasSuffix(hdr.Name, ".md") {
-			t.Errorf("attachments=false still carried %s", hdr.Name)
+			t.Errorf("files=false still carried %s", hdr.Name)
 		}
 		if hdr.Name == typ+"/sales/orders.md" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("attachments=false dropped the entries too")
+		t.Errorf("files=false dropped the entries too")
 	}
 
 	// The export must survive crossing a batch boundary: entries are
@@ -301,7 +301,7 @@ func TestRESTIntegration(t *testing.T) {
 		resp.Body.Close()
 	}
 	removeEntries(t, srv, planted...)
-	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "attachments=false")
+	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "files=false")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,8 +372,22 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
+	// 201: this address held nothing before (design doc 0064, matching
+	// what a concept PUT already answers).
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("attach status = %d, want 201", resp.StatusCode)
+	}
+
+	// Replacing the same file's bytes is 200, not 201: the address
+	// already held an object.
+	req, _ = http.NewRequest(http.MethodPut, attURL, bytes.NewReader(png))
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("attach status = %d", resp.StatusCode)
+		t.Fatalf("re-PUT status = %d, want 200", resp.StatusCode)
 	}
 
 	// The listing carries the attachment metadata.
@@ -381,12 +395,12 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 		Hits []domain.SearchHit `json:"hits"`
 	}
 	getJSON(t, srv.URL+"/api/v1/search?sort=verified_at&type="+typ, &hits)
-	if len(hits.Hits) != 1 || len(hits.Hits[0].Attachments) != 1 ||
-		hits.Hits[0].Attachments[0].Name != "weekly.png" ||
-		hits.Hits[0].Attachments[0].MediaType != "image/png" {
+	if len(hits.Hits) != 1 || len(hits.Hits[0].Files) != 1 ||
+		hits.Hits[0].Files[0].Name != "weekly.png" ||
+		hits.Hits[0].Files[0].MediaType != "image/png" {
 		t.Fatalf("hits should carry attachment metadata: %+v", hits.Hits)
 	}
-	sum := hits.Hits[0].Attachments[0].SHA256
+	sum := hits.Hits[0].Files[0].SHA256
 
 	// Plain GET: bytes, content-hash ETag, revalidation policy.
 	resp, err = http.Get(attURL)
@@ -412,6 +426,27 @@ func TestRESTIntegrationAttachments(t *testing.T) {
 	}
 	if csp := resp.Header.Get("Content-Security-Policy"); csp != "" {
 		t.Errorf("Content-Security-Policy = %q on an image served inline", csp)
+	}
+
+	// Accept: application/json on the same address answers metadata, not
+	// bytes — the only way to read a file's sha256 without downloading it
+	// (design doc 0064).
+	req, _ = http.NewRequest(http.MethodGet, attURL, nil)
+	req.Header.Set("Accept", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var meta domain.File
+	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || meta.SHA256 != sum || meta.Name != "weekly.png" {
+		t.Fatalf("Accept: application/json on a file = %d, meta %+v, want 200 with sha256 %q", resp.StatusCode, meta, sum)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
 
 	// Conditional GET with the current hash: 304, no body.
@@ -639,6 +674,39 @@ func TestRESTIntegrationEveryRulingIsAccepted(t *testing.T) {
 		if !slices.Contains([]string{"rejected", "withdrawn", "verified"}, ruling) {
 			t.Errorf("domain.Rulings names %q, which this test never sends", ruling)
 		}
+	}
+}
+
+// TestRESTIntegrationWithdrawWithNothingToWithdrawIs409 pins design doc
+// 0064: a live concept carrying no rejection is a 409 on "withdrawn", the
+// same shape purge-on-a-live-concept already answers — not a 404, which
+// would be indistinguishable from "no such concept".
+func TestRESTIntegrationWithdrawWithNothingToWithdrawIs409(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restnowithdraw")
+	id := typ + "/never-rejected"
+	putDoc(t, srv.URL, id, docFrom(t, map[string]any{"type": typ, "id": id}), true).Body.Close()
+
+	resp, err := postRuling(srv.URL, id, `{"ruling":"withdrawn"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("withdraw with nothing to withdraw = %d, want 409: %s", resp.StatusCode, body)
+	}
+
+	// A concept that never existed is still a 404 — the two are told
+	// apart, not both folded into one status.
+	resp, err = postRuling(srv.URL, typ+"/does-not-exist", `{"ruling":"withdrawn"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("withdraw on a missing concept = %d, want 404", resp.StatusCode)
 	}
 }
 
@@ -1069,11 +1137,15 @@ func TestRESTIntegrationDocumentWrites(t *testing.T) {
 		t.Errorf("producer key lost:\n%s", created.Document)
 	}
 
-	// The same write again is a 409: create-only means create.
+	// The same write again is a 412: the If-None-Match "*" precondition
+	// failed, since the id is no longer free (design doc 0064 — RFC 9110
+	// and the spec both say 412 for a failed precondition; 409 is for an
+	// ErrAlreadyExists with no precondition behind it, like move onto an
+	// occupied id).
 	resp = putDoc(t, srv.URL, id, []byte(doc), true)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("create-only over a live entry = %d, want 409", resp.StatusCode)
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Errorf("create-only over a live entry = %d, want 412", resp.StatusCode)
 	}
 
 	// Without the precondition it replaces — and an identical document
@@ -1356,8 +1428,8 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("attaching %s = %d: %s", tc.name, resp.StatusCode, body)
+		if resp.StatusCode != http.StatusCreated {
+			t.Errorf("attaching %s = %d, want 201: %s", tc.name, resp.StatusCode, body)
 			continue
 		}
 
@@ -1392,8 +1464,8 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 	// directory of the bundle may hold.
 	var view domain.View
 	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &view)
-	if len(view.Attachments) != 4 {
-		t.Errorf("the entry carries %d files, want 4 — nothing caps how many", len(view.Attachments))
+	if len(view.Files) != 4 {
+		t.Errorf("the entry carries %d files, want 4 — nothing caps how many", len(view.Files))
 	}
 }
 
@@ -1463,8 +1535,8 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("bundle chart")...)
 	resp = put(t, id+"/chart.png", png)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("writing a file = %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("writing a file = %d, want 201", resp.StatusCode)
 	}
 	resp, err := http.Get(bundle + id + "/chart.png")
 	if err != nil {
@@ -1478,16 +1550,16 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	// It is attributed to the entry that shows it, without anybody
 	// having said so (design doc 0046 §3.3).
 	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &read)
-	if len(read.Attachments) != 1 || read.Attachments[0].Name != "chart.png" {
-		t.Errorf("the entry does not carry the file its body shows: %+v", read.Attachments)
+	if len(read.Files) != 1 || read.Files[0].Name != "chart.png" {
+		t.Errorf("the entry does not carry the file its body shows: %+v", read.Files)
 	}
 
 	// A markdown document with no type is a file, not a bad concept.
 	notes := []byte("# 会議メモ\n\ntype なし。\n")
 	resp = put(t, typ+"/notes.md", notes)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("writing a typeless markdown file = %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("writing a typeless markdown file = %d, want 201", resp.StatusCode)
 	}
 	resp, err = http.Get(bundle + typ + "/notes.md")
 	if err != nil {
@@ -1864,8 +1936,8 @@ func TestRESTIntegrationTheArchiveCarriesAFileNothingOwns(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("writing a file nothing owns = %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("writing a file nothing owns = %d, want 201", resp.StatusCode)
 	}
 
 	resp, err = getArchive(t, srv.URL+"/api/v1/bundle/", "")
@@ -1919,8 +1991,8 @@ func TestRESTIntegrationPurgeOnAFileRemovesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("writing the file = %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("writing the file = %d, want 201", resp.StatusCode)
 	}
 
 	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+path+"?purge=true", nil)
@@ -1979,8 +2051,8 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("writing the file = %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("writing the file = %d, want 201", resp.StatusCode)
 	}
 
 	// JSON: the third kind, beside dirs and entries.
@@ -2242,8 +2314,8 @@ func TestRESTIntegrationTypelessMarkdownHasOneHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("PUT a typeless markdown file = %d, want 200 (it is a file)", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("PUT a typeless markdown file = %d, want 201 (it is a file)", resp.StatusCode)
 	}
 	defer func() {
 		r, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+file, nil)
@@ -2359,8 +2431,8 @@ func TestRESTIntegrationAnObjectIsNotAnArchivableDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	putResp.Body.Close()
-	if putResp.StatusCode != http.StatusOK {
-		t.Fatalf("writing the file = %d", putResp.StatusCode)
+	if putResp.StatusCode != http.StatusCreated {
+		t.Fatalf("writing the file = %d, want 201", putResp.StatusCode)
 	}
 
 	for _, path := range []string{id + ".md", loose} {
@@ -2585,5 +2657,65 @@ func TestRESTIntegrationDryRunRefusesWhatTheWriteRefuses(t *testing.T) {
 	}
 	if dry.StatusCode != http.StatusBadRequest {
 		t.Errorf("dry run = %d, want 400", dry.StatusCode)
+	}
+}
+
+// TestRESTIntegrationDeleteIfMatch pins design doc 0064: DELETE now takes
+// the same If-Match precondition PUT already did (design doc 0030), so a
+// delete racing an edit it never saw fails with a conflict instead of
+// silently deleting a version the caller did not read.
+func TestRESTIntegrationDeleteIfMatch(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restdelifm")
+	id := typ + "/entry"
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Original"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	at := srv.URL + "/api/v1/bundle/" + id + ".md"
+
+	// A stale If-Match is a 412, and the concept survives it.
+	req, _ := http.NewRequest(http.MethodDelete, at, nil)
+	req.Header.Set("If-Match", `"deadbeef"`)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("delete with stale If-Match = %d, want 412", resp.StatusCode)
+	}
+	getResp, err := http.Get(at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		t.Errorf("concept after a refused delete = %d, want still there (200)", getResp.StatusCode)
+	}
+	etag := getResp.Header.Get("ETag")
+
+	// The current ETag lands the delete.
+	req, _ = http.NewRequest(http.MethodDelete, at, nil)
+	req.Header.Set("If-Match", etag)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete with the current If-Match = %d, want 204", resp.StatusCode)
+	}
+	getResp, err = http.Get(at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	getResp.Body.Close()
+	if getResp.StatusCode != http.StatusNotFound {
+		t.Errorf("concept after the delete = %d, want gone (404)", getResp.StatusCode)
 	}
 }

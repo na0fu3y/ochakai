@@ -2,9 +2,10 @@
 
 The short version, so nobody has to infer it:
 
-> **While the major version is 0, every interface is unstable.** REST, MCP,
-> the CLI and the stored shape may all change in a minor release. There is
-> no deprecation window. Only the latest release is supported.
+> **REST is frozen at `/api/v1`.** Everything else is still unstable while
+> the major version is 0: MCP, the CLI and the stored shape may all change
+> in a minor release. There is no deprecation window for any of them. Only
+> the latest release is supported.
 
 That is the actual policy, not a disclaimer. If you are deciding whether
 to build on ochakai, decide against *this*, not against what "SemVer"
@@ -12,19 +13,23 @@ usually implies at 0.x.
 
 ## What "unstable" covers
 
-Everything a client can touch:
+Everything a client can touch, except the one line below that no longer
+moves:
 
-- **REST** — paths, request and response shapes, status codes. `0.13.0`
-  moved the knowledge out of `/context`'s `hits`; `0.14.0` moved seven
-  keys out of `attrs` into envelope fields. The largest move so far is
-  [0046](design/0046-bundle-address-space.md) §3.5's fold, which left an
-  object with one address: **build on `/api/v1/bundle/{path}`**. The
-  second spellings it replaced — `/api/v1/knowledge/{id}`,
+- **REST is frozen.** [0064](design/0064-rest-stops-at-api-v1.md) closed
+  the last batch of breaking changes — an unrecognized query parameter is
+  now a 400 naming it rather than a silent no-op, which is what makes it
+  safe to add one later without breaking a client that predates it. Before
+  the freeze, REST moved the same way everything else did: `0.13.0` moved
+  the knowledge out of `/context`'s `hits`; `0.14.0` moved seven keys out
+  of `attrs` into envelope fields; the largest move,
+  [0046](design/0046-bundle-address-space.md) §3.5's fold, left an object
+  with one address — `/api/v1/bundle/{path}` — and removed the second
+  spellings it replaced (`/api/v1/knowledge/{id}`,
   `/api/v1/attachments/{id}/{name}`, `/api/v1/backlinks/{id}`,
-  `/api/v1/export` — were removed rather than deprecated, which is what
-  the paragraph above means by "no deprecation window".
-  [api/openapi.yaml](../api/openapi.yaml) is the list of addresses that
-  exist; a changelog entry names the successor of each one that went.
+  `/api/v1/export`) rather than deprecating them. That history does not
+  repeat: [api/openapi.yaml](../api/openapi.yaml) is now the address list
+  a client can hold onto.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now, and the five
   tools that said `knowledge` say `concept`.
@@ -92,6 +97,9 @@ practices that make an unstable dependency survivable:
 
 ## 1.0
 
-Not scheduled, and no criteria have been set. When the interfaces stop
-moving, that will be a decision recorded like any other — until then,
-assume the paragraph at the top of this page.
+Still not scheduled, but no longer "no criteria have been set" — REST
+reaching a frozen `/api/v1` is the first criterion actually met, recorded
+in [0064](design/0064-rest-stops-at-api-v1.md). MCP, the CLI and the
+stored shape are not there yet, so the paragraph at the top of this page
+still applies to them. When each of the rest stops moving, that will be
+its own decision, recorded the same way.

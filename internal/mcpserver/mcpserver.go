@@ -52,7 +52,7 @@ type extraProvider interface {
 // sessionProducer is the initialize-time clientInfo as a producer string,
 // or "" when the client named nothing usable.
 //
-// It is a fallback, not an override: a caller that sent X-Ochakai-Producer
+// It is a fallback, not an override: a caller that sent Ochakai-Producer
 // said what it is on this call, while clientInfo says what opened the
 // session — and a host that proxies several agents through one session
 // distinguishes them only by the header. Silently preferring the session's
@@ -219,7 +219,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Annotations: readOnly,
 		Description: "Search the knowledge base across all types (recommended: " + domain.TypesHint() + "; custom types welcome). " +
 			"Verified concepts rank higher. Filter with types/statuses/tags. Returns scored hits. " +
-			"Attachments count too — filenames and file contents — and a hit is always the owning concept. " +
+			"Files count too — filenames and file contents — and a hit is always the owning concept. " +
 			"Rejected concepts are excluded unless you pass rejected=true — ask for them " +
 			"to check whether a proposal was already rejected before creating similar knowledge. " +
 			"With sort=\"verified_at\" the tool lists concepts by verification age instead of searching " +
@@ -288,8 +288,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "get_concept",
 		Annotations: readOnly,
 		Description: "Get one knowledge concept by id, including its full markdown body, structured attrs, " +
-			"links, and attachment metadata (files the body references: images, PDFs, plain-text data — " +
-			"fetch bytes with get_attachment).",
+			"links, and file metadata (files the body references: images, PDFs, plain-text data — " +
+			"fetch bytes with get_file).",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
@@ -386,32 +386,33 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
 			"concept and recreating it would erase the record of why it was turned down.",
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in getIn) (*mcp.CallToolResult, deleteOut, error) {
-		// Delete has no precondition channel in the store, so a curation
-		// landing in the window between check and delete still wins. The
-		// window is a single round trip and the delete is revivable.
+		// MCP exposes no version field to agents (design doc 0030 §3.4),
+		// so this never sends If-Match — a curation landing in the window
+		// between check and delete still wins. The window is a single
+		// round trip and the delete is revivable.
 		if _, err := svc.RefuseIfCurated(ctx, in.ID, "delete"); err != nil {
 			return nil, deleteOut{}, err
 		}
-		if err := svc.Delete(ctx, in.ID, actor); err != nil {
+		if err := svc.Delete(ctx, in.ID, actor, nil); err != nil {
 			return nil, deleteOut{}, err
 		}
 		return nil, deleteOut{Deleted: true, URI: uriScheme + in.ID}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_attachment",
+		Name:        "get_file",
 		Annotations: readOnly,
-		Description: "Fetch one file of the bundle by its path (get_concept lists the files an " +
-			"concept shows under \"attachments\", each with its path: images, PDFs, plain-text data " +
-			"files, anything a producer put there). Returns the file as content plus its metadata. Attachments are context-heavy — fetch them " +
+		Description: "Fetch one file of the bundle by its path (get_concept lists the files a " +
+			"concept shows under \"files\", each with its path: images, PDFs, plain-text data " +
+			"files, anything a producer put there). Returns the file as content plus its metadata. Files are context-heavy — fetch them " +
 			"deliberately, when the concept's body references one you need to see (a dashboard's " +
-			"normal shape, an ER diagram, a seeds file). ochakai never interprets attachments; " +
+			"normal shape, an ER diagram, a seeds file). ochakai never interprets files; " +
 			"if you learn something from one, write it back into the concept's body with " +
 			"put_concept so the knowledge becomes searchable text.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in attachmentIn) (*mcp.CallToolResult, attachmentOut, error) {
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in fileIn) (*mcp.CallToolResult, fileOut, error) {
 		att, data, err := svc.GetFile(ctx, in.Path)
 		if err != nil {
-			return nil, attachmentOut{}, err
+			return nil, fileOut{}, err
 		}
 		// The content block matches the media type (design doc 0013):
 		// images as image content, plain text inline, PDFs as an embedded
@@ -430,7 +431,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			}}
 		}
 		res := &mcp.CallToolResult{Content: []mcp.Content{content}}
-		return res, attachmentOut{Attachment: *att}, nil
+		return res, fileOut{File: *att}, nil
 	}))
 
 	mcp.AddTool(s, &mcp.Tool{
@@ -605,12 +606,12 @@ type knowledgeOut struct {
 	Notes []string `json:"notes,omitempty"`
 }
 
-type attachmentIn struct {
-	Path string `json:"path" jsonschema:"the file's bundle path, from the path field of a concept's attachments metadata (e.g. metrics/revenue/chart.png)"`
+type fileIn struct {
+	Path string `json:"path" jsonschema:"the file's bundle path, from the path field of a concept's files metadata (e.g. metrics/revenue/chart.png)"`
 }
 
-type attachmentOut struct {
-	Attachment domain.Attachment `json:"attachment"`
+type fileOut struct {
+	File domain.File `json:"file"`
 }
 
 type usageOut struct {

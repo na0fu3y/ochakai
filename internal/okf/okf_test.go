@@ -667,7 +667,7 @@ func TestDocumentOmitsAnUnnamedProducer(t *testing.T) {
 // at its own path either way (§3.2), which is what the promise is.
 func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
 	entries := sample()
-	files := []domain.Attachment{
+	files := []domain.File{
 		{Name: "chart.png", Path: "insights/chart.png", MediaType: "image/png", Size: 2048},
 		{Name: "orders.csv", Path: "seeds/orders.csv", MediaType: "text/csv", Size: 12},
 	}

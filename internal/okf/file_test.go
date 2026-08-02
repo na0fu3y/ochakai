@@ -14,7 +14,7 @@ func pngBytes() []byte { return append([]byte("\x89PNG\r\n\x1a\n"), make([]byte,
 // the entry whose body links to it, wherever it sits — the canonical
 // entry-named directory, a foreign _assets-style layout, or the bundle
 // root. Relative and /-rooted link forms both resolve.
-func TestFromBundleAttachments(t *testing.T) {
+func TestFromBundleFilesResolveByReference(t *testing.T) {
 	png := pngBytes()
 	files := map[string][]byte{
 		"insights/revenue-reading.md": []byte("---\ntype: Insight\ntitle: 売上の読み方\n---\n\n" +
@@ -41,7 +41,7 @@ func TestFromBundleAttachments(t *testing.T) {
 		"tables/orders/er.png":                "diagrams/er.png",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("attachments = %v, want %v", got, want)
+		t.Errorf("files = %v, want %v", got, want)
 	}
 	// The unreferenced image belongs to no entry, and is kept anyway: it
 	// is the bundle's file, at the path it arrived at (design doc 0046
@@ -57,7 +57,7 @@ func TestFromBundleAttachments(t *testing.T) {
 
 // A concept at the bundle root resolves relative links against the root
 // — where it also stays on re-export (design doc 0016).
-func TestFromBundleRootConceptAttachment(t *testing.T) {
+func TestFromBundleRootConceptFile(t *testing.T) {
 	files := map[string][]byte{
 		"overview.md":   []byte("---\ntype: Insight\ntitle: overview\n---\n\n![chart](img/chart.png)\n"),
 		"img/chart.png": pngBytes(),
@@ -72,13 +72,13 @@ func TestFromBundleRootConceptAttachment(t *testing.T) {
 // files that resolve nowhere. A file nobody claims is kept as the
 // bundle's own (design doc 0046 §3.2); only what cannot be stored at all
 // is reported.
-func TestFromBundleAttachmentAllowlist(t *testing.T) {
+func TestFromBundleFileAllowlist(t *testing.T) {
 	files := map[string][]byte{
 		"terms/a.md": []byte("---\ntype: Glossary Term\ntitle: a\n---\n\n" +
 			"[別エントリ](/terms/b.md) と [ログ](data.csv) と ![big](big.png)\n"),
 		"terms/b.md": []byte("---\ntype: Glossary Term\ntitle: b\n---\n"),
 		"data.csv":   []byte("a,b,c"),
-		"big.png":    append(pngBytes(), make([]byte, domain.MaxAttachmentSize)...),
+		"big.png":    append(pngBytes(), make([]byte, domain.MaxFileSize)...),
 	}
 	_, atts, loose, skipped, _ := FromBundle(files)
 	if len(atts) != 0 {
@@ -99,7 +99,7 @@ func TestFromBundleAttachmentAllowlist(t *testing.T) {
 // Non-image files in the allowlist (design doc 0013) attach like images:
 // by body reference wherever they sit, and PDFs and plain text both pass
 // the sniffer.
-func TestFromBundleFileAttachments(t *testing.T) {
+func TestFromBundleNonImageFileTypes(t *testing.T) {
 	files := map[string][]byte{
 		"tables/orders.md": []byte("---\ntype: Table\ntitle: orders\n---\n\n" +
 			"シード: [seeds](/data/seeds.txt)、仕様: [spec](orders/spec.pdf)\n"),
@@ -116,7 +116,7 @@ func TestFromBundleFileAttachments(t *testing.T) {
 		"tables/orders/spec.pdf":  "tables/orders/spec.pdf",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("attachments = %v, want %v", got, want)
+		t.Errorf("files = %v, want %v", got, want)
 	}
 	if len(skipped) != 0 {
 		t.Errorf("skipped = %v, want none", skipped)
@@ -148,7 +148,7 @@ func TestFromBundleNamespaceAttribution(t *testing.T) {
 		"tables/orders/seeds.txt": "tables/orders/seeds.txt",
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("attachments = %v, want %v", got, want)
+		t.Errorf("files = %v, want %v", got, want)
 	}
 	// A file under no entry's namespace is attributed to nobody and kept
 	// anyway, at the path it arrived at (design doc 0046 §3.2).
@@ -176,13 +176,13 @@ func TestFromBundleNamespaceHierarchicalID(t *testing.T) {
 	}
 }
 
-func TestAttachmentPath(t *testing.T) {
-	native := &domain.Attachment{Name: "weekly.png"}
-	if p := AttachmentPath("insights/sales/revenue-reading", native); p != "insights/sales/revenue-reading/weekly.png" {
+func TestFilePath(t *testing.T) {
+	native := &domain.File{Name: "weekly.png"}
+	if p := FilePath("insights/sales/revenue-reading", native); p != "insights/sales/revenue-reading/weekly.png" {
 		t.Errorf("canonical path = %q", p)
 	}
-	foreign := &domain.Attachment{Name: "er.png", Path: "diagrams/er.png"}
-	if p := AttachmentPath("tables/orders", foreign); p != "diagrams/er.png" {
+	foreign := &domain.File{Name: "er.png", Path: "diagrams/er.png"}
+	if p := FilePath("tables/orders", foreign); p != "diagrams/er.png" {
 		t.Errorf("foreign path = %q", p)
 	}
 }
