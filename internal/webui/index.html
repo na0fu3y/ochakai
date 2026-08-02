@@ -1175,10 +1175,10 @@ function nodeHTML(prefix, label, count) {
 }
 
 // levelHTML renders one browse response: subdirectories, then the
-// entries at this level — title-first with a short status hint; the id
+// concepts at this level — title-first with a short status hint; the id
 // and full status ride in the tooltip. A directory's name is a link to
 // its index page (the ▸ marker and the rest of the row still toggle
-// expansion). Entries are draggable: dropping one on a directory moves
+// expansion). Concepts are draggable: dropping one on a directory moves
 // it there (references rewritten server-side) — except on a read-only
 // deployment, where the move would only 403 (design doc 0040 §2.3). A
 // level is rendered from a browse response, so READ_ONLY is known by
@@ -1187,14 +1187,14 @@ function levelHTML(res, prefix) {
   const dirs = (res.dirs || []).map(dir => nodeHTML(prefix + dir.name + '/',
     `<span class="type-ico">📁</span><a class="dir-name mono" href="${dirHash(prefix + dir.name)}"
        title="Open the index of ${esc(prefix + dir.name)}/">${esc(dir.name)}/</a>`, dir.count)).join('');
-  const entries = (res.entries || []).map(e => `
+  const concepts = (res.concepts || []).map(e => `
     <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="${READ_ONLY ? 'false' : 'true'}"
        title="${esc(e.id)} · ${esc(e.status)}">
       <span class="type-ico" title="${esc(e.type)}">${icon(e.type)}</span>
       <span class="entry-title">${esc(displayTitle(e))}</span>
       ${e.status === 'stable' ? '' : `<span class="status-dot ${esc(e.status)}" title="${esc(e.status)}"></span>`}
     </a>`).join('');
-  return dirs + entries;
+  return dirs + concepts;
 }
 
 // wireNodes attaches lazy loading to every not-yet-wired node under
@@ -1223,7 +1223,7 @@ function loadNode(d) {
       const res = await api(`/api/v1/bundle/${idPath(prefix)}/index.md`);
       const body = levelHTML(res, prefix);
       const note = res.truncated
-        ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
+        ? `<div class="truncation-note">Showing the first 1000 concepts at this level — a directory this wide is
            better split into subdirectories.</div>` : '';
       box.innerHTML = (body + note) || '<div class="empty">Empty.</div>';
       wireNodes(box);
@@ -1407,20 +1407,20 @@ function fileCard(f) {
 }
 
 // loadDirIndex fetches one browse level and renders it into container
-// (which the caller seeded with a placeholder). Entry cards reuse the
-// search result card — browse entries carry no attrs/files, so
+// (which the caller seeded with a placeholder). Concept cards reuse the
+// search result card — browse concepts carry no attrs/files, so
 // they render as title, status, and description.
 async function loadDirIndex(container, prefix, emptyText) {
   try {
     const res = await api(prefix ? `/api/v1/bundle/${idPath(prefix)}/index.md` : '/api/v1/bundle/index.md');
     if (!container.isConnected) return; // navigated away while loading
     const dirs = (res.dirs || []).map(d => dirCard(prefix, d)).join('');
-    const entries = (res.entries || []).map(hitCard).join('');
+    const concepts = (res.concepts || []).map(hitCard).join('');
     const files = (res.files || []).map(fileCard).join('');
     const note = res.truncated
-      ? `<div class="truncation-note">Showing the first 1000 entries at this level — a directory this wide is
+      ? `<div class="truncation-note">Showing the first 1000 concepts at this level — a directory this wide is
          better split into subdirectories.</div>` : '';
-    container.innerHTML = (dirs + entries + files + note) || `<div class="empty">${emptyText}</div>`;
+    container.innerHTML = (dirs + concepts + files + note) || `<div class="empty">${emptyText}</div>`;
   } catch (e) {
     if (!container.isConnected) return;
     container.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;
@@ -2033,12 +2033,12 @@ async function loadLoopStats() {
   let s;
   try { s = await api('/api/v1/stats'); } catch (e) { return; }
   if (out !== $('#loop-stats')) return;
-  const trust = s.entries?.trust || {};
+  const trust = s.concepts?.trust || {};
   const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
   const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
-      <div class="tile"><div class="num">${s.entries?.total ?? 0}</div><div class="lbl">concepts</div></div>
+      <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concepts</div></div>
       <div class="tile"><div class="num">${confirmed}</div><div class="lbl">confirmed by somebody</div></div>
       <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
       <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>

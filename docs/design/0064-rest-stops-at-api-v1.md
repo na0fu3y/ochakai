@@ -3,10 +3,13 @@
 Status: Accepted(2026-08-02)。[0046](0046-bundle-address-space.md) §3.5 の
 代表表現の表を改訂する(概念の既定表現は「エクスポート形」ではなく
 「JSON の View」— §4)。同ドキュメントの §2.1・§3.3、
-[0057](0057-concept-is-the-word-a-reader-meets.md) §3.2、
 [0058](0058-filters-nobody-arrived-through.md)、
 [0061](0061-a-dry-run-is-the-write-withheld.md)、
-[0030](0030-optimistic-locking.md) は引用するのみで改訂しない。実装は同 PR
+[0030](0030-optimistic-locking.md) は引用するのみで改訂しない。
+[0057](0057-concept-is-the-word-a-reader-meets.md) §3.2 は改訂する —
+「`entries` は配列の名前であって単位の名前ではない」として wire から
+外した除外を撤回し、`entries` を `concepts` に改名する(§7、issue
+[#411](https://github.com/na0fu3y/ochakai/issues/411))。実装は同 PR
 (issue [#379](https://github.com/na0fu3y/ochakai/issues/379))。
 Date: 2026-08-02
 
@@ -105,9 +108,8 @@ REST の 11 操作すべてで、宣言していないクエリキーは 400 に
 `files` / `File` に改める: `Attachment` スキーマと `View`・
 `SearchHit`・`ReembedResult` の JSON キー、アーカイブ住所の
 `?attachments=` クエリ(→ `?files=`)、MCP ツール `get_attachment`
-(→ `get_file`)。`entries` は対象外のまま — [0057](0057-concept-is-the-word-a-reader-meets.md)
-§3.2 が「配列の名前であって単位の名前ではない」として除外した決定は
-変わらない。
+(→ `get_file`)。`entries` は当初この改名の対象外とする案だったが、
+issue #411 の指摘を受けて §7 で改めて決定し直す。
 
 `ReembedResult.files` / `.missing` は**このパスの進捗**であって corpus
 の全数調査ではない、と定義を明文化する。`attachment_embedding` は今も
@@ -122,7 +124,39 @@ path 鍵に付け替えても、進捗という定義なら二度目の破壊的
 からも見えない保存層の内部で、いつか行う付け替え作業と一緒に片付ける
 (issue #379 のコメントがすでにこの境界を引いている)。
 
-## 7. 小さな修正、まとめて
+## 7. `entries` を `concepts` に改名する
+
+issue [#411](https://github.com/na0fu3y/ochakai/issues/411) の指摘:
+0057 §3.2 は `entries` を「配列の名前であって単位の名前ではない」として
+wire から外したが、この理由は 3 箇所のうち 1 箇所にしか届かない。
+`GET /api/v1/stats` の `entries` は `total`・`status`・`trust`・
+`rejected`・`created` を持つ**構造体**(`domain.StatsEntries`)で配列
+ではなく、そもそも当てはまらない。バンドル一覧 `{dirs, entries, files}`
+では、隣の `files` を §6 が `attachments` から改名した理由(0046 §2.1 が
+退役させた語)が `entries` にも同じ形で当てはまるのに、同じ応答の中で
+片方だけ改名されていた。`GET /api/v1/context` は本当に concept の配列で
+0057 §3.2 の理由が一番よく効く場所だが、`get_context` 自身の
+`Description`(`internal/mcpserver/mcpserver.go`)はすでに「`"concepts"`
+is the knowledge」と書いており、wire のキー名だけが追いついていなかった。
+
+REST が本 PR で止まる以上、これが 3 箇所の綴りを動かせる最後の機会で
+ある。`/stats` とバンドル一覧の 2 箇所は 0057 §3.2 の理由がそもそも
+届いていない以上、「配列の名前だから恒久的に残す」とは書けない —
+`/context` だけ残す案も、3 つのうち 1 つだけ違う語のまま残すことになり、
+0057 が閉じようとした問題そのものになる。
+
+**決定: 3 箇所とも `concepts` に改名する。** `Stats.entries`、バンドル
+一覧の `entries`、`GET /api/v1/context` と MCP `get_context` の
+`entries` を、すべて `concepts` にする。0057 §3.2 の除外は本書がここで
+撤回する — 3 箇所のうち 2 箇所には最初から届いておらず、届く 1 箇所も
+0057 §3.1 自身の決定(読む語はすべて concept にする)とすでに矛盾して
+いたので、除外を保つ理由が消えている。ワイヤと `json` タグで直結する
+Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
+`store.BrowseEntry` / `apiclient.BrowseEntry` → `BrowseConcept`)—
+0054 §3.4 が対象外とした内部専用の識別子(`domain.Knowledge` 等)とは
+違い、この 3 つは §6 の `Attachment` → `File` と同じ扱いになる。
+
+## 8. 小さな修正、まとめて
 
 | 何 | 直った形 | なぜ |
 |---|---|---|
@@ -132,7 +166,7 @@ path 鍵に付け替えても、進捗という定義なら二度目の破壊的
 | `ruling: withdrawn` で取り消す物が無い | 409(旧 404) | purge-on-live と同じ「状態の衝突」であって「概念が無い」ではない。id が本当に無い場合は引き続き 404 |
 | `limit` / `days` の範囲外 | 全面 400(旧: 大半は既定へ黙って丸め、`days` だけ 400) | 黙った丸めは `dry_run` が false green を生んだのと同じ形の沈黙。0 または省略は既定、それ以外の範囲外は 400 で範囲を名指す |
 
-## 8. 決めて書くだけ、コードは動かさない
+## 9. 決めて書くだけ、コードは動かさない
 
 - **6 通りの表現の優先順位**は §4 に書いた規則がそれである。
 - **`api/openapi.yaml` は `{path}` を本物のパスパラメータとして表現
@@ -160,12 +194,12 @@ path 鍵に付け替えても、進捗という定義なら二度目の破壊的
   盲目的な再試行は安全 — どちらも「その id に生きているものは無い」と
   いう終着点は同じだからである。
 
-## 9. 死んだコード
+## 10. 死んだコード
 
 `internal/restapi/restapi.go` の `queryFloat` を削除した — 0058 が
 `min_score` を撤去して以来、呼び出し元が無かった。
 
-## 10. 壊れるもの
+## 11. 壊れるもの
 
 **BREAKING**。REST を組み込んでいるクライアントが直す必要があるもの:
 
@@ -174,6 +208,8 @@ path 鍵に付け替えても、進捗という定義なら二度目の破壊的
 - 未知のクエリパラメータを送っていたら 400 になる。
 - `attachments` という JSON キー・クエリパラメータ・MCP ツール名を
   読み書きしていたら `files` に読み替える。
+- `stats`・バンドル一覧・`context`(MCP `get_context` も)の JSON キー
+  `entries` を読んでいたら `concepts` に読み替える。
 - If-None-Match `*` の衝突を 409 として扱っていたら 412 に。
 - ファイル PUT の成功判定を 200 のみで書いていたら 201 も見る。
 - `ruling: withdrawn` の失敗を 404 として扱っていたら、取り消す物が

@@ -38,12 +38,12 @@ const missQueryLimit = 10
 // could not answer stay the instance's (design doc 0051 §3.7).
 func (s *Store) Stats(ctx context.Context, since time.Time, prefixes []string) (*domain.Stats, error) {
 	st := &domain.Stats{
-		Entries: domain.StatsEntries{
+		Concepts: domain.StatsConcepts{
 			Status: zeroed(domain.Statuses),
 			Trust:  zeroed(domain.Trusts),
 		},
 	}
-	if err := s.statsEntries(ctx, st, since, prefixes); err != nil {
+	if err := s.statsConcepts(ctx, st, since, prefixes); err != nil {
 		return nil, err
 	}
 	if err := s.statsReview(ctx, st, since, prefixes); err != nil {
@@ -82,14 +82,14 @@ func zeroed[T ~string](values []T) map[string]int64 {
 	return m
 }
 
-// statsEntries tallies the live entries by lifecycle and trust tier in one
-// pass, and counts the rejections and the new arrivals beside them.
+// statsConcepts tallies the live concepts by lifecycle and trust tier in
+// one pass, and counts the rejections and the new arrivals beside them.
 //
 // The two tiers are derived exactly as the trust filter derives them
 // (buildWhere) and as SPEC §5.3 defines them: a person makes it
 // human-reviewed, any other confirmation machine-confirmed, none
 // unverified.
-func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.Time, prefixes []string) error {
+func (s *Store) statsConcepts(ctx context.Context, st *domain.Stats, since time.Time, prefixes []string) error {
 	scope, scopeArgs := statsScope("k.id", prefixes)
 	// The tiers are spelled from the domain vocabulary rather than
 	// written out here, so the tally cannot answer in a vocabulary the
@@ -112,7 +112,7 @@ func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.T
 		domain.ActorHuman, domain.TrustHuman, domain.TrustMachine, domain.TrustUnverified, scope),
 		append([]any{since}, scopeArgs...)...)
 	if err != nil {
-		return fmt.Errorf("stats: entries: %w", err)
+		return fmt.Errorf("stats: concepts: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -120,17 +120,17 @@ func (s *Store) statsEntries(ctx context.Context, st *domain.Stats, since time.T
 		var rejected bool
 		var created, n int64
 		if err := rows.Scan(&status, &trust, &rejected, &created, &n); err != nil {
-			return fmt.Errorf("stats: entries: %w", err)
+			return fmt.Errorf("stats: concepts: %w", err)
 		}
-		// An entry whose document names no status reads as OKF's default
+		// A concept whose document names no status reads as OKF's default
 		// (design doc 0046 §3.9), which is what every other surface shows
 		// — the tally has to agree with them.
-		st.Entries.Status[string(domain.LifecycleOf(domain.Status(status)))] += n
-		st.Entries.Trust[trust] += n
-		st.Entries.Total += n
-		st.Entries.Created += created
+		st.Concepts.Status[string(domain.LifecycleOf(domain.Status(status)))] += n
+		st.Concepts.Trust[trust] += n
+		st.Concepts.Total += n
+		st.Concepts.Created += created
 		if rejected {
-			st.Entries.Rejected += n
+			st.Concepts.Rejected += n
 		}
 	}
 	return rows.Err()

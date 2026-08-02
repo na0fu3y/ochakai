@@ -29,7 +29,7 @@ type Stats struct {
 	// WindowDays is how far back the flow numbers reach.
 	WindowDays int `json:"window_days"`
 
-	Entries StatsEntries `json:"entries"`
+	Concepts StatsConcepts `json:"concepts"`
 	// Queues is what design doc 0049's GET /api/v1/queues returns, under
 	// the key it returns it under: how much each review queue is
 	// holding, right now. It travels here as a sibling of the rest
@@ -42,9 +42,9 @@ type Stats struct {
 	Misses   StatsMisses   `json:"misses"`
 }
 
-// StatsEntries is what the base is made of (state), plus how much of it
-// is new (flow). Deleted entries are in none of it.
-type StatsEntries struct {
+// StatsConcepts is what the base is made of (state), plus how much of it
+// is new (flow). Deleted concepts are in none of it.
+type StatsConcepts struct {
 	Total int64 `json:"total"`
 	// Status and Trust carry every value of their vocabulary, zero
 	// included, so a reader never has to tell "none" from "not

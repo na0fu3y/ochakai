@@ -3010,7 +3010,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range lvl.Entries {
+	for _, e := range lvl.Concepts {
 		if e.ID != id {
 			t.Errorf("browse listed a non-entry: %q", e.ID)
 		}

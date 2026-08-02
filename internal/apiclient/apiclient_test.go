@@ -114,8 +114,8 @@ func TestBrowseReadsTheDirectorysIndex(t *testing.T) {
 		}
 		path = r.URL.Path
 		_ = json.NewEncoder(w).Encode(BrowseResult{
-			Dirs:    []BrowseDir{{Name: "sales", Count: 4}},
-			Entries: []BrowseEntry{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusStable}},
+			Dirs:     []BrowseDir{{Name: "sales", Count: 4}},
+			Concepts: []BrowseConcept{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusStable}},
 		})
 	})
 	res, err := c.Browse(context.Background(), "queries/")
@@ -126,7 +126,7 @@ func TestBrowseReadsTheDirectorysIndex(t *testing.T) {
 		t.Errorf("path = %s", path)
 	}
 	if len(res.Dirs) != 1 || res.Dirs[0].Name != "sales" ||
-		len(res.Entries) != 1 || res.Entries[0].ID != "monthly-revenue" {
+		len(res.Concepts) != 1 || res.Concepts[0].ID != "monthly-revenue" {
 		t.Errorf("res = %+v", res)
 	}
 
@@ -234,7 +234,7 @@ func TestStatsSendsTheWindowOnlyWhenSet(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(domain.Stats{
 				WindowDays: 30,
-				Entries:    domain.StatsEntries{Total: 3, Status: map[string]int64{"draft": 1}},
+				Concepts:   domain.StatsConcepts{Total: 3, Status: map[string]int64{"draft": 1}},
 				Misses: domain.StatsMisses{Recording: true, Count: 2,
 					Queries: []domain.MissedQuery{{Query: "解約率の定義", Count: 2}}},
 			})
@@ -243,7 +243,7 @@ func TestStatsSendsTheWindowOnlyWhenSet(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if st.Entries.Total != 3 || st.Entries.Status["draft"] != 1 ||
+		if st.Concepts.Total != 3 || st.Concepts.Status["draft"] != 1 ||
 			!st.Misses.Recording || len(st.Misses.Queries) != 1 {
 			t.Errorf("stats = %+v", st)
 		}
@@ -383,7 +383,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(ContextResult{
 			Hits: []domain.ContextRank{{Type: "metrics", ID: "revenue", Score: 0.8}},
-			Entries: []domain.View{{ID: "revenue", Document: "---\ntype: metrics\n---\n",
+			Concepts: []domain.View{{ID: "revenue", Document: "---\ntype: metrics\n---\n",
 				Summary: domain.Summary{Type: "metrics", ID: "revenue", Title: "売上"}}},
 		})
 	})
@@ -395,7 +395,7 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Hits) != 1 || len(res.Entries) != 1 || res.Entries[0].Summary.Title != "売上" {
+	if len(res.Hits) != 1 || len(res.Concepts) != 1 || res.Concepts[0].Summary.Title != "売上" {
 		t.Errorf("result = %+v", res)
 	}
 	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metrics" ||

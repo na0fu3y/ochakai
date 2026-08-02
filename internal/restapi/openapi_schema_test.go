@@ -111,7 +111,7 @@ func (d *specDoc) properties(t *testing.T, s *specSchema) map[string]bool {
 }
 
 // lookup resolves a dotted path into the schemas: "Stats" is the named
-// schema, "Stats.entries" the shape of that property, and a trailing "[]"
+// schema, "Stats.concepts" the shape of that property, and a trailing "[]"
 // steps into an array's items. Nested shapes are spelled inline in the
 // spec, so this is how they get checked without giving each one a name it
 // does not need.
@@ -202,7 +202,7 @@ func ownedSchemas() map[string]any {
 		"BundleListing":        service.BrowseResult{},
 		"Change":               change{},
 		"Stats":                domain.Stats{},
-		"Stats.entries":        domain.StatsEntries{},
+		"Stats.concepts":       domain.StatsConcepts{},
 		"Stats.review":         domain.StatsReview{},
 		"Stats.outcomes":       domain.StatsOutcomes{},
 		"Stats.misses":         domain.StatsMisses{},

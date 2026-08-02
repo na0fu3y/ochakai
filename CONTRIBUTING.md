@@ -372,10 +372,15 @@ existing record to fold it into. 8311 → 8339: issue
 written the same week, stated two rules the implementation did not
 follow and left two questions the freeze needs answered (a bar for
 breaking it, whether DELETE is safe to retry) unwritten — 28 lines of
-correction and decision, not restatement.
+correction and decision, not restatement. 8339 → 8377: issue
+[#411](https://github.com/na0fu3y/ochakai/issues/411) found that 0057
+§3.2's exclusion of the JSON field name `entries` did not hold in two
+of the three places it applied — 0064 §7 decides the question 0057
+deferred and renames `entries` to `concepts`, still unreleased so
+folded into 0064 rather than taking a new number.
 
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8339
+    RECORD-CORPUS-LINES: 8377
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

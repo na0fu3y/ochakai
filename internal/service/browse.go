@@ -16,18 +16,18 @@ import (
 // Not a search — no usage is recorded: walking the tree to see what
 // exists is not the demand signal search hits measure.
 
-// BrowseResult is one level of the tree: the subdirectories, entries and
+// BrowseResult is one level of the tree: the subdirectories, concepts and
 // files directly under the prefix — the three sections the index.md OKF
 // SPEC §8 describes carries (design doc 0046 §3.7).
 type BrowseResult struct {
-	Dirs      []store.DirCount    `json:"dirs,omitempty"`
-	Entries   []store.BrowseEntry `json:"entries,omitempty"`
-	Files     []store.BrowseFile  `json:"files,omitempty"`
-	Truncated bool                `json:"truncated,omitempty"`
+	Dirs      []store.DirCount      `json:"dirs,omitempty"`
+	Concepts  []store.BrowseConcept `json:"concepts,omitempty"`
+	Files     []store.BrowseFile    `json:"files,omitempty"`
+	Truncated bool                  `json:"truncated,omitempty"`
 }
 
 // Browse lists one level of the knowledge hierarchy: the subdirectories,
-// entries and files directly under prefix ("" is the root). prefix
+// concepts and files directly under prefix ("" is the root). prefix
 // accepts "a/b" or "a/b/".
 func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
 	prefix, err := normalizePrefix(prefix)
@@ -41,7 +41,7 @@ func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, err
 	if err != nil {
 		return nil, err
 	}
-	return &BrowseResult{Dirs: lvl.Dirs, Entries: lvl.Entries, Files: lvl.Files, Truncated: lvl.Truncated}, nil
+	return &BrowseResult{Dirs: lvl.Dirs, Concepts: lvl.Concepts, Files: lvl.Files, Truncated: lvl.Truncated}, nil
 }
 
 // normalizePrefix cleans one path prefix, for every surface that takes
@@ -99,7 +99,7 @@ func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, err
 		dirs = append(dirs, okf.IndexLine{Text: d.Name + "/", Target: d.Name + "/index.md",
 			Description: fmt.Sprintf("%d %s", d.Count, noun)})
 	}
-	for _, e := range res.Entries {
+	for _, e := range res.Concepts {
 		name := e.ID
 		if i := strings.LastIndex(name, "/"); i >= 0 {
 			name = name[i+1:]

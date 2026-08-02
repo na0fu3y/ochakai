@@ -170,7 +170,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 	var level service.BrowseResult
 	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/sales/index.md", &level)
-	if len(level.Entries) != 1 || level.Entries[0].ID != id || string(level.Entries[0].Type) != typ {
+	if len(level.Concepts) != 1 || level.Concepts[0].ID != id || string(level.Concepts[0].Type) != typ {
 		t.Errorf("index.md level = %+v", level)
 	}
 	// And the same address without the Accept header is the file itself.
@@ -849,7 +849,7 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 	}
 	var got struct {
 		Hits      []domain.ContextRank    `json:"hits"`
-		Entries   []domain.View           `json:"entries"`
+		Concepts  []domain.View           `json:"concepts"`
 		Outline   []domain.ContextOutline `json:"outline"`
 		Truncated int                     `json:"truncated"`
 	}
@@ -857,14 +857,14 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Truncated == 0 {
-		t.Fatalf("budget %d over 4 entries of %d bytes truncated nothing", budget, len(body))
+		t.Fatalf("budget %d over 4 concepts of %d bytes truncated nothing", budget, len(body))
 	}
 	if len(got.Hits) == 0 {
 		t.Error("the ranking is gone; hits still have to say what matched")
 	}
-	if bytes.Count(wire, []byte(body)) > len(got.Entries) {
-		t.Errorf("response carries %d copies of the body for %d delivered entries",
-			bytes.Count(wire, []byte(body)), len(got.Entries))
+	if bytes.Count(wire, []byte(body)) > len(got.Concepts) {
+		t.Errorf("response carries %d copies of the body for %d delivered concepts",
+			bytes.Count(wire, []byte(body)), len(got.Concepts))
 	}
 	ranking, err := json.Marshal(got.Hits)
 	if err != nil {
@@ -1091,18 +1091,18 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 		t.Fatalf("context status = %d", cresp.StatusCode)
 	}
 	var pack struct {
-		Hits    []domain.ContextRank `json:"hits"`
-		Entries []domain.View        `json:"entries"`
+		Hits     []domain.ContextRank `json:"hits"`
+		Concepts []domain.View        `json:"concepts"`
 	}
 	if err := json.NewDecoder(cresp.Body).Decode(&pack); err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]bool{}
-	for _, e := range pack.Entries {
+	for _, e := range pack.Concepts {
 		got[e.ID] = true
 	}
 	if !got[term] {
-		t.Errorf("entries = %v; the cited glossary term must travel with the scoped entry", got)
+		t.Errorf("concepts = %v; the cited glossary term must travel with the scoped entry", got)
 	}
 	for _, h := range pack.Hits {
 		if h.ID == term {
@@ -1578,7 +1578,7 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	// not among them.
 	var listing service.BrowseResult
 	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
-	for _, e := range listing.Entries {
+	for _, e := range listing.Concepts {
 		if e.ID == typ+"/notes" || e.ID == typ+"/notes.md" {
 			t.Errorf("a typeless markdown file is listed as a concept: %+v", e)
 		}
@@ -1619,11 +1619,11 @@ func TestRESTIntegrationStats(t *testing.T) {
 
 	var before domain.Stats
 	getJSON(t, srv.URL+"/api/v1/stats?days=1", &before)
-	if before.WindowDays != 1 || before.Entries.Total == 0 {
+	if before.WindowDays != 1 || before.Concepts.Total == 0 {
 		t.Fatalf("stats = %+v", before)
 	}
-	if _, ok := before.Entries.Status[string(domain.StatusDraft)]; !ok {
-		t.Errorf("status tally has no draft: %+v", before.Entries.Status)
+	if _, ok := before.Concepts.Status[string(domain.StatusDraft)]; !ok {
+		t.Errorf("status tally has no draft: %+v", before.Concepts.Status)
 	}
 
 	// A search nothing answers. Recording is off the read path, so the
@@ -2062,8 +2062,8 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 		listing.Files[0].Path != loose || listing.Files[0].MediaType == "" {
 		t.Errorf("files in the listing = %+v", listing.Files)
 	}
-	if len(listing.Entries) != 1 {
-		t.Errorf("entries in the listing = %+v", listing.Entries)
+	if len(listing.Concepts) != 1 {
+		t.Errorf("concepts in the listing = %+v", listing.Concepts)
 	}
 
 	// Markdown: the same listing, in the shape the format has a place for.

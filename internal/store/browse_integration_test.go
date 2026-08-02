@@ -86,10 +86,10 @@ func TestIntegrationBrowse(t *testing.T) {
 	if len(lvl.Dirs) != 1 || lvl.Dirs[0].Name != "regions" || lvl.Dirs[0].Count != 1 {
 		t.Errorf("dirs = %+v, want regions(1)", lvl.Dirs)
 	}
-	if e := lvl.Entries; len(e) != 1 || e[0].ID != "it-br-sales/monthly" || e[0].Type != domain.TypeComputations ||
+	if e := lvl.Concepts; len(e) != 1 || e[0].ID != "it-br-sales/monthly" || e[0].Type != domain.TypeComputations ||
 		e[0].Title != "t:it-br-sales/monthly" || e[0].Description != "d:it-br-sales/monthly" ||
 		e[0].Status != domain.StatusStable {
-		t.Errorf("entries = %+v", lvl.Entries)
+		t.Errorf("concepts = %+v", lvl.Concepts)
 	}
 
 	// The underscore ID lives in its own directory, not under it-br-sales.
@@ -97,8 +97,8 @@ func TestIntegrationBrowse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lvl.Dirs) != 0 || len(lvl.Entries) != 1 || lvl.Entries[0].ID != "it-br_x/deep" {
-		t.Errorf("underscore prefix: dirs=%+v entries=%+v", lvl.Dirs, lvl.Entries)
+	if len(lvl.Dirs) != 0 || len(lvl.Concepts) != 1 || lvl.Concepts[0].ID != "it-br_x/deep" {
+		t.Errorf("underscore prefix: dirs=%+v concepts=%+v", lvl.Dirs, lvl.Concepts)
 	}
 
 	// Root level: the rejected entry is invisible.
@@ -106,7 +106,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range lvl.Entries {
+	for _, e := range lvl.Concepts {
 		if e.ID == "it-br-rejected" {
 			t.Error("rejected entry visible in browse")
 		}

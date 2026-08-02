@@ -242,14 +242,14 @@ func (c *Client) Queues(ctx context.Context, prefixes []string) (domain.QueueCou
 }
 
 // ContextResult mirrors the /api/v1/context response: the ranking plus
-// the full entries behind the top hits, expanded one hop through links.
-// Hits carries the ranking only — the knowledge travels once, in Entries
-// (design doc 0033) — so a hit with no matching entry is a pointer to
-// fetch with Get. Outline lists entries the server's budget dropped; it
+// the full concepts behind the top hits, expanded one hop through links.
+// Hits carries the ranking only — the knowledge travels once, in Concepts
+// (design doc 0033) — so a hit with no matching concept is a pointer to
+// fetch with Get. Outline lists concepts the server's budget dropped; it
 // stays empty unless the caller passes a budget.
 type ContextResult struct {
 	Hits      []domain.ContextRank    `json:"hits"`
-	Entries   []domain.View           `json:"entries"`
+	Concepts  []domain.View           `json:"concepts"`
 	Outline   []domain.ContextOutline `json:"outline,omitempty"`
 	Truncated int                     `json:"truncated,omitempty"`
 }

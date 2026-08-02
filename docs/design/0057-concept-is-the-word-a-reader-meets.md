@@ -9,6 +9,8 @@ Status: Accepted(2026-07-29)。**BREAKING(文言のみ)。**
 `description`、サーバのエラー文。0054 §3.4 の「`domain.Knowledge` は
 改名しない」は維持し、**JSON のフィールド名 `entries` も動かさない**
 (§3.2)。ワイヤの形・引数・応答・能力・保存形はどれも 1 バイトも変わらない
+[0064](0064-rest-stops-at-api-v1.md) §7 が §3.2 の JSON フィールド名の
+除外を撤回し、`entries` を `concepts` に改名した(issue #411)。
 Date: 2026-07-29
 
 ## 0. 0054 が決めたこと: MCP ツール名 5 本の改名

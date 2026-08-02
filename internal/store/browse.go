@@ -49,12 +49,12 @@ type BrowseFile struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// BrowseEntry is the light projection of an entry for tree listings:
+// BrowseConcept is the light projection of a concept for tree listings:
 // no body, no links, no attrs. Type rides along as display metadata
 // (the tree itself is pure path), and Description so a directory
 // listing can render as an index page — the same title-plus-description
 // lines the OKF export's index.md files carry.
-type BrowseEntry struct {
+type BrowseConcept struct {
 	Type        domain.Type   `json:"type"`
 	ID          string        `json:"id"`
 	Title       string        `json:"title,omitempty"` // display-name override; empty means the id's last segment (design doc 0022)
@@ -83,10 +83,10 @@ const MaxBrowseEntries = 1000
 // Level is one directory of the bundle as browsing reads it: what sits
 // directly under a prefix, in the three kinds SPEC §8 lists.
 type Level struct {
-	Dirs      []DirCount    `json:"dirs,omitempty"`
-	Entries   []BrowseEntry `json:"entries,omitempty"`
-	Files     []BrowseFile  `json:"files,omitempty"`
-	Truncated bool          `json:"truncated,omitempty"`
+	Dirs      []DirCount      `json:"dirs,omitempty"`
+	Concepts  []BrowseConcept `json:"concepts,omitempty"`
+	Files     []BrowseFile    `json:"files,omitempty"`
+	Truncated bool            `json:"truncated,omitempty"`
 }
 
 // Browse returns what sits directly under prefix: the subdirectories
@@ -132,16 +132,16 @@ func (s *Store) Browse(ctx context.Context, prefix string) (*Level, error) {
 	if err != nil {
 		return nil, err
 	}
-	lvl.Entries, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BrowseEntry, error) {
-		var e BrowseEntry
+	lvl.Concepts, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BrowseConcept, error) {
+		var e BrowseConcept
 		err := row.Scan(&e.Type, &e.ID, &e.Title, &e.Description, &e.Status, &e.UpdatedAt)
 		return e, err
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(lvl.Entries) > MaxBrowseEntries {
-		lvl.Entries = lvl.Entries[:MaxBrowseEntries]
+	if len(lvl.Concepts) > MaxBrowseEntries {
+		lvl.Concepts = lvl.Concepts[:MaxBrowseEntries]
 		lvl.Truncated = true
 	}
 	// The files at this level. A file has no id, so it is matched on its

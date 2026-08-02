@@ -92,14 +92,14 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	// This test's two entries are in the tally, one per tier: the
 	// verified one is human-reviewed (SPEC §5.3), the other is confirmed
 	// by nobody.
-	if got.Entries.Total < 2 || got.Entries.Created < 2 {
-		t.Errorf("entries = %+v, want at least the two this test created", got.Entries)
+	if got.Concepts.Total < 2 || got.Concepts.Created < 2 {
+		t.Errorf("concepts = %+v, want at least the two this test created", got.Concepts)
 	}
-	if got.Entries.Status[string(domain.StatusDraft)] < 1 ||
-		got.Entries.Trust[string(domain.TrustHuman)] < 1 ||
-		got.Entries.Trust[string(domain.TrustUnverified)] < 1 {
+	if got.Concepts.Status[string(domain.StatusDraft)] < 1 ||
+		got.Concepts.Trust[string(domain.TrustHuman)] < 1 ||
+		got.Concepts.Trust[string(domain.TrustUnverified)] < 1 {
 		t.Errorf("status = %v, trust = %v, want this test's two entries in them",
-			got.Entries.Status, got.Entries.Trust)
+			got.Concepts.Status, got.Concepts.Trust)
 	}
 	if got.Review.Verifications < 1 {
 		t.Errorf("review.verifications = %d, want at least the one this test recorded", got.Review.Verifications)
@@ -110,12 +110,12 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	// Every value of both vocabularies is present, so a reader tells
 	// "none" from "not reported" without knowing the vocabulary.
 	for _, st := range domain.Statuses {
-		if _, ok := got.Entries.Status[string(st)]; !ok {
+		if _, ok := got.Concepts.Status[string(st)]; !ok {
 			t.Errorf("status tally has no %q", st)
 		}
 	}
 	for _, tr := range domain.Trusts {
-		if _, ok := got.Entries.Trust[string(tr)]; !ok {
+		if _, ok := got.Concepts.Trust[string(tr)]; !ok {
 			t.Errorf("trust tally has no %q", tr)
 		}
 	}
@@ -137,12 +137,12 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if empty.Misses.Count != 0 || empty.Entries.Created != 0 || empty.Review.Verifications != 0 {
+	if empty.Misses.Count != 0 || empty.Concepts.Created != 0 || empty.Review.Verifications != 0 {
 		t.Errorf("a future window is not empty: %+v", empty)
 	}
 	// The state numbers are not windowed, and say so by staying put.
-	if empty.Entries.Total < 2 {
-		t.Errorf("entries.total = %d in a future window, want the state numbers unwindowed", empty.Entries.Total)
+	if empty.Concepts.Total < 2 {
+		t.Errorf("concepts.total = %d in a future window, want the state numbers unwindowed", empty.Concepts.Total)
 	}
 
 	for _, table := range []string{"object", "knowledge_revision"} {
