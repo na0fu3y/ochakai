@@ -289,10 +289,7 @@ func Handler(svc *service.Service) http.Handler {
 	// of them has (design doc 0046 §3.5).
 	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		path := r.PathValue("path")
-		if err := rejectUnknownParams(r.URL.Query(), "history", "limit", "files"); err != nil {
-			writeError(w, err)
-			return
-		}
+		q := r.URL.Query()
 		// An archive is the bundle at a path: everything under it, as
 		// OKF, in the layout it lives at (design doc 0046 §3.5). The
 		// root is the whole knowledge base, which is what
@@ -300,6 +297,16 @@ func Handler(svc *service.Service) http.Handler {
 		// re-rooted — an export of metrics/ imports back to metrics/,
 		// because this is a copy of a subtree and not a move of one.
 		if wantsArchive(r) {
+			// history addresses a different object than the archive
+			// (the object's own log.md, not this subtree's), so
+			// combining them is a 400 rather than the archive silently
+			// winning — the six representations of §4 get a precedence
+			// order because they are representations of the same
+			// thing; this is not that (design doc 0064 §2 item 2).
+			if err := rejectOutOfModeParams(q, "with Accept: application/gzip", "files"); err != nil {
+				writeError(w, err)
+				return
+			}
 			// A reserved name is a file the bundle generates, not a
 			// directory in it, so there is no subtree at this address to
 			// archive — the same refusal the write face makes, for the
@@ -342,7 +349,11 @@ func Handler(svc *service.Service) http.Handler {
 		// same way: the ledger is keyed by path, so "what happened to
 		// this object" is one question with one answer whichever kind
 		// it is.
-		if r.URL.Query().Has("history") {
+		if q.Has("history") {
+			if err := rejectOutOfModeParams(q, "with ?history", "history", "limit"); err != nil {
+				writeError(w, err)
+				return
+			}
 			// Nothing ever happened to a file that is generated on
 			// demand, and "nothing ever happened here" (404) reads as a
 			// fact about the bundle rather than about the address. The
@@ -357,6 +368,10 @@ func Handler(svc *service.Service) http.Handler {
 		dir, base := splitReserved(path)
 		switch base {
 		case "index.md":
+			if err := rejectOutOfModeParams(q, "on index.md"); err != nil {
+				writeError(w, err)
+				return
+			}
 			if wantsJSON(r) {
 				res, err := svc.Browse(r.Context(), dir)
 				if err != nil {
@@ -373,7 +388,11 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			writeMarkdown(w, doc)
 		case "log.md":
-			limit, err := queryInt(r.URL.Query(), "limit")
+			if err := rejectOutOfModeParams(q, "on log.md", "limit"); err != nil {
+				writeError(w, err)
+				return
+			}
+			limit, err := queryInt(q, "limit")
 			if err != nil {
 				writeError(w, err)
 				return
@@ -398,6 +417,10 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			writeMarkdown(w, doc)
 		default:
+			if err := rejectOutOfModeParams(q, "on a concept or file's own address"); err != nil {
+				writeError(w, err)
+				return
+			}
 			// Every other path is an object of the bundle: a concept at
 			// its own path, or a file (design doc 0046 §3.5). A concept
 			// is answered by the concept surface's own writer, so one
@@ -1412,8 +1435,15 @@ func writeDocument(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	_, _ = w.Write(doc)
 }
 
+// readJSON decodes the request body strictly: an unrecognized key is a 400
+// naming it, the same shape rejectUnknownParams gives an unrecognized query
+// key, and content trailing the JSON value is a 400 rather than silently
+// discarded. Before design doc 0064 §2 neither was checked — a body key a
+// server did not yet know was a 200 that dropped it, the same false-green
+// shape ?dry_run= had as a query parameter before this doc closed that one.
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		// An oversized body is not malformed JSON, and calling it that
 		// sends the caller looking for a syntax error in a payload that
@@ -1424,7 +1454,15 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 				map[string]string{"error": fmt.Sprintf("request body exceeds %d bytes", maxErr.Limit)})
 			return false
 		}
+		if field, ok := strings.CutPrefix(err.Error(), `json: unknown field "`); ok {
+			writeError(w, service.Invalidf("unknown field %q", strings.TrimSuffix(field, `"`)))
+			return false
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return false
+	}
+	if dec.More() {
+		writeError(w, service.Invalidf("request body must be a single JSON value"))
 		return false
 	}
 	return true
@@ -1555,6 +1593,30 @@ func rejectUnknownParams(q url.Values, allowed ...string) error {
 		return service.Invalidf("unknown query parameter %q", key)
 	}
 	return nil
+}
+
+// bundleModeParams is history, limit and files: query keys the bundle GET
+// handler declares for the address as a whole, but each is read in only
+// some of its modes (archive, ?history, index.md, log.md, a concept or
+// file's own address). rejectOutOfModeParams is what makes that precise —
+// before design doc 0064 §2 item 2, a mode that did not read one of these
+// silently ignored it instead of saying so.
+var bundleModeParams = []string{"history", "limit", "files"}
+
+// rejectOutOfModeParams 400s a bundleModeParams key present outside the
+// mode that reads it, naming the mode — mode reads as "<key> is not
+// meaningful <mode>", so it must fit that sentence (e.g. "with
+// Accept: application/gzip", "on log.md"). allowed lists which of the
+// three this mode does read; any other unrecognized key falls through to
+// rejectUnknownParams's generic message.
+func rejectOutOfModeParams(q url.Values, mode string, allowed ...string) error {
+	for _, key := range bundleModeParams {
+		if !q.Has(key) || slices.Contains(allowed, key) {
+			continue
+		}
+		return service.Invalidf("%s is not meaningful %s", key, mode)
+	}
+	return rejectUnknownParams(q, allowed...)
 }
 
 // queryInt parses an optional numeric query parameter, rejecting a

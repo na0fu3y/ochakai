@@ -36,6 +36,31 @@ REST の 11 操作すべてで、宣言していないクエリキーは 400 に
 推測しているのはその名残)、凍結後に同じ形の事故が起きないための土台が
 これである。
 
+この決定はクエリパラメータでは閉じておらず、同じ形の穴が二つ残って
+いた(issue [#470](https://github.com/na0fu3y/ochakai/issues/470))。
+
+**リクエストボディの未知キー。** `readJSON`(`internal/restapi/restapi.go`)
+は `DisallowUnknownFields` を呼んでおらず、本文を読む三操作
+(`POST /api/v1/move`・`POST /api/v1/review/{id}`・
+`POST /api/v1/usage/{id}`)は宣言していないキーを黙って捨てて 200 を
+返していた。`{"rulling": "verified"}` は何もしない 200、`note` のつもり
+の `notes` は静かに消える書き込み — 本文版の `dry_run` false green で
+ある。**決定:** `dec.DisallowUnknownFields()` を呼び、JSON 値のあとに
+続く内容(`dec.More()`)も 400 にする。未知キーはクエリパラメータと
+同じ形で名指す。
+
+**バンドル GET のモード別パラメータ。**
+`GET /api/v1/bundle/{path}` は `history`・`limit`・`files` の三つを
+住所全体に許可していたが、実際に読むのはそれぞれ一部のモードだけ
+だった — `files` はアーカイブ分岐のみ、`limit` は `?history` と
+`log.md` のみ、`history` はアーカイブ分岐より後で見るため
+`Accept: application/gzip` と `?history` を同時に送ると `?history` が
+黙って無視されていた。**決定:** モードの外で送られたキーは、そのモード
+を名指す 400 にする。アーカイブと `?history` の重なりは、§4 が 6 通り
+の表現に優先順位を与えた理由(同じものの表現違いだから)がここには
+当てはまらない — `?history` はアーカイブとは別のオブジェクトなので、
+優先順位ではなく 400 にする。
+
 ## 3. ヘッダ接頭辞の統一
 
 `X-Ochakai-On-Behalf-Of` / `X-Ochakai-Producer`(リクエストヘッダ)を
@@ -209,6 +234,12 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
   `X-` を外す。`On-Behalf-Of` は古い綴りのままだと 400 でなく黙って誤
   身元に書き込む。段階アップグレード中に限らない([Upgrades](../guides/operating.md#upgrades))。
 - 未知のクエリパラメータを送っていたら 400 になる。
+- `POST /api/v1/move`・`POST /api/v1/review/{id}`・
+  `POST /api/v1/usage/{id}` の本文に宣言外のキーを送っていたら 400 になる。
+- `GET /api/v1/bundle/{path}` で `history`・`limit`・`files` を、それを
+  読まないモードに送っていたら(`limit` を index.md や概念・ファイルの
+  住所に、`files` をアーカイブ以外に、`history` をアーカイブ
+  (`Accept: application/gzip`)と同時に、など)400 になる。
 - `attachments` という JSON キー・クエリパラメータ・MCP ツール名を
   読み書きしていたら `files` に読み替える。
 - `stats`・バンドル一覧・`context`(MCP `get_context` も)の JSON キー

@@ -360,6 +360,42 @@ func TestBundleAddressesRefuseByPath(t *testing.T) {
 	}
 }
 
+// TestBundleParamsAreRejectedOutsideTheirMode pins design doc 0064 §2's
+// completion (issue #470): history, limit and files are declared for the
+// whole GET /api/v1/bundle/{path} address, but each is read in only some
+// of its modes. Sent to a mode that does not read it, each is now a 400
+// naming the mode, rather than a silently ignored value.
+func TestBundleParamsAreRejectedOutsideTheirMode(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct {
+		name, url, accept string
+	}{
+		{"limit on index.md", "/api/v1/bundle/index.md?limit=5", ""},
+		{"limit on a concept", "/api/v1/bundle/metrics/revenue.md?limit=5", ""},
+		{"files on index.md", "/api/v1/bundle/index.md?files=false", ""},
+		{"files on log.md", "/api/v1/bundle/metrics/log.md?files=false", ""},
+		{"files on a concept", "/api/v1/bundle/metrics/revenue.md?files=false", "application/json"},
+		{"history with the archive", "/api/v1/bundle/metrics/revenue.md?history", "application/gzip"},
+		{"limit with the archive", "/api/v1/bundle/?limit=5", "application/gzip"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, c.url, nil)
+			if c.accept != "" {
+				req.Header.Set("Accept", c.accept)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("GET %s = %d, want 400 (body: %s)", c.url, rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), "not meaningful") {
+				t.Errorf("body %q does not say the parameter is out of mode", rec.Body)
+			}
+		})
+	}
+}
+
 // TestAttachWithoutBlobStore pins the 501: on an instance without GCS
 // (design doc 0013), attaching fails before any validation or DB access
 // with the config hint.
@@ -402,6 +438,50 @@ func TestOversizedBodies(t *testing.T) {
 				t.Errorf("body %q does not mention %q", rec.Body, c.wantSubstr)
 			}
 		})
+	}
+}
+
+// TestUnknownBodyFieldsAreRejected pins design doc 0064 §2's completion
+// (issue #470): a JSON body key none of these three operations declare is
+// a 400 naming it, the same as an unrecognized query parameter, rather
+// than a 200 that silently dropped it — closing the body's version of the
+// hole that let ?dry_run= go unenforced.
+func TestUnknownBodyFieldsAreRejected(t *testing.T) {
+	h := Handler(&service.Service{})
+	cases := []struct {
+		name, method, url, body string
+	}{
+		{"move", http.MethodPost, "/api/v1/move", `{"from":"a","to":"b","force":true}`},
+		{"review", http.MethodPost, "/api/v1/review/metrics/revenue", `{"ruling":"verified","rulling":"verified"}`},
+		{"usage", http.MethodPost, "/api/v1/usage/metrics/revenue", `{"outcome":"worked","notes":"x"}`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(c.method, c.url, strings.NewReader(c.body)))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("%s %s = %d, want 400 (body: %s)", c.method, c.url, rec.Code, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), "unknown field") {
+				t.Errorf("body %q does not name the unknown field", rec.Body)
+			}
+		})
+	}
+}
+
+// TestTrailingBodyContentIsRejected pins the other half of readJSON's
+// strictness: content after the JSON value is a 400, not silently
+// discarded.
+func TestTrailingBodyContentIsRejected(t *testing.T) {
+	h := Handler(&service.Service{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/move",
+		strings.NewReader(`{"from":"a","to":"b"}{"from":"c","to":"d"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST move with trailing content = %d, want 400 (body: %s)", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "single JSON value") {
+		t.Errorf("body %q does not say why", rec.Body)
 	}
 }
 
