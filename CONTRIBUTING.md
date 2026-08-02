@@ -512,12 +512,27 @@ Two pieces of bookkeeping, both easy to forget:
 
 - **Mark the page where an English page links to it** — `(Japanese)`
   after the link text — so a reader is not surprised mid-click.
-- **`DOC-LINES` goes up, not down.** Japanese puts no spaces between
-  words, so a line was expected to carry more; a full-width character
-  takes two columns, so the same 70-column wrap holds about half as many.
-  Measured on `loop.md`: 114 → 120. Raise the ceiling in the same PR and
-  narrate it in the DOC section, the way every other raise is narrated.
-  Translation never returns budget — only folding does.
+- **`DOC-LINES` usually needs nothing.** The ceiling moves in hundreds
+  (`DOC-LINES-SLACK: 100`), so most pages land inside the block the
+  manual is already in and the number is not touched — which is what
+  keeps nine translations from all conflicting on one line. Run
+  `scripts/check core`; if it fails, round the ceiling to the next
+  hundred and write the paragraph, because crossing a hundred is the
+  moment the manual actually got bigger.
+
+  Expect it to grow rather than shrink where it moves at all. Japanese
+  puts no spaces between words, so a line was expected to carry more; a
+  full-width character takes two columns, so the same 70-column wrap
+  holds about half as many. `loop.md` 114 → 120, `configuration.md`
+  75 → 84 — but `docs/README.md` 101 → 96, because a page of one-line
+  summaries loses more to the wrap than it gains. Translation never
+  returns budget; only folding does.
+
+- **Check the English before translating it.** A translation should be
+  faithful, which means a description that has gone stale gets fixed in
+  Japanese rather than fixed. If a page says something the code or
+  another page no longer supports, say so in an issue and leave that
+  sentence for a separate PR — #451 is what happens otherwise.
 
 ## Pull requests
 

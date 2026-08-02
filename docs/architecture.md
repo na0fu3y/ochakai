@@ -464,5 +464,5 @@ by commit SHA.
   the layout, types, and links this page describes.
 - [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) — the
   deployment walkthrough and the hardening checklist.
-- [docs/guides/golden-query-canary.md](guides/golden-query-canary.md) —
-  running verified queries as canaries.
+- [docs/guides/golden-query-canary.md](guides/golden-query-canary.md)
+  (Japanese) — running verified queries as canaries.
