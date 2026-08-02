@@ -20,7 +20,7 @@ context, including the store integration test and the fuzz targets).
 - [ ] Widens a surface — a REST operation, an MCP tool, a CLI command, an
       environment variable? `docs/surface.md` is updated
       (`cmd/ochakai/surface_test.go` says so), the description names which of
-      its seven conditions the addition serves, and the three questions are
+      its eight conditions the addition serves, and the three questions are
       answered under *What and why*: who actually got stuck, why an existing
       surface does not already cover it, and what is folded away in exchange.
       The default answer is no

@@ -436,6 +436,7 @@ paths:
                   value:
                     error: cursor belongs to the usage listing; it cannot resume the failed one
         "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/bundle/{path}:
     get:
@@ -781,6 +782,7 @@ paths:
                   error: { type: string }
               example:
                 error: no object at this path
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     put:
       operationId: putBundleFile
@@ -903,6 +905,7 @@ paths:
                   error: { type: string }
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteBundleFile
@@ -975,6 +978,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/context:
     get:
@@ -1278,6 +1282,7 @@ paths:
                     truncated: 1
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
@@ -1389,6 +1394,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/review/{id}:
     parameters:
@@ -1641,6 +1647,7 @@ paths:
                   error: { type: string }
               example:
                 error: knowledge carries no rejection to withdraw
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/usage/{id}:
     parameters:
@@ -1681,6 +1688,7 @@ paths:
                     last_used_at: "2026-07-26T23:58:07.336114Z"
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     post:
       operationId: reportOutcome
@@ -1748,6 +1756,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/stats:
     get:
@@ -1856,6 +1865,7 @@ paths:
                           last_at: "2026-07-26T08:11:02.104233Z"
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/reembed:
     post:
@@ -1956,6 +1966,7 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "501": { $ref: "#/components/responses/Error" }
+        "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:

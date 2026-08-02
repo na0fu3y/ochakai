@@ -32,8 +32,8 @@ last entry.
 - The committed `.mcp.json` pointed at the Cloud Run proxy's port
   (8787), so opening the repo in Claude Code after the quick start
   (port 8080) connected to nothing, with no error saying so. It now
-  matches the compose default; the Cloud Run guide says to repoint it
-  at the proxy instead of claiming that happens automatically.
+  matches the compose default; a Cloud Run deployment uses the bridge
+  or `ochakai ui` instead (docs/guides/mcp-clients.md), not this file.
 - The operating guide's web UI section still showed delegated writes as
   `agent:ochakai-webui@…`, the actor-kind spelling design doc
   [0043](docs/design/0043-document-first.md) §3.8 retired for `process:`
@@ -64,7 +64,24 @@ last entry.
   what `api/openapi.yaml` tells an operator to verify a backup by
   reading rather than by the status code, and this one read fine — valid
   gzip, valid tar, empty. A backup script pointed one path too deep
-  succeeded forever.
+  succeeded forever. This covers an object's own address; a prefix that
+  matches no object at all — the same typo one segment shallower —
+  still answers 200 with an empty archive, indistinguishable from a
+  directory that is legitimately empty. That is a deliberate scope
+  limit, not an oversight.
+
+- **BREAKING** — a REST error response used to leave the documented
+  `{"error": "..."}` envelope in two ways. A request net/http's own
+  routing turned away before a handler ran — an unmatched path, or a
+  path matched by a different method — answered plain text instead of
+  JSON (404 `not found`, 405 `method not allowed`; issue #365). And a
+  500 echoed whatever the store or a driver said, which could carry SQL
+  text or a connection string. Both now stay inside the envelope: 404
+  and 405 are JSON, and a 500 is logged for an operator and answered as
+  `{"error": "internal error"}`. A caller parsing a 500 body for a
+  driver message now finds `internal error` and needs the server log
+  for detail. `api/openapi.yaml` declares 405 alongside the 500 already
+  on all eleven operations.
 
 ### Changed
 
