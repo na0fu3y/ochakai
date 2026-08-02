@@ -55,13 +55,18 @@ func newCredentialProxy(target *url.URL, setAuth func(http.Header)) *httputil.Re
 // standing to make it. It wraps any handler that may legitimately set
 // one, so it runs first and cannot undo it.
 //
-// Both spellings are dropped, not just the current one. Design doc 0064
-// renamed OnBehalfOfHeader by dropping its "X-" prefix with no dual-accept
-// window, and this proxy is a separate Cloud Run service from the API
-// (design doc 0032) that can lag behind it during a staggered upgrade: a
-// build old enough to still call this the retired name would otherwise
-// strip only that name and forward the current one untouched, straight
-// to an API new enough to honor it (issue #410).
+// Both spellings are dropped, not just the current one — but only in a
+// build that carries this line. Design doc 0064 renamed OnBehalfOfHeader
+// by dropping its "X-" prefix with no dual-accept window, and this proxy
+// is a separate Cloud Run service from the API (design doc 0032) that can
+// lag behind it during a staggered upgrade. What this closes is a *new*
+// web UI in front of an API that has not yet adopted 0064 and still
+// honors the retired spelling: without this line, the proxy would strip
+// only the current name and forward the retired one straight through. It
+// cannot close the reverse — an old web UI, built before this line
+// existed, in front of a new API — because an old binary cannot run code
+// it does not contain; the only mitigation for that direction is upgrade
+// order (docs/guides/operating.md#upgrades, issue #418).
 func stripDelegation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Del(httpauth.OnBehalfOfHeader)

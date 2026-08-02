@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 4984
+- DOC-LINES: 4996
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -580,6 +580,11 @@ docs/guides/rest-integration.md が、まだ「すべての面が不安定」と
 [#412](https://github.com/na0fu3y/ochakai/issues/412) も同じ形の訂正
 である。PARAM・HEADER・MCP・FLAG の四つの一覧に前回抜けていた説明を
 足し、この段落を含めてその分を数えている — 4,948 → 4,984。
+
+[#418](https://github.com/na0fu3y/ochakai/issues/418) も同じ形の訂正
+である。stripDelegation の修正が実際に閉じる方向を CHANGELOG が取り
+違えていたのを直し、運用ガイドに欠けていたアップグレード順序を足し、
+この段落を含めてその分を数えている — 4,984 → 4996。
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
