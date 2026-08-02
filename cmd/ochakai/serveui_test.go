@@ -169,6 +169,34 @@ func TestServeUIProxyStripsBrowserDelegation(t *testing.T) {
 	}
 }
 
+// The retired "X-" spelling (design doc 0064) must be stripped too, not
+// just the current name: a staggered upgrade could otherwise leave this
+// header reaching an API new enough to still honor it (issue #410).
+func TestServeUIProxyStripsRetiredDelegationHeaderSpelling(t *testing.T) {
+	var got http.Header
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer backend.Close()
+	u, _ := url.Parse(backend.URL)
+
+	h := serveUIHandler(newServiceProxy(u, staticServiceTokens{tok: "t"}, nil, slog.New(slog.DiscardHandler)))
+	local := httptest.NewServer(h)
+	defer local.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
+	req.Header.Set("X-"+httpauth.OnBehalfOfHeader, "human:attacker@example.co.jp")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if v := got.Get("X-" + httpauth.OnBehalfOfHeader); v != "" {
+		t.Errorf("X-%s reached ochakai as %q, want it stripped", httpauth.OnBehalfOfHeader, v)
+	}
+}
+
 // With IAP configured the header is rebuilt from the verified assertion,
 // so a write is recorded as the person in the browser (via the service).
 // The browser's own value is still discarded, not merged.

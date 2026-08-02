@@ -130,12 +130,14 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   ENV は 16 → 14 で、姿勢の 3 綴りは VOCAB に数えない — 姿勢はデプロイ
   する人の語であり、それは ENV が既に数えている(§4)。
 - [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
-  — **Accepted**(§3 の合成規則を 0052 が producer に適用)。信頼済みの
-  呼び出し元が `X-Ochakai-On-Behalf-Of` でエンドユーザーを名乗り、
+  — **Accepted**(§3 の合成規則を 0052 が producer に適用。ヘッダの綴りは
+  0064 が `X-` を落として改訂)。信頼済みの
+  呼び出し元が `Ochakai-On-Behalf-Of` でエンドユーザーを名乗り、
   provenance がサービスアカウント 1 つに潰れる問題を解く。
 - [0052 名乗りは actor の隣に置く](0052-producer-beside-the-actor.md)
-  — **Accepted**。0043 §3.8(0046 §2.4 が継承)の「SPEC §7 の
-  `<producer>/<version>` は使わない」を改訂し、`X-Ochakai-Producer` /
+  — **Accepted**(ヘッダの綴りは 0064 が `X-` を落として改訂)。0043 §3.8
+  (0046 §2.4 が継承)の「SPEC §7 の
+  `<producer>/<version>` は使わない」を改訂し、`Ochakai-Producer` /
   MCP の `clientInfo` / `OCHAKAI_PRODUCER` から来る自称を `Actor.producer`
   として**認証済みの actor の隣に**記録する。actor の綴りは `human:` /
   `process:` のまま、trust tier も不変。
