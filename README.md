@@ -138,7 +138,7 @@ ochakai loses, and says who should pick something else.
 
 | ochakai has no… | because |
 |---|---|
-| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job |
+| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. Embeddings are the exception in spirit and not in fact — an encoder is deterministic and produces no text |
 | SQL execution | it holds no warehouse credentials. Your agent executes |
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
@@ -150,8 +150,11 @@ ochakai loses, and says who should pick something else.
 
 - **Google Cloud**, for a real deployment: Cloud Run IAM and Cloud SQL
   IAM are how ochakai holds no secret of its own, and there is no
-  supported way to run it elsewhere. What is portable is the knowledge,
-  not the runtime.
+  supported way to run it elsewhere. This superseded an earlier "runs
+  anywhere" position, for a reason worth knowing before you adopt:
+  keeping a non-GCP path alive meant keeping a second authentication path
+  alive with it, and that is the one thing secret-zero cannot afford.
+  What is portable is the knowledge, not the runtime.
 - **PostgreSQL 17 with `pg_trgm`**; `vector` (pgvector) as well where
   semantic search is on, which on Google Cloud is the default.
 - **No authorization**, as above. Deciding who may reach a deployment is
