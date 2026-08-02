@@ -204,7 +204,8 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
 **BREAKING**。REST を組み込んでいるクライアントが直す必要があるもの:
 
 - `X-Ochakai-On-Behalf-Of` / `X-Ochakai-Producer` を送っているなら
-  `X-` を外す。
+  `X-` を外す。`On-Behalf-Of` は API 先行だと 400 でなく黙って誤身元に
+  書き込む([Upgrades](../guides/operating.md#upgrades))。
 - 未知のクエリパラメータを送っていたら 400 になる。
 - `attachments` という JSON キー・クエリパラメータ・MCP ツール名を
   読み書きしていたら `files` に読み替える。
@@ -212,8 +213,7 @@ Go の識別子も揃える(`domain.StatsEntries` → `StatsConcepts`、
   `entries` を読んでいたら `concepts` に読み替える。
 - If-None-Match `*` の衝突を 409 として扱っていたら 412 に。
 - ファイル PUT の成功判定を 200 のみで書いていたら 201 も見る。
-- `ruling: withdrawn` の失敗を 404 として扱っていたら、取り消す物が
-  無い場合は 409 になる。
+- `ruling: withdrawn` の失敗を 404 として扱っていたら、取り消す物が無い場合は 409 になる。
 - 範囲外の `limit` / `days` が黙って既定値に丸まることを当てにして
   いたら、400 として扱う。
 

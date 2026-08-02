@@ -807,8 +807,15 @@ against a newer schema.
 
 Pin a version rather than `:latest`, so a redeploy is a decision.
 
-Two upgrade-adjacent traps worth knowing here:
+Three upgrade-adjacent traps worth knowing here:
 
+- **Upgrade the web UI before or together with the API, never after.**
+  Design doc [0064](../design/0064-rest-stops-at-api-v1.md) renamed the
+  delegation header with no dual-accept window; the web UI proxy only
+  strips the spelling its own build knows. An old web UI in front of an
+  API that has already adopted 0064 forwards the current spelling
+  untouched — silently misattributing a write, not a 400 (issue
+  [#418](https://github.com/na0fu3y/ochakai/issues/418)).
 - **Changing `OCHAKAI_EMBEDDING_DIM` on a database that already holds
   vectors rebuilds the vector tables at the new width**, because a vector
   is derived from the concept it describes and nothing curated is involved

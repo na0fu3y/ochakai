@@ -27,13 +27,18 @@ last entry.
   retired `X-Ochakai-On-Behalf-Of` it replaced. The web UI is a separate
   Cloud Run service from the API (design doc
   [0032](docs/design/0032-webui-iap-identity.md)) and the two can be
-  upgraded one at a time: during that window a build of the web UI old
-  enough to still call the header by its retired name would strip only
-  that name and forward the current one straight through, and an API
-  new enough to have adopted 0064 would honor it — letting any
-  IAP-authorized browser attribute a write to whichever identity it
-  named. Both spellings are now stripped regardless of which build is
-  running (issue [#410](https://github.com/na0fu3y/ochakai/issues/410)).
+  upgraded one at a time: during that window a *new* web UI in front of
+  an API that has not yet adopted 0064 would forward the retired
+  spelling straight through, and the old API would still honor it —
+  letting any IAP-authorized browser attribute a write to whichever
+  identity it named. Any build carrying this fix now strips both
+  spellings (issue [#410](https://github.com/na0fu3y/ochakai/issues/410)).
+  This does **not** close the reverse case — an old web UI, without this
+  fix, in front of a new API — since an old binary cannot run code it
+  does not contain. The only mitigation there is upgrade order: upgrade
+  the web UI first, or both together, never the API alone while the web
+  UI lags. See [Upgrades](docs/guides/operating.md#upgrades) (issue
+  [#418](https://github.com/na0fu3y/ochakai/issues/418)).
 - The quick start's demo import needed the Go toolchain
   (`go run ./cmd/ochakai import examples/demo`) despite the README
   promising "Docker and nothing else locally", and there was no
