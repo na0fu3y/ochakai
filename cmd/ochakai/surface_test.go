@@ -816,6 +816,21 @@ func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
 	if slack < 0 {
 		t.Fatalf("%s sets no DOC%s cap: DOC%s would carry silent headroom with no ceiling of its own", surfaceDoc, capSlack, capMeasures)
 	}
+	// The cap moves in whole blocks, so it cannot be set to whatever the
+	// manual happens to measure today. Fitting it to the actual leaves no
+	// headroom, which puts the next page's PR back on this same line — and
+	// nine translations editing one line is the conflict that widened the
+	// slack in the first place. A multiple is also what makes crossing one
+	// mean something: it happens when the manual got bigger, not when a
+	// paragraph did.
+	if slack > 0 && limit%slack != 0 {
+		t.Errorf(`DOC%s is %d, which is not a multiple of the %d DOC%s.
+
+The cap moves in blocks: round it up to %d rather than fitting it to what
+the manual measures today, which would leave the next PR no room and put
+it back on this line.`,
+			capMeasures, limit, slack, capSlack, ((limit/slack)+1)*slack)
+	}
 	_, lines := userDocs(t)
 	switch headroom := limit - lines; {
 	case headroom < 0:
