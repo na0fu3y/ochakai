@@ -176,7 +176,7 @@ in the version you are running.
 - **Using** — [The improvement loop](docs/loop.md) (Japanese) ·
   [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) (Japanese) ·
-  [Troubleshooting](docs/guides/troubleshooting.md)
+  [Troubleshooting](docs/guides/troubleshooting.md) (Japanese)
 - **Running** — [Deploy with Terraform](deploy/terraform/README.md)
   (Japanese) ·
   [the gcloud reference it runs](deploy/cloudrun/README.md)

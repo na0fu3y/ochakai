@@ -51,7 +51,7 @@ if the proposal is concrete.
   [docs/cli.md](docs/cli.md) before you have a binary, every design record
   carries an English abstract, and the half of the product that is not Cloud
   Run has a [FAQ](docs/faq.md),
-  [troubleshooting](docs/guides/troubleshooting.md) and an
+  [troubleshooting](docs/guides/troubleshooting.md) (Japanese) and an
   [operating guide](docs/guides/operating.md). What is left is
   [open as issues](https://github.com/na0fu3y/ochakai/issues) rather than a
   paragraph here. The compatibility policy the wire surfaces actually follow

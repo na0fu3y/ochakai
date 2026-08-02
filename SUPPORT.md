@@ -25,9 +25,9 @@ Most answers are already written down, and the docs are short enough to check:
 - [docs/faq.md](docs/faq.md) — the questions this project's shape invites:
   whether it runs outside Google Cloud, whether anything leaves your project,
   what an agent may do to verified knowledge, what happens if you leave.
-- [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md) — symptoms
-  and their causes on the local and client side, from an empty search to a
-  skipped import to a 412.
+- [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md) (Japanese)
+  — symptoms and their causes on the local and client side, from an empty
+  search to a skipped import to a 412.
 - [README](README.md) — what ochakai is, and the things it deliberately does
   not do. [docs/configuration.md](docs/configuration.md) (Japanese) has the
   requirements and every environment variable.
