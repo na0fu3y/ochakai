@@ -27,7 +27,7 @@ var (
 	mdLinkRe  = regexp.MustCompile(`\[[^\]]*\]\(([^)\s]+)\)`)
 	headingRe = regexp.MustCompile(`(?m)^#{1,6}\s+(.*)$`)
 	anchorRe  = regexp.MustCompile(`<a id="([^"]+)"`)
-	slugDrop  = regexp.MustCompile("[^\\p{L}\\p{N}\\p{Han}\\p{Hiragana}\\p{Katakana} _-]+")
+	slugDrop  = regexp.MustCompile(`[^\p{L}\p{N}\p{Han}\p{Hiragana}\p{Katakana} _-]+`)
 )
 
 // slug is GitHub's heading-to-fragment rule, near enough for the ASCII
@@ -39,7 +39,6 @@ func slug(heading string) string {
 	h = regexp.MustCompile("`[^`]*`").ReplaceAllStringFunc(h, func(s string) string {
 		return strings.Trim(s, "`")
 	})
-	h = mdLinkRe.ReplaceAllString(h, "$0")
 	h = slugDrop.ReplaceAllString(h, "")
 	return strings.ReplaceAll(h, " ", "-")
 }
