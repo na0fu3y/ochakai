@@ -181,7 +181,7 @@ in the version you are running.
   [Golden query canary](docs/guides/golden-query-canary.md)
 - **Building on it** — [REST API](api/openapi.yaml) ·
   [Examples](examples) · [All docs](docs/README.md)
-- **Deciding** — [The surface](docs/surface.md), the seven conditions
+- **Deciding** — [The surface](docs/surface.md), the eight conditions
   ochakai exists to satisfy and everything counted against them, and
   [docs/design](docs/design/README.md), the numbered decision records
   behind it (mostly Japanese, [summarized in

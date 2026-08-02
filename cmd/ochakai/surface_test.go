@@ -945,18 +945,26 @@ var commandGuardExempt = map[string]bool{
 	"ROADMAP.md":  true,
 }
 
-// commandGuardExtra are files outside the manual that also teach a literal
-// "ochakai <command>" invocation and so need the same guard —
-// TestManualNamesNoCommandThatDoesNotExist did not reach them because
-// userDocs() is DOC-page prose only (.md, and .github/ skipped as a
-// dot-directory): issue #399 found bug_report.yml still showing the
-// retired `ochakai create` as the example every bug reporter copies.
-// These are scanned with commandWordsIn rather than commandWordIn: none of
-// them wrap prose in Markdown fences or backticks to isolate a span with,
-// so every field in every line is checked instead.
-var commandGuardExtra = []string{
-	".github/ISSUE_TEMPLATE/bug_report.yml",
-}
+// commandGuardExtraDir is the directory TestManualNamesNoCommandThatDoesNotExist
+// reads outside the Markdown manual: userDocs() is DOC-page prose only
+// (.md, and .github/ skipped as a dot-directory), so issue #399 found
+// bug_report.yml still showing the retired `ochakai create` as the
+// example every bug reporter copies. Issue #401's fix named that one
+// file (commandGuardExtra); issue #412 found the same directory's
+// feature_request.yml just as unwatched — its own dropdown option names
+// `ochakai ui` — so this reads every file the directory holds instead of
+// one chosen by hand, the way repoTextFiles (retired_test.go) walks a
+// directory rather than naming files in it.
+//
+// These are scanned with commandWordsIn rather than commandWordIn: an
+// issue form's dropdown options and placeholder text are read literally
+// by the GitHub UI, so wrapping the invocation in backticks or a fence to
+// isolate it — the way the Markdown manual does — would show the reporter
+// a stray backtick instead of the command. Every field in every line is
+// checked instead, and prose that merely mentions the product name
+// (`ochakai` in backticks) is worded to stay out of the way, the same
+// reason a URL segment or `./cmd/ochakai` already does not match.
+const commandGuardExtraDir = ".github/ISSUE_TEMPLATE"
 
 var inlineCodeSpanRe = regexp.MustCompile("`([^`]*)`")
 
@@ -985,11 +993,15 @@ var commandWordRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*`)
 // an already-isolated span, this walks all fields so it also catches a
 // standalone "ochakai" appearing mid-sentence, while still passing over
 // "./cmd/ochakai" or "ochakai.example.com", where "ochakai" is never a
-// field by itself.
+// field by itself. A leading "(" is stripped first — an issue form's
+// dropdown option reads "Web UI (ochakai ui / serve-ui)", where
+// Fields() leaves the paren stuck to the word — so long as what remains
+// is exactly "ochakai" and not, say, "(ochakai.example.com)".
 func commandWordsIn(line string) []string {
 	fields := strings.Fields(line)
 	var words []string
 	for i, field := range fields[:max(0, len(fields)-1)] {
+		field = strings.TrimPrefix(field, "(")
 		if field != "ochakai" && field != "/ochakai" {
 			continue
 		}
@@ -1062,7 +1074,15 @@ func TestManualNamesNoCommandThatDoesNotExist(t *testing.T) {
 			}
 		}
 	}
-	for _, rel := range commandGuardExtra {
+	entries, err := os.ReadDir(filepath.Join("../..", commandGuardExtraDir))
+	if err != nil {
+		t.Fatalf("read %s: %v", commandGuardExtraDir, err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		rel := commandGuardExtraDir + "/" + e.Name()
 		content, err := os.ReadFile(filepath.Join("../..", rel))
 		if err != nil {
 			t.Fatalf("read %s: %v", rel, err)
@@ -1077,9 +1097,59 @@ func TestManualNamesNoCommandThatDoesNotExist(t *testing.T) {
 			}
 		}
 	}
+	for _, rel := range terraformOutputFiles(t) {
+		content, err := os.ReadFile(filepath.Join("../..", rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		for i, line := range strings.Split(string(content), "\n") {
+			m := terraformOchakaiValueRe.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			checked++
+			if !valid[m[1]] {
+				t.Errorf("%s:%d names a command ochakai does not have: %q\n\t%s",
+					rel, i+1, m[1], strings.TrimSpace(line))
+			}
+		}
+	}
 	if checked == 0 {
 		t.Fatal("no command invocation found across the manual: this check now guards nothing")
 	}
+}
+
+// terraformOchakaiValueRe matches a Terraform output's `value` when it is
+// a literal string that opens with "ochakai <word>" — deploy/terraform/
+// outputs.tf's use_command tells the reader the next command to run, in a
+// string `terraform output` prints verbatim, so it cannot be fenced or
+// backtick-isolated the way the manual's invocations are without putting
+// stray backticks in what the operator copies and pastes. A description
+// string (prose about the output, not the output itself) is not this
+// shape, which is what keeps main.tf's and variables.tf's free-form
+// commentary about ochakai out of this check.
+var terraformOchakaiValueRe = regexp.MustCompile(`^\s*value\s*=\s*"ochakai ([A-Za-z][A-Za-z0-9-]*)`)
+
+// terraformOutputFiles lists the .tf files under deploy/terraform, the
+// only place a Terraform output's value has ever named a live ochakai
+// command — walked generically rather than naming outputs.tf, the same
+// reason commandGuardExtraDir reads a directory instead of one issue
+// form.
+func terraformOutputFiles(t *testing.T) []string {
+	t.Helper()
+	const dir = "deploy/terraform"
+	entries, err := os.ReadDir(filepath.Join("../..", dir))
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".tf" {
+			continue
+		}
+		out = append(out, dir+"/"+e.Name())
+	}
+	return out
 }
 
 // queueWordsToLearn is the queue keys that are words of their own. A
