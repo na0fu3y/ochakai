@@ -242,8 +242,8 @@ documents (mostly Japanese). Start from the
 describes each area today, and the prose below it carries the history. A
 new record needs a row in
 [README.en.md](docs/design/README.en.md) beside it, which a test checks.
-[docs/architecture.md](docs/architecture.md) summarizes the accepted ones
-in English if you would rather read the shape of the system first.
+[docs/architecture.md](docs/architecture.md) (Japanese) summarizes the
+accepted ones if you would rather read the shape of the system first.
 
 The Japanese is the maintainer's habit, not a rule — write your design
 doc in English if that is what you think in, and say so in the PR. What

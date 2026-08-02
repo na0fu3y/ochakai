@@ -358,7 +358,7 @@ supported path.
   serves.
 - **Searches come back empty on a base that has concepts.** Not a
   connection problem. Japanese knowledge bases want embeddings on; see
-  [architecture's search section](../architecture.md#search).
+  [architecture's search section](../architecture.md#search) (Japanese).
 
 `ochakai mcp-stdio` writes diagnostics to stderr and keeps stdout for the
 protocol, so a client that surfaces server logs will show you what it

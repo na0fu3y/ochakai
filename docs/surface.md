@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 15
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5032
+- DOC-LINES: 5065
 - DOC-LINES-SLACK: 10
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -553,6 +553,15 @@ configuration・architecture・faq・deploy の各ページに同じ話が繰り
 印すが、日本語の索引が英語のページを一つずつ印すと 13 項目のうち 10 に
 印が付き、しかも翻訳が進むたびに剥がすことになる。**一行で状態を言う**
 ほうが安く、剥がすのも一度で済む。
+
+5,032 → 5,056 は、[#447](https://github.com/na0fu3y/ochakai/issues/447)
+の畳み込みが残した参照側、architecture.md を日本語にした分である。
+ページ自身は 468 → 490 行、22 行増えている。残る 2 行は
+`#the-data-model`・`#search` という二つのアンカーを指す
+[faq.md](faq.md) の被リンクが折り返した分で、README・
+[mcp-clients.md](guides/mcp-clients.md)・CONTRIBUTING.md にも
+`(Japanese)` を足したが、そちらは行数を動かしていない。この段落自身の
+分を含めて 5,056 → 5,065。
 
 5,015 → 4,980 は architecture.md の畳み込みである
 ([#447](https://github.com/na0fu3y/ochakai/issues/447))。「これは何か」は
