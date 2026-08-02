@@ -14,7 +14,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/pb33f/libopenapi v0.38.6
 	github.com/pb33f/libopenapi-validator v0.14.0
-	go.yaml.in/yaml/v3 v3.0.4
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/text v0.40.0
 	google.golang.org/api v0.291.0
@@ -54,7 +54,6 @@ require (
 	github.com/pb33f/jsonpath v0.8.2 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
