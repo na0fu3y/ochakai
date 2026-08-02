@@ -19,7 +19,7 @@ func TestLogDocumentLinksAreRelativeToTheDirectoryItSitsIn(t *testing.T) {
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "sato@example.co.jp"}
 	lines := []LogLine{
 		{At: at, Change: "verify", Path: "metrics/revenue.md", Title: "Revenue", By: actor},
-		{At: at, Change: "attach", Path: "metrics/revenue/chart.png", By: actor},
+		{At: at, Change: "add_file", Path: "metrics/revenue/chart.png", By: actor},
 		// The concept the directory is named after lives one level up:
 		// a directory's history covers "<dir>.md" as well as its subtree.
 		{At: at, Change: "update", Path: "metrics.md", Title: "Metrics", By: actor},

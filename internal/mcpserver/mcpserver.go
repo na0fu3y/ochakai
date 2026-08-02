@@ -280,7 +280,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		}
 		return nil, contextOut{
 			Hits: res.Hits, Concepts: res.Concepts, Outline: res.Outline,
-			Truncated: res.Truncated, Hint: contextHint(res.Truncated),
+			Hint: contextHint(len(res.Outline)),
 		}, nil
 	}))
 
@@ -563,11 +563,10 @@ type contextIn struct {
 }
 
 type contextOut struct {
-	Hits      []domain.ContextRank    `json:"hits"`
-	Concepts  []domain.View           `json:"concepts"`
-	Outline   []domain.ContextOutline `json:"outline,omitempty"`
-	Truncated int                     `json:"truncated,omitempty"`
-	Hint      string                  `json:"hint"`
+	Hits     []domain.ContextRank    `json:"hits"`
+	Concepts []domain.View           `json:"concepts"`
+	Outline  []domain.ContextOutline `json:"outline,omitempty"`
+	Hint     string                  `json:"hint"`
 }
 
 // defaultContextBudget bounds an unparameterized get_context. It is on by

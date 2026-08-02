@@ -1219,7 +1219,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		embedded += res.Embedded
+		embedded += res.Concepts
 		files += res.Files
 		failed += res.Failed
 		if *asJSON {
@@ -1228,7 +1228,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 			}
 		} else {
 			fmt.Printf("pass %d: embedded %d concepts, %d files, failed %d, still missing %d\n",
-				pass, res.Embedded, res.Files, res.Failed, res.Missing)
+				pass, res.Concepts, res.Files, res.Failed, res.Missing)
 		}
 		if *once || res.Missing == 0 {
 			break

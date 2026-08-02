@@ -284,7 +284,8 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 しては既に対象消滅させていたが、名前だけ残っていた。**その綴りの retire
 自体は [0064](0064-rest-stops-at-api-v1.md) §6 の決定**であり、この節の
 どのドキュメントも改訂しない — 保存モデルは 0046 のまま、動いたのは
-JSON キーと MCP ツール名だけである。
+JSON キーと MCP ツール名だけである。`change` の語彙に残っていた
+`attach` / `detach` という最後の綴りは 0064 §8 が仕上げる(issue #470)。
 
 ## ブラウズと Web UI
 
@@ -333,11 +334,15 @@ JSON キーと MCP ツール名だけである。
   なり sha256 をバイト列無しで読める、`attachments` / `Attachment` を
   wire から `files` / `File` に retire、`stats`・バンドル一覧・`context`
   の JSON キー `entries` を `concepts` に改名(§7、0057 §3.2 の除外を
-  撤回、issue #411)、If-None-Match の衝突は 412、DELETE が If-Match に
-  対応、ファイル PUT が作成時 201、withdrawn の空振りは 409、`limit` /
-  `days` の範囲外は全面 400。バージョンや capability の合図は無し、
-  CORS も意図して無し。凍結を破ってよい理由はセキュリティ上の欠陥だけ
-  (§9)、DELETE の再実行は 404 のままで安全(§9)。
+  撤回、issue #411)、`change` の語彙に残っていた `attach` / `detach` を
+  `add_file` / `remove_file` に改名(§8、マイグレーション付き、issue
+  #470)、`context` の冗長な `truncated` を撤去・バンドル一覧のファイル
+  行を `updated_at` から `created_at` に・`reembed` の `embedded` を
+  `concepts` に(§9、issue #470)、If-None-Match の衝突は 412、DELETE が
+  If-Match に対応、ファイル PUT が作成時 201、withdrawn の空振りは 409、
+  `limit` / `days` の範囲外は全面 400。バージョンや capability の合図は
+  無し、CORS も意図して無し。凍結を破ってよい理由はセキュリティ上の欠陥
+  だけ(§11)、DELETE の再実行は 404 のままで安全(§11)。
   [0046](0046-bundle-address-space.md) §3.5 の代表表現の表を改訂する
   (概念の既定は JSON の View)。[docs/compatibility.md](../compatibility.md)
   を同 PR で書き換え、REST だけが「不安定」の対象から外れる。

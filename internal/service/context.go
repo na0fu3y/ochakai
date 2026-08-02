@@ -23,10 +23,9 @@ import (
 // in Concepts; a hit that was not expanded into a concept is a pointer the
 // caller can spend a round trip on.
 type ContextResult struct {
-	Hits      []domain.ContextRank    `json:"hits"`
-	Concepts  []domain.View           `json:"concepts"`
-	Outline   []domain.ContextOutline `json:"outline,omitempty"`
-	Truncated int                     `json:"truncated,omitempty"`
+	Hits     []domain.ContextRank    `json:"hits"`
+	Concepts []domain.View           `json:"concepts"`
+	Outline  []domain.ContextOutline `json:"outline,omitempty"`
 }
 
 // ContextRequest is the input to Context. Budget caps the serialized size
@@ -131,7 +130,7 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	s.recordUsage(ctx, domain.EventFetched, ids)
 	return &ContextResult{
 		Hits: domain.ContextRanks(hits), Concepts: kept,
-		Outline: outline, Truncated: len(outline),
+		Outline: outline,
 	}, nil
 }
 

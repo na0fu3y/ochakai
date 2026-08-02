@@ -855,15 +855,14 @@ func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got struct {
-		Hits      []domain.ContextRank    `json:"hits"`
-		Concepts  []domain.View           `json:"concepts"`
-		Outline   []domain.ContextOutline `json:"outline"`
-		Truncated int                     `json:"truncated"`
+		Hits     []domain.ContextRank    `json:"hits"`
+		Concepts []domain.View           `json:"concepts"`
+		Outline  []domain.ContextOutline `json:"outline"`
 	}
 	if err := json.Unmarshal(wire, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Truncated == 0 {
+	if len(got.Outline) == 0 {
 		t.Fatalf("budget %d over 4 concepts of %d bytes truncated nothing", budget, len(body))
 	}
 	if len(got.Hits) == 0 {

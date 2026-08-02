@@ -1089,7 +1089,7 @@ func TestIntegrationAttachments(t *testing.T) {
 		}
 		changes = append(changes, c)
 	}
-	want := []string{"create", "attach", "attach", "detach"}
+	want := []string{"create", "add_file", "add_file", "remove_file"}
 	if len(changes) != len(want) {
 		t.Fatalf("revisions = %v, want %v", changes, want)
 	}

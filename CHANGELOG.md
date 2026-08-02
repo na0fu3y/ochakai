@@ -161,6 +161,27 @@ last entry.
     the `files` key this same PR renamed for the identical reason — issue
     [#411](https://github.com/na0fu3y/ochakai/issues/411) found the
     inconsistency; design doc 0064 §7 revokes the exemption.
+  - `attach`/`detach`, the last retired-word holdouts in the `change`
+    vocabulary (`Change.change`, `Revision.change`), are renamed to
+    `add_file`/`remove_file` — design doc 0064 §6 renamed every other wire
+    spelling of "attachment" and missed the change-verbs; issue
+    [#470](https://github.com/na0fu3y/ochakai/issues/470) found the gap.
+    Existing `knowledge_revision` rows are rewritten by a migration; the
+    CLI commands `ochakai attach`/`ochakai detach` are unrelated and keep
+    their names.
+  - `GET /api/v1/context`'s `truncated` count is dropped — it always
+    equaled `len(outline)`, so the array's own length carries the same
+    signal (design doc 0064 §9, issue #470). The bundle listing's
+    `truncated` flag (a different, non-redundant signal: whether the
+    concept or file list hit the 1000-per-level cap) is unchanged.
+  - The bundle listing's file rows say `created_at` instead of
+    `updated_at` — a file is content-addressed and immutable, and the
+    listing's query now reads the column that actually stays fixed across
+    an overwrite, matching what `File.created_at` already says elsewhere
+    on the wire (design doc 0064 §9, issue #470).
+  - `POST /api/v1/reembed`'s `embedded` count is renamed to `concepts`,
+    matching its sibling `files` — it counts concepts, not the act of
+    embedding (design doc 0064 §9, issue #470).
   - A failed `If-None-Match: *` (the id was already taken) is now 412,
     not 409 — RFC 9110's status for a failed precondition. 409 stays the
     answer for a conflict with no precondition behind it, such as `move`

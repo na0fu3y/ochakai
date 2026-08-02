@@ -248,10 +248,9 @@ func (c *Client) Queues(ctx context.Context, prefixes []string) (domain.QueueCou
 // fetch with Get. Outline lists concepts the server's budget dropped; it
 // stays empty unless the caller passes a budget.
 type ContextResult struct {
-	Hits      []domain.ContextRank    `json:"hits"`
-	Concepts  []domain.View           `json:"concepts"`
-	Outline   []domain.ContextOutline `json:"outline,omitempty"`
-	Truncated int                     `json:"truncated,omitempty"`
+	Hits     []domain.ContextRank    `json:"hits"`
+	Concepts []domain.View           `json:"concepts"`
+	Outline  []domain.ContextOutline `json:"outline,omitempty"`
 }
 
 // ContextParams are the query parameters of GET /api/v1/context. The
@@ -699,7 +698,7 @@ func (c *Client) Export(ctx context.Context, files bool) (io.ReadCloser, error) 
 
 // ReembedResult mirrors the /api/v1/reembed response.
 type ReembedResult struct {
-	Embedded int    `json:"embedded"`
+	Concepts int    `json:"concepts"`
 	Files    int    `json:"files"`
 	Failed   int    `json:"failed"`
 	Missing  int    `json:"missing"`

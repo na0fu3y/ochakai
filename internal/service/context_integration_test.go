@@ -192,8 +192,8 @@ func TestContextBudgetIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
-	if full.Truncated != 0 || full.Outline != nil {
-		t.Errorf("no budget must not truncate: %d outlined", full.Truncated)
+	if full.Outline != nil {
+		t.Errorf("no budget must not truncate: %d outlined", len(full.Outline))
 	}
 	delivered := 0
 	for _, e := range full.Concepts {
@@ -222,9 +222,8 @@ func TestContextBudgetIntegration(t *testing.T) {
 		t.Errorf("budget delivered %d entries, unbudgeted %d — nothing was capped",
 			len(capped.Concepts), len(full.Concepts))
 	}
-	if capped.Truncated != len(capped.Outline) || capped.Truncated == 0 {
-		t.Fatalf("truncated = %d, outline = %d; want both nonzero and equal",
-			capped.Truncated, len(capped.Outline))
+	if len(capped.Outline) == 0 {
+		t.Fatalf("outline = %d; want nonzero", len(capped.Outline))
 	}
 	// Nothing is lost: every entry the unbudgeted pack carried is either
 	// delivered or named.

@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 222
+    RECORD-LINES: 273
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -404,8 +404,19 @@ add a posture beside it" differ by which noun a に governs, and a guess
 there fails by blocking a PR that did nothing wrong. That one stays a
 reviewer's job.
 
+222 → 273 is a record catching up with its own decision rather than
+amending another one. Issue [#470](https://github.com/na0fu3y/ochakai/issues/470)
+found that 0064 §6 and §7's vocabulary sweep missed four corners of the
+same wire: the `attach`/`detach` change-verbs §6 left behind, and three
+more places §7's `entries` → `concepts` rename had a sibling (`/context`'s
+redundant `truncated` count, a file listing row calling `created_at` by
+the wrong name, `reembed`'s `embedded`). Two new sections carry the four
+decisions, one migration, and one scope boundary each — the same shape as
+§7 itself, which is the nearest precedent for "this record's own earlier
+section didn't reach everywhere it said it would."
+
     RECORD-COUNT: 61
-    RECORD-CORPUS-LINES: 8391
+    RECORD-CORPUS-LINES: 8442
     RECORD-CORPUS-LINES-SLACK: 15
 
 Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under

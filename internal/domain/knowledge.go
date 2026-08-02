@@ -366,7 +366,7 @@ func ValidRuling(r string) bool { return slices.Contains(Rulings, r) }
 var Changes = []string{
 	"create", "update", "move", "delete",
 	"verify", "reject", "withdraw",
-	"attach", "detach",
+	"add_file", "remove_file",
 }
 
 // QueueCounts is how much work each review queue is holding — the three
