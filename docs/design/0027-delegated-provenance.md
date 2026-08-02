@@ -1,6 +1,9 @@
 # ochakai 設計ドキュメント 0027: 呼び出し元によるエンドユーザー identity の委譲
 
-Status: Accepted(2026-07-25)(§6 の webui 側実装は 0032)
+Status: Accepted(2026-07-25)(§6 の webui 側実装は 0032)。**ヘッダ名は
+[0064](0064-rest-stops-at-api-v1.md) §3 が改訂した** — 本文が示す
+`X-Ochakai-On-Behalf-Of` は `Ochakai-On-Behalf-Of` になった(RFC 6648、
+移行期間なし)。委譲の規則そのものは変わらない
 Date: 2026-07-25
 
 ## 1. 問題

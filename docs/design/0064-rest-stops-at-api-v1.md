@@ -11,6 +11,8 @@ Status: Accepted(2026-08-02)。[0046](0046-bundle-address-space.md) §3.5 の
 外した除外を撤回し、`entries` を `concepts` に改名する(§7、issue
 [#411](https://github.com/na0fu3y/ochakai/issues/411))。実装は同 PR
 (issue [#379](https://github.com/na0fu3y/ochakai/issues/379))。
+[0027](0027-delegated-provenance.md) と
+[0052](0052-producer-beside-the-actor.md) が決めたヘッダ名を改訂する(§3)。
 Date: 2026-08-02
 
 ## 1. 目的
