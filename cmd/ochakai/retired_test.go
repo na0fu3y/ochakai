@@ -123,9 +123,13 @@ func TestRetiredSpellingsAreNotTaught(t *testing.T) {
 // reader learns the project from, minus the three places a retired
 // spelling belongs.
 //
-//   - docs/design holds decision records, which are not rewritten after
-//     they are accepted — a record that named an endpoint goes on naming
-//     it, and its Status header says what replaced it.
+//   - docs/design's numbered records are not rewritten after they are
+//     accepted — a record that named an endpoint goes on naming it, and
+//     its Status header says what replaced it. Its two indexes,
+//     README.md and README.en.md, are not records: CLAUDE.md requires
+//     them to say what holds today, so they stay in the walk (issue
+//     #420 found README.en.md's own summary of 0027 teaching "via
+//     agent:" after the kind was renamed to process:).
 //   - CHANGELOG.md is the list of removals; it cannot announce one
 //     without spelling it.
 //   - _test.go files pin what became of each retired spelling, so the
@@ -134,7 +138,10 @@ func repoTextFiles(t *testing.T) []string {
 	t.Helper()
 	const root = "../.."
 	skipDirs := map[string]bool{
-		".git": true, "node_modules": true, "docs/design": true,
+		".git": true, "node_modules": true,
+	}
+	designIndexes := map[string]bool{
+		"docs/design/README.md": true, "docs/design/README.en.md": true,
 	}
 	text := map[string]bool{
 		".go": true, ".md": true, ".yaml": true, ".yml": true, ".json": true,
@@ -160,6 +167,9 @@ func repoTextFiles(t *testing.T) []string {
 			return nil
 		}
 		if rel == "CHANGELOG.md" || strings.HasSuffix(rel, "_test.go") {
+			return nil
+		}
+		if strings.HasPrefix(rel, "docs/design/") && !designIndexes[rel] {
 			return nil
 		}
 		if text[filepath.Ext(rel)] {
