@@ -510,8 +510,18 @@ to their agent, in English, does not demonstrate the thing C8 claims.
 
 Two pieces of bookkeeping, both easy to forget:
 
+- **Keep the anchors.** Translating a heading moves the fragment it
+  generates, and a dead fragment renders as an ordinary link that lands
+  the reader at the top of the right page — wrong in a way that survives
+  review. Put an explicit `<a id="…"></a>` above each translated heading
+  that something links to; `docs/configuration.md` is the worked example.
+  `TestManualLinksResolve` fails on a fragment with no heading and on a
+  link to a file that is not there.
 - **Mark the page where an English page links to it** — `(Japanese)`
-  after the link text — so a reader is not surprised mid-click.
+  after the link text — so a reader is not surprised mid-click. **And
+  take the markers off this page's own outbound links** to pages that are
+  already Japanese: between two Japanese pages the mark says nothing, and
+  the ones left behind are what a reader learns to stop trusting.
 - **`DOC-LINES` usually needs nothing.** The ceiling moves in hundreds
   (`DOC-LINES-SLACK: 100`), so most pages land inside the block the
   manual is already in and the number is not touched — which is what

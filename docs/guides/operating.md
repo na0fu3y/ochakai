@@ -133,8 +133,8 @@ them warnings that describe **degraded but running**:
 | `usage recording failed` | the in-memory buffer was full — 20,000 events — and events were dropped |
 | `search miss recording failed` | same buffer, same bargain (0051): a question that found no answer was not kept. The knowledge is unaffected; `ochakai stats` undercounts |
 | `query embedding failed; falling back to lexical-only` | Vertex AI did not answer a search; results are still returned, ranked by the lexical half alone |
-| `document embedding failed` / `storing embedding failed` | a concept was written but is not in the vector index. It stays findable lexically; `ochakai reembed` repairs it |
-| `attachment embedding failed` | same, for an attachment: still findable by filename |
+| `document embedding failed; concept remains findable by the lexical half of search` / `storing embedding failed` | a concept was written but is not in the vector index. `ochakai reembed` repairs it |
+| `attachment embedding failed; attachment remains findable by name` | same, for a file. The message still says *attachment*: 0064 renamed the word on the wire, not in the log |
 | `backlink lookup failed` | one concept's backlinks are missing from a response |
 | `export truncated after the response began` | an export failed midway. **The bytes the client received are not a complete backup** — this is the one in the list that can quietly cost you |
 | `knowledge verified` / `knowledge purged` | not errors: the audit line for a curation event, with the actor |
@@ -155,9 +155,9 @@ line that replaces it says which way it went instead:
 
 | Line | What it means |
 |---|---|
-| `semantic search off: Vertex AI did not answer for this deployment` | the startup probe was refused, almost always a missing `roles/aiplatform.user`. Search is lexical-only; grant the role and restart |
+| `semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on` | the startup probe was refused. The message carries its own remedy; restart after granting |
 | `semantic search is off: this database cannot hold vectors` | pgvector is not there and this role may not create it. Create the extension as the admin user (deploy guide §3) |
-| `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off)` | asked for — the one line here that is not worth investigating |
+| `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only` | asked for — the one line here that is not worth investigating |
 | `semantic search disabled; using lexical search only` | no project was configured and none was discovered — ochakai is not running on Google Cloud |
 
 If `insecure_dev=true` appears anywhere but a laptop, stop and fix that

@@ -64,7 +64,7 @@
 - [golden query canary](guides/golden-query-canary.md) — 検証済みクエリ
   を CI から実行し、静かに壊れたナレッジベースがそうと分かるようにする。
 - [トラブルシューティング](guides/troubleshooting.md) — ローカルとクライ
-  アント側の半分: 空の検索結果、スキップされた import、409 や 412、空の
+  アント側の半分: 空の検索結果、スキップされた import、404 や 412、空の
   web UI、起動を拒むサーバー。Google Cloud 側の症状はデプロイガイドの
   §7 にある。
 
