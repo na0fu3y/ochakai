@@ -189,6 +189,37 @@ func TestUIHandlerStripsDelegationHeader(t *testing.T) {
 	}
 }
 
+// The retired "X-" spelling (design doc 0064) must be stripped too, not
+// just the current name: a staggered upgrade could otherwise leave this
+// header reaching an API new enough to still honor it (issue #410).
+func TestUIHandlerStripsRetiredDelegationHeaderSpelling(t *testing.T) {
+	var got http.Header
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer backend.Close()
+
+	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := httptest.NewServer(h)
+	defer local.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, local.URL+"/api/v1/search?q=x", nil)
+	req.Header.Set("X-"+httpauth.OnBehalfOfHeader, "human:someone-else@example.co.jp")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+	if v := got.Get("X-" + httpauth.OnBehalfOfHeader); v != "" {
+		t.Errorf("X-%s reached the server as %q, want it stripped", httpauth.OnBehalfOfHeader, v)
+	}
+}
+
 // X-Serverless-Authorization is the other credential header httpauth
 // reads, and it reads it *in preference to* Authorization. Forwarding
 // what the browser sent would therefore let a page override the very

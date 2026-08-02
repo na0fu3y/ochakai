@@ -20,6 +20,19 @@ last entry.
 
 ### Fixed
 
+- **Security** — the web UI's delegation-header filter (`stripDelegation`)
+  deleted only the current `Ochakai-On-Behalf-Of` spelling design doc
+  [0064](docs/design/0064-rest-stops-at-api-v1.md) introduced, not the
+  retired `X-Ochakai-On-Behalf-Of` it replaced. The web UI is a separate
+  Cloud Run service from the API (design doc
+  [0032](docs/design/0032-webui-iap-identity.md)) and the two can be
+  upgraded one at a time: during that window a build of the web UI old
+  enough to still call the header by its retired name would strip only
+  that name and forward the current one straight through, and an API
+  new enough to have adopted 0064 would honor it — letting any
+  IAP-authorized browser attribute a write to whichever identity it
+  named. Both spellings are now stripped regardless of which build is
+  running (issue [#410](https://github.com/na0fu3y/ochakai/issues/410)).
 - The quick start's demo import needed the Go toolchain
   (`go run ./cmd/ochakai import examples/demo`) despite the README
   promising "Docker and nothing else locally", and there was no
@@ -100,7 +113,13 @@ last entry.
   - `X-Ochakai-On-Behalf-Of` and `X-Ochakai-Producer` lose their `X-`
     prefix — `Ochakai-On-Behalf-Of` and `Ochakai-Producer`, matching the
     five response headers, which never carried one. No dual-accept
-    window; send the new spelling.
+    window; send the new spelling. **The failure mode is silence, not a
+    400**: a caller that keeps sending the retired name gets no error —
+    the header is simply not read, and every write it makes is attributed
+    to the caller's own identity instead of the end user it meant to
+    name. An embedding host with per-user provenance should check its
+    writes are still landing as the right user after this upgrade, not
+    only that requests still succeed.
   - `Accept: application/json` on a file's own bundle path now answers
     its metadata (name, media_type, size, sha256, path, created_by,
     created_at) instead of being ignored in favor of the bytes — the only

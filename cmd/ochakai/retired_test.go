@@ -50,6 +50,18 @@ var retiredSpellings = []retiredSpelling{
 		instead: "[text](/metrics/revenue.md) or [text](./revenue.md), the SPEC §6 forms (design doc 0046 §3.6)",
 	},
 	{
+		// Design doc 0064 dropped the "X-" prefix from both request
+		// headers with no dual-accept window (httpauth.OnBehalfOfHeader,
+		// httpauth.ProducerHeader). Functional code that has to name the
+		// retired spelling — stripDelegation strips both, so a staggered
+		// upgrade of the two-service web UI can't forward one past a
+		// filter that only knew the current name (issue #410) — builds
+		// it as "X-"+httpauth.OnBehalfOfHeader instead of writing the
+		// retired literal, so it never trips this guard.
+		forms:   []string{"X-Ochakai-"},
+		instead: "Ochakai-On-Behalf-Of or Ochakai-Producer, no X- prefix (design doc 0064)",
+	},
+	{
 		// domain.ValidActorKind accepts only "human" and "process"; a
 		// caller that sends "agent:" gets a 400 (httpauth.parseOnBehalfOf).
 		// The two forms are the shapes an identity string actually takes —

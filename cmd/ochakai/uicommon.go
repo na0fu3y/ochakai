@@ -54,9 +54,18 @@ func newCredentialProxy(target *url.URL, setAuth func(http.Header)) *httputil.Re
 // browser sent is a claim about identity from the one party with no
 // standing to make it. It wraps any handler that may legitimately set
 // one, so it runs first and cannot undo it.
+//
+// Both spellings are dropped, not just the current one. Design doc 0064
+// renamed OnBehalfOfHeader by dropping its "X-" prefix with no dual-accept
+// window, and this proxy is a separate Cloud Run service from the API
+// (design doc 0032) that can lag behind it during a staggered upgrade: a
+// build old enough to still call this the retired name would otherwise
+// strip only that name and forward the current one untouched, straight
+// to an API new enough to honor it (issue #410).
 func stripDelegation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Header.Del(httpauth.OnBehalfOfHeader)
+		r.Header.Del("X-" + httpauth.OnBehalfOfHeader)
 		next.ServeHTTP(w, r)
 	})
 }

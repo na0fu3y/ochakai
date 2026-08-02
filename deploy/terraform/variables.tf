@@ -113,7 +113,7 @@ variable "public_read_only" {
     and writable ochakai is not a configuration the server accepts. And no
     identity is believed: the Authorization header is not read at all — its
     signature is unverifiable without Cloud Run IAM in front —
-    X-Ochakai-On-Behalf-Of is ignored, and every caller is human:anonymous. Provenance would be forgeable on a public service, so
+    Ochakai-On-Behalf-Of is ignored, and every caller is human:anonymous. Provenance would be forgeable on a public service, so
     none is read; nothing is written, so there is none to record.
 
     Everything else in this module stays private. Do not reach for this to
@@ -127,7 +127,7 @@ variable "public_read_only" {
 variable "delegating_callers" {
   description = <<-EOT
     Callers allowed to forward an end user's identity with the
-    X-Ochakai-On-Behalf-Of header (OCHAKAI_DELEGATING_CALLERS, design doc
+    Ochakai-On-Behalf-Of header (OCHAKAI_DELEGATING_CALLERS, design doc
     0027). For applications that embed ochakai and serve many people;
     without it every one of their users collapses into the application's one
     service account. Both identities are always recorded. The webui's own
