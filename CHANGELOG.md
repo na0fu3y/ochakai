@@ -21,6 +21,48 @@ last entry.
 
 ## [0.18.0] - 2026-08-04
 
+### Added
+
+- **The contract declares the authentication it always required.**
+  `api/openapi.yaml` gained `components.securitySchemes.GoogleIDToken`
+  (`http` / `bearer` / JWT) and a top-level `security:` listing that
+  scheme and the empty requirement `{}`. Nothing about the server
+  changed: authentication is Cloud Run IAM and has been since
+  [0003](docs/design/0003-gcp-only.md), the container never verifies a
+  signature itself, and the empty requirement is `OCHAKAI_MODE=public`
+  and `dev`, where nothing is checked and every caller is
+  `human:anonymous` ([0066](docs/design/0066-four-postures-one-word.md)
+  §1). What changed is that the contract said none of it, so a generated
+  client had no way to know a token was needed. **This ships inside the
+  freeze** — the three lines are in `api/openapi.frozen.txt` — which is
+  why it had to land now rather than after. **What a client does:** a
+  regenerated client now takes a bearer token; pass the Google-signed
+  identity token audience-bound to the service URL that Cloud Run IAM
+  already demanded (`gcloud auth print-identity-token --audiences=$OCHAKAI_URL`).
+  A deployment on `public` or `dev` passes none, as before.
+- **[docs/guides/rest-integration.md](docs/guides/rest-integration.md)**
+  — a manual page (Japanese) for the application embedding ochakai's
+  REST API in its own web service: minting the identity token, carrying
+  an end user's identity with the delegation headers and the IAM grant
+  that permits it, declaring who wrote with `Ochakai-Producer`,
+  concurrent writes with `ETag`/`If-Match`, and running against a local
+  instance. C6 is "a small REST API you can embed", and until now the
+  only instructions were the contract itself. The `GoogleIDToken`
+  scheme's own description links to it.
+- **The shipped Claude Code hooks close the loop's third move.**
+  `report_outcome` existed only as prose in
+  `examples/claude-code/CLAUDE.md` — recall and write-back had hooks
+  that fire every time, so `sort=failed` (the evidence-based
+  re-verification feed, [0069](docs/design/0069-the-loop-and-what-measures-it.md))
+  stayed at zero however stale the knowledge actually was. The Stop hook
+  now nudges the agent to report what worked and what did not, and the
+  recall hook records the concept ids it surfaced in
+  `${TMPDIR:-/tmp}/ochakai-recalled-$session` so the nudge can name
+  them (issue [#378](https://github.com/na0fu3y/ochakai/issues/378)).
+  **Anyone running the shipped hooks sees a new end-of-session prompt
+  and a new temporary file**; both are `examples/`, so nothing changes
+  for a deployment that does not use them.
+
 ### Fixed
 
 - **A refused concept no longer takes its files down with it.** When the
@@ -234,6 +276,14 @@ last entry.
   `PUT`/`DELETE /api/v1/bundle/{path}`, the `add_file`/`remove_file`
   revision verbs and the stored form are all untouched.
 
+- The web UI says `concept` everywhere a reader meets a word for one —
+  feed banners, truncation notes, empty states, tooltips and hint text
+  still said `entry`, the word design doc
+  [0057](docs/design/0057-concept-is-the-word-a-reader-meets.md) retired
+  and the rest of the product stopped using releases ago. Identifiers,
+  CSS classes and code comments keep their spellings, which is where
+  0057 §3.2 drew the line.
+
 - **BREAKING** — MCP goes from eight tools to six: `delete_concept` and
   `get_concept_usage` are gone (design doc
   [0076](docs/design/0076-two-tools-leave-mcp.md)). A tool schema is paid
@@ -319,11 +369,14 @@ last entry.
   among the unstable interfaces. This entry is the last batch of breaking
   changes that made the freeze possible:
   - An unrecognized query parameter is now a 400 naming it, on every REST
-    operation (`fm.*` keys excepted — those are checked against the
-    concept's own frontmatter, not a fixed name list). It used to be a
-    silent no-op, which is what let a 0.16.1 server ignore `dry_run` and
-    write anyway; this closes the same shape of hole for anything added
-    to the wire from here on.
+    operation. It used to be a silent no-op, which is what let a 0.16.1
+    server ignore `dry_run` and write anyway; this closes the same shape
+    of hole for anything added to the wire from here on. `fm.{key}` is
+    the one family checked against the concept's own frontmatter rather
+    than a fixed name list, and **only the two operations that filter by
+    it take it** — `GET /api/v1/search` and `GET /api/v1/context`.
+    Anywhere else, `?fm.anything=x` is an unknown parameter like any
+    other and answers 400; it used to be ignored.
   - An unrecognized JSON body key on `POST /api/v1/move`,
     `POST /api/v1/review/{id}` and `POST /api/v1/usage/{id}` is now a 400
     naming it too, closing the same hole for the body: `{"rulling":
@@ -603,23 +656,45 @@ last entry.
     object at its own path, a new file event is that path's own
     `create` or `delete` (design doc 0064 §§23.7, 8).
 
-- `docs/guides/operating.md` is now Japanese (issue #446, part of C8,
-  #398). It is the largest page translated under C8 so far and the first
-  to cross a `DOC-LINES-SLACK` block on its own: [docs/surface.md](docs/surface.md)'s
-  `DOC-LINES` ceiling moves 5,100 → 5,200. Its eight linked headings
+- **Most of the manual is now Japanese** — the largest user-visible
+  change in this release for a reader who does not read Japanese. C8
+  (issue [#398](https://github.com/na0fu3y/ochakai/issues/398)) says
+  ochakai should be one of the best choices available to a
+  Japanese-speaking user, and a manual they have to read in English is
+  the first place that fails. Ten pages were translated this cycle:
+  `docs/README.md`, `docs/loop.md`, `docs/configuration.md`,
+  `docs/architecture.md`, `docs/guides/operating.md` (#446),
+  `docs/guides/troubleshooting.md` (#440),
+  `docs/guides/mcp-clients.md`, `docs/guides/golden-query-canary.md`,
+  `deploy/cloudrun/README.md` (#464) and `deploy/terraform/README.md`.
+  **Every heading anchor is kept**, so a bookmark or an inbound link
+  still lands where it did — `operating.md`'s eight
   (`#backup-and-restore`, `#capacity`, `#supply-chain`, `#hardening`,
   `#guardrails-against-misconfiguration`, `#the-team-web-ui`,
-  `#public-demo`, `#upgrades`) keep their anchors, and every remaining
-  English page that links to it — `README.md`, `ROADMAP.md`,
-  `docs/compatibility.md` and `docs/faq.md` — is now marked `(Japanese)`.
-  `deploy/cloudrun/README.md`'s own translation (#464) landed first and
-  needs no mark either way, since both pages are Japanese now. One
-  capacity claim ("20 files per concept") was already
-  stale before translation — the cap was removed in `[0.16.0]` below —
-  and is left in English pending issue
+  `#public-demo`, `#upgrades`) included — and a link test now checks
+  that manual links and their fragments resolve. Every remaining
+  English page that links to a translated one — `README.md`,
+  `ROADMAP.md`, `docs/compatibility.md`, `docs/faq.md` — is marked
+  `(Japanese)`. The English pages that remain are the ones an outside
+  reader meets first: the repository README, `CONTRIBUTING.md`,
+  `docs/compatibility.md`, `docs/faq.md`, `ROADMAP.md` and the wire
+  contract's own prose. One capacity claim ("20 files per concept") was
+  already stale before translation — the cap was removed in `[0.16.0]`
+  below — and is left in English pending issue
   [#466](https://github.com/na0fu3y/ochakai/issues/466) rather than
   translated as written (CONTRIBUTING.md's "check the English before
   translating it").
+
+- **The manual lost two pages and gained one.** `docs/knowledge.md`
+  folded into `docs/architecture.md`, whose own evaluation half then
+  moved into `docs/README.md`; `docs/images/README.md` went with the
+  file-address fold. `docs/guides/rest-integration.md` is new (see
+  **Added**). [docs/surface.md](docs/surface.md)'s `DOC` count moves
+  25 → 23 and its `DOC-LINES` ceiling 5,100 → 5,300 — translation adds
+  lines, and the ceiling moves in hundreds so that only a page that
+  actually grew the manual rewrites that line. **A link to either
+  removed page 404s**; both were reference pages with no address a
+  client sends.
 
 ## [0.17.0] - 2026-07-31
 
