@@ -1308,11 +1308,43 @@ func splitReserved(path string) (dir, base string) {
 //     downloading it, closing the gap 0046 §3.5's table had already
 //     promised); default: the bytes.
 //
+// acceptsType reports whether the caller named mediaType in Accept.
+//
+// **Accept here is not a preference ranking.** An address has one default
+// representation and at most two media types that select another — the
+// archive of the subtree under it, and the object's own alternative form
+// (design doc 0064 §4) — so there is nothing to rank. The header is read
+// as a *set of names*: split on commas, parameters dropped, the media
+// type compared exactly and case-insensitively as RFC 9110 defines it.
+// Naming a type selects it; everything else, `*/*` and an unrecognized
+// type and no header at all, leaves the default.
+//
+// **`q` is dropped with the other parameters, `q=0` included.** RFC 9110
+// reads `q=0` as "not this one", which ochakai does not implement: a
+// caller that wants the default asks for it by *not naming the token*, so
+// an exclusion has nothing here to express that omission does not. The
+// cost is one honest sentence in the contract — `application/gzip;q=0`
+// still gets the archive — rather than a ranking rule a reader would have
+// to run in their head to predict a response (design doc 0064 §22).
+//
+// Exact comparison is the other half of making that rule true. Substring
+// matching answered `text/markdown-x` as markdown and was case-sensitive,
+// so the written rule and the code agreed only by luck.
+func acceptsType(r *http.Request, mediaType string) bool {
+	for entry := range strings.SplitSeq(r.Header.Get("Accept"), ",") {
+		name, _, _ := strings.Cut(entry, ";")
+		if strings.EqualFold(strings.TrimSpace(name), mediaType) {
+			return true
+		}
+	}
+	return false
+}
+
 // wantsJSON reports whether the caller asked for the structured form of
 // a derived file. Only an explicit JSON Accept counts: a browser or a
 // curl sends */* and should get the file that lives at the path.
 func wantsJSON(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/json")
+	return acceptsType(r, "application/json")
 }
 
 func writeMarkdown(w http.ResponseWriter, doc []byte) {
@@ -1324,7 +1356,7 @@ func writeMarkdown(w http.ResponseWriter, doc []byte) {
 // document rather than as JSON. Only an explicit markdown Accept counts:
 // a browser sends */* and wants the JSON every existing client reads.
 func wantsDocument(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "text/markdown")
+	return acceptsType(r, "text/markdown")
 }
 
 // wantsArchive reports whether the caller asked for a path as an OKF
@@ -1332,7 +1364,7 @@ func wantsDocument(r *http.Request) bool {
 // browser sending */* is asking to look at something, not to download
 // the knowledge base under it.
 func wantsArchive(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/gzip")
+	return acceptsType(r, "application/gzip")
 }
 
 // onlyIfAbsent reports an If-None-Match "*" precondition on a write:

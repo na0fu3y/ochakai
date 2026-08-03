@@ -372,6 +372,17 @@ last entry.
     `add_file`/`remove_file`), and a closed response enum would have made
     the tenth word impossible after the freeze rather than merely
     breaking (§20.3).
+  - **`Accept` is read as a set of media type names, not as a ranking**,
+    and the rule is now written down. Comparison is on the media type
+    alone and case-insensitive, so `text/markdown; charset=utf-8` selects
+    the document (it did before too) while `text/markdown-x` no longer
+    does — substring matching used to answer a longer type that merely
+    contained a token, and used to miss `TEXT/MARKDOWN`, which RFC 9110
+    says is the same type. **`q` is not read, `q=0` included**:
+    `application/gzip;q=0` still gets the archive. An address has one
+    default and at most two types that select another, so there is
+    nothing to rank, and a caller who wants the default asks for it by
+    not naming the token (§22).
   - **Five `operationId`s drop the retired word `knowledge`**:
     `searchKnowledge`, `moveKnowledge`, `reviewKnowledge`,
     `getKnowledgeUsage` and `reembedKnowledge` become `searchConcepts`,

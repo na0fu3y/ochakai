@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 708
+    RECORD-LINES: 760
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -344,7 +344,7 @@ freeze. The ceiling goes back down when the freeze's record stops being
 the one that sets it — the next-largest record is 0001 at 402, so the
 drop when it comes is a large one.
 
-**554 → 708 is the same case again, and the batch is why.** 0064 landed
+**554 → 760 is the same case again, and the batch is why.** 0064 landed
 exactly on 554, so any further work on the freeze moves this line by
 construction. The review before the release found eight more things the
 wire would have made permanent, and every one is the same shape: not a

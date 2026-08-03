@@ -48,6 +48,26 @@ info:
     silently dropping it.
 
 
+    **`Accept` is read as a set of names, not as a ranking** (design doc
+    0064 §22). An address has one default representation and at most two
+    media types that select another: `application/gzip` for the subtree
+    under it, and the object's own alternative form (`application/json`
+    for `index.md`, `log.md` and a file; `text/markdown` for a concept).
+    Naming one selects it, `application/gzip` first where both are named;
+    `*/*`, an unrecognized type and no header at all all leave the
+    default. The comparison is on the media type alone — parameters are
+    dropped and the match is case-insensitive, so
+    `text/markdown; charset=utf-8` selects the document and
+    `text/markdown-x` is simply a different type.
+
+    **`q` is dropped with the other parameters, `q=0` included.** RFC 9110
+    reads `q=0` as "not this one"; ochakai does not implement it, so
+    `application/gzip;q=0` still gets the archive. There is nothing for an
+    exclusion to express here that omission does not: a caller who wants
+    the default asks for it by not naming the token. This is written down
+    rather than left to be discovered, because it is the one place ochakai
+    knowingly answers a standard header by a rule of its own.
+
     **A repeated query key is a 400, naming it** (design doc 0064 §20.2) —
     unless the parameter is declared as an array, which is how a caller
     spells a set: `?type=Metric&type=Policy` asks for either, and `type`,

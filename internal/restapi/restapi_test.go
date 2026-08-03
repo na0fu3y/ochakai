@@ -669,3 +669,48 @@ func TestMissingObjectAnswersAboutTheObjectNotTheDeployment(t *testing.T) {
 		}
 	}
 }
+
+// TestAcceptIsReadAsASetOfNames pins the representation-selection rule
+// design doc 0064 §22 wrote down: an address has one default and at most
+// two media types that select another, so Accept is read as a set of
+// names rather than as a ranking. Substring matching agreed with that
+// rule only by luck — it answered a type that merely contained a token,
+// and it was case-sensitive where RFC 9110 is not.
+func TestAcceptIsReadAsASetOfNames(t *testing.T) {
+	cases := []struct {
+		name, accept string
+		json, doc    bool
+	}{
+		{"absent", "", false, false},
+		{"anything", "*/*", false, false},
+		{"json", "application/json", true, false},
+		{"markdown", "text/markdown", false, true},
+		{"with a charset", "text/markdown; charset=utf-8", false, true},
+		{"uppercase", "TEXT/MARKDOWN", false, true},
+		{"among several", "application/xml, text/markdown, */*", false, true},
+		{"browser-shaped", "text/html,application/xhtml+xml,*/*;q=0.8", false, false},
+		// A ranking is not read, so a weight neither selects nor excludes:
+		// the name is what selects. A caller that wants the default asks
+		// for it by not naming the token.
+		{"a weight does not exclude", "text/markdown;q=0", false, true},
+		{"a weight does not select", "application/json;q=0.9", true, false},
+		// Exactness: a longer type that merely contains the token is a
+		// different type, and a subtype prefix is not the token either.
+		{"a type containing the token", "text/markdown-x", false, false},
+		{"a structured suffix", "application/vnd.acme+json", false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/x", nil)
+			if c.accept != "" {
+				r.Header.Set("Accept", c.accept)
+			}
+			if got := wantsJSON(r); got != c.json {
+				t.Errorf("wantsJSON(Accept: %q) = %v, want %v", c.accept, got, c.json)
+			}
+			if got := wantsDocument(r); got != c.doc {
+				t.Errorf("wantsDocument(Accept: %q) = %v, want %v", c.accept, got, c.doc)
+			}
+		})
+	}
+}
