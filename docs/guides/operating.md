@@ -153,18 +153,21 @@ provenance はそれが起きるのを見ていたインスタンスに属する
 "files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only"
 ```
 
-`discovered=true` は、project がメタデータサーバーから来たのであって
-`OCHAKAI_VERTEX_PROJECT` からではないことを意味する — semantic search
-は Google Cloud 上での既定だからである(設計ドキュメント
-[0053](../design/0053-embeddings-by-default.md))。これに代わる行は
-どちらに転んだかを言う:
+`discovered=true` は、model・location・project のどれもデプロイが書いた
+ものではないことを意味する — project はメタデータサーバーから来ており、
+残りは製品の既定である(`OCHAKAI_EMBEDDINGS` にモデルの resource name を
+書けば `discovered=false` になる、設計ドキュメント
+[0078](../design/0078-one-variable-says-how-it-embeds.md))。semantic
+search は Google Cloud 上での既定だからである(設計ドキュメント
+[0073](../design/0073-search-and-when-embeddings-apply.md))。これに
+代わる行はどちらに転んだかを言う:
 
 | 行 | 意味 |
 |---|---|
 | `semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on` | 起動時の probe が拒否された。メッセージ自体が対処法を運んでいる; 権限を付与してから再起動せよ |
 | `semantic search is off: this database cannot hold vectors` | pgvector が無く、このロールには作成できないかもしれない。admin ユーザーとして extension を作成せよ(デプロイガイド §3) |
 | `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only` | 頼んだ通り — ここにある行の中で、調べる価値の無い唯一のものである |
-| `semantic search disabled; using lexical search only` | project が設定されておらず、発見もされなかった — ochakai は Google Cloud 上で動いていない |
+| `semantic search disabled; using lexical search only` | モデルが名指されておらず、project も発見されなかった — ochakai は Google Cloud 上で動いていない |
 
 `insecure_dev=true` がラップトップ以外のどこかに出ていたら、そこで
 止めて直せ: すべての呼び出し元が `human:anonymous` になり、何も認証
@@ -866,14 +869,20 @@ gcloud run services update ochakai --region=$REGION \
   module は常に API を先に適用する; この一件のためだけに、
   `webui_image_tag` を `image_tag` より先に進めよ(issue
   [#426](https://github.com/na0fu3y/ochakai/issues/426))。
-- **すでにベクトルを持つデータベースで `OCHAKAI_EMBEDDING_DIM` を変える
-  と、ベクトルテーブルが新しい幅で再構築される。** ベクトルはそれが
-  記述する concept から導出されるものであり、キュレーションされた
-  何かが関わっているわけではないからである(設計ドキュメント
-  [0053](../design/0053-embeddings-by-default.md) §3)。起動時のログは
-  それが起きたことを言う。`ochakai reembed` がそれらを埋め直すまで、
-  検索は lexical のみになる — 埋め直しは費用がかかるので、それは意図
-  的である。
+- **`OCHAKAI_VERTEX_MODEL` / `OCHAKAI_VERTEX_LOCATION` /
+  `OCHAKAI_VERTEX_PROJECT` / `OCHAKAI_EMBEDDING_DIM` を設定している
+  なら、アップグレードの*前*に `OCHAKAI_EMBEDDINGS` を書き換える。**
+  四つは 0.18.0 で黙って無視されるようになった(設計ドキュメント
+  [0078](../design/0078-one-variable-says-how-it-embeds.md))。無視された
+  デプロイは既定のモデル・リージョン・幅に落ちる。**そこで起きることは
+  ログにしか出ない**: 幅が違えばベクトルテーブルは新しい幅で再構築されて
+  空になり、幅が同じでモデルだけ違えば古い行は残るが新しいモデルの
+  クエリからは見えない(検索はモデルで絞る)。どちらでも semantic search
+  は黙って字句のみに落ち、**壊れたようには見えない** — 順位が悪くなる
+  だけである。直すのは `ochakai reembed` で、それは Vertex AI の呼び出し
+  をベースの規模ぶん支払う。手で `DROP TABLE` する必要は無い: ベクトルは
+  それが記述する concept から導出されるものだからである(設計ドキュメント
+  [0073](../design/0073-search-and-when-embeddings-apply.md) §2)。
 - **semantic search が到達可能になったり、モデルが変わったりしても、
   backfill はされない。** 既存の concept は `ochakai reembed` まで
   embedding が無いままである。これは Vertex AI のトークンをベースの

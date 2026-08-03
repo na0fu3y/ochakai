@@ -85,16 +85,17 @@ locals {
     },
     local.mode != "" ? { OCHAKAI_MODE = local.mode } : {},
     var.enable_gcs_attachments ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
-    # No OCHAKAI_VERTEX_PROJECT when embeddings are on: ochakai discovers
-    # the project it runs in, and a discovered project is the mode that
-    # falls back to lexical search instead of refusing to start (design
-    # doc 0053 §2.3). That matters here, because the pgvector extension
-    # is a documented manual bootstrap step below — an apply that lands
-    # before somebody ran it should degrade, not fail to serve.
+    # One variable says how this deployment embeds (design doc 0078).
+    # Nothing is set when embeddings are on and no model is named:
+    # ochakai discovers the project it runs in, and a discovered default
+    # is the mode that falls back to lexical search instead of refusing
+    # to start (design doc 0073 §1.3). That matters here, because the
+    # pgvector extension is a documented manual bootstrap step below — an
+    # apply that lands before somebody ran it should degrade, not fail to
+    # serve. Naming a model is the other side of that trade, and
+    # var.embedding_model's description says so.
     var.enable_vertex_embeddings ? {} : { OCHAKAI_EMBEDDINGS = "off" },
-    var.enable_vertex_embeddings && var.vertex_model != null ? { OCHAKAI_VERTEX_MODEL = var.vertex_model } : {},
-    var.enable_vertex_embeddings && var.vertex_location != null ? { OCHAKAI_VERTEX_LOCATION = var.vertex_location } : {},
-    var.enable_vertex_embeddings && var.embedding_dim != null ? { OCHAKAI_EMBEDDING_DIM = tostring(var.embedding_dim) } : {},
+    var.enable_vertex_embeddings && var.embedding_model != null ? { OCHAKAI_EMBEDDINGS = var.embedding_model } : {},
     length(local.delegating_callers) > 0 ? { OCHAKAI_DELEGATING_CALLERS = join(",", local.delegating_callers) } : {},
   )
 

@@ -129,6 +129,49 @@ last entry.
 
 ### Changed
 
+- **BREAKING** — one variable says how a deployment embeds (design doc
+  [0078](docs/design/0078-one-variable-says-how-it-embeds.md)):
+
+  ```
+  (unset)                                   →  (unset — embed, project discovered)
+  OCHAKAI_EMBEDDINGS=on|off                 →  unchanged
+  OCHAKAI_VERTEX_PROJECT=p                  ┐
+  OCHAKAI_VERTEX_LOCATION=l                 ├→  OCHAKAI_EMBEDDINGS=projects/p/locations/l/publishers/google/models/m
+  OCHAKAI_VERTEX_MODEL=m                    ┘
+  OCHAKAI_EMBEDDING_DIM=…                   →  (gone: the width belongs to the model)
+  ```
+
+  **Set `OCHAKAI_EMBEDDINGS` before upgrading.** The four retired
+  variables are ignored, so a deployment that named a model, a location, a
+  project or a dimension silently falls back to the default
+  (`gemini-embedding-001`, `us-central1`, the project it runs in, 768) —
+  and **it will not look broken**. A changed width rebuilds the vector
+  tables empty on the next start; an unchanged width with a changed model
+  leaves the old rows in place but invisible, because search filters by
+  model. Either way semantic search goes quiet, rankings quietly become
+  lexical-only, and a base that used `gemini-embedding-2` loses image and
+  PDF search with them. Nothing curated is lost — a vector is derived, and
+  no `DROP TABLE` is ever needed — but the only cure is `ochakai reembed`,
+  which pays Vertex AI to rewrite every vector in the base. Migration is
+  one command:
+
+  ```sh
+  gcloud run services update ochakai \
+    --update-env-vars=OCHAKAI_EMBEDDINGS=projects/$PROJECT_ID/locations/global/publishers/google/models/gemini-embedding-2 \
+    --remove-env-vars=OCHAKAI_VERTEX_PROJECT,OCHAKAI_VERTEX_LOCATION,OCHAKAI_VERTEX_MODEL,OCHAKAI_EMBEDDING_DIM
+  ```
+
+  A deployment that set none of the four, or only `OCHAKAI_EMBEDDINGS`,
+  has nothing to do. A spelling that is none of the three forms is a
+  startup error naming them, as `OCHAKAI_MODE` has been since 0.17.0, and
+  a model ochakai carries no vector width for is refused rather than
+  embedded at a guessed width. The dimension is no longer settable at all:
+  a vector is the product's derived value (design doc
+  [0073](docs/design/0073-search-and-when-embeddings-apply.md) §2), 768 for
+  both models, and unchanged for every deployment that never set it.
+  Terraform's `vertex_model`, `vertex_location` and `embedding_dim` become
+  one `embedding_model` taking the resource name.
+
 - **BREAKING** — REST is frozen at `/api/v1` (design doc
   [0064](docs/design/0064-rest-stops-at-api-v1.md), issue
   [#379](https://github.com/na0fu3y/ochakai/issues/379)):

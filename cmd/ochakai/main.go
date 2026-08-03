@@ -159,7 +159,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if err := st.Migrate(ctx, embedDim); err != nil {
 		// A database that cannot hold vectors is not a reason to refuse
 		// to serve knowledge, unless this deployment asked for semantic
-		// search by name (design doc 0053 §2.3). Everything else the
+		// search by name (design doc 0073 §1.3). Everything else the
 		// migration does has already run — the vector schema is the last
 		// step — so there is nothing to redo here.
 		if cfg.Embedding == nil || !cfg.Embedding.Discovered ||
@@ -175,19 +175,18 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 // semanticSearch builds the embedder behind hybrid search, and decides
 // whether this deployment has one at all.
 //
-// Embeddings are the default on Google Cloud (design doc 0053 §2.1): a
-// deployment that names no project gets the one it is running in, and
-// whether it may call Vertex AI there is IAM's answer rather than a
-// setting — so the answer is asked for, once, with a probe. A deployment
-// that named its project asked for semantic search and is told when it
-// cannot have it; a discovered one falls back to lexical search, which is
-// what it would have had before this was the default.
+// Embeddings are the default on Google Cloud (design doc 0073 §1.1): a
+// deployment that names no model gets the project it is running in and
+// the product's own model, and whether it may call Vertex AI there is
+// IAM's answer rather than a setting — so the answer is asked for, once,
+// with a probe. A deployment that named a model asked for semantic search
+// and is told when it cannot have it; a discovered one falls back to
+// lexical search, which is what it would have had before this was the
+// default.
 func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (embed.Embedder, error) {
 	if cfg.Embedding == nil && !cfg.EmbeddingsOff {
 		if project := config.DiscoverVertexProject(ctx); project != "" {
-			if err := cfg.EnableDiscoveredEmbedding(project); err != nil {
-				return nil, err
-			}
+			cfg.EnableDiscoveredEmbedding(project)
 		}
 	}
 	if cfg.Embedding == nil {

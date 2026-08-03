@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"github.com/na0fu3y/ochakai/internal/embed"
 )
 
 func TestDatabaseURLRequired(t *testing.T) {
@@ -37,15 +39,15 @@ func TestGCSBucket(t *testing.T) {
 	})
 }
 
-// Semantic search is the default where ochakai runs on Google Cloud, so
-// the absence of OCHAKAI_VERTEX_PROJECT is no longer the off switch —
-// OCHAKAI_EMBEDDINGS=off is (design doc 0053 §2.4). A deployment that
-// wants no Vertex AI call made on its behalf must be able to say so and
-// be believed, so a spelling that is not "on" or "off" is refused rather
-// than read as one of them.
+// One variable says how a deployment embeds (design doc 0078): unset or
+// "on" for the product's default around a discovered project, "off" for
+// none, and a Vertex AI model resource name for a deployment that needs a
+// particular model, region or project. A deployment that wants no Vertex
+// AI call made on its behalf must be able to say so and be believed, so a
+// spelling that is none of the three is refused rather than read as one
+// of them.
 func TestEmbeddingsSwitch(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
-	t.Setenv("OCHAKAI_VERTEX_PROJECT", "")
 
 	t.Run("off refuses discovery", func(t *testing.T) {
 		t.Setenv("OCHAKAI_EMBEDDINGS", "off")
@@ -56,15 +58,13 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if !cfg.EmbeddingsOff {
 			t.Fatal("OCHAKAI_EMBEDDINGS=off did not turn embeddings off")
 		}
-		if err := cfg.EnableDiscoveredEmbedding("some-project"); err != nil {
-			t.Fatal(err)
-		}
+		cfg.EnableDiscoveredEmbedding("some-project")
 		if cfg.Embedding != nil {
 			t.Errorf("a discovered project turned embeddings back on: %+v", cfg.Embedding)
 		}
 	})
 
-	t.Run("a discovered project is not a configured one", func(t *testing.T) {
+	t.Run("a discovered default is not a named one", func(t *testing.T) {
 		cfg, err := FromEnv()
 		if err != nil {
 			t.Fatal(err)
@@ -72,46 +72,100 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if cfg.Embedding != nil {
 			t.Fatalf("Embedding = %+v before discovery, want nil", cfg.Embedding)
 		}
-		if err := cfg.EnableDiscoveredEmbedding("some-project"); err != nil {
-			t.Fatal(err)
-		}
+		cfg.EnableDiscoveredEmbedding("some-project")
 		if cfg.Embedding == nil || cfg.Embedding.Project != "some-project" {
 			t.Fatalf("Embedding = %+v, want the discovered project", cfg.Embedding)
 		}
 		// The flag is what decides that a Vertex AI that does not answer
 		// is a fallback rather than a failure to start.
 		if !cfg.Embedding.Discovered {
-			t.Error("a discovered project was recorded as configured")
+			t.Error("a discovered default was recorded as named")
 		}
-		if cfg.Embedding.Model != "gemini-embedding-001" || cfg.Embedding.Dim != 768 {
-			t.Errorf("model=%q dim=%d, want the defaults around the discovered project",
-				cfg.Embedding.Model, cfg.Embedding.Dim)
+		if cfg.Embedding.Model != "gemini-embedding-001" ||
+			cfg.Embedding.Location != "us-central1" || cfg.Embedding.Dim != 768 {
+			t.Errorf("model=%q location=%q dim=%d, want the product's defaults around the discovered project",
+				cfg.Embedding.Model, cfg.Embedding.Location, cfg.Embedding.Dim)
 		}
 	})
 
-	t.Run("a configured project stays configured", func(t *testing.T) {
-		t.Setenv("OCHAKAI_VERTEX_PROJECT", "named-project")
+	t.Run("a named model carries project, location and width", func(t *testing.T) {
+		t.Setenv("OCHAKAI_EMBEDDINGS", "projects/named-project/locations/global/publishers/google/models/gemini-embedding-2")
 		cfg, err := FromEnv()
 		if err != nil {
 			t.Fatal(err)
 		}
 		if cfg.Embedding == nil || cfg.Embedding.Discovered {
-			t.Fatalf("Embedding = %+v, want the named project, not a discovered one", cfg.Embedding)
+			t.Fatalf("Embedding = %+v, want the named model, not a discovered default", cfg.Embedding)
 		}
-		if err := cfg.EnableDiscoveredEmbedding("some-other-project"); err != nil {
-			t.Fatal(err)
+		if cfg.Embedding.Project != "named-project" || cfg.Embedding.Location != "global" ||
+			cfg.Embedding.Model != "gemini-embedding-2" {
+			t.Errorf("Embedding = %+v; the resource name was not read apart", cfg.Embedding)
 		}
+		// The width is the model's and comes from the code, never from
+		// the environment: a deployment cannot be talked into writing
+		// vectors at a width its stored ones do not have.
+		if cfg.Embedding.Dim != 768 {
+			t.Errorf("Dim = %d, want 768 — the width ochakai carries for this model", cfg.Embedding.Dim)
+		}
+		cfg.EnableDiscoveredEmbedding("some-other-project")
 		if cfg.Embedding.Project != "named-project" {
-			t.Errorf("Project = %q; discovery overrode a configured project", cfg.Embedding.Project)
+			t.Errorf("Project = %q; discovery overrode a named model", cfg.Embedding.Project)
 		}
 	})
 
-	t.Run("an unreadable spelling is refused", func(t *testing.T) {
-		t.Setenv("OCHAKAI_EMBEDDINGS", "false")
-		if _, err := FromEnv(); err == nil {
-			t.Error("OCHAKAI_EMBEDDINGS=false was accepted; a deployment that means off must not get on")
+	t.Run("a spelling that is none of the three is refused", func(t *testing.T) {
+		for _, v := range []string{
+			"false", "true", "ON", "enabled",
+			"my-project",         // the project alone, as OCHAKAI_VERTEX_PROJECT took it
+			"gemini-embedding-2", // the model alone, as OCHAKAI_VERTEX_MODEL took it
+			"projects/p/locations/l/publishers/google/models/",
+			"projects/p/locations/l/publishers/acme/models/gemini-embedding-001",
+			"projects//locations/l/publishers/google/models/gemini-embedding-001",
+			"projects/p/locations/l/models/gemini-embedding-001",
+			// A model ochakai has no width for: guessing one writes
+			// vectors nobody can compare (design doc 0078 §3).
+			"projects/p/locations/l/publishers/google/models/gemini-embedding-99",
+		} {
+			t.Run(v, func(t *testing.T) {
+				t.Setenv("OCHAKAI_EMBEDDINGS", v)
+				if _, err := FromEnv(); err == nil {
+					t.Errorf("OCHAKAI_EMBEDDINGS=%q was accepted; a deployment that means one thing must not get another", v)
+				}
+			})
 		}
 	})
+}
+
+// The error a misspelling gets names all three forms: a startup error
+// that only says "no" leaves the operator guessing at the spelling that
+// would have worked.
+func TestEmbeddingsErrorNamesTheThreeForms(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	t.Setenv("OCHAKAI_EMBEDDINGS", "yes")
+	_, err := FromEnv()
+	if err == nil {
+		t.Fatal("OCHAKAI_EMBEDDINGS=yes was accepted")
+	}
+	for _, want := range []string{"on", "off", "publishers/google/models"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}
+
+// The width follows from the model, so the model ochakai reaches for when
+// nobody names one must be a model it carries a width for. Nothing else
+// in FromEnv can report that it is not.
+func TestTheDefaultModelHasAWidth(t *testing.T) {
+	dim, ok := embed.Dimension(defaultEmbeddingModel)
+	if !ok {
+		t.Fatalf("no width for the default model %q: every discovered deployment would embed at 0",
+			defaultEmbeddingModel)
+	}
+	if dim != 768 {
+		t.Errorf("the default model's width is %d, want 768 — changing it strands every vector "+
+			"already stored by every deployment", dim)
+	}
 }
 
 // The public posture implies read-only and cannot be separated from it:

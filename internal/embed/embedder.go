@@ -56,7 +56,7 @@ type FileEmbedder interface {
 // ErrFileEmbeddingUnsupported reports that the configured model embeds
 // text only; callers skip the file rather than treating this as a
 // provider failure.
-var ErrFileEmbeddingUnsupported = errors.New("the configured embedding model does not take file input (set OCHAKAI_VERTEX_MODEL=gemini-embedding-2, design doc 0020)")
+var ErrFileEmbeddingUnsupported = errors.New("the configured embedding model does not take file input (name gemini-embedding-2 in OCHAKAI_EMBEDDINGS, design doc 0073 §4)")
 
 // ErrInputTooLong reports that the text exceeded the model's input
 // window. It is worth telling apart from a provider outage: the caller

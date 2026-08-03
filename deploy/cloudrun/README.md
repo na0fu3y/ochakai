@@ -294,11 +294,19 @@ role を付与する前に知っておく価値があること: ochakai には�
 Vertex AI の呼び出しを引き起こせる** — キュレーションされたナレッジ
 ベースの規模では数セントで済む。
 
-model、location、マルチモーダルなファイル検索、
-`OCHAKAI_EMBEDDING_DIM`、そして role 付与前や model 変更前に読み込ん
-だベースを埋め直すコマンド `ochakai reembed` は、すべて
+別のモデル・リージョン・プロジェクトを使うなら、変数は同じ一つで、値が
+Vertex AI のモデル resource name になる(設計ドキュメント 0078):
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_EMBEDDINGS=projects/$PROJECT_ID/locations/global/publishers/google/models/gemini-embedding-2
+```
+
+これは**セマンティック検索を要求する**綴りである — 使えなければ起動を
+拒否する。マルチモーダルなファイル検索と、role 付与前や model 変更前に
+読み込んだベースを埋め直すコマンド `ochakai reembed` は
 [環境変数](../../docs/configuration.md#environment-variables)にある。
-次元を変えることが既存のデータベースに何をするかは、運用ガイドの
+model を変えることが既存のデータベースに何をするかは、運用ガイドの
 [Upgrades](../../docs/guides/operating.md#upgrades) にある。
 
 ## 4b. ファイルには GCS が要る

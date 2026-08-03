@@ -137,9 +137,10 @@ bundle ではない。ファイルが *何であるか* はバイト列を sniff
 
 **ファイルの中身が検索に出てこない。** ファイル名はどの検索でも常に
 マッチするが、中身は embeddings が on のときだけ合流し、画像や PDF は
-ファイルに対応したモデル(`gemini-embedding-2`、`OCHAKAI_VERTEX_LOCATION`
-を `global`・`us`・`eu` のいずれかに設定)を必要とする。その設定より
-前からあるファイルは遡って埋められない — `ochakai reembed`。
+ファイルに対応したモデルを必要とする —
+`OCHAKAI_EMBEDDINGS=projects/<p>/locations/global/publishers/google/models/gemini-embedding-2`
+(location は `global`・`us`・`eu` のいずれか)。その設定より前から
+あるファイルは遡って埋められない — `ochakai reembed`。
 
 ## Web UI
 
@@ -159,20 +160,23 @@ webui のサービスアカウントがサーバーの `OCHAKAI_DELEGATING_CALLE
 
 ## 起動
 
-**embedding の設定変更後、semantic search が静かになった。** すでに
-vector を持つデータベースで `OCHAKAI_EMBEDDING_DIM` を変更すると、
-vector テーブルは新しい次元で再構築され、それがログに残る: 古い
-vector は誰も問い合わせない空間にあったものであり、vector は元の
-concept から導出されるものなので、curate されたものは何も失われない
-(design doc [0053](../design/0053-embeddings-by-default.md) §3)。
-テーブルは意図的に空で戻ってくる — `ochakai reembed` を実行して埋め
-直す、これがお金を使う工程である。それが終わるまでランキングは
-lexical のみになる。
+**embedding の設定変更後、semantic search が静かになった。**
+`OCHAKAI_EMBEDDINGS` で別のモデルを名指すと、古い vector は残るが新しい
+モデルのクエリからは見えない — 検索はモデルで絞るからである。幅が違う
+モデルなら vector テーブルはその幅で再構築され、空で戻ってくる。どちらも
+ログに残り、curate されたものは何も失われない: vector は元の concept から
+導出されるものだからである(design doc
+[0073](../design/0073-search-and-when-embeddings-apply.md) §2)。
+`ochakai reembed` を実行して埋め直す、これがお金を使う工程である。
+それが終わるまでランキングは lexical のみになる。**0.18.0 へ上げた
+直後にこれが起きたなら**、原因は退役した `OCHAKAI_VERTEX_MODEL` /
+`OCHAKAI_EMBEDDING_DIM` が無視されて既定に戻ったことである
+([Upgrades](operating.md#upgrades))。
 
 **`pgvector is required for semantic search, and this role may not
 create it`。** 管理者として一度 `vector` を作成する — デプロイガイドの
-§3 の bootstrap SQL がまさにそれを行う。`OCHAKAI_VERTEX_PROJECT` を
-指定したデプロイは、それをするまで起動を拒否する — semantic search を
+§3 の bootstrap SQL がまさにそれを行う。`OCHAKAI_EMBEDDINGS` でモデルを
+名指したデプロイは、それをするまで起動を拒否する — semantic search を
 求めたからである。プロジェクトを自動検出しただけのデプロイはこれを
 ログに残して lexical のみで動く。
 

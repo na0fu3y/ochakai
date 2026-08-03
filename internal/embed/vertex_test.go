@@ -135,6 +135,28 @@ func TestVertexHost(t *testing.T) {
 	}
 }
 
+// The width belongs to the model and is carried in code, not in a
+// setting (design doc 0078 §3). Two things are pinned here: that every
+// model ochakai names is one it has a width for, and that the width is
+// still 768 — every vector any deployment has ever stored is 768 wide,
+// and a change here silently strands all of them until `ochakai reembed`
+// pays to rewrite them.
+func TestModelWidths(t *testing.T) {
+	for _, model := range Models() {
+		dim, ok := Dimension(model)
+		if !ok {
+			t.Errorf("Models() names %q, which Dimension does not know", model)
+		}
+		if dim != 768 {
+			t.Errorf("Dimension(%q) = %d, want 768: changing a stored width invalidates "+
+				"every vector written at the old one", model, dim)
+		}
+	}
+	if _, ok := Dimension("gemini-embedding-99"); ok {
+		t.Error("a model nobody added has a width; the guess is what 0078 §3 refuses")
+	}
+}
+
 func TestVertexDimensionMismatch(t *testing.T) {
 	v := newTestVertex(t, "gemini-embedding-2", true, func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"embedding":{"values":[1,2]}}`)
