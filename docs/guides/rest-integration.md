@@ -22,7 +22,7 @@ ochakai 自体をデプロイしようとしていて、すでに動いている
 ## 認証する
 
 Cloud Run IAM が ochakai に届く者を決め(設計ドキュメント
-[0002](../design/0002-authn-authz.md)、
+[0065](../design/0065-identity-and-provenance.md) §1、
 [0003](../design/0003-gcp-only.md)) — ochakai 自身が発行したり検証したり
 する API キーやベアラートークンは無い。すべてのリクエストは、あなたの
 ochakai サービスの URL に audience が紐づいた Google 署名の **ID
@@ -74,7 +74,7 @@ provenance — ochakai が売るものの大半 — が一つの名前に潰れ�
 
 あなたのアプリケーションが利用者に代わって identity を転送すること
 を ochakai に伝える(設計ドキュメント
-[0027](../design/0027-delegated-provenance.md))。記録されるのは常に
+[0065](../design/0065-identity-and-provenance.md) §3)。記録されるのは常に
 両方の identity であり — `human:tanaka@… via process:app-sa@…` —
 転送された側だけになることは無い。だから、あなたのアプリケーション
 を通した書き込みは、その人が直接行った書き込みと区別できるままに
@@ -115,14 +115,14 @@ Ochakai-On-Behalf-Of: human:tanaka@example.co.jp
 - **これは認可ではない。** 決めるのは誰の identity が記録されるかで
   あって、誰が何をしてよいかではない — ochakai に届く呼び出し元は
   誰でもすでにすべてを読み書きできる(設計ドキュメント
-  [0002](../design/0002-authn-authz.md))。到達性は引き続き IAM の
+  [0065](../design/0065-identity-and-provenance.md) §1)。到達性は引き続き IAM の
   仕事である。
 
 ## 何が書いたかを宣言する: Ochakai-Producer
 
 それを保証する identity の隣に、あなたのソフトウェアの名前を置く
 (設計ドキュメント
-[0052](../design/0052-producer-beside-the-actor.md)):
+[0065](../design/0065-identity-and-provenance.md) §4):
 
 ```
 Ochakai-Producer: insightflow/1.4.0
@@ -144,7 +144,7 @@ Ochakai-Producer: insightflow/1.4.0
 `summary.content_hash` として返す — そして、古い値を持った
 `If-Match` を添えた `PUT` は `412` になり、何も書き込まない
 (設計ドキュメント [0030](../design/0030-optimistic-locking.md)、
-0043 §3.4):
+0075 §3.2):
 
 ```sh
 etag=$(curl -si "$OCHAKAI_URL/api/v1/bundle/metrics/revenue.md" \

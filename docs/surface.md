@@ -23,14 +23,14 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 
 | id | 条件 |
 |---|---|
-| C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0046](design/0046-bundle-address-space.md)) |
-| C2 | Google Cloud、secret なし — Cloud Run IAM と Cloud SQL IAM で、トークンもパスワードも置かない([0002](design/0002-authn-authz.md)・[0003](design/0003-gcp-only.md)) |
-| C3 | 形式は Open Knowledge Format v0.2 — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0036](design/0036-okf-schema-first.md)・[0046](design/0046-bundle-address-space.md)) |
-| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0004](design/0004-cli.md)・[0007](design/0007-api-only-cli.md)) |
-| C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0015](design/0015-surface-consistency.md)・[0039](design/0039-mcp-stdio-bridge.md)) |
-| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0001](design/0001-architecture.md)・[0015](design/0015-surface-consistency.md)) |
-| C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0025](design/0025-closing-the-loop.md)・[0029](design/0029-usage-recording-off-the-read-path.md)・[0049](design/0049-queue-counts.md)・[0051](design/0051-instance-metrics-and-search-misses.md)) |
-| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — trigram 索引は二文字の日本語語を引けず、埋め込みは Google Cloud 上で既定である([0053](design/0053-embeddings-by-default.md)) |
+| C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
+| C2 | Google Cloud、secret なし — Cloud Run IAM と Cloud SQL IAM で、トークンもパスワードも置かない([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md)) |
+| C3 | 形式は Open Knowledge Format v0.2 — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md)) |
+| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0067](design/0067-four-faces-and-what-they-decline.md)) |
+| C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0067](design/0067-four-faces-and-what-they-decline.md) §3) |
+| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0001](design/0001-architecture.md)・[0067](design/0067-four-faces-and-what-they-decline.md) §1) |
+| C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0069](design/0069-the-loop-and-what-measures-it.md)) |
+| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — trigram 索引は二文字の日本語語を引けず、埋め込みは Google Cloud 上で既定である([0073](design/0073-search-and-when-embeddings-apply.md)) |
 
 **どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
 逆は成り立たない — 条件に当たることは必要条件であって十分条件では
@@ -54,12 +54,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 2. **既存の面で回避できるか。** 回避できるなら足さない。サーバ側の一括
    import を断った理由がこれで、既存のエンドポイントのループで足りる
    ものに二つ目の経路を作ると、買えるのは capability ではなく
-   convenience だけだった([0015 §3.2](design/0015-surface-consistency.md))。
+   convenience だけだった([0067 §5.2](design/0067-four-faces-and-what-they-decline.md))。
 3. **何が畳めるか。** 一つ足すとき、既存のどれが要らなくなるかを探す。
    何も畳めないなら、表面が単調に増えてよい理由を書く — 書けるなら
    足してよい。書けないと気づくことが、この問いの目的である。
 
-面ごとの既定は [0015 §3.1](design/0015-surface-consistency.md) が決めて
+面ごとの既定は [0067 §1](design/0067-four-faces-and-what-they-decline.md) が決めて
 いる。**REST** は唯一の契約で、すべては `/api/v1` に載るか、どこにも
 載らない。**CLI** は完全性の面なので既定は yes。**MCP の既定は no** —
 ツールスキーマはエージェントのコンテキストから支払われるので、ツール数
@@ -155,7 +155,7 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 「パラメータを持つ一つの操作」の定義である(§3.4)。
 
 `report_outcome`(`POST /api/v1/usage/{id}`)はそこに畳んでいない。
-人の裁定ではなく機械の観測であり、[0015 §3.4](design/0015-surface-consistency.md)
+人の裁定ではなく機械の観測であり、[0067 §5.4](design/0067-four-faces-and-what-they-decline.md)
 が Web UI に載せないと決めている当のものである。数のためだけの畳み込み
 は、この文書が数えようとしているものを増やす。
 
@@ -187,7 +187,7 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 関門が通り、本番 import が落ちた — のは、判定の半分がサーバのもので
 あってバンドルからは見えないからである。クライアント側で作り直せば
 パラメータは増えないが、増えないのは表面だけで、書き込み経路の判断を
-第二の実装が推測することになる(0007「CLI は REST の薄いクライアント」)。
+第二の実装が推測することになる(0067 §2「CLI は REST の薄いクライアント」)。
 ヘッダではなくクエリパラメータなのは、**落とされたヘッダは書き込みに
 なる**からである。同じ PR で `Ochakai-Plan` も足しており、HEADER の
 天井も上がっている。
@@ -252,7 +252,7 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 もので、増えたのは数であって表面ではない。数えられない表面より、数えて
 天井を上げるほうがよい。除外(ENV が OS 定義の変数にしているような)に
 しなかったのは、この三本が**ochakai の選択**だからである — `sandbox` を
-いつ出すかは 0046 §3.2 が決めた挙動であり、ブラウザに何を許すかを
+いつ出すかは 0075 §1 が決めた挙動であり、ブラウザに何を許すかを
 クライアントが読む値である。標準で定義されている名前だから数えない、
 という線は、ここでは意味を運んでいる値を落とす。
 
@@ -297,7 +297,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 検索ヒットと `get_concept` に既に載っている。エージェントが持ち続ける
 のは書き込みの側、`report_outcome` である。
 
-8 本のまま、[0054](design/0054-concept-is-the-okf-word.md) が 5 本を
+8 本のまま、[0057 §0](design/0057-concept-is-the-word-a-reader-meets.md) が 5 本を
 改名した — 知識の単位は OKF SPEC §2 の語で **concept** であり、文書が
 既にその語で書いていたのにツール名だけが `knowledge` を名乗っていた。
 能力も引数も応答も変わらない。
@@ -706,7 +706,7 @@ PR ごとの増減は [CHANGELOG](../CHANGELOG.md) の仕事で、ここでは�
 ## 数えていないもの
 
 - **Web UI。** 自分のアドレス空間を持たず、`/api/v1` の client として
-  動く([0006](design/0006-web-ui-serving.md))ので、増えるとすれば REST
+  動く([0072](design/0072-the-web-ui-serves-and-edits-documents.md) §2)ので、増えるとすれば REST
   の節に出る。ページ自身の予算は「ビルドステップなし・フレームワーク
   なし・CDN なし」の一枚という形の制約で、数ではない。
 - **`serve` / `serve-ui` / `version` / `help`。** バイナリの動かし方で
@@ -740,8 +740,8 @@ DOC が塞いだのはさらに一つで、これは他とは向きが違う —
 増えた行が同じ表に並ぶのは、この節が足されて初めてである。
 
 FLAG が塞いだのはもう一つで、「REST を畳んで CLI に逃がせば得」という
-逃げ道である。[0046](design/0046-bundle-address-space.md) と
-[0056](design/0056-one-question-one-command.md) の畳み込みで REST と CLI
+逃げ道である。[0075](design/0075-the-bundle-is-the-address-space.md) と
+[0068](design/0068-how-a-face-is-added-and-removed.md) の畳み込みで REST と CLI
 のコマンドは減ったが、**その間 CLI のフラグは一度も数えられていな
 かった** — 数え始めた時点で 29 で、うち 14 が `ochakai search` 一本に
 付いている。

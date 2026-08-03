@@ -311,7 +311,7 @@ func (f *searchFilters) params(query, sortBy, cursor string, limit int) (apiclie
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] <query>\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nA search is a ranking: it is bounded by --limit and has no page two\n(design doc 0050), so it takes no cursor and prints none.\n`ochakai list` is the other half — the review feeds and the reverse\nlookups, which are sets rather than rankings and page with --cursor.\nThe filters below narrow either command the same way.",
+		"Usage: ochakai search [flags] <query>\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nA search is a ranking: it is bounded by --limit and has no page two\n(design doc 0068 §2.2), so it takes no cursor and prints none.\n`ochakai list` is the other half — the review feeds and the reverse\nlookups, which are sets rather than rankings and page with --cursor.\nThe filters below narrow either command the same way.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n  ochakai search revenue --links-to metrics/revenue --type Insight   # among what reads this metric\n")
 	filters := addSearchFilters(fs)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50)")
@@ -344,7 +344,7 @@ func cmdSearch(ctx context.Context, args []string) error {
 
 // cmdList is the listing half. A feed and a search are not one question
 // asked two ways: one is a total order that pages, the other a ranking
-// that does not (design doc 0050), and they disagree about --limit's
+// that does not (design doc 0068 §2.2), and they disagree about --limit's
 // default, about whether --cursor means anything, and about what the
 // first column holds. While both lived in `ochakai search`, its help had
 // to say all of that before a reader reached the flags (design doc 0062).
@@ -441,7 +441,7 @@ func printHits(page *apiclient.SearchResult, feed string) {
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"browse",
-		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design docs\n0014 and 0017, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected concepts are hidden, as in\nsearch.",
+		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design doc\n0075 §2, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected concepts are hidden, as in\nsearch.",
 		"  ochakai browse\n  ochakai browse queries\n  ochakai browse ga4/tables\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	pos, err := parseArgs(fs, args)

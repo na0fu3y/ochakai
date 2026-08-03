@@ -97,7 +97,7 @@ concept を再検証すること、つまり「もう一度確かめた、まだ
 `ochakai stats`、そして Review タブのバッジである。おかげで**静かな
 キューが、空のキューに見えなくなる**。`--exit-code` を付ければ、チームに
 知らせる cron ジョブまであと一歩である(設計ドキュメント
-[0049](design/0049-queue-counts.md))。そして引用元の文書が変わったときは、
+[0069](design/0069-the-loop-and-what-measures-it.md) §5)。そして引用元の文書が変わったときは、
 `?source=<uri>` が逆向きに答える — そこから導かれた concept を、concept
 ページの出典行からそのまま辿れる。
 
@@ -106,14 +106,14 @@ concept を再検証すること、つまり「もう一度確かめた、まだ
 concept ごとの利用回数は、そのナレッジが使われているかを示す。
 `ochakai stats` はインスタンス全体の集計を返し、**何も返さなかった検索**
 もそこに含まれる(設計ドキュメント
-[0051](design/0051-instance-metrics-and-search-misses.md))。結果報告
+[0069](design/0069-the-loop-and-what-measures-it.md) §4)。結果報告
 (`report_outcome`: worked / failed)は、古びの**証拠にもとづく半分**で
 あり、時間にもとづく `verified_at` / `stale_after` の隣に立つ — golden
 query を実行して違う数字を得たエージェントがそう言い、その concept が
 再検証フィードに浮かんで、人かエージェントが確かめ直す。確かめ直したこと
 自体も記録され(`ochakai verify`、または Web UI の Verify)、それが
 フィードを空にする(設計ドキュメント
-[0025](design/0025-closing-the-loop.md))。
+[0069](design/0069-the-loop-and-what-measures-it.md) §1)。
 
 エージェントが躓くのを待たずに golden query を信頼できる状態に保つには、
 CI からカナリアとして実行する:

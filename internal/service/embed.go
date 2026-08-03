@@ -102,7 +102,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 		return nil, err
 	}
 	if s.Embedder == nil {
-		return nil, Unsupportedf("semantic search is not enabled on this deployment: it is the default on Google Cloud once the service identity may call Vertex AI (design doc 0053)")
+		return nil, Unsupportedf("semantic search is not enabled on this deployment: it is the default on Google Cloud once the service identity may call Vertex AI (design doc 0073 §1)")
 	}
 	limit, err := checkedLimit(limit, defaultReembedPass, maxReembedPass)
 	if err != nil {

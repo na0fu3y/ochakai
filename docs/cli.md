@@ -70,8 +70,8 @@ Run "ochakai <command> -h" for flags and examples.
 ```
 Usage: ochakai browse [flags] [prefix]
 
-List one level of the ID hierarchy (the folder view of design docs
-0014 and 0017, the CLI counterpart of the web UI's Browse tab).
+List one level of the ID hierarchy (the folder view of design doc
+0075 §2, the CLI counterpart of the web UI's Browse tab).
 Without an argument, the top-level directories with their concept
 counts; with a prefix, the subdirectories and concepts directly under
 it. Directories print as "name/	count", concepts as
@@ -612,7 +612,7 @@ Usage: ochakai search [flags] <query>
 Search the knowledge base; verified concepts rank higher.
 Output: score, uri, status, title — description (one hit per line).
 A search is a ranking: it is bounded by --limit and has no page two
-(design doc 0050), so it takes no cursor and prints none.
+(design doc 0068 §2.2), so it takes no cursor and prints none.
 `ochakai list` is the other half — the review feeds and the reverse
 lookups, which are sets rather than rankings and page with --cursor.
 The filters below narrow either command the same way.

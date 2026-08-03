@@ -36,7 +36,7 @@ concept as a file, so `ochakai get jobs/sync-bigquery-catalog
 --download .` brings back the code with the contract. It sits in the
 concept-named directory beside the document, which is where `ochakai export`
 puts a file and what the web UI's files tab tells you to
-reference (design doc [0013](../../docs/design/0013-attachment-files-gcs-only.md)).
+reference (design doc [0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §5).
 
 That shape is the point as much as the sync is. An agent told to refresh
 the catalog gets a contract that says *supply these parameters and run this
