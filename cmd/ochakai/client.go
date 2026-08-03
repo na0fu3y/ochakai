@@ -430,7 +430,7 @@ func printHits(page *apiclient.SearchResult, feed string) {
 		case "stale_after":
 			lead = h.StaleAfter
 		}
-		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, h.Title)
+		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, domain.DisplayTitle(h.Title, h.ID))
 		if h.Description != "" {
 			line += " — " + h.Description
 		}
@@ -572,7 +572,7 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 	for i := range res.Hits {
 		h := &res.Hits[i]
 		if !rendered[h.ID] {
-			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, h.Title))
+			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, domain.DisplayTitle(h.Title, h.ID)))
 		}
 	}
 	if len(rest) > 0 {
@@ -592,7 +592,7 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 // for it.
 func renderEntry(v *domain.View) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%s) — %s\n", v.URI(), v.Summary.Status, v.Summary.Title)
+	fmt.Fprintf(&b, "## %s (%s) — %s\n", v.URI(), v.Summary.Status, domain.DisplayTitle(v.Summary.Title, v.Summary.ID))
 	prov := "created by " + v.Observed.CreatedBy.String()
 	if lv := v.Observed.LastVerified(); lv != nil {
 		verified := fmt.Sprintf("verified by %s on %s", lv.By.String(), lv.At.Format("2006-01-02"))

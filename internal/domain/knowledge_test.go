@@ -214,14 +214,18 @@ func TestValidType(t *testing.T) {
 	for _, typ := range []Type{
 		"BigQuery Table", "Golden Query", "runbook", "data-contract", "GA4",
 		"日本語", "Data Contract", ".hidden",
+		// A namespaced type is legal OKF: SPEC §4.1 registers no
+		// taxonomy and requires a consumer to tolerate unknown types,
+		// and §11 forbids rejecting a bundle over one (design doc 0064).
+		"acme/Table", "a/b",
 	} {
 		if !ValidType(typ) {
 			t.Errorf("ValidType(%q) = false, want true", typ)
 		}
 	}
-	// Rejected: empty, anything that reads as an address, control
-	// characters, and over 128 bytes.
-	for _, typ := range []Type{"", "   ", "a/b", "a\nb", "a\rb", "a\x00b", Type(strings.Repeat("x", 129))} {
+	// Rejected: empty, more than one line, control characters, and over
+	// 128 bytes.
+	for _, typ := range []Type{"", "   ", "a\nb", "a\rb", "a\x00b", Type(strings.Repeat("x", 129))} {
 		if ValidType(typ) {
 			t.Errorf("ValidType(%q) = true, want false", typ)
 		}

@@ -19,7 +19,14 @@ moves:
 - **REST is frozen.** [0064](design/0064-rest-stops-at-api-v1.md) closed
   the last batch of breaking changes — an unrecognized query parameter is
   now a 400 naming it rather than a silent no-op, which is what makes it
-  safe to add one later without breaking a client that predates it. Before
+  safe to add one later without breaking a client that predates it. That
+  batch is also where the last *value* changes had to go, because a
+  response's shape is what a validating client holds: `title` became
+  optional the way OKF SPEC §4.1 always had it,
+  `observed.generated.at` became the content's instant rather than the
+  row's, and a `type` may now contain `/`, which SPEC §4.1 and §11
+  require a consumer to tolerate. The changelog entry says what a client
+  does about each. Before
   the freeze, REST moved the same way everything else did: `0.13.0` moved
   the knowledge out of `/context`'s `hits`; `0.14.0` moved seven keys out
   of `attrs` into envelope fields; the largest move,

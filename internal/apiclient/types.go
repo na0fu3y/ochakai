@@ -44,7 +44,7 @@ type BrowseFile struct {
 type BrowseConcept struct {
 	Type        string        `json:"type"`
 	ID          string        `json:"id"`
-	Title       string        `json:"title,omitempty"` // empty means the id's last segment (design doc 0022)
+	Title       string        `json:"title,omitempty"` // empty means the id's last segment (design doc 0074 §1)
 	Description string        `json:"description,omitempty"`
 	Status      domain.Status `json:"status"`
 	UpdatedAt   time.Time     `json:"updated_at"`

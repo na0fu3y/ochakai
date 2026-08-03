@@ -351,6 +351,75 @@ last entry.
     range, everywhere. Most `limit`s used to clamp silently to a default
     instead; `days` was already the strict one, and the rest now match
     it.
+  - **BREAKING** — `title` is optional on the wire, everywhere. OKF SPEC
+    §4.1 gives it no default — it is RECOMMENDED, and "If omitted,
+    consumers MAY derive a title from the filename" — so `Summary.title`
+    being `required` and resolved asserted a value the document never
+    declared, and a client could not tell a title from a filename. The
+    key is now absent when the document declared none, on `Summary` (and
+    so on every search hit and every `View`, which inherit it),
+    `ContextRank` and `ContextOutline`; the bundle listing and
+    `Change.title` already behaved this way and only the prose changed.
+    **What a client does:** treat `title` as absent and derive a display
+    name from the id's last segment — `id.split("/").pop()` — the way
+    the web UI and the CLI already did. `status` stays resolved, because
+    SPEC §5.4 does give *it* a normative default (design doc 0064 §15,
+    [0074](docs/design/0074-the-document-and-the-vocabulary-that-asks-it.md)
+    §1).
+  - **BREAKING** — `observed.generated.at` reports the instant the
+    *content* last changed, not the instant the row was last written.
+    OKF SPEC §5.2 defines `generated.at` as the content's "last
+    meaningful change"; the exported document has always rendered that
+    (`ContentChangedAt`) while the JSON rendered `updated_at`, so a write
+    that only reformatted a document moved one and not the other and the
+    two renderings of the same concept disagreed inside one response.
+    **What a client does:** if it was reading `observed.generated.at` as
+    "when was this row last written", read `summary.updated_at` instead;
+    if it was reading it as OKF's `generated.at`, nothing changes except
+    that it is now correct (design doc 0064 §17).
+  - **BREAKING** — a `type` may contain `/`. OKF SPEC §4.1 says type
+    values are not registered centrally and a consumer "MUST tolerate
+    unknown types gracefully", and §11 forbids rejecting a bundle over an
+    unknown one; ochakai answered 400 to `type: acme/Table` and, on
+    import, silently demoted such a document to a loose bundle file — it
+    kept its bytes but stopped being a concept, with no note and nothing
+    in `skipped`. The ban was ochakai's own rule with no SPEC behind it.
+    The `Type` schema's pattern widens to `^[^\r\n]{1,128}$` and
+    `domain.ValidType` with it; the 128-byte cap stays, as ordinary
+    defensive practice rather than anything SPEC derives. **What a client
+    does:** a client that validated types against the old pattern must
+    widen it — a response can now carry a type with a `/` in it (design
+    doc 0064 §18).
+  - `PUT /api/v1/bundle/{path}` declares a `requestBody` at last
+    (`required: true`; `text/markdown` for a concept,
+    `application/octet-stream` for a file). It never had one, so no
+    generator could produce a working write client from the contract.
+    It survived because the contract test skipped *every* PUT under the
+    bundle address, concepts included — written for opaque file bytes,
+    it took the whole write face out from under the validator. The skip
+    is now decided the way the handler decides, by the body, so a
+    concept PUT is checked like any other request; a client that sent no
+    `Content-Type` on a concept write is off-contract, though the server
+    stays lenient (design doc 0064 §16).
+  - The contract now declares what the server already sent: an
+    `Ochakai-Read-Only` header on the two bundle 412s and the review
+    409; a 400 on `GET /api/v1/usage/{id}` (the one operation whose
+    response list was never updated when unknown query keys became a
+    400) and a 413 on `POST /api/v1/move`, `POST /api/v1/review/{id}`
+    and `POST /api/v1/usage/{id}`; and the `Cache-Control`,
+    `X-Content-Type-Options: nosniff` and `Content-Security-Policy:
+    sandbox` response headers, plus `ETag` on the 304. All additive —
+    nothing a client holds breaks. The three headers move
+    [docs/surface.md](docs/surface.md)'s `HEADER` count 10 → 13: the
+    section derives it from the spec rather than from the code, so a
+    header the server set and the contract omitted was surface nobody
+    counted (design doc 0064 §19).
+  - `api/openapi.yaml`'s `Trust` schema now says what design doc
+    [0009](docs/design/0009-provenance-portability.md) decided: the tier
+    is derived from *this instance's* verification ledger, and a
+    document's own `verified` key is kept under `received:` and never
+    scored. A reader coming from OKF SPEC §5.3 would have expected the
+    document's own key to be read. Prose only.
   - No version or capability-discovery signal ships, and CORS stays
     deliberately absent — both are decided in 0064 rather than left
     open.
