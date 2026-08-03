@@ -47,6 +47,36 @@ info:
     their schema does not declare, rather than decoding the request and
     silently dropping it.
 
+
+    **`Accept` is read as a set of names, not as a ranking** (design doc
+    0064 §22). An address has one default representation and at most two
+    media types that select another: `application/gzip` for the subtree
+    under it, and the object's own alternative form (`application/json`
+    for `index.md`, `log.md` and a file; `text/markdown` for a concept).
+    Naming one selects it, `application/gzip` first where both are named;
+    `*/*`, an unrecognized type and no header at all all leave the
+    default. The comparison is on the media type alone — parameters are
+    dropped and the match is case-insensitive, so
+    `text/markdown; charset=utf-8` selects the document and
+    `text/markdown-x` is simply a different type.
+
+    **`q` is dropped with the other parameters, `q=0` included.** RFC 9110
+    reads `q=0` as "not this one"; ochakai does not implement it, so
+    `application/gzip;q=0` still gets the archive. There is nothing for an
+    exclusion to express here that omission does not: a caller who wants
+    the default asks for it by not naming the token. This is written down
+    rather than left to be discovered, because it is the one place ochakai
+    knowingly answers a standard header by a rule of its own.
+
+    **A repeated query key is a 400, naming it** (design doc 0064 §20.2) —
+    unless the parameter is declared as an array, which is how a caller
+    spells a set: `?type=Metric&type=Policy` asks for either, and `type`,
+    `status`, `trust`, `tag` and `prefix` are the five that work this
+    way. Every other key takes one value, and `?limit=10&limit=50` has no
+    answer that is what was asked. The server used to take the first
+    value for most keys and the last for `fm.{key}`, so one contradiction
+    got two different silent answers in the same request.
+
     **REST is frozen at `/api/v1`** (design doc 0064,
     docs/compatibility.md): this contract is the address list a client can
     hold onto, and the only thing that can still break it after this point
@@ -80,7 +110,7 @@ security:
 paths:
   /api/v1/search:
     get:
-      operationId: searchKnowledge
+      operationId: searchConcepts
       summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
         Rejected concepts are excluded unless rejected=true is passed (so
@@ -452,8 +482,8 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/bundle/{path}:
     get:
-      operationId: getBundleFile
-      summary: Read one object of the bundle
+      operationId: getBundlePath
+      summary: Read what is at a bundle path
       description: >
         One object at its bundle path (design doc 0075 §4): a concept
         at `<id>.md`, a file at its own path, or one of the two names OKF
@@ -823,7 +853,7 @@ paths:
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     put:
-      operationId: putBundleFile
+      operationId: putBundlePath
       summary: Write one object of the bundle
       description: >
         Stores the request body at the path (design doc 0075 §4). What
@@ -949,6 +979,26 @@ paths:
               schema: { type: string }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: >
+            `If-Match` named a version at a path where no concept lives.
+            A precondition names a version, and a version the caller read
+            cannot belong to a concept that does not exist, so the
+            conditional write is an update and there is nothing to
+            update. **404 rather than the 412 RFC 9110 prescribes**, and
+            deliberately: 412 would conflate "it changed" with "it is
+            gone", which are different things to a caller deciding
+            whether to re-read or to create. Without `If-Match` this PUT
+            creates, so this response cannot arise (design doc 0064
+            §20.5).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
         "412":
           description: >
             An If-Match or If-None-Match "*" precondition failed — the
@@ -981,7 +1031,7 @@ paths:
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     delete:
-      operationId: deleteBundleFile
+      operationId: deleteBundlePath
       summary: Delete one object of the bundle
       description: >
         Removes the object at the path: a concept is soft-deleted — it
@@ -1368,7 +1418,7 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
-      operationId: moveKnowledge
+      operationId: moveConcept
       summary: Move (rename) a knowledge concept to a new id
       description: >
         The id is the address (design doc 0075 §2), so a move carries
@@ -1488,7 +1538,7 @@ paths:
         description: The concept's id; slashes are real path separators.
         schema: { type: string }
     post:
-      operationId: reviewKnowledge
+      operationId: reviewConcept
       summary: Record a human's ruling on a concept
       description: >
         One ruling on the concept as it stands, by the caller, now. This
@@ -1745,7 +1795,7 @@ paths:
         description: The concept's id; slashes are real path separators.
         schema: { type: string }
     get:
-      operationId: getKnowledgeUsage
+      operationId: getConceptUsage
       summary: Usage totals for one knowledge concept
       description: >
         How often the concept was actually used: appeared in search results,
@@ -1960,7 +2010,7 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/reembed:
     post:
-      operationId: reembedKnowledge
+      operationId: reembedConcepts
       summary: Embed concepts that have no vector for the configured model
       description: >
         Vectors are written when a concept is written, so a knowledge base
@@ -2165,11 +2215,19 @@ components:
         summary.content_hash field is the same value). Every response carrying a concept
         carries the header. The write happens only if the concept still has
         this version; a concept changed since it was read is a 412 and
-        nothing is written. Absent or "*" means no precondition — last
-        write wins.
+        nothing is written. Absent means no precondition — last write wins.
         The version is opaque, so there is no format to reject: a value
         that never matched anything fails the precondition with a 412,
         which is what a merely stale one does too.
+
+        **`*` is a 400.** RFC 9110 §13.1.1 gives it a meaning — "only if
+        a representation exists", the update-only mirror of the
+        create-only `If-None-Match: *` — that ochakai does not implement,
+        and reading it as no precondition at all silently created for a
+        caller who sent it to prevent exactly that. Naming it leaves the
+        choice open: a 400 can be given RFC's meaning in a later release
+        without breaking anyone, because no request that always failed
+        can be relied on (design doc 0064 §20.1).
       schema: { type: string }
     IfNoneMatch:
       name: If-None-Match
@@ -2183,6 +2241,19 @@ components:
         cache validator — the content hash a prior read returned,
         answered with a 304 when it still matches (design doc 0064
         §14.2: a concept's GET did not compare it until now).
+
+        **Each surface takes one of those two spellings and 400s the
+        other.** A version on a PUT would mean "write only if this is
+        *not* the version", which ochakai does not implement; `*` on a
+        GET would mean "answer only if nothing is here", the opposite of
+        the validator. Both used to be dropped in silence, leaving the
+        write or the read unconditioned — the outcome a caller sending a
+        precondition least wants (design doc 0064 §20.4).
+
+        **Neither is read where the path holds a file.** The contract
+        declares both here because one address writes both kinds, but the
+        version they name is a concept's; a file write takes no
+        precondition and says so with a 400 rather than overwriting.
       schema: { type: string }
     OnBehalfOf:
       name: Ochakai-On-Behalf-Of
@@ -2601,6 +2672,19 @@ components:
         ER diagram, a seeds file (design doc 0075 §1).
         Metadata travels with the concept; bytes are a separate,
         deliberate fetch so agent context is never flooded with base64.
+
+        **This is ochakai's, not OKF's.** SPEC v0.2 is markdown-centric:
+        §3 calls a bundle "a directory tree of markdown files", §11's
+        conformance clauses speak only of `.md` files, and non-markdown
+        content is neither permitted nor forbidden — it is not addressed,
+        and the spec gives it no name, no metadata fields and no rule for
+        a consumer. So there is no OKF vocabulary this schema could be
+        aligned to, and the words below are ochakai's own. Note that
+        SPEC's `resource` (§4.1) is a different thing entirely — the
+        external asset a concept *describes*, not a file stored beside
+        it. Bundles ochakai writes stay readable by an OKF consumer: the
+        concepts are conformant and these files are ordinary files in the
+        tree, which the spec has nothing to say about either way.
       properties:
         name: { type: string, description: Filename, unique within the concept. }
         media_type:
@@ -2919,7 +3003,22 @@ components:
       properties:
         path: { type: string, description: The object's bundle path. }
         title: { type: string, description: "The object's own title as it stands — absent when the document declared none, for a file, and for a concept since purged; a reader derives one from the path's last segment (OKF SPEC §4.1, design doc 0074 §1)." }
-        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
+        change:
+          type: string
+          description: >
+            What happened, as one word. **An open set: treat a value you
+            do not know as an event you have nothing special to render
+            for, and do not fail on it.** Today it is one of `create`,
+            `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
+            `add_file`, `remove_file`, and that list is the ledger's
+            vocabulary rather than the wire's promise — it has moved
+            twice already (`unreject` became `withdraw`, `attach` and
+            `detach` became `add_file` and `remove_file`, each with a
+            migration rewriting the stored rows). A closed enum here
+            would make the tenth word a breaking change, which after the
+            freeze is a word that can never be added (design doc 0064
+            §20.3). The current spelling is counted in docs/surface.md's
+            VOCAB, where adding one is a decision that shows in a diff.
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
     ObjectHistory:
@@ -2941,7 +3040,22 @@ components:
         how, when, and the whole concept as it stood, as an OKF document.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per concept. }
-        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
+        change:
+          type: string
+          description: >
+            What happened, as one word. **An open set: treat a value you
+            do not know as an event you have nothing special to render
+            for, and do not fail on it.** Today it is one of `create`,
+            `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
+            `add_file`, `remove_file`, and that list is the ledger's
+            vocabulary rather than the wire's promise — it has moved
+            twice already (`unreject` became `withdraw`, `attach` and
+            `detach` became `add_file` and `remove_file`, each with a
+            migration rewriting the stored rows). A closed enum here
+            would make the tenth word a breaking change, which after the
+            freeze is a word that can never be added (design doc 0064
+            §20.3). The current spelling is counted in docs/surface.md's
+            VOCAB, where adding one is a decision that shows in a diff.
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         document:

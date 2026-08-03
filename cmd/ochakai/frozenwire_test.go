@@ -22,10 +22,22 @@ import (
 // outside rather than trust the convention.
 //
 // api/openapi.frozen.txt is that reading, checked in. Every line is one
-// thing a client can observe — an operation, a parameter or header wire
-// name, a status code, a media type, a schema property with its
-// requiredness, type and enum — derived from the spec and sorted, so a diff
-// names exactly what moved.
+// thing a client can observe — an operation and its operationId, a
+// parameter or header wire name, a status code, a media type, a schema
+// property with its requiredness, type, enum and constraints — derived
+// from the spec and sorted, so a diff names exactly what moved.
+//
+// The constraint facets (schemaFacets) were the first version's blind
+// spot, and a large one: `pattern`, `format`, `default`, `maximum` and
+// `maxLength` all describe the wire and none of them was read. Design
+// doc 0064 §18 had already written down why a response `pattern` cannot
+// widen after the freeze — a validating client holds it — and then froze
+// it without a check. `default` was worse than unread: the five distinct
+// (default, maximum) pairs `limit` carries across five operations are the
+// difference between asking for 10 rows and 200, and moving one of them
+// moved no line here. operationId is in for the same reason a header name
+// is: 0064 §11 treats a code generator as a consumer of this document, so
+// the method name it emits is something a client holds onto.
 //
 // **Prose is deliberately not in it.** description, summary, example and
 // examples are dropped on the way through, so the documentation in the
@@ -198,6 +210,7 @@ func (f *wireFingerprint) walkPaths() {
 			op := wireMap(node)
 			loc := strings.ToUpper(method) + " " + path
 			f.add(loc)
+			f.add(loc, "operationId="+wireStr(op["operationId"]))
 			for _, p := range append(append([]any{}, shared...), wireSeq(op["parameters"])...) {
 				f.parameter(loc, p)
 			}
@@ -317,7 +330,7 @@ func (f *wireFingerprint) schema(loc string, node any, required string) {
 		f.add(loc, required, "ref="+shortRef(ref))
 		return
 	}
-	f.add(loc, required, typeToken(s["type"]), enumToken(s["enum"]))
+	f.add(loc, append([]string{required, typeToken(s["type"]), enumToken(s["enum"])}, facetTokens(s)...)...)
 
 	names := map[string]bool{}
 	for _, name := range wireSeq(s["required"]) {
@@ -381,6 +394,40 @@ func typeToken(v any) string {
 		return "type=" + strings.Join(names, "|")
 	}
 	return ""
+}
+
+// schemaFacets are the constraint keys, in the order a line carries them.
+// Each one narrows or describes what may travel under a name, which makes
+// it as much a part of the contract as the name: a `default` decides what
+// a caller gets for asking nothing, a `pattern` or `maxLength` decides
+// what a validating client refuses, and a `format` tells it how to read
+// the string. Listed rather than "every key that is not prose" so a facet
+// OpenAPI grows later arrives as a decision to record it, not as a line
+// that appears on its own.
+var schemaFacets = []string{
+	"format", "pattern", "default", "minimum", "maximum", "exclusiveMinimum",
+	"exclusiveMaximum", "multipleOf", "minLength", "maxLength", "minItems",
+	"maxItems", "uniqueItems", "readOnly", "writeOnly", "nullable",
+}
+
+func facetTokens(s map[string]any) []string {
+	out := make([]string, 0, len(schemaFacets))
+	for _, name := range schemaFacets {
+		if v, ok := s[name]; ok {
+			out = append(out, name+"="+facetValue(v))
+		}
+	}
+	return out
+}
+
+// facetValue quotes a string and leaves a number or a bool bare, so a
+// pattern containing a space still reads as one token and `default=0` is
+// never confused with `default="0"`.
+func facetValue(v any) string {
+	if s, ok := v.(string); ok {
+		return fmt.Sprintf("%q", s)
+	}
+	return fmt.Sprint(v)
 }
 
 // enumToken quotes each value, so an enum whose values contain a space or

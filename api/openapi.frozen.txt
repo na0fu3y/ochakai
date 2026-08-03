@@ -13,7 +13,8 @@ DELETE /api/v1/bundle/{path}
 DELETE /api/v1/bundle/{path} header If-Match ref=IfMatch
 DELETE /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 DELETE /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
-DELETE /api/v1/bundle/{path} query purge required=false type=boolean
+DELETE /api/v1/bundle/{path} operationId=deleteBundlePath
+DELETE /api/v1/bundle/{path} query purge required=false type=boolean default=false
 DELETE /api/v1/bundle/{path} response 204
 DELETE /api/v1/bundle/{path} response 204 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 400 ref=Error
@@ -34,13 +35,14 @@ DELETE /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 500 ref=Error
 GET /api/v1/bundle/{path}
 GET /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
+GET /api/v1/bundle/{path} operationId=getBundlePath
 GET /api/v1/bundle/{path} path path required=true type=string
-GET /api/v1/bundle/{path} query files required=false type=boolean
+GET /api/v1/bundle/{path} query files required=false type=boolean default=true
 GET /api/v1/bundle/{path} query history required=false type=string
 GET /api/v1/bundle/{path} query limit required=false type=integer
 GET /api/v1/bundle/{path} response 200
-GET /api/v1/bundle/{path} response 200 content */* type=string
-GET /api/v1/bundle/{path} response 200 content application/gzip type=string
+GET /api/v1/bundle/{path} response 200 content */* type=string format="binary"
+GET /api/v1/bundle/{path} response 200 content application/gzip type=string format="binary"
 GET /api/v1/bundle/{path} response 200 content application/json
 GET /api/v1/bundle/{path} response 200 content application/json/anyOf/0 ref=View
 GET /api/v1/bundle/{path} response 200 content application/json/anyOf/1 ref=BundleListing
@@ -75,9 +77,10 @@ GET /api/v1/bundle/{path} response 501 content application/json type=object
 GET /api/v1/bundle/{path} response 501 content application/json.error required=false type=string
 GET /api/v1/bundle/{path} response 501 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/context
-GET /api/v1/context query budget required=false type=integer
+GET /api/v1/context operationId=getContext
+GET /api/v1/context query budget required=false type=integer default=0
 GET /api/v1/context query fm.{key} required=false type=string
-GET /api/v1/context query limit required=false type=integer
+GET /api/v1/context query limit required=false type=integer default=5 maximum=20
 GET /api/v1/context query prefix required=false type=array
 GET /api/v1/context query prefix[] type=string
 GET /api/v1/context query q required=true type=string
@@ -103,6 +106,7 @@ GET /api/v1/context response 403 ref=Forbidden
 GET /api/v1/context response 405 ref=Error
 GET /api/v1/context response 500 ref=Error
 GET /api/v1/search
+GET /api/v1/search operationId=searchConcepts
 GET /api/v1/search query cursor required=false type=string
 GET /api/v1/search query fm.{key} required=false type=string
 GET /api/v1/search query limit required=false type=integer
@@ -135,6 +139,7 @@ GET /api/v1/search response 403 ref=Forbidden
 GET /api/v1/search response 405 ref=Error
 GET /api/v1/search response 500 ref=Error
 GET /api/v1/stats
+GET /api/v1/stats operationId=getStats
 GET /api/v1/stats query days required=false type=integer
 GET /api/v1/stats query prefix required=false type=array
 GET /api/v1/stats query prefix[] type=string
@@ -146,6 +151,7 @@ GET /api/v1/stats response 403 ref=Forbidden
 GET /api/v1/stats response 405 ref=Error
 GET /api/v1/stats response 500 ref=Error
 GET /api/v1/usage/{id}
+GET /api/v1/usage/{id} operationId=getConceptUsage
 GET /api/v1/usage/{id} path id required=true type=string
 GET /api/v1/usage/{id} response 200
 GET /api/v1/usage/{id} response 200 content application/json ref=Usage
@@ -161,6 +167,7 @@ POST /api/v1/move body application/json.from required=true type=string
 POST /api/v1/move body application/json.to required=true type=string
 POST /api/v1/move header Ochakai-On-Behalf-Of ref=OnBehalfOf
 POST /api/v1/move header Ochakai-Producer ref=Producer
+POST /api/v1/move operationId=moveConcept
 POST /api/v1/move response 200
 POST /api/v1/move response 200 content application/json ref=View
 POST /api/v1/move response 200 header ETag ref=ETag
@@ -173,8 +180,9 @@ POST /api/v1/move response 409 ref=Error
 POST /api/v1/move response 413 ref=Error
 POST /api/v1/move response 500 ref=Error
 POST /api/v1/reembed
+POST /api/v1/reembed operationId=reembedConcepts
 POST /api/v1/reembed query cursor required=false type=string
-POST /api/v1/reembed query limit required=false type=integer
+POST /api/v1/reembed query limit required=false type=integer default=200 maximum=5000
 POST /api/v1/reembed response 200
 POST /api/v1/reembed response 200 content application/json type=object
 POST /api/v1/reembed response 200 content application/json.concepts required=false type=integer
@@ -190,10 +198,11 @@ POST /api/v1/reembed response 500 ref=Error
 POST /api/v1/reembed response 501 ref=Error
 POST /api/v1/review/{id}
 POST /api/v1/review/{id} body application/json required=true type=object
-POST /api/v1/review/{id} body application/json.note required=false type=string
+POST /api/v1/review/{id} body application/json.note required=false type=string maxLength=2000
 POST /api/v1/review/{id} body application/json.ruling required=true type=string enum=["verified" "rejected" "withdrawn"]
 POST /api/v1/review/{id} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 POST /api/v1/review/{id} header Ochakai-Producer ref=Producer
+POST /api/v1/review/{id} operationId=reviewConcept
 POST /api/v1/review/{id} path id required=true type=string
 POST /api/v1/review/{id} response 200
 POST /api/v1/review/{id} response 200 content application/json ref=View
@@ -214,10 +223,11 @@ POST /api/v1/review/{id} response 413 ref=Error
 POST /api/v1/review/{id} response 500 ref=Error
 POST /api/v1/usage/{id}
 POST /api/v1/usage/{id} body application/json required=true type=object
-POST /api/v1/usage/{id} body application/json.note required=false type=string
+POST /api/v1/usage/{id} body application/json.note required=false type=string maxLength=2000
 POST /api/v1/usage/{id} body application/json.outcome required=true type=string enum=["worked" "failed"]
 POST /api/v1/usage/{id} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 POST /api/v1/usage/{id} header Ochakai-Producer ref=Producer
+POST /api/v1/usage/{id} operationId=reportOutcome
 POST /api/v1/usage/{id} path id required=true type=string
 POST /api/v1/usage/{id} response 200
 POST /api/v1/usage/{id} response 200 content application/json ref=Usage
@@ -229,13 +239,14 @@ POST /api/v1/usage/{id} response 405 ref=Error
 POST /api/v1/usage/{id} response 413 ref=Error
 POST /api/v1/usage/{id} response 500 ref=Error
 PUT /api/v1/bundle/{path}
-PUT /api/v1/bundle/{path} body application/octet-stream required=true type=string
+PUT /api/v1/bundle/{path} body application/octet-stream required=true type=string format="binary"
 PUT /api/v1/bundle/{path} body text/markdown required=true type=string
 PUT /api/v1/bundle/{path} header If-Match ref=IfMatch
 PUT /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
 PUT /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 PUT /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
-PUT /api/v1/bundle/{path} query dry_run required=false type=boolean
+PUT /api/v1/bundle/{path} operationId=putBundlePath
+PUT /api/v1/bundle/{path} query dry_run required=false type=boolean default=false
 PUT /api/v1/bundle/{path} response 200
 PUT /api/v1/bundle/{path} response 200 content application/json
 PUT /api/v1/bundle/{path} response 200 content application/json/anyOf/0 ref=View
@@ -256,6 +267,10 @@ PUT /api/v1/bundle/{path} response 201 header Ochakai-Note ref=Note
 PUT /api/v1/bundle/{path} response 201 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 400 ref=Error
 PUT /api/v1/bundle/{path} response 403 ref=Forbidden
+PUT /api/v1/bundle/{path} response 404
+PUT /api/v1/bundle/{path} response 404 content application/json type=object
+PUT /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 405 ref=Error
 PUT /api/v1/bundle/{path} response 409
 PUT /api/v1/bundle/{path} response 409 content application/json type=object
@@ -288,9 +303,9 @@ components/parameters/IfMatch schema type=string
 components/parameters/IfNoneMatch name=If-None-Match in=header required=false
 components/parameters/IfNoneMatch schema type=string
 components/parameters/OnBehalfOf name=Ochakai-On-Behalf-Of in=header required=false
-components/parameters/OnBehalfOf schema type=string
+components/parameters/OnBehalfOf schema type=string maxLength=320
 components/parameters/Producer name=Ochakai-Producer in=header required=false
-components/parameters/Producer schema type=string
+components/parameters/Producer schema type=string maxLength=128
 components/responses/Error
 components/responses/Error content application/json type=object
 components/responses/Error content application/json.error required=false type=string
@@ -312,14 +327,14 @@ components/schemas/BundleListing.concepts[].id required=false type=string
 components/schemas/BundleListing.concepts[].status required=false ref=Status
 components/schemas/BundleListing.concepts[].title required=false type=string
 components/schemas/BundleListing.concepts[].type required=false ref=Type
-components/schemas/BundleListing.concepts[].updated_at required=false type=string
+components/schemas/BundleListing.concepts[].updated_at required=false type=string format="date-time"
 components/schemas/BundleListing.dirs required=false type=array
 components/schemas/BundleListing.dirs[] type=object
 components/schemas/BundleListing.dirs[].count required=false type=integer
 components/schemas/BundleListing.dirs[].name required=false type=string
 components/schemas/BundleListing.files required=false type=array
 components/schemas/BundleListing.files[] type=object
-components/schemas/BundleListing.files[].created_at required=false type=string
+components/schemas/BundleListing.files[].created_at required=false type=string format="date-time"
 components/schemas/BundleListing.files[].media_type required=false type=string
 components/schemas/BundleListing.files[].name required=false type=string
 components/schemas/BundleListing.files[].path required=false type=string
@@ -329,8 +344,8 @@ components/schemas/BundleLog type=object
 components/schemas/BundleLog.changes required=true type=array
 components/schemas/BundleLog.changes[] ref=Change
 components/schemas/Change type=object
-components/schemas/Change.change required=false type=string enum=["create" "update" "verify" "reject" "withdraw" "delete" "move" "add_file" "remove_file"]
-components/schemas/Change.changed_at required=false type=string
+components/schemas/Change.change required=false type=string
+components/schemas/Change.changed_at required=false type=string format="date-time"
 components/schemas/Change.changed_by required=false ref=Actor
 components/schemas/Change.path required=false type=string
 components/schemas/Change.title required=false type=string
@@ -350,7 +365,7 @@ components/schemas/ContextRank.trust required=false
 components/schemas/ContextRank.trust/allOf/0 ref=Trust
 components/schemas/ContextRank.type required=false ref=Type
 components/schemas/File type=object
-components/schemas/File.created_at required=false type=string
+components/schemas/File.created_at required=false type=string format="date-time" readOnly=true
 components/schemas/File.created_by required=false ref=Actor
 components/schemas/File.media_type required=false type=string
 components/schemas/File.name required=false type=string
@@ -358,7 +373,7 @@ components/schemas/File.path required=false type=string
 components/schemas/File.sha256 required=false type=string
 components/schemas/File.size required=false type=integer
 components/schemas/Generated type=object
-components/schemas/Generated.at required=false type=string
+components/schemas/Generated.at required=false type=string format="date-time"
 components/schemas/Generated.by required=false ref=Actor
 components/schemas/Link type=object
 components/schemas/Link.target required=false type=string
@@ -378,25 +393,25 @@ components/schemas/QueueCounts.drafts required=false type=integer
 components/schemas/QueueCounts.failed required=false type=integer
 components/schemas/QueueCounts.stale_after required=false type=integer
 components/schemas/Rejection type=object
-components/schemas/Rejection.at required=false type=string
+components/schemas/Rejection.at required=false type=string format="date-time"
 components/schemas/Rejection.by required=false ref=Actor
 components/schemas/Rejection.note required=false type=string
 components/schemas/Revision type=object
-components/schemas/Revision.change required=false type=string enum=["create" "update" "verify" "reject" "withdraw" "delete" "move" "add_file" "remove_file"]
-components/schemas/Revision.changed_at required=false type=string
+components/schemas/Revision.change required=false type=string
+components/schemas/Revision.changed_at required=false type=string format="date-time"
 components/schemas/Revision.changed_by required=false ref=Actor
 components/schemas/Revision.document required=false type=string
 components/schemas/Revision.rev required=false type=integer
 components/schemas/SearchHit
 components/schemas/SearchHit/allOf/0 ref=Summary
 components/schemas/SearchHit/allOf/1 type=object
-components/schemas/SearchHit/allOf/1.files required=false type=array
+components/schemas/SearchHit/allOf/1.files required=false type=array readOnly=true
 components/schemas/SearchHit/allOf/1.files[] ref=File
 components/schemas/SearchHit/allOf/1.score required=false type=number
-components/schemas/SearchHit/allOf/1.usage required=false
+components/schemas/SearchHit/allOf/1.usage required=false readOnly=true
 components/schemas/SearchHit/allOf/1.usage/allOf/0 ref=Usage
 components/schemas/Stats type=object
-components/schemas/Stats.at required=false type=string
+components/schemas/Stats.at required=false type=string format="date-time"
 components/schemas/Stats.concepts required=false type=object
 components/schemas/Stats.concepts.created required=false type=integer
 components/schemas/Stats.concepts.rejected required=false type=integer
@@ -410,7 +425,7 @@ components/schemas/Stats.misses.count required=false type=integer
 components/schemas/Stats.misses.queries required=false type=array
 components/schemas/Stats.misses.queries[] type=object
 components/schemas/Stats.misses.queries[].count required=false type=integer
-components/schemas/Stats.misses.queries[].last_at required=false type=string
+components/schemas/Stats.misses.queries[].last_at required=false type=string format="date-time"
 components/schemas/Stats.misses.queries[].query required=false type=string
 components/schemas/Stats.misses.recording required=false type=boolean
 components/schemas/Stats.outcomes required=false type=object
@@ -424,14 +439,14 @@ components/schemas/Stats.window_days required=false type=integer
 components/schemas/Status type=string enum=["draft" "stable" "deprecated"]
 components/schemas/Summary type=object
 components/schemas/Summary.content_hash required=true type=string
-components/schemas/Summary.created_at required=true type=string
+components/schemas/Summary.created_at required=true type=string format="date-time"
 components/schemas/Summary.description required=false type=string
-components/schemas/Summary.id required=true type=string
+components/schemas/Summary.id required=true type=string pattern="^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
 components/schemas/Summary.links required=false type=array
 components/schemas/Summary.links[] ref=Link
 components/schemas/Summary.rejected required=true type=boolean
 components/schemas/Summary.resource required=false type=string
-components/schemas/Summary.stale_after required=false type=string
+components/schemas/Summary.stale_after required=false type=string format="date"
 components/schemas/Summary.status required=true ref=Status
 components/schemas/Summary.tags required=false type=array
 components/schemas/Summary.tags[] type=string
@@ -439,18 +454,18 @@ components/schemas/Summary.title required=false type=string
 components/schemas/Summary.trust required=true
 components/schemas/Summary.trust/allOf/0 ref=Trust
 components/schemas/Summary.type required=true ref=Type
-components/schemas/Summary.updated_at required=true type=string
-components/schemas/Summary.verified_at required=false type=string
+components/schemas/Summary.updated_at required=true type=string format="date-time"
+components/schemas/Summary.verified_at required=false type=string format="date-time"
 components/schemas/Trust type=string enum=["unverified" "machine-confirmed" "human-reviewed"]
-components/schemas/Type type=string
+components/schemas/Type type=string pattern="^[^\\r\\n]{1,128}$"
 components/schemas/Usage type=object
 components/schemas/Usage.failed required=false type=integer
 components/schemas/Usage.fetches required=false type=integer
-components/schemas/Usage.last_used_at required=false type=string
+components/schemas/Usage.last_used_at required=false type=string format="date-time"
 components/schemas/Usage.search_hits required=false type=integer
 components/schemas/Usage.worked required=false type=integer
 components/schemas/Verification type=object
-components/schemas/Verification.at required=false type=string
+components/schemas/Verification.at required=false type=string format="date-time"
 components/schemas/Verification.by required=false ref=Actor
 components/schemas/View type=object
 components/schemas/View.document required=true type=string

@@ -38,8 +38,10 @@ moves:
   repeat: [api/openapi.yaml](../api/openapi.yaml) is now the address list
   a client can hold onto. **The freeze is checked, not promised.**
   [api/openapi.frozen.txt](../api/openapi.frozen.txt) is a fingerprint of
-  everything that file lets a client observe — every operation, parameter,
-  header, status code and schema field — and CI fails when the two disagree
+  everything that file lets a client observe — every operation and its
+  `operationId`, parameter, header, status code, schema field and the
+  constraints on it (`pattern`, `format`, `default`, `maximum`, and the
+  rest) — and CI fails when the two disagree
   (`cmd/ochakai/frozenwire_test.go`), so a rename that keeps every count
   still cannot land quietly. Prose is deliberately outside it: the
   documentation in the contract stays free to improve.

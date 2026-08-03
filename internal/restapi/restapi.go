@@ -436,7 +436,12 @@ func Handler(svc *service.Service) http.Handler {
 					// same ETag and never compared it (design doc 0064
 					// §14.2, issue #470). The spec declared the header
 					// for this GET as a whole, not just for a file.
-					if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, k.ContentHash) {
+					fresh, err := unmodified(r, k.ContentHash)
+					if err != nil {
+						writeError(w, err)
+						return
+					}
+					if fresh {
 						w.WriteHeader(http.StatusNotModified)
 						return
 					}
@@ -467,7 +472,12 @@ func Handler(svc *service.Service) http.Handler {
 				}
 				w.Header().Set("ETag", `"`+att.SHA256+`"`)
 				w.Header().Set("Cache-Control", "private, no-cache")
-				if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, att.SHA256) {
+				fresh, err := unmodified(r, att.SHA256)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				if fresh {
 					w.WriteHeader(http.StatusNotModified)
 					return
 				}
@@ -481,7 +491,12 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			w.Header().Set("ETag", `"`+att.SHA256+`"`)
 			w.Header().Set("Cache-Control", "private, no-cache")
-			if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, att.SHA256) {
+			fresh, err := unmodified(r, att.SHA256)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if fresh {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
@@ -581,6 +596,17 @@ func Handler(svc *service.Service) http.Handler {
 					writeError(w, err)
 					return
 				}
+				// A path that is not a concept's address names a file,
+				// which takes no precondition (design doc 0064 §20.4).
+				// A `.md` path is decided below: it reaches DeleteFile
+				// only when no concept lives there, and a precondition
+				// against a concept that is not there is already a 404.
+				if !isMarkdown {
+					if err := refusePreconditions(r); err != nil {
+						writeError(w, err)
+						return
+					}
+				}
 				err = store.ErrNotFound
 				switch {
 				case isMarkdown && purge:
@@ -592,7 +618,12 @@ func Handler(svc *service.Service) http.Handler {
 					// doc 0064).
 					err = svc.Purge(r.Context(), id, actor)
 				case isMarkdown:
-					err = svc.Delete(r.Context(), id, actor, parseIfMatch(r))
+					ifMatch, perr := parseIfMatch(r)
+					if perr != nil {
+						writeError(w, perr)
+						return
+					}
+					err = svc.Delete(r.Context(), id, actor, ifMatch)
 				}
 				if errors.Is(err, store.ErrNotFound) {
 					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
@@ -625,6 +656,12 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			if isMarkdown && okf.CarriesType(body) {
 				putEntry(w, r, svc, id, body, actor, dry)
+				return
+			}
+			// Everything from here writes a file, which takes no
+			// precondition (design doc 0064 §20.4).
+			if err := refusePreconditions(r); err != nil {
+				writeError(w, err)
 				return
 			}
 			var (
@@ -1144,9 +1181,11 @@ const maxDocument = 5 << 20
 // refusing there keeps the refusal in the one place all three surfaces
 // pass through (design doc 0015 §2).
 //
-// A repeated parameter keeps its last value. The pairs are AND-ed, and
-// "the same key twice" is a contradiction rather than a question, so
-// there is nothing sensible to OR.
+// The pairs are AND-ed. A repeated key never reaches here: "the same key
+// twice" is a contradiction rather than a question, so there is nothing
+// sensible to OR, and rejectUnknownParams answers it with a 400 naming
+// the key. This used to keep the last value, which was the same silence
+// the rest of the query surface stopped giving (design doc 0064 §20.2).
 func frontmatterFilter(q url.Values) map[string]string {
 	var out map[string]string
 	for key, vals := range q {
@@ -1269,11 +1308,43 @@ func splitReserved(path string) (dir, base string) {
 //     downloading it, closing the gap 0046 §3.5's table had already
 //     promised); default: the bytes.
 //
+// acceptsType reports whether the caller named mediaType in Accept.
+//
+// **Accept here is not a preference ranking.** An address has one default
+// representation and at most two media types that select another — the
+// archive of the subtree under it, and the object's own alternative form
+// (design doc 0064 §4) — so there is nothing to rank. The header is read
+// as a *set of names*: split on commas, parameters dropped, the media
+// type compared exactly and case-insensitively as RFC 9110 defines it.
+// Naming a type selects it; everything else, `*/*` and an unrecognized
+// type and no header at all, leaves the default.
+//
+// **`q` is dropped with the other parameters, `q=0` included.** RFC 9110
+// reads `q=0` as "not this one", which ochakai does not implement: a
+// caller that wants the default asks for it by *not naming the token*, so
+// an exclusion has nothing here to express that omission does not. The
+// cost is one honest sentence in the contract — `application/gzip;q=0`
+// still gets the archive — rather than a ranking rule a reader would have
+// to run in their head to predict a response (design doc 0064 §22).
+//
+// Exact comparison is the other half of making that rule true. Substring
+// matching answered `text/markdown-x` as markdown and was case-sensitive,
+// so the written rule and the code agreed only by luck.
+func acceptsType(r *http.Request, mediaType string) bool {
+	for entry := range strings.SplitSeq(r.Header.Get("Accept"), ",") {
+		name, _, _ := strings.Cut(entry, ";")
+		if strings.EqualFold(strings.TrimSpace(name), mediaType) {
+			return true
+		}
+	}
+	return false
+}
+
 // wantsJSON reports whether the caller asked for the structured form of
 // a derived file. Only an explicit JSON Accept counts: a browser or a
 // curl sends */* and should get the file that lives at the path.
 func wantsJSON(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/json")
+	return acceptsType(r, "application/json")
 }
 
 func writeMarkdown(w http.ResponseWriter, doc []byte) {
@@ -1285,7 +1356,7 @@ func writeMarkdown(w http.ResponseWriter, doc []byte) {
 // document rather than as JSON. Only an explicit markdown Accept counts:
 // a browser sends */* and wants the JSON every existing client reads.
 func wantsDocument(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "text/markdown")
+	return acceptsType(r, "text/markdown")
 }
 
 // wantsArchive reports whether the caller asked for a path as an OKF
@@ -1293,14 +1364,74 @@ func wantsDocument(r *http.Request) bool {
 // browser sending */* is asking to look at something, not to download
 // the knowledge base under it.
 func wantsArchive(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/gzip")
+	return acceptsType(r, "application/gzip")
 }
 
-// onlyIfAbsent reports an If-None-Match "*" precondition: write only if
-// the id is free. Any other value is ignored — ochakai has no use for a
-// conditional read, and a caller that means "only if absent" says "*".
-func onlyIfAbsent(r *http.Request) bool {
-	return strings.TrimSpace(r.Header.Get("If-None-Match")) == "*"
+// onlyIfAbsent reports an If-None-Match "*" precondition on a write:
+// write only if the path is free. It is how a caller states that it is
+// not replacing anything, which a create-or-replace PUT cannot say any
+// other way (design doc 0030), and it is what `--only-if-new` and the
+// MCP write path send.
+//
+// Any other value is a 400 naming it. RFC 9110 gives an entity-tag here
+// the meaning "write only if the object is *not* this version", which is
+// not something a knowledge store has a use for, and until design doc
+// 0064 it was dropped in silence — the write went ahead unconditioned,
+// which is the outcome a caller sending a precondition least wants
+// (§20.4).
+func onlyIfAbsent(r *http.Request) (bool, error) {
+	switch v := strings.TrimSpace(r.Header.Get("If-None-Match")); v {
+	case "":
+		return false, nil
+	case "*":
+		return true, nil
+	default:
+		return false, service.Invalidf(
+			`If-None-Match on a write takes only "*", for "write only if the path is free"; a version here is not a precondition ochakai implements`)
+	}
+}
+
+// unmodified reports whether an If-None-Match validator still matches the
+// version being served, so the read can answer 304 instead of the body.
+//
+// "*" is a 400. RFC 9110 reads it on a GET as "only if nothing is here",
+// which for an object that exists means a 304 — the opposite of the
+// cache validator this header is otherwise used as, and until design doc
+// 0064 it was ignored and answered 200 with the whole body (§20.4). The
+// caller that wants to know whether something exists asks for it.
+// refusePreconditions 400s a write that carries either precondition to an
+// address holding a file rather than a concept.
+//
+// The contract declares If-Match and If-None-Match on the bundle write
+// because one address writes both kinds (design doc 0075 §4), but only a
+// concept has the version they name: optimistic locking is a concept's
+// content hash and its ledger (design doc 0030). A file write has never
+// read either header — it overwrote whatever was there, precondition or
+// not, which is the outcome a caller sending one least wants. Naming it
+// leaves the door open: conditional file writes can be implemented later
+// without breaking a caller, because nothing can depend on a request that
+// always failed (design doc 0064 §20.4).
+func refusePreconditions(r *http.Request) error {
+	for _, name := range []string{"If-Match", "If-None-Match"} {
+		if strings.TrimSpace(r.Header.Get(name)) == "" {
+			continue
+		}
+		return service.Invalidf(
+			"%s conditions a write on a concept's version (design doc 0030); a file is written at its path without one", name)
+	}
+	return nil
+}
+
+func unmodified(r *http.Request, version string) (bool, error) {
+	v := strings.TrimSpace(r.Header.Get("If-None-Match"))
+	if v == "" {
+		return false, nil
+	}
+	if v == "*" {
+		return false, service.Invalidf(
+			`If-None-Match "*" is not a precondition ochakai implements on a read; send the version a prior read returned in the ETag header`)
+	}
+	return strings.Contains(v, version), nil
 }
 
 // putEntry writes one document as the concept at id and answers with the
@@ -1325,6 +1456,16 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	// If-Match is an optional optimistic-concurrency precondition: its
 	// value is the ETag from a prior read. Absent means last-write-wins
 	// (design doc 0030).
+	ifMatch, err := parseIfMatch(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	ifAbsent, err := onlyIfAbsent(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	var (
 		out              *domain.Knowledge
 		created, changed bool
@@ -1335,8 +1476,8 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		// happening, and the plan already says whether the id is free —
 		// which is the whole of what the precondition would have told
 		// the caller, without the 412 (design doc 0061).
-		out, created, changed, err = svc.Plan(r.Context(), k, actor, parseIfMatch(r))
-	case onlyIfAbsent(r):
+		out, created, changed, err = svc.Plan(r.Context(), k, actor, ifMatch)
+	case ifAbsent:
 		out, err = svc.Create(r.Context(), k, actor)
 		created, changed = true, true
 		if errors.Is(err, store.ErrAlreadyExists) {
@@ -1351,7 +1492,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 			return
 		}
 	default:
-		out, created, changed, err = svc.Put(r.Context(), k, actor, parseIfMatch(r))
+		out, created, changed, err = svc.Put(r.Context(), k, actor, ifMatch)
 	}
 	if err != nil {
 		writeError(w, err)
@@ -1547,19 +1688,34 @@ func etagOf(k *domain.Knowledge) string {
 	return `"` + k.ContentHash + `"`
 }
 
-// parseIfMatch reads an optional If-Match precondition. Absent or "*"
-// means no version precondition (the update still requires the concept to
-// exist). Any other value is taken as a concept ETag, quoted or not: it is
-// an opaque token now, so there is no format to validate — a value that
-// never matched anything simply fails the precondition with a 412, which
-// is what a stale one does too.
-func parseIfMatch(r *http.Request) *string {
+// parseIfMatch reads an optional If-Match precondition. Absent means no
+// precondition — last write wins. Any value is taken as a concept ETag,
+// quoted or not: it is an opaque token now, so there is no format to
+// validate — a value that never matched anything simply fails the
+// precondition with a 412, which is what a stale one does too.
+//
+// "*" is the one value refused, with a 400 naming it. RFC 9110 §13.1.1
+// gives it a meaning ochakai does not implement — "only if a
+// representation exists", the update-only mirror of the create-only
+// If-None-Match "*" — and until design doc 0064 it was read as no
+// precondition at all, so a caller sending it to guard against creating
+// silently created. That is the shape §2 spent the freeze closing: an
+// unimplemented spelling has to be named, not obeyed backwards. Refusing
+// it is also what keeps the choice open. A 400 can be given RFC's meaning
+// in a later release without breaking a caller, because nobody can be
+// relying on a request that never succeeded; freezing either behaviour
+// would settle it forever (design doc 0064 §2, §20.1).
+func parseIfMatch(r *http.Request) (*string, error) {
 	v := strings.TrimSpace(r.Header.Get("If-Match"))
-	if v == "" || v == "*" {
-		return nil
+	if v == "" {
+		return nil, nil
+	}
+	if v == "*" {
+		return nil, service.Invalidf(
+			`If-Match "*" is not a precondition ochakai implements; send the version a prior read returned in the ETag header, or no If-Match at all`)
 	}
 	v = strings.Trim(v, `"`)
-	return &v
+	return &v, nil
 }
 
 // rejectUnknownParams 400s on the lowest unknown query key, naming it —
@@ -1589,6 +1745,16 @@ func parseIfMatch(r *http.Request) *string {
 // an old server 400s a caller that sends one early, rather than silently
 // ignoring it the way ?dry_run= was ignored by a server that did not
 // know it yet.
+//
+// A key sent more than once is refused the same way unless it is one of
+// repeatableParams. The contract declares every other query key with a
+// scalar schema, and there is no reading of ?limit=10&limit=50 that
+// answers what was asked: the server used to take the first value for
+// most keys and the last for fm.*, so the same contradiction got two
+// different silent answers on the same request. Naming it is the rule §2
+// applied to unknown keys, unknown body keys and out-of-mode keys; a
+// repeated scalar is the fourth spelling of the same silence, and the
+// last one that can still be closed (design doc 0064 §2, §20.2).
 func rejectUnknownParams(q url.Values, allowed ...string) error {
 	allowFM := slices.Contains(allowed, "fm.")
 	keys := make([]string, 0, len(q))
@@ -1597,16 +1763,26 @@ func rejectUnknownParams(q url.Values, allowed ...string) error {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if name, ok := strings.CutPrefix(key, "fm."); allowFM && ok && name != "" {
-			continue
+		name, isFM := strings.CutPrefix(key, "fm.")
+		switch {
+		case allowFM && isFM && name != "":
+		case key != "fm." && slices.Contains(allowed, key):
+		default:
+			return service.Invalidf("unknown query parameter %q", key)
 		}
-		if key != "fm." && slices.Contains(allowed, key) {
-			continue
+		if len(q[key]) > 1 && !slices.Contains(repeatableParams, key) {
+			return service.Invalidf(
+				"query parameter %q was sent %d times; it takes one value, and the same key twice is a contradiction rather than a question",
+				key, len(q[key]))
 		}
-		return service.Invalidf("unknown query parameter %q", key)
 	}
 	return nil
 }
+
+// repeatableParams are the query keys the contract declares with an array
+// schema, so repeating one is how a caller spells a set: ?type=Metric&type=Policy
+// asks for either. Every other key is scalar and repeating it is a 400.
+var repeatableParams = []string{"prefix", "status", "tag", "trust", "type"}
 
 // bundleModeParams is history, limit and files: query keys the bundle GET
 // handler declares for the address as a whole, but each is read in only

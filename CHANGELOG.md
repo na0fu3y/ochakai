@@ -328,6 +328,71 @@ last entry.
     "verified"}` used to be a 200 that did nothing recognizable, and
     `"notes"` for `"note"` used to drop the note silently (issue
     [#470](https://github.com/na0fu3y/ochakai/issues/470)).
+  - **`If-Match: *` is now a 400.** RFC 9110 gives it a meaning ochakai
+    does not implement — "only if a representation exists", the
+    update-only mirror of the create-only `If-None-Match: *` — and it was
+    being read as no precondition at all, so a caller sending it
+    precisely to avoid creating anything **silently created**. If you
+    send it, drop it; if you were relying on it to guard a write, you
+    were not guarded. A 400 is also the only one of the three possible
+    answers that can still change after the freeze, which is why it is
+    not the RFC behaviour: nothing can depend on a request that always
+    failed (§20.1).
+  - **Three more preconditions that were accepted and dropped are now
+    400s.** `If-None-Match` with a version on a PUT (RFC's meaning is
+    "write only if it is *not* this version", which a knowledge store has
+    no use for), `If-None-Match: *` on a GET (the opposite of the cache
+    validator the header is otherwise used as), and **either header on a
+    write or delete whose path holds a file** — the contract declares
+    both on this operation because one address writes concepts and files,
+    but the version they name is a concept's, and a file write had never
+    read either one. In every case the request went through
+    unconditioned, which is exactly what a caller sending a precondition
+    is trying to prevent. `ochakai put` has refused the file case
+    client-side all along; the server says so now too. Conditional file
+    writes can still be implemented later: a 400 nobody can depend on is
+    not a promise (§20.4).
+  - `PUT /api/v1/bundle/{path}` **declares its 404**: `If-Match` naming a
+    version where no concept lives has always answered 404, and the
+    contract never said so. It stays 404 rather than the 412 RFC 9110
+    prescribes, deliberately — 412 would conflate "it changed" with "it
+    is gone", and those lead a caller to different next steps (§20.5).
+  - **A repeated query key is now a 400**, unless the parameter is
+    declared as an array — `type`, `status`, `trust`, `tag` and `prefix`
+    are the five that legitimately repeat, and `?type=Metric&type=Policy`
+    still means either. Everything else takes one value.
+    `?limit=10&limit=50` used to be answered silently and in two
+    directions at once: the first value won for most keys and the last
+    one won for `fm.{key}` (§20.2).
+  - **`change` is no longer a closed enum** in `Change` and `Revision`.
+    The nine words are unchanged, but a client that validated against the
+    list should now pass a value it does not know through as an event it
+    has nothing special to render. The vocabulary has moved twice in
+    three months (`unreject` → `withdraw`, `attach`/`detach` →
+    `add_file`/`remove_file`), and a closed response enum would have made
+    the tenth word impossible after the freeze rather than merely
+    breaking (§20.3).
+  - **`Accept` is read as a set of media type names, not as a ranking**,
+    and the rule is now written down. Comparison is on the media type
+    alone and case-insensitive, so `text/markdown; charset=utf-8` selects
+    the document (it did before too) while `text/markdown-x` no longer
+    does — substring matching used to answer a longer type that merely
+    contained a token, and used to miss `TEXT/MARKDOWN`, which RFC 9110
+    says is the same type. **`q` is not read, `q=0` included**:
+    `application/gzip;q=0` still gets the archive. An address has one
+    default and at most two types that select another, so there is
+    nothing to rank, and a caller who wants the default asks for it by
+    not naming the token (§22).
+  - **Eight `operationId`s are renamed.** Five drop the retired word
+    `knowledge` — `searchKnowledge`, `moveKnowledge`, `reviewKnowledge`,
+    `getKnowledgeUsage` and `reembedKnowledge` become `searchConcepts`,
+    `moveConcept`, `reviewConcept`, `getConceptUsage` and
+    `reembedConcepts`. The three bundle operations name their address
+    instead of a payload they mostly do not carry: `getBundleFile`,
+    `putBundleFile` and `deleteBundleFile` become `getBundlePath`,
+    `putBundlePath` and `deleteBundlePath`, since `File` is this wire's
+    schema for a bundle file that is *not* a concept. No HTTP byte moves;
+    a generated client's method names do (§21).
   - `GET /api/v1/bundle/{path}`'s `history`, `limit` and `files` query
     parameters are now a 400 naming the mode when sent outside the mode
     that reads them — `limit` outside `?history` and a directory's
