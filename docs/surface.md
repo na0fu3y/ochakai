@@ -76,13 +76,13 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - REST: 11
 - PARAM: 19
 - HEADER: 10
-- MCP: 8
+- MCP: 6
 - CLI: 26
 - FLAG: 28
 - ENV: 11
 - VOCAB: 34
 - DOC: 23
-- DOC-LINES: 5200
+- DOC-LINES: 5300
 - DOC-LINES-SLACK: 100
 
 `-LINES` で終わる一行だけは、一覧ではなく**量**に天井を置いている。
@@ -248,16 +248,32 @@ PR がこの一行を書き換える** — 並行して進む翻訳が毎回こ�
 - `Ochakai-Read-Only`
 - `Ochakai-Unchanged`
 
-## MCP (8)
+## MCP (6)
 
-- `delete_concept`
 - `get_concept`
-- `get_concept_usage`
 - `get_context`
 - `get_file`
 - `put_concept`
 - `report_outcome`
 - `search_concepts`
+
+8 → 6 は [0076](design/0076-two-tools-leave-mcp.md) で、`delete_concept`
+と `get_concept_usage` を降ろした([0068](design/0068-how-a-face-is-added-and-removed.md)
+§3「通行量の無い入口は降ろす」の、パラメータではなくツールへの適用で
+ある)。**畳み込みではなく削除である** — 上の REST の 19 → 11 は住所が
+減っても能力は一つも落ちなかったが、ここでは落ちる。落ちるのは**この面
+からだけ**で、削除は `DELETE /api/v1/bundle/{path}`・`ochakai delete`・
+Web UI に、利用回数の合計は `GET /api/v1/usage/{id}`・`ochakai usage`・
+Web UI に、いずれもそのまま残る(CLI が完全性の面であるとはこのことで
+ある)。**能力を他の面に残さずに降ろすことは、この規則の外である。**
+
+降ろす理由は二本で違う。削除は**裁定**であり、この面は
+`POST /api/v1/review/{id}`(verify / reject)を載せていない — 取り消せる
+裁定を預けない面が、取り消せないほうを配っていた。利用回数はループの
+**人間側**([0069](design/0069-the-loop-and-what-measures-it.md))で、
+エージェントが頼ってよいかの判断に要る trust tier と `verified_at` は
+検索ヒットと `get_concept` に既に載っている。エージェントが持ち続ける
+のは書き込みの側、`report_outcome` である。
 
 8 本のまま、[0054](design/0054-concept-is-the-okf-word.md) が 5 本を
 改名した — 知識の単位は OKF SPEC §2 の語で **concept** であり、文書が
@@ -582,6 +598,13 @@ C8 の翻訳が始まってから、この節は PR ごとの増減を一段落�
 段落は区切りをまたいだときだけである。
 
 PR ごとの増減は [CHANGELOG](../CHANGELOG.md) の仕事で、ここではない。
+5,200 → 5,300 が、その規則を置いてから最初の区切りまたぎである。またい
+だのは一つの PR ではなく**二つの畳み込みが同時に着地したから**で、0076
+(MCP 6 本)と 0078(`OCHAKAI_EMBEDDINGS` 一語)がそれぞれ天井を動かさ
+ずに数十行ずつ足した。畳み込みが散文を買うことは DOC の節が既に言って
+いるが、**別々の PR の散文が合流して境界を越える**のは初めてで、区切り
+単位にしたからこそ一度だけ鳴った — 10 行単位なら両方が個別に鳴っていた。
+
 残すのは**次に効く発見**だけ:
 
 - **翻訳は行数を減らさない。** 日本語は語間に空白を置かないので一行が

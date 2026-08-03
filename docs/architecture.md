@@ -120,9 +120,11 @@ ochakai が identity に対してすることは*記録*だけであり、目的
 
 「認可は無い」には一つだけ狭い例外があり、それは意図して認可では
 ないと位置づけられている: MCP は、人間が裁定した concept —
-verified・rejected・deprecated — を上書き・削除・変更することを
+verified・rejected・deprecated — を上書き・変更することを
 拒み、そうした concept のソフトデリートされた tombstone を create
-で蘇らせることも拒む。その理由は権限ではなく可視性である: 静かに
+で蘇らせることも拒む(削除はそもそもツールが無い — 設計ドキュメント
+[0076](design/0076-two-tools-leave-mcp.md))。その理由は権限ではなく
+可視性である: 静かに
 置き換えられた verified の golden query は、誰かがそれを実行して
 違う数字を得たときにしか発覚せず、しかも MCP には条件付き書き込みの
 経路(ETag)が無いので、エージェントは自分が何を置き換えるつもり
@@ -333,7 +335,9 @@ REST、MCP、CLI、web UI は一つのルールに従う: 機能はこのすべ�
 中でそれを得る)、ファイルの書き込みも無く(tool の引数の中の
 base64 は token の無駄であり、エージェントの書き戻しは検索可能な
 テキストであるべきである)、一括の export も import も無く、
-`verify` も無い — 再検証は人間の判断だからである。web UI には
+`verify` も `delete` も無い — 裁定は人間が下すものだからである
+(設計ドキュメント [0076](design/0076-two-tools-leave-mcp.md))。
+利用回数の合計も無い — それを読んで動くのは人である。web UI には
 outcome の報告が無い。SQL を実行できないサーフェスが worked/failed
 の報告を作っても、その裏に行動が無いからである。REST には SQL の
 実行も、LLM の機能も、ユーザー管理も、一括の OKF import も無い。

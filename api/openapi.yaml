@@ -7,8 +7,9 @@ info:
     terms, dataset and table catalog entries, and references (mirrors of
     external material) in one knowledge base. The REST API is a superset
     of the MCP tools — the same operations plus bulk export, the
-    human-facing reverse lookups, and file writes — so users can build
-    their own web UIs. ochakai executes no SQL and uses no LLM.
+    human-facing reverse lookups, deletion, a concept's usage totals (both
+    of those left MCP with design doc 0076), and file writes — so users
+    can build their own web UIs. ochakai executes no SQL and uses no LLM.
 
 
     **One address for an object.** A concept and a file are both objects

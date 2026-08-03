@@ -78,7 +78,7 @@ you install anything.
 Agents without a shell — Claude Desktop, hosted agents — connect over
 MCP instead, and it's the primary interface for that case. Which form
 each client wants (a URL, or the `ochakai mcp-stdio` bridge against
-Cloud Run), and the eight tools it will see:
+Cloud Run), and the six tools it will see:
 [connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)

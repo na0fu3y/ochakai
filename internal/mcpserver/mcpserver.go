@@ -3,9 +3,10 @@
 // servers' tools (design doc §4). The REST API (internal/restapi) is a
 // superset of these tools: the same operations plus the archive of a
 // bundle path, the derived index.md and log.md, the reverse lookup
-// (search's links_to=), the human's ruling and file writes (design doc
-// 0015 §3.1 keeps those off MCP — agents use search/get_context; tool
-// schemas cost agent context, so the tool count is a budget).
+// (search's links_to=), the human's ruling, deletion, the usage totals and
+// file writes (design doc 0067 §5.1 keeps those off MCP — agents use
+// search/get_context; tool schemas cost agent context, so the tool count
+// is a budget, and design doc 0076 returned two of it).
 package mcpserver
 
 import (
@@ -378,26 +379,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		return nil, out, err
 	}))
 
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "delete_concept",
-		Annotations: destructive,
-		Description: "Soft-delete a knowledge concept. History is retained as revisions; " +
-			"put_concept on the same id revives it. Concepts a human has ruled on — verified, " +
-			"rejected, or deprecated — cannot be deleted from this surface; deleting a rejected " +
-			"concept and recreating it would erase the record of why it was turned down.",
-	}, tool(svc, func(ctx context.Context, actor domain.Actor, in getIn) (*mcp.CallToolResult, deleteOut, error) {
-		// MCP exposes no version field to agents (design doc 0030 §3.4),
-		// so this never sends If-Match — a curation landing in the window
-		// between check and delete still wins. The window is a single
-		// round trip and the delete is revivable.
-		if _, err := svc.RefuseIfCurated(ctx, in.ID, "delete"); err != nil {
-			return nil, deleteOut{}, err
-		}
-		if err := svc.Delete(ctx, in.ID, actor, nil); err != nil {
-			return nil, deleteOut{}, err
-		}
-		return nil, deleteOut{Deleted: true, URI: uriScheme + in.ID}, nil
-	}))
+	// delete_concept is not a tool (design doc 0076). Deleting knowledge is
+	// a ruling, and rulings stay off this surface: MCP withholds the
+	// reversible ones (verify, reject — POST /api/v1/review/{id} is not a
+	// tool) so it cannot offer the destructive one. An agent that wrote a
+	// bad draft leaves it for a human to rule on. REST, the CLI
+	// (ochakai delete) and the web UI keep the capability.
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_file",
@@ -434,20 +421,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		return res, fileOut{File: *att}, nil
 	}))
 
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_concept_usage",
-		Annotations: readOnly,
-		Description: "Usage totals for one knowledge concept: how often it appeared in search results, " +
-			"was fetched individually, and how it was reported to have worked, with last_used_at. " +
-			"The measure of the write-back loop — evidence when deciding to promote a draft, " +
-			"and a staleness signal for verified concepts that stopped being used.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, usageOut, error) {
-		u, err := svc.Usage(ctx, in.ID)
-		if err != nil {
-			return nil, usageOut{}, err
-		}
-		return nil, usageOut{Usage: *u}, nil
-	}))
+	// get_concept_usage is not a tool (design doc 0076). Usage totals are
+	// the human half of the loop — a curator reads them to promote a draft
+	// or retire a concept nobody uses. What an agent needs in order to
+	// decide whether to rely on a concept is its trust tier and
+	// verified_at, and both ride on every search hit and every
+	// get_concept. The agent keeps report_outcome, the edge of the loop it
+	// owns; the totals stay on REST, the CLI and the web UI.
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "report_outcome",
@@ -455,7 +435,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
 			"write-back loop. After running an attested computation or SQL you wrote from a concept, report worked " +
 			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
-			"Reports feed the concept's usage totals (get_concept_usage), where failed counts " +
+			"Reports feed the concept's usage totals, where failed counts " +
 			"against verified concepts flag them for re-verification. Your identity is recorded " +
 			"with each report. Returns the concept's updated usage totals.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
@@ -487,18 +467,18 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 // deployment. The service refuses these operations anyway (that is the
 // guarantee); removing them here is what stops an agent from wasting a
 // turn discovering it.
-var writeTools = []string{"put_concept", "delete_concept", "report_outcome"}
+var writeTools = []string{"put_concept", "report_outcome"}
 
 // Tool annotations let clients apply auto-approval policies without reading
 // prose. readOnlyHint here describes the knowledge domain: search/get
 // never change a concept (they may bump usage counters — telemetry the hint
-// deliberately ignores). Writes are non-destructive because history is kept as
-// revisions; only delete is flagged destructive. The values are immutable and
-// shared across tools.
+// deliberately ignores). Writes are non-destructive because history is kept
+// as revisions, and no tool on this surface is destructive — the one that
+// was, delete_concept, left with design doc 0076. The values are immutable
+// and shared across tools.
 var (
 	readOnly       = &mcp.ToolAnnotations{ReadOnlyHint: true}
 	nonDestructive = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}
-	destructive    = &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)}
 )
 
 func boolPtr(b bool) *bool { return &b }
@@ -621,11 +601,6 @@ type outcomeIn struct {
 	Target  string `json:"target" jsonschema:"the id of the concept the outcome is about (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
 	Outcome string `json:"outcome" jsonschema:"\"worked\" = acting on the concept gave a correct result; \"failed\" = it gave a wrong or unusable one"`
 	Note    string `json:"note,omitempty" jsonschema:"optional context recorded with the report: what was run, what went wrong (max 2000 bytes)"`
-}
-
-type deleteOut struct {
-	Deleted bool   `json:"deleted"`
-	URI     string `json:"uri"`
 }
 
 // writeIn is an id and a document. It was a field-by-field mirror of the
