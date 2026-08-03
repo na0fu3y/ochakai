@@ -482,8 +482,8 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/bundle/{path}:
     get:
-      operationId: getBundleFile
-      summary: Read one object of the bundle
+      operationId: getBundlePath
+      summary: Read what is at a bundle path
       description: >
         One object at its bundle path (design doc 0075 §4): a concept
         at `<id>.md`, a file at its own path, or one of the two names OKF
@@ -853,7 +853,7 @@ paths:
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     put:
-      operationId: putBundleFile
+      operationId: putBundlePath
       summary: Write one object of the bundle
       description: >
         Stores the request body at the path (design doc 0075 §4). What
@@ -1031,7 +1031,7 @@ paths:
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     delete:
-      operationId: deleteBundleFile
+      operationId: deleteBundlePath
       summary: Delete one object of the bundle
       description: >
         Removes the object at the path: a concept is soft-deleted — it

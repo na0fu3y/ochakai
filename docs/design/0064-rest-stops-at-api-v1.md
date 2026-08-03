@@ -331,9 +331,13 @@ issue #470 の指摘、続き。§7 の `entries` → `concepts` の隣で、同
   反復してよい。それ以外は 400 になる。
 - `change` の値を閉じた集合として検証していたら、**未知の値を通す**
   (§20.3)。今日の九語は変わらないが、契約はもう網羅を約束しない。
-- 生成クライアントを使っていて、メソッド名が `searchKnowledge` などで
-  あれば、`searchConcepts` などに変わる(§21)。HTTP は一バイトも
-  動かない。
+- 生成クライアントを使っていて、メソッド名が `searchKnowledge` や
+  `getBundleFile` などであれば、`searchConcepts` /
+  `getBundlePath` などに変わる(§21)。HTTP は一バイトも動かない。
+- `Accept` に `q` を付けて表現を選び分けていたら、**名前だけで選ぶ**
+  (§22)。`q=0` は除外にならず、`application/gzip;q=0` はアーカイブを
+  返す。大小は区別されなくなり、トークンを部分文字列として含むだけの型
+  (`text/markdown-x`)は既定に落ちる。
 
 保存形とワイヤの識別子(id・path)は 1 バイトも動かない。
 
@@ -698,6 +702,31 @@ operationId を入れるのは、§11 が「どんなジェネレータも」と
 `reviewKnowledge`・`getKnowledgeUsage`・`reembedKnowledge`)を
 `searchConcepts`・`moveConcept`・`reviewConcept`・`getConceptUsage`・
 `reembedConcepts` に改める — HTTP のバイト列は一つも動かない。
+
+**バンドルの三本は住所を名乗る。** `getBundleFile` / `putBundleFile` /
+`deleteBundleFile` を `getBundlePath` / `putBundlePath` /
+`deleteBundlePath` にする。`File` はこのワイヤでは **concept でない**
+バンドルファイルのスキーマ名なので(§6)、主に concept を返す操作が
+それを名乗るのは自分の語彙との衝突だった。
+
+`Object` にしないのは、**この操作の定義域がそれより広い**からである。
+`GET` はディレクトリ一覧とサブツリーのアーカイブも返し、ディレクトリは
+オブジェクトではない — §4 のエラーメッセージ自身が「object であって
+ディレクトリではない」と言っている。住所を名乗れば全モードを覆い、union
+の名詞を要求しない。同じ理由で GET の summary も「バンドルのオブジェクト
+一つを読む」から「バンドルパスにあるものを読む」に直す(`PUT` と
+`DELETE` はオブジェクトしか書けず消せないので、そちらは変えない)。
+
+**OKF に揃える先は無い。** SPEC §2 が定義する語は Knowledge Bundle・
+Concept・Concept ID の三つだけで、`file` は定義語ではなく地の文にしか
+出ない(§3「バンドルは markdown ファイルのディレクトリツリー」)。そして
+**非 markdown のファイルは SPEC の範囲外**である — 許可も禁止もされず、
+名前もメタデータのフィールドも consumer への規則も無く、§11 の適合条件は
+すべて `.md` についてのものである。したがって `File` スキーマを OKF の
+語に改める道は存在せず、狭めた定義が規範と衝突してもいない(空いている
+場所での定義である)。`resource`(§4.1)は concept が**記述する外部の**
+アセットを指すので、ここへの流用は誤りになる。**改めるのではなく、
+OKF の外だと契約に書く** — `File` スキーマの説明がそれを言う。
 
 **残る欠落を二つ書いておく。** `GET /api/v1/search` と `?history` の
 `limit` はモードによって(既定, 上限)が二組ずつある(検索 10/50 と一覧

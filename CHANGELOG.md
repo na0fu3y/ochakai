@@ -383,12 +383,16 @@ last entry.
     default and at most two types that select another, so there is
     nothing to rank, and a caller who wants the default asks for it by
     not naming the token (§22).
-  - **Five `operationId`s drop the retired word `knowledge`**:
-    `searchKnowledge`, `moveKnowledge`, `reviewKnowledge`,
+  - **Eight `operationId`s are renamed.** Five drop the retired word
+    `knowledge` — `searchKnowledge`, `moveKnowledge`, `reviewKnowledge`,
     `getKnowledgeUsage` and `reembedKnowledge` become `searchConcepts`,
     `moveConcept`, `reviewConcept`, `getConceptUsage` and
-    `reembedConcepts`. No HTTP byte moves; a generated client's method
-    names do (§21).
+    `reembedConcepts`. The three bundle operations name their address
+    instead of a payload they mostly do not carry: `getBundleFile`,
+    `putBundleFile` and `deleteBundleFile` become `getBundlePath`,
+    `putBundlePath` and `deleteBundlePath`, since `File` is this wire's
+    schema for a bundle file that is *not* a concept. No HTTP byte moves;
+    a generated client's method names do (§21).
   - `GET /api/v1/bundle/{path}`'s `history`, `limit` and `files` query
     parameters are now a 400 naming the mode when sent outside the mode
     that reads them — `limit` outside `?history` and a directory's

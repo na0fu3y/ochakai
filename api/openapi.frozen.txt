@@ -13,7 +13,7 @@ DELETE /api/v1/bundle/{path}
 DELETE /api/v1/bundle/{path} header If-Match ref=IfMatch
 DELETE /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 DELETE /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
-DELETE /api/v1/bundle/{path} operationId=deleteBundleFile
+DELETE /api/v1/bundle/{path} operationId=deleteBundlePath
 DELETE /api/v1/bundle/{path} query purge required=false type=boolean default=false
 DELETE /api/v1/bundle/{path} response 204
 DELETE /api/v1/bundle/{path} response 204 header Ochakai-Read-Only ref=ReadOnly
@@ -35,7 +35,7 @@ DELETE /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 500 ref=Error
 GET /api/v1/bundle/{path}
 GET /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
-GET /api/v1/bundle/{path} operationId=getBundleFile
+GET /api/v1/bundle/{path} operationId=getBundlePath
 GET /api/v1/bundle/{path} path path required=true type=string
 GET /api/v1/bundle/{path} query files required=false type=boolean default=true
 GET /api/v1/bundle/{path} query history required=false type=string
@@ -245,7 +245,7 @@ PUT /api/v1/bundle/{path} header If-Match ref=IfMatch
 PUT /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
 PUT /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 PUT /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
-PUT /api/v1/bundle/{path} operationId=putBundleFile
+PUT /api/v1/bundle/{path} operationId=putBundlePath
 PUT /api/v1/bundle/{path} query dry_run required=false type=boolean default=false
 PUT /api/v1/bundle/{path} response 200
 PUT /api/v1/bundle/{path} response 200 content application/json

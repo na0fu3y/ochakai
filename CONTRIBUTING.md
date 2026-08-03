@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 760
+    RECORD-LINES: 789
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -344,15 +344,17 @@ freeze. The ceiling goes back down when the freeze's record stops being
 the one that sets it — the next-largest record is 0001 at 402, so the
 drop when it comes is a large one.
 
-**554 → 760 is the same case again, and the batch is why.** 0064 landed
+**554 → 789 is the same case again, and the batch is why.** 0064 landed
 exactly on 554, so any further work on the freeze moves this line by
-construction. The review before the release found eight more things the
-wire would have made permanent, and every one is the same shape: not a
-missing feature, but **a place where the contract and the code disagreed
-in silence.** Five were preconditions and query keys that were accepted
-and then dropped, so a caller who sent one got the unconditioned write it
-was trying to prevent; one was `change` frozen as a closed enum over a
-vocabulary that had already moved twice; and one was the fingerprint's
+construction. The review before the release found a dozen more things the
+wire would have made permanent, and almost every one is the same shape:
+not a missing feature, but **a place where the contract and the code
+disagreed in silence.** Six were preconditions and query keys that were
+accepted and then dropped, so a caller who sent one got the unconditioned
+write it was trying to prevent; one was `change` frozen as a closed enum
+over a vocabulary that had already moved twice; one was `Accept` read by
+substring, so the six-representation rule §4 had written down and the
+code that served it agreed only by luck; and one was the fingerprint's
 own blind spot — it read no schema constraint at all, so the `pattern`
 §18 had just written down as unwidenable was about to freeze unchecked.
 
