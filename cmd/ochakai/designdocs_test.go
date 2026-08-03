@@ -357,11 +357,12 @@ func capturedNumbers(re *regexp.Regexp, s string) []string {
 // how much of it there is.
 //
 // 0048 narrowed what earns a number and said nothing about how much a number
-// costs, so the corpus grew in the one direction nothing measured: 58 records
-// and roughly 10,400 lines beside a 25-page manual of 5,700. The record for
-// renaming two queue keys runs to 150 lines and leaves an entry in each index
-// behind it. Explaining a fold has been outgrowing the fold for several
-// releases, and docs/surface.md's DOC section now says so in numbers.
+// costs, so the corpus grew in the one direction nothing measured: record
+// count and total lines both climbing right alongside the manual counted in
+// docs/surface.md. The record for renaming two queue keys runs to 150 lines
+// and leaves an entry in each index behind it. Explaining a fold has been
+// outgrowing the fold for several releases, and docs/surface.md's DOC
+// section now says so in numbers.
 //
 // The ceiling lives in CONTRIBUTING.md rather than here, for the same reason
 // docs/surface.md keeps the surface caps in prose: raising it should be a

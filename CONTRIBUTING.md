@@ -297,9 +297,11 @@ state per area, so when a design doc lands:
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
-and the corpus grew accordingly: 58 records and about 10,400 lines, on
-top of a 25-page manual of 5,700. A decision that renames two words has
-cost 150 lines of record, an entry in each index and a paragraph in
+and the corpus grew accordingly — record count and total lines both
+outrunning the manual's own count over the same stretch (see "How many
+records, and how much" below for where things stand today). A decision
+that renames two words has cost 150 lines of record, an entry in each
+index and a paragraph in
 [docs/surface.md](docs/surface.md) — the explanation outgrowing the
 thing explained is the shape the numbers have been showing for several
 releases.
