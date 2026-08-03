@@ -303,7 +303,9 @@ func TestPutSendsADocumentAndDelete204(t *testing.T) {
 	if len(notes) != 1 {
 		t.Errorf("notes = %v, want the one the server reported", notes)
 	}
-	if err := c.Delete(context.Background(), "metrics/revenue", ""); err != nil {
+	// Delete takes the bundle path, so a concept is named the way the
+	// address spells it: "<id>.md" (design doc 0064 §5).
+	if err := c.Delete(context.Background(), "metrics/revenue.md", ""); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -411,8 +413,10 @@ func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
 }
 
 // A file goes to the address it lives at, with nothing beside it saying
-// where it really lives (design doc 0046 §3.3).
-func TestAttachSendsBytesToTheAddress(t *testing.T) {
+// where it really lives (design doc 0046 §3.3), and the stored object
+// comes back — the media type is what the bytes sniffed as, not what the
+// caller called them.
+func TestPutBundleFileSendsBytesToTheAddress(t *testing.T) {
 	body := []byte("file bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/bundle/insights/sales/reading/weekly.png" {
@@ -427,7 +431,7 @@ func TestAttachSendsBytesToTheAddress(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(domain.File{Name: "weekly.png", MediaType: "image/png", Size: int64(len(body))})
 	})
-	att, err := c.Attach(context.Background(), "insights/sales/reading", "weekly.png", body)
+	att, err := c.PutBundleFile(context.Background(), "insights/sales/reading/weekly.png", body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,20 +457,26 @@ func TestFileFetchesBytesAndMediaType(t *testing.T) {
 	}
 }
 
-func TestDetachHitsFilePath(t *testing.T) {
-	called := false
+// One verb for one address space: Delete takes the bundle path, so a
+// file's path and a concept's "<id>.md" reach the same handler and the
+// client keeps no second method for the file half (design doc 0075 §4).
+func TestDeleteHitsTheBundlePathItIsGiven(t *testing.T) {
+	var got []string
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/bundle/insights/reading/weekly.png" {
-			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		if r.Method != http.MethodDelete {
+			t.Errorf("unexpected method %s", r.Method)
 		}
+		got = append(got, r.URL.Path)
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.Detach(context.Background(), "insights/reading/weekly.png"); err != nil {
-		t.Fatal(err)
+	for _, p := range []string{"insights/reading/weekly.png", "metrics/revenue.md"} {
+		if err := c.Delete(context.Background(), p, ""); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if !called {
-		t.Error("no request sent")
+	want := []string{"/api/v1/bundle/insights/reading/weekly.png", "/api/v1/bundle/metrics/revenue.md"}
+	if !slices.Equal(got, want) {
+		t.Errorf("requests = %v, want %v", got, want)
 	}
 }
 

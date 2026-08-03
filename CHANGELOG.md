@@ -129,6 +129,46 @@ last entry.
 
 ### Changed
 
+- **BREAKING** — a file has one address, and the CLI stops having a second
+  one for it (design doc
+  [0077](docs/design/0077-one-address-for-a-file.md), issue
+  [#470](https://github.com/na0fu3y/ochakai/issues/470)):
+
+  ```
+  ochakai attach <id> <file>                →  ochakai put <id>/<file> -f <file>
+  ochakai attach <id> <f1> <f2>             →  a shell loop over ochakai put
+  ochakai attach <id> <file> --name <name>  →  ochakai put <id>/<name> -f <file>
+  ochakai detach <id> <name>                →  ochakai delete <id>/<name>
+  ```
+
+  Both commands named a file by `<concept id> <name>` rather than by the
+  bundle path it lives at, in a word design doc
+  [0075](docs/design/0075-the-bundle-is-the-address-space.md) §1 had
+  already retired — and `PUT`/`DELETE` on a bundle path, which is what
+  they sent, is what `ochakai put` and `ochakai delete` already send.
+  **No capability is lost.** `ochakai put` writes either kind of object
+  and the bytes decide which, exactly as they do on the wire: frontmatter
+  carrying a `type` is a concept at `<id>.md`, anything else is a file at
+  the path given. `ochakai delete` removes either kind, reading an
+  argument with no filename extension as a concept id and one that
+  carries its own extension as a file's path; the other address is tried
+  only when the first holds nothing, so a dotted id and a file whose name
+  has no extension both stay reachable.
+
+  **The paste-me link moved, it did not go.** `ochakai put` prints the
+  same relative markdown link on stderr that `attach` did — attribution
+  is derived from the bodies that link a file (0075 §5), so a file
+  nothing links is a file nobody finds. What folds away is convenience:
+  several files per invocation is a shell loop, and `--name` has no place
+  now that the path is the name (the spelling survives on `ochakai use`,
+  so no flag is retired).
+
+  The web UI's buttons follow the CLI's word — `Attach` is now
+  `Add files` and `Detach` is `Remove` — which is what design doc 0064 §8
+  asked for when it kept the two symmetric. **The wire is unchanged**:
+  `PUT`/`DELETE /api/v1/bundle/{path}`, the `add_file`/`remove_file`
+  revision verbs and the stored form are all untouched.
+
 - **BREAKING** — MCP goes from eight tools to six: `delete_concept` and
   `get_concept_usage` are gone (design doc
   [0076](docs/design/0076-two-tools-leave-mcp.md)). A tool schema is paid
@@ -275,9 +315,9 @@ last entry.
     `add_file`/`remove_file` — design doc 0064 §6 renamed every other wire
     spelling of "attachment" and missed the change-verbs; issue
     [#470](https://github.com/na0fu3y/ochakai/issues/470) found the gap.
-    Existing `knowledge_revision` rows are rewritten by a migration; the
-    CLI commands `ochakai attach`/`ochakai detach` are unrelated and keep
-    their names.
+    Existing `knowledge_revision` rows are rewritten by a migration. The
+    CLI commands of the same name were split out to their own issue and
+    are folded in the entry below.
   - `GET /api/v1/context`'s `truncated` count is dropped — it always
     equaled `len(outline)`, so the array's own length carries the same
     signal (design doc 0064 §9, issue #470). The bundle listing's

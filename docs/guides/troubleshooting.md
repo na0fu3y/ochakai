@@ -122,7 +122,7 @@ type はパスから推測されることは無いので(design doc 0017)、代�
 
 ## ファイル
 
-**attach で 501。** そのインスタンスには `OCHAKAI_GCS_BUCKET` が無く、
+**ファイルの `put` で 501。** そのインスタンスには `OCHAKAI_GCS_BUCKET` が無く、
 markdown の concept しか保存できない。これはリクエスト単位ではなく
 デプロイ全体の設定である。
 

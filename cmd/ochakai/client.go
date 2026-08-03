@@ -38,8 +38,6 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"purge":     cmdPurge,
 	"reembed":   cmdReembed,
 	"move":      cmdMove,
-	"attach":    cmdAttach,
-	"detach":    cmdDetach,
 	"usage":     cmdUsage,
 	"stats":     cmdStats,
 	"report":    cmdReport,
@@ -879,94 +877,6 @@ func cmdGet(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdAttach(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"attach",
-		"Usage: ochakai attach [flags] <id> <file...>\n\nAttach files to a knowledge concept (any file, up to 5 MiB each — the\nmedia type is sniffed from the bytes). A file of the same name is\nreplaced (the change is kept as a revision). Reference the file from the concept's body so its\ncaption is searchable and it survives OKF export/import — the hint\nprinted after attaching shows the canonical relative link. Requires\nthe server to have GCS configured (OCHAKAI_GCS_BUCKET).",
-		"  ochakai attach insights/reading-revenue weekly.png\n  ochakai attach tables/orders seeds.txt\n  ochakai attach tables/orders er-diagram.png --name schema.png\n")
-	name := fs.String("name", "", "file name (default: the file's basename; single file only)")
-	asJSON := fs.Bool("json", false, "print the file metadata as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) < 2 || (*name != "" && len(pos) != 2) {
-		fs.Usage()
-		return errReported
-	}
-	id, err := parseRef(pos[0])
-	if err != nil {
-		return err
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	// The canonical body link is relative to the concept's own document:
-	// "<id last segment>/<name>" (design doc 0008).
-	lastSeg := id[strings.LastIndex(id, "/")+1:]
-	for _, file := range pos[1:] {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return err
-		}
-		attName := *name
-		if attName == "" {
-			attName = filepath.Base(file)
-		}
-		att, err := c.Attach(ctx, id, attName, data)
-		if err != nil {
-			return fmt.Errorf("%s: %w", file, err)
-		}
-		if *asJSON {
-			if err := printJSON(att); err != nil {
-				return err
-			}
-			continue
-		}
-		fmt.Printf("attached %s/%s (%s, %d bytes)\n", id, att.Name, att.MediaType, att.Size)
-		link := fmt.Sprintf("[%s](%s/%s)", att.Name, lastSeg, att.Name)
-		if strings.HasPrefix(att.MediaType, "image/") {
-			link = "!" + link
-		}
-		fmt.Fprintf(os.Stderr, "hint: reference it from the body: %s\n", link)
-	}
-	return nil
-}
-
-func cmdDetach(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"detach",
-		"Usage: ochakai detach [flags] <id> <name>\n\nRemove a file from a knowledge concept (the change is kept as a\nrevision; content-addressed bytes stay referenced by history).",
-		"  ochakai detach insights/reading-revenue weekly.png\n")
-	id, rest, err := idArgs(fs, args, 2)
-	if err != nil {
-		return err
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	// The file is at <id>/<name> unless the concept's body puts it
-	// elsewhere; read the concept and detach whichever one carries the
-	// name, so the command means the same thing for both (design doc
-	// 0046 §3.3).
-	path := id + "/" + rest[0]
-	if k, err := c.Get(ctx, id); err == nil {
-		for _, a := range k.Files {
-			if a.Name == rest[0] && a.Path != "" {
-				path = a.Path
-				break
-			}
-		}
-	}
-	if err := c.Detach(ctx, path); err != nil {
-		return err
-	}
-	fmt.Printf("detached %s\n", path)
-	return nil
-}
-
 // cmdPut writes a concept, whether or not one was there. The wire has
 // been create-or-replace since design doc 0043 §3.5 — a PUT states what
 // the concept should say, and whether the id was free is a precondition
@@ -982,15 +892,22 @@ func cmdDetach(ctx context.Context, args []string) error {
 //
 // Named `put` and not `write` or `set`: it is the method it sends, and
 // this CLI is a thin client of the REST API (design docs 0004, 0007).
+//
+// It writes both kinds of object, because the bundle holds both kinds at
+// one address space and the wire has taken both since design doc 0046
+// §3.5: what an object is, is decided by its bytes (design doc 0075 §1).
+// `ochakai attach` was the second address for the half of that the CLI
+// could already reach — the same PUT, at the same path, spelled with a
+// word the rest of the product retired (design doc 0077).
 func cmdPut(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"put",
-		"Usage: ochakai put [flags] <id>\n\nWrite a knowledge concept from -f or stdin, creating it or replacing\nwhat is there. Input is an OKF document (--- frontmatter with type,\nmarkdown body — the format `ochakai get` prints; title is optional,\nthe id's last segment is the display name when it is absent) or JSON\n(see api/openapi.yaml). The id is the concept's path; pass it as the\nargument (it overrides an id in the input, and OKF documents carry\nnone — the path is the id). New concepts default to draft; provenance\nis recorded from your Google identity. Every change is kept as a\nrevision server-side.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the concept still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.",
-		"  ochakai put runbook/restore -f concept.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n")
+		"Usage: ochakai put [flags] <path>\n\nWrite one object of the bundle from -f or stdin, creating it or\nreplacing what is there. The bytes decide which kind it is, as they do\non the wire: an OKF document (--- frontmatter with type, markdown body\n— the format `ochakai get` prints) is a concept, and the argument is\nits id; anything else is a file, and the argument is the path it lives\nat, extension included. Every change is kept as a revision.\n\nAs a concept: title is optional (the id's last segment is the display\nname when it is absent), JSON input is accepted at a concept's address\ntoo (see api/openapi.yaml), the argument overrides an id in the input\n— OKF documents carry none, the path is the id — new concepts default\nto draft, and provenance is recorded from your Google identity.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the concept still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.\n\nAs a file: any bytes, up to 5 MiB, and the media type is sniffed from\nthem rather than taken from the name. Nothing derives the file's\nconcept from where it sits, so the hint printed afterwards is the\nrelative markdown link to paste into a body — a file no concept links\nis a file nobody finds. Non-markdown bytes need the server to have GCS\nconfigured (OCHAKAI_GCS_BUCKET).",
+		"  ochakai put runbook/restore -f concept.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n  ochakai put insights/reading-revenue/weekly.png -f weekly.png\n  for f in *.csv; do ochakai put \"tables/orders/$f\" -f \"$f\"; done\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	onlyIfNew := fs.Bool("only-if-new", false, "write only if the id is free; a taken id fails instead of being replaced")
 	ifMatch := fs.String("if-match", "", "write only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting a concept does not move it: only an edit does")
-	asJSON := fs.Bool("json", false, "print the written concept as JSON")
+	asJSON := fs.Bool("json", false, "print the written object as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -999,14 +916,32 @@ func cmdPut(ctx context.Context, args []string) error {
 		fs.Usage()
 		return errReported
 	}
-	k, claimed, err := readEntry(*file)
+	path := ""
+	if len(pos) == 1 {
+		if path, err = parseRef(pos[0]); err != nil {
+			return err
+		}
+	}
+	data, err := readInput(*file)
 	if err != nil {
 		return err
 	}
-	if len(pos) == 1 {
-		if k.ID, err = parseRef(pos[0]); err != nil {
+	if !isConceptInput(data, path) {
+		c, err := newClient(ctx, *url)
+		if err != nil {
 			return err
 		}
+		return putFile(ctx, c, path, data, *asJSON, *onlyIfNew, *ifMatch)
+	}
+	k, claimed, err := decodeEntry(data)
+	if err != nil {
+		return err
+	}
+	// A concept's address is "<id>.md" (design doc 0064 §5) and every
+	// other command in this CLI names it by the id, so both spellings
+	// reach the same object and the ".md" comes off here.
+	if path != "" {
+		k.ID = strings.TrimSuffix(path, ".md")
 	}
 	// An OKF document carries no id, so the argument is the only place most
 	// inputs can get one. Saying so here beats the server's `invalid id ""`,
@@ -1045,6 +980,86 @@ func cmdPut(ctx context.Context, args []string) error {
 	default:
 		fmt.Printf("updated %s (%s)\n", written.URI(), written.Summary.Status)
 	}
+	return nil
+}
+
+// isConceptInput answers the question the server answers for itself:
+// whether these bytes are a concept. The server reads the frontmatter's
+// `type` key and stores everything else as a file (design doc 0075 §1,
+// `internal/restapi`), so the CLI asks the same predicate of the same
+// bytes rather than inventing a second rule from the path's spelling —
+// that is what "a thin client over REST" means here (design doc 0067
+// §2), and it is why one `put` doing two things is not the defect design
+// doc 0068 §1 names: the two are one act at one address, told apart by
+// what is being written.
+//
+// JSON is the exception, and it is the CLI's own: it is an input form
+// this command accepts, never a form the bundle stores, so it is read as
+// a concept only where a concept could live. Otherwise
+// `ochakai put schemas/orders.json -f orders.json` would store a JSON
+// *file* as a concept and refuse it for having no type.
+func isConceptInput(data []byte, path string) bool {
+	if okf.CarriesType(data) {
+		return true
+	}
+	return bytes.HasPrefix(bytes.TrimLeft(data, " \t\r\n"), []byte("{")) && conceptAddress(path)
+}
+
+// conceptAddress reports whether path can be a concept's: its own
+// address "<id>.md", or the id — which is that path with the ".md" filed
+// off, and so carries no filename extension of its own.
+func conceptAddress(path string) bool {
+	if path == "" || strings.HasSuffix(path, ".md") {
+		return true
+	}
+	return !strings.Contains(path[strings.LastIndex(path, "/")+1:], ".")
+}
+
+// putFile writes one file at its bundle path. A file has no version to
+// hold a precondition against — the concept preconditions are refused
+// rather than dropped, because a precondition that is silently ignored
+// is the write it was meant to prevent.
+func putFile(ctx context.Context, c *apiclient.Client, path string, data []byte,
+	asJSON, onlyIfNew bool, ifMatch string,
+) error {
+	if path == "" {
+		return errors.New("no path: pass the file's bundle path as the argument (e.g. `ochakai put insights/reading-revenue/weekly.png -f weekly.png`)")
+	}
+	if onlyIfNew || ifMatch != "" {
+		return errors.New("--only-if-new and --if-match are preconditions on a concept's version; a file is content-addressed and has none")
+	}
+	// Markdown that reached here carried no `type`, so the server will
+	// store it as a file (OKF SPEC §11). Saying so beats letting a writer
+	// discover it in `ochakai browse` (design doc 0075 §3.3).
+	if bytes.HasPrefix(bytes.TrimLeft(data, " \t\r\n"), []byte("---")) {
+		reportNotes([]string{"the frontmatter carries no `type`, so this is stored as a file rather than as a concept"})
+	}
+	f, err := c.PutBundleFile(ctx, path, data)
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		return printJSON(f)
+	}
+	fmt.Printf("wrote %s (%s, %d bytes)\n", path, f.MediaType, f.Size)
+	// Which concept a file belongs to is derived from the bodies that
+	// link it (design doc 0075 §5), so a file nothing links is a file
+	// nobody finds. The link is relative to the document of the concept
+	// whose namespace the file sits in, which sits one directory up:
+	// "<last directory segment>/<name>".
+	dir, name := "", path
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		dir, name = path[:i], path[i+1:]
+	}
+	rel := name
+	if dir != "" {
+		rel = dir[strings.LastIndex(dir, "/")+1:] + "/" + name
+	}
+	link := fmt.Sprintf("[%s](%s)", name, rel)
+	if strings.HasPrefix(f.MediaType, "image/") {
+		link = "!" + link
+	}
+	fmt.Fprintf(os.Stderr, "hint: link it from a concept's body so it can be found: %s\n", link)
 	return nil
 }
 
@@ -1142,13 +1157,21 @@ func cmdReject(ctx context.Context, args []string) error {
 	return nil
 }
 
+// cmdDelete removes one object of the bundle, whichever kind is at the
+// address. `ochakai detach` was the second command for the file half,
+// addressing it by <concept id> <name> instead of by the path it lives
+// at (design doc 0077).
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"delete",
-		"Usage: ochakai delete [flags] <id>\n\nSoft-delete a knowledge concept (history is retained server-side).\nWith --if-match it lands only if the concept still has the version you\nread, and fails instead of deleting someone else's edit.",
-		"  ochakai delete terms/obsolete-kpi\n")
+		"Usage: ochakai delete [flags] <path>\n\nRemove one object of the bundle: a knowledge concept, named by its id\n(soft-delete — history is retained server-side), or a file, named by\nthe path it lives at (the removal is kept as a revision of the concept\nthat linked it; content-addressed bytes stay referenced by history).\nA concept's address is <id>.md and an id is that path with the .md\nfiled off, so an argument carrying no filename extension is read as an\nid — spell a dotted id with its .md to reach it.\nWith --if-match a concept is deleted only if it still has the version\nyou read, and the delete fails instead of removing someone else's edit.",
+		"  ochakai delete terms/obsolete-kpi\n  ochakai delete insights/reading-revenue/weekly.png\n")
 	ifMatch := fs.String("if-match", "", "delete only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting")
-	id, _, err := idArgs(fs, args, 1)
+	pos, err := exactArgs(fs, args, 1)
+	if err != nil {
+		return err
+	}
+	arg, err := parseRef(pos[0])
 	if err != nil {
 		return err
 	}
@@ -1156,11 +1179,49 @@ func cmdDelete(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Delete(ctx, id, *ifMatch); err != nil {
+	// A delete carries no bytes to say what it is removing, so the
+	// spelling picks which of the two addresses to ask first, and the
+	// other is tried only when the first holds nothing. Nothing that is
+	// there can be shadowed by the fallback, and both an id with a dot in
+	// it and a file whose name has no extension stay reachable.
+	first, second := deleteAddresses(arg)
+	err = c.Delete(ctx, first, *ifMatch)
+	if second != "" && isNotFound(err) {
+		if fallback := c.Delete(ctx, second, *ifMatch); !isNotFound(fallback) {
+			first, err = second, fallback
+		}
+	}
+	if err != nil {
 		return err
 	}
-	fmt.Printf("deleted ochakai://%s\n", id)
+	if id, ok := strings.CutSuffix(first, ".md"); ok {
+		fmt.Printf("deleted ochakai://%s\n", id)
+		return nil
+	}
+	fmt.Printf("deleted %s\n", first)
 	return nil
+}
+
+// deleteAddresses returns the bundle path the argument spells, and the
+// one it might have meant. A concept lives at "<id>.md" and a file at
+// its own path, so an argument that carries no filename extension is an
+// id and an argument that carries one is a path; an argument already
+// ending in ".md" is a bundle path, and the server reads it as a concept
+// or as a markdown file by itself.
+func deleteAddresses(arg string) (first, second string) {
+	if strings.HasSuffix(arg, ".md") {
+		return arg, ""
+	}
+	if strings.Contains(arg[strings.LastIndex(arg, "/")+1:], ".") {
+		return arg, arg + ".md"
+	}
+	return arg + ".md", arg
+}
+
+// isNotFound reports a 404: nothing lives at that address.
+func isNotFound(err error) bool {
+	var apiErr *apiclient.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
 // cmdPurge is the second half of a two-step destruction: delete makes an
@@ -1429,7 +1490,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		// At the path the bundle carried it at, which is the whole of
 		// what preserving a foreign location means now (design doc 0046
 		// §3.3): the concept claims it because its body points there.
-		if err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
+		if _, err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
 			return fmt.Errorf("write %s: %w", a.Path, err)
 		}
 		attached++
@@ -1443,7 +1504,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	// body answers (§3.3), so nothing is attributed here.
 	var written int
 	for _, f := range loose {
-		if err := c.PutBundleFile(ctx, f.Path, f.Data); err != nil {
+		if _, err := c.PutBundleFile(ctx, f.Path, f.Data); err != nil {
 			if !isInvalid(err) {
 				return fmt.Errorf("write %s: %w", f.Path, err)
 			}
@@ -1681,27 +1742,24 @@ func readBundleTarGz(r io.Reader) (map[string][]byte, error) {
 	}
 }
 
-// readEntry reads a knowledge concept from path ("" or "-" = stdin) in
-// either of the interchange formats from design doc 0004 §5: an OKF
-// document (leading ---) or JSON.
+// readInput reads what is being written from path ("" or "-" = stdin).
+// The bytes are read before anything is decided about them, because it
+// is the bytes that decide what object they are (isConceptInput).
+func readInput(path string) ([]byte, error) {
+	if path == "" || path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	return os.ReadFile(path)
+}
+
+// decodeEntry reads a knowledge concept in either of the interchange
+// formats from design doc 0004 §5: an OKF document (leading ---) or
+// JSON.
 //
 // claimed names the server-owned keys the document carried, which the
 // parse kept as its own claim rather than as provenance (design doc 0046
 // §2.2). Whether the claim survives the write is the server's answer, so
 // it travels to the call site rather than being reported here.
-func readEntry(path string) (k *domain.Knowledge, claimed []string, err error) {
-	var data []byte
-	if path == "" || path == "-" {
-		data, err = io.ReadAll(os.Stdin)
-	} else {
-		data, err = os.ReadFile(path)
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	return decodeEntry(data)
-}
-
 func decodeEntry(data []byte) (*domain.Knowledge, []string, error) {
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if bytes.HasPrefix(trimmed, []byte("---")) {

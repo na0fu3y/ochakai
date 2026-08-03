@@ -32,16 +32,16 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full concepts)
   get <id>                print one concept as an OKF document
-  put <id> [-f file]      write a concept from OKF markdown or JSON, creating
-                          or replacing (every change kept as a revision)
+  put <path> [-f file]    write one object of the bundle: a concept from OKF
+                          markdown or JSON at <id>, or a file at its own path
+                          (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified concept too)
   reject <id>             record a rejection and why (--withdraw takes it back)
-  delete <id>             soft-delete a concept (history retained)
+  delete <path>           remove one object: a concept by id (history retained)
+                          or a file by the path it lives at
   purge <id>              hard-delete a soft-deleted concept, freeing its id
   reembed                 embed concepts missing a vector for the current model
   move <id> <new-id>      move (rename) a concept; references are rewritten
-  attach <id> <file...>   attach files to a concept (png/jpeg/webp/pdf/text)
-  detach <id> <name>      remove a file from a concept
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
@@ -63,32 +63,6 @@ Server commands (run as deployed services, configured by environment):
   completion <shell>      print a completion script (zsh, bash, fish)
 
 Run "ochakai <command> -h" for flags and examples.
-```
-
-## ochakai attach
-
-```
-Usage: ochakai attach [flags] <id> <file...>
-
-Attach files to a knowledge concept (any file, up to 5 MiB each — the
-media type is sniffed from the bytes). A file of the same name is
-replaced (the change is kept as a revision). Reference the file from the concept's body so its
-caption is searchable and it survives OKF export/import — the hint
-printed after attaching shows the canonical relative link. Requires
-the server to have GCS configured (OCHAKAI_GCS_BUCKET).
-
-Flags:
-  -json
-    	print the file metadata as JSON
-  -name string
-    	file name (default: the file's basename; single file only)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai attach insights/reading-revenue weekly.png
-  ochakai attach tables/orders seeds.txt
-  ochakai attach tables/orders er-diagram.png --name schema.png
 ```
 
 ## ochakai browse
@@ -181,11 +155,17 @@ Examples:
 ## ochakai delete
 
 ```
-Usage: ochakai delete [flags] <id>
+Usage: ochakai delete [flags] <path>
 
-Soft-delete a knowledge concept (history is retained server-side).
-With --if-match it lands only if the concept still has the version you
-read, and fails instead of deleting someone else's edit.
+Remove one object of the bundle: a knowledge concept, named by its id
+(soft-delete — history is retained server-side), or a file, named by
+the path it lives at (the removal is kept as a revision of the concept
+that linked it; content-addressed bytes stay referenced by history).
+A concept's address is <id>.md and an id is that path with the .md
+filed off, so an argument carrying no filename extension is read as an
+id — spell a dotted id with its .md to reach it.
+With --if-match a concept is deleted only if it still has the version
+you read, and the delete fails instead of removing someone else's edit.
 
 Flags:
   -if-match version
@@ -195,22 +175,7 @@ Flags:
 
 Examples:
   ochakai delete terms/obsolete-kpi
-```
-
-## ochakai detach
-
-```
-Usage: ochakai detach [flags] <id> <name>
-
-Remove a file from a knowledge concept (the change is kept as a
-revision; content-addressed bytes stay referenced by history).
-
-Flags:
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai detach insights/reading-revenue weekly.png
+  ochakai delete insights/reading-revenue/weekly.png
 ```
 
 ## ochakai export
@@ -488,21 +453,31 @@ Examples:
 ## ochakai put
 
 ```
-Usage: ochakai put [flags] <id>
+Usage: ochakai put [flags] <path>
 
-Write a knowledge concept from -f or stdin, creating it or replacing
-what is there. Input is an OKF document (--- frontmatter with type,
-markdown body — the format `ochakai get` prints; title is optional,
-the id's last segment is the display name when it is absent) or JSON
-(see api/openapi.yaml). The id is the concept's path; pass it as the
-argument (it overrides an id in the input, and OKF documents carry
-none — the path is the id). New concepts default to draft; provenance
-is recorded from your Google identity. Every change is kept as a
-revision server-side.
+Write one object of the bundle from -f or stdin, creating it or
+replacing what is there. The bytes decide which kind it is, as they do
+on the wire: an OKF document (--- frontmatter with type, markdown body
+— the format `ochakai get` prints) is a concept, and the argument is
+its id; anything else is a file, and the argument is the path it lives
+at, extension included. Every change is kept as a revision.
+
+As a concept: title is optional (the id's last segment is the display
+name when it is absent), JSON input is accepted at a concept's address
+too (see api/openapi.yaml), the argument overrides an id in the input
+— OKF documents carry none, the path is the id — new concepts default
+to draft, and provenance is recorded from your Google identity.
 With --only-if-new the write lands only if the id is free, and fails
 instead of replacing. With --if-match it lands only if the concept still
 has the version you read, and fails instead of overwriting someone
 else's edit.
+
+As a file: any bytes, up to 5 MiB, and the media type is sniffed from
+them rather than taken from the name. Nothing derives the file's
+concept from where it sits, so the hint printed afterwards is the
+relative markdown link to paste into a body — a file no concept links
+is a file nobody finds. Non-markdown bytes need the server to have GCS
+configured (OCHAKAI_GCS_BUCKET).
 
 Flags:
   -f string
@@ -510,7 +485,7 @@ Flags:
   -if-match version
     	write only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting a concept does not move it: only an edit does
   -json
-    	print the written concept as JSON
+    	print the written object as JSON
   -only-if-new
     	write only if the id is free; a taken id fails instead of being replaced
   -url ochakai use
@@ -519,6 +494,8 @@ Flags:
 Examples:
   ochakai put runbook/restore -f concept.md
   ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new
+  ochakai put insights/reading-revenue/weekly.png -f weekly.png
+  for f in *.csv; do ochakai put "tables/orders/$f" -f "$f"; done
 ```
 
 ## ochakai reembed

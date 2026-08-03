@@ -193,7 +193,7 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 	for _, aff := range []struct{ what, marker string }{
 		{"the directory view's New entry here", `href="${newHref}"`}, // the fifth, built as a variable
 		{"the status picker on an entry", `id="act-status"`},
-		{"Detach on a file", "data-detach="},
+		{"Remove on a file", "data-remove-file="},
 		{"the editor's save button", `type="submit"`},
 	} {
 		if _, tag := tagAt(t, page, indexOf(t, page, aff.marker)); !hidesOnReadOnly(tag) {
@@ -205,7 +205,7 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 	// and the review card's. Each marker must occur once, so a second copy
 	// added somewhere ungated fails here rather than shipping visible.
 	for _, aff := range []struct{ what, marker, open, close string }{
-		{"attaching a file", `id="att-upload"`, `<div class="toolbar write-only"`, "</div>"},
+		{"adding a file", `id="att-upload"`, `<div class="toolbar write-only"`, "</div>"},
 		{"Edit", `href="#/edit/`, `<span class="actions write-only">`, "</span>"},
 		{"Verify", `id="act-verify"`, `<span class="actions write-only">`, "</span>"},
 		{"Reject…", `id="act-reject"`, `<span class="actions write-only">`, "</span>"},

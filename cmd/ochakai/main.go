@@ -93,16 +93,16 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   browse [prefix]         list one level of the ID hierarchy (folder view)
   context <question>      the one-call read before a data question (full concepts)
   get <id>                print one concept as an OKF document
-  put <id> [-f file]      write a concept from OKF markdown or JSON, creating
-                          or replacing (every change kept as a revision)
+  put <path> [-f file]    write one object of the bundle: a concept from OKF
+                          markdown or JSON at <id>, or a file at its own path
+                          (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified concept too)
   reject <id>             record a rejection and why (--withdraw takes it back)
-  delete <id>             soft-delete a concept (history retained)
+  delete <path>           remove one object: a concept by id (history retained)
+                          or a file by the path it lives at
   purge <id>              hard-delete a soft-deleted concept, freeing its id
   reembed                 embed concepts missing a vector for the current model
   move <id> <new-id>      move (rename) a concept; references are rewritten
-  attach <id> <file...>   attach files to a concept (png/jpeg/webp/pdf/text)
-  detach <id> <name>      remove a file from a concept
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty

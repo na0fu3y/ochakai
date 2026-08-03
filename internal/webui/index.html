@@ -1694,7 +1694,7 @@ async function viewDetail(id) {
             <span class="mono">${esc(a.name)}</span>
             <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
             <span class="meta">body reference: <code>${ref}</code></span>
-            <button class="btn small danger write-only" data-detach="${esc(a.path)}" data-name="${esc(a.name)}">Detach</button>
+            <button class="btn small danger write-only" data-remove-file="${esc(a.path)}" data-name="${esc(a.name)}">Remove</button>
           </div>
         </div>`;
       }).join('');
@@ -1704,7 +1704,7 @@ async function viewDetail(id) {
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
           <button class="btn small" id="att-choose">Choose files…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
-          <button class="btn small primary" id="att-upload">Attach</button>
+          <button class="btn small primary" id="att-upload">Add files</button>
         </div>
         <p class="provenance write-only">Any file, max 5 MiB each. Reference a file from the
         body (<code>![alt](${esc(lastSeg)}/name.png)</code> or <code>[name](${esc(lastSeg)}/name.txt)</code>) so it is findable and survives OKF export.</p>`;
@@ -1727,18 +1727,18 @@ async function viewDetail(id) {
         for (const f of files) {
           await api(attPath(canonicalPath(f.name)), { method: 'PUT', raw: f });
         }
-        toast(files.length > 1 ? `Attached ${files.length} files.` : 'Attached.');
+        toast(files.length > 1 ? `Added ${files.length} files.` : 'Added.');
         viewDetail(entry.id);
-      } catch (e) { toast('Attach failed: ' + e.message); }
+      } catch (e) { toast('Add files failed: ' + e.message); }
     });
-    body.querySelectorAll('[data-detach]').forEach(b => b.addEventListener('click', async () => {
-      const path = b.dataset.detach;
-      if (!confirm(`Detach ${b.dataset.name}? The change is kept as a revision.`)) return;
+    body.querySelectorAll('[data-remove-file]').forEach(b => b.addEventListener('click', async () => {
+      const path = b.dataset.removeFile;
+      if (!confirm(`Remove ${b.dataset.name}? The change is kept as a revision.`)) return;
       try {
         await api(attPath(path), { method: 'DELETE' });
-        toast('Detached.');
+        toast('Removed.');
         viewDetail(entry.id);
-      } catch (e) { toast('Detach failed: ' + e.message); }
+      } catch (e) { toast('Remove failed: ' + e.message); }
     }));
   }
 

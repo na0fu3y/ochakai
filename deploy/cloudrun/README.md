@@ -313,9 +313,9 @@ model を変えることが既存のデータベースに何をするかは、�
 
 ファイルの実体は GCS バケットにのみ置かれる — メタデータとリビジョン
 は Postgres に残り、認証はサービス identity 経由の ADC でキーは無い。
-`OCHAKAI_GCS_BUCKET` が無いとサービスは markdown 専用で動く: attach 操
-作は 501 を返し、import はファイルを失敗として報告する。ファイルを一
-切添付しないのでなければ、この節は飛ばさない:
+`OCHAKAI_GCS_BUCKET` が無いとサービスは markdown 専用で動く: ファイル
+の書き込みは 501 を返し、import はファイルを失敗として報告する。ファイ
+ルを一切置かないのでなければ、この節は飛ばさない:
 
 ```sh
 gcloud storage buckets create gs://$PROJECT_ID-ochakai-blobs \
