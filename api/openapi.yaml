@@ -14,7 +14,7 @@ info:
 
     **One address for an object.** A concept and a file are both objects
     of one bundle, and `/api/v1/bundle/{path}` is where they live — a
-    concept at `<id>.md` (design doc 0046 §3.5). The second spelling,
+    concept at `<id>.md` (design doc 0075 §4). The second spelling,
     `/api/v1/knowledge/{id}`, is gone: it read, wrote and deleted exactly
     what the bundle address does, one suffix away.
 
@@ -27,7 +27,7 @@ info:
     search face beside `source=`, the reverse lookup that was already
     there. `/api/v1/export` is gone too: an archive is the bundle at a
     path, so it is `Accept: application/gzip` on that path, and the root
-    is the whole knowledge base. §3.5's fold is complete.
+    is the whole knowledge base. Design doc 0075 §4's fold is complete.
 
 
     **An unrecognized query parameter is a 400, naming it** (design doc
@@ -37,7 +37,7 @@ info:
     having the parameter quietly ignored. The one exception is `fm.`, and
     only on the operations that declare `fm.{key}` below (search,
     context): there, its keys are validated against the concept's own OKF
-    frontmatter (design doc 0047) rather than against a fixed name list.
+    frontmatter (design doc 0074 §4) rather than against a fixed name list.
     Every other operation has no such downstream check and rejects `fm.*`
     like any other unrecognized parameter.
 
@@ -64,16 +64,16 @@ security:
 # Authentication is Cloud Run IAM (Google identity), handled by the
 # infrastructure before requests reach ochakai — there is no
 # application-level auth scheme. ochakai reads the forwarded identity
-# only to record provenance (design docs 0002/0003). The scheme below
+# only to record provenance (design docs 0065 §1, 0003). The scheme below
 # (components/securitySchemes/GoogleIDToken) documents what Cloud Run
 # checks before a request reaches this server; ochakai itself verifies
 # nothing, which is why the empty alternative sits beside it — a
 # deployment with OCHAKAI_MODE=public or dev answers with no Authorization
-# header at all (design docs 0040, 0042). See
+# header at all (design doc 0066 §1). See
 # docs/guides/rest-integration.md (Japanese) for a walkthrough of minting
 # a token and what it takes to embed this API in your own service. An
 # application on the delegator allowlist may forward the end user it
-# acts for with Ochakai-On-Behalf-Of (design doc 0027) — the header is
+# acts for with Ochakai-On-Behalf-Of (design doc 0065 §3) — the header is
 # honored on every call; it is declared below
 # (components/parameters/OnBehalfOf) on the operations that record
 # provenance.
@@ -86,8 +86,8 @@ paths:
         Rejected concepts are excluded unless rejected=true is passed (so
         agents can check for already-rejected proposals). Whether a concept
         was confirmed is asked with trust, independently of the status
-        filter — status is the lifecycle value alone (design doc 0043
-        §§3.2-3.3).
+        filter — status is the lifecycle value alone (design doc 0075
+        §4.1).
         With sort=verified_at the endpoint lists concepts by verification age
         (oldest first, never-verified last) instead of searching — the feed
         for golden query canary runs (docs/guides/golden-query-canary.md).
@@ -102,7 +102,7 @@ paths:
         is kept up shows an empty feed.
         With sort=stale_after it lists concepts whose author declared a
         stale_after that has now passed, most overdue first — the feed for
-        knowledge dated by whoever wrote it (design doc 0037 §2.1).
+        knowledge dated by whoever wrote it (design doc 0069 §2.2).
         Concepts whose expiry has not come due are not listed. Unlike the
         two feeds above, verifying does not clear this one: the date is
         the writer's declaration, so a concept leaves only when someone
@@ -113,7 +113,7 @@ paths:
         with either.
         A listing — any sort, or source with no q — pages: it answers
         with a cursor when more concepts follow, and walks past the limit
-        one page at a time (design doc 0050). A search does not: it is
+        one page at a time (design doc 0068 §2.1). A search does not: it is
         bounded by limit, and passing a cursor with q is a 400.
       parameters:
         - name: q
@@ -161,8 +161,8 @@ paths:
             This is the filter that does not need a migration. A key OKF
             adds in a later version is askable as soon as ochakai knows
             the spelling: the whole frontmatter is indexed, so there is
-            no column to add and no data to move (design doc 0046
-            §3.11). Exact match and list membership are the only two
+            no column to add and no data to move (design doc 0074
+            §4). Exact match and list membership are the only two
             comparisons: ranges and boolean expressions are the doorway
             to a query language, and what ochakai returns is knowledge
             rather than rows.
@@ -179,7 +179,7 @@ paths:
             says nothing, since OKF's default is stable, and `fm.status`
             never would. Use `type`, `status`, `tag`, `source` and
             `sort=stale_after` for those. Everything else is a 400
-            (design doc 0047).
+            (design doc 0074 §4).
           schema: { type: string }
         - name: rejected
           in: query
@@ -198,7 +198,7 @@ paths:
           description: >
             Only concepts citing this resource — the reverse of
             sources[].resource, for "this material changed, what derives
-            from it?" (design doc 0037 §2.3). Matched exactly: no prefix
+            from it?" (design doc 0069 §2.3). Matched exactly: no prefix
             or substring matching, and sources[].id is not consulted
             because it keys a document's own footnotes rather than
             identifying an artifact across concepts. Single-valued, unlike
@@ -208,10 +208,10 @@ paths:
           in: query
           description: >
             Only concepts whose body links at this id — the reverse edge
-            of links (design doc 0024): the insight that explains a
+            of links (design doc 0074 §2): the insight that explains a
             metric links to the metric, not the other way round. This is
             what `/api/v1/backlinks/{id}` was, folded into the face that
-            already had the other reverse lookup (design doc 0046 §3.5),
+            already had the other reverse lookup (design doc 0075 §4),
             and `get_context` follows the same edge when packing
             companions.
 
@@ -225,18 +225,18 @@ paths:
           in: query
           description: >
             Only concepts addressed under this path. An id is an address
-            (design doc 0017), so this scopes a search to a subtree:
+            (design doc 0075 §2), so this scopes a search to a subtree:
             prefix=metrics covers metrics itself and everything under
             metrics/, and does not match metrics-legacy/churn — matching
             is on segment boundaries, not raw string prefixes (design doc
-            0041 §2.2). A trailing slash is optional and the empty value
+            0075 §6). A trailing slash is optional and the empty value
             is the root, which narrows nothing. Repeatable and OR-ed,
             unlike source: "my team's scope and the company-wide one" is
             the ordinary question, and two calls would produce two
             rankings that cannot be merged. Composes with q and with any
             sort. This is a filter, not an access control — any caller may
             pass any prefix, and passing none returns the whole base
-            (design doc 0002).
+            (design doc 0065 §1).
           schema: { type: array, items: { type: string } }
           explode: true
           # A path is segments joined by "/", so the separator travels
@@ -260,7 +260,7 @@ paths:
           description: >
             Resume a listing where the previous page ended: pass back the
             cursor that page returned, with the same sort and the same
-            filters (design doc 0050 §2.1). Listings are the sort feeds
+            filters (design doc 0068 §2.1). Listings are the sort feeds
             and the source lookup — the modes with a total order to
             resume from.
 
@@ -273,7 +273,7 @@ paths:
             **A search refuses it with a 400.** Relevance is a fused
             window rather than an order, so a ranking has no page two:
             50 hits are the whole contract, and the way past them is a
-            narrower question (design doc 0050 §2.2).
+            narrower question (design doc 0068 §2.2).
 
             A cursor is a position, not a snapshot. The feeds are live,
             so a concept that moves while you walk may be missed or seen
@@ -292,7 +292,7 @@ paths:
             A listing carries cursor when more concepts follow this page.
             Its absence is the end of the listing — that is the only
             count given, since an exact one over a filtered feed costs a
-            second scan of it (design doc 0050 §2.3).
+            second scan of it (design doc 0068 §2.1).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -455,10 +455,10 @@ paths:
       operationId: getBundleFile
       summary: Read one object of the bundle
       description: >
-        One object at its bundle path (design doc 0046 §3.5): a concept
+        One object at its bundle path (design doc 0075 §4): a concept
         at `<id>.md`, a file at its own path, or one of the two names OKF
         reserves per directory — which are generated from the bundle
-        rather than stored in it (§§3.7-3.8).
+        rather than stored in it (design doc 0075 §4.2).
 
         A concept answers with a View, or with the document itself
         under `Accept: text/markdown`, and carries the ETag to echo back
@@ -469,25 +469,25 @@ paths:
         decide what a browser may do with them: an image, a PDF or plain
         text renders in place, everything else is a download under
         `Content-Security-Policy: sandbox`, and `nosniff` is always set
-        (design doc 0046 §3.2).
+        (design doc 0075 §1).
 
         **`Accept: application/gzip` reads the path as a subtree** and
         streams it as an OKF bundle: a tar.gz of markdown + YAML
         frontmatter, the generated `index.md` and `log.md` of every
         directory, and every file under the path — including one no
         concept shows, because what enters the bundle leaves it (design
-        doc 0046 §3.2). The history travels with it (§3.8): a purge is
+        doc 0075 §1). The history travels with it (design doc 0075 §4.2): a purge is
         the only thing that removes a row from the ledger, and an
         archive without it left the record readable only from the
         instance holding it. An import never reads it back. The root
         (`/api/v1/bundle/`) is the whole knowledge base — this is what `GET /api/v1/export` was, at the address of
-        the thing it returns (design doc 0046 §3.5). Your knowledge is
+        the thing it returns (design doc 0075 §4). Your knowledge is
         yours.
 
         A path is a subtree or it is not: a concept's or a file's own
         address — `metrics/revenue.md` as much as a reserved name — is
         409, not an empty archive with a 200 on it, because nothing lives
-        under an object's own address (design doc 0046 §3.5).
+        under an object's own address (design doc 0064 §4).
 
         Paths inside the archive are not re-rooted: an archive of
         `metrics/` carries `metrics/revenue.md` and imports back to where
@@ -503,7 +503,7 @@ paths:
         file it stopped on.
 
         There is no matching import endpoint, and that is deliberate
-        (design doc 0015 §3.2): importing a bundle is a loop over this
+        (design doc 0067 §5.2): importing a bundle is a loop over this
         very address, so a server-side version would add a second path to
         the same outcome without adding a capability. To write your own
         importer against any OKF bundle: walk the tar.gz and PUT every
@@ -514,14 +514,14 @@ paths:
         — `generated`, `verified`, `created_by`, `rejected_by`,
         `rejected_at`, and the pre-v0.2 spellings `timestamp` /
         `verified_by` / `verified_at` — are ignored on write; provenance
-        comes from the caller's identity (design docs 0009, 0036 §3.2).
+        comes from the caller's identity (design docs 0009, 0075 §3.1).
         The one exception is that the presence of a `verified` key
         decides how OKF's `stable` status maps onto ochakai's (design doc
-        0036 §3.4).
+        0075 §3.1).
 
         `index.md` is one level of the tree — the subdirectories directly
         under the path, each with the count of concepts beneath, plus the
-        concepts at that level (design docs 0014, 0016). Rejected and
+        concepts at that level (design doc 0075 §4.2). Rejected and
         deleted concepts are excluded, as in search; a level caps at 1000
         with truncated=true; listing records no usage.
 
@@ -538,7 +538,7 @@ paths:
         says what the document says.
 
         **`?history` is the log.md of the one object at this path**
-        (design doc 0046 §3.5) — the history of a concept or of a file,
+        (design doc 0075 §4) — the history of a concept or of a file,
         because a revision is an event about an object and the ledger is
         keyed by path. As JSON a concept's carries each revision's whole
         document, so a diff between two revisions is a text diff; a
@@ -585,8 +585,8 @@ paths:
           in: query
           description: >
             The log.md of the object at this path rather than the object
-            itself — its own changes, newest first (design doc 0046
-            §3.5). Presence is the whole of it — `?history` — and a
+            itself — its own changes, newest first (design doc 0075
+            §4). Presence is the whole of it — `?history` — and a
             value is ignored, the way `Accept` decides a representation
             without being asked a question. A directory's history is the
             reserved `log.md` beside it. Combined with
@@ -632,7 +632,7 @@ paths:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
             ETag: { $ref: "#/components/headers/ETag" }
             Content-Disposition:
-              description: Files and archives — inline for an image, a PDF or plain text; attachment otherwise (design doc 0046 §3.2).
+              description: Files and archives — inline for an image, a PDF or plain text; attachment otherwise (design doc 0075 §1).
               schema: { type: string }
             Cache-Control: { $ref: "#/components/headers/CacheControl" }
             X-Content-Type-Options: { $ref: "#/components/headers/NoSniff" }
@@ -705,7 +705,7 @@ paths:
                     SPEC §9 prose: what changed under the path, newest
                     first. Each row names its object by **path**, because
                     a revision is an event about an object and a file has
-                    no concept id (design doc 0046 §3.1). The documents
+                    no concept id (design doc 0075 §1). The documents
                     are not here — a directory's history carrying every
                     past version of everything under it would be the
                     knowledge base several times over. `?history` on the
@@ -725,12 +725,12 @@ paths:
                   summary: "GET /api/v1/bundle/metrics/revenue.md?history (Accept: application/json)"
                   description: >
                     One object's own history, at the object's own address
-                    (design doc 0046 §3.5). A concept's carries the whole
+                    (design doc 0075 §4). A concept's carries the whole
                     concept as it stood at each change, so a diff between
                     two revisions is a text diff. A *file's* carries the
                     changes alone in the shape above, having no document
                     to carry — and a markdown document with no `type` is a
-                    file (§3.2), so the shape follows what is stored at
+                    file (design doc 0075 §1), so the shape follows what is stored at
                     the path rather than the path's suffix.
                   value:
                     revisions:
@@ -763,7 +763,7 @@ paths:
         "501":
           description: >
             A file was asked for on an instance that holds no files
-            (no OCHAKAI_GCS_BUCKET, design doc 0013). Only for a path
+            (no OCHAKAI_GCS_BUCKET, design doc 0075 §1). Only for a path
             that is not a concept's: at `<id>.md` the answer is the
             concept's own 404, because what was asked about is the
             concept and not the deployment.
@@ -784,7 +784,7 @@ paths:
             (`Accept: application/gzip`), or as an object's own
             `?history`. Both read the path as a thing the bundle stores —
             a directory to walk, an object with events — and a generated
-            file is neither (design doc 0046 §§3.7-3.8). The same refusal
+            file is neither (design doc 0075 §4.2). The same refusal
             PUT and DELETE make at these two names, for the same reason.
             Reading the file itself is a 200: that is what generating it
             is for.
@@ -826,7 +826,7 @@ paths:
       operationId: putBundleFile
       summary: Write one object of the bundle
       description: >
-        Stores the request body at the path (design doc 0046 §3.5). What
+        Stores the request body at the path (design doc 0075 §4). What
         it becomes is decided by the bytes, not by a parameter:
 
         A markdown path whose document carries a `type` is a concept.
@@ -840,7 +840,7 @@ paths:
         write surface beside the format. Anything else is a file,
         including a markdown document with no `type`: SPEC §11 makes the
         key what a concept has, and a bundle that carried a typeless
-        markdown file gets it back rather than losing it (§3.2).
+        markdown file gets it back rather than losing it (design doc 0075 §1).
 
         index.md and log.md are 409: they are generated from the bundle,
         so a write there is a conflict with what the address is.
@@ -848,10 +848,10 @@ paths:
         Writing a file needs the server to have GCS configured
         (OCHAKAI_GCS_BUCKET); without it an instance stores concepts and
         nothing else, and a write that is not a concept is a 501 (design
-        doc 0013). A concept is unaffected.
+        doc 0075 §1). A concept is unaffected.
 
         `dry_run=true` asks what the write would do and stores nothing
-        (design doc 0061). Everything else is the same call — the same
+        (design doc 0074 §5). Everything else is the same call — the same
         body, the same validation, the same read of what is there, the
         same 400s and 403s and 501s, the same `Ochakai-Note` headers —
         and the answer is `Ochakai-Plan`. Because it is the write path
@@ -1081,7 +1081,7 @@ paths:
         Rejected concepts never appear. limit caps the primary concepts
         (default 5, max 20); linked companions share a 2×limit total cap.
 
-        Changed in 0.13.0 (design doc 0033): `hits` carries the ranking
+        Changed in 0.13.0 (design doc 0067 §4): `hits` carries the ranking
         only — id, type, title, status, score. It used to repeat every
         top concept in full, so the knowledge arrived twice and the budget
         bound one copy of it. A client that read bodies out of `hits`
@@ -1126,8 +1126,8 @@ paths:
             This is the filter that does not need a migration. A key OKF
             adds in a later version is askable as soon as ochakai knows
             the spelling: the whole frontmatter is indexed, so there is
-            no column to add and no data to move (design doc 0046
-            §3.11). Exact match and list membership are the only two
+            no column to add and no data to move (design doc 0074
+            §4). Exact match and list membership are the only two
             comparisons: ranges and boolean expressions are the doorway
             to a query language, and what ochakai returns is knowledge
             rather than rows.
@@ -1144,7 +1144,7 @@ paths:
             says nothing, since OKF's default is stable, and `fm.status`
             never would. Use `type`, `status`, `tag`, `source` and
             `sort=stale_after` for those. Everything else is a 400
-            (design doc 0047).
+            (design doc 0074 §4).
           schema: { type: string }
         - name: tag
           in: query
@@ -1155,10 +1155,10 @@ paths:
           description: >
             Only concepts addressed under this path, repeatable and OR-ed —
             the same subtree filter GET /api/v1/search takes (design doc
-            0041). It scopes the search that picks the hits, not the link
+            0075 §6). It scopes the search that picks the hits, not the link
             expansion: a concept inside the scope that cites a glossary term
             outside it still arrives with the term, which is the reason
-            this endpoint follows links at all (design doc 0041 §2.6).
+            this endpoint follows links at all (design doc 0075 §6).
           schema: { type: array, items: { type: string } }
           explode: true
           allowReserved: true
@@ -1371,12 +1371,12 @@ paths:
       operationId: moveKnowledge
       summary: Move (rename) a knowledge concept to a new id
       description: >
-        The id is the address (design doc 0017), so a move carries
+        The id is the address (design doc 0075 §2), so a move carries
         everything keyed by it along in one transaction — revisions,
         usage, files, embeddings — and rewrites inbound references
         (link targets in both of SPEC §6's forms, and the producer
         key `model` where a document carries one)
-        so nothing breaks (design doc 0021). The destination must be a
+        so nothing breaks (design doc 0075 §5). The destination must be a
         fresh id: a live or soft-deleted concept there already owns that
         address and its history — free an id held by a deleted concept with
         DELETE ...?purge=true. Lives at its own top-level path for the
@@ -1495,12 +1495,12 @@ paths:
         replaced three endpoints — `POST /api/v1/verify/{id}`,
         `POST /api/v1/reject/{id}` and `DELETE /api/v1/reject/{id}` —
         which shared every structural property and differed only in the
-        value they wrote (design doc 0055 §3.1).
+        value they wrote (design doc 0068 §4).
 
         **None of them edits the concept.** The document, its lifecycle
         status, its `updated_at` and its ETag all stay put, because
         ruling on knowledge and publishing it are different acts (design
-        doc 0043 §§3.2-3.3). Promoting a draft to stable is a PUT. That
+        doc 0075 §3.2). Promoting a draft to stable is a PUT. That
         shared property is what says these are one operation: a face that
         writes the document and a face that rules on it are different
         things, and three faces that all leave the document alone are the
@@ -1509,8 +1509,8 @@ paths:
         Not an MCP tool: a ruling is what a person does, and it is the
         human judgment the write-back loop turns on. An agent that finds
         a verified concept wrong reports the outcome (`POST
-        /api/v1/usage/{id}`) or drafts a replacement (design doc 0015
-        §3.1).
+        /api/v1/usage/{id}`) or drafts a replacement (design doc 0067
+        §6).
 
         Lives at its own top-level path for the same reason `/usage`
         does — a suffix after the hierarchical id could be confused with
@@ -1539,7 +1539,7 @@ paths:
                     nothing when the content is unchanged, so "checked
                     again, still right" could not be recorded and both
                     review feeds (`sort=verified_at`, `sort=failed`) had
-                    no exit (design doc 0025 §6).
+                    no exit (design doc 0069 §2).
 
                     `rejected` writes the caller, the time and the reason
                     as the concept's live ruling, replacing any earlier
@@ -1661,7 +1661,7 @@ paths:
                     concept, not a stage of it, and it could not
                     round-trip as a status because export would have to
                     fold it onto deprecated, which asserts the opposite
-                    thing about the concept (design doc 0043 §3.3).
+                    thing about the concept (design doc 0068 §4).
                   value:
                     id: metrics/gross-revenue
                     document: |
@@ -1859,12 +1859,12 @@ paths:
         an improvement loop needs a trend: whether the verified share is
         growing, whether failure reports are being answered, and what people
         asked for and did not find. That is a question about the base as a
-        whole, and this is the face that answers it (design doc 0051).
+        whole, and this is the face that answers it (design doc 0069 §5).
 
 
-        It carries the queue depths under `queues` (design doc 0049
-        §3.1). `GET /api/v1/queues` used to answer those three numbers at
-        an address of their own and is gone (design doc 0049 §3.1): it
+        It carries the queue depths under `queues` (design doc 0069
+        §5). `GET /api/v1/queues` used to answer those three numbers at
+        an address of their own and is gone (design doc 0069 §5): it
         returned what this response already carried, under the same key
         and from the same query, and the one thing it could do that this
         could not was scope them to a subtree. So the scope came here
@@ -1896,7 +1896,7 @@ paths:
           description: >
             Measure only what lives under this path, e.g. teams/growth —
             matched on segment boundaries, repeatable and OR-ed, as on
-            search (design doc 0041). This is how a team asks about its
+            search (design doc 0075 §6). This is how a team asks about its
             own knowledge on a deployment it shares: before this, it could
             count its own review queue and could not count its own
             concepts.
@@ -1906,7 +1906,7 @@ paths:
             not**, and cannot: a search that found nothing found it
             nowhere, so there is no id to scope by, and the questions this
             base could not answer stay the instance's whatever prefix is
-            passed (design doc 0051 §3.7).
+            passed (design doc 0069 §5.1).
           schema: { type: array, items: { type: string } }
           explode: true
           allowReserved: true
@@ -1968,7 +1968,7 @@ paths:
         hybrid search stays quietly lexical-only until every concept
         happens to be rewritten. Changing the embedding model has the
         same shape: the old vectors sit in a space nothing queries any
-        more (design doc 0020). This fills the gap.
+        more (design doc 0073 §2). This fills the gap.
 
 
         File vectors are covered too: only writing a file records one, so
@@ -2071,12 +2071,12 @@ components:
       bearerFormat: JWT
       description: >
         A Google-signed identity token, audience-bound to this service's
-        URL, as `Authorization: Bearer <token>` (design docs 0002 §2,
+        URL, as `Authorization: Bearer <token>` (design docs 0065 §2,
         0003). Cloud Run IAM verifies it before a request reaches ochakai
         — the container never checks the signature itself and never sees
         a caller without one, except on OCHAKAI_MODE=public or dev, where
         nothing is checked and every caller is `human:anonymous` (design
-        docs 0040, 0042); the empty security requirement alongside this
+        doc 0066 §1); the empty security requirement alongside this
         scheme covers that case. Mint one with
         `gcloud auth print-identity-token --audiences=$OCHAKAI_URL`, or
         from code with a client library's ID-token helper — see
@@ -2088,7 +2088,7 @@ components:
       description: >
         The concept's version — the hash of the document as stored,
         quoted, and the same value as the body's summary.content_hash
-        (design docs 0043 §3.4, 0046 §3.4). A client echoes it in
+        (design doc 0075 §3.2). A client echoes it in
         If-Match on a later update to write only if nothing changed
         meanwhile (design doc 0030). It covers the document and nothing
         else, so verifying, rejecting or attaching a file all leave a
@@ -2102,12 +2102,12 @@ components:
         written — an unrecognized status, a date it could not parse, a
         trust family read as the document's own claim rather than as
         this instance's observation. Repeatable, one per reinterpretation. A reinterpretation is never
-        silent (design doc 0036 §3.4), and there is no room for it in a
+        silent (design doc 0075 §3.1), and there is no room for it in a
         response whose body is the concept.
       schema: { type: string }
     Plan:
       description: >
-        What a `dry_run=true` write would have done (design doc 0061):
+        What a `dry_run=true` write would have done (design doc 0074 §5):
         "created" when the path is free, "updated" when the object would
         change, "unchanged" when the body says exactly what is stored and
         the write would have written nothing. It replaces
@@ -2121,7 +2121,7 @@ components:
       description: >
         Set to "true" on every /api/v1 response — reads, writes, and
         errors alike — when the deployment is read-only
-        (OCHAKAI_MODE=read-only or public, design doc 0040 §2.3). It describes the
+        (OCHAKAI_MODE=read-only or public, design doc 0066 §2). It describes the
         deployment, not the outcome of the call. Absent means the
         deployment accepts writes, which is what every server predating
         the flag says. MCP announces read-only by not offering the write
@@ -2144,14 +2144,14 @@ components:
         `nosniff`, on a file's bytes. The media type was decided here, by
         sniffing what was stored; a browser that overrode it from a
         filename or a guess would be deciding it a second time (design doc
-        0046 §3.2).
+        0075 §1).
       schema: { type: string, enum: [nosniff] }
     Sandbox:
       description: >
         `sandbox`, on a file that is not rendered in place — anything but
         an image, a PDF or plain text. The web UI is served from this
         origin, so a stored document that happens to carry script (an SVG,
-        an HTML file) must have nowhere to run (design doc 0046 §3.2).
+        an HTML file) must have nowhere to run (design doc 0075 §1).
       schema: { type: string, enum: [sandbox] }
   parameters:
     IfMatch:
@@ -2182,14 +2182,14 @@ components:
         anything. On a GET, of a concept or a file, it is the ordinary
         cache validator — the content hash a prior read returned,
         answered with a 304 when it still matches (design doc 0064
-        §12.2: a concept's GET did not compare it until now).
+        §14.2: a concept's GET did not compare it until now).
       schema: { type: string }
     OnBehalfOf:
       name: Ochakai-On-Behalf-Of
       in: header
       required: false
       description: >
-        Delegated end-user identity (design doc 0027): "kind:identity",
+        Delegated end-user identity (design doc 0065 §3): "kind:identity",
         kind human or process, no whitespace in the identity, at most 320
         bytes — e.g. "human:tanaka@example.co.jp". An application on the
         delegator allowlist (OCHAKAI_DELEGATING_CALLERS) forwards who it
@@ -2208,7 +2208,7 @@ components:
       description: >
         The software the caller is running, in OKF SPEC §7's
         "<producer>/<version>" form — e.g. "insightflow/1.4.0" (design doc
-        0052). One slash, both halves non-empty, no whitespace, no colon
+        0065 §4). One slash, both halves non-empty, no whitespace, no colon
         (the character §7 tells "human:"/"process:" apart by), at most 128
         bytes; a malformed value is a 400, not a silent drop.
         It is recorded as Actor.producer, beside the authenticated actor
@@ -2221,7 +2221,7 @@ components:
         which this does not touch.
         Honored on every call; declared on the operations that record
         provenance. Ignored on a public read-only deployment, where no
-        caller is authenticated (design doc 0042).
+        caller is authenticated (design doc 0066 §3).
       schema: { type: string, maxLength: 128 }
   responses:
     Error:
@@ -2239,9 +2239,9 @@ components:
         Refused — the route exists and the request was understood, but
         this deployment declines it. Two things answer 403, and the
         message says which: a write against a read-only deployment
-        (design doc 0040 §4 — 403 rather than 404, because the endpoint
+        (design doc 0066 §2 — 403 rather than 404, because the endpoint
         did not go away), and Ochakai-On-Behalf-Of from a caller that
-        is not on the delegator allowlist (design doc 0027, which refuses
+        is not on the delegator allowlist (design doc 0065 §3, which refuses
         rather than silently downgrading to the caller's own identity).
         The second reaches every operation, since the header is honored
         on every call; the first only the writes. Same JSON envelope as
@@ -2272,7 +2272,7 @@ components:
         Glossary Term, BigQuery Dataset, BigQuery Table,
         Reference) are recommendations,
         not a closed set, and no server behavior hangs off any of them
-        (design doc 0038, design doc 0063). Any
+        (design doc 0071 §2). Any
         single-line value works as a type; OKF registers no taxonomy, so
         the spelling is the meaning and it round-trips unchanged. Matching
         is case-insensitive; the spelling you write is the one stored.
@@ -2295,13 +2295,13 @@ components:
         It says nothing about whether anyone confirmed the concept — SPEC
         §5.3 puts that in `verified`, and ochakai keeps it in the
         verifications ledger, so a draft may be verified and a stable
-        concept unverified (design doc 0043 §3.2). "Was never accepted" is
+        concept unverified (design doc 0075 §4.1). "Was never accepted" is
         likewise not a lifecycle value but a ruling, in `rejection`
-        (§3.3).
+        (design doc 0068 §4).
         A document that names no status is stable — SPEC §5.4's default.
         ochakai does not write a key its writer left out, so what comes
         back here is the value a reader reads, while the document keeps
-        its silence (design doc 0046 §3.9).
+        its silence (design doc 0075 §3).
       enum: [draft, stable, deprecated]
     Trust:
       type: string
@@ -2311,8 +2311,8 @@ components:
         the concept, machine-confirmed when something other than a person
         has, human-reviewed when a person vouched for it. Derived on read
         and never accepted from a payload — and independent of status,
-        which says whether the concept may be consumed (design doc 0046
-        §3.10).
+        which says whether the concept may be consumed (design doc 0075
+        §4.1).
 
         The ledger it is derived from is **this instance's own**: the
         confirmations recorded here through
@@ -2348,7 +2348,7 @@ components:
         It is not a lifecycle value: a rejection is a judgment about the
         concept rather than a stage of it, and it could not round-trip as
         a status because export had to fold it onto deprecated, which
-        asserts the opposite thing about the concept (design doc 0043 §3.3).
+        asserts the opposite thing about the concept (design doc 0068 §4).
         A bundle does not carry it (design doc 0009).
       properties:
         by: { $ref: "#/components/schemas/Actor" }
@@ -2367,7 +2367,7 @@ components:
       properties:
         kind:
           description: >
-            The spellings OKF SPEC §7 defines (design doc 0043 §3.8).
+            The spellings OKF SPEC §7 defines (design doc 0065 §2).
             Anything that is not a person is a process — §5.3 derives
             trust from the human: prefix alone, so no finer distinction
             is load-bearing. Service accounts are processes.
@@ -2378,7 +2378,7 @@ components:
           description: >
             The delegating caller, when an application forwarded an end
             user's identity with Ochakai-On-Behalf-Of (design doc
-            0027) — e.g. "process:app@project.iam.gserviceaccount.com" on
+            0065 §3) — e.g. "process:app@project.iam.gserviceaccount.com" on
             a concept whose actor is the person who used that application.
             Absent when the caller acted as itself. Recorded rather than
             replaced: a write made through an application must stay
@@ -2389,7 +2389,7 @@ components:
             The software that made this write, as the caller declared it
             with Ochakai-Producer — OKF SPEC §7's
             "<producer>/<version>" form, e.g. "insightflow/1.4.0" (design
-            doc 0052). Absent when the caller named none.
+            doc 0065 §4). Absent when the caller named none.
             It is the one field of an actor that is self-declared rather
             than observed from authentication, which is exactly why it
             sits beside kind/name instead of in them: read it as "what
@@ -2414,7 +2414,7 @@ components:
       type: object
       description: >
         The projection of one concept: enough to name it, order it, and
-        decide whether to read it (design doc 0043 §3.5). It is derived
+        decide whether to read it (design doc 0075 §3). It is derived
         from the document and never authoritative — the document is what
         the concept says, and this is an index over it. A client that needs
         a key not listed here reads the document; the projection carries
@@ -2426,12 +2426,12 @@ components:
           description: >
             The concept's bundle path — where it lives (the type says what
             it is): path segments separated by "/", the OKF concept ID
-            (design docs 0016, 0019). OKF prescribes no character set,
+            (design docs 0075 §2, 0074 §3). OKF prescribes no character set,
             so only path safety constrains segments: no leading ".",
             no control characters, at most 128 bytes each (512 total).
             The final segment must not be "index" or "log"
             (OKF-reserved filenames). Stored NFC-normalized, as are
-            link targets and file names (design doc 0022).
+            link targets and file names (design doc 0074 §1.1).
           pattern: "^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
         type: { $ref: "#/components/schemas/Type" }
         title:
@@ -2460,20 +2460,20 @@ components:
           format: date
           description: >
             Absolute date (YYYY-MM-DD) on and after which the concept is
-            stale — OKF's lifecycle date (SPEC §5.5, design doc 0036
-            §3.9). A date rather than a TTL so staleness is a plain
+            stale — OKF's lifecycle date (SPEC §5.5, design doc
+            0069). A date rather than a TTL so staleness is a plain
             comparison against today. Advisory: nothing hides a stale
             concept and search ranking never reads it — a passed date means
             due for a re-check, not wrong. The one surface that reads it
             is sort=stale_after, the feed of concepts whose declared date
-            has passed (design doc 0037 §2.1).
+            has passed (design doc 0069 §2.2).
         trust:
           allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >
             Who has confirmed the concept, in OKF's own vocabulary (SPEC
             §5.3), derived from the verifications ledger. Independent of
             status: a draft may be human-reviewed and a stable concept
-            unverified (design docs 0043 §3.2, 0046 §3.10). Who confirmed
+            unverified (design doc 0075 §4.1). Who confirmed
             it, and how often, is in observed.verified.
         verified_at:
           type: string
@@ -2500,8 +2500,8 @@ components:
           type: string
           description: >
             The concept's version: the hash of the document as stored, and
-            the same value the ETag header carries (design docs 0043
-            §3.4, 0046 §3.4). Send it back as If-Match to write only if
+            the same value the ETag header carries (design doc 0075
+            §3.2). Send it back as If-Match to write only if
             nothing changed meanwhile. Opaque — it covers the document
             alone, so a verification or a file leaves a held
             precondition valid, while a reformat moves it.
@@ -2518,7 +2518,7 @@ components:
         OKF's generated family (SPEC §5.2): who the content stands by, and
         when it last changed. `by` is not the creator — once somebody else
         edits a concept, the creator is no longer who the content stands by
-        — and verifying moves neither value (design doc 0036 §3.3).
+        — and verifying moves neither value (design doc 0075 §3.2).
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
@@ -2544,7 +2544,7 @@ components:
             POST /api/v1/review/{id} with ruling: verified: this is an
             instance ledger, and
             import reads only whether a bundle's `verified` key was
-            present (design docs 0009, 0043 §3.2).
+            present (design docs 0009, 0075 §4.1).
         rejection:
           allOf: [{ $ref: "#/components/schemas/Rejection" }]
           description: >
@@ -2555,8 +2555,8 @@ components:
       type: object
       description: >
         A read of one concept: the document it is, the projection to read it
-        by, and what this instance observed about it (design doc 0043
-        §3.5). The document is the concept — the same shape an export
+        by, and what this instance observed about it (design doc 0075
+        §3). The document is the concept — the same shape an export
         writes, a PUT takes, and `ochakai get` prints — and `summary` is
         an index over it, so where the two could disagree the document is
         right.
@@ -2580,7 +2580,7 @@ components:
             line endings, with the keys this instance owns (`generated`,
             `verified`) taken out and, when the document asserted any of
             them itself, kept under `received`. It is what content_hash is taken over
-            (design docs 0043 §3.4, 0046 §§2.2, 3.4), so it can be
+            (design doc 0075 §§3.1-3.2), so it can be
             edited and PUT back with nothing to strip, and the
             provenance those keys would have carried is in `observed`
             instead. Fetch the export form, server-owned keys included,
@@ -2598,7 +2598,7 @@ components:
       type: object
       description: >
         A file beside a knowledge concept — a dashboard screenshot, an
-        ER diagram, a seeds file (design docs 0008, 0013, 0046 §2.1).
+        ER diagram, a seeds file (design doc 0075 §1).
         Metadata travels with the concept; bytes are a separate,
         deliberate fetch so agent context is never flooded with base64.
       properties:
@@ -2607,7 +2607,7 @@ components:
           type: string
           description: >
             Sniffed from the bytes, never taken from the client. Any type:
-            a bundle carries what it carries (design doc 0046 §3.2), and
+            a bundle carries what it carries (design doc 0075 §1), and
             what a browser may do with it is decided when it is served.
         size: { type: integer }
         sha256: { type: string, description: Content hash; files are content-addressed and immutable. }
@@ -2618,7 +2618,7 @@ components:
             export writes it back as. A file written through this address
             is at `<id>/<name>`; one written at its own bundle path is
             there, which is how a foreign layout round-trips (design doc
-            0046 §3.3). `name` is the last segment, beside it the way a
+            0075 §5). `name` is the last segment, beside it the way a
             concept keeps its id beside its path.
         created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         created_at: { type: string, format: date-time, readOnly: true }
@@ -2632,7 +2632,7 @@ components:
         last_used_at: { type: string, format: date-time }
     Stats:
       description: >
-        The instance-level view of the loop (design doc 0051). State
+        The instance-level view of the loop (design doc 0069 §5). State
         fields describe the base as it stands; flow fields cover the last
         `window_days`.
       type: object
@@ -2670,8 +2670,8 @@ components:
           allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
           description: >
             State: how much each review queue is holding right now (design
-            doc 0049 §3.1 kept this place for the metrics beside it), and
-            since 0049 §3.1 the only place it is answered — `prefix`
+            doc 0069 §5 kept this place for the metrics beside it), and
+            since 0069 §5 the only place it is answered — `prefix`
             scopes it like everything else here. When the question is only
             "is there anything", `ochakai stats` prints these three with
             the next step on each line, and its `--exit-code` is what a
@@ -2728,7 +2728,7 @@ components:
 
 
         A queue is named after the `sort` that lists it, so the count and
-        the way to see what it counts are one word (design doc 0059).
+        the way to see what it counts are one word (design doc 0069 §5.2).
         `drafts` is the exception, and names itself, because no single
         sort lists it.
       properties:
@@ -2738,29 +2738,29 @@ components:
             Drafts waiting to be published or turned down — GET
             /api/v1/search?sort=usage&status=draft. It takes a filter as
             well as a sort, which is why this one keeps a name of its own
-            (design doc 0059 §2.2). Verifying does not empty it:
+            (design doc 0069 §5.2). Verifying does not empty it:
             confirming and publishing are different acts, so a draft
             leaves when it is edited to another status or rejected
-            (design doc 0043 §3.2).
+            (design doc 0069 §2).
         failed:
           type: integer
           description: >
             Concepts whose failure reports are still unanswered —
             sort=failed, the listing this count is keyed by (design doc
-            0059). Verifying takes one out.
+            0069 §5.2). Verifying takes one out.
         stale_after:
           type: integer
           description: >
             Concepts past the stale_after their author declared —
             sort=stale_after. Verifying does not clear this one: the date
             is the writer's declaration, so the concept leaves when someone
-            edits it (design doc 0037 §2.2).
+            edits it (design doc 0069 §2.2).
     SearchHit:
       description: >
         One search or listing result: the projection plus what ranked it.
         A hit no longer carries the concept. Search used to return whole
         concepts on the reasoning that there they are the answer rather
-        than a duplicate of one (design doc 0033) — true while a concept
+        than a duplicate of one (design doc 0067 §4) — true while a concept
         was a bag of fields, and false once it is a document: a page of
         results that shipped ten documents to answer "which of these
         should I read" spends the caller's context on the nine it will
@@ -2769,7 +2769,7 @@ components:
 
         REST hits carry file metadata (filled in batch) so UIs can
         render image previews without a fetch per concept; MCP search
-        results omit it to keep agent context lean (design doc 0015).
+        results omit it to keep agent context lean (design doc 0067 §1).
       allOf:
         - $ref: "#/components/schemas/Summary"
         - type: object
@@ -2796,7 +2796,7 @@ components:
         One hit's place in the ranking behind a context pack. The knowledge
         itself travels once, under `concepts` — a rank that repeated it would
         double the response and leave the byte budget governing one of the
-        copies (design doc 0033). Search results keep their full hits: there
+        copies (design doc 0067 §4). Search results keep their full hits: there
         the concepts are the answer, not a duplicate of one.
       properties:
         id: { type: string }
@@ -2812,8 +2812,8 @@ components:
           allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >
             The ledger's answer in OKF's vocabulary (SPEC §5.3), which the
-            lifecycle status does not carry (design docs 0043 §3.2, 0046
-            §3.10). A caller deciding whether to spend a round trip on an
+            lifecycle status does not carry (design doc 0075
+            §4.1). A caller deciding whether to spend a round trip on an
             id below the pack's cut-off wants to know who confirmed the
             concept, not merely whether somebody did.
         score: { type: number }
@@ -2842,13 +2842,13 @@ components:
       description: >
         `index.md` as structure — one level of the tree, which is what a
         web UI's navigator needs and what the markdown says in prose
-        (design docs 0014, 0016). Two representations of one generated
+        (design doc 0075 §4.2). Two representations of one generated
         file, at one address; the JSON is not a second surface.
 
         Three kinds of thing sit in a directory and the listing carries
-        all three (design doc 0046 §3.7): the subdirectories, the
+        all three (design doc 0075 §4.2): the subdirectories, the
         concepts, and the files — a file is an object in the bundle
-        rather than a property of a concept (§3.3), so a directory can
+        rather than a property of a concept (design doc 0075 §5), so a directory can
         hold one that no concept shows.
       properties:
         dirs:
@@ -2900,7 +2900,7 @@ components:
         same way it never reads back `generated` (design doc 0009).
 
         Each row names the object by its **path**: a revision is an event
-        about an object (design doc 0046 §3.1), and a file has no concept
+        about an object (design doc 0075 §1), and a file has no concept
         id — a history keyed on the id would leave every attach and
         detach out of the one it belongs in.
       required: [changes]
@@ -2928,7 +2928,7 @@ components:
         `?history` on a concept's own address: its revisions, newest
         first, each carrying the whole concept as it stood, as an OKF
         document — so a diff between two revisions is a text diff
-        (design doc 0046 §3.5).
+        (design doc 0075 §4).
       required: [revisions]
       properties:
         revisions:
@@ -2948,7 +2948,7 @@ components:
           type: string
           description: >
             The concept as it stood after this change, as an OKF document
-            (design doc 0043 §3.9). It replaced a JSON snapshot of the
+            (design doc 0075). It replaced a JSON snapshot of the
             server's own struct: a record whose shape depends on the
             reader knowing every past release is the distortion, not the
             fidelity, and it also means a diff between two revisions
