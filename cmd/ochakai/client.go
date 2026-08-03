@@ -55,7 +55,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 
 // runClient dispatches a client command and maps errors to exit codes:
 // 0 success, 1 error, 2 "the command ran and the answer is no"
-// (`queues --exit-code` with work waiting). Two codes rather than one
+// (`stats --exit-code` with work waiting). Two codes rather than one
 // because a scheduled job must not read "the server is unreachable" as
 // "the queues are empty" — both are non-zero, and only one of them means
 // somebody has reviewing to do.

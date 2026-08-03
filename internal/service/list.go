@@ -108,6 +108,20 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 				"written, not asked for. Askable: %s", key, key, askableHint)
 		}
 	}
+	// status and trust are closed vocabularies, so a value outside them
+	// is named rather than matched against nothing: an unknown tier used
+	// to answer 200 with no hits, which reads as "the base holds nothing"
+	// when the truth was "that word does not exist" (design doc 0064).
+	for _, s := range f.Statuses {
+		if !domain.ValidStatus(s) {
+			return f, Invalidf("status must be one of %s, not %q", domain.StatusesHint(), string(s))
+		}
+	}
+	for _, t := range f.Trust {
+		if !domain.ValidTrust(t) {
+			return f, Invalidf("trust must be one of %s, not %q", domain.TrustsHint(), string(t))
+		}
+	}
 	if len(f.Prefixes) == 0 {
 		return f, nil
 	}

@@ -758,8 +758,14 @@ func TestAskableKeysAreTheOKFKeysWithNoFilterOfTheirOwn(t *testing.T) {
 		if use, ok := domain.FilterOwnedKeys[key]; ok {
 			t.Errorf("askable key %q is already asked by %s", key, use)
 		}
+		// ochakai's own envelope keys are not OKF vocabulary, and the
+		// filter's refusal says the vocabulary is OKF's — so they are
+		// refused like any other producer's extension (design doc 0064).
+		if slices.Contains(domain.OchakaiEnvelopeKeys, key) {
+			t.Errorf("askable key %q is ochakai's own, not OKF's", key)
+		}
 	}
-	if got, want := len(askable), len(domain.EnvelopeKeys)-len(domain.FilterOwnedKeys); got != want {
+	if got, want := len(askable), len(domain.EnvelopeKeys)-len(domain.FilterOwnedKeys)-len(domain.OchakaiEnvelopeKeys); got != want {
 		t.Errorf("askable keys = %d, want %d", got, want)
 	}
 }

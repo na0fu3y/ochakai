@@ -270,7 +270,7 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 `, version)
 	})
 	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
-	mux.Handle("/api/v1/", httpauth.Middleware(cfg, restapi.Handler(svc)))
+	mux.Handle("/api/v1/", restapi.AnnounceReadOnly(svc, httpauth.Middleware(cfg, restapi.Handler(svc))))
 
 	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
 		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})

@@ -358,6 +358,21 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 		if !changed {
 			return old, false, false, nil
 		}
+		// The values the write would stamp, stamped without the write:
+		// the same rules as Update above, the same clock as the store.
+		// Leaving them zero put an empty actor and a zero time on the
+		// wire, where every real write resolves both (design doc 0064).
+		if k.SameContent(old) {
+			k.UpdatedBy, k.ContentChangedAt = old.UpdatedBy, old.ContentChangedAt
+		} else {
+			k.UpdatedBy, k.ContentChangedAt = actor, store.NowStored()
+		}
+		k.UpdatedAt = store.NowStored()
+		doc, hash, err := store.StoredDocument(k)
+		if err != nil {
+			return nil, false, false, err
+		}
+		k.Doc, k.ContentHash = doc, hash
 		return k, false, true, nil
 	}
 	if ifMatch != nil || !errors.Is(err, store.ErrNotFound) {
@@ -369,6 +384,13 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 	// the concept it stores, so out says what a created concept would say.
 	k.Status = k.Lifecycle()
 	k.CreatedBy, k.UpdatedBy = actor, actor
+	now := store.NowStored()
+	k.CreatedAt, k.UpdatedAt, k.ContentChangedAt = now, now, now
+	doc, hash, err := store.StoredDocument(k)
+	if err != nil {
+		return nil, false, false, err
+	}
+	k.Doc, k.ContentHash = doc, hash
 	return k, true, true, nil
 }
 

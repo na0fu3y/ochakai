@@ -357,6 +357,10 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
 	at := NowStored()
+	var (
+		createdBy domain.Actor
+		createdAt time.Time
+	)
 	// Outside the transaction, and content-addressed, so a failure after
 	// it leaves only an unreferenced object the next write reuses.
 	if err := s.blobs.Put(ctx, hash, mediaType, data); err != nil {
@@ -371,6 +375,11 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 		// not updated by the ON CONFLICT arm" — one query, no second
 		// round trip to ask created (design doc 0064: a file PUT answers
 		// 201 on create the same way a concept PUT already does).
+		// RETURNING reads created_by and created_at off the row rather
+		// than assuming them: an overwrite keeps the original creator
+		// (created_at is not in the ON CONFLICT arm), and a response
+		// saying otherwise would disagree with the next GET (design doc
+		// 0064).
 		row := tx.QueryRow(ctx, `INSERT INTO object
 			(path, type, title, body, blob_hash, size, media_type,
 			 created_by_kind, created_by_name, updated_by_kind, updated_by_name,
@@ -381,9 +390,9 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
 				updated_at=EXCLUDED.updated_at
 			WHERE object.id IS NULL
-			RETURNING (xmax = 0)`,
+			RETURNING (xmax = 0), created_by_kind, created_by_name, created_at`,
 			p, hash, int64(len(data)), mediaType, actor.Kind, actor.Name, at)
-		if err := row.Scan(&created); err != nil {
+		if err := row.Scan(&created, &createdBy.Kind, &createdBy.Name, &createdAt); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("%w: %s is a concept", ErrAlreadyExists, p)
 			}
@@ -397,7 +406,7 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 	return &domain.File{
 		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
 		Size: int64(len(data)), SHA256: hash, Path: p,
-		CreatedBy: actor, CreatedAt: at,
+		CreatedBy: createdBy, CreatedAt: createdAt,
 	}, created, nil
 }
 
