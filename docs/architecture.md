@@ -49,11 +49,11 @@ flowchart LR
 `serve` は MCP サーバーと REST API を一つのポートで、データベースの
 隣で動かす。CLI と web UI は REST クライアントであり、自分自身の
 データベース接続を持たない(設計ドキュメント
-[0007](design/0007-api-only-cli.md))。web UI はビルドステップの無い
+[0067](design/0067-four-faces-and-what-they-decline.md) §2)。web UI はビルドステップの無い
 一枚の自己完結したページで、`ochakai ui` によってループバックから、
 あるいは `ochakai serve-ui` によってチームのサービスとして配られる —
 同じコンテナイメージに、違う引数を渡すだけである(設計ドキュメント
-[0006](design/0006-web-ui-serving.md))。
+[0072](design/0072-the-web-ui-serves-and-edits-documents.md) §1)。
 
 ## Identity と provenance、そして認可は無い
 
@@ -61,7 +61,7 @@ flowchart LR
 それが一部の組織にとっては致命的な欠格事由になる。** それが運用上
 何を意味するか、そしてそれを狭める姿勢は
 [要件と設定](configuration.md#authentication-has-no-configuration)
-(設計ドキュメント [0002](design/0002-authn-authz.md))にある。この
+(設計ドキュメント [0065](design/0065-identity-and-provenance.md) §1)にある。この
 節はその*理由*である。
 
 ochakai が identity に対してすることは*記録*だけであり、目的は一つ
@@ -86,9 +86,9 @@ ochakai が identity に対してすることは*記録*だけであり、目的
   利用者全員を同じサービスアカウントとして記録する。
   [Delegated provenance](guides/rest-integration.md#delegated-provenance-forwarding-who-used-your-product)
   は、運用者が明示的に一覧した呼び出し元についてこれを解消する
-  (設計ドキュメント [0027](design/0027-delegated-provenance.md))。
+  (設計ドキュメント [0065](design/0065-identity-and-provenance.md) §3)。
   team web UI は IAP が署名した JWT から同じことを行う(設計
-  ドキュメント [0032](design/0032-webui-iap-identity.md))。
+  ドキュメント [0065](design/0065-identity-and-provenance.md) §5)。
 - **identity が言うのは誰かであって、何かではない。** 本人の
   資格情報の下で書き込むエージェント — MCP クライアント、スクリプト
   内の CLI — はその人物を記録し、record はまるで本人が文章を書いた
@@ -97,7 +97,7 @@ ochakai が identity に対してすることは*記録*だけであり、目的
   伝える。これは actor の**隣に**記録され、決してその代わりには
   ならない — ここで唯一、呼び出し元が認証によって観測されたのでは
   なく自分自身について宣言するものだからである(設計ドキュメント
-  [0052](design/0052-producer-beside-the-actor.md))。
+  [0065](design/0065-identity-and-provenance.md) §4)。
 - **provenance がペイロードから読まれることは無い。** import は
   バンドルの frontmatter から ledger へ何も持ち込まず、そこにある
   何も trust の段階を動かさない。provenance はこのインスタンスが
@@ -115,8 +115,7 @@ ochakai が identity に対してすることは*記録*だけであり、目的
 それについて何をするか、そして identity を読むこと自体をやめる
 姉妹の**public**姿勢については
 [要件と設定](configuration.md#environment-variables)
-(設計ドキュメント [0040](design/0040-read-only-mode.md)、
-[0042](design/0042-public-read-only.md))にある。
+(設計ドキュメント [0066](design/0066-four-postures-one-word.md) §2・§3)にある。
 
 「認可は無い」には一つだけ狭い例外があり、それは意図して認可では
 ないと位置づけられている: MCP は、人間が裁定した concept —
@@ -129,7 +128,7 @@ verified・rejected・deprecated — を上書き・変更することを
 違う数字を得たときにしか発覚せず、しかも MCP には条件付き書き込みの
 経路(ETag)が無いので、エージェントは自分が何を置き換えるつもり
 だったかを示すすべを持たない。人間向けのサーフェスは制限されない
-(設計ドキュメント [0015](design/0015-surface-consistency.md) §3.1)。
+(設計ドキュメント [0067](design/0067-four-faces-and-what-they-decline.md) §6)。
 
 <a id="the-data-model"></a>
 
@@ -138,10 +137,10 @@ verified・rejected・deprecated — を上書き・変更することを
 **concept とは [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
 v0.2 文書である** — YAML の frontmatter の後に markdown 本文が続く —
 そしてそれが保存形式であり、ワイヤ形式であり、export 形式でもある
-(設計ドキュメント [0046](design/0046-bundle-address-space.md) §2.2。
-設計ドキュメント 0043 の*文書だけが真実*をそのまま引き継ぎ、バイト
-レベルまで落とし込んでいる: 書き込みが保存するのは受け取ったバイト
-列そのものであり、正準形式はそこから導かれる)。concept を読み、
+(設計ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §3。
+*文書だけが真実*をバイトレベルまで落とし込んでいる:
+書き込みが保存するのは受け取ったバイト列そのものであり、正準形式は
+そこから導かれる)。concept を読み、
 編集し、送り返すのは変換の入らない一つのループである — id が、
 両端で住所になる:
 
@@ -188,8 +187,7 @@ round trip を生き残る。推奨の九つに入る資格を得るのは、SPE
 producer に課すただ一つの要求 — 綴りが descriptive で
 self-explanatory であること — を、OKF 自身が spec の例やその
 reference bundle で示している綴りに照らして判断した結果である
-(設計ドキュメント [0023](design/0023-okf-type-vocabulary.md)、
-[0038](design/0038-type-vocabulary-realignment.md))。マッチングは
+(設計ドキュメント [0071](design/0071-the-recommended-type-vocabulary.md) §3)。マッチングは
 大文字小文字を区別しない — 保存されるのは書いた綴りそのものである。
 
 **identity とはパスである。** concept の id はその住所であり bundle
@@ -197,20 +195,20 @@ reference bundle で示している綴りに照らして判断した結果であ
 であり、ディレクトリはナレッジベースをどう組織するかを表す — type
 は concept の属性であって住所の一部ではないので、export した
 bundle のレイアウトは id だけから決まる(設計ドキュメント
-[0017](design/0017-path-addressing.md))。MCP は concept を、
+[0075](design/0075-the-bundle-is-the-address-space.md) §2)。MCP は concept を、
 `ochakai://` スキームの下でそのパスによる resource として住所づける
 — これは MCP のための URI であって、bundle の中を旅することは無い。
 `title` は省略でき、それを持たない concept は id の最後のセグメント
 で表示される — ファイルがファイル名で呼ばれるのと同じである — そして
 id は NFC 正規化されており、それ自体が検索対象でもある(設計
-ドキュメント [0022](design/0022-filename-as-name.md))。
+ドキュメント [0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §1)。
 
 住所がパスであるということは、パスもまた検索の対象になるという
 ことである。`--prefix`(REST では `?prefix=`、MCP では `prefixes`)
 は検索や `context` の呼び出しを一つの subtree に絞り込む — 繰り返し
 指定でき、OR で結ばれるので、一回の呼び出しで木の二箇所をカバーし、
 id で答えを見分けられる(設計ドキュメント
-[0041](design/0041-path-scoped-search.md))。マッチングはセグメント
+[0075](design/0075-the-bundle-is-the-address-space.md) §6)。マッチングはセグメント
 境界で行われる: `metrics` は `metrics-legacy` には届かない。これが
 どれだけ役に立つかはディレクトリが何を意味するかによる —
 [examples/demo](../examples/demo) は種類でグループ化しており
@@ -228,7 +226,7 @@ vocabulary の隣にあるチーム独自の vocabulary のように、ディレ
 すべてである — が edge になる。リンク先は backlink を得て、
 `get_context` はその edge を両方向に展開する。どんな種類の関係かは
 その周りの文が語るので、ochakai は自分自身の関係 vocabulary を一切
-保存しない(設計ドキュメント [0024](design/0024-links-from-body.md))。
+保存しない(設計ドキュメント [0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2)。
 フェンスされたコードブロック(``` や ~~~)の中のリンクとインラインの
 `` `code span` `` は例として扱われスキップされる — インデントされた
 コードは検出されないので、4 スペース分インデントされたリンクは本文
@@ -241,19 +239,18 @@ vocabulary の隣にあるチーム独自の vocabulary のように、ディレ
 ただのファイルとして round trip する。受け付ける形式は Claude が
 読めるものと Gemini が embed できるものの積である: PNG、JPEG、
 WebP、PDF、プレーンテキスト。ファイル名からではなくバイト列から
-判定する — これは 0046 §3.5 が bundle address に畳み込んでいる操作の
+判定する — これは 0075 §4 が bundle address に畳み込んでいる操作の
 一つで、その畳み込みはまだ着地の途中だからである。バイト列は Cloud
 Storage に置かれ、必要になったときに取得される。1 オブジェクト
 あたり 5 MiB まで、住所を保持するのはデータベースの側である(設計
-ドキュメント [0046](design/0046-bundle-address-space.md) §3.2。設計
-ドキュメント 0013 の判断を引き継いでいる)。`OCHAKAI_GCS_BUCKET` が
+ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §1)。`OCHAKAI_GCS_BUCKET` が
 未設定なら、そのインスタンスは markdown の concept だけを保存し、
 markdown 以外の書き込みは拒否される。Files は検索対象でもある:
 ファイル名はすべての検索でマッチし、内容は embeddings が有効な
 ところではハイブリッド検索に加わる — テキストはどの embedding
 model でも、画像と PDF は `gemini-embedding-2` で。ヒットは常に
 それを持つ concept であって、ファイル自身がヒットすることは無い
-(設計ドキュメント [0020](design/0020-attachment-search.md))。
+(設計ドキュメント [0073](design/0073-search-and-when-embeddings-apply.md) §3)。
 
 **trust はナレッジと一緒に旅をする。** OKF v0.2 のスキーマは
 ochakai のスキーマでもある: spec が定義するキーはすべて第一級の
@@ -299,8 +296,7 @@ rejection — レビューされて*受け入れられなかった*こと — �
 本当の status の隣に `rejected_by` / `rejected_at` として現れ、
 import はそれを二度と読み戻さない — bundle が運ぶのはナレッジで
 あって、一つのインスタンスの判断ではないからである(設計ドキュメント
-[0046](design/0046-bundle-address-space.md) §2.4。設計ドキュメント
-0043 §§3.2-3.3 を変えずに引き継いでいる)。
+[0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。
 
 ochakai はこれらを**記録する**だけで、決してそれをもとに動かない。
 source の `resource` を取得することも、その信頼性の信号を採点する
@@ -317,7 +313,7 @@ concept を消費する側の仕事である(SPEC §5.1、§10.5)。
 
 REST、MCP、CLI、web UI は一つのルールに従う: 機能はこのすべてに
 一貫して現れる — 意図してどれにも現れない場合も含めて(設計
-ドキュメント [0015](design/0015-surface-consistency.md))。それぞれ
+ドキュメント [0067](design/0067-four-faces-and-what-they-decline.md))。それぞれ
 に宣言された役目がある。
 
 | Surface | 役目 |
@@ -352,7 +348,7 @@ outcome の報告が無い。SQL を実行できないサーフェスが worked/
 を書き尽くしていて、別の実装がそれを再現できることである。この決定
 を覆す条件も record は名指している: バイナリを動かせない環境から
 restore を求められたときである(設計ドキュメント
-[0015](design/0015-surface-consistency.md) §3.2)。
+[0067](design/0067-four-faces-and-what-they-decline.md) §5.2)。
 
 ## ストレージ
 
@@ -369,7 +365,7 @@ restore を求められたときである(設計ドキュメント
 メモリ上にバッファされ、定期的にフラッシュされる。統計は
 best-effort だと文書化されており、あふれた分はリクエストを詰まらせ
 るのではなく捨てられ、shutdown は最後のフラッシュの前に drain する
-(設計ドキュメント [0029](design/0029-usage-recording-off-the-read-path.md))。
+(設計ドキュメント [0069](design/0069-the-loop-and-what-measures-it.md) §3)。
 同時編集は同じ文書のハッシュに対する楽観的ロックで扱われる(設計
 ドキュメント [0030](design/0030-optimistic-locking.md))。
 
@@ -406,7 +402,7 @@ files のファイル名 — に対してマッチさせる。ラテン文字の
 キーは無い。字句面の ranking とは reciprocal rank fusion で融合
 される — は、**ochakai が Google Cloud 上で動いているところでは
 既定で on になる**(設計ドキュメント
-[0053](design/0053-embeddings-by-default.md)。何がそれを決めるか、
+[0073](design/0073-search-and-when-embeddings-apply.md) §1。何がそれを決めるか、
 どう断るかは[要件と設定](configuration.md#environment-variables)に
 ある)。ベクトルは concept が書かれたときに書かれるので、embeddings
 が届く前に読み込んだベースや、model を変えた後のベースは、
@@ -419,10 +415,10 @@ score は較正されておらず、二つのモード間で比較できるも�
 返し、残りは outline の行として名指すだけであり、`hits` が運ぶのは
 ranking だけである — id、type、title、status、verified かどうか、
 score — ナレッジそのものの二つ目のコピーではない(設計ドキュメント
-[0033](design/0033-context-hits-are-a-ranking.md))。検索の hit も
+[0067](design/0067-four-faces-and-what-they-decline.md) §4)。検索の hit も
 同じ種類のものである: 一行が concept を名指し、何がそれを ranking
 したかを言い、文書自体は id で一回取得すれば手に入る(設計
-ドキュメント [0046](design/0046-bundle-address-space.md) §3.5)。
+ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §4)。
 
 ## 書き戻しと検証のループ
 
@@ -439,8 +435,8 @@ score — ナレッジそのものの二つ目のコピーではない(設計ド
 付けた `POST /api/v1/review/{id}` が concept の ledger に追記する。
 なぜなら、何も変えない更新は何も書き込まないので、「もう一度確かめた、
 まだ正しい」がどこにも着地しないからである(設計ドキュメント
-[0025](design/0025-closing-the-loop.md) §6。設計ドキュメント
-[0037](design/0037-stale-and-source-lookup.md) が拡張している)。
+[0069](design/0069-the-loop-and-what-measures-it.md) §2。宣言した期限と
+引用元からの逆引きは同 §2.2・§2.3 が拡張している)。
 そして**`stale_after` は再検証によってではなく編集によって片づく**
 — これはサーバーが観測したものではなく、その著者が立てた主張だから
 である。
@@ -467,11 +463,11 @@ ochakai の不変条件のほとんどは Go の型システムでは表現で�
   テストを通るすべてのリクエストとレスポンスをこれに照らして
   検証する。コード生成器は使わない: handler は手書きのままである。
   各サーフェスの意味を意図して設計することが設計ドキュメント
-  0015 の要点であり、この規模なら生成と同じだけの精度でテストが
+  0067 の要点であり、この規模なら生成と同じだけの精度でテストが
   spec を同期させ続けられるからである。
 - **Properties。** Go 標準の fuzzing が、信頼されない入力が入って
   くる唯一の場所である OKF parser、id と link の導出、そして設計
-  ドキュメント 0036 が厳密であると主張する export → import の
+  ドキュメント 0075 §3 が厳密であると主張する export → import の
   round trip をカバーする。seed corpus は普通の `go test` の下で
   再生されるので、CI に新しい形は要らない。
 

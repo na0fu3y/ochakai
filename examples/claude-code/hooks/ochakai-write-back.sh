@@ -9,7 +9,7 @@
 # - report_outcome: whether any concept ochakai-recall.sh handed this
 #   session (recorded to a per-session file under $TMPDIR) held up when
 #   acted on. `failed` reports are what moves a verified concept into the
-#   re-verification feed (design doc 0025) — without them that feed stays
+#   re-verification feed (design doc 0069 §2.1) — without them that feed stays
 #   at zero regardless of how stale the knowledge actually is.
 #
 # CLAUDE.md alone relies on the agent remembering both habits; this hook

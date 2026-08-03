@@ -615,7 +615,7 @@ Two decisions worth knowing before proposing features:
   knowledge; interpretation and execution belong to the client agent
   (0001).
 - **Google Cloud only, secret-zero.** Auth is Cloud Run IAM + Cloud SQL
-  IAM; features must not introduce tokens or passwords (0002, 0003).
+  IAM; features must not introduce tokens or passwords (0065, 0003).
 
 ## Translating a manual page
 

@@ -30,7 +30,7 @@ moves:
   the freeze, REST moved the same way everything else did: `0.13.0` moved
   the knowledge out of `/context`'s `hits`; `0.14.0` moved seven keys out
   of `attrs` into envelope fields; the largest move,
-  [0046](design/0046-bundle-address-space.md) §3.5's fold, left an object
+  [0075](design/0075-the-bundle-is-the-address-space.md) §4's fold, left an object
   with one address — `/api/v1/bundle/{path}` — and removed the second
   spellings it replaced (`/api/v1/knowledge/{id}`,
   `/api/v1/attachments/{id}/{name}`, `/api/v1/backlinks/{id}`,
@@ -71,8 +71,8 @@ Not a promise that nothing breaks. A promise that you are told what did:
   two new deployment postures.
 - **Every removal from MCP, the CLI or the stored shape has a design record**
   that says why, and what to use instead. `compile_sql` went with
-  [0028](design/0028-retire-compile-sql.md), the OAuth connector with
-  [0012](design/0012-retire-mcp-oauth-connector.md). Features are removed when
+  [0070](design/0070-what-was-retired-and-why.md) §3, the OAuth connector with
+  the same record's §2. Features are removed when
   they stop earning their place, and that is treated as maintenance rather than
   as a failure.
 - **Your knowledge outlives any of it.** `ochakai export` writes an OKF

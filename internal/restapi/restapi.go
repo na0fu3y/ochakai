@@ -1179,7 +1179,7 @@ func refuseReserved(w http.ResponseWriter, path, because string) bool {
 		return false
 	}
 	writeJSON(w, http.StatusConflict, map[string]string{
-		"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8), %s",
+		"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0075 §4.2), %s",
 			base, because),
 	})
 	return true
@@ -1225,7 +1225,7 @@ func refuseObjectAsArchive(w http.ResponseWriter, r *http.Request, svc *service.
 	}
 	writeJSON(w, http.StatusConflict, map[string]string{
 		"error": fmt.Sprintf(
-			"%s is an object, not a directory (design doc 0046 §3.5); there is no subtree here to archive, ask the directory it sits in", path),
+			"%s is an object, not a directory (design doc 0064 §4); there is no subtree here to archive, ask the directory it sits in", path),
 	})
 	return true, nil
 }

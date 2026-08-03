@@ -94,7 +94,7 @@ Last write wins, unless the client asks for better. Every `GET` and `PUT`
 returns an `ETag` — the hash of the concept's canonical OKF document,
 quoted, and also in the body as `summary.content_hash` — and a `PUT` carrying
 `If-Match` with a stale value gets `412` and writes nothing (design docs
-0030, 0043 §3.4). It is a hash of the content alone, so verifying or
+0030, 0075 §3.2). It is a hash of the content alone, so verifying or
 rejecting the concept, or attaching a file to it, leaves your precondition
 valid: only an edit invalidates it. MCP
 exposes no version field but uses the same mechanism internally to protect
@@ -159,7 +159,7 @@ a `curl` that creates a concept.
 
 One markdown document with YAML frontmatter, addressed by a path-like id
 (`queries/sales/monthly-revenue`). The id is the address and the type is
-an attribute, not a directory (design doc 0017). Relationships come from
+an attribute, not a directory (design doc 0075 §2). Relationships come from
 ordinary markdown links in the body — there is no links field to fill in
-(design doc 0024) — and a `title` is optional, because the last segment of
-the id already names the concept (design doc 0022).
+(design doc 0074 §2) — and a `title` is optional, because the last segment of
+the id already names the concept (design doc 0074 §1).

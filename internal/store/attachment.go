@@ -167,7 +167,7 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 // errNoBlobStore is the backstop for attachment operations on an
 // instance without a blob store; the service layer checks first and
 // wraps the condition in a client-facing error (design doc 0013).
-var errNoBlobStore = errors.New("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
+var errNoBlobStore = errors.New("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 
 // GetAttachment returns one attachment with its bytes. Attachments of
 // soft-deleted entries are gone with the entry.

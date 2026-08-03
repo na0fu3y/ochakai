@@ -11,7 +11,7 @@ window and no backporting ([docs/compatibility.md](docs/compatibility.md)).
 ## Scope notes
 
 ochakai's security posture is deliberately narrow (see
-[docs/design/0002-authn-authz.md](docs/design/0002-authn-authz.md) and
+[docs/design/0065-identity-and-provenance.md](docs/design/0065-identity-and-provenance.md) and
 [requirements and configuration](docs/configuration.md#authentication-has-no-configuration)
 (Japanese)):
 
@@ -23,9 +23,8 @@ ochakai's security posture is deliberately narrow (see
   public one would let any caller name any person. (The publicly
   reachable MCP OAuth connector service existed briefly and was retired
   in 0.9.0.)
-- The one exception is `OCHAKAI_MODE=public` (design docs
-  [0040](docs/design/0040-read-only-mode.md),
-  [0042](docs/design/0042-public-read-only.md)): safe to run publicly
+- The one exception is `OCHAKAI_MODE=public` (design doc
+  [0066 §3](docs/design/0066-four-postures-one-word.md)): safe to run publicly
   only because it reads no identity and refuses every write. A
   deployment that is publicly readable *and* writable is not a
   configuration ochakai accepts — a report that this posture reads a

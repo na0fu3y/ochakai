@@ -41,7 +41,7 @@ theirs and ochakai's `Metric` concepts are redundant. What stays is
 everything that does not fit a semantic-model YAML: the baseline, the
 caveat, the threshold, the query somebody sanctioned, and knowledge that
 spans warehouses. ochakai stopped generating SQL deliberately
-([0028](design/0028-retire-compile-sql.md)) — what an agent needs is the
+([0070](design/0070-what-was-retired-and-why.md) §3) — what an agent needs is the
 verified query and the caveat around it.
 
 ### Catalogs as context layers
@@ -91,7 +91,7 @@ proposal keeps its reason so agents stop re-proposing it.
 Every AI-analyst product has one, and each feeds only its own chat. The
 same knowledge in ochakai serves Claude Code, hosted MCP agents and CI
 jobs alike, and the whole base round-trips through OKF v0.2 bundles
-([0036](design/0036-okf-schema-first.md)) — plain markdown and YAML that
+([0075](design/0075-the-bundle-is-the-address-space.md) §1) — plain markdown and YAML that
 lives in git. MIT and self-hosted per tenant: your knowledge is never a
 hostage.
 
@@ -107,7 +107,7 @@ with Bases, while the data stays in the notes.
 The overlap is not superficial — it is the same physical form. An
 `ochakai export` bundle is a directory of markdown files with YAML
 frontmatter whose relationships are ordinary body links
-([0024](design/0024-links-from-body.md)), which is to say **it opens as a
+([0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2), which is to say **it opens as a
 vault**. If what you want is to browse your knowledge base with a good
 editor and a graph view, that is the tool, and nothing here competes with
 it. (Whether every root-relative link in an export resolves in Obsidian's
@@ -118,20 +118,20 @@ What the vault does not have is everything that is not the file format:
 - **The unit.** A note is a document somebody wrote for their own
   reasons. An ochakai concept is a claim carrying its lifecycle, its
   `verified` ledger and its provenance in
-  [OKF](design/0036-okf-schema-first.md)'s own keys. Those keys are
+  [OKF](design/0075-the-bundle-is-the-address-space.md)'s own keys. Those keys are
   ordinary YAML, so a vault can hold them — which is exactly where the
   difference shows. In a vault, a `verified` concept naming a human is a
   line somebody typed. Here it is what the instance observed of an
   authenticated caller, and it is never read back from a document
   ([0009](design/0009-provenance-portability.md),
-  [0043](design/0043-document-first.md)) — a file has no observer.
+  [0075](design/0075-the-bundle-is-the-address-space.md) §3.1) — a file has no observer.
   Nothing in a vault appends to that ledger, derives a trust tier from
   it, refuses a write against it, or resurfaces a concept when its last
   confirmation has aged out.
 - **The loop (C7).** There is no analogue at all — no review queue, no
   memory of *no*, no usage counts, no verification-age feed, no outcome
   reports from agents that acted on a concept and found it wrong
-  ([the loop](loop.md), [0025](design/0025-closing-the-loop.md)). This is
+  ([the loop](loop.md), [0069](design/0069-the-loop-and-what-measures-it.md) §1). This is
   the sharpest difference, and it is the product.
 - **Direction.** A vault is written by a human for a human, with the
   agent as a reader — or lately a writer, unaudited and unmeasured.
@@ -146,14 +146,14 @@ What the vault does not have is everything that is not the file format:
 - **Identity, and no secret (C2).** A vault MCP server typically runs
   behind a local REST API plugin with an API key in the client config —
   exactly the token ochakai's design refuses
-  ([0002](design/0002-authn-authz.md),
+  ([0065](design/0065-identity-and-provenance.md) §1,
   [0003](design/0003-gcp-only.md)). And the caller has no identity to
   record: "who wrote this" is whoever's laptop it was.
 - **Reach (C5, C6).** The vault is on one machine and so is its MCP
   server. Hosted agents, CI jobs and a REST API you can embed in your own
   web service are not there.
 - **Retrieval.** Hybrid search with embeddings on by default
-  ([0053](design/0053-embeddings-by-default.md)), path-scoped search,
+  ([0073](design/0073-search-and-when-embeddings-apply.md) §1), path-scoped search,
   file search over image and PDF content, and `get_context` — a
   one-call read shaped for an agent's question rather than a human's
   browse.
@@ -175,7 +175,7 @@ an evaluation.
 - **Authoring experience.** Obsidian and its ecosystem are far better
   places to write and to browse. The bundled web UI is a curation
   surface by policy, not a writing environment or a BI tool
-  ([0015 §3.1](design/0015-surface-consistency.md)).
+  ([0067 §1](design/0067-four-faces-and-what-they-decline.md)).
 - **Infrastructure.** A vault costs nothing to stand up. ochakai wants a
   Google Cloud project and a Postgres — about $10/month, but not zero,
   and not five minutes.
@@ -184,7 +184,7 @@ an evaluation.
   production elsewhere ([0003](design/0003-gcp-only.md)). For many teams
   that is disqualifying, and it is a decision rather than a gap.
 - **No authorization.** Whoever can reach a deployment can read and write
-  everything ([0002](design/0002-authn-authz.md)). If you need per-concept
+  everything ([0065](design/0065-identity-and-provenance.md) §1). If you need per-concept
   permissions, this is the wrong tool.
 - **Scale.** Built for the size a *curated* base reaches — thousands of
   concepts, not millions, because every one passed a human.

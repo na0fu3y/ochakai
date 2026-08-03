@@ -61,7 +61,7 @@ def identity_from(token: str) -> str:
     Not verified, and it does not need to be: we minted it a moment ago,
     and it is used only to recognize our own past writes. The server does
     verify — that is where the claim actually decides anything (design doc
-    0002 §2).
+    0065 §2).
     """
     try:
         payload = token.split(".")[1]
@@ -154,14 +154,14 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
                    window: tuple[str, str], frequent: int) -> str:
     """The entry as an OKF document: YAML frontmatter, then the body.
 
-    A concept *is* the document (design doc 0043) — there is no typed
+    A concept *is* the document (design doc 0075 §3) — there is no typed
     write surface beside the format, and a JSON body at a concept's
     address is a 415 naming this shape. The frontmatter is the metadata
     and the markdown is the body.
 
     `status` is deliberately absent: create defaults it to draft, and a
     replace leaves whatever is stored alone. `title` is absent too — the
-    id's last segment is the display name (design doc 0022), and that
+    id's last segment is the display name (design doc 0074 §1), and that
     segment is already the table id. The keys this instance owns —
     `generated`, `verified`, `created_by` — are never written from here:
     provenance is the server's observation of who called, not something a
@@ -176,7 +176,7 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
 
     # The table cites itself: `ochakai search --source bigquery://…` then
     # returns this entry together with every insight and computation
-    # someone wrote citing the same table (design doc 0037).
+    # someone wrote citing the same table (design doc 0069 §2.3).
     source: dict = {"resource": resource, "title": fq}
     if table.modified:
         source["last_modified"] = table.modified.date().isoformat()
@@ -207,7 +207,7 @@ class Ochakai:
     """A client of /api/v1/bundle — one object, one address.
 
     A concept lives at `<id>.md` in the bundle and that is the only
-    address it has (design doc 0046 §3.5): the same path reads it, writes
+    address it has (design doc 0075 §4): the same path reads it, writes
     it and deletes it, and what the bytes become is decided by the
     document rather than by which endpoint was called.
     """
@@ -258,7 +258,7 @@ def ruled_on(view: dict) -> str:
     """Why this entry is a person's now, or "" while it is still the sync's.
 
     Three separate signals, because ochakai keeps them separate (design
-    doc 0043 §3.2): the **lifecycle** is what the writer declared, the
+    doc 0075 §4.1): the **lifecycle** is what the writer declared, the
     **trust tier** is what the verification ledger derives, and a
     **rejection** is a live ruling beside both. Verifying an entry does
     not move its status — a ruling and a publication are different acts —
@@ -283,7 +283,7 @@ def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: di
     edit landing between the read and the write loses the race instead of
     being erased by it (design doc 0030). Verifying an entry — or simply
     editing it — takes it out of the sync for good. That is the same line
-    design doc 0015 §3.1 draws for MCP, applied from outside: a machine
+    design doc 0067 §6 draws for MCP, applied from outside: a machine
     does not overwrite what a human ruled on. ochakai needs no owner field
     and no authorization for this; the projection and provenance carry it.
     """
@@ -299,7 +299,7 @@ def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: di
         print(f"skip   {entry_id} — {verdict}, a human ruled on it", file=sys.stderr)
         return
 
-    # Who wrote the words that stand there now (design doc 0052): under
+    # Who wrote the words that stand there now (design doc 0065 §4): under
     # delegation this is the end user, which is exactly right — a person
     # who edited through an application is a person who edited.
     writer = view.get("observed", {}).get("generated", {}).get("by", {}).get("name", "")

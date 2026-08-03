@@ -26,7 +26,7 @@ A numbered doc is for a decision **a user can observe** (0048 §2.1):
 - **what identity and provenance mean** — who a write is recorded as,
   what is refused, read-only and its edges
 - **a new dependency on a Google Cloud service**, or anything touching
-  secret-zero (0002, 0003)
+  secret-zero (0065, 0003)
 - **something ochakai refuses to do** — the kind of judgment that lands
   in the ROADMAP's refusals
 
@@ -49,7 +49,7 @@ Two decisions to check any proposal against first:
 
 - **No LLM inside, no SQL execution** (0001). Interpretation and
   execution belong to the client agent.
-- **Google Cloud only, secret-zero** (0002, 0003). Cloud Run IAM + Cloud
+- **Google Cloud only, secret-zero** (0065, 0003). Cloud Run IAM + Cloud
   SQL IAM; no tokens, no passwords.
 
 ## Steps
@@ -80,7 +80,7 @@ Status: Accepted(YYYY-MM-DD)。[00XX](00XX-….md) を Superseded にし、
 Date: YYYY-MM-DD
 ```
 
-Use 0038 or 0067 as models for the header style.
+Use 0067 or 0071 as models for the header style.
 
 **Keep it under the ceiling.** CONTRIBUTING.md declares a `RECORD-LINES:`
 number and `TestDesignRecordsStayUnderTheirCeiling` reads it back; the

@@ -134,7 +134,7 @@ func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err
 	}
 	p = domain.Normalize(p)
 	if !s.Store.HasBlobStore() {
-		return "", "", Unsupportedf("files are not supported without GCS: this instance stores markdown concepts only; set OCHAKAI_GCS_BUCKET (design doc 0013)")
+		return "", "", Unsupportedf("files are not supported without GCS: this instance stores markdown concepts only; set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 	}
 	if !domain.ValidBundlePath(p) {
 		return "", "", Invalidf("invalid bundle path %q (path segments separated by \"/\"; segments must not start with \".\", and index.md and log.md are generated rather than stored)", p)
@@ -188,7 +188,7 @@ func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *dom
 // GetFile returns the file at a bundle path with its bytes.
 func (s *Service) GetFile(ctx context.Context, p string) (*domain.File, []byte, error) {
 	if !s.Store.HasBlobStore() {
-		return nil, nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
+		return nil, nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 	}
 	return s.Store.GetFile(ctx, domain.Normalize(p))
 }
@@ -199,7 +199,7 @@ func (s *Service) GetFile(ctx context.Context, p string) (*domain.File, []byte, 
 // promised this column, the REST face just ignored the header).
 func (s *Service) GetFileMeta(ctx context.Context, p string) (*domain.File, error) {
 	if !s.Store.HasBlobStore() {
-		return nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)")
+		return nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 	}
 	return s.Store.GetFileMeta(ctx, domain.Normalize(p))
 }

@@ -3,7 +3,7 @@
 ochakai is a knowledge store for data-analysis agents. Two decisions
 frame everything: no LLM inside and no SQL execution (0001), and
 Google Cloud only with zero secrets — Cloud Run IAM + Cloud SQL IAM,
-never tokens or passwords (0002, 0003).
+never tokens or passwords (0065, 0003).
 
 ## Design docs
 

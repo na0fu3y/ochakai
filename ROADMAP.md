@@ -68,7 +68,8 @@ if the proposal is concrete.
 
 - **Write down the Git-review workflow.**
   [0009](docs/design/0009-provenance-portability.md) is the only design doc
-  still marked *Proposed*. Its world-view has since been settled by 0036 §2.2 —
+  still marked *Proposed*. Its world-view has since been settled by
+  [0075 §3.1](docs/design/0075-the-bundle-is-the-address-space.md) —
   bundles carry knowledge, provenance is what this instance observed and is
   never read back from a document — which leaves the recommended
   export → Git → review → import loop to be documented rather than decided.
@@ -78,7 +79,7 @@ if the proposal is concrete.
   That is fine at the scale a curated knowledge base reaches, and embeddings
   are the answer — which is why they stopped being opt-in: running on Google
   Cloud, ochakai turns them on by itself
-  ([0053](docs/design/0053-embeddings-by-default.md)). A better lexical index
+  ([0073](docs/design/0073-search-and-when-embeddings-apply.md)). A better lexical index
   has not been designed, and nothing here promises one.
 
 Beyond that this roadmap is thin, and honestly so. Work has been arriving from
@@ -101,7 +102,7 @@ it.
 - **SQL execution.** ochakai holds no warehouse credentials; your agent
   executes. `compile_sql` — deterministic SQL generation from a semantic model,
   which was as close as this ever came — existed until 0.13.0 and was retired
-  ([0028](docs/design/0028-retire-compile-sql.md)): what an agent needs is the
+  ([0070 §3](docs/design/0070-what-was-retired-and-why.md)): what an agent needs is the
   verified query and the caveat around it, and both arrive from `get_context`.
 - **Connector ingestion.** Knowledge is curated by humans and agents, not
   harvested by pipelines. Trust density over volume.
@@ -113,26 +114,27 @@ it.
   there is nothing to issue or rotate. Features must not introduce a token or a
   password, and porting the auth model to another cloud is not a goal — the
   secret-zero property is exactly the thing that would be lost
-  ([0002](docs/design/0002-authn-authz.md),
+  ([0065](docs/design/0065-identity-and-provenance.md),
   [0003](docs/design/0003-gcp-only.md)).
 - **Authorization, and a user database.** Whoever can reach a deployment can
   read and write; identity is recorded as provenance, and trust is judged from
-  provenance by whoever reads the concept (0002).
+  provenance by whoever reads the concept (0065 §1).
 - **A server-side bulk OKF import endpoint.** Loading a bundle is a loop over
   endpoints that already exist, and a second server-side path to the same
   outcome buys convenience rather than capability. Re-examined in July 2026 at
   an embedding host's request and kept; the condition for revisiting is a
   client without the CLI that actually needs it
-  ([0015 §3.2](docs/design/0015-surface-consistency.md)). The same reasoning
+  ([0067 §5.2](docs/design/0067-four-faces-and-what-they-decline.md)). The same reasoning
   closed the `ochakai sync` / diff-only-import-from-CI request (issue #43).
 - **A one-to-one MCP mirror of REST.** Tool schemas cost the agent's context,
   so the tool count is a budget: browse, revisions, backlinks, file
-  writes, bulk export/import, purge, and reembed stay off MCP, as does
+  writes, bulk export/import, purge, and reembed stay off MCP
+  ([0067 §1](docs/design/0067-four-faces-and-what-they-decline.md)), as does
   overwriting or deleting a concept a human has curated — an agent that finds a
   verified concept wrong reports the outcome or drafts a replacement
-  ([0015 §3.1](docs/design/0015-surface-consistency.md),
-  [0025](docs/design/0025-closing-the-loop.md)).
+  ([0067 §6](docs/design/0067-four-faces-and-what-they-decline.md),
+  [0069](docs/design/0069-the-loop-and-what-measures-it.md)).
 - **A publicly reachable MCP OAuth connector service.** It existed briefly and
-  was retired in 0.9.0 ([0012](docs/design/0012-retire-mcp-oauth-connector.md));
-  [0010](docs/design/0010-mcp-oauth-connector.md) is kept as the starting point
+  was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md));
+  [0070 §5](docs/design/0070-what-was-retired-and-why.md) names revert as the starting point
   if it ever comes back.

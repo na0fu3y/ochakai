@@ -100,7 +100,7 @@ deprecated だったものを蘇らせることは拒否される — 記録済�
 プレフィックスを付けて stderr に出力され、サマリで数えられる
 (`imported N concepts (…, M skipped)`)。スキップに見えて数えられない
 二つのこと: frontmatter に `type` が無いファイルはスキップではない —
-type はパスから推測されることは無いので(design doc 0017)、代わりに
+type はパスから推測されることは無いので(design doc 0075 §2)、代わりに
 素の bundle ファイルとしてインポートされる。予約済みの `index.md`・
 `log.md`、あるいは隠しパスは黙って捨てられ、出力にも件数にも現れない。
 スキップであるもの:
@@ -155,7 +155,7 @@ bundle ではない。ファイルが *何であるか* はバイト列を sniff
 サービスアカウントを記録する — `OCHAKAI_IAP_AUDIENCE` が設定され、
 webui のサービスアカウントがサーバーの `OCHAKAI_DELEGATING_CALLERS`
 に載っている場合を除く。それがブラウザでの編集を
-`human:you via process:webui-sa` に変える(design doc 0032)。
+`human:you via process:webui-sa` に変える(design doc 0065 §5)。
 
 <a id="startup"></a>
 

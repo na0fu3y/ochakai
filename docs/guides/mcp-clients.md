@@ -8,7 +8,7 @@ ochakai は `/mcp` で streamable HTTP による MCP を提供する。クライ
 ならないので、接続は `ochakai mcp-stdio` を通す — stdin/stdout で MCP
 を話し、他のクライアントコマンドと同じ方法で identity を解決し、
 JSON-RPC メッセージをそのまま転送する(設計ドキュメント
-[0039](../design/0039-mcp-stdio-bridge.md))。クライアント側の設定に
+[0067](../design/0067-four-faces-and-what-they-decline.md) §3)。クライアント側の設定に
 資格情報は要らない、そもそも設定するものが無いからである。ローカル
 ではこの要件が消え、URL がそのまま使える。
 
@@ -57,7 +57,7 @@ Claude Code とブリッジはこのプロジェクトが実際に動かして�
 これらはすべて知識に関する操作である。ochakai は SQL を実行せず、LLM も
 呼ばない。`compile_sql` — セマンティックモデルからの決定的な SQL 生成 —
 は 0.13.0 まで存在し、その後退役した(設計ドキュメント
-[0028](../design/0028-retire-compile-sql.md)): エージェントが実際に
+[0070](../design/0070-what-was-retired-and-why.md) §3): エージェントが実際に
 必要としているのは検証済みのクエリとそれに添う注意書きであり、両方とも
 `get_context` から届く。
 
@@ -358,7 +358,7 @@ ChatGPT のコネクタ、OpenAI の Responses API、Claude Desktop のカスタ
 
 これはギャップではなく、アクセスモデルが働いている証拠である:
 到達できることそのものが認可である(設計ドキュメント
-[0002](../design/0002-authn-authz.md))ので、デプロイを第三者のサーバー
+[0065](../design/0065-identity-and-provenance.md) §1)ので、デプロイを第三者のサーバー
 から届くようにすることは、そのまま公開到達可能にすることを意味する —
 ochakai を公開で呼び出せる状態にすることは、デプロイの一形態ではなく
 設定ミスである。ローカルコードも動かせるホスト型アシスタント

@@ -10,7 +10,7 @@
 
 **golden query は `Attested Computation` concept として保存される。**
 ochakai はそのための専用の型を持たない(設計ドキュメント
-[0038](../design/0038-type-vocabulary-realignment.md)): OKF SPEC §10 が
+[0071](../design/0071-the-recommended-type-vocabulary.md) §2): OKF SPEC §10 が
 既にこの概念を定義しているので、golden query は SQL がどの warehouse
 で動くかを `runtime` が言い、SQL 本体を `# Computation` の本文フェンス
 が持ち、それが答える質問を producer key の `question` が運ぶ、
@@ -79,7 +79,7 @@ ochakai は関与しない。
   されたかでもある。`update` にはこれが言えない: 何も変えない
   update は何も書かないので、「もう一度確かめた、まだ正しい」は
   どこにも残らない。それこそが verify の存在理由である(設計
-  ドキュメント 0025 §6)。MCP に対応するツールは無い — 検証は人の
+  ドキュメント 0069 §2)。MCP に対応するツールは無い — 検証は人の
   判断であり、CI で走るカナリアは CI 自身の身元で記録される。
 - **失敗または警告の場合**: 影響を受けた concept に対して draft の
   `Insight`(`kind: caveat`)を作るか、理由を書いた `status_note` 付き
@@ -87,8 +87,8 @@ ochakai は関与しない。
   する。concept が誤りだと確定したら `ochakai reject <id> --note
   "…"` になる。裁定は人の面(Web UI / CLI)から行う: エージェントが
   カナリアを走らせている場合、検証済み concept の上書きと status の
-  変更はどちらも MCP 経由では拒否されるので(設計ドキュメント 0015
-  §3.1)、エージェントの出口は下の `report_outcome failed` と、別
+  変更はどちらも MCP 経由では拒否されるので(設計ドキュメント 0067
+  §6)、エージェントの出口は下の `report_outcome failed` と、別
   id での draft 作成になる。
 - **どちらの場合も、結果を記録する**: `ochakai report queries/<id>
   worked` / `ochakai report queries/<id> failed --note "何が起きた
@@ -99,7 +99,7 @@ ochakai は関与しない。
   human-reviewed`、REST: `GET /api/v1/search?sort=failed`、MCP:
   `search_concepts` に `sort: "failed"`)は、間違いだと報告された
   回数が多い順に並べる。時間にもとづく `sort=verified_at` を補う、
-  証拠にもとづく入口である(設計ドキュメント 0025)。
+  証拠にもとづく入口である(設計ドキュメント 0069 §2.1)。
 
 ## CI のスニペット(GitHub Actions + BigQuery)
 
