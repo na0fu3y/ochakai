@@ -340,6 +340,9 @@
   .md p { margin: .5em 0; }
   .md ul, .md ol { margin: .4em 0; padding-left: 1.5em; }
   .md img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; display: block; margin: .6rem 0; }
+  .md table { border-collapse: collapse; margin: .6em 0; max-width: 100%; }
+  .md th, .md td { border: 1px solid var(--border); padding: .35rem .6rem; }
+  .md th { background: var(--code-bg); font-weight: 600; text-align: left; }
 
   /* ---- browse tree ---- */
   .browse details.node > summary {
@@ -611,7 +614,7 @@ function crumbTrail(dirs, leaf) {
   return leaf === undefined ? out : out + esc(leaf);
 }
 
-/* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images) ---- */
+/* ---- tiny markdown renderer (headings, lists, code, links, emphasis, images, tables) ---- */
 // resolveFile maps a reference from the body to a file URL (the
 // detail view resolves entry-relative references against the entry's
 // files); references it cannot resolve stay literal text rather than
@@ -652,7 +655,27 @@ function md(src, resolveFile, resolveEntry) {
     );
   const flushPara = () => { if (para.length) { out += '<p>' + inline(para.join(' ')) + '</p>'; para = []; } };
   const flushList = () => { if (inList) { out += `</${inList}>`; inList = null; } };
-  for (const line of lines) {
+  // GFM table: a header row followed by a `|---|---|` delimiter row (with
+  // optional `:` alignment markers), then body rows until a blank line.
+  // Requiring a delimiter with at least two columns keeps a lone `---`
+  // (used as prose, not markup, elsewhere in this parser) from matching.
+  const isTableSep = line => /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(line);
+  const splitRow = line => {
+    const cells = [];
+    let cur = '', esc = false;
+    for (const ch of line.trim()) {
+      if (esc) { cur += ch; esc = false; continue; }
+      if (ch === '\\') { esc = true; continue; }
+      if (ch === '|') { cells.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    cells.push(cur);
+    if (cells.length > 1 && !cells[0].trim()) cells.shift();
+    if (cells.length > 1 && !cells[cells.length - 1].trim()) cells.pop();
+    return cells.map(c => c.trim());
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (/^```/.test(line)) {
       flushPara(); flushList();
       out += inCode ? '</code></pre>' : '<pre><code>';
@@ -660,6 +683,21 @@ function md(src, resolveFile, resolveEntry) {
       continue;
     }
     if (inCode) { out += esc(line) + '\n'; continue; }
+    if (line.includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      flushPara(); flushList();
+      const aligns = splitRow(lines[i + 1]).map(a => {
+        const left = a.startsWith(':'), right = a.endsWith(':');
+        return left && right ? 'center' : right ? 'right' : left ? 'left' : '';
+      });
+      const row = (cells, tag) => '<tr>' + cells.map((c, ci) =>
+        `<${tag}${aligns[ci] ? ` style="text-align:${aligns[ci]}"` : ''}>${inline(c)}</${tag}>`).join('') + '</tr>';
+      out += '<table><thead>' + row(splitRow(line), 'th') + '</thead><tbody>';
+      i += 2;
+      for (; i < lines.length && lines[i].includes('|') && lines[i].trim(); i++) out += row(splitRow(lines[i]), 'td');
+      out += '</tbody></table>';
+      i--;
+      continue;
+    }
     const h = line.match(/^(#{1,3})\s+(.*)/);
     if (h) { flushPara(); flushList(); out += `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`; continue; }
     const li = line.match(/^\s*([-*]|\d+\.)\s+(.*)/);
