@@ -720,6 +720,23 @@ PR ごとの増減は [CHANGELOG](../CHANGELOG.md) の仕事で、ここでは�
   唯一これに当たる(`TestCLIReferenceIsCurrent`、
   [#371](https://github.com/na0fu3y/ochakai/issues/371))。基準は三条件
   だけで、狭く保つのがこの箇条書き自体の目的である。
+- **`deploy/terraform` の変数。** このモジュールは Cloud Run + Cloud SQL
+  という一つのホスティング経路の上に立つ任意の便宜レイヤーで、
+  [deploy/terraform/README.md](../deploy/terraform/README.md) 自身が
+  「gcloud ガイドは引き続きリファレンスであり正とする情報源」であり
+  二つが食い違えばこちらにバグがあると宣言している —
+  [0067 §1](design/0067-four-faces-and-what-they-decline.md)
+  が既定を決めている REST・CLI・MCP・Web UI の四つの面のどれでもない。
+  ochakai 自身に届く変数(`enable_gcs_files` → `OCHAKAI_GCS_BUCKET`、
+  `read_only` / `public_read_only` → `OCHAKAI_MODE`)は、ENV が既に
+  数えている一語が IaC の綴りを着ているだけであり、二度数えれば VOCAB
+  が退けた「一つのものが二つの名前」を今度は次元をまたいで踏む。届かない
+  変数(`region`・`image_tag`・`database_backups`・`maintenance_users`
+  など)は Cloud SQL・Cloud Run・GCS 側の資源の選択であって、`serve` /
+  `serve-ui` の引数を数えないのと同じ理由で ochakai が知っていることでは
+  ない。読む代金は `deploy/terraform/README.md` として DOC が既に数えて
+  いる — 数えていないのは HCL の変数名で、それはこのモジュールを使わない
+  という選択で丸ごと避けられる代金だからである。
 
 ## この仕組みが持てないもの
 

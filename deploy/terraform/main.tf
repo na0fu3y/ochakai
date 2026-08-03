@@ -84,7 +84,7 @@ locals {
       ])
     },
     local.mode != "" ? { OCHAKAI_MODE = local.mode } : {},
-    var.enable_gcs_attachments ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
+    var.enable_gcs_files ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
     # One variable says how this deployment embeds (design doc 0078).
     # Nothing is set when embeddings are on and no model is named:
     # ochakai discovers the project it runs in, and a discovered default
@@ -329,10 +329,10 @@ resource "google_project_iam_member" "ochakai_vertex" {
   member  = "serviceAccount:${google_service_account.ochakai.email}"
 }
 
-# --- 4b. Optional: attachments in GCS -------------------------------------
+# --- 4b. Optional: files in GCS --------------------------------------------
 
-resource "google_storage_bucket" "attachments" {
-  count = var.enable_gcs_attachments ? 1 : 0
+resource "google_storage_bucket" "files" {
+  count = var.enable_gcs_files ? 1 : 0
 
   project                     = var.project_id
   name                        = local.gcs_bucket_name
@@ -340,16 +340,16 @@ resource "google_storage_bucket" "attachments" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
 
-  # Attachment objects are content-addressed (blob/<sha256>), create-only and
+  # File objects are content-addressed (blob/<sha256>), create-only and
   # never deleted by ochakai, so the bucket holds the only copy of every file
-  # anyone attached.
+  # anyone added.
   force_destroy = var.gcs_force_destroy
 }
 
 resource "google_storage_bucket_iam_member" "ochakai" {
-  count = var.enable_gcs_attachments ? 1 : 0
+  count = var.enable_gcs_files ? 1 : 0
 
-  bucket = google_storage_bucket.attachments[0].name
+  bucket = google_storage_bucket.files[0].name
   role   = "roles/storage.objectUser"
   member = "serviceAccount:${google_service_account.ochakai.email}"
 }

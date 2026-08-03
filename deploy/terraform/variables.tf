@@ -9,7 +9,7 @@ variable "project_id" {
 variable "region" {
   description = <<-EOT
     Region for Cloud Run, Cloud SQL, Artifact Registry and (if enabled) the
-    attachment bucket. Deliberately has no default: the choice is a latency
+    files bucket. Deliberately has no default: the choice is a latency
     and cost decision. The guide's cost table is quoted for us-central1;
     Asian regions such as asia-northeast1 cost slightly more.
   EOT
@@ -266,26 +266,26 @@ variable "embedding_model" {
   }
 }
 
-# --- Optional: attachments in GCS (guide §4b) -----------------------------
+# --- Optional: files in GCS (guide §4b) -----------------------------------
 
-variable "enable_gcs_attachments" {
+variable "enable_gcs_files" {
   description = <<-EOT
-    Create a bucket for attachment bytes and point ochakai at it. Without it
-    the service runs markdown-only: attach operations return 501 and imports
-    report attachments as failed. Auth is ADC via the service identity.
+    Create a bucket for file bytes and point ochakai at it. Without it
+    the service runs markdown-only: add_file operations return 501 and
+    imports report files as failed. Auth is ADC via the service identity.
   EOT
   type        = bool
   default     = false
 }
 
 variable "gcs_bucket_name" {
-  description = "Name of the attachment bucket. Null means \"<project_id>-ochakai-blobs\"."
+  description = "Name of the files bucket. Null means \"<project_id>-ochakai-blobs\"."
   type        = string
   default     = null
 }
 
 variable "gcs_force_destroy" {
-  description = "Allow `terraform destroy` to delete a bucket that still holds attachment bytes. False by default — those objects are the only copy."
+  description = "Allow `terraform destroy` to delete a bucket that still holds file bytes. False by default — those objects are the only copy."
   type        = bool
   default     = false
 }

@@ -22,9 +22,9 @@ invoker_members = [
 # lexical-only: nothing is granted and no external API is called.
 # enable_vertex_embeddings = false
 
-# Attachments. Without a bucket the service is markdown-only and attach
+# Files. Without a bucket the service is markdown-only and add_file
 # operations return 501.
-# enable_gcs_attachments = true
+# enable_gcs_files = true
 
 # Drop the Cloud SQL public endpoint. Free, but local admin access then needs
 # a VPC-attached workstation or a temporary public IP.
