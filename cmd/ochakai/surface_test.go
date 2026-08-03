@@ -764,10 +764,11 @@ func TestSurfaceDocCountsVocabulary(t *testing.T) {
 // guide alone is longer than the CLI reference.
 //
 // It is the dimension that grew fastest. Between v0.10.0 and now the REST
-// contract went 19 → 11 while these pages passed 5,600 lines from 2,971: the
-// folding was real, and the prose explaining the folding outgrew what it
-// folded. Every other counter would have called that a pure win, which is
-// the same shape of blind spot PARAM, FLAG and VOCAB each closed.
+// contract went 19 → 11 while these pages grew from 2,971 lines toward the
+// DOC-LINES ceiling below: the folding was real, and the prose explaining
+// the folding outgrew what it folded. Every other counter would have called
+// that a pure win, which is the same shape of blind spot PARAM, FLAG and
+// VOCAB each closed.
 //
 // What counts as one of these pages is decided here rather than listed
 // twice: an exception nobody can see is a place to put a page.
