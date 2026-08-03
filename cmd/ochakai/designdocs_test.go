@@ -423,38 +423,36 @@ Japanese.`, r.file, lines, limit, contributing)
 }
 
 // recordCorpusCapRe reads a ceiling on the corpus as a whole rather than on
-// one record: "RECORD-COUNT: 59", "RECORD-CORPUS-LINES: 10292" or
-// "RECORD-CORPUS-LINES-SLACK: 10", declared beside RECORD-LINES in
+// one record: "RECORD-CORPUS-LINES: 10500" or
+// "RECORD-CORPUS-LINES-SLACK: 500", declared beside RECORD-LINES in
 // CONTRIBUTING.md rather than as an eleventh cap in docs/surface.md's 上限
 // section — a record is read by somebody changing ochakai, not somebody
 // using it, so its ceiling lives with the other ceiling for that same
 // reader.
-var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-COUNT|RECORD-CORPUS-LINES|RECORD-CORPUS-LINES-SLACK): (\d+)$`)
+var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-CORPUS-LINES|RECORD-CORPUS-LINES-SLACK): (\d+)$`)
 
 // TestDesignRecordCorpusStaysUnderItsCeiling reads docs/design as a whole:
-// how many records it holds, and how many lines they total. Superseded
-// records count in both — they still ship in the tree, and a reader
-// following a Status: header still opens them. Counting only what is
-// current would let a supersession buy headroom for the next addition, and
-// the file stays on disk either way, so that would be the next escape
-// hatch rather than a saving.
+// how many lines its records total. Superseded records count — they still
+// ship in the tree, and a reader following a Status: header still opens
+// them. Counting only what is current would let a supersession buy headroom
+// for the next addition, and the file stays on disk either way, so that
+// would be the next escape hatch rather than a saving.
 //
-// The two catch different shapes. RECORD-CORPUS-LINES is DOC-LINES's
-// argument applied to this corpus: a record that never crosses RECORD-LINES
-// can still add to what a reader gets through, and enough of them doing it
-// at once moves nothing else. RECORD-COUNT is for the shape a line total
-// cannot see at all — 0054/0057 and 0055/0056 are one subject apiece, told
-// across two numbers, and no per-record cap can notice that a second
-// number was the wrong fix.
+// RECORD-CORPUS-LINES is DOC-LINES's argument applied to this corpus: a
+// record that never crosses RECORD-LINES can still add to what a reader
+// gets through, and enough of them doing it at once moves nothing else.
 //
-// RECORD-COUNT is a name count exactly like DOC or VOCAB — a record either
-// exists or it does not, so its ceiling is exact and a drop has to lower it
-// in the same PR. RECORD-CORPUS-LINES is an amount, like DOC-LINES, and
-// gets the same stated tolerance rather than an exact match: editing a
-// handful of records should not fail CI, but the gap docs/surface.md
-// describes for DOC-LINES — a fold that lowers what is declared and leaves
-// the ceiling where it was — is exactly as possible here, so
-// RECORD-CORPUS-LINES-SLACK bounds it the same way.
+// It is also DOC-LINES's *width*, on the same reasoning docs/surface.md
+// gives for the manual: a ceiling that every record-adding PR has to
+// rewrite is a line every concurrent PR conflicts on, and an alarm that
+// sounds every time tells nobody anything. So the ceiling sits on a grid
+// the size of the slack — checked below — and moves when the corpus
+// crosses a boundary rather than when it grows at all.
+//
+// A companion ceiling on the *number* of records was retired with that
+// change: a record has lines, so nothing could raise the count without
+// raising the total, and its exact-match rule was the half that guaranteed
+// the conflict. CONTRIBUTING.md carries the argument in full.
 func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
 	content, err := os.ReadFile(contributing)
 	if err != nil {
@@ -468,7 +466,7 @@ func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
 		}
 		caps[m[1]] = n
 	}
-	for _, name := range []string{"RECORD-COUNT", "RECORD-CORPUS-LINES", "RECORD-CORPUS-LINES-SLACK"} {
+	for _, name := range []string{"RECORD-CORPUS-LINES", "RECORD-CORPUS-LINES-SLACK"} {
 		if _, ok := caps[name]; !ok {
 			t.Fatalf("%s declares no %s ceiling: this check now guards nothing", contributing, name)
 		}
@@ -480,25 +478,17 @@ func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
 		totalLines += strings.Count(r.body, "\n")
 	}
 
-	switch count, limit := len(records), caps["RECORD-COUNT"]; {
-	case count > limit:
-		t.Errorf(`docs/design holds %d records, over the RECORD-COUNT ceiling of %d in %s.
-
-Going over is a decision to make the corpus bigger, so it is made by
-raising the number in the same PR, having said why — or by finding that the
-new record restates one already on file, or that two subjects have been
-sharing one number and would read better split.`, count, limit, contributing)
-	case count < limit:
-		t.Errorf(`docs/design holds %d records, under the RECORD-COUNT ceiling of %d in %s.
-
-A record either exists or it does not, so this ceiling carries no
-headroom: it is the count this project agreed the corpus holds, not a
-limit not to cross. Lower it to %d in the same PR that retired a record
-— otherwise the gap is spare capacity the next addition spends without
-moving a number anyone would see.`, count, limit, contributing, count)
-	}
-
 	got, limit, slack := totalLines, caps["RECORD-CORPUS-LINES"], caps["RECORD-CORPUS-LINES-SLACK"]
+	if slack <= 0 || limit%slack != 0 {
+		t.Errorf(`RECORD-CORPUS-LINES is %d, which is not a multiple of the %d
+RECORD-CORPUS-LINES-SLACK in %s.
+
+The ceiling sits on a grid the width of the slack so that it is a derived
+number rather than one to negotiate: the corpus rounded up to the next
+boundary. Pinning it to the exact total instead leaves no room, and the
+next record lands back on this line — which is the conflict the grid
+exists to stop.`, limit, slack, contributing)
+	}
 	switch headroom := limit - got; {
 	case got > limit:
 		t.Errorf(`docs/design totals %d lines across %d records, over the RECORD-CORPUS-LINES
@@ -506,8 +496,10 @@ ceiling of %d in %s.
 
 A record can stay under RECORD-LINES on its own and still add to what a
 reader gets through if enough records do it at once, which is what this
-ceiling is for. Raise it in the same PR, having said why.`,
-			got, len(records), limit, contributing)
+ceiling is for. The corpus has crossed a %d-line boundary: raise the
+ceiling to %d in the same PR, having said why — that paragraph is the
+whole point of the number.`,
+			got, len(records), limit, contributing, slack, ((got/slack)+1)*slack)
 	case headroom > slack:
 		t.Errorf(`docs/design totals %d lines across %d records, %d under the
 RECORD-CORPUS-LINES ceiling of %d — more than the %d RECORD-CORPUS-LINES-SLACK
@@ -515,9 +507,9 @@ allows.
 
 A ceiling on an amount that is left standing after the amount drops is
 headroom nobody has to justify before spending it, which is the same gap
-docs/surface.md describes for DOC-LINES. Lower the ceiling to %d, or close
-to it, in the same PR that lowered the total.`,
-			got, len(records), headroom, limit, slack, got)
+docs/surface.md describes for DOC-LINES. The corpus has fallen back below
+a boundary: lower the ceiling to %d in the same PR that lowered the total.`,
+			got, len(records), headroom, limit, slack, ((got/slack)+1)*slack)
 	}
 }
 

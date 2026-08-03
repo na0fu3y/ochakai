@@ -32,9 +32,12 @@ an index that disagrees with a record's `Status:` header about whether it
 is current, or a supersession recorded at only one end.
 
 **A record has a ceiling, and so does the corpus.** CONTRIBUTING.md
-declares `RECORD-LINES` for one record's length and `RECORD-COUNT` /
+declares `RECORD-LINES` for one record's length and
 `RECORD-CORPUS-LINES` for all of `docs/design` together, Superseded
-records included; the same test file reads all three back. 0048 narrowed
+records included; the same test file reads both back. The corpus ceiling
+sits on a grid the width of its own slack, so adding a record usually
+moves no number at all — it moves when the corpus crosses a boundary,
+which is when the paragraph explaining it is worth reading. 0048 narrowed
 what earns a number, not how many records pile up or how long they run
 together — that was the direction the corpus grew, 4.6x against non-test
 Go's 2.3x. Over a line usually means two decisions, or a record restating

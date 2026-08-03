@@ -609,9 +609,11 @@ PR ごとの増減は [CHANGELOG](../CHANGELOG.md) の仕事で、ここでは�
   [0048](design/0048-decision-records-for-wire-contracts.md) が既に
   狭めているが、取った後に**何冊積み上がるか**は別の問いで、これは
   数えていなかった — v0.10.0 の 19 記録から現在の 59 記録へ、この文書の
-  どの次元よりも速く増えている。冊数と総行数の天井は
-  [CONTRIBUTING.md](../CONTRIBUTING.md) の `RECORD-COUNT` /
-  `RECORD-CORPUS-LINES` に置く。読むのは利用者ではなく変える人で、
+  どの次元よりも速く増えている。総行数の天井は
+  [CONTRIBUTING.md](../CONTRIBUTING.md) の
+  `RECORD-CORPUS-LINES` に置く(冊数を数える `RECORD-COUNT` もあったが、
+  この節が `DOC-LINES` について書いたのと同じ理由 —
+  毎回鳴る警報と、並行 PR の唯一の衝突点 — で退役した)。読むのは利用者ではなく変える人で、
   `RECORD-LINES`(一冊の天井)と同じ読者の同じ種類の天井だから、ここに
   十一本目の上限を足すより、その天井の隣に置くほうが筋が通る。
 - **OKF ドキュメント。** `examples/demo` の 10 件も

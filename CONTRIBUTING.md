@@ -498,34 +498,46 @@ only thing that can stop its body from describing a world that ended is
 something superseding it** — which is the whole argument for this program,
 now with numbers.
 
-72 → 73 while 4,270 → 4,430 is 0078, which folds five environment
-variables into one the way 0066 folded three. It amends 0073 rather than
-replacing it: what changes is how a deployment writes its embedding
-configuration down, not what embeddings are or when they apply, and 0073's
-own header now says which of its sections that reaches.
+    RECORD-CORPUS-LINES: 4500
+    RECORD-CORPUS-LINES-SLACK: 500
 
-    RECORD-COUNT: 73
-    RECORD-CORPUS-LINES: 4430
-    RECORD-CORPUS-LINES-SLACK: 15
+`RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded
+ones included: they still ship in the tree, and a reader following a
+`Status:` header still opens them. Counting only what is current would let
+a supersession buy headroom for the next addition — the file stays on disk
+either way, so that would be the next escape hatch rather than a saving.
 
-Both `RECORD-COUNT` and `RECORD-CORPUS-LINES` count every record under
-`docs/design`, Superseded ones included: they still ship in the tree, and
-a reader following a `Status:` header still opens them. Counting only
-what is current would let a supersession buy headroom for the next
-addition — the file stays on disk either way, so that would be the next
-escape hatch rather than a saving.
+It is `DOC-LINES`'s argument applied to this corpus: a record that never
+crosses `RECORD-LINES` can still add to what a reader gets through, and
+enough of them doing it at once moves nothing else.
 
-The two catch different shapes. `RECORD-CORPUS-LINES` is `DOC-LINES`'s
-argument applied to this corpus: a record that never crosses
-`RECORD-LINES` can still add to what a reader gets through, and enough of
-them doing it at once moves nothing else. `RECORD-COUNT` is for the shape
-a line total cannot see at all — 0054/0057 and 0055/0056 were one subject
-apiece, told across two numbers, until this pass folded each pair into one
-full record and a tombstone. `RECORD-COUNT` does not move for that: a
-tombstoned record still occupies its number and its file, for the same
-reason a Superseded record was never exempt from `RECORD-CORPUS-LINES`
-either — but a reader following either area now meets one record to read,
-not two.
+**It is also `DOC-LINES`'s width, and for `DOC-LINES`'s reason.** This
+ceiling used to sit at the exact total with 15 lines of tolerance, beside
+a second one — `RECORD-COUNT` — that had to match the number of records
+exactly. Both are gone in favour of one number on a 500-line grid, after
+six records were written in parallel and every one of them had to rewrite
+the same two lines. [docs/surface.md](../docs/surface.md) had already
+diagnosed this and prescribed the cure for the manual: **an alarm that
+sounds every time tells nobody anything**, and a line every concurrent PR
+edits is a line every concurrent PR conflicts on. A ceiling meant to make
+growth a sentence somebody writes cannot be a line somebody rewrites by
+reflex.
+
+So the ceiling is the corpus rounded up to the next 500, the slack is the
+same 500, and the two facts together make it a single derived number —
+which is what lets the check keep both directions. Growth still has to be
+said out loud; it just gets said when the corpus crosses a boundary worth
+a paragraph, roughly every third record, rather than on every record that
+lands.
+
+`RECORD-COUNT` is not replaced by anything, because it was never
+independent: a record has lines, so nothing can raise the count without
+raising the total. It was introduced for a shape a line total was thought
+not to see — 0054/0057 and 0055/0056, one subject apiece told across two
+numbers — but the fold that fixed those *lowered* the corpus by more than
+any record adds, and the grid sees that in the direction that matters.
+What is lost with it is the exact-match rule; what is bought is that
+adding a record touches no shared line at all.
 
 Every ceiling in this file and in [docs/surface.md](docs/surface.md) used
 to check only one direction: over the number fails, under it is free. That
@@ -535,17 +547,18 @@ gap without moving a number anyone would see in the diff. It happened to
 `DOC-LINES` once: a PR that shortened the deploy guide raised the ceiling
 5,753 → 5,790 for room the fold needed, landed at 5,762, and left 28 lines
 nobody returned ([#376](https://github.com/na0fu3y/ochakai/issues/376)).
-`RECORD-COUNT`, like the name-counted dimensions in docs/surface.md's 上限
-section, now has to match exactly — a record either exists or it does
-not, so there is no amount of drift small enough to deserve headroom.
-`RECORD-CORPUS-LINES` is an amount, not a list, so instead it gets a
-stated tolerance: `RECORD-CORPUS-LINES-SLACK` is how far the ceiling may
-sit above the actual total before that gap is itself a failure. Both are
+`RECORD-CORPUS-LINES` is an amount, not a list, so it gets a stated
+tolerance: `RECORD-CORPUS-LINES-SLACK` is how far the ceiling may
+sit above the actual total before that gap is itself a failure, and the
+ceiling has to be a multiple of it — the same pair of rules
+`DOC-LINES` and `DOC-LINES-SLACK` already run under, so a fold that
+lowers the total still has to lower the ceiling once it crosses a
+boundary. Both are
 read back by `TestDesignRecordCorpusStaysUnderItsCeiling`, and both are
 checked the same way `RECORD-LINES` already was — one number in one file,
 raised or lowered in the PR that earns it.
 
-These live here, next to `RECORD-LINES`, rather than as extra lines in
+These live here, next to `RECORD-LINES`, rather than as an extra line in
 [docs/surface.md](docs/surface.md)'s 上限 section. A record is read by
 somebody changing ochakai, not somebody using it — that document's DOC
 section already excludes `docs/design` from the manual on that basis — and
@@ -561,7 +574,7 @@ it retires or revises, and the older one saying so — a new record has to
 fit under its own
 ceiling, a Superseded one has to be a tombstone
 (`TestSupersededRecordsAreTombstones`), and the corpus as a whole has to
-fit under `RECORD-COUNT` and `RECORD-CORPUS-LINES`, with no more slack than
+fit under `RECORD-CORPUS-LINES`, with no more slack than
 `RECORD-CORPUS-LINES-SLACK` allows (`TestDesignRecordCorpusStaysUnderItsCeiling`).
 What no test can read is the judgment: whether the opening table's row still
 points at the doc somebody should actually read. That is where the attention goes.
