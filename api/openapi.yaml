@@ -47,6 +47,16 @@ info:
     their schema does not declare, rather than decoding the request and
     silently dropping it.
 
+
+    **A repeated query key is a 400, naming it** (design doc 0064 §20.2) —
+    unless the parameter is declared as an array, which is how a caller
+    spells a set: `?type=Metric&type=Policy` asks for either, and `type`,
+    `status`, `trust`, `tag` and `prefix` are the five that work this
+    way. Every other key takes one value, and `?limit=10&limit=50` has no
+    answer that is what was asked. The server used to take the first
+    value for most keys and the last for `fm.{key}`, so one contradiction
+    got two different silent answers in the same request.
+
     **REST is frozen at `/api/v1`** (design doc 0064,
     docs/compatibility.md): this contract is the address list a client can
     hold onto, and the only thing that can still break it after this point
@@ -80,7 +90,7 @@ security:
 paths:
   /api/v1/search:
     get:
-      operationId: searchKnowledge
+      operationId: searchConcepts
       summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
         Rejected concepts are excluded unless rejected=true is passed (so
@@ -1368,7 +1378,7 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
-      operationId: moveKnowledge
+      operationId: moveConcept
       summary: Move (rename) a knowledge concept to a new id
       description: >
         The id is the address (design doc 0075 §2), so a move carries
@@ -1488,7 +1498,7 @@ paths:
         description: The concept's id; slashes are real path separators.
         schema: { type: string }
     post:
-      operationId: reviewKnowledge
+      operationId: reviewConcept
       summary: Record a human's ruling on a concept
       description: >
         One ruling on the concept as it stands, by the caller, now. This
@@ -1745,7 +1755,7 @@ paths:
         description: The concept's id; slashes are real path separators.
         schema: { type: string }
     get:
-      operationId: getKnowledgeUsage
+      operationId: getConceptUsage
       summary: Usage totals for one knowledge concept
       description: >
         How often the concept was actually used: appeared in search results,
@@ -1960,7 +1970,7 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/reembed:
     post:
-      operationId: reembedKnowledge
+      operationId: reembedConcepts
       summary: Embed concepts that have no vector for the configured model
       description: >
         Vectors are written when a concept is written, so a knowledge base
@@ -2165,11 +2175,19 @@ components:
         summary.content_hash field is the same value). Every response carrying a concept
         carries the header. The write happens only if the concept still has
         this version; a concept changed since it was read is a 412 and
-        nothing is written. Absent or "*" means no precondition — last
-        write wins.
+        nothing is written. Absent means no precondition — last write wins.
         The version is opaque, so there is no format to reject: a value
         that never matched anything fails the precondition with a 412,
         which is what a merely stale one does too.
+
+        **`*` is a 400.** RFC 9110 §13.1.1 gives it a meaning — "only if
+        a representation exists", the update-only mirror of the
+        create-only `If-None-Match: *` — that ochakai does not implement,
+        and reading it as no precondition at all silently created for a
+        caller who sent it to prevent exactly that. Naming it leaves the
+        choice open: a 400 can be given RFC's meaning in a later release
+        without breaking anyone, because no request that always failed
+        can be relied on (design doc 0064 §20.1).
       schema: { type: string }
     IfNoneMatch:
       name: If-None-Match
@@ -2919,7 +2937,22 @@ components:
       properties:
         path: { type: string, description: The object's bundle path. }
         title: { type: string, description: "The object's own title as it stands — absent when the document declared none, for a file, and for a concept since purged; a reader derives one from the path's last segment (OKF SPEC §4.1, design doc 0074 §1)." }
-        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
+        change:
+          type: string
+          description: >
+            What happened, as one word. **An open set: treat a value you
+            do not know as an event you have nothing special to render
+            for, and do not fail on it.** Today it is one of `create`,
+            `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
+            `add_file`, `remove_file`, and that list is the ledger's
+            vocabulary rather than the wire's promise — it has moved
+            twice already (`unreject` became `withdraw`, `attach` and
+            `detach` became `add_file` and `remove_file`, each with a
+            migration rewriting the stored rows). A closed enum here
+            would make the tenth word a breaking change, which after the
+            freeze is a word that can never be added (design doc 0064
+            §20.3). The current spelling is counted in docs/surface.md's
+            VOCAB, where adding one is a decision that shows in a diff.
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
     ObjectHistory:
@@ -2941,7 +2974,22 @@ components:
         how, when, and the whole concept as it stood, as an OKF document.
       properties:
         rev: { type: integer, description: 1-based, monotonically increasing per concept. }
-        change: { type: string, enum: [create, update, verify, reject, withdraw, delete, move, add_file, remove_file] }
+        change:
+          type: string
+          description: >
+            What happened, as one word. **An open set: treat a value you
+            do not know as an event you have nothing special to render
+            for, and do not fail on it.** Today it is one of `create`,
+            `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
+            `add_file`, `remove_file`, and that list is the ledger's
+            vocabulary rather than the wire's promise — it has moved
+            twice already (`unreject` became `withdraw`, `attach` and
+            `detach` became `add_file` and `remove_file`, each with a
+            migration rewriting the stored rows). A closed enum here
+            would make the tenth word a breaking change, which after the
+            freeze is a word that can never be added (design doc 0064
+            §20.3). The current spelling is counted in docs/surface.md's
+            VOCAB, where adding one is a decision that shows in a diff.
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
         document:

@@ -592,7 +592,12 @@ func Handler(svc *service.Service) http.Handler {
 					// doc 0064).
 					err = svc.Purge(r.Context(), id, actor)
 				case isMarkdown:
-					err = svc.Delete(r.Context(), id, actor, parseIfMatch(r))
+					ifMatch, perr := parseIfMatch(r)
+					if perr != nil {
+						writeError(w, perr)
+						return
+					}
+					err = svc.Delete(r.Context(), id, actor, ifMatch)
 				}
 				if errors.Is(err, store.ErrNotFound) {
 					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
@@ -1144,9 +1149,11 @@ const maxDocument = 5 << 20
 // refusing there keeps the refusal in the one place all three surfaces
 // pass through (design doc 0015 §2).
 //
-// A repeated parameter keeps its last value. The pairs are AND-ed, and
-// "the same key twice" is a contradiction rather than a question, so
-// there is nothing sensible to OR.
+// The pairs are AND-ed. A repeated key never reaches here: "the same key
+// twice" is a contradiction rather than a question, so there is nothing
+// sensible to OR, and rejectUnknownParams answers it with a 400 naming
+// the key. This used to keep the last value, which was the same silence
+// the rest of the query surface stopped giving (design doc 0064 §20.2).
 func frontmatterFilter(q url.Values) map[string]string {
 	var out map[string]string
 	for key, vals := range q {
@@ -1325,6 +1332,11 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	// If-Match is an optional optimistic-concurrency precondition: its
 	// value is the ETag from a prior read. Absent means last-write-wins
 	// (design doc 0030).
+	ifMatch, err := parseIfMatch(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	var (
 		out              *domain.Knowledge
 		created, changed bool
@@ -1335,7 +1347,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		// happening, and the plan already says whether the id is free —
 		// which is the whole of what the precondition would have told
 		// the caller, without the 412 (design doc 0061).
-		out, created, changed, err = svc.Plan(r.Context(), k, actor, parseIfMatch(r))
+		out, created, changed, err = svc.Plan(r.Context(), k, actor, ifMatch)
 	case onlyIfAbsent(r):
 		out, err = svc.Create(r.Context(), k, actor)
 		created, changed = true, true
@@ -1351,7 +1363,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 			return
 		}
 	default:
-		out, created, changed, err = svc.Put(r.Context(), k, actor, parseIfMatch(r))
+		out, created, changed, err = svc.Put(r.Context(), k, actor, ifMatch)
 	}
 	if err != nil {
 		writeError(w, err)
@@ -1547,19 +1559,34 @@ func etagOf(k *domain.Knowledge) string {
 	return `"` + k.ContentHash + `"`
 }
 
-// parseIfMatch reads an optional If-Match precondition. Absent or "*"
-// means no version precondition (the update still requires the concept to
-// exist). Any other value is taken as a concept ETag, quoted or not: it is
-// an opaque token now, so there is no format to validate — a value that
-// never matched anything simply fails the precondition with a 412, which
-// is what a stale one does too.
-func parseIfMatch(r *http.Request) *string {
+// parseIfMatch reads an optional If-Match precondition. Absent means no
+// precondition — last write wins. Any value is taken as a concept ETag,
+// quoted or not: it is an opaque token now, so there is no format to
+// validate — a value that never matched anything simply fails the
+// precondition with a 412, which is what a stale one does too.
+//
+// "*" is the one value refused, with a 400 naming it. RFC 9110 §13.1.1
+// gives it a meaning ochakai does not implement — "only if a
+// representation exists", the update-only mirror of the create-only
+// If-None-Match "*" — and until design doc 0064 it was read as no
+// precondition at all, so a caller sending it to guard against creating
+// silently created. That is the shape §2 spent the freeze closing: an
+// unimplemented spelling has to be named, not obeyed backwards. Refusing
+// it is also what keeps the choice open. A 400 can be given RFC's meaning
+// in a later release without breaking a caller, because nobody can be
+// relying on a request that never succeeded; freezing either behaviour
+// would settle it forever (design doc 0064 §2, §20.1).
+func parseIfMatch(r *http.Request) (*string, error) {
 	v := strings.TrimSpace(r.Header.Get("If-Match"))
-	if v == "" || v == "*" {
-		return nil
+	if v == "" {
+		return nil, nil
+	}
+	if v == "*" {
+		return nil, service.Invalidf(
+			`If-Match "*" is not a precondition ochakai implements; send the version a prior read returned in the ETag header, or no If-Match at all`)
 	}
 	v = strings.Trim(v, `"`)
-	return &v
+	return &v, nil
 }
 
 // rejectUnknownParams 400s on the lowest unknown query key, naming it —
@@ -1589,6 +1616,16 @@ func parseIfMatch(r *http.Request) *string {
 // an old server 400s a caller that sends one early, rather than silently
 // ignoring it the way ?dry_run= was ignored by a server that did not
 // know it yet.
+//
+// A key sent more than once is refused the same way unless it is one of
+// repeatableParams. The contract declares every other query key with a
+// scalar schema, and there is no reading of ?limit=10&limit=50 that
+// answers what was asked: the server used to take the first value for
+// most keys and the last for fm.*, so the same contradiction got two
+// different silent answers on the same request. Naming it is the rule §2
+// applied to unknown keys, unknown body keys and out-of-mode keys; a
+// repeated scalar is the fourth spelling of the same silence, and the
+// last one that can still be closed (design doc 0064 §2, §20.2).
 func rejectUnknownParams(q url.Values, allowed ...string) error {
 	allowFM := slices.Contains(allowed, "fm.")
 	keys := make([]string, 0, len(q))
@@ -1597,16 +1634,26 @@ func rejectUnknownParams(q url.Values, allowed ...string) error {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if name, ok := strings.CutPrefix(key, "fm."); allowFM && ok && name != "" {
-			continue
+		name, isFM := strings.CutPrefix(key, "fm.")
+		switch {
+		case allowFM && isFM && name != "":
+		case key != "fm." && slices.Contains(allowed, key):
+		default:
+			return service.Invalidf("unknown query parameter %q", key)
 		}
-		if key != "fm." && slices.Contains(allowed, key) {
-			continue
+		if len(q[key]) > 1 && !slices.Contains(repeatableParams, key) {
+			return service.Invalidf(
+				"query parameter %q was sent %d times; it takes one value, and the same key twice is a contradiction rather than a question",
+				key, len(q[key]))
 		}
-		return service.Invalidf("unknown query parameter %q", key)
 	}
 	return nil
 }
+
+// repeatableParams are the query keys the contract declares with an array
+// schema, so repeating one is how a caller spells a set: ?type=Metric&type=Policy
+// asks for either. Every other key is scalar and repeating it is a 400.
+var repeatableParams = []string{"prefix", "status", "tag", "trust", "type"}
 
 // bundleModeParams is history, limit and files: query keys the bundle GET
 // handler declares for the address as a whole, but each is read in only

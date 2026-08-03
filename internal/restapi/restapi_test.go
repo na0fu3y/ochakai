@@ -140,6 +140,16 @@ func TestBadRequestValidation(t *testing.T) {
 		{"producer key", "/api/v1/search?q=x&fm.owner=finance", "OKF does not define"},
 		{"producer key while listing", "/api/v1/search?sort=usage&fm.owner=finance", "OKF does not define"},
 		{"producer key on a context pack", "/api/v1/context?q=x&fm.owner=finance", "OKF does not define"},
+		// A scalar key sent twice is a contradiction, not a question
+		// (design doc 0064 §20.2). It used to be answered silently and in
+		// two directions: the first value won everywhere except fm.{key},
+		// where the last one did.
+		{"repeated q", "/api/v1/search?q=a&q=b", `\"q\" was sent 2 times`},
+		{"repeated limit", "/api/v1/search?q=x&limit=10&limit=50", `\"limit\" was sent 2 times`},
+		{"repeated sort", "/api/v1/search?sort=usage&sort=failed", `\"sort\" was sent 2 times`},
+		{"repeated fm key", "/api/v1/search?q=x&fm.owner=a&fm.owner=b", `\"fm.owner\" was sent 2 times`},
+		{"repeated days", "/api/v1/stats?days=7&days=30", `\"days\" was sent 2 times`},
+		{"repeated history limit", "/api/v1/bundle/metrics/log.md?limit=1&limit=2", `\"limit\" was sent 2 times`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -513,9 +523,9 @@ func TestReportOutcomeBadRequests(t *testing.T) {
 }
 
 // TestETagRoundTrip pins the ETag/If-Match wire format: etagOf quotes
-// the concept's content hash, and parseIfMatch reads it (and "*", and
-// absence) back — so a value from a response header is accepted verbatim
-// on the next request.
+// the concept's content hash, and parseIfMatch reads it (and absence)
+// back — so a value from a response header is accepted verbatim on the
+// next request.
 func TestETagRoundTrip(t *testing.T) {
 	const hash = "9f2c1b0d4e5a6789abcdef0123456789abcdef0123456789abcdef0123456789"
 	k := &domain.Knowledge{ID: "metrics/x", ContentHash: hash}
@@ -526,20 +536,28 @@ func TestETagRoundTrip(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/bundle/metrics/x.md", nil)
 	req.Header.Set("If-Match", etag)
-	got := parseIfMatch(req)
-	if got == nil || *got != hash {
-		t.Errorf("parseIfMatch(%s) = %v, want %q", etag, got, hash)
+	got, err := parseIfMatch(req)
+	if err != nil || got == nil || *got != hash {
+		t.Errorf("parseIfMatch(%s) = %v, %v, want %q", etag, got, err, hash)
 	}
 
-	// Absent and "*" carry no version precondition.
-	for _, v := range []string{"", "*"} {
-		r := httptest.NewRequest(http.MethodPut, "/x", nil)
-		if v != "" {
-			r.Header.Set("If-Match", v)
-		}
-		if p := parseIfMatch(r); p != nil {
-			t.Errorf("parseIfMatch(If-Match:%q) = %v; want nil", v, p)
-		}
+	// Absence carries no version precondition.
+	r := httptest.NewRequest(http.MethodPut, "/x", nil)
+	if p, err := parseIfMatch(r); p != nil || err != nil {
+		t.Errorf("parseIfMatch of an absent If-Match = %v, %v; want nil, nil", p, err)
+	}
+
+	// "*" is the one value refused. RFC 9110 §13.1.1 gives it a meaning
+	// ochakai does not implement ("only if a representation exists"), and
+	// reading it as no precondition at all silently created for a caller
+	// who sent it to prevent exactly that. A 400 can still be given RFC's
+	// meaning after the freeze; either behaviour, frozen, could not
+	// (design doc 0064 §20.1).
+	r = httptest.NewRequest(http.MethodPut, "/x", nil)
+	r.Header.Set("If-Match", "*")
+	p, err := parseIfMatch(r)
+	if p != nil || err == nil {
+		t.Errorf(`parseIfMatch(If-Match:"*") = %v, %v; want nil and a 400`, p, err)
 	}
 
 	// The version is an opaque token now, so there is no format to
@@ -547,10 +565,10 @@ func TestETagRoundTrip(t *testing.T) {
 	// with a 412, which is what a merely stale one does too. Rejecting it
 	// at parse time would only tell a client that its own ETag looked
 	// wrong to us, which is not something we can know.
-	r := httptest.NewRequest(http.MethodPut, "/x", nil)
+	r = httptest.NewRequest(http.MethodPut, "/x", nil)
 	r.Header.Set("If-Match", `"not-a-hash"`)
-	if p := parseIfMatch(r); p == nil || *p != "not-a-hash" {
-		t.Errorf("parseIfMatch of an unknown token = %v, want it passed through", p)
+	if p, err := parseIfMatch(r); err != nil || p == nil || *p != "not-a-hash" {
+		t.Errorf("parseIfMatch of an unknown token = %v, %v, want it passed through", p, err)
 	}
 }
 

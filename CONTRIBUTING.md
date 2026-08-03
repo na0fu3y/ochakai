@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 554
+    RECORD-LINES: 652
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -319,8 +319,9 @@ Going over usually means one of three things, in order of likelihood:
 2. **It is restating what another record already decided.** Cite it
    instead. The index exists so a record does not have to carry its
    ancestors.
-3. **It really is that large** — 0046 rebuilt the address space in 601
-   lines and earned every one. Then raise the line above and say so.
+3. **It really is that large.** Then raise the line above and say so.
+   0046 rebuilt the address space in 601 lines and earned every one; it
+   is a tombstone now, so 0064 is both the precedent and the customer.
 
 What the ceiling must not buy is denser prose. Records earlier than 0063
 are not measured: they are immutable, and immutability is a promise about
@@ -339,9 +340,24 @@ server already sent that the contract never declared. None of them is a
 second subject: each is one wire decision that the freeze makes
 irreversible, and splitting them across new numbers would say the
 opposite of what the record is for, that they were separable from the
-freeze. 554 is still under 0046's 601, which rebuilt the address space
-and is the precedent for a record that really is that large. The ceiling
-goes back down when the freeze's record stops being the one that sets it.
+freeze. The ceiling goes back down when the freeze's record stops being
+the one that sets it — the next-largest record is 0001 at 402, so the
+drop when it comes is a large one.
+
+**554 → 652 is the same case a second time, and it should be the last.**
+0064 landed exactly on 554, which means any further work on the freeze
+moves this line by construction; the review before the freeze ships found
+three more silences the wire would have made permanent (`If-Match: *`
+read backwards, a repeated scalar query key answered in two directions,
+and `change` frozen as a closed enum), plus the fingerprint's own blind
+spot — it was reading no schema constraint at all, so the `pattern`
+§18 had just written down as unwidenable was about to freeze unchecked.
+Each is again one wire decision the freeze makes irreversible. What is
+worth noticing is *why* they were found late: none of them was a missing
+feature, and all four were places where the contract and the code
+disagreed quietly. **A batch record grows until the batch closes, and
+this one closes when the release ships** — after that, `/api/v1` cannot
+move, so neither can this number for this reason.
 
 ### What a superseded record keeps
 

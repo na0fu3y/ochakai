@@ -328,6 +328,37 @@ last entry.
     "verified"}` used to be a 200 that did nothing recognizable, and
     `"notes"` for `"note"` used to drop the note silently (issue
     [#470](https://github.com/na0fu3y/ochakai/issues/470)).
+  - **`If-Match: *` is now a 400.** RFC 9110 gives it a meaning ochakai
+    does not implement — "only if a representation exists", the
+    update-only mirror of the create-only `If-None-Match: *` — and it was
+    being read as no precondition at all, so a caller sending it
+    precisely to avoid creating anything **silently created**. If you
+    send it, drop it; if you were relying on it to guard a write, you
+    were not guarded. A 400 is also the only one of the three possible
+    answers that can still change after the freeze, which is why it is
+    not the RFC behaviour: nothing can depend on a request that always
+    failed (§20.1).
+  - **A repeated query key is now a 400**, unless the parameter is
+    declared as an array — `type`, `status`, `trust`, `tag` and `prefix`
+    are the five that legitimately repeat, and `?type=Metric&type=Policy`
+    still means either. Everything else takes one value.
+    `?limit=10&limit=50` used to be answered silently and in two
+    directions at once: the first value won for most keys and the last
+    one won for `fm.{key}` (§20.2).
+  - **`change` is no longer a closed enum** in `Change` and `Revision`.
+    The nine words are unchanged, but a client that validated against the
+    list should now pass a value it does not know through as an event it
+    has nothing special to render. The vocabulary has moved twice in
+    three months (`unreject` → `withdraw`, `attach`/`detach` →
+    `add_file`/`remove_file`), and a closed response enum would have made
+    the tenth word impossible after the freeze rather than merely
+    breaking (§20.3).
+  - **Five `operationId`s drop the retired word `knowledge`**:
+    `searchKnowledge`, `moveKnowledge`, `reviewKnowledge`,
+    `getKnowledgeUsage` and `reembedKnowledge` become `searchConcepts`,
+    `moveConcept`, `reviewConcept`, `getConceptUsage` and
+    `reembedConcepts`. No HTTP byte moves; a generated client's method
+    names do (§21).
   - `GET /api/v1/bundle/{path}`'s `history`, `limit` and `files` query
     parameters are now a 400 naming the mode when sent outside the mode
     that reads them — `limit` outside `?history` and a directory's
