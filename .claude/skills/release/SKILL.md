@@ -33,7 +33,7 @@ top of a red main.
 
 ## 1. The preparation PR
 
-Branch off `origin/main`. Three files, all of which drift silently —
+Branch off `origin/main`. Four files, all of which drift silently —
 nothing fails when they are stale:
 
 1. **`CHANGELOG.md`**
@@ -43,6 +43,12 @@ nothing fails when they are stale:
      repoint `[Unreleased]` at the new tag
 2. **`api/openapi.yaml`** — `info.version`
 3. **`.github/ISSUE_TEMPLATE/bug_report.yml`** — the version placeholder
+4. **`deploy/cloudrun/README.md`** — the hand-set `export VERSION=`
+   example, for the reader with no `gh` CLI
+
+`grep -rn '<prev>' --exclude-dir=.git .` catches a fifth if one appears;
+`CHANGELOG.md` and `docs/design` name old versions legitimately, so read
+the hits rather than replacing them.
 
 Read the unreleased entries as you go and confirm they match what
 actually landed (`git log v<prev>..origin/main --oneline`). A missing
