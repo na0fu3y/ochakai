@@ -18,8 +18,10 @@ import (
 // re-export unchanged (design doc 0023).
 // index.md files are navigation that Bundle regenerates, and log.md files
 // are the other OKF-reserved name (update history, SPEC §3) — both are
-// skipped silently, as are hidden paths (.git trees, macOS tar's
-// AppleDouble ._* siblings, .DS_Store).
+// dropped rather than stored, and each says so in a note, because a
+// producer who hand-wrote one is losing bytes (design doc 0079). Hidden
+// paths (.git trees, macOS tar's AppleDouble ._* siblings, .DS_Store) are
+// skipped silently: they were never knowledge.
 //
 // Files referenced by a concept's body markdown links become that
 // entry's files — attribution is by reference first, so any
@@ -54,7 +56,17 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []AttributedFile, 
 		if hiddenPath(clean) {
 			continue
 		}
-		if domain.ReservedBundleName(path.Base(clean)) {
+		if base := path.Base(clean); domain.ReservedBundleName(base) {
+			// SPEC §8 makes index.md regenerable and §11 forbids requiring
+			// one, so ochakai regenerates both reserved files from the
+			// bundle rather than storing them (design doc 0075 §4.2) — but
+			// a producer who hand-wrote one loses those bytes, and this was
+			// the last place an import destroyed something without saying
+			// so (design doc 0079). Saying it costs a note, which --strict
+			// reads as the refusal it is.
+			notes = append(notes, fmt.Sprintf(
+				"%s: %s is a filename OKF reserves (SPEC §3.1) and ochakai generates from the bundle, "+
+					"not stored in it; not imported", p, base))
 			continue
 		}
 		if !strings.HasSuffix(clean, ".md") {

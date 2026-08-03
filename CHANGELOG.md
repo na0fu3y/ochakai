@@ -21,6 +21,69 @@ last entry.
 
 ### Fixed
 
+- **A refused concept no longer takes its files down with it.** When the
+  server declines a document as a concept (an Attested Computation with
+  no `runtime`, which the write path refuses by design), `ochakai import`
+  also dropped every file that document's body pointed at — one refusal
+  cost every object the concept named, though a file is an object at its
+  own path and attribution is derived rather than stored. Those files are
+  written now, reported as belonging to no concept. The document itself
+  is still not stored: the skip line now names the path, the reason, and
+  the fact that the bundle you imported from still holds it. Keeping its
+  bytes instead would have meant a new rule on
+  `PUT /api/v1/bundle/{path}`, which freezes permanently — design doc
+  [0079](docs/design/0079-taking-the-document.md) §1 says why that trade
+  was declined.
+- **BREAKING (stored shape)** — `ochakai put` and `ochakai import` sent a
+  canonical rendering built from the parsed fields instead of the
+  document they were handed, so a producer's comments, key order, scalar
+  style and everything the family readers had no field for were dropped
+  on the way in. They now send the document's own bytes. The stored form
+  is therefore different from what the same file produced before, and a
+  CLI write and a REST write of the same file finally store the same
+  thing. An operator re-importing an old bundle gets the bundle's bytes
+  where they previously got ochakai's rendering, which moves the ETag of
+  every concept whose document was not already canonical; nothing else
+  has to be done about it. Design doc
+  [0079](docs/design/0079-taking-the-document.md) §5.
+- **BREAKING (stored shape)** — a document is no longer refused for a
+  non-string scalar under a key OKF gives no YAML type: `title: 2026`,
+  `description: 3.14`, `status: 3` and `tags: [1, 2]` are read as the
+  text their producer wrote, with a note, rather than failing the parse.
+  On import that failure was silent — the file was demoted to a loose
+  markdown object with nothing in the notes or the skip list, so it kept
+  its bytes and stopped being a concept. Such a document now imports as a
+  concept: it appears in search, listings and trust where it did not
+  before, and a `--strict` sync that used to pass now reports the notes.
+  Only SPEC §11's own conditions still refuse a document — unparseable
+  frontmatter and a missing or empty `type`. Design doc
+  [0079](docs/design/0079-taking-the-document.md) §3.
+- `executor` no longer requires a `receipt`. SPEC §10.2 marks only
+  `runtime` REQUIRED and describes `receipt` with no requirement word;
+  §11 forbids rejecting a concept for a missing optional field. ochakai
+  dropped the whole `executor` and refused the write, in a note and an
+  error that both cited §10.2 for a rule §10.2 does not state. A
+  `resource` is still required — an executor naming nothing to run says
+  nothing — and a document that wrote no `receipt` no longer gets one
+  written back. Design doc
+  [0079](docs/design/0079-taking-the-document.md) §2.
+- A hand-written `index.md` or `log.md` was discarded on import without a
+  word. ochakai still regenerates both from the bundle (SPEC §8 and §9
+  make them derived), but now says so in a note — which means
+  `ochakai export | ochakai import --strict` of ochakai's own bundle
+  fails, one note per directory. That is deliberate: the alternative is a
+  rule that only stays quiet about files ochakai wrote, which is no
+  guarantee for anybody else's bundle. Design doc
+  [0079](docs/design/0079-taking-the-document.md) §4.
+- The MCP `write`/`propose` document schema described `sources` without
+  SPEC §5.1's per-entry `usage_window` override, which the parser and the
+  renderer both support, and described `executor` as always carrying a
+  `receipt`.
+- An entry with no actor exported `created_by: ':'` — a value OKF's actor
+  convention (SPEC §7) has no form for. Unreachable for a stored row
+  since migration `0022_actor_process.sql`; entries composed in memory
+  still reached the renderer.
+
 - **Security** — the web UI's delegation-header filter (`stripDelegation`)
   deleted only the current `Ochakai-On-Behalf-Of` spelling design doc
   [0064](docs/design/0064-rest-stops-at-api-v1.md) introduced, not the

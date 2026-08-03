@@ -936,8 +936,8 @@ func TestOKFFamilyValidationIntegration(t *testing.T) {
 			Type: domain.TypeTerms, UsageWindow: &domain.UsageWindow{From: "last quarter"}},
 		"a parameter with no type": {
 			Type: domain.TypeTerms, Parameters: []domain.Parameter{{Name: "year"}}},
-		"an executor with no receipt": {
-			Type: domain.TypeTerms, Executor: &domain.Executor{Resource: "run.md"}},
+		"an executor with no resource": {
+			Type: domain.TypeTerms, Executor: &domain.Executor{Receipt: []string{"job_id"}}},
 		"an attester with no resource": {
 			Type: domain.TypeTerms, Attester: &domain.Attester{}},
 		"an Attested Computation with no runtime": {
@@ -962,6 +962,16 @@ func TestOKFFamilyValidationIntegration(t *testing.T) {
 		Type: domain.TypeTerms, ID: uid(t, "no-runtime-ok"), Title: "x",
 	}, actor); err != nil {
 		t.Fatalf("a Glossary Term must not need a runtime: %v", err)
+	}
+
+	// And the receipt was never one of SPEC §10.2's requirements: only
+	// runtime is marked REQUIRED there, and §11 forbids refusing a
+	// concept for a missing optional field (design doc 0079).
+	if _, err := svc.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeComputations, ID: uid(t, "no-receipt-ok"), Title: "x",
+		Runtime: "bigquery", Executor: &domain.Executor{Resource: "run.md"},
+	}, actor); err != nil {
+		t.Fatalf("an executor with no receipt must be writable: %v", err)
 	}
 
 	// A full contract round-trips through the database intact, including

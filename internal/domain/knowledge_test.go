@@ -195,11 +195,15 @@ func TestOKFFamilyValidation(t *testing.T) {
 		"parameter needs a type":      {false, func() bool { return Parameter{Name: "year"}.Valid() }},
 		"parameter with both is fine": {true, func() bool { return Parameter{Name: "year", Type: "integer"}.Valid() }},
 		"executor needs a resource":   {false, func() bool { return (&Executor{Receipt: []string{"job_id"}}).Valid() }},
-		"executor needs a receipt":    {false, func() bool { return (&Executor{Resource: "run.md"}).Valid() }},
-		"absent executor is fine":     {true, func() bool { return (*Executor)(nil).Valid() }},
-		"attester needs a resource":   {false, func() bool { return (&Attester{}).Valid() }},
-		"absent attester is fine":     {true, func() bool { return (*Attester)(nil).Valid() }},
-		"absent window is fine":       {true, func() bool { return (*UsageWindow)(nil).Valid() }},
+		// SPEC §10.2 marks only runtime REQUIRED, and describes receipt
+		// with no requirement word; §11 forbids rejecting a concept for a
+		// missing optional field. ochakai demanded one until 0079, citing
+		// a §10.2 rule §10.2 does not state.
+		"executor without a receipt is fine": {true, func() bool { return (&Executor{Resource: "run.md"}).Valid() }},
+		"absent executor is fine":            {true, func() bool { return (*Executor)(nil).Valid() }},
+		"attester needs a resource":          {false, func() bool { return (&Attester{}).Valid() }},
+		"absent attester is fine":            {true, func() bool { return (*Attester)(nil).Valid() }},
+		"absent window is fine":              {true, func() bool { return (*UsageWindow)(nil).Valid() }},
 	} {
 		if got := tc.valid(); got != tc.ok {
 			t.Errorf("%s: Valid() = %v, want %v", name, got, tc.ok)

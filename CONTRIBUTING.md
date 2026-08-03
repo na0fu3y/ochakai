@@ -521,7 +521,14 @@ grew to acknowledge the amendment. That is what the ceiling is for — the
 corpus grew because a decision was made, and the decision is named one
 line above the number.
 
-    RECORD-CORPUS-LINES: 5000
+5,000 → 5,500 is 0079, the second crossing and the first by an ordinary
+new record rather than by lines an existing one grew into. It states
+where ochakai refused a document OKF SPEC §11 says a consumer must
+accept, and two of those refusals had cited the spec for a requirement
+the spec does not state — the kind of finding a record exists to correct
+rather than to compress away.
+
+    RECORD-CORPUS-LINES: 5500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

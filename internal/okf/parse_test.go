@@ -525,7 +525,7 @@ sources:
 usage_window: [2026-06-01, 2026-06-30]
 parameters:
   - { type: integer }
-executor: { resource: run.md }
+executor: { receipt: [job_id] }
 attester: {}
 ---
 `))
@@ -540,8 +540,12 @@ attester: {}
 	if len(k.Sources) > 0 && k.Sources[0].LastModified != "" {
 		t.Errorf("an unparseable last_modified must be dropped, got %q", k.Sources[0].LastModified)
 	}
-	// A half-stated contract is dropped rather than stored: both of the
-	// executor's keys are required within it (SPEC §10.2).
+	// An executor naming nothing to run says nothing, so it is dropped.
+	// A receipt is not what makes it a contract: SPEC §10.2 marks only
+	// runtime REQUIRED and §11 forbids rejecting a concept over a missing
+	// optional field, so `executor: { resource: run.md }` — the case that
+	// used to be dropped here — now survives (design doc 0079,
+	// TestExecutorWithoutReceiptIsKept).
 	if k.UsageWindow != nil || k.Executor != nil || k.Attester != nil || len(k.Parameters) != 0 {
 		t.Errorf("unusable values must be dropped: %+v %+v %+v %+v",
 			k.UsageWindow, k.Executor, k.Attester, k.Parameters)
@@ -618,5 +622,132 @@ func TestStableWithoutVerificationRoundTrips(t *testing.T) {
 	}
 	if strings.Contains(string(out), "verified:") {
 		t.Errorf("re-export must not assert a review nobody made:\n%s", out)
+	}
+}
+
+// SPEC §11 lists exactly three conformance conditions, and says a
+// consumer "MUST NOT reject a bundle because of" unknown keys, unknown
+// types, missing optional fields, broken links or a missing index.md.
+// SPEC §4.1 gives title, description, resource, status, status_note,
+// stale_after, runtime and computation no YAML type at all, so an
+// unquoted 2026 is a title a producer wrote, not a broken document.
+//
+// ochakai refused the whole document over each of these until design doc
+// 0079 — and on import that refusal was silent: the file was demoted to
+// a loose markdown object with no note and nothing in `skipped`, so it
+// kept its bytes and stopped being knowledge.
+func TestParseTakesNonStringScalars(t *testing.T) {
+	for _, tc := range []struct {
+		name, doc, note string
+		check           func(*Doc) string
+	}{
+		{"an unquoted year is a title", "---\ntype: Metric\ntitle: 2026\n---\n", `title is not a string; read as "2026"`,
+			func(d *Doc) string { return d.Title }},
+		{"a float is a description", "---\ntype: Metric\ndescription: 3.14\n---\n", `description is not a string`,
+			func(d *Doc) string { return d.Description }},
+		{"a bool is a status_note", "---\ntype: Metric\nstatus_note: true\n---\n", `status_note is not a string`,
+			func(d *Doc) string { return d.StatusNote }},
+		{"a number is a runtime", "---\ntype: Metric\nruntime: 3\n---\n", `runtime is not a string`,
+			func(d *Doc) string { return d.Runtime }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d, notes, err := Parse([]byte(tc.doc))
+			if err != nil {
+				t.Fatalf("SPEC §11 makes this document conformant: %v", err)
+			}
+			if got := tc.check(d); got == "" {
+				t.Errorf("the value was dropped rather than read: %+v", d.Knowledge)
+			}
+			if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, tc.note) }) {
+				t.Errorf("a reinterpretation is never silent (design doc 0036 §3.4); notes = %v", notes)
+			}
+		})
+	}
+
+	// A list of numbers is a list of tags; a mapping where a scalar
+	// belongs has no text to be read as, so it is dropped — with a note,
+	// never with the document.
+	d, notes, err := Parse([]byte("---\ntype: Metric\ntags: [1, 2]\nstatus: {a: b}\n---\n"))
+	if err != nil {
+		t.Fatalf("SPEC §11 makes this document conformant: %v", err)
+	}
+	if !slices.Equal(d.Tags, []string{"1", "2"}) {
+		t.Errorf("tags = %v, want the two the producer wrote", d.Tags)
+	}
+	if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "status is not a scalar; dropped") }) {
+		t.Errorf("a dropped mapping must be reported; notes = %v", notes)
+	}
+
+	// The two refusals SPEC §11 does license: frontmatter that will not
+	// parse, and a missing or empty type.
+	for _, bad := range []string{
+		"---\ntype: Metric\n  bad indent: [\n---\n",
+		"---\ntitle: no type here\n---\n",
+		"---\ntype: {a: b}\n---\n",
+	} {
+		if _, _, err := Parse([]byte(bad)); err == nil {
+			t.Errorf("SPEC §11 makes this non-conformant, want an error:\n%s", bad)
+		}
+	}
+}
+
+// SPEC §10.2 marks exactly one field REQUIRED for an Attested
+// Computation: runtime. Of the executor it says "`resource` names run
+// instructions or code" and "`receipt` declares the fields a run must
+// return" — no requirement word on either — and §11 forbids rejecting a
+// concept for a missing optional field.
+//
+// ochakai dropped the whole executor without a receipt, in a note that
+// cited §10.2 for a rule §10.2 does not state (design doc 0079). The
+// resource is still the whole content of the key: an executor naming
+// nothing to run says nothing.
+func TestExecutorWithoutReceiptIsKept(t *testing.T) {
+	d, notes, err := Parse([]byte("---\ntype: Attested Computation\nruntime: bigquery\n" +
+		"executor:\n  resource: references/skills/run-on-bq.md\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Executor == nil || d.Executor.Resource != "references/skills/run-on-bq.md" {
+		t.Fatalf("executor = %+v, want the contract the producer wrote", d.Executor)
+	}
+	if len(notes) != 0 {
+		t.Errorf("nothing was reinterpreted; notes = %v", notes)
+	}
+	// A key its writer left out is not written back (design doc 0046
+	// §3.9): the re-export says what the document said, and no more.
+	out, err := Canonical(&d.Knowledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "receipt:") {
+		t.Errorf("re-export invented a receipt the producer never wrote:\n%s", out)
+	}
+
+	// An executor with a receipt and nothing to run is still dropped.
+	d, notes, err = Parse([]byte("---\ntype: Attested Computation\nruntime: bigquery\n" +
+		"executor:\n  receipt: [job_id]\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Executor != nil {
+		t.Errorf("executor = %+v, want it dropped: it names nothing to run", d.Executor)
+	}
+	if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "executor needs a resource") }) {
+		t.Errorf("notes = %v, want one naming the resource", notes)
+	}
+}
+
+// A zero actor is no actor. OKF's convention (SPEC §7) has no form for
+// one, and Actor.String renders it as a bare ":" — a created_by value
+// nothing can read back. Unreachable for a stored row since migration
+// 0022_actor_process.sql; an entry composed in memory still reaches the
+// renderer (design doc 0079).
+func TestZeroActorWritesNoCreatedBy(t *testing.T) {
+	out, err := Document(&domain.Knowledge{Type: domain.TypeMetrics, Body: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "created_by:") {
+		t.Errorf("an actorless entry must write no created_by:\n%s", out)
 	}
 }
