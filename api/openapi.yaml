@@ -199,17 +199,18 @@ paths:
 
             The filter vocabulary is OKF's, and `fm.` carries the OKF
             keys nothing else asks about: `attester`, `computation`,
-            `description`, `executor`, `id`, `parameters`, `resource`,
-            `runtime`, `status_note`, `title`, `usage_window`. A key a
-            producer invented is stored and handed back exactly as
-            written (SPEC §4.1) but is not part of the query vocabulary,
-            and `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
-            `fm.stale_after` are read through columns that answer a
-            different question — `status=stable` matches a document that
-            says nothing, since OKF's default is stable, and `fm.status`
-            never would. Use `type`, `status`, `tag`, `source` and
-            `sort=stale_after` for those. Everything else is a 400
-            (design doc 0074 §4).
+            `description`, `executor`, `parameters`, `resource`,
+            `runtime`, `title`, `usage_window`. A key a producer
+            invented is stored and handed back exactly as written (SPEC
+            §4.1) but is not part of the query vocabulary — including
+            the two ochakai itself writes into a bundle, `id` and
+            `status_note`, which OKF does not define. `fm.type`,
+            `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after`
+            are read through columns that answer a different question —
+            `status=stable` matches a document that says nothing, since
+            OKF's default is stable, and `fm.status` never would. Use
+            `type`, `status`, `tag`, `source` and `sort=stale_after`
+            for those. Everything else is a 400 (design doc 0074 §4).
           schema: { type: string }
         - name: rejected
           in: query
@@ -338,6 +339,7 @@ paths:
                     description: >
                       Where the next page of this listing resumes. Absent
                       on the last page, and on every search.
+                required: [hits]
               examples:
                 search:
                   summary: GET /api/v1/search?q=monthly+revenue&limit=3
@@ -460,6 +462,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               examples:
                 queryAndSortTogether:
                   summary: q and sort are mutually exclusive
@@ -509,7 +512,10 @@ paths:
         doc 0075 §1). The history travels with it (design doc 0075 §4.2): a purge is
         the only thing that removes a row from the ledger, and an
         archive without it left the record readable only from the
-        instance holding it. An import never reads it back. The root
+        instance holding it. Each generated `log.md` inside the archive
+        carries its newest 1000 lines, the same bound the address
+        itself serves; the ledger's older rows stay on the instance. An
+        import never reads it back. The root
         (`/api/v1/bundle/`) is the whole knowledge base — this is what `GET /api/v1/export` was, at the address of
         the thing it returns (design doc 0075 §4). Your knowledge is
         yours.
@@ -545,9 +551,9 @@ paths:
         `rejected_at`, and the pre-v0.2 spellings `timestamp` /
         `verified_by` / `verified_at` — are ignored on write; provenance
         comes from the caller's identity (design docs 0009, 0075 §3.1).
-        The one exception is that the presence of a `verified` key
-        decides how OKF's `stable` status maps onto ochakai's (design doc
-        0075 §3.1).
+        There is no exception: a document's own `verified` key changes
+        nothing about the write — it is kept under `received:` as the
+        writer's claim, and this instance's trust ledger never reads it.
 
         `index.md` is one level of the tree — the subdirectories directly
         under the path, each with the count of concepts beneath, plus the
@@ -682,13 +688,15 @@ paths:
             application/json:
               schema:
                 description: >
-                  Which shape arrives is decided by the path, not by a
-                  parameter: a concept answers with its View, `index.md`
-                  with the listing, `log.md` with the history, a file
-                  with its metadata (design doc 0064) — the only address
-                  that answers a file's `sha256` without its bytes.
+                  Which shape arrives is decided by the path and the
+                  query, not by a parameter of its own: a concept
+                  answers with its View, `index.md` with the listing,
+                  `log.md` with the history, `?history` on an object
+                  with its revisions, a file with its metadata (design
+                  doc 0064) — the only address that answers a file's
+                  `sha256` without its bytes.
 
-                  `anyOf` rather than `oneOf` because the four are not
+                  `anyOf` rather than `oneOf` because the five are not
                   disjoint as schemas — a listing level with no
                   subdirectories and no concepts is `{}`, which every
                   object satisfies. The path is the discriminator, and
@@ -748,7 +756,7 @@ paths:
                         changed_by: { kind: human, name: sato@example.co.jp }
                         changed_at: "2026-07-14T02:33:41.019778Z"
                       - path: metrics/revenue/chart.png
-                        change: add_file
+                        change: create
                         changed_by: { kind: human, name: sato@example.co.jp }
                         changed_at: "2026-07-13T11:02:07.401221Z"
                 history:
@@ -805,6 +813,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               example:
                 error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
         "409":
@@ -833,6 +842,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               example:
                 error: >
                   index.md is generated from the bundle, not stored in it
@@ -848,6 +858,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               example:
                 error: no object at this path
         "405": { $ref: "#/components/responses/Error" }
@@ -999,6 +1010,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
         "412":
           description: >
             An If-Match or If-None-Match "*" precondition failed — the
@@ -1013,11 +1025,16 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
         "413": { $ref: "#/components/responses/Error" }
         "415": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
         "409":
-          description: A generated file is not one anybody writes.
+          description: >
+            A generated file is not one anybody writes — and an address
+            already taken by the other kind of object is not free: a
+            file PUT to a path where a live concept sits (or a concept
+            PUT to a path a file holds) answers 409 naming which.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -1026,6 +1043,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
         "405": { $ref: "#/components/responses/Error" }
@@ -1095,6 +1113,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
         "409":
           description: A generated file is not one anybody deletes.
           headers:
@@ -1105,6 +1124,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
         "412":
           description: >
             If-Match named a version the concept no longer has (design doc
@@ -1117,6 +1137,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/context:
@@ -1184,17 +1205,18 @@ paths:
 
             The filter vocabulary is OKF's, and `fm.` carries the OKF
             keys nothing else asks about: `attester`, `computation`,
-            `description`, `executor`, `id`, `parameters`, `resource`,
-            `runtime`, `status_note`, `title`, `usage_window`. A key a
-            producer invented is stored and handed back exactly as
-            written (SPEC §4.1) but is not part of the query vocabulary,
-            and `fm.type`, `fm.status`, `fm.tags`, `fm.sources` and
-            `fm.stale_after` are read through columns that answer a
-            different question — `status=stable` matches a document that
-            says nothing, since OKF's default is stable, and `fm.status`
-            never would. Use `type`, `status`, `tag`, `source` and
-            `sort=stale_after` for those. Everything else is a 400
-            (design doc 0074 §4).
+            `description`, `executor`, `parameters`, `resource`,
+            `runtime`, `title`, `usage_window`. A key a producer
+            invented is stored and handed back exactly as written (SPEC
+            §4.1) but is not part of the query vocabulary — including
+            the two ochakai itself writes into a bundle, `id` and
+            `status_note`, which OKF does not define. `fm.type`,
+            `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after`
+            are read through columns that answer a different question —
+            `status=stable` matches a document that says nothing, since
+            OKF's default is stable, and `fm.status` never would. Use
+            `type`, `status`, `tag`, `source` and `sort=stale_after`
+            for those. Everything else is a 400 (design doc 0074 §4).
           schema: { type: string }
         - name: tag
           in: query
@@ -1264,6 +1286,7 @@ paths:
                       nothing was dropped.
                     type: array
                     items: { $ref: "#/components/schemas/ContextOutline" }
+                required: [hits, concepts]
               examples:
                 pack:
                   summary: GET /api/v1/context?q=monthly+revenue&limit=2&budget=4000
@@ -1759,11 +1782,12 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               examples:
                 unknownRuling:
                   summary: A ruling outside the vocabulary
                   value:
-                    error: 'ruling must be "verified", "rejected" or "withdrawn", not "approved"'
+                    error: 'ruling must be one of verified, rejected, withdrawn, not "approved"'
                 noteOnVerification:
                   summary: A note belongs to a rejection
                   value:
@@ -1782,6 +1806,7 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
+                required: [error]
               example:
                 error: knowledge carries no rejection to withdraw
         "413": { $ref: "#/components/responses/Error" }
@@ -2086,6 +2111,7 @@ paths:
                       missing; unchanged from the one sent in means the
                       corpus is exhausted and what remains only fails.
                     type: string
+                required: [concepts, files, failed, missing]
               examples:
                 partial:
                   summary: A pass with work still left
@@ -2305,6 +2331,7 @@ components:
             type: object
             properties:
               error: { type: string }
+            required: [error]
     Forbidden:
       description: >
         Refused — the route exists and the request was understood, but
@@ -2325,6 +2352,7 @@ components:
             type: object
             properties:
               error: { type: string }
+            required: [error]
           examples:
             readOnly:
               summary: A write against a read-only deployment
@@ -2353,7 +2381,12 @@ components:
         gracefully", and §11 does not let an unknown type reject a
         bundle — so a namespaced type like `acme/Table` is legal OKF and
         is stored as written (design doc 0064). The 128-byte cap is
-        ochakai's own defensive bound, not something SPEC derives.
+        ochakai's own defensive bound, not something SPEC derives. The
+        pattern below is the loosest spelling a portable regex can
+        carry: the server is stricter — it refuses every control
+        character, not only CR and LF, and counts the cap in bytes, so
+        multibyte values shorter than 128 characters can still be
+        refused.
       examples: [Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, Data Contract]
       pattern: "^[^\\r\\n]{1,128}$"
     Status:
@@ -2409,6 +2442,7 @@ components:
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
+      required: [by, at]
     Rejection:
       type: object
       description: >
@@ -2430,6 +2464,7 @@ components:
             the concept's own status_note, which belongs to whoever wrote
             the concept.
           type: string
+      required: [by, at]
     Actor:
       type: object
       description: >
@@ -2468,6 +2503,7 @@ components:
             Google verified. Trust tier is unaffected — SPEC §5.3 derives
             it from the human: prefix alone.
           type: string
+      required: [kind, name]
     Link:
       type: object
       description: >
@@ -2481,6 +2517,7 @@ components:
           description: >
             The anchor text the body used. Absent when the link carried none,
             in which case the target's last segment reads as the name.
+      required: [target]
     Summary:
       type: object
       description: >
@@ -2581,8 +2618,11 @@ components:
           type: string
           format: date-time
           description: >
-            When the content last changed — the same instant as
-            observed.generated.at, which is the OKF spelling of it.
+            When the row last moved — any write, a reformat included.
+            When the *content* last changed is `observed.generated.at`
+            (OKF SPEC §5.2): a write that changes the bytes without
+            changing what they say moves this value and not that one
+            (design doc 0064 §17).
     Generated:
       type: object
       description: >
@@ -2593,6 +2633,7 @@ components:
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
+      required: [by, at]
     Observed:
       type: object
       description: >
@@ -2622,6 +2663,7 @@ components:
             The live ruling, absent when there is none. Written by
             POST /api/v1/review/{id} with ruling: rejected, and cleared
             by ruling: withdrawn.
+      required: [created_by, generated]
     View:
       type: object
       description: >
@@ -2706,6 +2748,7 @@ components:
             concept keeps its id beside its path.
         created_by: { $ref: "#/components/schemas/Actor", readOnly: true }
         created_at: { type: string, format: date-time, readOnly: true }
+      required: [name, media_type, size, sha256, path, created_by, created_at]
     Usage:
       type: object
       properties:
@@ -2714,6 +2757,7 @@ components:
         worked: { type: integer, description: Outcome reports saying the concept led to a correct result. }
         failed: { type: integer, description: Outcome reports saying the concept led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
+      required: [search_hits, fetches, worked, failed]
     Stats:
       description: >
         The instance-level view of the loop (design doc 0069 §5). State
@@ -2750,6 +2794,7 @@ components:
                 are counted in status and trust as well — a rejection is a
                 ruling beside the lifecycle value, not one of them.
             created: { type: integer, description: "Flow: live concepts created in the window." }
+          required: [total, status, trust, rejected, created]
         queues:
           allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
           description: >
@@ -2772,12 +2817,14 @@ components:
                 answers "how much moved through review last week", which no
                 queue depth can: a queue says what is left, never what went
                 through.
+          required: [verifications]
         outcomes:
           type: object
           description: "Flow: what callers reported back in the window (report_outcome)."
           properties:
             worked: { type: integer }
             failed: { type: integer }
+          required: [worked, failed]
         misses:
           type: object
           description: >
@@ -2802,6 +2849,9 @@ components:
                   query: { type: string, description: The query as it was typed (kept up to 500 bytes). }
                   count: { type: integer }
                   last_at: { type: string, format: date-time }
+                required: [query, count, last_at]
+          required: [recording, count, queries]
+      required: [at, window_days, concepts, queues, review, outcomes, misses]
     QueueCounts:
       type: object
       description: >
@@ -2839,6 +2889,7 @@ components:
             sort=stale_after. Verifying does not clear this one: the date
             is the writer's declaration, so the concept leaves when someone
             edits it (design doc 0069 §2.2).
+      required: [drafts, failed, stale_after]
     SearchHit:
       description: >
         One search or listing result: the projection plus what ranked it.
@@ -2874,6 +2925,7 @@ components:
                 File metadata for this row — a file beside the
                 concept rather than part of its projection, which is why it
                 is here and not in Summary. REST only.
+          required: [score]
     ContextRank:
       type: object
       description: >
@@ -2901,6 +2953,7 @@ components:
             id below the pack's cut-off wants to know who confirmed the
             concept, not merely whether somebody did.
         score: { type: number }
+      required: [id, type, status, trust, score]
     ContextOutline:
       type: object
       description: >
@@ -2921,6 +2974,7 @@ components:
         bytes:
           description: What the full concept would have cost.
           type: integer
+      required: [id, type, status, bytes]
     BundleListing:
       type: object
       description: >
@@ -2949,6 +3003,7 @@ components:
                   documents and a mixed count would misdescribe every
                   directory that has both.
                 type: integer
+            required: [name, count]
         concepts:
           type: array
           items:
@@ -2960,6 +3015,7 @@ components:
               description: { type: string, description: The one-line summary, so a directory listing can render as an index page. }
               status: { $ref: "#/components/schemas/Status" }
               updated_at: { type: string, format: date-time }
+            required: [type, id, status, updated_at]
         files:
           description: >
             The files sitting directly in this directory, in path order.
@@ -2972,6 +3028,7 @@ components:
               media_type: { type: string, description: Sniffed from the bytes when it was written, never taken from the caller. }
               size: { type: integer, description: Bytes. }
               created_at: { type: string, format: date-time }
+            required: [name, path, media_type, size, created_at]
         truncated:
           type: boolean
           description: The concept or file list hit the 1000-per-level cap.
@@ -3008,19 +3065,24 @@ components:
           description: >
             What happened, as one word. **An open set: treat a value you
             do not know as an event you have nothing special to render
-            for, and do not fail on it.** Today it is one of `create`,
+            for, and do not fail on it.** Today's rows carry `create`,
             `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
             `add_file`, `remove_file`, and that list is the ledger's
             vocabulary rather than the wire's promise — it has moved
             twice already (`unreject` became `withdraw`, `attach` and
             `detach` became `add_file` and `remove_file`, each with a
-            migration rewriting the stored rows). A closed enum here
+            migration rewriting the stored rows). The last two sit on
+            historical rows only: they date from when a file event was a
+            revision of its concept, and since a file became an object
+            at its own path (design doc 0075 §5) a new file event is
+            that path's own `create` or `delete`. A closed enum here
             would make the tenth word a breaking change, which after the
             freeze is a word that can never be added (design doc 0064
             §20.3). The current spelling is counted in docs/surface.md's
             VOCAB, where adding one is a decision that shows in a diff.
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
+      required: [path, change, changed_by, changed_at]
     ObjectHistory:
       type: object
       description: >
@@ -3045,13 +3107,17 @@ components:
           description: >
             What happened, as one word. **An open set: treat a value you
             do not know as an event you have nothing special to render
-            for, and do not fail on it.** Today it is one of `create`,
+            for, and do not fail on it.** Today's rows carry `create`,
             `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
             `add_file`, `remove_file`, and that list is the ledger's
             vocabulary rather than the wire's promise — it has moved
             twice already (`unreject` became `withdraw`, `attach` and
             `detach` became `add_file` and `remove_file`, each with a
-            migration rewriting the stored rows). A closed enum here
+            migration rewriting the stored rows). The last two sit on
+            historical rows only: they date from when a file event was a
+            revision of its concept, and since a file became an object
+            at its own path (design doc 0075 §5) a new file event is
+            that path's own `create` or `delete`. A closed enum here
             would make the tenth word a breaking change, which after the
             freeze is a word that can never be added (design doc 0064
             §20.3). The current spelling is counted in docs/surface.md's
@@ -3069,3 +3135,4 @@ components:
             reads. The keys this instance owns are included — a revision
             records what the concept was, and who had confirmed it then is
             part of that.
+      required: [rev, change, changed_by, changed_at, document]

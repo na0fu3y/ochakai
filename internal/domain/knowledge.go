@@ -273,10 +273,10 @@ func LifecycleOf(s Status) Status {
 // what it did rather than silently reinterpreting.
 //
 // An absent status stays unset ("") rather than becoming a value. OKF
-// reads absence as stable (§5.4), but ochakai already has a rule for a
-// write that names no status — draft on create, unchanged on update — and
-// that rule is what keeps a re-imported document from silently demoting
-// the entry it lands on.
+// reads absence as stable (§5.4), and that default is applied where the
+// value is read (LifecycleOf, and the write path's k.Lifecycle() — design
+// doc 0046 §3.9) rather than stamped in here: the parser reports what the
+// document says, and this one says nothing.
 //
 // Whether the document carried a verified key is deliberately not an
 // input. Until 0043 it was: with no way to say "stable but unconfirmed",
@@ -802,7 +802,7 @@ type Knowledge struct {
 	ContentHash string `json:"content_hash,omitempty"`
 }
 
-// EnvelopeKeys names every OKF frontmatter key the envelope owns, in the
+// EnvelopeKeys names every frontmatter key the envelope owns, in the
 // spelling a bundle uses. Attrs carries producer extension keys (SPEC
 // §4.1) and nothing else, so a payload naming one of these inside attrs is
 // rejected rather than stored where nothing will read it (design doc 0036
@@ -815,6 +815,16 @@ var EnvelopeKeys = []string{
 	"status", "status_note", "stale_after",
 	"runtime", "parameters", "computation", "executor", "attester",
 }
+
+// OchakaiEnvelopeKeys names the two envelope keys that are ochakai's own
+// rather than OKF's: SPEC v0.2 defines no top-level `id` (a concept's id
+// is its path, §2 — `sources[].id` is a different key) and no
+// `status_note`. Both are read into columns and written back into
+// bundles, so they stay envelope keys — but the frontmatter filter's
+// vocabulary is OKF's (design doc 0074 §4.2), and when ochakai is the
+// producer its own extension keys are refused the same way anybody
+// else's are (design doc 0064).
+var OchakaiEnvelopeKeys = []string{"id", "status_note"}
 
 // FilterOwnedKeys names, for each OKF key ochakai reads through a column
 // of its own, the filter that owns the question — the one a frontmatter
@@ -834,7 +844,10 @@ var FilterOwnedKeys = map[string]string{
 // sorted: every key OKF defines, less the ones a filter of their own
 // already asks (design doc 0047 §2). A producer's extension key is not
 // here — it is stored and handed back exactly as written (SPEC §4.1), but
-// the query vocabulary is OKF's.
+// the query vocabulary is OKF's. That rule reads ochakai's own two
+// envelope keys out too (OchakaiEnvelopeKeys): `fm.id` asks what the
+// address already answers, and an extension key ochakai may ask but
+// nobody else may would make the refusal's own reason false.
 //
 // It is derived from EnvelopeKeys rather than written out, which is what
 // makes the query surface additive: the day OKF adds a key and that list
@@ -845,7 +858,7 @@ var FilterOwnedKeys = map[string]string{
 func AskableFrontmatterKeys() []string {
 	out := make([]string, 0, len(EnvelopeKeys))
 	for _, k := range EnvelopeKeys {
-		if FilterOwnedKeys[k] == "" {
+		if FilterOwnedKeys[k] == "" && !slices.Contains(OchakaiEnvelopeKeys, k) {
 			out = append(out, k)
 		}
 	}

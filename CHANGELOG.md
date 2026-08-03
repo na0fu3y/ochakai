@@ -551,6 +551,55 @@ last entry.
   - No version or capability-discovery signal ships, and CORS stays
     deliberately absent — both are decided in 0064 rather than left
     open.
+  - **BREAKING** — `status` and `trust` values outside their vocabularies
+    are a 400 naming it, not a 200 with no hits. `?status=Draft` (case
+    matters) and `?trust=verified` (a status word, not a tier) used to
+    read as "the base holds nothing" — the same silent no-op unknown
+    query keys used to be. Every surface goes through the one check, so
+    MCP and the CLI close with REST. **What a client does:** send
+    `draft|stable|deprecated` and
+    `unverified|machine-confirmed|human-reviewed`, exactly (design doc
+    0064 §23.3).
+  - **BREAKING** — `fm.id` and `fm.status_note` are no longer askable
+    (400). Both are ochakai's own envelope keys — OKF SPEC v0.2 defines
+    no top-level `id` and no `status_note` — and the `fm.` vocabulary is
+    OKF's; ochakai's own extension keys are refused the same way anybody
+    else's are. Storage and round trip are untouched. **What a client
+    does:** the id question is answered by the address and `prefix=`;
+    a `status_note` exact-match had no answerable question behind it
+    (design doc 0064 §23.5).
+  - **BREAKING** — `POST /api/v1/reembed` refuses a request body (400):
+    it never read one, so `{"limit": 10}` in the body silently ran a
+    default-sized pass. `limit` and `cursor` are query parameters. And a
+    negative `budget` on `GET /api/v1/context` is a 400 instead of
+    silently meaning "no cap" — 0 or omission is that spelling (design
+    doc 0064 §23.4).
+  - A dry run's response now carries the values the write would stamp:
+    `observed.generated.by` (an empty actor — a value the contract's own
+    enum forbids — used to reach the wire on every update plan),
+    `content_hash` (deterministic, so the plan's hash equals the later
+    write's ETag), `summary.updated_at`/`created_at`, and a planned
+    file's `created_by`/`created_at`. And a file overwrite's 200 now
+    reports the row's original creator and creation time instead of the
+    current caller and now, so the PUT response agrees with the next GET
+    (design doc 0064 §§23.1-23.2).
+  - Always-present response fields are now declared `required` — the
+    error envelope's `error`, search's `hits`, context's
+    `hits`/`concepts`, `Usage`'s four counters, `File`'s seven fields,
+    all of `Stats`, `Actor`'s `kind`/`name`, and the rest that match the
+    structs. Additive for readers; a generated client stops holding
+    all-optional types. This was the last day it could happen: adding
+    `required` moves the frozen fingerprint (design doc 0064 §23.6).
+  - `Ochakai-Read-Only` now stands on auth-layer 400/403 responses too,
+    which "on every /api/v1 response" always promised. Contract prose
+    that said untrue things is corrected — the phantom rule that a
+    `verified` key decides the `stable` mapping (no such rule exists),
+    `summary.updated_at` described as the same instant as
+    `observed.generated.at` (it is the row's time; the content's is
+    `generated.at`), and the `change` vocabulary's `add_file` /
+    `remove_file` marked as historical spellings: since a file became an
+    object at its own path, a new file event is that path's own
+    `create` or `delete` (design doc 0064 §§23.7, 8).
 
 - `docs/guides/operating.md` is now Japanese (issue #446, part of C8,
   #398). It is the largest page translated under C8 so far and the first

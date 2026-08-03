@@ -160,7 +160,7 @@ func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err
 // the store says so only from inside the write. Asking here is what keeps
 // a bundle carrying a markdown file that lost its type key from passing a
 // dry run and failing the import.
-func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *domain.File, created, changed bool, err error) {
+func (s *Service) PlanFile(ctx context.Context, p string, data []byte, actor domain.Actor) (att *domain.File, created, changed bool, err error) {
 	p, mediaType, err := s.settleFile(p, data)
 	if err != nil {
 		return nil, false, false, err
@@ -179,9 +179,16 @@ func (s *Service) PlanFile(ctx context.Context, p string, data []byte) (att *dom
 			return nil, false, false, fmt.Errorf("%w: %s is a concept", store.ErrAlreadyExists, p)
 		}
 	}
+	// The values the write would stamp, stamped without the write: a
+	// created file resolves both, so the plan does too rather than
+	// putting an empty actor and a zero time on the wire (design doc
+	// 0064). A file row keeps kind and name only, so the plan says no
+	// more than a later GET would.
 	return &domain.File{
 		Name: p[strings.LastIndex(p, "/")+1:], MediaType: mediaType,
 		Size: int64(len(data)), SHA256: hash, Path: p,
+		CreatedBy: domain.Actor{Kind: actor.Kind, Name: actor.Name},
+		CreatedAt: store.NowStored(),
 	}, true, true, nil
 }
 

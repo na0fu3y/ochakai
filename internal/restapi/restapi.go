@@ -669,7 +669,7 @@ func Handler(svc *service.Service) http.Handler {
 				created, changed bool
 			)
 			if dry {
-				att, created, changed, err = svc.PlanFile(r.Context(), path, body)
+				att, created, changed, err = svc.PlanFile(r.Context(), path, body, actor)
 			} else {
 				att, created, err = svc.PutFile(r.Context(), path, body, actor)
 			}
@@ -946,6 +946,15 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
+		// The operation reads no body, so one arriving is refused rather
+		// than dropped: `{"limit": 10}` in the body would silently run
+		// the default-sized pass — the same false green §2 of design doc
+		// 0064 closed for unknown query keys.
+		var one [1]byte
+		if n, _ := r.Body.Read(one[:]); n > 0 {
+			writeError(w, service.Invalidf("reembed takes no request body; limit and cursor are query parameters"))
+			return
+		}
 		limit, err := queryInt(r.URL.Query(), "limit")
 		if err != nil {
 			writeError(w, err)
@@ -959,7 +968,7 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	return announceReadOnly(svc, stdlibDefaultsAsJSON(mux))
+	return AnnounceReadOnly(svc, stdlibDefaultsAsJSON(mux))
 }
 
 // stdlibDefaultsAsJSON rewrites the two responses net/http's ServeMux
@@ -1009,14 +1018,18 @@ func (w *defaultEnvelopeWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-// announceReadOnly marks every REST response from a read-only deployment
+// AnnounceReadOnly marks every REST response from a read-only deployment
 // with Ochakai-Read-Only: true (design doc 0040 §2.3). REST has no
 // capability handshake the way MCP does — where read-only shows up as the
 // write tools simply not being offered — so a client learns it from a
 // header, the same way it learns an update changed nothing from
 // Ochakai-Unchanged. The Web UI uses it to stop drawing buttons that
 // would only ever 403.
-func announceReadOnly(svc *service.Service, next http.Handler) http.Handler {
+//
+// Handler already wraps itself in it; main wraps the auth middleware in
+// it too, because the contract says "every /api/v1 response" and the
+// 400/403 the middleware writes are /api/v1 responses (design doc 0064).
+func AnnounceReadOnly(svc *service.Service, next http.Handler) http.Handler {
 	if svc.Config == nil || !svc.Config.ReadOnly {
 		return next
 	}

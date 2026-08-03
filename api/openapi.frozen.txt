@@ -21,16 +21,16 @@ DELETE /api/v1/bundle/{path} response 400 ref=Error
 DELETE /api/v1/bundle/{path} response 403 ref=Forbidden
 DELETE /api/v1/bundle/{path} response 404
 DELETE /api/v1/bundle/{path} response 404 content application/json type=object
-DELETE /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 404 content application/json.error required=true type=string
 DELETE /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 405 ref=Error
 DELETE /api/v1/bundle/{path} response 409
 DELETE /api/v1/bundle/{path} response 409 content application/json type=object
-DELETE /api/v1/bundle/{path} response 409 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 409 content application/json.error required=true type=string
 DELETE /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 412
 DELETE /api/v1/bundle/{path} response 412 content application/json type=object
-DELETE /api/v1/bundle/{path} response 412 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 412 content application/json.error required=true type=string
 DELETE /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 500 ref=Error
 GET /api/v1/bundle/{path}
@@ -64,17 +64,17 @@ GET /api/v1/bundle/{path} response 400 ref=Error
 GET /api/v1/bundle/{path} response 403 ref=Forbidden
 GET /api/v1/bundle/{path} response 404
 GET /api/v1/bundle/{path} response 404 content application/json type=object
-GET /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+GET /api/v1/bundle/{path} response 404 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/bundle/{path} response 405 ref=Error
 GET /api/v1/bundle/{path} response 409
 GET /api/v1/bundle/{path} response 409 content application/json type=object
-GET /api/v1/bundle/{path} response 409 content application/json.error required=false type=string
+GET /api/v1/bundle/{path} response 409 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/bundle/{path} response 500 ref=Error
 GET /api/v1/bundle/{path} response 501
 GET /api/v1/bundle/{path} response 501 content application/json type=object
-GET /api/v1/bundle/{path} response 501 content application/json.error required=false type=string
+GET /api/v1/bundle/{path} response 501 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 501 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/context
 GET /api/v1/context operationId=getContext
@@ -94,9 +94,9 @@ GET /api/v1/context query type required=false type=array
 GET /api/v1/context query type[] ref=Type
 GET /api/v1/context response 200
 GET /api/v1/context response 200 content application/json type=object
-GET /api/v1/context response 200 content application/json.concepts required=false type=array
+GET /api/v1/context response 200 content application/json.concepts required=true type=array
 GET /api/v1/context response 200 content application/json.concepts[] ref=View
-GET /api/v1/context response 200 content application/json.hits required=false type=array
+GET /api/v1/context response 200 content application/json.hits required=true type=array
 GET /api/v1/context response 200 content application/json.hits[] ref=ContextRank
 GET /api/v1/context response 200 content application/json.outline required=false type=array
 GET /api/v1/context response 200 content application/json.outline[] ref=ContextOutline
@@ -128,12 +128,12 @@ GET /api/v1/search query type[] ref=Type
 GET /api/v1/search response 200
 GET /api/v1/search response 200 content application/json type=object
 GET /api/v1/search response 200 content application/json.cursor required=false type=string
-GET /api/v1/search response 200 content application/json.hits required=false type=array
+GET /api/v1/search response 200 content application/json.hits required=true type=array
 GET /api/v1/search response 200 content application/json.hits[] ref=SearchHit
 GET /api/v1/search response 200 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/search response 400
 GET /api/v1/search response 400 content application/json type=object
-GET /api/v1/search response 400 content application/json.error required=false type=string
+GET /api/v1/search response 400 content application/json.error required=true type=string
 GET /api/v1/search response 400 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/search response 403 ref=Forbidden
 GET /api/v1/search response 405 ref=Error
@@ -185,11 +185,11 @@ POST /api/v1/reembed query cursor required=false type=string
 POST /api/v1/reembed query limit required=false type=integer default=200 maximum=5000
 POST /api/v1/reembed response 200
 POST /api/v1/reembed response 200 content application/json type=object
-POST /api/v1/reembed response 200 content application/json.concepts required=false type=integer
+POST /api/v1/reembed response 200 content application/json.concepts required=true type=integer
 POST /api/v1/reembed response 200 content application/json.cursor required=false type=string
-POST /api/v1/reembed response 200 content application/json.failed required=false type=integer
-POST /api/v1/reembed response 200 content application/json.files required=false type=integer
-POST /api/v1/reembed response 200 content application/json.missing required=false type=integer
+POST /api/v1/reembed response 200 content application/json.failed required=true type=integer
+POST /api/v1/reembed response 200 content application/json.files required=true type=integer
+POST /api/v1/reembed response 200 content application/json.missing required=true type=integer
 POST /api/v1/reembed response 200 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/reembed response 400 ref=Error
 POST /api/v1/reembed response 403 ref=Forbidden
@@ -210,14 +210,14 @@ POST /api/v1/review/{id} response 200 header ETag ref=ETag
 POST /api/v1/review/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/review/{id} response 400
 POST /api/v1/review/{id} response 400 content application/json type=object
-POST /api/v1/review/{id} response 400 content application/json.error required=false type=string
+POST /api/v1/review/{id} response 400 content application/json.error required=true type=string
 POST /api/v1/review/{id} response 400 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/review/{id} response 403 ref=Forbidden
 POST /api/v1/review/{id} response 404 ref=Error
 POST /api/v1/review/{id} response 405 ref=Error
 POST /api/v1/review/{id} response 409
 POST /api/v1/review/{id} response 409 content application/json type=object
-POST /api/v1/review/{id} response 409 content application/json.error required=false type=string
+POST /api/v1/review/{id} response 409 content application/json.error required=true type=string
 POST /api/v1/review/{id} response 409 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/review/{id} response 413 ref=Error
 POST /api/v1/review/{id} response 500 ref=Error
@@ -269,16 +269,16 @@ PUT /api/v1/bundle/{path} response 400 ref=Error
 PUT /api/v1/bundle/{path} response 403 ref=Forbidden
 PUT /api/v1/bundle/{path} response 404
 PUT /api/v1/bundle/{path} response 404 content application/json type=object
-PUT /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 404 content application/json.error required=true type=string
 PUT /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 405 ref=Error
 PUT /api/v1/bundle/{path} response 409
 PUT /api/v1/bundle/{path} response 409 content application/json type=object
-PUT /api/v1/bundle/{path} response 409 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 409 content application/json.error required=true type=string
 PUT /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 412
 PUT /api/v1/bundle/{path} response 412 content application/json type=object
-PUT /api/v1/bundle/{path} response 412 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 412 content application/json.error required=true type=string
 PUT /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 413 ref=Error
 PUT /api/v1/bundle/{path} response 415 ref=Error
@@ -308,134 +308,134 @@ components/parameters/Producer name=Ochakai-Producer in=header required=false
 components/parameters/Producer schema type=string maxLength=128
 components/responses/Error
 components/responses/Error content application/json type=object
-components/responses/Error content application/json.error required=false type=string
+components/responses/Error content application/json.error required=true type=string
 components/responses/Error header Ochakai-Read-Only ref=ReadOnly
 components/responses/Forbidden
 components/responses/Forbidden content application/json type=object
-components/responses/Forbidden content application/json.error required=false type=string
+components/responses/Forbidden content application/json.error required=true type=string
 components/responses/Forbidden header Ochakai-Read-Only ref=ReadOnly
 components/schemas/Actor type=object
-components/schemas/Actor.kind required=false type=string enum=["human" "process"]
-components/schemas/Actor.name required=false type=string
+components/schemas/Actor.kind required=true type=string enum=["human" "process"]
+components/schemas/Actor.name required=true type=string
 components/schemas/Actor.producer required=false type=string
 components/schemas/Actor.via required=false type=string
 components/schemas/BundleListing type=object
 components/schemas/BundleListing.concepts required=false type=array
 components/schemas/BundleListing.concepts[] type=object
 components/schemas/BundleListing.concepts[].description required=false type=string
-components/schemas/BundleListing.concepts[].id required=false type=string
-components/schemas/BundleListing.concepts[].status required=false ref=Status
+components/schemas/BundleListing.concepts[].id required=true type=string
+components/schemas/BundleListing.concepts[].status required=true ref=Status
 components/schemas/BundleListing.concepts[].title required=false type=string
-components/schemas/BundleListing.concepts[].type required=false ref=Type
-components/schemas/BundleListing.concepts[].updated_at required=false type=string format="date-time"
+components/schemas/BundleListing.concepts[].type required=true ref=Type
+components/schemas/BundleListing.concepts[].updated_at required=true type=string format="date-time"
 components/schemas/BundleListing.dirs required=false type=array
 components/schemas/BundleListing.dirs[] type=object
-components/schemas/BundleListing.dirs[].count required=false type=integer
-components/schemas/BundleListing.dirs[].name required=false type=string
+components/schemas/BundleListing.dirs[].count required=true type=integer
+components/schemas/BundleListing.dirs[].name required=true type=string
 components/schemas/BundleListing.files required=false type=array
 components/schemas/BundleListing.files[] type=object
-components/schemas/BundleListing.files[].created_at required=false type=string format="date-time"
-components/schemas/BundleListing.files[].media_type required=false type=string
-components/schemas/BundleListing.files[].name required=false type=string
-components/schemas/BundleListing.files[].path required=false type=string
-components/schemas/BundleListing.files[].size required=false type=integer
+components/schemas/BundleListing.files[].created_at required=true type=string format="date-time"
+components/schemas/BundleListing.files[].media_type required=true type=string
+components/schemas/BundleListing.files[].name required=true type=string
+components/schemas/BundleListing.files[].path required=true type=string
+components/schemas/BundleListing.files[].size required=true type=integer
 components/schemas/BundleListing.truncated required=false type=boolean
 components/schemas/BundleLog type=object
 components/schemas/BundleLog.changes required=true type=array
 components/schemas/BundleLog.changes[] ref=Change
 components/schemas/Change type=object
-components/schemas/Change.change required=false type=string
-components/schemas/Change.changed_at required=false type=string format="date-time"
-components/schemas/Change.changed_by required=false ref=Actor
-components/schemas/Change.path required=false type=string
+components/schemas/Change.change required=true type=string
+components/schemas/Change.changed_at required=true type=string format="date-time"
+components/schemas/Change.changed_by required=true ref=Actor
+components/schemas/Change.path required=true type=string
 components/schemas/Change.title required=false type=string
 components/schemas/ContextOutline type=object
-components/schemas/ContextOutline.bytes required=false type=integer
+components/schemas/ContextOutline.bytes required=true type=integer
 components/schemas/ContextOutline.description required=false type=string
-components/schemas/ContextOutline.id required=false type=string
-components/schemas/ContextOutline.status required=false ref=Status
+components/schemas/ContextOutline.id required=true type=string
+components/schemas/ContextOutline.status required=true ref=Status
 components/schemas/ContextOutline.title required=false type=string
-components/schemas/ContextOutline.type required=false ref=Type
+components/schemas/ContextOutline.type required=true ref=Type
 components/schemas/ContextRank type=object
-components/schemas/ContextRank.id required=false type=string
-components/schemas/ContextRank.score required=false type=number
-components/schemas/ContextRank.status required=false ref=Status
+components/schemas/ContextRank.id required=true type=string
+components/schemas/ContextRank.score required=true type=number
+components/schemas/ContextRank.status required=true ref=Status
 components/schemas/ContextRank.title required=false type=string
-components/schemas/ContextRank.trust required=false
+components/schemas/ContextRank.trust required=true
 components/schemas/ContextRank.trust/allOf/0 ref=Trust
-components/schemas/ContextRank.type required=false ref=Type
+components/schemas/ContextRank.type required=true ref=Type
 components/schemas/File type=object
-components/schemas/File.created_at required=false type=string format="date-time" readOnly=true
-components/schemas/File.created_by required=false ref=Actor
-components/schemas/File.media_type required=false type=string
-components/schemas/File.name required=false type=string
-components/schemas/File.path required=false type=string
-components/schemas/File.sha256 required=false type=string
-components/schemas/File.size required=false type=integer
+components/schemas/File.created_at required=true type=string format="date-time" readOnly=true
+components/schemas/File.created_by required=true ref=Actor
+components/schemas/File.media_type required=true type=string
+components/schemas/File.name required=true type=string
+components/schemas/File.path required=true type=string
+components/schemas/File.sha256 required=true type=string
+components/schemas/File.size required=true type=integer
 components/schemas/Generated type=object
-components/schemas/Generated.at required=false type=string format="date-time"
-components/schemas/Generated.by required=false ref=Actor
+components/schemas/Generated.at required=true type=string format="date-time"
+components/schemas/Generated.by required=true ref=Actor
 components/schemas/Link type=object
-components/schemas/Link.target required=false type=string
+components/schemas/Link.target required=true type=string
 components/schemas/Link.text required=false type=string
 components/schemas/ObjectHistory type=object
 components/schemas/ObjectHistory.revisions required=true type=array
 components/schemas/ObjectHistory.revisions[] ref=Revision
 components/schemas/Observed type=object
-components/schemas/Observed.created_by required=false ref=Actor
-components/schemas/Observed.generated required=false ref=Generated
+components/schemas/Observed.created_by required=true ref=Actor
+components/schemas/Observed.generated required=true ref=Generated
 components/schemas/Observed.rejection required=false
 components/schemas/Observed.rejection/allOf/0 ref=Rejection
 components/schemas/Observed.verified required=false type=array
 components/schemas/Observed.verified[] ref=Verification
 components/schemas/QueueCounts type=object
-components/schemas/QueueCounts.drafts required=false type=integer
-components/schemas/QueueCounts.failed required=false type=integer
-components/schemas/QueueCounts.stale_after required=false type=integer
+components/schemas/QueueCounts.drafts required=true type=integer
+components/schemas/QueueCounts.failed required=true type=integer
+components/schemas/QueueCounts.stale_after required=true type=integer
 components/schemas/Rejection type=object
-components/schemas/Rejection.at required=false type=string format="date-time"
-components/schemas/Rejection.by required=false ref=Actor
+components/schemas/Rejection.at required=true type=string format="date-time"
+components/schemas/Rejection.by required=true ref=Actor
 components/schemas/Rejection.note required=false type=string
 components/schemas/Revision type=object
-components/schemas/Revision.change required=false type=string
-components/schemas/Revision.changed_at required=false type=string format="date-time"
-components/schemas/Revision.changed_by required=false ref=Actor
-components/schemas/Revision.document required=false type=string
-components/schemas/Revision.rev required=false type=integer
+components/schemas/Revision.change required=true type=string
+components/schemas/Revision.changed_at required=true type=string format="date-time"
+components/schemas/Revision.changed_by required=true ref=Actor
+components/schemas/Revision.document required=true type=string
+components/schemas/Revision.rev required=true type=integer
 components/schemas/SearchHit
 components/schemas/SearchHit/allOf/0 ref=Summary
 components/schemas/SearchHit/allOf/1 type=object
 components/schemas/SearchHit/allOf/1.files required=false type=array readOnly=true
 components/schemas/SearchHit/allOf/1.files[] ref=File
-components/schemas/SearchHit/allOf/1.score required=false type=number
+components/schemas/SearchHit/allOf/1.score required=true type=number
 components/schemas/SearchHit/allOf/1.usage required=false readOnly=true
 components/schemas/SearchHit/allOf/1.usage/allOf/0 ref=Usage
 components/schemas/Stats type=object
-components/schemas/Stats.at required=false type=string format="date-time"
-components/schemas/Stats.concepts required=false type=object
-components/schemas/Stats.concepts.created required=false type=integer
-components/schemas/Stats.concepts.rejected required=false type=integer
-components/schemas/Stats.concepts.status required=false type=object
+components/schemas/Stats.at required=true type=string format="date-time"
+components/schemas/Stats.concepts required=true type=object
+components/schemas/Stats.concepts.created required=true type=integer
+components/schemas/Stats.concepts.rejected required=true type=integer
+components/schemas/Stats.concepts.status required=true type=object
 components/schemas/Stats.concepts.status.* type=integer
-components/schemas/Stats.concepts.total required=false type=integer
-components/schemas/Stats.concepts.trust required=false type=object
+components/schemas/Stats.concepts.total required=true type=integer
+components/schemas/Stats.concepts.trust required=true type=object
 components/schemas/Stats.concepts.trust.* type=integer
-components/schemas/Stats.misses required=false type=object
-components/schemas/Stats.misses.count required=false type=integer
-components/schemas/Stats.misses.queries required=false type=array
+components/schemas/Stats.misses required=true type=object
+components/schemas/Stats.misses.count required=true type=integer
+components/schemas/Stats.misses.queries required=true type=array
 components/schemas/Stats.misses.queries[] type=object
-components/schemas/Stats.misses.queries[].count required=false type=integer
-components/schemas/Stats.misses.queries[].last_at required=false type=string format="date-time"
-components/schemas/Stats.misses.queries[].query required=false type=string
-components/schemas/Stats.misses.recording required=false type=boolean
-components/schemas/Stats.outcomes required=false type=object
-components/schemas/Stats.outcomes.failed required=false type=integer
-components/schemas/Stats.outcomes.worked required=false type=integer
-components/schemas/Stats.queues required=false
+components/schemas/Stats.misses.queries[].count required=true type=integer
+components/schemas/Stats.misses.queries[].last_at required=true type=string format="date-time"
+components/schemas/Stats.misses.queries[].query required=true type=string
+components/schemas/Stats.misses.recording required=true type=boolean
+components/schemas/Stats.outcomes required=true type=object
+components/schemas/Stats.outcomes.failed required=true type=integer
+components/schemas/Stats.outcomes.worked required=true type=integer
+components/schemas/Stats.queues required=true
 components/schemas/Stats.queues/allOf/0 ref=QueueCounts
-components/schemas/Stats.review required=false type=object
-components/schemas/Stats.review.verifications required=false type=integer
-components/schemas/Stats.window_days required=false type=integer
+components/schemas/Stats.review required=true type=object
+components/schemas/Stats.review.verifications required=true type=integer
+components/schemas/Stats.window_days required=true type=integer
 components/schemas/Status type=string enum=["draft" "stable" "deprecated"]
 components/schemas/Summary type=object
 components/schemas/Summary.content_hash required=true type=string
@@ -459,14 +459,14 @@ components/schemas/Summary.verified_at required=false type=string format="date-t
 components/schemas/Trust type=string enum=["unverified" "machine-confirmed" "human-reviewed"]
 components/schemas/Type type=string pattern="^[^\\r\\n]{1,128}$"
 components/schemas/Usage type=object
-components/schemas/Usage.failed required=false type=integer
-components/schemas/Usage.fetches required=false type=integer
+components/schemas/Usage.failed required=true type=integer
+components/schemas/Usage.fetches required=true type=integer
 components/schemas/Usage.last_used_at required=false type=string format="date-time"
-components/schemas/Usage.search_hits required=false type=integer
-components/schemas/Usage.worked required=false type=integer
+components/schemas/Usage.search_hits required=true type=integer
+components/schemas/Usage.worked required=true type=integer
 components/schemas/Verification type=object
-components/schemas/Verification.at required=false type=string format="date-time"
-components/schemas/Verification.by required=false ref=Actor
+components/schemas/Verification.at required=true type=string format="date-time"
+components/schemas/Verification.by required=true ref=Actor
 components/schemas/View type=object
 components/schemas/View.document required=true type=string
 components/schemas/View.files required=false type=array

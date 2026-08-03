@@ -53,6 +53,12 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	if strings.TrimSpace(req.Query) == "" {
 		return nil, Invalidf("invalid context request: query is required")
 	}
+	// A negative budget used to read as "no cap" — the spelling for that
+	// is 0 or omission, so a sign mistake got everything instead of being
+	// named (design doc 0064, the same shape as limit and days).
+	if req.Budget < 0 {
+		return nil, Invalidf("invalid budget %d (omit it or send 0 for no cap; a cap is positive)", req.Budget)
+	}
 	limit, err := checkedLimit(req.Limit, 5, 20)
 	if err != nil {
 		return nil, err
