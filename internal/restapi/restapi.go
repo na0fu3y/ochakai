@@ -436,7 +436,12 @@ func Handler(svc *service.Service) http.Handler {
 					// same ETag and never compared it (design doc 0064
 					// §14.2, issue #470). The spec declared the header
 					// for this GET as a whole, not just for a file.
-					if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, k.ContentHash) {
+					fresh, err := unmodified(r, k.ContentHash)
+					if err != nil {
+						writeError(w, err)
+						return
+					}
+					if fresh {
 						w.WriteHeader(http.StatusNotModified)
 						return
 					}
@@ -467,7 +472,12 @@ func Handler(svc *service.Service) http.Handler {
 				}
 				w.Header().Set("ETag", `"`+att.SHA256+`"`)
 				w.Header().Set("Cache-Control", "private, no-cache")
-				if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, att.SHA256) {
+				fresh, err := unmodified(r, att.SHA256)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				if fresh {
 					w.WriteHeader(http.StatusNotModified)
 					return
 				}
@@ -481,7 +491,12 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			w.Header().Set("ETag", `"`+att.SHA256+`"`)
 			w.Header().Set("Cache-Control", "private, no-cache")
-			if match := r.Header.Get("If-None-Match"); match != "" && strings.Contains(match, att.SHA256) {
+			fresh, err := unmodified(r, att.SHA256)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if fresh {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
@@ -581,6 +596,17 @@ func Handler(svc *service.Service) http.Handler {
 					writeError(w, err)
 					return
 				}
+				// A path that is not a concept's address names a file,
+				// which takes no precondition (design doc 0064 §20.4).
+				// A `.md` path is decided below: it reaches DeleteFile
+				// only when no concept lives there, and a precondition
+				// against a concept that is not there is already a 404.
+				if !isMarkdown {
+					if err := refusePreconditions(r); err != nil {
+						writeError(w, err)
+						return
+					}
+				}
 				err = store.ErrNotFound
 				switch {
 				case isMarkdown && purge:
@@ -630,6 +656,12 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			if isMarkdown && okf.CarriesType(body) {
 				putEntry(w, r, svc, id, body, actor, dry)
+				return
+			}
+			// Everything from here writes a file, which takes no
+			// precondition (design doc 0064 §20.4).
+			if err := refusePreconditions(r); err != nil {
+				writeError(w, err)
 				return
 			}
 			var (
@@ -1303,11 +1335,71 @@ func wantsArchive(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "application/gzip")
 }
 
-// onlyIfAbsent reports an If-None-Match "*" precondition: write only if
-// the id is free. Any other value is ignored — ochakai has no use for a
-// conditional read, and a caller that means "only if absent" says "*".
-func onlyIfAbsent(r *http.Request) bool {
-	return strings.TrimSpace(r.Header.Get("If-None-Match")) == "*"
+// onlyIfAbsent reports an If-None-Match "*" precondition on a write:
+// write only if the path is free. It is how a caller states that it is
+// not replacing anything, which a create-or-replace PUT cannot say any
+// other way (design doc 0030), and it is what `--only-if-new` and the
+// MCP write path send.
+//
+// Any other value is a 400 naming it. RFC 9110 gives an entity-tag here
+// the meaning "write only if the object is *not* this version", which is
+// not something a knowledge store has a use for, and until design doc
+// 0064 it was dropped in silence — the write went ahead unconditioned,
+// which is the outcome a caller sending a precondition least wants
+// (§20.4).
+func onlyIfAbsent(r *http.Request) (bool, error) {
+	switch v := strings.TrimSpace(r.Header.Get("If-None-Match")); v {
+	case "":
+		return false, nil
+	case "*":
+		return true, nil
+	default:
+		return false, service.Invalidf(
+			`If-None-Match on a write takes only "*", for "write only if the path is free"; a version here is not a precondition ochakai implements`)
+	}
+}
+
+// unmodified reports whether an If-None-Match validator still matches the
+// version being served, so the read can answer 304 instead of the body.
+//
+// "*" is a 400. RFC 9110 reads it on a GET as "only if nothing is here",
+// which for an object that exists means a 304 — the opposite of the
+// cache validator this header is otherwise used as, and until design doc
+// 0064 it was ignored and answered 200 with the whole body (§20.4). The
+// caller that wants to know whether something exists asks for it.
+// refusePreconditions 400s a write that carries either precondition to an
+// address holding a file rather than a concept.
+//
+// The contract declares If-Match and If-None-Match on the bundle write
+// because one address writes both kinds (design doc 0075 §4), but only a
+// concept has the version they name: optimistic locking is a concept's
+// content hash and its ledger (design doc 0030). A file write has never
+// read either header — it overwrote whatever was there, precondition or
+// not, which is the outcome a caller sending one least wants. Naming it
+// leaves the door open: conditional file writes can be implemented later
+// without breaking a caller, because nothing can depend on a request that
+// always failed (design doc 0064 §20.4).
+func refusePreconditions(r *http.Request) error {
+	for _, name := range []string{"If-Match", "If-None-Match"} {
+		if strings.TrimSpace(r.Header.Get(name)) == "" {
+			continue
+		}
+		return service.Invalidf(
+			"%s conditions a write on a concept's version (design doc 0030); a file is written at its path without one", name)
+	}
+	return nil
+}
+
+func unmodified(r *http.Request, version string) (bool, error) {
+	v := strings.TrimSpace(r.Header.Get("If-None-Match"))
+	if v == "" {
+		return false, nil
+	}
+	if v == "*" {
+		return false, service.Invalidf(
+			`If-None-Match "*" is not a precondition ochakai implements on a read; send the version a prior read returned in the ETag header`)
+	}
+	return strings.Contains(v, version), nil
 }
 
 // putEntry writes one document as the concept at id and answers with the
@@ -1337,6 +1429,11 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		writeError(w, err)
 		return
 	}
+	ifAbsent, err := onlyIfAbsent(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	var (
 		out              *domain.Knowledge
 		created, changed bool
@@ -1348,7 +1445,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		// which is the whole of what the precondition would have told
 		// the caller, without the 412 (design doc 0061).
 		out, created, changed, err = svc.Plan(r.Context(), k, actor, ifMatch)
-	case onlyIfAbsent(r):
+	case ifAbsent:
 		out, err = svc.Create(r.Context(), k, actor)
 		created, changed = true, true
 		if errors.Is(err, store.ErrAlreadyExists) {

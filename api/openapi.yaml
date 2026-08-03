@@ -959,6 +959,26 @@ paths:
               schema: { type: string }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: >
+            `If-Match` named a version at a path where no concept lives.
+            A precondition names a version, and a version the caller read
+            cannot belong to a concept that does not exist, so the
+            conditional write is an update and there is nothing to
+            update. **404 rather than the 412 RFC 9110 prescribes**, and
+            deliberately: 412 would conflate "it changed" with "it is
+            gone", which are different things to a caller deciding
+            whether to re-read or to create. Without `If-Match` this PUT
+            creates, so this response cannot arise (design doc 0064
+            §20.5).
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
         "412":
           description: >
             An If-Match or If-None-Match "*" precondition failed — the
@@ -2201,6 +2221,19 @@ components:
         cache validator — the content hash a prior read returned,
         answered with a 304 when it still matches (design doc 0064
         §14.2: a concept's GET did not compare it until now).
+
+        **Each surface takes one of those two spellings and 400s the
+        other.** A version on a PUT would mean "write only if this is
+        *not* the version", which ochakai does not implement; `*` on a
+        GET would mean "answer only if nothing is here", the opposite of
+        the validator. Both used to be dropped in silence, leaving the
+        write or the read unconditioned — the outcome a caller sending a
+        precondition least wants (design doc 0064 §20.4).
+
+        **Neither is read where the path holds a file.** The contract
+        declares both here because one address writes both kinds, but the
+        version they name is a concept's; a file write takes no
+        precondition and says so with a 400 rather than overwriting.
       schema: { type: string }
     OnBehalfOf:
       name: Ochakai-On-Behalf-Of

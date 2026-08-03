@@ -338,6 +338,25 @@ last entry.
     answers that can still change after the freeze, which is why it is
     not the RFC behaviour: nothing can depend on a request that always
     failed (§20.1).
+  - **Three more preconditions that were accepted and dropped are now
+    400s.** `If-None-Match` with a version on a PUT (RFC's meaning is
+    "write only if it is *not* this version", which a knowledge store has
+    no use for), `If-None-Match: *` on a GET (the opposite of the cache
+    validator the header is otherwise used as), and **either header on a
+    write or delete whose path holds a file** — the contract declares
+    both on this operation because one address writes concepts and files,
+    but the version they name is a concept's, and a file write had never
+    read either one. In every case the request went through
+    unconditioned, which is exactly what a caller sending a precondition
+    is trying to prevent. `ochakai put` has refused the file case
+    client-side all along; the server says so now too. Conditional file
+    writes can still be implemented later: a 400 nobody can depend on is
+    not a promise (§20.4).
+  - `PUT /api/v1/bundle/{path}` **declares its 404**: `If-Match` naming a
+    version where no concept lives has always answered 404, and the
+    contract never said so. It stays 404 rather than the 412 RFC 9110
+    prescribes, deliberately — 412 would conflate "it changed" with "it
+    is gone", and those lead a caller to different next steps (§20.5).
   - **A repeated query key is now a 400**, unless the parameter is
     declared as an array — `type`, `status`, `trust`, `tag` and `prefix`
     are the five that legitimately repeat, and `?type=Metric&type=Policy`

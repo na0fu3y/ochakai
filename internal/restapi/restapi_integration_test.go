@@ -880,6 +880,86 @@ func TestRESTIntegrationConceptConditionalGET(t *testing.T) {
 	}
 }
 
+// TestUnimplementedPreconditionsAreNamed pins the last of the silences
+// design doc 0064 §20 closed before the freeze. Each spelling below was
+// accepted and then dropped, so a caller who sent a precondition got the
+// unconditioned write or read it was trying to prevent — the shape §2
+// spent the record closing, one header along. A 400 is also the only
+// answer that can still change afterwards: nothing can come to depend on
+// a request that always failed.
+func TestUnimplementedPreconditionsAreNamed(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "precond")
+	id := typ + "/subject"
+	payload := docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "precondition subject",
+		"description": "a concept to condition writes on", "body": "body",
+	})
+	resp := putDoc(t, srv.URL, id, payload, true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	defer func() {
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	concept := srv.URL + "/api/v1/bundle/" + id + ".md"
+	file := srv.URL + "/api/v1/bundle/" + typ + "/note.txt"
+	cases := []struct {
+		name, method, url, header, value string
+	}{
+		// RFC 9110 reads "*" here as "only if a representation exists",
+		// the update-only mirror of the create-only If-None-Match "*".
+		// ochakai read it as no precondition at all, so a caller sending
+		// it to avoid creating anything created (§20.1).
+		{"If-Match * on a write", http.MethodPut, concept, "If-Match", "*"},
+		{"If-Match * on a delete", http.MethodDelete, concept, "If-Match", "*"},
+		// An entity-tag here means "write only if it is *not* this
+		// version", which a knowledge store has no use for (§20.4).
+		{"If-None-Match version on a write", http.MethodPut, concept, "If-None-Match", `"deadbeef"`},
+		// On a read "*" means "only if nothing is here", the opposite of
+		// the cache validator the header is otherwise used as (§20.4).
+		{"If-None-Match * on a read", http.MethodGet, concept, "If-None-Match", "*"},
+		// The contract declares both on this operation because one
+		// address writes concepts and files, but only a concept has the
+		// version they name; a file write read neither (§20.4).
+		{"If-Match on a file write", http.MethodPut, file, "If-Match", `"deadbeef"`},
+		{"If-None-Match on a file write", http.MethodPut, file, "If-None-Match", "*"},
+		{"If-Match on a file delete", http.MethodDelete, file, "If-Match", `"deadbeef"`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var body io.Reader
+			if c.method == http.MethodPut {
+				body = strings.NewReader(string(payload))
+			}
+			req, _ := http.NewRequest(c.method, c.url, body)
+			if c.method == http.MethodPut {
+				req.Header.Set("Content-Type", "text/markdown")
+			}
+			req.Header.Set(c.header, c.value)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("%s %s with %s: %s = %d, want 400 (body: %s)",
+					c.method, c.url, c.header, c.value, resp.StatusCode, got)
+			}
+			if !strings.Contains(string(got), c.header) {
+				t.Errorf("the 400 does not name %s: %s", c.header, got)
+			}
+		})
+	}
+}
+
 // TestRESTContextBudgetGovernsTheResponse pins the budget on the surface
 // an embedding host actually calls. The cap is a promise about what the
 // caller receives, and hits used to embed the whole entry: an entry the

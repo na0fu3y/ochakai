@@ -293,7 +293,7 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 652
+    RECORD-LINES: 708
     RECORD-CAP-FROM: 0063
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
@@ -344,20 +344,27 @@ freeze. The ceiling goes back down when the freeze's record stops being
 the one that sets it — the next-largest record is 0001 at 402, so the
 drop when it comes is a large one.
 
-**554 → 652 is the same case a second time, and it should be the last.**
-0064 landed exactly on 554, which means any further work on the freeze
-moves this line by construction; the review before the freeze ships found
-three more silences the wire would have made permanent (`If-Match: *`
-read backwards, a repeated scalar query key answered in two directions,
-and `change` frozen as a closed enum), plus the fingerprint's own blind
-spot — it was reading no schema constraint at all, so the `pattern`
+**554 → 708 is the same case again, and the batch is why.** 0064 landed
+exactly on 554, so any further work on the freeze moves this line by
+construction. The review before the release found eight more things the
+wire would have made permanent, and every one is the same shape: not a
+missing feature, but **a place where the contract and the code disagreed
+in silence.** Five were preconditions and query keys that were accepted
+and then dropped, so a caller who sent one got the unconditioned write it
+was trying to prevent; one was `change` frozen as a closed enum over a
+vocabulary that had already moved twice; and one was the fingerprint's
+own blind spot — it read no schema constraint at all, so the `pattern`
 §18 had just written down as unwidenable was about to freeze unchecked.
-Each is again one wire decision the freeze makes irreversible. What is
-worth noticing is *why* they were found late: none of them was a missing
-feature, and all four were places where the contract and the code
-disagreed quietly. **A batch record grows until the batch closes, and
-this one closes when the release ships** — after that, `/api/v1` cannot
-move, so neither can this number for this reason.
+
+That last one is the part worth keeping. **The check that guards the
+freeze had a gap the freeze's own record had already described**, which is
+the argument for reading an invariant from outside rather than trusting
+that a record and a test agree ([0035](docs/design/0035-verifiability.md)).
+
+**A batch record grows until the batch closes, and this one closes when
+the release ships** — after that `/api/v1` cannot move, so neither can
+this number for this reason. If it moves again before then, the thing to
+ask is not whether the record is too long but whether the freeze is ready.
 
 ### What a superseded record keeps
 

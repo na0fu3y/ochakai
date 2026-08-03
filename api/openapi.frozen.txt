@@ -267,6 +267,10 @@ PUT /api/v1/bundle/{path} response 201 header Ochakai-Note ref=Note
 PUT /api/v1/bundle/{path} response 201 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 400 ref=Error
 PUT /api/v1/bundle/{path} response 403 ref=Forbidden
+PUT /api/v1/bundle/{path} response 404
+PUT /api/v1/bundle/{path} response 404 content application/json type=object
+PUT /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 405 ref=Error
 PUT /api/v1/bundle/{path} response 409
 PUT /api/v1/bundle/{path} response 409 content application/json type=object
