@@ -898,17 +898,17 @@ function viewExplore() {
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Verification-age feed — oldest verified first,
            the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
         : explore.failedFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — entries whose failure reports
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — concepts whose failure reports
            (report_outcome failed) are still unanswered, worst first. Open one, re-read it, and verify it to take it
            out of the feed. Uncheck <strong>reported wrong</strong> to search.</div>`
         : explore.source
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Entries citing
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Concepts citing
            <code>${esc(explore.source)}</code> — everything that derives from this material.
            <a href="#/search">Back to search</a>.</div>`
         : explore.expiredFeed
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Stale feed — concepts past the <code>stale_after</code>
            their author declared, most overdue first. Verifying does <em>not</em> clear this one: the date is the writer's
-           claim, so re-check the entry and then edit it to declare a new expiry (or remove it).
+           claim, so re-check the concept and then edit it to declare a new expiry (or remove it).
            Uncheck <strong>stale</strong> to search.</div>`
         : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
                   value="${esc(explore.q)}" autocomplete="off">`}
@@ -1074,12 +1074,12 @@ async function runSearch(append = false) {
         barely related, probably noise</summary>${weak.map(hitCard).join('')}</details>`;
     }
     if (explore.cursor) {
-      html += `<div class="truncation-note">Showing ${hits.length} entries ·
+      html += `<div class="truncation-note">Showing ${hits.length} concepts ·
            <a href="#" id="feed-more">load more</a></div>`;
     } else if (!isFeed && hits.length >= limit) {
       // A search does not page: 50 is the whole contract, and the way on
       // is a narrower question rather than a next page (0050 §2.2).
-      html += `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'entries'}
+      html += `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'concepts'}
            (server cap) — narrow with filters or a more specific query.</div>`;
     }
     out.innerHTML = scopeNote + html;
@@ -1381,7 +1381,7 @@ async function moveEntry(from, to) {
 
 function dirCard(prefix, d) {
   const href = dirHash(prefix + d.name);
-  const noun = d.count === 1 ? 'entry' : 'entries';
+  const noun = d.count === 1 ? 'concept' : 'concepts';
   return `<article class="card" data-href="${href}">
     <div class="head">
       <span class="type-ico">📁</span>
@@ -1443,13 +1443,13 @@ function viewDir(rawPrefix) {
       <a class="btn small write-only" href="${newHref}" title="Create a concept in ${esc(prefix) || 'the root'}">＋ New concept here</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;
-  loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the entries in them.');
+  loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the concepts in them.');
 }
 
 function viewHome() {
   view.innerHTML = `
     <div class="section-title" style="font-size:1.5rem">🍵 ochakai</div>
-    <p style="color:var(--muted);max-width:42rem">Knowledge is a folder tree — an entry's id is its path
+    <p style="color:var(--muted);max-width:42rem">Knowledge is a folder tree — a concept's id is its path
     (<code>queries/sales/monthly-revenue</code>), so the tree in the sidebar is the way in: place together
     what should be read together, and browse it like documentation. Search when you don't know where to look.</p>
     <div class="searchbox" style="max-width:36rem">
@@ -1469,7 +1469,7 @@ function viewHome() {
   $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
   $('#home-export').addEventListener('click', downloadBundle);
   if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
-  loadDirIndex($('#home-index'), '', 'No knowledge yet — create the first entry.');
+  loadDirIndex($('#home-index'), '', 'No knowledge yet — create the first concept.');
 }
 
 /* ============================== detail ============================== */
@@ -1565,7 +1565,7 @@ async function viewDetail(id) {
           <div class="menu-body">
             <button id="act-verify" title="${isVerified(entry)
               ? 'Checked again and still right — appends a verification, which is what clears the review feeds'
-              : 'Confirm this entry — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
+              : 'Confirm this concept — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
             ${entry.rejected
               ? `<button id="act-withdraw" title="Withdraw the ruling and return the concept to the ordinary pool">Withdraw rejection</button>`
               : `<button class="danger" id="act-reject" title="Reviewed and not accepted — hidden from search, with the reason kept for the next agent">Reject…</button>`}
@@ -1586,8 +1586,8 @@ async function viewDetail(id) {
         <button class="btn small primary" id="move-go">Move</button>
         <button class="btn small" id="move-cancel">Cancel</button>
       </div>
-      <p class="provenance" style="margin-top:.3rem">The entry's new path. Inbound references are rewritten;
-      revisions, usage, and files follow the entry.</p>
+      <p class="provenance" style="margin-top:.3rem">The concept's new path. Inbound references are rewritten;
+      revisions, usage, and files follow the concept.</p>
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     ${staleNote}
@@ -1663,7 +1663,7 @@ async function viewDetail(id) {
     // the duplication document-first exists to remove, and the reason
     // design doc 0044 puts the format itself in front of the reader.
     document: () => `
-      <p class="provenance" style="margin:0 0 .8rem">The entry as ochakai stores it —
+      <p class="provenance" style="margin:0 0 .8rem">The concept as ochakai stores it —
       OKF frontmatter and markdown. This is the text Edit opens, and the text an export writes.</p>
       <pre class="mono">${esc(document_)}</pre>`,
     // Read-only: links come from the body's markdown links (design doc
@@ -2001,10 +2001,10 @@ function viewReview() {
     often the draft already surfaces when people search. Verify what's true, reject what isn't (the reason is recorded as
     status_note so agents stop re-proposing it). Never-used drafts sink to the bottom; toggle <em>stale</em> to triage them.</p>
     <p style="color:var(--muted);font-size:.9rem;max-width:48rem">Verified knowledge has two queues of its own:
-    <a href="#/search/reported-wrong">reported wrong</a> — entries whose failure reports are unanswered — and
-    <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying an entry empties it from both.
-    A third, <a href="#/search/stale">stale</a>, lists entries past the expiry their author declared — that one is cleared by
-    editing the entry, not by verifying.</p>
+    <a href="#/search/reported-wrong">reported wrong</a> — concepts whose failure reports are unanswered — and
+    <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying a concept empties it from both.
+    A third, <a href="#/search/stale">stale</a>, lists concepts past the expiry their author declared — that one is cleared by
+    editing the concept, not by verifying.</p>
     <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
@@ -2213,12 +2213,12 @@ async function viewEditor(id, prefix = '') {
                  placeholder="sales/monthly-revenue"
                  ${editing ? 'disabled' : 'required'}>
           <div class="hint">${editing
-            ? 'Where the entry lives (move it from the entry page).'
-            : 'The full path, directories separated by “/”. The last segment is the entry’s name, e.g. 売上 or monthly-revenue; place together what should be read together.'}</div>
+            ? 'Where the concept lives (move it from the concept page).'
+            : 'The full path, directories separated by “/”. The last segment is the concept’s name, e.g. 売上 or monthly-revenue; place together what should be read together.'}</div>
         </div>`;
 
   view.innerHTML = `
-    <div class="section-title">${editing ? `Edit ${esc(entryID)}` : 'New knowledge entry'}</div>
+    <div class="section-title">${editing ? `Edit ${esc(entryID)}` : 'New knowledge concept'}</div>
     <form class="form" id="editor">
       <div class="row">
         ${idField}
@@ -2234,7 +2234,7 @@ async function viewEditor(id, prefix = '') {
         <label class="top" for="e-doc">Document</label>
         <textarea id="e-doc" rows="26" class="mono" spellcheck="false" required>${esc(doc)}</textarea>
         <div class="hint">OKF frontmatter between <code>---</code> lines, then markdown.
-        Link to another entry with a markdown link to its path — <code>[revenue](/metrics/revenue.md)</code> —
+        Link to another concept with a markdown link to its path — <code>[revenue](/metrics/revenue.md)</code> —
         and it becomes a link both ways. Keys ochakai does not define are kept as written.
         The keys the server owns (<code>generated</code>, <code>verified</code>, <code>created_by</code>)
         are not yours to set and are ignored if present.</div>
