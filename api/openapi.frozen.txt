@@ -1,0 +1,444 @@
+# The frozen REST wire, read out of api/openapi.yaml by
+# cmd/ochakai/frozenwire_test.go. Generated — do not edit by hand:
+#
+#	go test ./cmd/ochakai -run TestFrozenWireHasNotMoved -update
+#
+# One line per thing a client can observe. Prose (description, summary,
+# example, examples) is left out on purpose: documentation stays free to
+# improve after the freeze. Moving any line below is a change to a contract
+# design doc 0064 froze at /api/v1, and §11 says the only reason left is a
+# security defect.
+
+DELETE /api/v1/bundle/{path}
+DELETE /api/v1/bundle/{path} header If-Match ref=IfMatch
+DELETE /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
+DELETE /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
+DELETE /api/v1/bundle/{path} query purge required=false type=boolean
+DELETE /api/v1/bundle/{path} response 204
+DELETE /api/v1/bundle/{path} response 204 header Ochakai-Read-Only ref=ReadOnly
+DELETE /api/v1/bundle/{path} response 400 ref=Error
+DELETE /api/v1/bundle/{path} response 403 ref=Forbidden
+DELETE /api/v1/bundle/{path} response 404
+DELETE /api/v1/bundle/{path} response 404 content application/json type=object
+DELETE /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
+DELETE /api/v1/bundle/{path} response 405 ref=Error
+DELETE /api/v1/bundle/{path} response 409
+DELETE /api/v1/bundle/{path} response 409 content application/json type=object
+DELETE /api/v1/bundle/{path} response 409 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
+DELETE /api/v1/bundle/{path} response 412
+DELETE /api/v1/bundle/{path} response 412 content application/json type=object
+DELETE /api/v1/bundle/{path} response 412 content application/json.error required=false type=string
+DELETE /api/v1/bundle/{path} response 500 ref=Error
+GET /api/v1/bundle/{path}
+GET /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
+GET /api/v1/bundle/{path} path path required=true type=string
+GET /api/v1/bundle/{path} query files required=false type=boolean
+GET /api/v1/bundle/{path} query history required=false type=string
+GET /api/v1/bundle/{path} query limit required=false type=integer
+GET /api/v1/bundle/{path} response 200
+GET /api/v1/bundle/{path} response 200 content */* type=string
+GET /api/v1/bundle/{path} response 200 content application/gzip type=string
+GET /api/v1/bundle/{path} response 200 content application/json
+GET /api/v1/bundle/{path} response 200 content application/json/anyOf/0 ref=View
+GET /api/v1/bundle/{path} response 200 content application/json/anyOf/1 ref=BundleListing
+GET /api/v1/bundle/{path} response 200 content application/json/anyOf/2 ref=BundleLog
+GET /api/v1/bundle/{path} response 200 content application/json/anyOf/3 ref=ObjectHistory
+GET /api/v1/bundle/{path} response 200 content application/json/anyOf/4 ref=File
+GET /api/v1/bundle/{path} response 200 content text/markdown type=string
+GET /api/v1/bundle/{path} response 200 header Content-Disposition
+GET /api/v1/bundle/{path} response 200 header ETag ref=ETag
+GET /api/v1/bundle/{path} response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/bundle/{path} response 304
+GET /api/v1/bundle/{path} response 304 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/bundle/{path} response 400 ref=Error
+GET /api/v1/bundle/{path} response 403 ref=Forbidden
+GET /api/v1/bundle/{path} response 404
+GET /api/v1/bundle/{path} response 404 content application/json type=object
+GET /api/v1/bundle/{path} response 404 content application/json.error required=false type=string
+GET /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/bundle/{path} response 405 ref=Error
+GET /api/v1/bundle/{path} response 409
+GET /api/v1/bundle/{path} response 409 content application/json type=object
+GET /api/v1/bundle/{path} response 409 content application/json.error required=false type=string
+GET /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/bundle/{path} response 500 ref=Error
+GET /api/v1/bundle/{path} response 501
+GET /api/v1/bundle/{path} response 501 content application/json type=object
+GET /api/v1/bundle/{path} response 501 content application/json.error required=false type=string
+GET /api/v1/bundle/{path} response 501 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/context
+GET /api/v1/context query budget required=false type=integer
+GET /api/v1/context query fm.{key} required=false type=string
+GET /api/v1/context query limit required=false type=integer
+GET /api/v1/context query prefix required=false type=array
+GET /api/v1/context query prefix[] type=string
+GET /api/v1/context query q required=true type=string
+GET /api/v1/context query status required=false type=array
+GET /api/v1/context query status[] ref=Status
+GET /api/v1/context query tag required=false type=array
+GET /api/v1/context query tag[] type=string
+GET /api/v1/context query trust required=false type=array
+GET /api/v1/context query trust[] ref=Trust
+GET /api/v1/context query type required=false type=array
+GET /api/v1/context query type[] ref=Type
+GET /api/v1/context response 200
+GET /api/v1/context response 200 content application/json type=object
+GET /api/v1/context response 200 content application/json.concepts required=false type=array
+GET /api/v1/context response 200 content application/json.concepts[] ref=View
+GET /api/v1/context response 200 content application/json.hits required=false type=array
+GET /api/v1/context response 200 content application/json.hits[] ref=ContextRank
+GET /api/v1/context response 200 content application/json.outline required=false type=array
+GET /api/v1/context response 200 content application/json.outline[] ref=ContextOutline
+GET /api/v1/context response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/context response 400 ref=Error
+GET /api/v1/context response 403 ref=Forbidden
+GET /api/v1/context response 405 ref=Error
+GET /api/v1/context response 500 ref=Error
+GET /api/v1/search
+GET /api/v1/search query cursor required=false type=string
+GET /api/v1/search query fm.{key} required=false type=string
+GET /api/v1/search query limit required=false type=integer
+GET /api/v1/search query links_to required=false type=string
+GET /api/v1/search query prefix required=false type=array
+GET /api/v1/search query prefix[] type=string
+GET /api/v1/search query q required=false type=string
+GET /api/v1/search query rejected required=false type=boolean
+GET /api/v1/search query sort required=false type=string enum=["verified_at" "usage" "failed" "stale_after"]
+GET /api/v1/search query source required=false type=string
+GET /api/v1/search query status required=false type=array
+GET /api/v1/search query status[] ref=Status
+GET /api/v1/search query tag required=false type=array
+GET /api/v1/search query tag[] type=string
+GET /api/v1/search query trust required=false type=array
+GET /api/v1/search query trust[] ref=Trust
+GET /api/v1/search query type required=false type=array
+GET /api/v1/search query type[] ref=Type
+GET /api/v1/search response 200
+GET /api/v1/search response 200 content application/json type=object
+GET /api/v1/search response 200 content application/json.cursor required=false type=string
+GET /api/v1/search response 200 content application/json.hits required=false type=array
+GET /api/v1/search response 200 content application/json.hits[] ref=SearchHit
+GET /api/v1/search response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/search response 400
+GET /api/v1/search response 400 content application/json type=object
+GET /api/v1/search response 400 content application/json.error required=false type=string
+GET /api/v1/search response 400 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/search response 403 ref=Forbidden
+GET /api/v1/search response 405 ref=Error
+GET /api/v1/search response 500 ref=Error
+GET /api/v1/stats
+GET /api/v1/stats query days required=false type=integer
+GET /api/v1/stats query prefix required=false type=array
+GET /api/v1/stats query prefix[] type=string
+GET /api/v1/stats response 200
+GET /api/v1/stats response 200 content application/json ref=Stats
+GET /api/v1/stats response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/stats response 400 ref=Error
+GET /api/v1/stats response 403 ref=Forbidden
+GET /api/v1/stats response 405 ref=Error
+GET /api/v1/stats response 500 ref=Error
+GET /api/v1/usage/{id}
+GET /api/v1/usage/{id} path id required=true type=string
+GET /api/v1/usage/{id} response 200
+GET /api/v1/usage/{id} response 200 content application/json ref=Usage
+GET /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/usage/{id} response 403 ref=Forbidden
+GET /api/v1/usage/{id} response 404 ref=Error
+GET /api/v1/usage/{id} response 405 ref=Error
+GET /api/v1/usage/{id} response 500 ref=Error
+POST /api/v1/move
+POST /api/v1/move body application/json required=true type=object
+POST /api/v1/move body application/json.from required=true type=string
+POST /api/v1/move body application/json.to required=true type=string
+POST /api/v1/move header Ochakai-On-Behalf-Of ref=OnBehalfOf
+POST /api/v1/move header Ochakai-Producer ref=Producer
+POST /api/v1/move response 200
+POST /api/v1/move response 200 content application/json ref=View
+POST /api/v1/move response 200 header ETag ref=ETag
+POST /api/v1/move response 200 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/move response 400 ref=Error
+POST /api/v1/move response 403 ref=Forbidden
+POST /api/v1/move response 404 ref=Error
+POST /api/v1/move response 405 ref=Error
+POST /api/v1/move response 409 ref=Error
+POST /api/v1/move response 500 ref=Error
+POST /api/v1/reembed
+POST /api/v1/reembed query cursor required=false type=string
+POST /api/v1/reembed query limit required=false type=integer
+POST /api/v1/reembed response 200
+POST /api/v1/reembed response 200 content application/json type=object
+POST /api/v1/reembed response 200 content application/json.concepts required=false type=integer
+POST /api/v1/reembed response 200 content application/json.cursor required=false type=string
+POST /api/v1/reembed response 200 content application/json.failed required=false type=integer
+POST /api/v1/reembed response 200 content application/json.files required=false type=integer
+POST /api/v1/reembed response 200 content application/json.missing required=false type=integer
+POST /api/v1/reembed response 200 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/reembed response 400 ref=Error
+POST /api/v1/reembed response 403 ref=Forbidden
+POST /api/v1/reembed response 405 ref=Error
+POST /api/v1/reembed response 500 ref=Error
+POST /api/v1/reembed response 501 ref=Error
+POST /api/v1/review/{id}
+POST /api/v1/review/{id} body application/json required=true type=object
+POST /api/v1/review/{id} body application/json.note required=false type=string
+POST /api/v1/review/{id} body application/json.ruling required=true type=string enum=["verified" "rejected" "withdrawn"]
+POST /api/v1/review/{id} header Ochakai-On-Behalf-Of ref=OnBehalfOf
+POST /api/v1/review/{id} header Ochakai-Producer ref=Producer
+POST /api/v1/review/{id} path id required=true type=string
+POST /api/v1/review/{id} response 200
+POST /api/v1/review/{id} response 200 content application/json ref=View
+POST /api/v1/review/{id} response 200 header ETag ref=ETag
+POST /api/v1/review/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/review/{id} response 400
+POST /api/v1/review/{id} response 400 content application/json type=object
+POST /api/v1/review/{id} response 400 content application/json.error required=false type=string
+POST /api/v1/review/{id} response 400 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/review/{id} response 403 ref=Forbidden
+POST /api/v1/review/{id} response 404 ref=Error
+POST /api/v1/review/{id} response 405 ref=Error
+POST /api/v1/review/{id} response 409
+POST /api/v1/review/{id} response 409 content application/json type=object
+POST /api/v1/review/{id} response 409 content application/json.error required=false type=string
+POST /api/v1/review/{id} response 500 ref=Error
+POST /api/v1/usage/{id}
+POST /api/v1/usage/{id} body application/json required=true type=object
+POST /api/v1/usage/{id} body application/json.note required=false type=string
+POST /api/v1/usage/{id} body application/json.outcome required=true type=string enum=["worked" "failed"]
+POST /api/v1/usage/{id} header Ochakai-On-Behalf-Of ref=OnBehalfOf
+POST /api/v1/usage/{id} header Ochakai-Producer ref=Producer
+POST /api/v1/usage/{id} path id required=true type=string
+POST /api/v1/usage/{id} response 200
+POST /api/v1/usage/{id} response 200 content application/json ref=Usage
+POST /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/usage/{id} response 400 ref=Error
+POST /api/v1/usage/{id} response 403 ref=Forbidden
+POST /api/v1/usage/{id} response 404 ref=Error
+POST /api/v1/usage/{id} response 405 ref=Error
+POST /api/v1/usage/{id} response 500 ref=Error
+PUT /api/v1/bundle/{path}
+PUT /api/v1/bundle/{path} header If-Match ref=IfMatch
+PUT /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
+PUT /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
+PUT /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
+PUT /api/v1/bundle/{path} query dry_run required=false type=boolean
+PUT /api/v1/bundle/{path} response 200
+PUT /api/v1/bundle/{path} response 200 content application/json
+PUT /api/v1/bundle/{path} response 200 content application/json/anyOf/0 ref=View
+PUT /api/v1/bundle/{path} response 200 content application/json/anyOf/1 ref=File
+PUT /api/v1/bundle/{path} response 200 content text/markdown type=string
+PUT /api/v1/bundle/{path} response 200 header ETag ref=ETag
+PUT /api/v1/bundle/{path} response 200 header Ochakai-Note ref=Note
+PUT /api/v1/bundle/{path} response 200 header Ochakai-Plan ref=Plan
+PUT /api/v1/bundle/{path} response 200 header Ochakai-Read-Only ref=ReadOnly
+PUT /api/v1/bundle/{path} response 200 header Ochakai-Unchanged
+PUT /api/v1/bundle/{path} response 201
+PUT /api/v1/bundle/{path} response 201 content application/json
+PUT /api/v1/bundle/{path} response 201 content application/json/anyOf/0 ref=View
+PUT /api/v1/bundle/{path} response 201 content application/json/anyOf/1 ref=File
+PUT /api/v1/bundle/{path} response 201 content text/markdown type=string
+PUT /api/v1/bundle/{path} response 201 header ETag ref=ETag
+PUT /api/v1/bundle/{path} response 201 header Ochakai-Note ref=Note
+PUT /api/v1/bundle/{path} response 201 header Ochakai-Read-Only ref=ReadOnly
+PUT /api/v1/bundle/{path} response 400 ref=Error
+PUT /api/v1/bundle/{path} response 403 ref=Forbidden
+PUT /api/v1/bundle/{path} response 405 ref=Error
+PUT /api/v1/bundle/{path} response 409
+PUT /api/v1/bundle/{path} response 409 content application/json type=object
+PUT /api/v1/bundle/{path} response 409 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
+PUT /api/v1/bundle/{path} response 412
+PUT /api/v1/bundle/{path} response 412 content application/json type=object
+PUT /api/v1/bundle/{path} response 412 content application/json.error required=false type=string
+PUT /api/v1/bundle/{path} response 413 ref=Error
+PUT /api/v1/bundle/{path} response 415 ref=Error
+PUT /api/v1/bundle/{path} response 500 ref=Error
+PUT /api/v1/bundle/{path} response 501 ref=Error
+components/headers/ETag
+components/headers/ETag schema type=string
+components/headers/Note
+components/headers/Note schema type=string
+components/headers/Plan
+components/headers/Plan schema type=string enum=["created" "updated" "unchanged"]
+components/headers/ReadOnly
+components/headers/ReadOnly schema type=string enum=["true"]
+components/parameters/IfMatch name=If-Match in=header required=false
+components/parameters/IfMatch schema type=string
+components/parameters/IfNoneMatch name=If-None-Match in=header required=false
+components/parameters/IfNoneMatch schema type=string
+components/parameters/OnBehalfOf name=Ochakai-On-Behalf-Of in=header required=false
+components/parameters/OnBehalfOf schema type=string
+components/parameters/Producer name=Ochakai-Producer in=header required=false
+components/parameters/Producer schema type=string
+components/responses/Error
+components/responses/Error content application/json type=object
+components/responses/Error content application/json.error required=false type=string
+components/responses/Error header Ochakai-Read-Only ref=ReadOnly
+components/responses/Forbidden
+components/responses/Forbidden content application/json type=object
+components/responses/Forbidden content application/json.error required=false type=string
+components/responses/Forbidden header Ochakai-Read-Only ref=ReadOnly
+components/schemas/Actor type=object
+components/schemas/Actor.kind required=false type=string enum=["human" "process"]
+components/schemas/Actor.name required=false type=string
+components/schemas/Actor.producer required=false type=string
+components/schemas/Actor.via required=false type=string
+components/schemas/BundleListing type=object
+components/schemas/BundleListing.concepts required=false type=array
+components/schemas/BundleListing.concepts[] type=object
+components/schemas/BundleListing.concepts[].description required=false type=string
+components/schemas/BundleListing.concepts[].id required=false type=string
+components/schemas/BundleListing.concepts[].status required=false ref=Status
+components/schemas/BundleListing.concepts[].title required=false type=string
+components/schemas/BundleListing.concepts[].type required=false ref=Type
+components/schemas/BundleListing.concepts[].updated_at required=false type=string
+components/schemas/BundleListing.dirs required=false type=array
+components/schemas/BundleListing.dirs[] type=object
+components/schemas/BundleListing.dirs[].count required=false type=integer
+components/schemas/BundleListing.dirs[].name required=false type=string
+components/schemas/BundleListing.files required=false type=array
+components/schemas/BundleListing.files[] type=object
+components/schemas/BundleListing.files[].created_at required=false type=string
+components/schemas/BundleListing.files[].media_type required=false type=string
+components/schemas/BundleListing.files[].name required=false type=string
+components/schemas/BundleListing.files[].path required=false type=string
+components/schemas/BundleListing.files[].size required=false type=integer
+components/schemas/BundleListing.truncated required=false type=boolean
+components/schemas/BundleLog type=object
+components/schemas/BundleLog.changes required=true type=array
+components/schemas/BundleLog.changes[] ref=Change
+components/schemas/Change type=object
+components/schemas/Change.change required=false type=string enum=["create" "update" "verify" "reject" "withdraw" "delete" "move" "add_file" "remove_file"]
+components/schemas/Change.changed_at required=false type=string
+components/schemas/Change.changed_by required=false ref=Actor
+components/schemas/Change.path required=false type=string
+components/schemas/Change.title required=false type=string
+components/schemas/ContextOutline type=object
+components/schemas/ContextOutline.bytes required=false type=integer
+components/schemas/ContextOutline.description required=false type=string
+components/schemas/ContextOutline.id required=false type=string
+components/schemas/ContextOutline.status required=false ref=Status
+components/schemas/ContextOutline.title required=false type=string
+components/schemas/ContextOutline.type required=false ref=Type
+components/schemas/ContextRank type=object
+components/schemas/ContextRank.id required=false type=string
+components/schemas/ContextRank.score required=false type=number
+components/schemas/ContextRank.status required=false ref=Status
+components/schemas/ContextRank.title required=false type=string
+components/schemas/ContextRank.trust required=false
+components/schemas/ContextRank.trust/allOf/0 ref=Trust
+components/schemas/ContextRank.type required=false ref=Type
+components/schemas/File type=object
+components/schemas/File.created_at required=false type=string
+components/schemas/File.created_by required=false ref=Actor
+components/schemas/File.media_type required=false type=string
+components/schemas/File.name required=false type=string
+components/schemas/File.path required=false type=string
+components/schemas/File.sha256 required=false type=string
+components/schemas/File.size required=false type=integer
+components/schemas/Generated type=object
+components/schemas/Generated.at required=false type=string
+components/schemas/Generated.by required=false ref=Actor
+components/schemas/Link type=object
+components/schemas/Link.target required=false type=string
+components/schemas/Link.text required=false type=string
+components/schemas/ObjectHistory type=object
+components/schemas/ObjectHistory.revisions required=true type=array
+components/schemas/ObjectHistory.revisions[] ref=Revision
+components/schemas/Observed type=object
+components/schemas/Observed.created_by required=false ref=Actor
+components/schemas/Observed.generated required=false ref=Generated
+components/schemas/Observed.rejection required=false
+components/schemas/Observed.rejection/allOf/0 ref=Rejection
+components/schemas/Observed.verified required=false type=array
+components/schemas/Observed.verified[] ref=Verification
+components/schemas/QueueCounts type=object
+components/schemas/QueueCounts.drafts required=false type=integer
+components/schemas/QueueCounts.failed required=false type=integer
+components/schemas/QueueCounts.stale_after required=false type=integer
+components/schemas/Rejection type=object
+components/schemas/Rejection.at required=false type=string
+components/schemas/Rejection.by required=false ref=Actor
+components/schemas/Rejection.note required=false type=string
+components/schemas/Revision type=object
+components/schemas/Revision.change required=false type=string enum=["create" "update" "verify" "reject" "withdraw" "delete" "move" "add_file" "remove_file"]
+components/schemas/Revision.changed_at required=false type=string
+components/schemas/Revision.changed_by required=false ref=Actor
+components/schemas/Revision.document required=false type=string
+components/schemas/Revision.rev required=false type=integer
+components/schemas/SearchHit
+components/schemas/SearchHit/allOf/0 ref=Summary
+components/schemas/SearchHit/allOf/1 type=object
+components/schemas/SearchHit/allOf/1.files required=false type=array
+components/schemas/SearchHit/allOf/1.files[] ref=File
+components/schemas/SearchHit/allOf/1.score required=false type=number
+components/schemas/SearchHit/allOf/1.usage required=false
+components/schemas/SearchHit/allOf/1.usage/allOf/0 ref=Usage
+components/schemas/Stats type=object
+components/schemas/Stats.at required=false type=string
+components/schemas/Stats.concepts required=false type=object
+components/schemas/Stats.concepts.created required=false type=integer
+components/schemas/Stats.concepts.rejected required=false type=integer
+components/schemas/Stats.concepts.status required=false type=object
+components/schemas/Stats.concepts.status.* type=integer
+components/schemas/Stats.concepts.total required=false type=integer
+components/schemas/Stats.concepts.trust required=false type=object
+components/schemas/Stats.concepts.trust.* type=integer
+components/schemas/Stats.misses required=false type=object
+components/schemas/Stats.misses.count required=false type=integer
+components/schemas/Stats.misses.queries required=false type=array
+components/schemas/Stats.misses.queries[] type=object
+components/schemas/Stats.misses.queries[].count required=false type=integer
+components/schemas/Stats.misses.queries[].last_at required=false type=string
+components/schemas/Stats.misses.queries[].query required=false type=string
+components/schemas/Stats.misses.recording required=false type=boolean
+components/schemas/Stats.outcomes required=false type=object
+components/schemas/Stats.outcomes.failed required=false type=integer
+components/schemas/Stats.outcomes.worked required=false type=integer
+components/schemas/Stats.queues required=false
+components/schemas/Stats.queues/allOf/0 ref=QueueCounts
+components/schemas/Stats.review required=false type=object
+components/schemas/Stats.review.verifications required=false type=integer
+components/schemas/Stats.window_days required=false type=integer
+components/schemas/Status type=string enum=["draft" "stable" "deprecated"]
+components/schemas/Summary type=object
+components/schemas/Summary.content_hash required=true type=string
+components/schemas/Summary.created_at required=true type=string
+components/schemas/Summary.description required=false type=string
+components/schemas/Summary.id required=true type=string
+components/schemas/Summary.links required=false type=array
+components/schemas/Summary.links[] ref=Link
+components/schemas/Summary.rejected required=true type=boolean
+components/schemas/Summary.resource required=false type=string
+components/schemas/Summary.stale_after required=false type=string
+components/schemas/Summary.status required=true ref=Status
+components/schemas/Summary.tags required=false type=array
+components/schemas/Summary.tags[] type=string
+components/schemas/Summary.title required=true type=string
+components/schemas/Summary.trust required=true
+components/schemas/Summary.trust/allOf/0 ref=Trust
+components/schemas/Summary.type required=true ref=Type
+components/schemas/Summary.updated_at required=true type=string
+components/schemas/Summary.verified_at required=false type=string
+components/schemas/Trust type=string enum=["unverified" "machine-confirmed" "human-reviewed"]
+components/schemas/Type type=string
+components/schemas/Usage type=object
+components/schemas/Usage.failed required=false type=integer
+components/schemas/Usage.fetches required=false type=integer
+components/schemas/Usage.last_used_at required=false type=string
+components/schemas/Usage.search_hits required=false type=integer
+components/schemas/Usage.worked required=false type=integer
+components/schemas/Verification type=object
+components/schemas/Verification.at required=false type=string
+components/schemas/Verification.by required=false ref=Actor
+components/schemas/View type=object
+components/schemas/View.document required=true type=string
+components/schemas/View.files required=false type=array
+components/schemas/View.files[] ref=File
+components/schemas/View.id required=true type=string
+components/schemas/View.observed required=true ref=Observed
+components/schemas/View.summary required=true ref=Summary
+components/securitySchemes/GoogleIDToken type=http scheme=bearer format=JWT
+security (anonymous)
+security GoogleIDToken
