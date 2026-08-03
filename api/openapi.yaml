@@ -2672,6 +2672,19 @@ components:
         ER diagram, a seeds file (design doc 0075 §1).
         Metadata travels with the concept; bytes are a separate,
         deliberate fetch so agent context is never flooded with base64.
+
+        **This is ochakai's, not OKF's.** SPEC v0.2 is markdown-centric:
+        §3 calls a bundle "a directory tree of markdown files", §11's
+        conformance clauses speak only of `.md` files, and non-markdown
+        content is neither permitted nor forbidden — it is not addressed,
+        and the spec gives it no name, no metadata fields and no rule for
+        a consumer. So there is no OKF vocabulary this schema could be
+        aligned to, and the words below are ochakai's own. Note that
+        SPEC's `resource` (§4.1) is a different thing entirely — the
+        external asset a concept *describes*, not a file stored beside
+        it. Bundles ochakai writes stay readable by an OKF consumer: the
+        concepts are conformant and these files are ordinary files in the
+        tree, which the spec has nothing to say about either way.
       properties:
         name: { type: string, description: Filename, unique within the concept. }
         media_type:
