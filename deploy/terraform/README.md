@@ -37,7 +37,7 @@ private IP(§2b)、GCS attachments(§4b)、IAP 越しの web UI(§5b)。
 **Secret-zero** はこのプロジェクトの中心的な設計判断であって細部ではない。
 理由は
 [デプロイガイド](../cloudrun/README.md#3-deploy-cloud-run-dedicated-identity-passwordless-org-restricted)
-にある(設計ドキュメント 0002、0003)。
+にある(設計ドキュメント 0065、0003)。
 
 この先を読む前に知っておくべき帰結が二つある:
 
@@ -58,7 +58,7 @@ private IP(§2b)、GCS attachments(§4b)、IAP 越しの web UI(§5b)。
 同じ規則が、Domain Restricted Sharing の org policy とデプロイの互換性を保
 っている。
 
-例外は `public_read_only`(ガイド §5d、設計ドキュメント 0042)で、これ自体
+例外は `public_read_only`(ガイド §5d、設計ドキュメント 0066 §3)で、これ自体
 が `allUsers` を付与する。変数を二つに分けず一つにしているのは、public が
 安全なのはそれに伴うものと組み合わさったときだけだからである: デプロイはす
 べての書き込みを拒み、identity を一切読まない — 偽装する provenance も、取
