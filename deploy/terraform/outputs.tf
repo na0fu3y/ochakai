@@ -58,9 +58,9 @@ output "webui_service_account_email" {
   value       = var.enable_webui ? google_service_account.webui[0].email : null
 }
 
-output "attachments_bucket" {
-  description = "Bucket holding attachment bytes, or null when var.enable_gcs_attachments is false."
-  value       = var.enable_gcs_attachments ? google_storage_bucket.attachments[0].name : null
+output "files_bucket" {
+  description = "Bucket holding file bytes, or null when var.enable_gcs_files is false."
+  value       = var.enable_gcs_files ? google_storage_bucket.files[0].name : null
 }
 
 output "database_bootstrap_sql" {
