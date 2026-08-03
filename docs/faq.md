@@ -65,9 +65,12 @@ the three ways to decline are in
 
 ### Can an agent overwrite or delete knowledge a human verified?
 
-Not over MCP. `put_concept` and `delete_concept` both refuse a concept
-a human has ruled on — verified, rejected or deprecated — and the refusal
-says what to do instead:
+Not over MCP. Deleting is not a tool at all — design doc
+[0076](design/0076-two-tools-leave-mcp.md) took `delete_concept` off that
+surface, because deleting knowledge is a ruling and MCP does not carry
+even the reversible rulings. `put_concept` refuses a concept a human has
+ruled on — verified, rejected or deprecated — and the refusal says what to
+do instead:
 
 > cannot update metrics/revenue from this surface: it is verified, and
 > this surface has no If-Match precondition to replace curated knowledge
@@ -79,7 +82,7 @@ says what to do instead:
 This is not authorization — a human on the same deployment can edit
 anything from REST, the CLI or the web UI. It is a surface rule: MCP has
 no way to carry the `If-Match` precondition that makes a safe replacement
-expressible (design docs 0015 §3.1, 0030). Reviving a curated concept's
+expressible (design docs 0067 §6, 0030). Reviving a curated concept's
 tombstone with `put_concept` is refused on MCP for the same reason: it would
 put a fresh draft where a rejection's recorded reason used to be. On REST
 and the CLI that revival is allowed — those are the surfaces a human

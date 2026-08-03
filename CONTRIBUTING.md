@@ -498,7 +498,14 @@ only thing that can stop its body from describing a world that ended is
 something superseding it** — which is the whole argument for this program,
 now with numbers.
 
-    RECORD-CORPUS-LINES: 4500
+4,500 → 5,000 is 0076, the first record to cross a boundary under the
+grid below. It takes two tools off MCP, and both halves of its cost land
+here: a record nothing supersedes, plus the lines 0067's `Status:` header
+grew to acknowledge the amendment. That is what the ceiling is for — the
+corpus grew because a decision was made, and the decision is named one
+line above the number.
+
+    RECORD-CORPUS-LINES: 5000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

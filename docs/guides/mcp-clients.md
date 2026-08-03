@@ -52,8 +52,6 @@ Claude Code とブリッジはこのプロジェクトが実際に動かして�
 | `get_concept` | concept を一件、OKF ドキュメントとして、リンクとファイルのメタデータ付きで取得する |
 | `get_file` | concept に添付されたファイルを取得する(ダッシュボードのスクリーンショット、ER 図、seeds ファイルなど) |
 | `put_concept` | 学びを書き戻す — id が空いていれば作成し、埋まっていれば置き換える。変更はすべてリビジョンとして残る |
-| `delete_concept` | ソフトデリート(履歴は残る) |
-| `get_concept_usage` | concept ごとの利用回数の合計 — draft を昇格させる根拠、古びのシグナル |
 | `report_outcome` | ナレッジをもとに行動した後、worked/failed を報告する — failed の報告は verified な concept を再検証フィードに乗せる |
 
 これらはすべて知識に関する操作である。ochakai は SQL を実行せず、LLM も
@@ -63,21 +61,29 @@ Claude Code とブリッジはこのプロジェクトが実際に動かして�
 必要としているのは検証済みのクエリとそれに添う注意書きであり、両方とも
 `get_context` から届く。
 
+**削除と利用回数の合計はこの表に無い。** `delete_concept` と
+`get_concept_usage` は設計ドキュメント
+[0076](../design/0076-two-tools-leave-mcp.md) で降ろした — 削除は裁定で
+あり、利用回数はループの人間側だからである。どちらも REST(`DELETE
+/api/v1/bundle/{path}`・`GET /api/v1/usage/{id}`)、CLI(`ochakai delete`・
+`ochakai usage`)、Web UI には残っている。
+
 すべての concept は正規の URI で参照できる **MCP リソース**でもある —
 `ochakai://` の後ろに id(concept のパス)を続ける、例えば
 `ochakai://metrics/revenue` や `ochakai://queries/sales/top-customers`。
 リソース参照(`@` メンション)に対応するクライアントは、ツール呼び出し
 無しで concept を OKF ドキュメント — frontmatter と本文 — として引き
 込める。発見のための手段は引き続き `get_context`/`search_concepts`
-である。読み取り系のツールには `readOnly` の、`delete_concept` には
-`destructive` のアノテーションが付いているので、クライアントの
-自動承認ポリシーは説明文を解析しなくても機能する。
+である。読み取り系のツールには `readOnly` の、書き込み系には
+`destructive: false` のアノテーションが付いているので、クライアントの
+自動承認ポリシーは説明文を解析しなくても機能する。破壊的なツールは
+一本も無い。
 
 ツール数は REST の写しではなく予算である: スキーマはエージェントの
 コンテキストウィンドウから支払われるので、REST API はその上位互換に
-なる — 一括エクスポート、人が読むための取得、ファイルの書き込み、
-そして一括インポートは無い(設計ドキュメント
-[0015 §3.1-3.2](../design/0015-surface-consistency.md))。シェルを
+なる — 一括エクスポート、人が読むための取得、削除、利用回数の合計、
+ファイルの書き込み、そして一括インポートは無い(設計ドキュメント
+[0067 §5](../design/0067-four-faces-and-what-they-decline.md))。シェルを
 持つエージェントには、[CLI](../cli.md) が全機能をカバーしつつスキーマ
 の代金を一切要求しない。
 

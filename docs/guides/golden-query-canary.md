@@ -154,10 +154,11 @@ jobs:
 
 ## 補助的なシグナル: usage テレメトリ
 
-`ochakai usage queries/<id>`(REST: `GET /api/v1/usage/queries/<id>`、
-MCP: `get_concept_usage`)は、そのクエリが実際に検索で返された回数や
-fetch された回数、worked と failed の報告数、最後に使われたのがいつ
-かを返す。**長いあいだ誰も使っていない検証済み concept** はカナリアの
+`ochakai usage queries/<id>`(REST: `GET /api/v1/usage/queries/<id>`。
+MCP には無い — 設計ドキュメント
+[0076](../design/0076-two-tools-leave-mcp.md))は、そのクエリが実際に
+検索で返された回数や fetch された回数、worked と failed の報告数、
+最後に使われたのがいつかを返す。**長いあいだ誰も使っていない検証済み concept** はカナリアの
 優先度を下げる理由になる — あるいは deprecated を検討する理由にも
 なる。**failure が積み上がった検証済み concept** はその逆で、先に
 再検証する理由になる。

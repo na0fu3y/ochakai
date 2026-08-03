@@ -261,9 +261,11 @@ func TestReadResourceRejectsMalformedURI(t *testing.T) {
 	}
 }
 
-// TestToolAnnotations pins the auto-approval hints: readers are read-only,
-// writes are non-destructive (history kept as revisions), only delete is
-// destructive. MCP clients gate auto-approval on these, so they must be exact.
+// TestToolAnnotations pins the auto-approval hints: readers are read-only
+// and writes are non-destructive (history is kept as revisions). Nothing
+// here is destructive — the one tool that was, delete_concept, left the
+// surface with design doc 0076. MCP clients gate auto-approval on these,
+// so they must be exact.
 func TestToolAnnotations(t *testing.T) {
 	cs := connect(t)
 	res, err := cs.ListTools(context.Background(), nil)
@@ -275,15 +277,14 @@ func TestToolAnnotations(t *testing.T) {
 		readOnly    bool
 		destructive *bool
 	}
-	yes, no := true, false
+	no := false
 	want := map[string]ann{
-		"search_concepts":   {readOnly: true},
-		"get_context":       {readOnly: true},
-		"get_concept":       {readOnly: true},
-		"get_file":          {readOnly: true},
-		"get_concept_usage": {readOnly: true},
-		"put_concept":       {destructive: &no},
-		"delete_concept":    {destructive: &yes},
+		"search_concepts": {readOnly: true},
+		"get_context":     {readOnly: true},
+		"get_concept":     {readOnly: true},
+		"get_file":        {readOnly: true},
+		"put_concept":     {destructive: &no},
+		"report_outcome":  {destructive: &no},
 	}
 	seen := map[string]bool{}
 	for _, tool := range res.Tools {
@@ -438,11 +439,10 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 		t.Fatalf("ListTools: %v", err)
 	}
 	want := map[string][]string{
-
-		"delete_concept": {"verified, rejected, or deprecated", "erase the record of why"},
 		// Reviving a curated tombstone is the third way to overwrite a
 		// ruling, and an agent that only learns of it from an error has
-		// already written the draft (design doc 0015 §3.1).
+		// already written the draft (design doc 0067 §5.1). Deleting one
+		// was the second until design doc 0076 took the tool away.
 		"put_concept": {"deleted can be reused", "verified, rejected, deprecated", "different id",
 			"verified, rejected, or deprecated", "report_outcome failed"},
 	}
@@ -742,13 +742,14 @@ func TestOneWriteFace(t *testing.T) {
 			t.Errorf("%s is back; the write face is put_concept", gone)
 		}
 	}
-	// The eight the surface carries (design doc 0046 §3.14, issue #272).
-	// The three at the end were once slated to go, and the measurement
-	// went the other way: they are the cheapest tools here, and the
-	// saving was in the merge above.
+	// The six the surface carries. delete_concept and get_concept_usage
+	// were the last two of the eight, and design doc 0076 took them off:
+	// deleting knowledge is a ruling, and this surface withholds even the
+	// reversible rulings; usage totals are what a curator reads, while the
+	// trust tier an agent acts on already rides on every hit.
 	want := []string{
 		"search_concepts", "get_context", "get_concept", "put_concept", "report_outcome",
-		"delete_concept", "get_concept_usage", "get_file",
+		"get_file",
 	}
 	for _, w := range want {
 		if !names[w] {

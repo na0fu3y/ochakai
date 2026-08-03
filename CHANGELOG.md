@@ -129,6 +129,41 @@ last entry.
 
 ### Changed
 
+- **BREAKING** — MCP goes from eight tools to six: `delete_concept` and
+  `get_concept_usage` are gone (design doc
+  [0076](docs/design/0076-two-tools-leave-mcp.md)). A tool schema is paid
+  for out of the agent's context window on every session, so the tool
+  count is a budget, and these two were doors nobody arrived through —
+  neither the shipped hooks nor the shipped `CLAUDE.md` nor the
+  BigQuery-catalog job ever called them. There is no deprecation window;
+  MCP is explicitly unstable at 0.x
+  ([docs/compatibility.md](docs/compatibility.md)), so a call to either
+  name now fails with "no such tool". **The capability is not gone — it
+  left this face only**:
+
+  ```
+  MCP
+    delete_concept       →  DELETE /api/v1/bundle/{id}.md
+                            ochakai delete <id>
+                            web UI: ⋯ → Delete…
+    get_concept_usage    →  GET /api/v1/usage/{id}
+                            ochakai usage <id>
+                            web UI: the concept's Usage tab
+  ```
+
+  An **agent** that called `delete_concept` should not call anything: if a
+  concept is wrong, `report_outcome` failed puts it in the re-verification
+  feed, and a better version is a `put_concept` draft at a different id.
+  Deleting knowledge is a ruling, and this surface deliberately withholds
+  even the reversible rulings — `POST /api/v1/review/{id}` (verify,
+  reject) is not a tool either. An agent that called `get_concept_usage`
+  needs nothing new: the trust tier and `verified_at` it acts on already
+  ride on every search hit and every `get_concept`. **An operator or
+  script** that read totals over MCP moves to `GET /api/v1/usage/{id}` or
+  `ochakai usage`. Read-only deployments now withhold two write tools
+  (`put_concept`, `report_outcome`) instead of three, and no MCP tool
+  carries the `destructive` annotation any more.
+
 - **BREAKING** — one variable says how a deployment embeds (design doc
   [0078](docs/design/0078-one-variable-says-how-it-embeds.md)):
 
