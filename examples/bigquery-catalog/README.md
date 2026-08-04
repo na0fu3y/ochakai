@@ -22,6 +22,18 @@ itself in the knowledge base it writes to:
 ochakai import examples/bigquery-catalog/bundle
 ```
 
+**The two files need a bucket.** An instance without `OCHAKAI_GCS_BUCKET`
+answers `501` for any file
+([0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §1), so
+that import writes the three concepts and fails on the first `.py`. Cloud
+Run has the bucket; `deploy/compose.yaml` does not, and there the concepts
+are the half worth reading — the code is already in front of you:
+
+```sh
+tar czf - -C examples/bigquery-catalog/bundle --exclude='*.py' . |
+  ochakai import -
+```
+
 | Concept | Type | |
 |---|---|---|
 | [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **start here** — the day-one order: pick a small scope, settle the address, project the tables in, verify one, and only then attach a computation |
