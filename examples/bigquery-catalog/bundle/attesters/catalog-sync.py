@@ -21,7 +21,16 @@ does the same two jobs for `runtime: bigquery`:
      is attempted and the four outcomes after it, so a mismatch means a
      table left the loop without being counted.
 
-  3. Continuity — only when a previous receipt is supplied: the catalog
+  3. Ownership — the run still projected something. `written` and
+     `unchanged` are the two outcomes that leave an entry the sync's;
+     `skipped` is the one that says a person took it. A run where every
+     table was skipped refreshed nothing, and checks 1 and 2 call that a
+     clean night — the counts conserve, nothing failed, the catalog is
+     the same size as yesterday. It is what a projection that has quietly
+     stopped looks like, and equally what a catalog nobody needs a
+     schedule for looks like; both are worth a person's attention.
+
+  4. Continuity — only when a previous receipt is supplied: the catalog
      did not collapse between two runs. A dataset that silently loses read
      access looks exactly like a warehouse that got smaller.
 
@@ -42,6 +51,9 @@ ran the job.
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from typing import Any
 
 # The fields skills/run-a-python-job.md says a run has to bring back, and
@@ -170,7 +182,13 @@ def attest(
         return _verdict(False, "the run reported failed tables",
                         failed=counts["failed"])
 
-    # 3. Continuity.
+    # 3. Ownership.
+    projected = counts["written"] + counts["unchanged"]
+    if counts["tables_seen"] and not projected:
+        return _verdict(False, "the run projected nothing: every table was skipped",
+                        tables_seen=counts["tables_seen"], skipped=counts["skipped"])
+
+    # 4. Continuity.
     if previous is not None:
         before = _count(previous.get("tables_seen"))
         if before is None:
@@ -183,3 +201,51 @@ def attest(
                 min_ratio=min_ratio)
 
     return _verdict(True, None, scope=got, counts=counts)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Read a receipt on stdin, take the sanctioned scope as flags, print a verdict.
+
+    The reference bundle's attester is a module and nothing else, which is
+    right for one a consumer calls in-process before it displays a number.
+    This one is the last step of a scheduled job, where the caller is a
+    shell — so it is both, and the step that decides whether a run counted
+    does not start with "write yourself a driver".
+
+    Exit status is the verdict: 0 attested, 1 not. A scheduler can gate on
+    it without reading the JSON.
+    """
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--sync-identity", required=True,
+                   help="the account the run was scheduled to use")
+    p.add_argument("--project", required=True)
+    p.add_argument("--datasets", required=True, nargs="+")
+    p.add_argument("--prefix", default="catalog/bigquery")
+    p.add_argument("--previous", metavar="FILE",
+                   help="the last receipt that passed; omit on the first run, and "
+                        "the continuity check is skipped rather than assumed")
+    args = p.parse_args(argv)
+
+    receipt = json.load(sys.stdin)
+    previous = None
+    if args.previous:
+        with open(args.previous, encoding="utf-8") as f:
+            previous = json.load(f)
+
+    verdict = attest(
+        sanctioned={
+            "sync_identity": args.sync_identity,
+            "project": args.project,
+            "datasets": args.datasets,
+            "prefix": args.prefix,
+        },
+        receipt=receipt,
+        previous=previous,
+    )
+    json.dump(verdict, sys.stdout, indent=2, ensure_ascii=False)
+    print()
+    return 0 if verdict["ok"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -86,8 +86,10 @@ between the read and the write loses the race instead of being erased by
 it.
 
 "Nobody has ruled on it" is three separate questions, because ochakai
-keeps the three apart: the **lifecycle** is what the writer declared
-(`draft`), the **trust tier** is what the verification ledger derives, and
+keeps the three apart: the **lifecycle** is what the writer declared —
+`draft`, written into every projection, because a document that declares
+nothing reads as `stable` and this job would then skip its own work — the
+**trust tier** is what the verification ledger derives, and
 a **rejection** is a live ruling beside both. Verifying does not move the
 status — a ruling and a publication are different acts — so a sync
 watching `status` alone would go on overwriting an entry somebody had just
@@ -130,7 +132,7 @@ prints its receipt to stdout as JSON and its progress to stderr:
 
 `attester.resource` points at
 [catalog-sync.py](/attesters/catalog-sync.py), which decides whether a run
-counts. It asks three things, and the first two are the two questions the
+counts. It asks four things, and the first two are the two questions the
 reference bundle's `sql_equality.py` asks of a SQL run:
 
 1. **Provenance — did the executor run what was sanctioned?** For a query
@@ -143,7 +145,17 @@ reference bundle's `sql_equality.py` asks of a SQL run:
    skipped + failed` must equal `tables_seen`, and `failed` must be zero.
    The count is taken before a write is attempted and the outcomes after,
    so a disagreement means a table left the loop uncounted.
-3. **Continuity** — given the previous passing receipt, `tables_seen` has
+3. **Ownership** — the run projected something. `written` and `unchanged`
+   leave an entry the job's; `skipped` says a person took it. A night where
+   every table was skipped refreshed nothing, and the two checks above call
+   it clean: the counts conserve, nothing failed, the catalog is the same
+   size. **This check exists because that state shipped.** Writing no
+   `status` at all does not mean draft — SPEC §5.4 defaults it to `stable`
+   — so every entry this job created came back reading as ruled on by a
+   person, and from the second night on it skipped all of them. One line
+   in `build_document` was the bug; this is the check that would have said
+   so on night two.
+4. **Continuity** — given the previous passing receipt, `tables_seen` has
    not halved. A dataset silently losing read access looks exactly like a
    warehouse that got smaller.
 
