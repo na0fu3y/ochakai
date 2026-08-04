@@ -50,6 +50,18 @@ archives:
     files:
       - LICENSE
       - README.md
+      # The bundles the README tells you to import, and the hooks it tells
+      # you to install. `ochakai import` takes a directory or a tar.gz and
+      # not a URL, and the container image carries only the binary, so
+      # without these the sole way to reach examples/bigquery-catalog was
+      # to clone the repository for a bundle whose whole point is that it
+      # runs outside the server.
+      #
+      # The directory, not a glob: `examples/**/*` silently drops the files
+      # sitting directly in it — examples/README.md, which is the page that
+      # says what the bundles are, and examples/golden-query.md, which the
+      # same page hands to `ochakai put -f`.
+      - examples
 
 checksum:
   name_template: checksums.txt
