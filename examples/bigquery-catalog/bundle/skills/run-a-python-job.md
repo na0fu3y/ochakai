@@ -58,22 +58,36 @@ billed query — small, not free.
 
 ## The receipt
 
-`receipt: [sync_identity, tables_seen, written, skipped, failed]`, printed
-to stdout as one JSON object. Progress goes to stderr, so a scheduler can
-capture the receipt on its own.
+Printed to stdout as one JSON object. Progress goes to stderr, so a
+scheduler can capture the receipt on its own. Return **exactly** the fields
+the entry's `executor.receipt` declares — the attester refuses a receipt
+that is missing one rather than guessing what it meant.
 
 | Field | Where it comes from |
 |---|---|
 | `sync_identity` | the email claim of the ID token the run used — who the entries will say wrote them |
+| `project` | the `--project` the run used |
+| `datasets` | the `--datasets` it was given, sorted |
+| `prefix` | the `--prefix` the ids were built under |
 | `tables_seen` | tables and views considered, before any ownership check |
 | `written` | entries created or updated |
+| `unchanged` | entries whose bytes already matched, so no revision was made |
 | `skipped` | entries left alone because a person had verified or edited them |
 | `failed` | tables that errored; the run's exit code is non-zero when this is not 0 |
 
-`sync_identity` is the field worth checking hardest. The whole ownership
-rule rests on the job recognizing its own past writes, so a run under an
+The four scope fields are there because the entry id is derived from them.
+`sync_identity` is the one worth checking hardest: the whole ownership rule
+rests on the job recognizing its own past writes, so a run under an
 unexpected account does not merely mislabel provenance — it stops seeing
 the entries as its own and skips the entire catalog, quietly.
+
+## Post-conditions
+
+Hand the receipt to the entry's `attester.resource` together with the
+values the run was authorized with. Do not report the catalog as refreshed
+until the attester returns `ok: true`; a verdict that fails names which of
+the three checks it was, and the run's own exit code cannot tell you —
+a run that wrote a whole second catalog under the wrong prefix exits 0.
 
 ## What this is not
 

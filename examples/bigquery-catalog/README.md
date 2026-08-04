@@ -15,7 +15,7 @@ of the same REST API the CLI uses, under your own service account.
 
 ## It ships as knowledge, not as a script in a folder
 
-`bundle/` is a two-concept OKF bundle. Import it and the job documents
+`bundle/` is a three-concept OKF bundle. Import it and the job documents
 itself in the knowledge base it writes to:
 
 ```sh
@@ -24,9 +24,11 @@ ochakai import examples/bigquery-catalog/bundle
 
 | Concept | Type | |
 |---|---|---|
+| [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **start here** — the day-one order: pick a small scope, settle the address, project the tables in, verify one, and only then attach a computation |
 | [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`, the parameters, the receipt, and every decision the projection makes |
 | [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | what the `executor` points at: the identity to run as, the IAM roles, the receipt fields |
 
+Two files travel with the concepts.
 [`sync-bigquery-catalog.py`](bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py)
 is the computation itself. It is named by the concept's `computation` key as
 a file rather than pasted into a `# Computation` fence — the form
@@ -37,6 +39,16 @@ concept as a file, so `ochakai get jobs/sync-bigquery-catalog
 concept-named directory beside the document, which is where `ochakai export`
 puts a file and what the web UI's files tab tells you to
 reference (design doc [0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §5).
+
+[`catalog-sync.py`](bundle/attesters/catalog-sync.py) is the other, named by
+`attester.resource`: the code that decides whether a run counted. It checks
+that the run used the sanctioned scope — the entry id is derived from it, so
+a run under the wrong prefix silently builds a second catalog — that the
+counts conserve, and that the catalog did not collapse overnight. No
+network, no LLM, no read of the knowledge base; the receipt and the
+authorized values are the whole input. It follows
+`attesters/sql_equality.py` in the OKF reference bundle, which asks the
+first two of those questions about a SQL run.
 
 That shape is the point as much as the sync is. An agent told to refresh
 the catalog gets a contract that says *supply these parameters and run this

@@ -18,7 +18,9 @@ parameters:
 computation: /jobs/sync-bigquery-catalog/sync-bigquery-catalog.py
 executor:
   resource: /skills/run-a-python-job.md
-  receipt: [sync_identity, tables_seen, written, skipped, failed]
+  receipt: [sync_identity, project, datasets, prefix, tables_seen, written, unchanged, skipped, failed]
+attester:
+  resource: /attesters/catalog-sync.py
 ---
 
 The sanctioned way to get BigQuery table metadata into this knowledge base.
@@ -121,20 +123,46 @@ prints its receipt to stdout as JSON and its progress to stderr:
 
 ```json
 {"sync_identity": "catalog-sync@my-project.iam.gserviceaccount.com",
- "tables_seen": 84, "written": 3, "skipped": 12, "failed": 0}
+ "project": "my-project", "datasets": ["marketing", "shop"],
+ "prefix": "catalog/bigquery",
+ "tables_seen": 84, "written": 3, "unchanged": 69, "skipped": 12, "failed": 0}
 ```
 
-There is no `attester` on this entry, which is the honest state of things:
-nothing checks these runs today. One would be easy and worth writing —
-`sync_identity` has to be the account you scheduled and no other, `failed`
-has to be zero, and `tables_seen` should not fall off a cliff between two
-nights, which is what a dataset silently losing read access looks like.
-Until that exists, a non-zero exit code and a red Cloud Scheduler run are
-the whole alarm.
+`attester.resource` points at
+[catalog-sync.py](/attesters/catalog-sync.py), which decides whether a run
+counts. It asks three things, and the first two are the two questions the
+reference bundle's `sql_equality.py` asks of a SQL run:
+
+1. **Provenance — did the executor run what was sanctioned?** For a query
+   that is about the SQL text. Here it is about **scope**: the four fields
+   above the counts are exactly what an entry id is derived from, so a run
+   with a different `prefix` did not refresh this catalog. It wrote a
+   second one at addresses nobody is watching and left the first to rot.
+   This is why the scope is in the receipt at all.
+2. **Fidelity — does the outcome hold together?** `written + unchanged +
+   skipped + failed` must equal `tables_seen`, and `failed` must be zero.
+   The count is taken before a write is attempted and the outcomes after,
+   so a disagreement means a table left the loop uncounted.
+3. **Continuity** — given the previous passing receipt, `tables_seen` has
+   not halved. A dataset silently losing read access looks exactly like a
+   warehouse that got smaller.
+
+Check 1 is the one worth dwelling on, because it is the check a platform
+with an ontology manager runs before it saves an object type: **a primary
+key must be unique and must not change between builds.** A catalog whose
+primary key is its bundle path has the same failure mode, and nothing in
+the knowledge base can notice it — every entry the bad run wrote is a
+perfectly valid entry.
+
+A failed verdict does not undo anything, deliberately. The entries that
+were written stay written, because a bad run you can see beats a bad run
+that cleaned up after itself.
 
 ochakai stores this contract and executes none of it: running the
 computation and checking the receipt belong to whoever runs the job
-(SPEC §10.5).
+(SPEC §10.5). The attester never calls it either — no network, no LLM, no
+read of the knowledge base, just the receipt and the values the run was
+authorized with.
 
 # What this deliberately does not do
 
