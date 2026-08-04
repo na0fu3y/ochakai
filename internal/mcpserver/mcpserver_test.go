@@ -410,12 +410,24 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 // TestContextHint pins the habit the server hands every host. Claude Code
 // sites can install it as a Stop hook; a browser-based host has no shell,
 // so this string is the only copy it will ever see.
+//
+// The habit has to be callable, not merely mentioned. This asked for
+// "rejected" alone for as long as the hint spelled the filter
+// `statuses=["rejected"]` — the value's own retirement as a status
+// (design doc 0043 §3.3) left that call answering 400, and a host with no
+// other copy of the habit had no way to recover. So the filter is pinned
+// by the spelling searchIn accepts, and the status vocabulary is named as
+// what the hint must not reach for.
 func TestContextHint(t *testing.T) {
 	plain := contextHint(0)
-	for _, want := range []string{"report_outcome", "put_concept", "rejected"} {
+	for _, want := range []string{"report_outcome", "put_concept", "rejected=true"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("hint does not mention %q: %s", want, plain)
 		}
+	}
+	if strings.Contains(plain, "statuses") {
+		t.Errorf("rejected is a ruling, not a lifecycle status: the hint must ask for it "+
+			"with the rejected filter, not through statuses: %s", plain)
 	}
 	if strings.Contains(plain, "outline") {
 		t.Errorf("nothing was dropped; hint must not mention the outline: %s", plain)
