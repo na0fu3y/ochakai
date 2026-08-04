@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 // apiPathRe picks the first segment after /api/v1/ out of a line, in any
@@ -68,6 +70,97 @@ func TestExamplesCallAddressesThisBuildServes(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Every bundle this repo ships is read as the bundle it looks like.
+//
+// examples/bigquery-catalog/bundle is where ochakai shows the Attested
+// Computation contract whole — a computation file, an attester file, and
+// body links that attribute both — and none of that was reachable from
+// Go, so a drift in it failed nothing. FromBundle is where a directory
+// stops being a directory and becomes concepts and files, which makes it
+// the first place a drift shows: an index.md copied in to match another
+// producer's layout (OKF reserves the name and ochakai regenerates it, so
+// a hand-written one imports as a note), a body link that stopped
+// resolving after a rename, a file nobody links and therefore nobody
+// finds (design doc 0077).
+//
+// The bundle is read through the CLI's own readBundle, so this fails for
+// the same reasons `ochakai import` would, minus the server.
+func TestExampleBundlesReadCleanly(t *testing.T) {
+	roots := exampleBundleRoots(t)
+	if len(roots) == 0 {
+		t.Fatal("no bundles walked: this check now guards nothing")
+	}
+	for _, root := range roots {
+		t.Run(strings.TrimPrefix(root, "../../"), func(t *testing.T) {
+			files, err := readBundle(root)
+			if err != nil {
+				t.Fatalf("read %s: %v", root, err)
+			}
+			concepts, atts, loose, skipped, notes := okf.FromBundle(files)
+			if len(concepts) == 0 {
+				t.Fatal("bundle holds no concepts")
+			}
+			for _, n := range notes {
+				t.Errorf("note: %s", n)
+			}
+			for _, s := range skipped {
+				t.Errorf("skipped: %s", s)
+			}
+			// A file no concept links is legal in a bundle — what enters
+			// leaves — but in an example it is a file the reader is never
+			// sent to, which is the state design doc 0077 named.
+			for _, l := range loose {
+				t.Errorf("%s is attributed to no concept: nothing's body links it", l.Path)
+			}
+			t.Logf("%d concepts, %d attributed files", len(concepts), len(atts))
+		})
+	}
+}
+
+// exampleBundleRoots lists the OKF bundles under examples/, and fails when
+// a concept document turns up outside every one of them. Listing the roots
+// is unavoidable — a bundle root is not visible in a single file — but a
+// list that silently stops covering things is the failure this whole file
+// exists about, so the list is checked against the tree rather than
+// trusted (design doc 0035).
+func exampleBundleRoots(t *testing.T) []string {
+	t.Helper()
+	roots := []string{"../../examples/bigquery-catalog/bundle", "../../examples/demo"}
+	// examples/golden-query.md is one document for `ochakai put -f`, not a
+	// bundle; TestGoldenQueryExampleParses in internal/service pins it.
+	exempt := map[string]bool{"../../examples/golden-query.md": true}
+
+	err := filepath.WalkDir("../../examples", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(p) != ".md" {
+			return err
+		}
+		content, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		// The same test docs/surface.md's DOC section applies: a file with
+		// frontmatter under examples/ is knowledge, not prose about ochakai.
+		if !strings.HasPrefix(string(content), "---\n") {
+			return nil
+		}
+		slash := filepath.ToSlash(p)
+		if exempt[slash] {
+			return nil
+		}
+		for _, root := range roots {
+			if strings.HasPrefix(slash, root+"/") {
+				return nil
+			}
+		}
+		t.Errorf("%s is a concept document in no known bundle: add its bundle root to exampleBundleRoots", slash)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk examples: %v", err)
+	}
+	return roots
 }
 
 // exampleProgramFiles lists the runnable files under examples/: the ones
