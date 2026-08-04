@@ -46,6 +46,12 @@ docker compose -f deploy/compose.yaml exec ochakai /ochakai import /examples/dem
 curl 'http://localhost:8080/api/v1/search?q=revenue'
 ```
 
+That shop is invented. To fill a base with *your* tables, project a
+BigQuery dataset in: [examples/bigquery-catalog](examples/bigquery-catalog)
+carries the day-one procedure, the job that runs it, and the attester that
+says whether a run counted — outside the server, under your own service
+account, because ochakai has no connectors.
+
 ## Connect an agent
 
 For Claude Code — and anything else with a shell (headless agents, CI) —
@@ -174,6 +180,7 @@ in the version you are running.
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)
 - **Using** — [The improvement loop](docs/loop.md) (Japanese) ·
+  [Fill it with your own tables](examples/bigquery-catalog) ·
   [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) (Japanese) ·
   [Troubleshooting](docs/guides/troubleshooting.md) (Japanese)

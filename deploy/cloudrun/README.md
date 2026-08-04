@@ -353,6 +353,13 @@ curl -fsSL "https://raw.githubusercontent.com/na0fu3y/ochakai/v$VERSION/examples
   go run github.com/na0fu3y/ochakai/cmd/ochakai@latest put queries/monthly-revenue
 ```
 
+自分のテーブルを入れるなら
+[examples/bigquery-catalog](../../examples/bigquery-catalog) に day-one の
+手順と、それを走らせる job と、走りが正しかったかを判定する attester が
+ある。**§4b の GCS バケットが要る** — バンドルが計算本体と attester を
+ファイルとして運ぶので、バケットの無いインスタンスは concept だけ入れて
+最初の `.py` で落ちる。
+
 Claude Code — あるいはシェルを持つ任意のエージェント — を同じ URL に
 向ける。上で走らせた CLI が、proxy 無しでトークンを解決できることをす
 でに証明している。これが README の
