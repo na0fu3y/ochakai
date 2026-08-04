@@ -34,11 +34,22 @@ var retiredSpellings = []retiredSpelling{
 	{
 		// OKF's lifecycle has three values (SPEC §5.4). Confirmation is
 		// the ledger's business, and it answers in trust tiers.
+		//
+		// The plural spellings are the filter's, and they are here because
+		// the server's own get_context hint taught `statuses=["rejected"]`
+		// long after the value stopped being a status — a call every
+		// surface answers with a 400 (service.checkedFilter), handed to
+		// the hosts that have no Stop hook and see this string only. The
+		// singular forms above did not match it: `["` sits between the
+		// key and the value. Both quotings are listed because a Go string
+		// literal escapes the inner quotes and no other file does.
 		forms: []string{
 			"status: verified", "status: rejected",
 			"status=verified", "status=rejected",
 			"--status verified", "--status rejected",
 			`"status": "verified"`, `"status": "rejected"`,
+			`statuses=["verified"`, `statuses=["rejected"`,
+			`statuses=[\"verified\"`, `statuses=[\"rejected\"`,
 		},
 		instead: "draft | stable | deprecated, with verification carried by the ledger (design docs 0043 §3.2, 0046 §§3.9-3.10)",
 	},

@@ -564,7 +564,7 @@ func contextHint(truncated int) string {
 	hint := "After acting on this knowledge, call report_outcome (worked/failed) on the concepts you " +
 		"used — failed reports are how stale verified knowledge gets caught. If this session " +
 		"produced reusable knowledge, write it back with put_concept as a draft; search " +
-		"statuses=[\"rejected\"] first so you do not re-propose something already turned down."
+		"rejected=true first so you do not re-propose something already turned down."
 	if truncated > 0 {
 		hint += fmt.Sprintf(" %d concepts did not fit the budget and are listed under \"outline\" — "+
 			"fetch any of them by id with get_concept.", truncated)
