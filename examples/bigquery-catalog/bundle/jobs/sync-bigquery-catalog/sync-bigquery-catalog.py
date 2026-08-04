@@ -414,7 +414,22 @@ def main() -> int:
     # The receipt the entry's executor declares. Every field here is one a
     # run has to bring back; checking them is the consumer's job, never
     # ochakai's (OKF SPEC §10.5).
-    print(json.dumps({"sync_identity": identity, **counts}))
+    #
+    # The scope fields are not decoration. Each entry id is derived as
+    # <prefix>/<project>/<dataset>/<table>, so these four values decide
+    # *which* catalog a run refreshed. A run under a different prefix
+    # writes a whole second catalog at addresses nobody is watching and
+    # leaves the first to go stale in silence — which is why
+    # /attesters/catalog-sync.py compares them before it looks at a single
+    # count, the way the reference bundle's sql_equality.py compares the
+    # SQL that ran against the SQL that was sanctioned.
+    print(json.dumps({
+        "sync_identity": identity,
+        "project": args.project,
+        "datasets": sorted(args.datasets),
+        "prefix": args.prefix,
+        **counts,
+    }))
     return 1 if counts["failed"] else 0
 
 
