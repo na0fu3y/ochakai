@@ -19,6 +19,40 @@ last entry.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-05
+
+### Added
+
+- **`examples/bigquery-catalog`** gained a day-one procedure, a sync job,
+  and the first attester in the repository that verifies a run *after* it
+  happened — OKF's kinetic half, which no other example demonstrated.
+  Docs now point at it from the three pages a new user actually reads —
+  the quick start, the Cloud Run guide, and the manual's index — where
+  before the only mention was a parenthetical inside a refusal table.
+- Release archives now carry `examples/` alongside `LICENSE` and
+  `README.md`; the demo and catalog bundles the top-level README tells a
+  reader to import are reachable without cloning the repository.
+
+### Fixed
+
+- **BREAKING (deploy/terraform)** — the module's attachment-era names are
+  retired to match the wire's "file"
+  ([0064](docs/design/0064-rest-stops-at-api-v1.md) §6, which reached
+  REST/MCP but never this corner): `enable_gcs_attachments` →
+  `enable_gcs_files`, the `attachments_bucket` output → `files_bucket`,
+  and the `google_storage_bucket.attachments` resource → `.files`. An
+  operator applying this module after upgrading gets a rename Terraform
+  wants to apply as a destroy-and-recreate.
+- The web UI's markdown renderer had no notion of GFM pipe tables; one in
+  a document body rendered as a paragraph with the pipes and dashes shown
+  literally. `md()` now parses tables directly, including alignment and
+  escaped pipes.
+- `get_context`'s hint taught `search statuses=["rejected"]`, a spelling
+  the status vocabulary retired for `rejected=true` back in
+  [0043](docs/design/0043-document-first.md) §§3.2-3.3; an agent that
+  followed it got a 400 instead of the rejection ledger. The hint is
+  fixed, and the two guards that missed the drift now catch it.
+
 ## [0.18.0] - 2026-08-04
 
 ### Added
@@ -2995,7 +3029,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/na0fu3y/ochakai/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/na0fu3y/ochakai/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/na0fu3y/ochakai/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/na0fu3y/ochakai/compare/v0.16.0...v0.16.1
