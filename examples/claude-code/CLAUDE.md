@@ -1,62 +1,67 @@
-# ochakai — team knowledge base for data work
+# ochakai — データ作業のためのチームのナレッジベース
 
 <!--
-Copy this section into your project's CLAUDE.md. Point the CLI at your
-server once per machine — authentication is your gcloud login or
-service-account ADC; there are no tokens to configure:
+この節をあなたのプロジェクトの CLAUDE.md にコピーする。CLI をサーバーに
+向けるのはマシンごとに一度でよい — 認証はあなたの gcloud ログインか
+サービスアカウントの ADC であり、設定するトークンは無い:
 
     ochakai use https://ochakai-<hash>.run.app
 
-(Or set OCHAKAI_URL, which takes precedence — handy for CI.)
-`ochakai whoami` shows which server you target, as whom, and whether
-it is reachable.
+(あるいは OCHAKAI_URL を設定する。こちらが優先される — CI で便利。)
+`ochakai whoami` が、どのサーバーに誰として向いていて、届いているかを
+言う。
 -->
 
-ochakai holds metric definitions, attested computations (sanctioned SQL,
-including verified golden queries), interpretation knowledge (how to read
-a metric), glossary terms, and table catalog entries. Search it before writing analytics SQL; write learnings back.
+ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
+検証済みの golden query を含む)、解釈のナレッジ(メトリクスの読み方)、
+用語、テーブルカタログの項目を持つ。分析 SQL を書く前にここを検索し、
+学んだことを書き戻すこと。
 
-- `ochakai context "<question>"` — the one call to make before answering
-  a data question: prints the full concepts behind the top hits (verified
-  concepts rank higher), expanded one hop through links so the insight
-  explaining a metric arrives with it. Start here; use search/get below
-  for precise lookups.
+- `ochakai context "<question>"` — データの問いに答える前にする、唯一の
+  呼び出し。上位ヒットの背後にある concept を全文で印字し(検証済みの
+  concept が上位に来る)、リンクを一段展開するので、メトリクスを説明する
+  insight がそれと一緒に届く。まずここから。細かい参照には下の
+  search / get を使う。
 - `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|Reference] [--trust human-reviewed]`
-  — one hit per line: score, uri, status, title. Trust verified concepts;
-  judge `draft` concepts by their provenance (`--json` shows `created_by`).
-- `ochakai get <id>` — full concept as markdown (YAML frontmatter +
-  body). Follow the body's markdown links to related concepts — a link to
-  another concept's path, `[revenue](/metrics/revenue.md)`, is how concepts
-  relate, and writing one is how you create a relationship. If stderr lists
-  files (dashboard screenshots, ER diagrams), fetch them with
-  `ochakai get <id> --download <dir>` and Read the saved files when
-  the body's image references matter to the question.
-- `ochakai put <id>/<name> -f <file>` — put a file in the bundle
-  (any bytes; the path is its address). Link it from the concept's
-  body — `![name](<id last segment>/<name>)` — so the caption is
-  searchable and the file has an owner. If you learn something by
-  looking at a file, write it into the body with `ochakai put` too —
-  knowledge locked in pixels is invisible to search.
+  — 1 行 1 ヒット: score、uri、status、title。検証済みの concept は信用
+  してよい。`draft` の concept は provenance で判断する(`--json` が
+  `created_by` を出す)。
+- `ochakai get <id>` — concept の全文を markdown(YAML frontmatter +
+  本文)で。本文の markdown リンクを辿ると関連する concept に行ける —
+  他の concept のパスへのリンク `[revenue](/metrics/revenue.md)` が
+  concept どうしの関係であり、それを書くことが関係を作ることである。
+  stderr がファイル(ダッシュボードのスクリーンショット、ER 図)を挙げた
+  なら `ochakai get <id> --download <dir>` で取得し、本文の画像参照が
+  その問いに効くときは保存されたファイルを Read すること。
+- `ochakai put <id>/<name> -f <file>` — バンドルにファイルを置く
+  (任意のバイト列。パスがその住所である)。concept の本文からリンク
+  すること — `![name](<id last segment>/<name>)` — そうすればキャプション
+  が検索でき、ファイルに持ち主ができる。ファイルを見て何か分かったら、
+  それも `ochakai put` で本文に書くこと — ピクセルに閉じ込められた
+  ナレッジは検索から見えない。
 - `ochakai report <id> worked|failed [--note "what went wrong"]`
-  — after acting on knowledge (running an attested computation, running SQL you
-  wrote from a metric definition), report whether the result was actually correct. `failed` reports
-  flag verified concepts for re-verification, so the next agent doesn't
-  trust a stale concept blind. Always report `failed` when a verified concept
-  led you to a wrong number.
-- `ochakai put <id> -f entry.md` — write a learning back (OKF markdown
-  as printed by `get`, or JSON; see `ochakai put -h`). The id is the
-  concept's path (`queries/sales/monthly-revenue`) and it is an argument:
-  an OKF document does not carry one. Concepts start as `draft`; your
-  identity is recorded as provenance automatically.
-- `ochakai export <dir>` — snapshot the whole knowledge base as markdown;
-  `ochakai import <dir>` loads a bundle back (any OKF bundle works).
-Types beyond these are welcome (any slug works — e.g. `runbook/…`), and
-IDs may be hierarchical (`queries/sales/monthly-revenue`) to group
-related knowledge.
+  — ナレッジに基づいて動いた後(attested computation を走らせた、
+  メトリクス定義から自分で書いた SQL を走らせた)、結果が実際に正しかった
+  かを報告する。`failed` の報告は検証済み concept を再検証の対象に立て、
+  次のエージェントが古びた concept を黙って信じないようにする。検証済みの
+  concept に導かれて間違った数字に行き着いたときは、必ず `failed` を
+  報告すること。
+- `ochakai put <id> -f entry.md` — 学んだことを書き戻す(`get` が印字
+  するのと同じ OKF markdown、または JSON。`ochakai put -h` を見よ)。
+  id は concept のパス(`queries/sales/monthly-revenue`)であり、引数と
+  して渡す: OKF 文書は id を持たないからである。concept は `draft` から
+  始まり、あなたの identity が provenance として自動的に記録される。
+- `ochakai export <dir>` — ナレッジベース全体を markdown としてスナップ
+  ショットする。`ochakai import <dir>` はバンドルを読み戻す(どの OKF
+  バンドルでもよい)。
 
-When a query you wrote turns out to be correct and useful,
-save it: `type: Attested Computation` with `runtime` (where the SQL runs),
-the SQL in a `# Computation` fence in the body, and a top-level
-`question` key (the natural-language question) — OKF frontmatter is flat,
-so a key of your own goes beside the ones the spec defines, never nested
-under one. A human confirms it later with `ochakai verify`.
+ここに挙げた以外の型を使ってよいし(任意のスラグが通る — 例
+`runbook/…`)、関連するナレッジをまとめるために id は階層的でよい
+(`queries/sales/monthly-revenue`)。
+
+自分が書いたクエリが正しく、しかも役に立つと分かったら保存すること:
+`type: Attested Computation` に `runtime`(その SQL がどこで走るか)を
+付け、SQL は本文の `# Computation` フェンスに入れ、トップレベルに
+`question` キー(自然言語の問い)を置く — OKF の frontmatter は平坦
+なので、自分のキーは spec が定義するキーの**隣**に置き、その下に入れ子に
+しない。後で人が `ochakai verify` で確かめる。

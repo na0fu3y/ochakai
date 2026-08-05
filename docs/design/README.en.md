@@ -23,7 +23,7 @@ row, and `TestEnglishIndexSummarizesOnlyWhatIsCurrent` holds a superseded
 one to the pointer and nothing more.
 
 For the shape of the system rather than the history of it, read
-[docs/architecture.md](../architecture.md) first.
+[docs/architecture.md](../architecture.md) (Japanese) first.
 
 ## Architecture and foundations
 

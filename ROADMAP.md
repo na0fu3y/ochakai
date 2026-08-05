@@ -50,7 +50,7 @@ if the proposal is concrete.
   CLI's help — still the best documentation here — is rendered into
   [docs/cli.md](docs/cli.md) before you have a binary, every design record
   carries an English abstract, and the half of the product that is not Cloud
-  Run has a [FAQ](docs/faq.md),
+  Run has a [FAQ](docs/faq.md) (Japanese),
   [troubleshooting](docs/guides/troubleshooting.md) (Japanese) and an
   [operating guide](docs/guides/operating.md) (Japanese). What is left is
   [open as issues](https://github.com/na0fu3y/ochakai/issues) rather than a

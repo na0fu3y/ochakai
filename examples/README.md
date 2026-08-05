@@ -1,53 +1,53 @@
-# Examples
+# サンプル
 
-- **[demo/](demo)** — a whole knowledge base, ten concepts, importable in one
-  command. Described below.
-- **[bigquery-catalog/](bigquery-catalog)** — a daily job that projects BigQuery
-  table metadata in, shipped as an Attested Computation with its Python beside
-  it. What connector ingestion looks like when it stays outside the server.
-- **[claude-code/](claude-code)** — the recall and write-back loop as Claude Code
-  instructions and hooks.
-- **[golden-query.md](golden-query.md)** — one concept on its own, for
-  `ochakai put -f`.
+- **[demo/](demo)** — 10 concept のナレッジベース丸ごと。コマンド一つで
+  import できる。下で説明する。
+- **[bigquery-catalog/](bigquery-catalog)** — BigQuery のテーブルメタデータ
+  を毎日投影するジョブ。Attested Computation として、その Python を隣に置いて
+  出荷している。コネクタによる取り込みがサーバーの外に留まると、こうなる。
+- **[claude-code/](claude-code)** — 想起と書き戻しのループを、Claude Code
+  の指示とフックにしたもの。
+- **[golden-query.md](golden-query.md)** — concept 一つだけ。
+  `ochakai put -f` 用。
 
-## demo/: a knowledge base you can import
+## demo/: import できるナレッジベース
 
-Ten concepts about revenue at an invented online shop, written as an
+架空のオンラインショップの売上についての 10 concept を、
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
-v0.2 bundle. Enough of a knowledge base to see the whole shape of one: a metric
-and the attested computation behind it, the glossary term and the table catalog
-concept they both rest on, the policy that decides the number, the skill that says
-how to run the query, and an `Insight` that says how to *read* the series — the
-type that carries the knowledge no semantic layer holds.
+v0.2 バンドルとして書いたもの。ナレッジベース一つの姿が丸ごと見える程度の
+中身がある: メトリクスとその裏にある attested computation、両者が乗って
+いる用語とテーブルカタログの concept、その数字を決めるポリシー、クエリの
+走らせ方を言う skill、そして系列の*読み方*を言う `Insight` — どの
+semantic layer も持たないナレッジを運ぶ型である。
 
-Load it into a running server:
+動いているサーバーに読み込ませる:
 
 ```sh
 OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 ```
 
-Then try `ochakai context "why is revenue down?"`,
-`ochakai list --links-to glossary/completed-order`, and `ochakai list
-stale_after`. The concepts link to each other with ordinary markdown links, so
-the graph is already there — nothing declares it.
+そのあと `ochakai context "なぜ売上が落ちているのか"`、
+`ochakai list --links-to glossary/completed-order`、
+`ochakai list stale_after` を試すとよい。concept は普通の markdown リンク
+で互いを指しているので、グラフは既にそこにある — 何も宣言していない。
 
-Deliberately not uniform: two concepts are **drafts** so the review queue is not
-empty, one `Reference` is **deprecated**, and one draft's `stale_after` has
-already passed so the stale feed has an occupant. That is what a real knowledge
-base looks like a month in.
+**わざと均質にしていない**: 2 つの concept は **draft** なのでレビュー
+キューは空にならず、1 つの `Reference` は **deprecated** で、1 つの draft
+は `stale_after` を既に過ぎているので stale フィードにも住人がいる。
+一ヶ月使った本物のナレッジベースは、こう見える。
 
-This file is not inside `demo/`, and that is deliberate. OKF conformance asks
-that *every* non-reserved `.md` file in a bundle carry frontmatter with a `type`
-(SPEC §11) — only `index.md` and `log.md` are exempt. A README sitting in the
-bundle would break that rule and make `ochakai import` skip a file on every run.
-Every `.md` under `demo/` is a concept document, so the import reports ten
-concepts and skips nothing.
+このファイルが `demo/` の中に無いのは意図的である。OKF 適合はバンドル内の
+予約名でない*すべて*の `.md` が `type` を持つ frontmatter を運ぶことを
+求めており(SPEC §11)、免除されるのは `index.md` と `log.md` だけである。
+バンドルの中に README があるとその規則を破り、`ochakai import` が毎回
+ファイルを一つスキップすることになる。`demo/` 以下のすべての `.md` は
+concept 文書なので、import は 10 concept を報告し、何もスキップしない。
 
-### The numbers are made up
+### 数字はでっち上げである
 
-Every figure there is invented: the baselines, the seasonal percentages, the
-thresholds, the table and project names, `example.co.jp`, both people. Nothing
-was measured. This is a teaching example — read it for the *shape* of a concept
-and copy that, not the contents. Importing it into a knowledge base your agents
-actually use would teach them confident nonsense about a shop that does not
-exist.
+そこにある数値はすべて作り物である: ベースライン、季節性のパーセント、
+しきい値、テーブル名とプロジェクト名、`example.co.jp`、登場する二人とも。
+何一つ測っていない。これは教材であり、concept の*形*を読んで真似する
+ためのものであって、中身を真似するためのものではない。エージェントが
+実際に使うナレッジベースにこれを import すると、存在しない店について
+自信満々の出鱈目を教え込むことになる。

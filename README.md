@@ -48,7 +48,7 @@ curl 'http://localhost:8080/api/v1/search?q=revenue'
 
 That shop is invented. To fill a base with *your* tables, project a
 BigQuery dataset in: [examples/bigquery-catalog](examples/bigquery-catalog)
-carries the day-one procedure, the job that runs it, and the attester that
+(Japanese) carries the day-one procedure, the job that runs it, and the attester that
 says whether a run counted — outside the server, under your own service
 account, because ochakai has no connectors.
 
@@ -88,8 +88,8 @@ Cloud Run), and the six tools it will see:
 [connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
-into your project's CLAUDE.md, or install the
-[hooks](examples/claude-code) to make recall and write-back automatic
+(Japanese) into your project's CLAUDE.md, or install the
+[hooks](examples/claude-code) (Japanese) to make recall and write-back automatic
 instead of habitual — both without an LLM.
 **[Walk the whole loop in four prompts →](docs/loop.md)** (Japanese)
 
@@ -137,7 +137,7 @@ for what they still don't do:
 
 Each of those has an alternative you may already run — a catalog, a
 memory layer, a markdown vault with an MCP server.
-[Positioning](docs/positioning.md) takes them one at a time, says where
+[Positioning](docs/positioning.md) (Japanese) takes them one at a time, says where
 ochakai loses, and says who should pick something else.
 
 ### What it refuses
@@ -146,7 +146,7 @@ ochakai loses, and says who should pick something else.
 |---|---|
 | LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. Embeddings are the exception in spirit and not in fact — an encoder is deterministic and produces no text |
 | SQL execution | it holds no warehouse credentials. Your agent executes |
-| connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog)) |
+| connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog) (Japanese)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
 | authorization | reachability is the access model — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) (Japanese) |
@@ -174,13 +174,13 @@ Details, and every environment variable:
 This README describes `main`; the [changelog](CHANGELOG.md) says what is
 in the version you are running.
 
-- **Evaluating** — [FAQ](docs/faq.md) ·
-  [Positioning](docs/positioning.md) ·
+- **Evaluating** — [FAQ](docs/faq.md) (Japanese) ·
+  [Positioning](docs/positioning.md) (Japanese) ·
   [Architecture](docs/architecture.md) (Japanese) ·
   [Compatibility and support](docs/compatibility.md) ·
   [Roadmap](ROADMAP.md)
 - **Using** — [The improvement loop](docs/loop.md) (Japanese) ·
-  [Fill it with your own tables](examples/bigquery-catalog) ·
+  [Fill it with your own tables](examples/bigquery-catalog) (Japanese) ·
   [CLI reference](docs/cli.md) ·
   [MCP clients](docs/guides/mcp-clients.md) (Japanese) ·
   [Troubleshooting](docs/guides/troubleshooting.md) (Japanese)
@@ -192,7 +192,7 @@ in the version you are running.
   [Operating](docs/guides/operating.md) (Japanese) ·
   [Golden query canary](docs/guides/golden-query-canary.md) (Japanese)
 - **Building on it** — [REST API](api/openapi.yaml) ·
-  [Examples](examples) · [All docs](docs/README.md) (Japanese)
+  [Examples](examples) (Japanese) · [All docs](docs/README.md) (Japanese)
 - **Deciding** — [The surface](docs/surface.md), the eight conditions
   ochakai exists to satisfy and everything counted against them, and
   [docs/design](docs/design/README.md), the numbered decision records
