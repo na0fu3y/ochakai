@@ -79,17 +79,23 @@ Run without `--dry-run`, keep the receipt, and hand it to the attester with
 the scope **you authorized in step 3** — not with whatever the run reports:
 
 ```sh
+export OCHAKAI_ID_TOKEN=$(gcloud auth print-identity-token)
+
 python sync-bigquery-catalog.py --project my-project --datasets shop \
   --ochakai-url "$OCHAKAI_URL" > receipt.json
 
-python catalog-sync.py --sync-identity "$SYNC_ACCOUNT" --project my-project \
+python catalog-sync.py --sync-identity you@example.com --project my-project \
   --datasets shop --prefix catalog/bigquery < receipt.json
 ```
 
-Progress goes to stderr, so the redirect captures the receipt and nothing
-else. The attester exits 0 only if the run counted; keep the receipt of a
-run that passed and pass it as `--previous` tomorrow, which is what turns
-on the check that the catalog did not collapse overnight.
+The first line is what lets day one be run by hand: your own ADC cannot
+mint the ID token a private Cloud Run service wants, so you mint one with
+gcloud and the script uses it as-is. `--sync-identity` is then your own
+email — the identity you authorized the run to use is the one you ran it
+as. Progress goes to stderr, so the redirect captures the receipt and
+nothing else. The attester exits 0 only if the run counted; keep the
+receipt of a run that passed and pass it as `--previous` tomorrow, which
+is what turns on the check that the catalog did not collapse overnight.
 
 The job's own exit code is not that check. A run that wrote a whole second
 catalog under the wrong prefix exits 0 and looks like a good night. What
@@ -97,14 +103,18 @@ the four checks are, and why the first one bites hardest, is in
 [the job itself](/jobs/sync-bigquery-catalog.md).
 
 **This step wants the deployment, not a local instance.** `sync_identity`
-is the email claim of the ID token the run minted, and an instance you can
-reach without credentials makes it mint none — the field comes back empty
+is the email claim of the ID token the run used, and an instance you can
+reach without credentials makes it use none — the field comes back empty
 and the attester refuses the receipt rather than attest a run that cannot
 say who made it. That is the right answer, and it means the dev instance
 you dry-ran against in step 2 cannot carry you past here.
 
 Everything is now a draft written by a machine. Nothing here is knowledge
-yet.
+yet. And nothing here is yours in the ownership rule's eyes, even though
+you ran it as yourself: the writes carry the sync's producer stamp, so
+when the scheduled service account takes over tomorrow it recognizes your
+day-one entries as the projection's and keeps them current, instead of
+skipping a catalog that looks like a person wrote it.
 
 ### 5. Turn one table into knowledge
 

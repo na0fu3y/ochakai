@@ -16,10 +16,15 @@ does the same two jobs for `runtime: bigquery`:
      for a catalog whose primary key is its bundle path.
 
   2. Fidelity — does the reported outcome hold together? Every table the
-     run enumerated has to be accounted for by exactly one outcome, and
-     none of them may have failed. `tables_seen` is counted before a write
-     is attempted and the four outcomes after it, so a mismatch means a
-     table left the loop without being counted.
+     run enumerated — plus one dataset entry per dataset it was scoped to
+     — has to be accounted for by exactly one outcome, and none of them
+     may have failed. `tables_seen` is counted before a write is attempted
+     and the five outcomes after it, so a mismatch means a table left the
+     loop without being counted. `missing` is an outcome and not a
+     failure: a table dropped between the listing and the read is a
+     warehouse's ordinary day, and a check that turns red for it is a red
+     nobody reads. What guards against the catalog actually draining away
+     is check 4, which sees the trend, not the night.
 
   3. Ownership — the run still projected something. `written` and
      `unchanged` are the two outcomes that leave an entry the sync's;
@@ -67,6 +72,7 @@ RECEIPT_FIELDS = (
     "written",
     "unchanged",
     "skipped",
+    "missing",
     "failed",
 )
 
@@ -76,7 +82,7 @@ RECEIPT_FIELDS = (
 DEFAULT_MIN_RATIO = 0.5
 
 _SCOPE_STRINGS = ("sync_identity", "project", "prefix")
-_OUTCOMES = ("written", "unchanged", "skipped", "failed")
+_OUTCOMES = ("written", "unchanged", "skipped", "missing", "failed")
 
 
 def _verdict(ok: bool, reason: str | None, **details: Any) -> dict[str, Any]:
@@ -172,21 +178,28 @@ def attest(
                             value=repr(receipt[field]))
         counts[field] = value
 
+    # One outcome per table enumerated, plus one per dataset in scope —
+    # each dataset's own entry leaves the run by the same five doors.
     accounted = sum(counts[f] for f in _OUTCOMES)
-    if accounted != counts["tables_seen"]:
-        return _verdict(False, "tables seen and tables accounted for disagree",
-                        tables_seen=counts["tables_seen"], accounted=accounted,
-                        counts=counts)
+    expected = counts["tables_seen"] + len(got["datasets"])
+    if accounted != expected:
+        return _verdict(False, "objects seen and outcomes accounted for disagree",
+                        tables_seen=counts["tables_seen"],
+                        dataset_entries=len(got["datasets"]),
+                        accounted=accounted, counts=counts)
 
     if counts["failed"]:
         return _verdict(False, "the run reported failed tables",
                         failed=counts["failed"])
 
-    # 3. Ownership.
+    # 3. Ownership. `expected` is never zero — a run is scoped to at least
+    # one dataset, whose own entry it must keep current or be told a
+    # person took the whole catalog.
     projected = counts["written"] + counts["unchanged"]
-    if counts["tables_seen"] and not projected:
-        return _verdict(False, "the run projected nothing: every table was skipped",
-                        tables_seen=counts["tables_seen"], skipped=counts["skipped"])
+    if not projected:
+        return _verdict(False, "the run projected nothing: every entry was skipped or gone",
+                        tables_seen=counts["tables_seen"], skipped=counts["skipped"],
+                        missing=counts["missing"])
 
     # 4. Continuity.
     if previous is not None:

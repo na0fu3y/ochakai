@@ -20,10 +20,19 @@ The procedure the `runtime: python` entries in this bundle name as their
 2. Pass every entry in `parameters` as the matching `--flag`. `datasets`
    takes several values; `dry_run` prints the documents instead of writing
    them, which is how you check a change before it touches the base.
-3. Run it as a service account, not as yourself. A person's own credentials
-   cannot mint the ID token a private Cloud Run service wants, and — more
-   to the point — provenance should say a job wrote these entries, because
-   a job did.
+3. Run the *scheduled* job as a service account: provenance should say a
+   job wrote these entries, because a job did. Running it by hand — day
+   one, a backfill, the dataset you need refreshed this morning — is done
+   as yourself. A person's own ADC cannot mint the ID token a private
+   Cloud Run service wants, so bring one in:
+
+   ```sh
+   export OCHAKAI_ID_TOKEN=$(gcloud auth print-identity-token)
+   ```
+
+   Provenance then names you, which is true; the `Ochakai-Producer` stamp
+   on every write is what lets the next run — anyone's — recognize your
+   run's entries as the projection's rather than skip them as a person's.
 4. Return the receipt (below).
 
 ```sh
@@ -38,7 +47,10 @@ python sync-bigquery-catalog.py \
 
 A Cloud Run job on a Cloud Scheduler trigger is the obvious shape for the
 daily run; the script exits non-zero if any table failed, so a bad night
-shows red without anyone reading the log.
+shows red without anyone reading the log. A table that vanished between
+the listing and the read is `missing`, not `failed`, and does not turn
+the night red — deletion is a warehouse's ordinary day, and a schedule
+that cries wolf over it stops being believed.
 
 ## What it needs, and what it must not have
 
@@ -65,29 +77,31 @@ that is missing one rather than guessing what it meant.
 
 | Field | Where it comes from |
 |---|---|
-| `sync_identity` | the email claim of the ID token the run used — who the entries will say wrote them. Empty when there was no token to mint, and the attester refuses a receipt that cannot name its run |
+| `sync_identity` | the email claim of the ID token the run used — who the entries will say wrote them. Empty when there was no token to mint or bring, and the attester refuses a receipt that cannot name its run |
 | `project` | the `--project` the run used |
 | `datasets` | the `--datasets` it was given, sorted |
 | `prefix` | the `--prefix` the ids were built under |
 | `tables_seen` | tables and views considered, before any ownership check |
-| `written` | entries created or updated |
+| `written` | entries created or updated, dataset entries included |
 | `unchanged` | entries whose bytes already matched, so no revision was made |
-| `skipped` | entries left alone because a person had verified or edited them |
+| `skipped` | entries left alone because a person had verified, edited or rejected them |
+| `missing` | tables dropped between the listing and the read — the world changed, the run did not break, and the exit code stays 0 |
 | `failed` | tables that errored; the run's exit code is non-zero when this is not 0 |
 
 The four scope fields are there because the entry id is derived from them.
-`sync_identity` is the one worth checking hardest: the whole ownership rule
-rests on the job recognizing its own past writes, so a run under an
-unexpected account does not merely mislabel provenance — it stops seeing
-the entries as its own and skips the entire catalog, quietly.
+Ownership itself no longer hangs on `sync_identity` — the producer stamp
+is what a run recognizes its predecessors by, whoever ran them — but the
+receipt still has to name who ran, because the attester's provenance
+check is about whether the run was the one sanctioned, and entries from
+before the stamp existed are still recognized by account.
 
 ## Post-conditions
 
 Hand the receipt to the entry's `attester.resource` together with the
 values the run was authorized with. Do not report the catalog as refreshed
-until the attester returns `ok: true`; a verdict that fails names which of
-the three checks it was, and the run's own exit code cannot tell you —
-a run that wrote a whole second catalog under the wrong prefix exits 0.
+until the attester returns `ok: true`; a verdict that fails names which
+check it was, and the run's own exit code cannot tell you — a run that
+wrote a whole second catalog under the wrong prefix exits 0.
 
 ## What this is not
 
