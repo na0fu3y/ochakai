@@ -31,6 +31,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | エージェントのメモリ層(mem0、Zep、Letta) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入 | チームの所有、人のレビュー、*no* の記録 | 両立 |
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
 | AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
+| FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
 | **MCP サーバー付きの markdown vault(Obsidian、Logseq、ノートの git リポジトリ)** | markdown + frontmatter、リンク、ローカルな所有、エージェントが読めること | 生きた状態としての検証、ループ、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
 
 ### ウェアハウス native の semantic layer
@@ -95,6 +96,35 @@ v0.2 バンドルとして往復する
 ([0075](design/0075-the-bundle-is-the-address-space.md) §1) — git に
 置ける素の markdown と YAML である。MIT でテナントごとのセルフホスト:
 あなたのナレッジが人質になることはない。
+
+### FDE 型オントロジー
+
+*約束は共有し、買い方を拒む。* オントロジーが売っているもの — 組織の
+意味を一箇所に置き、オブジェクトとリンクで結び、意思決定をその上で
+回す — は正しく、実はこのページのどの隣人よりも ochakai の埋める枠に
+近い。[Palantir Foundry の Ontology](https://www.palantir.com/docs/foundry/ontology/overview)
+はそれを二つの支払いで買う: プラットフォームへの接続(semantic な
+オブジェクト・リンクに加えて、Action と write-back という kinetic の
+半分)と、意味を書き起こす常駐エンジニア(FDE)である。
+
+ochakai の賭けは、2026 年にはこの二つの支払いがどちらも要らなくなった、
+というものである。kinetic の半分 — Action、ライブデータへの接続、
+write-back — は、ツールを持ったエージェント自身の仕事になった。残る
+建設対象は semantic の半分、それも意思決定に効く中核だけである:
+検証済みの定義、sanctioned な計算、読み方、方針、そしてそれらを結ぶ
+リンク。書き起こす労働は消えない — 担い手が FDE からエージェントに
+変わり、人には判断の要る中核の検証だけが残る(README の C4、
+[ループ](loop.md))。
+
+この意味で ochakai は**最小のオントロジー**と呼べる: concept とリンクが
+オブジェクトとリンクに、`verified` の台帳と provenance がガバナンスに
+対応し、全体が OKF バンドルとして持ち出せるので
+([0075](design/0075-the-bundle-is-the-address-space.md))、オントロジーが
+プラットフォームのものになることはない。持たないものは意図して持たない。
+Action が要る、オペレーショナルな write-back が要る、concept 単位の
+権限が要る([0065](design/0065-identity-and-provenance.md) §1)、
+Google Cloud の外で動かす([0003](design/0003-gcp-only.md)) — どれか
+一つでも真なら、FDE 型を買う理由はまだそこにある。
 
 <a id="a-markdown-vault-with-an-mcp-server"></a>
 
@@ -204,6 +234,9 @@ vault が持たないのは、ファイル形式でないすべてである:
 - 足りないのがエージェントが*あなた*を覚えていること — 好み、進行中の
   文脈 — なら → メモリ層。
 - 一人、一台、自分で書くノートなら → vault と、その上の MCP サーバー。
+- オントロジーの約束には頷くが、プラットフォームと FDE という買い方を
+  断りたい — そして kinetic の半分(Action、write-back)をエージェントに
+  任せられるなら → semantic の中核だけを最小に持つ、それがこの枠である。
 - **エージェントと人が複数いて、足りないのが誰かが確かめたナレッジ** —
   どのクエリが sanctioned か、その数字が何を意味するか、何が既に試され
   却下されたか — であり、Google Cloud で動かせるなら → それがこれの

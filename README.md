@@ -118,7 +118,12 @@ for what they still don't do:
   the agent *is* the forward-deployed labor, drafting breadth every time
   it learns something, while a human verifies the judgment-heavy core.
   The smallest team that sustains a living knowledge base is one reviewer
-  already in the loop.
+  already in the loop. In ontology terms, this is the smallest ontology
+  that still works: concepts and their links carry the semantic half —
+  verified definitions, sanctioned computations, readings, policies — and
+  the kinetic half (actions, write-back, live objects) stays deliberately
+  absent, because your agent already owns it
+  ([positioning](docs/positioning.md), Japanese).
 - **Not a memory layer — the other half of one.** Memory layers (mem0,
   Zep, Letta) auto-extract per-user memories with an LLM and inject them
   back unaudited. ochakai is the opposite trade: team-shared knowledge
