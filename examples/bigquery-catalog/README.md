@@ -1,6 +1,7 @@
 # BigQuery カタログの同期
 
-BigQuery のテーブルメタデータを `BigQuery Table` concept として ochakai に
+BigQuery のテーブルメタデータを `BigQuery Table` concept として、
+データセットごとの一覧を `BigQuery Dataset` concept として ochakai に
 投影する、毎日のジョブ。`shop.orders` について訊いたエージェントが、
 カラムと、忘れてはいけないパーティションフィルタと、その後に人が下に
 書き足したことを見つけられるようにする。

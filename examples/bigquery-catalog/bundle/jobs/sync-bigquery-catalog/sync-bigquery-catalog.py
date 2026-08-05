@@ -12,7 +12,8 @@ under your own service account, against the same REST API the CLI uses.
 
 Reads BigQuery, writes ochakai, and holds no secret: BigQuery is reached
 with Application Default Credentials, and ochakai with a Google-minted ID
-token for the Cloud Run service.
+token for the Cloud Run service — or with OCHAKAI_ID_TOKEN, for a person
+whose own ADC cannot mint one.
 
     pip install google-cloud-bigquery google-auth requests
 
@@ -26,15 +27,24 @@ import argparse
 import base64
 import datetime
 import json
+import os
 import sys
 
 import google.auth
 import google.auth.transport.requests
 import google.oauth2.id_token
 import requests
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 TIMEOUT = 30
+
+# The stamp every write carries, as Ochakai-Producer (design doc 0052).
+# Ownership below is keyed to it rather than to an account, so any run of
+# this computation — the nightly service account, a person refreshing the
+# dataset they need this morning — recognizes every other run's writes as
+# the projection's. Bump the version when the documents change shape.
+PRODUCER = "sync-bigquery-catalog/2"
 
 
 # --------------------------------------------------------------- identity
@@ -43,10 +53,18 @@ TIMEOUT = 30
 def id_token_for(audience: str) -> str:
     """Mint a Google ID token for a private Cloud Run service.
 
-    Returns "" when the environment cannot mint one — a user's own ADC
-    cannot — which is fine against a local OCHAKAI_INSECURE_DEV server and
-    fatal against Cloud Run, where the server says so itself with a 403.
+    OCHAKAI_ID_TOKEN, when set, is used as-is and wins: a person's own ADC
+    cannot mint an ID token, so a human running this by hand brings one in
+    with
+
+        OCHAKAI_ID_TOKEN=$(gcloud auth print-identity-token)
+
+    Returns "" when the variable is unset and the environment cannot mint
+    one either — which is fine against a local OCHAKAI_INSECURE_DEV server
+    and fatal against Cloud Run, where the server says so itself with a 403.
     """
+    if token := os.environ.get("OCHAKAI_ID_TOKEN", ""):
+        return token
     try:
         request = google.auth.transport.requests.Request()
         return google.oauth2.id_token.fetch_id_token(request, audience)
@@ -168,9 +186,9 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     lifecycle is the writer's declaration, so the writer declares it.
 
     Re-writing it costs nothing: the only entry this job ever replaces is
-    one it wrote itself, which was already a draft. A person's edit takes
-    the entry out through the writer check, and a verification through
-    the trust tier — neither is reached by way of `status`.
+    one the projection wrote, which was already a draft. A person's edit
+    takes the entry out through the producer check, and a verification
+    through the trust tier — neither is reached by way of `status`.
 
     `title` is absent too — the
     id's last segment is the display name (design doc 0074 §1), and that
@@ -213,6 +231,51 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     return f"---\n{frontmatter(keys)}---\n\n{body}"
 
 
+def build_dataset_document(ds, project: str, dataset: str,
+                           tables: list[tuple[str, str]], prefix: str) -> str:
+    """The dataset as an entry: what it is, and which tables it holds.
+
+    Written only by a run that enumerated the whole dataset. The table
+    list is a claim about everything in it, and a run that looked at less
+    — one table, one glob — has no business making it; narrow this script
+    down and the right move is to leave the dataset entry alone rather
+    than have it recite tables the run never saw. The OKF reference
+    bundle keeps a dataset concept beside its table concepts for the same
+    reason: "what is in shop?" is a question with an address.
+
+    That address is `<prefix>/<project>/<dataset>` — the same name its
+    tables sit under as a directory. A concept and a directory of the
+    same name coexist by design (design doc 0075 §2).
+    """
+    resource = f"bigquery://{project}.{dataset}"
+    keys = {
+        "type": "BigQuery Dataset",
+        "resource": resource,
+        "description": (ds.description or "").split("\n")[0][:280],
+        "tags": ["bigquery", dataset],
+        "status": "draft",
+        "sources": [{"resource": resource, "title": f"{project}.{dataset}"}],
+    }
+    lines = ["# Tables", ""]
+    if tables:
+        lines += ["| table | description |", "|---|---|"]
+        for name, desc in tables:
+            link = f"/{prefix}/{project}/{dataset}/{name}.md"
+            lines.append(f"| [{name}]({link}) | {desc.replace('|', r'\|')} |")
+    else:
+        lines.append("_No tables the run could read._")
+    lines += [
+        "",
+        "# Caveats",
+        "",
+        "_Nothing recorded yet._ Write what an agent has to know before it",
+        "works in this dataset — which table is the source of truth, which",
+        "ones are deprecated, where the bodies are buried. Then `ochakai",
+        "verify` this entry and the sync will leave your text alone.",
+    ]
+    return f"---\n{frontmatter(keys)}---\n\n" + "\n".join(lines) + "\n"
+
+
 # ----------------------------------------------------------------- upsert
 
 
@@ -227,7 +290,13 @@ class Ochakai:
 
     def __init__(self, url: str, token: str):
         self.url = url.rstrip("/")
-        self.headers = {"Authorization": f"Bearer {token}"} if token else {}
+        # Every request names its software. The server records the value
+        # beside the authenticated actor, never in place of it (design doc
+        # 0052) — which is exactly what lets the next run tell a
+        # projection from a person, whoever ran this one.
+        self.headers = {"Ochakai-Producer": PRODUCER}
+        if token:
+            self.headers["Authorization"] = f"Bearer {token}"
 
     def _at(self, entry_id: str) -> str:
         return f"{self.url}/api/v1/bundle/{entry_id}.md"
@@ -292,13 +361,23 @@ def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: di
     """Write the projection, unless a person has taken it over.
 
     The rule, in full: write only while nobody has ruled on the entry and
-    this account was its last writer, and make the write conditional so an
-    edit landing between the read and the write loses the race instead of
-    being erased by it (design doc 0030). Verifying an entry — or simply
-    editing it — takes it out of the sync for good. That is the same line
-    design doc 0067 §6 draws for MCP, applied from outside: a machine
-    does not overwrite what a human ruled on. ochakai needs no owner field
-    and no authorization for this; the projection and provenance carry it.
+    the standing text is the projection's own, and make the write
+    conditional so an edit landing between the read and the write loses
+    the race instead of being erased by it (design doc 0030). Verifying an
+    entry — or simply editing it — takes it out of the sync for good. That
+    is the same line design doc 0067 §6 draws for MCP, applied from
+    outside: a machine does not overwrite what a human ruled on. ochakai
+    needs no owner field and no authorization for this; the projection and
+    provenance carry it.
+
+    "The projection's own" is keyed to the producer stamp, not to the
+    account. A catalog grown on demand is refreshed by whoever needed it —
+    A's run under A's account, B's under B's — and a rule keyed to one
+    account would have B skip every entry A projected, forever. Any run of
+    this computation names PRODUCER; a person's edit — CLI, web UI, an
+    agent — names a different producer or none, and that is what takes the
+    entry out. The last-writer identity survives only as a fallback for
+    entries written before the stamp existed.
     """
     view, etag = api.read(entry_id)
     if view is None:
@@ -313,12 +392,13 @@ def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: di
         return
 
     # Who wrote the words that stand there now (design doc 0065 §4): under
-    # delegation this is the end user, which is exactly right — a person
-    # who edited through an application is a person who edited.
-    writer = view.get("observed", {}).get("generated", {}).get("by", {}).get("name", "")
-    if identity and writer != identity:
+    # delegation the name is the end user's, which is exactly right — a
+    # person who edited through an application is a person who edited.
+    by = view.get("observed", {}).get("generated", {}).get("by", {})
+    ours = by.get("producer", "") == PRODUCER or not identity or by.get("name", "") == identity
+    if not ours:
         counts["skipped"] += 1
-        print(f"skip   {entry_id} — last written by {writer}", file=sys.stderr)
+        print(f"skip   {entry_id} — last written by {by.get('name', '?')}", file=sys.stderr)
         return
 
     if api.write(entry_id, document, if_match=etag):
@@ -397,8 +477,12 @@ def main() -> int:
               f"in region-{args.jobs_region}", file=sys.stderr)
         usage = usage_counts(client, args.project, args.jobs_region, args.usage_days)
 
-    counts = {"tables_seen": 0, "written": 0, "unchanged": 0, "skipped": 0, "failed": 0}
+    counts = {"tables_seen": 0, "written": 0, "unchanged": 0,
+              "skipped": 0, "missing": 0, "failed": 0}
     for dataset in args.datasets:
+        # (name, first line of its description) for the dataset entry: the
+        # tables this run actually read, which is the only list it may claim.
+        tables: list[tuple[str, str]] = []
         for item in client.list_tables(dataset):
             if item.table_type not in ("TABLE", "VIEW"):
                 continue
@@ -408,6 +492,7 @@ def main() -> int:
             entry_id = f"{args.prefix}/{args.project}/{dataset}/{name}"
             try:
                 table = client.get_table(f"{args.project}.{dataset}.{name}")
+                tables.append((name, (table.description or "").split("\n")[0]))
                 document = build_document(table, fq, dataset,
                                           usage.get(f"{dataset}.{name}"), window,
                                           args.frequent_threshold)
@@ -420,9 +505,38 @@ def main() -> int:
                     print(document)
                     continue
                 upsert(api, entry_id, document, identity, counts)
+            except NotFound:
+                # Dropped between the listing and the read. Deletion is a
+                # warehouse's ordinary day, so it is an outcome, not a
+                # failure — a nightly job that turns red for it is a red
+                # nobody reads. The entry it leaves behind stays (no
+                # deletes, below); a catalog that actually collapses is the
+                # attester's continuity check, not this run's exit code.
+                counts["missing"] += 1
+                print(f"gone   {entry_id} — dropped between list and read", file=sys.stderr)
             except Exception as err:  # noqa: BLE001 — one bad table is not a bad run
                 counts["failed"] += 1
                 print(f"FAIL   {entry_id} — {err}", file=sys.stderr)
+
+        # One entry for the dataset itself, listing the tables read above —
+        # written here, and only here, because this loop enumerated the
+        # whole dataset and can vouch for the list it writes.
+        entry_id = f"{args.prefix}/{args.project}/{dataset}"
+        try:
+            document = build_dataset_document(client.get_dataset(dataset),
+                                              args.project, dataset, tables,
+                                              args.prefix)
+            if args.dry_run:
+                print(f"=== {entry_id}.md")
+                print(document)
+            else:
+                upsert(api, entry_id, document, identity, counts)
+        except NotFound:
+            counts["missing"] += 1
+            print(f"gone   {entry_id} — dropped between list and read", file=sys.stderr)
+        except Exception as err:  # noqa: BLE001
+            counts["failed"] += 1
+            print(f"FAIL   {entry_id} — {err}", file=sys.stderr)
 
     # The receipt the entry's executor declares. Every field here is one a
     # run has to bring back; checking them is the consumer's job, never

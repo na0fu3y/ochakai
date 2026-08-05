@@ -18,7 +18,7 @@ parameters:
 computation: /jobs/sync-bigquery-catalog/sync-bigquery-catalog.py
 executor:
   resource: /skills/run-a-python-job.md
-  receipt: [sync_identity, project, datasets, prefix, tables_seen, written, unchanged, skipped, failed]
+  receipt: [sync_identity, project, datasets, prefix, tables_seen, written, unchanged, skipped, missing, failed]
 attester:
   resource: /attesters/catalog-sync.py
 ---
@@ -61,6 +61,17 @@ partition filter is mandatory, which is the thing an agent most needs to
 know before it writes a query — the row count, the view SQL when it is a
 view, and an empty `# Caveats` section for a person to fill in.
 
+And one entry per dataset, at `catalog/bigquery/<project>/<dataset>` —
+the dataset's own description and a table list linking to the entries
+under it, which is the address "what is in shop?" resolves to. The
+concept and the directory of its tables share that name by design
+(design doc 0075 §2), and the OKF reference bundle keeps a dataset
+concept beside its table concepts for the same reason. One discipline
+travels with it: the list is a claim about the *whole* dataset, so only
+a run that enumerated the whole dataset writes it. If you narrow this
+script — one table, one glob — leave the dataset entry alone rather
+than have it recite tables the run never saw.
+
 Three of those choices are load-bearing:
 
 - **No `title`.** The id's last segment is the display name, and that
@@ -82,10 +93,27 @@ Three of those choices are load-bearing:
 
 The obvious failure mode of any sync is that it flattens what a person
 wrote, the next morning, silently. This one writes an entry only while
-**nobody has ruled on it and the last writer was the sync account**, and
-the write is conditional on the version it read, so an edit landing
+**nobody has ruled on it and the standing text is the projection's own**,
+and the write is conditional on the version it read, so an edit landing
 between the read and the write loses the race instead of being erased by
 it.
+
+"The projection's own" is recognized by the `Ochakai-Producer` stamp
+every write here carries (`sync-bigquery-catalog/2`, design doc 0052) —
+deliberately the stamp, not the account. A catalog grown on demand is
+refreshed by whoever needed it: A's morning run under A's account, B's
+under B's, the nightly one under the scheduler's. A rule keyed to one
+account would have B's run skip every entry A projected, forever. Keyed
+to the producer, every run of this computation recognizes every other
+run's writes as machine-owned, while a person's edit — through the CLI,
+the web UI, an agent — names a different producer or none, and that is
+what takes the entry out. The stamp is self-declared and recorded beside
+the authenticated actor, never in place of it, so this is a courtesy
+contract between runs rather than a lock — which is all a sync needs:
+the point was never to stop a person, only to notice one. (Entries
+written before the stamp existed carry no producer; for those, and only
+those, the last-writer account still decides, so the first run under the
+old identity re-stamps them and the rule converges.)
 
 "Nobody has ruled on it" is three separate questions, because ochakai
 keeps the three apart: the **lifecycle** is what the writer declared —
@@ -103,8 +131,8 @@ different things:
 - **`ochakai verify`** — "I checked this and it is right." The entry stops
   being a projection and becomes curated knowledge. Its status does not
   change; its trust tier does, and that is what the sync sees.
-- **Editing the body** — enough on its own; the sync sees a different
-  writer and leaves it alone from then on.
+- **Editing the body** — enough on its own; the sync sees a write that
+  does not carry its producer and leaves the entry alone from then on.
 
 The cost is real: a frozen entry stops receiving schema changes, so a
 column added next month will not appear in it. If what you wrote is *about*
@@ -129,7 +157,8 @@ prints its receipt to stdout as JSON and its progress to stderr:
 {"sync_identity": "catalog-sync@my-project.iam.gserviceaccount.com",
  "project": "my-project", "datasets": ["marketing", "shop"],
  "prefix": "catalog/bigquery",
- "tables_seen": 84, "written": 3, "unchanged": 69, "skipped": 12, "failed": 0}
+ "tables_seen": 84, "written": 3, "unchanged": 70, "skipped": 12,
+ "missing": 1, "failed": 0}
 ```
 
 `attester.resource` points at
@@ -144,9 +173,15 @@ reference bundle's `sql_equality.py` asks of a SQL run:
    second one at addresses nobody is watching and left the first to rot.
    This is why the scope is in the receipt at all.
 2. **Fidelity — does the outcome hold together?** `written + unchanged +
-   skipped + failed` must equal `tables_seen`, and `failed` must be zero.
-   The count is taken before a write is attempted and the outcomes after,
-   so a disagreement means a table left the loop uncounted.
+   skipped + missing + failed` must equal `tables_seen` plus one dataset
+   entry per dataset in scope, and `failed` must be zero. The count is
+   taken before a write is attempted and the outcomes after, so a
+   disagreement means a table left the loop uncounted. `missing` — a
+   table dropped between the listing and the read — is an outcome, not a
+   failure: deletion is a warehouse's ordinary day, and a nightly job
+   that turns red for the world changing normally is a red nobody reads.
+   What failed asks is whether the *run* broke; whether the *catalog* is
+   draining away is check 4's question, asked across nights.
 3. **Ownership** — the run projected something. `written` and `unchanged`
    leave an entry the job's; `skipped` says a person took it. A night where
    every table was skipped refreshed nothing, and the two checks above call
@@ -197,5 +232,6 @@ authorized with.
   datasets your agents actually query, and add more when that stops being
   true.
 - **No deletes.** A table that disappears from BigQuery leaves its entry
-  behind. Removing knowledge is a human decision, and the entry may be the
-  only remaining record of what the table meant.
+  behind — the run counts it `missing` and moves on. Removing knowledge is
+  a human decision, and the entry may be the only remaining record of what
+  the table meant.
