@@ -96,16 +96,34 @@ catalog under the wrong prefix exits 0 and looks like a good night. What
 the four checks are, and why the first one bites hardest, is in
 [the job itself](/jobs/sync-bigquery-catalog.md).
 
+**This step wants the deployment, not a local instance.** `sync_identity`
+is the email claim of the ID token the run minted, and an instance you can
+reach without credentials makes it mint none — the field comes back empty
+and the attester refuses the receipt rather than attest a run that cannot
+say who made it. That is the right answer, and it means the dev instance
+you dry-ran against in step 2 cannot carry you past here.
+
 Everything is now a draft written by a machine. Nothing here is knowledge
 yet.
 
 ### 5. Turn one table into knowledge
 
-Pick the table your agents get wrong most often. Write its `# Caveats`
-section — the filter that is always required, the column that lies, the
-timezone the timestamps are in — and then `ochakai verify` it. Two things
-happen: the sync stops overwriting it, and its trust tier changes, so
-agents can tell it apart from the 83 projections beside it.
+Pick the table your agents get wrong most often. The entry is a document,
+so editing it is a round trip through one:
+
+```sh
+ochakai get catalog/bigquery/my-project/shop/orders > orders.md
+$EDITOR orders.md          # fill in the empty `# Caveats` section
+ochakai put catalog/bigquery/my-project/shop/orders -f orders.md
+ochakai verify catalog/bigquery/my-project/shop/orders
+```
+
+Write what an agent has to know before it queries the table — the filter
+that is always required, the column that lies, the timezone the timestamps
+are in. Leave the rest of the document alone; the sync owns it and will
+keep it current. Two things then happen: the sync stops overwriting the
+entry, and its trust tier changes, so agents can tell it apart from the 83
+projections beside it.
 
 **Do one.** The point of day one is not a verified catalog, it is a base
 that has one entry a person will vouch for and a procedure for making the

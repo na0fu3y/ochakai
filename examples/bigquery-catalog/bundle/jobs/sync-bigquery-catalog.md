@@ -66,10 +66,12 @@ Three of those choices are load-bearing:
 - **No `title`.** The id's last segment is the display name, and that
   segment is the table id already.
 - **The entry cites the table as its own source**, so
-  `ochakai search --source bigquery://my-project.shop.orders` returns the
+  `ochakai list --source bigquery://my-project.shop.orders` returns the
   catalog entry *and* every insight or computation written against the same
-  table. That reverse lookup only works if everyone spells the URI the same
-  way — pick the spelling once and keep it.
+  table. `list`, not `search`: a reverse lookup is a listing and has no
+  query to rank by, which is the whole of design doc 0062. That lookup only
+  works if everyone spells the URI the same way — pick the spelling once
+  and keep it.
 - **Query counts go in `sources[].usage_count`, never into ochakai's usage
   telemetry.** ochakai counts how often *its knowledge* was retrieved; this
   counts how often *a table* was queried. Same word, two subjects, and
