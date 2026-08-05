@@ -56,23 +56,19 @@ if the proposal is concrete.
   [open as issues](https://github.com/na0fu3y/ochakai/issues) rather than a
   paragraph here. The compatibility policy the wire surfaces actually follow
   has since been written down
-  ([docs/compatibility.md](docs/compatibility.md), issue #215); what is left is
-  the two ways in that are missing for
-  somebody with no shell or no map — an installable bundle for desktop MCP
-  clients (issue #213) and a guided `ochakai tutorial` (issue #212, which
-  needs a design doc before code, and may be the first command whose purpose
-  is teaching) — are proposals, not plans. None of it is a feature, and it is
-  the work most likely to decide whether anyone else can use this.
+  ([docs/compatibility.md](docs/compatibility.md), issue #215). The two ways in
+  that were missing for somebody with no shell or no map — an installable
+  bundle for desktop MCP clients (issue #213) and a guided `ochakai tutorial`
+  (issue #212) — were both closed as not planned, and for the same reason:
+  the surface each would add is not what keeps its reader out. A bundle
+  removes the cheapest of the three prerequisites a desktop client needs and
+  leaves `gcloud auth login`; a tutorial command would be a third copy of a
+  walkthrough the quick start and [docs/cli.md](docs/cli.md) already carry.
+  Both issues name the condition for revisiting. None of this is a feature,
+  and it is the work most likely to decide whether anyone else can use this.
 
 ## Next
 
-- **Write down the Git-review workflow.**
-  [0009](docs/design/0009-provenance-portability.md) is the only design doc
-  still marked *Proposed*. Its world-view has since been settled by
-  [0075 §3.1](docs/design/0075-the-bundle-is-the-address-space.md) —
-  bundles carry knowledge, provenance is what this instance observed and is
-  never read back from a document — which leaves the recommended
-  export → Git → review → import loop to be documented rather than decided.
 - **Japanese lexical search does not stay fast forever.** A trigram index
   cannot serve a two-character pattern, so Japanese terms are answered by
   scanning: about 16 ms across 5000 concepts, against 0.2 ms for a latin word.
@@ -84,9 +80,9 @@ if the proposal is concrete.
 
 Beyond that this roadmap is thin, and honestly so. Work has been arriving from
 use and from release reviews rather than from a plan; the open issues are the
-current exception, and no design doc is proposed but unlanded except 0009. If
-something you need is missing from this list, that is a reason to say so, not a
-sign it was already considered.
+current exception, and no design doc is proposed but unlanded. If something you
+need is missing from this list, that is a reason to say so, not a sign it was
+already considered.
 
 ## Considered and deliberately not doing
 

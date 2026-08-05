@@ -67,6 +67,9 @@
   いること — そして分かっていないこと。
 - [golden query canary](guides/golden-query-canary.md) — 検証済みクエリ
   を CI から実行し、静かに壊れたナレッジベースがそうと分かるようにする。
+- [Git をレビュー経路にする](guides/git-review.md) — export した木を Git
+  に置き、ナレッジの変更を PR で通す運用。往復で何が動かないか、なぜ
+  merge が verify ではないか、そして CI から取り込むと誰が記録されるか。
 - [トラブルシューティング](guides/troubleshooting.md) — ローカルとクライ
   アント側の半分: 空の検索結果、スキップされた import、404 や 412、空の
   web UI、起動を拒むサーバー。Google Cloud 側の症状はデプロイガイドの

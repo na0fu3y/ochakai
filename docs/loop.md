@@ -74,6 +74,8 @@ reject を待っている concept](images/webui-review.png)
 同じコンテナイメージに `--args=serve-ui` を渡すだけである
 ([運用ガイド](guides/operating.md#the-team-web-ui))。
 
+<a id="feeds"></a>
+
 ## 三つのフィードと、その終わらせ方
 
 再検証キューを裁定者の前に置くフィードが二つある。**検証の古さ**の

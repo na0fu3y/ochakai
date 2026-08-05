@@ -57,7 +57,7 @@ For the shape of the system rather than the history of it, read
 | [0060 One word for the posture](0060-one-word-for-the-posture.md) | **Superseded by 0066** | |
 | [0027 Delegated end-user provenance](0027-delegated-provenance.md) | **Superseded by 0065** | |
 | [0052 The self-declaration goes beside the actor](0052-producer-beside-the-actor.md) | **Superseded by 0065** | |
-| [0009 OKF/Git round-trips and who owns provenance](0009-provenance-portability.md) | **Proposed** | Provenance is what an instance observed, not a portable attribute: bundles carry knowledge only, and exported `created_by`/`verified_by` are historical reference that import never reads into a ledger; a `--preserve-provenance` flag is refused since nothing authorizes it. Migrating to a new instance records the importer — run migrations under a dedicated identity. |
+| [0009 OKF/Git round-trips and who owns provenance](0009-provenance-portability.md) | **Accepted** | Provenance is what an instance observed, not a portable attribute: bundles carry knowledge only, and a document's own trust family never reaches a ledger — 0075 §3.1 holds the current statement of that. What stays here is the two refusals it implies (`--preserve-provenance`, and signed provenance between instances — nothing authorizes either without an authorization model), and the ruling that Git is a review route: a round trip into the same instance moves no provenance at all, whoever imports is recorded as the actor, and **a merge is not a verification**. The procedure is [the Git-review guide](../guides/git-review.md) (Japanese). |
 
 ## The knowledge model — structure, ids, types, names, links
 
