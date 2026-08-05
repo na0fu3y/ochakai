@@ -159,8 +159,20 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     address is a 415 naming this shape. The frontmatter is the metadata
     and the markdown is the body.
 
-    `status` is deliberately absent: create defaults it to draft, and a
-    replace leaves whatever is stored alone. `title` is absent too — the
+    `status: draft` is written rather than left out. Leaving it out does
+    not mean draft: OKF SPEC §5.4 gives `status` a default and that
+    default is `stable` (internal/domain's LifecycleOf). A projection
+    that arrives stable is one this job then reads back as ruled on by a
+    person and skips forever after — the catalog is written once and
+    never updated again, and the receipt calls that a clean night. The
+    lifecycle is the writer's declaration, so the writer declares it.
+
+    Re-writing it costs nothing: the only entry this job ever replaces is
+    one it wrote itself, which was already a draft. A person's edit takes
+    the entry out through the writer check, and a verification through
+    the trust tier — neither is reached by way of `status`.
+
+    `title` is absent too — the
     id's last segment is the display name (design doc 0074 §1), and that
     segment is already the table id. The keys this instance owns —
     `generated`, `verified`, `created_by` — are never written from here:
@@ -192,6 +204,7 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
         "resource": resource,
         "description": (table.description or "").split("\n")[0][:280],
         "tags": tags,
+        "status": "draft",
         "sources": [source],
     }
     if usage:

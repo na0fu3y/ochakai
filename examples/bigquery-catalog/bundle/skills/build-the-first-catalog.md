@@ -52,6 +52,11 @@ The download brings back two files beside each other — the computation and
 the attester you will need in step 4 — because both are the job's, and a
 contract you can read without the code it names is half a contract.
 
+**That download is empty on an instance with no `OCHAKAI_GCS_BUCKET`**, and
+nothing says so: files are not stored there at all, so the concepts arrived
+without them. Take the two `.py` files from the bundle directory or the
+release archive instead.
+
 No credentials for ochakai are needed for the run itself. Read **one** of the printed
 documents completely — the columns, the partition filter, the empty
 `# Caveats` section. What you are checking is whether an agent handed this
@@ -70,12 +75,26 @@ run. The attester's first check exists for exactly this.
 
 ### 4. Run it, then attest the run
 
-Run without `--dry-run`, capture the receipt from stdout, and hand it to
-the attester the job names — with the scope you authorized in step 3, not
-with whatever the run reports. A non-zero exit code is not the check: a run
-that wrote a whole second catalog under the wrong prefix exits 0 and looks
-like a good night. What the three checks are, and why the first one is the
-one that bites, is in [the job itself](/jobs/sync-bigquery-catalog.md).
+Run without `--dry-run`, keep the receipt, and hand it to the attester with
+the scope **you authorized in step 3** — not with whatever the run reports:
+
+```sh
+python sync-bigquery-catalog.py --project my-project --datasets shop \
+  --ochakai-url "$OCHAKAI_URL" > receipt.json
+
+python catalog-sync.py --sync-identity "$SYNC_ACCOUNT" --project my-project \
+  --datasets shop --prefix catalog/bigquery < receipt.json
+```
+
+Progress goes to stderr, so the redirect captures the receipt and nothing
+else. The attester exits 0 only if the run counted; keep the receipt of a
+run that passed and pass it as `--previous` tomorrow, which is what turns
+on the check that the catalog did not collapse overnight.
+
+The job's own exit code is not that check. A run that wrote a whole second
+catalog under the wrong prefix exits 0 and looks like a good night. What
+the four checks are, and why the first one bites hardest, is in
+[the job itself](/jobs/sync-bigquery-catalog.md).
 
 Everything is now a draft written by a machine. Nothing here is knowledge
 yet.
