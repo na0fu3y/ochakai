@@ -135,6 +135,29 @@ gcloud sql users create ochakai --instance=ochakai --password=$DB_PASSWORD
 セスとのトレードオフは運用ガイドの
 [Hardening](../../docs/guides/operating.md#hardening) にある。
 
+### 2c. 代わりに: 既存のインスタンスに同居させる
+
+企業環境の典型は、インスタンスを新設せず既存の PostgreSQL インスタンス
+に database を一つ足す形である。その場合 §2 は丸ごと飛ばし、§3 以降を
+インスタンスの接続名を読み替えてそのまま辿る。先に要るのは二つだけ:
+
+```sh
+gcloud sql instances patch <instance> --database-flags=cloudsql.iam_authentication=on
+gcloud sql databases create ochakai --instance=<instance>
+```
+
+- `--database-flags` は一覧の**全置換**である — インスタンスに既に
+  フラグがあるなら、同じコマンドに列挙し直す。そしてフラグの変更は
+  **インスタンスの再起動を伴う**ので、同居しているデータベースの
+  メンテナンス窓で行う(既に on なら patch ごと不要である)。
+- §2 の admin ユーザーは作らなくてよい — §3 の bootstrap SQL は、
+  既存の管理者ユーザーで打てば足りる。
+- インスタンスが **private IP のみ**なら、§3 の `gcloud run deploy` に
+  `--network=<vpc> --subnet=<subnet>` を足して Cloud Run を同じ VPC に
+  入れる(Direct VPC egress)— 無いと Cloud SQL コネクタはタイムアウト
+  で死ぬ(§7)。フラグの意味は運用ガイドの
+  [Hardening](../../docs/guides/operating.md#hardening) にある。
+
 <a id="3-deploy-cloud-run-dedicated-identity-passwordless-org-restricted"></a>
 
 ## 3. Cloud Run をデプロイする(専用の identity、パスワードレス、組織限定)
@@ -461,6 +484,12 @@ gating は、すべて運用ガイドの
 - **コンテナが `cloudsql.instances.get ... NOT_AUTHORIZED` で終了す
   る**: サービスアカウントに `roles/cloudsql.client` が無い(§3 の最
   初の手順)。
+- **コンテナが `connection to Cloud SQL instance at 10.x.x.x:3307
+  failed: … timed out` で終了する**: インスタンスは private IP のみ
+  なのに、Cloud Run サービスが VPC の中に居ない。
+  `gcloud run services update ochakai --region=$REGION --network=<vpc> --subnet=<subnet>`
+  で Direct VPC egress を足す(§2c、運用ガイドの
+  [Hardening](../../docs/guides/operating.md#hardening))。
 - **サービスアカウントを作った直後に Cloud SQL ソケットが
   `connection refused` になる**: 作りたてのサービスアカウントへの
   IAM 付与が反映されるまで 1 分ほどかかることがある。role が届いて
