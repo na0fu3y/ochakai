@@ -3,11 +3,14 @@
 まずは [README](../README.md) を読む — ochakai とは何か、クイックスタート、
 そして何をしないか。README はわざと短くしてあり、詳しい説明はここにある。
 
-**このマニュアルは日本語へ移している途中である**(C8、
-[surface.md](surface.md))。使うため・運用するために読むページが日本語に
-なり、README と `api/openapi.yaml`、`cli.md`(バイナリの `-h` から生成)、
-互換性のページは英語のままである。まだ英語のページには英語のまま行き着く
-— 対訳は置かない。どちらが古いか誰にも分からなくなるからである。
+**このマニュアルは日本語である**(C8、[surface.md](surface.md))。英語で
+残るのは玄関と契約だけで、それは決定である — [README](../README.md)
+(使うかどうかを決める場所であり、その読者は国際的である)、
+[api/openapi.yaml](../api/openapi.yaml)、[cli.md](cli.md)(バイナリの
+`-h` から生成されるので、ページを訳すことはバイナリを訳すことになる)、
+[互換性](compatibility.md)、[ROADMAP](../ROADMAP.md)、
+[SECURITY](../SECURITY.md)、[SUPPORT](../SUPPORT.md)。**対訳は置かない**
+— 同じことを言う二本のテキストは、どちらが古いか誰にも分からなくなる。
 
 ## 導入を検討している人へ
 
@@ -67,6 +70,9 @@
   いること — そして分かっていないこと。
 - [golden query canary](guides/golden-query-canary.md) — 検証済みクエリ
   を CI から実行し、静かに壊れたナレッジベースがそうと分かるようにする。
+- [Git をレビュー経路にする](guides/git-review.md) — export した木を Git
+  に置き、ナレッジの変更を PR で通す運用。往復で何が動かないか、なぜ
+  merge が verify ではないか、そして CI から取り込むと誰が記録されるか。
 - [トラブルシューティング](guides/troubleshooting.md) — ローカルとクライ
   アント側の半分: 空の検索結果、スキップされた import、404 や 412、空の
   web UI、起動を拒むサーバー。Google Cloud 側の症状はデプロイガイドの

@@ -1,216 +1,220 @@
-# Positioning
+# ポジショニング
 
-Every "why not just use X?" answered in one place. The honest answer is
-usually **"you can, and they compose"** — ochakai is one layer of a data
-agent's context, not a replacement for the warehouse, the catalog, the
-memory layer or your notes app. What it claims is a slot none of them
-fill: *knowledge a human verified, written by the agents that use it,
-served to every client over one contract.*
+「X を使えばいいのでは」への答えを一箇所に集めたページ。正直な答えは
+たいてい**「使えばよいし、両立する」**である — ochakai はデータ
+エージェントのコンテキストの一層であって、ウェアハウスやカタログ、
+メモリ層やあなたのノートアプリの代わりではない。主張しているのは、
+そのどれも埋めていない一つの枠である: *人が検証したナレッジを、それを
+使うエージェント自身が書き、すべてのクライアントに一つの契約で配る。*
 
-This page is for somebody evaluating. What ochakai refuses is in the
-[README](../README.md#what-it-refuses) and the
-[roadmap](../ROADMAP.md#considered-and-deliberately-not-doing); why the
-surface stays small is [docs/surface.md](surface.md), whose **seven
-conditions** are the vocabulary used below.
+このページは評価している人のためのものである。ochakai が断るものは
+[README](../README.md#what-it-refuses) と
+[ROADMAP](../ROADMAP.md#considered-and-deliberately-not-doing) にあり、
+表面が小さいまま保たれる理由は [docs/surface.md](surface.md) にある。
+以下で使う語彙はその**八つの条件**である。
 
-## The one line
+## 一行で
 
-A semantic layer tells you revenue = `SUM(price)`. It does not tell you
-whether 100 is good or bad, that Q3 is always soft, that the `web` and
-`web_direct` channel codes were never two things, or that the query
-somebody sanctioned for this question is *that* one. ochakai holds that
-second half, keeps a human's ruling on each piece of it, and lets the
-agents that consume it write the next piece back.
+semantic layer は revenue = `SUM(price)` だと教えてくれる。100 という
+数字が良いのか悪いのか、Q3 はいつも弱いこと、`web` と `web_direct` の
+チャネルコードが実は二つのものだったことは一度も無いこと、そしてこの
+問いに対して誰かが sanctioned としたクエリが*その*一本であることは、
+教えてくれない。ochakai はその後半を持ち、一つ一つに人の裁定を残し、
+それを消費するエージェントが次の一つを書き戻せるようにする。
 
-## The neighbors
+## 隣人たち
 
-| Comparing against | It holds | It does not hold | Verdict |
+| 比較対象 | あちらが持つもの | あちらが持たないもの | 判定 |
 |---|---|---|---|
-| Warehouse-native semantic layers (dbt MCP, Cube, Lightdash, Snowflake Semantic Views, Databricks Metric Views) | Metric definitions, dimensions, compiled SQL | Interpretation, glossary, write-back, anything cross-warehouse | Compose |
-| Catalogs that became "context layers" (OpenMetadata, DataHub, Atlan) | Technical metadata, lineage, ownership, harvested at scale | The curated half as OSS — interpretation and the review loop tend to sit in the commercial tier | Compose, or replaces ochakai if you already run one |
-| Agent memory layers (mem0, Zep, Letta) | Per-user, per-agent memories, auto-extracted and auto-injected | Team ownership, human review, a record of *no* | Compose |
-| RAG over your documents | Passages from documents written for other reasons | A reviewed claim as the unit; provenance; direction of authorship | Compose |
-| Verified-query stores inside an AI-analyst product (Cortex Analyst's VQR, Genie) | Question + verified SQL, inside one vendor's chat | Any other client; an exit | Overlaps, and locks in |
-| **A markdown vault with an MCP server (Obsidian, Logseq, a git repo of notes)** | markdown + frontmatter, links, local ownership, agent-readable | Verification as a live state, the loop, multi-writer identity, reach beyond one machine | Compose — see below |
+| ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの | 両立 |
+| 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
+| エージェントのメモリ層(mem0、Zep、Letta) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入 | チームの所有、人のレビュー、*no* の記録 | 両立 |
+| 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
+| AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
+| **MCP サーバー付きの markdown vault(Obsidian、Logseq、ノートの git リポジトリ)** | markdown + frontmatter、リンク、ローカルな所有、エージェントが読めること | 生きた状態としての検証、ループ、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
 
-### Warehouse-native semantic layers
+### ウェアハウス native の semantic layer
 
-Closest on metric definitions, and by 2026 the warehouses hold them
-natively as schema objects. In a single-warehouse world that half is
-theirs and ochakai's `Metric` concepts are redundant. What stays is
-everything that does not fit a semantic-model YAML: the baseline, the
-caveat, the threshold, the query somebody sanctioned, and knowledge that
-spans warehouses. ochakai stopped generating SQL deliberately
-([0070](design/0070-what-was-retired-and-why.md) §3) — what an agent needs is the
-verified query and the caveat around it.
+メトリクス定義については最も近く、2026 年にはウェアハウスがそれを
+スキーマオブジェクトとしてネイティブに持つようになった。単一ウェア
+ハウスの世界では、その半分はあちらのものであり、ochakai の `Metric`
+concept は冗長である。残るのは semantic model の YAML に収まらない
+すべて — ベースライン、注意書き、しきい値、誰かが sanctioned とした
+クエリ、そしてウェアハウスをまたぐナレッジである。ochakai が SQL の
+生成をやめたのは意図した決定であり
+([0070](design/0070-what-was-retired-and-why.md) §3)、エージェントが
+必要とするのは検証済みのクエリとその周りの注意書きだからである。
 
-### Catalogs as context layers
+### コンテキスト層としてのカタログ
 
-The nearest in intent, and the honest risk: an organization already
-running a catalog with an MCP server will reasonably find it sufficient.
-ochakai's structural differences are that interpretation knowledge and
-the review loop are the *open-source core* rather than the commercial
-tier, and that it is curated rather than harvested — no connectors, no
-ingestion, trust density over volume. It stands alone for a team with no
-catalog, or beside one as the verified layer for agents. A catalog
-projection is an ordinary client under your own service account
-([example](../examples/bigquery-catalog)), never a credential ochakai
-holds.
+意図の上では最も近く、正直なリスクでもある: MCP サーバー付きのカタログ
+を既に運用している組織は、それで十分だと考えるのが妥当である。ochakai
+の構造上の違いは、解釈のナレッジとレビューループが商用ティアではなく
+**オープンソースの中核**であること、そして収集ではなくキュレーション
+であること — コネクタも取り込みも無く、量より信頼の密度である。カタログ
+を持たないチームには単独で立ち、持つチームにはエージェント向けの検証済み
+層としてその隣に立つ。カタログの投影は自分のサービスアカウントで動く
+普通のクライアントであって([例](../examples/bigquery-catalog))、
+ochakai が持つ資格情報では決してない。
 
-### Agent memory layers
+### エージェントのメモリ層
 
-*Memory layers remember what happened; ochakai curates what's true.*
-They extract with an LLM and inject unaudited: nobody reviews what got
-remembered, and a wrong memory persists quietly. In data analysis a
-wrong memory is a wrong decision, so the quality ceiling of unaudited
-recall is low. ochakai is team-shared knowledge behind a human's ruling,
-with rejections keeping their reason so agents stop re-proposing them.
+*メモリ層は起きたことを覚え、ochakai は正しいことをキュレーションする。*
+あちらは LLM で抽出し、監査を経ずに注入する: 何が記憶されたかを誰も
+レビューせず、間違った記憶は静かに残り続ける。データ分析において
+間違った記憶は間違った意思決定であり、監査されない想起の品質の天井は
+低い。ochakai は人の裁定の後ろにあるチーム共有のナレッジであり、却下は
+その理由を保つのでエージェントは同じ提案を繰り返さなくなる。
 
-The lesson worth taking from them is not about memory quality but about
-ergonomics: their real strength is that the agent does not have to
-*decide* to remember. ochakai answers that with `get_context` and the
-Claude Code [hooks](../examples/claude-code) — recall and write-back as
-mechanism rather than habit, and still without an LLM.
+あちらから学ぶ価値があるのは記憶の品質ではなく人間工学のほうである:
+本当の強みは、エージェントが覚えようと*決める*必要が無いことである。
+ochakai は `get_context` と Claude Code の[フック](../examples/claude-code)
+でそれに答える — 想起も書き戻しも習慣ではなく仕組みとして、しかも
+LLM 無しで。
 
-### RAG over your documents
+### 自分の文書に対する RAG
 
-RAG retrieves passages from documents somebody wrote for other reasons;
-what comes back is as right as whatever was in the wiki. ochakai returns
-concepts a human marked `verified`, with provenance saying who wrote it,
-who checked it and when, and a feed that resurfaces knowledge which has
-gone too long unchecked or came back wrong. **The unit is a reviewed
-claim, not a chunk.**
+RAG は誰かが他の理由で書いた文書から断片を取ってくる。返ってくるものの
+正しさは、wiki に何が書いてあったか以上にはならない。ochakai が返すのは
+人が `verified` と印を付けた concept であり、誰が書き、誰がいつ確かめた
+かを言う provenance と、長く確かめられていないナレッジや間違いとして
+戻ってきたナレッジを浮かせるフィードが付いている。**単位はチャンクでは
+なく、レビュー済みの主張である。**
 
-The other difference is direction. A RAG index is built *from*
-documents; a knowledge base here is written *by the agents using it* and
-promoted by a human — the write-back loop is the product, and a rejected
-proposal keeps its reason so agents stop re-proposing it.
+もう一つの違いは向きである。RAG の索引は文書*から*作られる。ここでの
+ナレッジベースは、それを使うエージェント*によって*書かれ、人が昇格
+させる — 書き戻しのループが製品そのものであり、却下された提案はその
+理由を保つのでエージェントは同じ提案を繰り返さない。
 
-### Verified-query stores inside an AI-analyst product
+### AI アナリスト製品に内蔵された検証済みクエリストア
 
-Every AI-analyst product has one, and each feeds only its own chat. The
-same knowledge in ochakai serves Claude Code, hosted MCP agents and CI
-jobs alike, and the whole base round-trips through OKF v0.2 bundles
-([0075](design/0075-the-bundle-is-the-address-space.md) §1) — plain markdown and YAML that
-lives in git. MIT and self-hosted per tenant: your knowledge is never a
-hostage.
+AI アナリスト製品はどれもこれを持っており、そのどれもが自分のチャット
+だけに供給する。ochakai の同じナレッジは Claude Code にも、ホストされた
+MCP エージェントにも、CI ジョブにも等しく供給され、ベース全体が OKF
+v0.2 バンドルとして往復する
+([0075](design/0075-the-bundle-is-the-address-space.md) §1) — git に
+置ける素の markdown と YAML である。MIT でテナントごとのセルフホスト:
+あなたのナレッジが人質になることはない。
 
-### A markdown vault with an MCP server
+<a id="a-markdown-vault-with-an-mcp-server"></a>
 
-The cheapest alternative, and in 2026 the most common one to have
-already: a vault of markdown notes with YAML frontmatter, links in the
-body, reachable from Claude Code over a community MCP server in about ten
-minutes with no infrastructure at all. Obsidian even reads frontmatter as
-typed properties and builds table, card, list and map views over them
-with Bases, while the data stays in the notes.
+### MCP サーバー付きの markdown vault
 
-The overlap is not superficial — it is the same physical form. An
-`ochakai export` bundle is a directory of markdown files with YAML
-frontmatter whose relationships are ordinary body links
-([0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2), which is to say **it opens as a
-vault**. If what you want is to browse your knowledge base with a good
-editor and a graph view, that is the tool, and nothing here competes with
-it. (Whether every root-relative link in an export resolves in Obsidian's
-graph is untested.)
+最も安価な代替であり、2026 年には最も高い確率で既に持っているもので
+ある: YAML frontmatter を持つ markdown ノートの vault で、本文にリンク
+があり、コミュニティの MCP サーバー経由で Claude Code から 10 分ほどで
+届く — インフラは一切要らない。Obsidian は frontmatter を型付きの
+プロパティとして読み、Bases でその上にテーブル・カード・リスト・マップの
+ビューまで作る。データはノートの中に留まったままである。
 
-What the vault does not have is everything that is not the file format:
+重なりは表面的ではない — **物理的な形が同じ**なのである。`ochakai
+export` のバンドルは YAML frontmatter を持つ markdown ファイルの
+ディレクトリで、その関係は普通の本文リンクである
+([0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2)。
+つまり**それは vault として開く**。良いエディタとグラフビューで
+ナレッジベースを眺めたいのなら、それがその道具であり、ここにあるものは
+何も競合しない。(export のルート相対リンクが Obsidian のグラフで
+すべて解決するかは未検証である。)
 
-- **The unit.** A note is a document somebody wrote for their own
-  reasons. An ochakai concept is a claim carrying its lifecycle, its
-  `verified` ledger and its provenance in
-  [OKF](design/0075-the-bundle-is-the-address-space.md)'s own keys. Those keys are
-  ordinary YAML, so a vault can hold them — which is exactly where the
-  difference shows. In a vault, a `verified` concept naming a human is a
-  line somebody typed. Here it is what the instance observed of an
-  authenticated caller, and it is never read back from a document
-  ([0009](design/0009-provenance-portability.md),
-  [0075](design/0075-the-bundle-is-the-address-space.md) §3.1) — a file has no observer.
-  Nothing in a vault appends to that ledger, derives a trust tier from
-  it, refuses a write against it, or resurfaces a concept when its last
-  confirmation has aged out.
-- **The loop (C7).** There is no analogue at all — no review queue, no
-  memory of *no*, no usage counts, no verification-age feed, no outcome
-  reports from agents that acted on a concept and found it wrong
-  ([the loop](loop.md), [0069](design/0069-the-loop-and-what-measures-it.md) §1). This is
-  the sharpest difference, and it is the product.
-- **Direction.** A vault is written by a human for a human, with the
-  agent as a reader — or lately a writer, unaudited and unmeasured.
-  ochakai's bet is the opposite: the agent drafts breadth, a human
-  verifies the judgment-heavy core.
-- **Multiple writers.** A vault is a folder; its concurrency story is
-  file sync, and shared vaults produce conflicts. ochakai is a server
-  with ETag / `If-Match` optimistic locking
-  ([0030](design/0030-optimistic-locking.md)) and a surface rule that an
-  agent cannot overwrite what a human has ruled on
-  ([FAQ](faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified)).
-- **Identity, and no secret (C2).** A vault MCP server typically runs
-  behind a local REST API plugin with an API key in the client config —
-  exactly the token ochakai's design refuses
-  ([0065](design/0065-identity-and-provenance.md) §1,
-  [0003](design/0003-gcp-only.md)). And the caller has no identity to
-  record: "who wrote this" is whoever's laptop it was.
-- **Reach (C5, C6).** The vault is on one machine and so is its MCP
-  server. Hosted agents, CI jobs and a REST API you can embed in your own
-  web service are not there.
-- **Retrieval.** Hybrid search with embeddings on by default
-  ([0073](design/0073-search-and-when-embeddings-apply.md) §1), path-scoped search,
-  file search over image and PDF content, and `get_context` — a
-  one-call read shaped for an agent's question rather than a human's
-  browse.
-- **Types.** A vault is type-agnostic, which is right for notes and
-  costly here: nothing tells an agent that this file is a verified golden
-  query and that one is a meeting note.
+vault が持たないのは、ファイル形式でないすべてである:
 
-So the composition is real and unusually literal. A vault is where a
-person thinks and writes; ochakai is where a team's verified data
-knowledge lives and is served to agents — and because the stored form is
-the same markdown, the export → Git → review → import loop can pass
-through a vault on the way.
+- **単位。** ノートは誰かが自分の理由で書いた文書である。ochakai の
+  concept は、自分のライフサイクル・`verified` の台帳・provenance を
+  [OKF](design/0075-the-bundle-is-the-address-space.md) 自身のキーで
+  運ぶ主張である。それらのキーは普通の YAML なので vault にも置ける —
+  そしてまさにそこに違いが出る。vault では、人の名前が書かれた
+  `verified` の concept は誰かがタイプした一行である。ここではそれは、
+  認証された呼び出し元についてインスタンスが観測したことであり、文書
+  から読み戻されることは決してない
+  ([0009](design/0009-provenance-portability.md)、
+  [0075](design/0075-the-bundle-is-the-address-space.md) §3.1) —
+  ファイルには観測者がいない。vault の中の何一つ、その台帳に追記も
+  しなければ、そこから trust tier を導きも、それに反する書き込みを
+  拒みも、最後の確認が古びた concept を浮かせもしない。
+- **ループ(C7)。** 対応するものが一つも無い — レビューキューも、
+  *no* の記憶も、利用回数も、検証の古さのフィードも、concept に基づいて
+  動いて間違いだったと分かったエージェントからの結果報告も
+  ([ループ](loop.md)、
+  [0069](design/0069-the-loop-and-what-measures-it.md) §1)。これが最も
+  鋭い違いであり、これが製品である。
+- **向き。** vault は人が人のために書き、エージェントは読み手である —
+  最近は書き手でもあるが、監査もされず測られもしない。ochakai の賭けは
+  逆で、エージェントが幅を下書きし、人が判断の要る中核を検証する。
+- **複数の書き手。** vault はフォルダであり、その並行性の話はファイル
+  同期である。共有された vault は衝突を生む。ochakai は ETag /
+  `If-Match` の楽観ロック([0030](design/0030-optimistic-locking.md))を
+  持つサーバーであり、人が裁定したものをエージェントが上書きできない
+  という面の規則を持つ
+  ([FAQ](faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified))。
+- **identity、そして secret が無いこと(C2)。** vault の MCP サーバーは
+  たいてい、クライアントの設定に API キーを書いたローカル REST API
+  プラグインの後ろで動く — それこそ ochakai の設計が拒んでいる当の
+  トークンである([0065](design/0065-identity-and-provenance.md) §1、
+  [0003](design/0003-gcp-only.md))。そして呼び出し元には記録すべき
+  identity が無い: 「これを書いたのは誰か」は「誰のノート PC だったか」
+  である。
+- **到達(C5、C6)。** vault は一台のマシンの上にあり、その MCP サーバー
+  も同じである。ホストされたエージェント、CI ジョブ、そして自分の Web
+  サービスに埋め込める REST API は、そこには無い。
+- **検索。** 埋め込みを既定でオンにした hybrid search
+  ([0073](design/0073-search-and-when-embeddings-apply.md) §1)、住所で
+  絞る検索、画像や PDF の中身に対するファイル検索、そして
+  `get_context` — 人のブラウズではなくエージェントの問いの形に合わせた
+  一回の読み取りである。
+- **型。** vault は型に無関心であり、それはノートには正しく、ここでは
+  代償になる: このファイルが検証済みの golden query で、あちらが議事録
+  だと、エージェントに言うものが何も無い。
 
-## Where ochakai loses
+だから両立は本物で、しかも異例なほど文字どおりである。vault は人が
+考えて書く場所であり、ochakai はチームの検証済みデータナレッジが住み、
+エージェントに配られる場所である — そして保存形が同じ markdown である
+以上、export → Git → レビュー → import のループは、途中で vault を
+通ることができる([Git をレビュー経路にする](guides/git-review.md))。
 
-Stated plainly, because an evaluation that only finds advantages is not
-an evaluation.
+## ochakai が負けるところ
 
-- **Authoring experience.** Obsidian and its ecosystem are far better
-  places to write and to browse. The bundled web UI is a curation
-  surface by policy, not a writing environment or a BI tool
-  ([0067 §1](design/0067-four-faces-and-what-they-decline.md)).
-- **Infrastructure.** A vault costs nothing to stand up. ochakai wants a
-  Google Cloud project and a Postgres — about $10/month, but not zero,
-  and not five minutes.
-- **Google Cloud only.** C2's secret-zero property is bought with Cloud
-  Run IAM and Cloud SQL IAM, and there is no supported way to run
-  production elsewhere ([0003](design/0003-gcp-only.md)). For many teams
-  that is disqualifying, and it is a decision rather than a gap.
-- **No authorization.** Whoever can reach a deployment can read and write
-  everything ([0065](design/0065-identity-and-provenance.md) §1). If you need per-concept
-  permissions, this is the wrong tool.
-- **Scale.** Built for the size a *curated* base reaches — thousands of
-  concepts, not millions, because every one passed a human.
-- **Ecosystem.** One maintainer, one binary, no plugins, no marketplace.
+はっきり書く。利点しか見つからない評価は、評価ではないからである。
 
-## Choosing
+- **書く体験。** Obsidian とそのエコシステムは、書く場所としても眺める
+  場所としてもはるかに優れている。同梱の Web UI は方針としてキュレー
+  ションの面であって、執筆環境でも BI ツールでもない
+  ([0067 §1](design/0067-four-faces-and-what-they-decline.md))。
+- **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
+  プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
+  5 分でもない。
+- **Google Cloud のみ。** C2 の secret-zero という性質は Cloud Run IAM
+  と Cloud SQL IAM で買われており、他所で本番を動かすサポートされた方法
+  は無い([0003](design/0003-gcp-only.md))。多くのチームにとってこれは
+  失格要件であり、そしてそれは欠落ではなく決定である。
+- **認可が無い。** デプロイに到達できる者は、すべてを読み書きできる
+  ([0065](design/0065-identity-and-provenance.md) §1)。concept ごとの
+  権限が要るなら、これは間違った道具である。
+- **規模。** **キュレーションされた**ベースが届く大きさのために作られて
+  いる — 数百万ではなく数千の concept である。一つ残らず人を通っている
+  からである。
+- **エコシステム。** 維持者は一人、バイナリは一つ、プラグインも
+  マーケットプレイスも無い。
 
-- Already run a catalog with an MCP server, and the questions your agents
-  miss are lineage and ownership → the catalog is enough.
-- One warehouse, and what is missing is metric definitions → the
-  warehouse's own semantic layer.
-- What is missing is the agent remembering *you* — preferences, ongoing
-  context → a memory layer.
-- One person, one machine, notes you write yourself → a vault, and an
-  MCP server over it.
-- **Several agents and people, and what is missing is knowledge somebody
-  checked** — which query is sanctioned, what the number means, what was
-  already tried and rejected — and you can run it on Google Cloud →
-  that is the slot this fills.
+## 選ぶ
 
-## Where this research lives
+- MCP サーバー付きのカタログを既に運用していて、エージェントが取り
+  こぼしている問いがリネージとオーナーシップなら → カタログで足りる。
+- ウェアハウスが一つで、足りないのがメトリクス定義なら → そのウェア
+  ハウス自身の semantic layer。
+- 足りないのがエージェントが*あなた*を覚えていること — 好み、進行中の
+  文脈 — なら → メモリ層。
+- 一人、一台、自分で書くノートなら → vault と、その上の MCP サーバー。
+- **エージェントと人が複数いて、足りないのが誰かが確かめたナレッジ** —
+  どのクエリが sanctioned か、その数字が何を意味するか、何が既に試され
+  却下されたか — であり、Google Cloud で動かせるなら → それがこれの
+  埋める枠である。
 
-This page is the living answer and is expected to change as the
-alternatives do. The dated snapshots of the research behind it stay where
-they were taken, in
-[0001 §2](design/0001-architecture.md) — the 2026-07-16 note on catalogs
-turning into context layers and warehouse-native semantic layers, and the
-2026-07-17 note on memory layers. Those are decision records and are not
-rewritten; a landscape is not a decision, so it is tracked here instead.
+## この調査がどこにあるか
+
+このページは生きた答えであり、代替が変われば変わることを前提にして
+いる。その裏にある調査の日付入りスナップショットは、取られた場所に
+そのまま置いてある — [0001 §2](design/0001-architecture.md) の、
+カタログがコンテキスト層になっていることとウェアハウス native の
+semantic layer についての 2026-07-16 のノート、そしてメモリ層に
+ついての 2026-07-17 のノートである。あれらは決定記録であって書き換え
+られない。landscape は決定ではないので、代わりにここで追う。

@@ -1,79 +1,82 @@
-# BigQuery catalog sync
+# BigQuery カタログの同期
 
-A daily job that projects BigQuery table metadata into ochakai as
-`BigQuery Table` concepts, so an agent asking about `shop.orders` finds the
-columns, the partition filter it must not forget, and whatever a human has
-since written underneath.
+BigQuery のテーブルメタデータを `BigQuery Table` concept として ochakai に
+投影する、毎日のジョブ。`shop.orders` について訊いたエージェントが、
+カラムと、忘れてはいけないパーティションフィルタと、その後に人が下に
+書き足したことを見つけられるようにする。
 
-**This is an example, not a feature.** ochakai has no connectors and is not
-getting any: a harvester living in the server would need warehouse
-credentials it deliberately does not hold, and knowledge here is curated
-rather than collected (README's refusal table, design doc
-[0001](../../docs/design/0001-architecture.md) §2). None of that stops
-*you* from filling a catalog — this one runs outside, as an ordinary client
-of the same REST API the CLI uses, under your own service account.
+**これは例であって機能ではない。** ochakai はコネクタを持たず、今後も
+持たない: サーバーの中に住む収集器は、ochakai が意図して持たないウェア
+ハウスの資格情報を要るし、ここでのナレッジは収集ではなくキュレーション
+されるものだからである(README の「断るもの」の表、設計ドキュメント
+[0001](../../docs/design/0001-architecture.md) §2)。それは*あなたが*
+カタログを埋めることを何ら妨げない — このジョブは外で、CLI が使うのと
+同じ REST API の普通のクライアントとして、あなた自身のサービス
+アカウントで動く。
 
-## It ships as knowledge, not as a script in a folder
+## スクリプトの入ったフォルダではなく、ナレッジとして出荷される
 
-`bundle/` is a three-concept OKF bundle. Import it and the job documents
-itself in the knowledge base it writes to:
+`bundle/` は 3 concept の OKF バンドルである。これを import すると、
+ジョブは自分が書き込むナレッジベースの中で自分自身を説明する:
 
 ```sh
 ochakai import examples/bigquery-catalog/bundle
 ```
 
-**The two files need a bucket.** An instance without `OCHAKAI_GCS_BUCKET`
-answers `501` for any file
-([0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §1), so
-that import writes the three concepts and fails on the first `.py`. Cloud
-Run has the bucket; `deploy/compose.yaml` does not, and there the concepts
-are the half worth reading — the code is already in front of you:
+**2 つのファイルはバケットを要る。** `OCHAKAI_GCS_BUCKET` の無い
+インスタンスは、どのファイルにも `501` を返す
+([0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §1)
+ので、上の import は 3 つの concept を書いた後、最初の `.py` で失敗する。
+Cloud Run にはバケットがあるが `deploy/compose.yaml` には無く、そちらで
+読む価値があるのは concept のほうである — コードは既に目の前にある:
 
 ```sh
 tar czf - -C examples/bigquery-catalog/bundle --exclude='*.py' . |
   ochakai import -
 ```
 
-| Concept | Type | |
+| Concept | 型 | |
 |---|---|---|
-| [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **start here** — the day-one order: pick a small scope, settle the address, project the tables in, verify one, and only then attach a computation |
-| [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`, the parameters, the receipt, and every decision the projection makes |
-| [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | what the `executor` points at: the identity to run as, the IAM roles, the receipt fields |
+| [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **ここから** — day-one の順序: 小さく範囲を決め、住所を確定し、テーブルを投影し、一つ verify し、それからやっと computation を付ける |
+| [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`、パラメータ、receipt、そして投影が下すすべての判断 |
+| [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | `executor` が指しているもの: どの identity で走らせるか、IAM ロール、receipt のフィールド |
 
-Two files travel with the concepts.
+concept と一緒に 2 つのファイルが旅をする。
 [`sync-bigquery-catalog.py`](bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py)
-is the computation itself. It is named by the concept's `computation` key as
-a file rather than pasted into a `# Computation` fence — the form
+は computation そのものである。`# Computation` フェンスに貼り込むのでは
+なく concept の `computation` キーがファイルとして名指している —
+インラインに書くには長すぎる computation のために
 [OKF SPEC](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
-§10.2 gives for a computation too long to inline — and it travels with the
-concept as a file, so `ochakai get jobs/sync-bigquery-catalog
---download .` brings back the code with the contract. It sits in the
-concept-named directory beside the document, which is where `ochakai export`
-puts a file and what the web UI's files tab tells you to
-reference (design doc [0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §5).
+§10.2 が与えている形である — そして concept と一緒にファイルとして旅を
+するので、`ochakai get jobs/sync-bigquery-catalog --download .` が契約と
+一緒にコードを持ち帰る。置かれているのは文書の隣、concept の名前の
+ディレクトリの中で、そこは `ochakai export` がファイルを置く場所であり、
+Web UI のファイルタブが参照せよと言う場所でもある(設計ドキュメント
+[0075](../../docs/design/0075-the-bundle-is-the-address-space.md) §5)。
 
-[`catalog-sync.py`](bundle/attesters/catalog-sync.py) is the other, named by
-`attester.resource`: the code that decides whether a run counted. It checks
-that the run used the sanctioned scope — the entry id is derived from it, so
-a run under the wrong prefix silently builds a second catalog — that the
-counts conserve, and that the catalog did not collapse overnight. No
-network, no LLM, no read of the knowledge base; the receipt and the
-authorized values are the whole input. It follows
-`attesters/sql_equality.py` in the OKF reference bundle, which asks the
-first two of those questions about a SQL run.
+もう一つの [`catalog-sync.py`](bundle/attesters/catalog-sync.py) は
+`attester.resource` が名指すもの: その実行が有効だったかを判定する
+コードである。sanctioned な範囲で走ったか(項目の id はそこから導かれる
+ので、間違った prefix で走った実行は黙って二つ目のカタログを作る)、
+数が保存されるか、そしてカタログが一晩で崩れていないかを確かめる。
+ネットワークも LLM も無く、ナレッジベースを読みもしない。receipt と
+authorized な値が入力のすべてである。OKF リファレンスバンドルの
+`attesters/sql_equality.py` に倣っており、あちらは SQL の実行について
+最初の二つの問いを立てる。
 
-That shape is the point as much as the sync is. An agent told to refresh
-the catalog gets a contract that says *supply these parameters and run this
-file*, and SPEC §10.3 says in as many words that it must not author the
-computation instead. A knowledge base whose own maintenance job is a concept
-inside it is one fewer thing living in a README nobody reads.
+同期そのものと同じくらい、**この形**が要点である。カタログを更新せよと
+言われたエージェントが受け取るのは、*これらのパラメータを与えてこの
+ファイルを走らせよ*と言う契約であり、SPEC §10.3 は「代わりに computation
+を自分で書いてはならない」と明言している。自分の保守ジョブが自分の中の
+concept になっているナレッジベースは、誰も読まない README の中に住むもの
+が一つ減っている。
 
-The two concepts import as **drafts**, on purpose. Verify them once you have
-run the job in your own project and the receipt came back clean — which is
-also the moment you would want to correct the IAM roles for how you
-actually granted them.
+2 つの concept は **draft** として import される。これは意図的である。
+自分のプロジェクトでジョブを走らせ、receipt がきれいに返ってきてから
+verify すること — それはちょうど、IAM ロールを実際に付与したとおりに
+直したくなる瞬間でもある。
 
-## Try it without touching anything
+## 何にも触らずに試す
 
 ```sh
 pip install google-cloud-bigquery google-auth requests
@@ -83,8 +86,8 @@ python bundle/jobs/sync-bigquery-catalog/sync-bigquery-catalog.py \
   --ochakai-url https://ochakai-<hash>.run.app --dry-run
 ```
 
-`--dry-run` prints the concepts it would write and needs no credentials for
-ochakai at all. Everything else — the daily schedule, the IAM grants, the
-ownership rule that keeps the job from flattening what a person wrote, and
-what is deliberately left out (Looker, a recommended-table flag, deletes) —
-is in the two concepts.
+`--dry-run` は書き込むはずだった concept を印字するだけで、ochakai の
+資格情報を一切要らない。それ以外のすべて — 毎日のスケジュール、IAM の
+付与、人が書いたものをジョブが踏み潰さないための所有権の規則、そして
+意図して外してあるもの(Looker、推奨テーブルのフラグ、削除)— は
+2 つの concept の中にある。

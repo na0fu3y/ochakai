@@ -22,7 +22,8 @@ public issue is the wrong place, and the private path exists for exactly that.
 
 Most answers are already written down, and the docs are short enough to check:
 
-- [docs/faq.md](docs/faq.md) — the questions this project's shape invites:
+- [docs/faq.md](docs/faq.md) (Japanese) — the questions this project's shape
+  invites:
   whether it runs outside Google Cloud, whether anything leaves your project,
   what an agent may do to verified knowledge, what happens if you leave.
 - [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md) (Japanese)

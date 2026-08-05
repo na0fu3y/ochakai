@@ -43,7 +43,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
-| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。[0009](0009-provenance-portability.md)(**Proposed** — 唯一の未採択) |
+| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
 | REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md) |
 
@@ -111,10 +111,13 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   1 箇所で利用測定だけが凍結の外、public は identity を一切読まず 401 も
   返さない。読めない綴りは既定に落とさず起動エラーにする。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
-  — **Proposed**。export → Git → import の往復で provenance が誰のものに
-  なるかの整理(バンドルは知識のみを運び、provenance はインスタンス固有)。
-  文書の trust family は台帳にも trust tier にも入らないまま、
-  `received:` の下に主張として保存される(0046 §2.2)。
+  — **Accepted**。export → Git → import の往復で provenance が誰のものに
+  なるか: バンドルは知識のみを運び、provenance はインスタンス固有である
+  (世界観の現行の記述は 0075 §3.1)。同じインスタンスへの往復では
+  provenance は一つも動かず、Git はレビュー経路として規範化され、
+  **merge は verify ではない**。二つの拒否 —— `--preserve-provenance` と
+  署名付き provenance —— は認可機構を持たないことから出る。手順は
+  [git-review ガイド](../guides/git-review.md)。
 - [0002 認証・認可](0002-authn-authz.md) — **Superseded by 0065**。
 - [0027 呼び出し元によるエンドユーザー identity の委譲](0027-delegated-provenance.md)
   — **Superseded by 0065**。

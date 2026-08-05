@@ -650,8 +650,11 @@ C8 (`docs/surface.md`) says ochakai should be one of the best choices
 available to a Japanese-speaking team, and the manual it hands that team
 was written in English while the contributor material — `docs/surface.md`
 and the design records — is Japanese. The pages a person reads **to
-operate and curate** are moving to Japanese, one page per PR.
-`docs/loop.md` is the worked example (#434).
+operate and curate** moved to Japanese, one page per PR; `docs/loop.md`
+is the worked example (#434) and `docs/positioning.md` was the last of
+them. So this section is no longer a plan — it is the rule a **new**
+manual page is written under, and the rule is that it is written in
+Japanese to begin with.
 
 **English stays** for the front door and the contract: `README.md` (an
 OSS landing page is where somebody decides *whether* to use this, and

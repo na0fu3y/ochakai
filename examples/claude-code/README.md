@@ -1,52 +1,54 @@
-# Claude Code integration
+# Claude Code との統合
 
-Two layers, weakest to strongest:
+二つの層がある。弱いほうから:
 
-1. **[CLAUDE.md](CLAUDE.md)** teaches the agent the commands and the
-   write-learnings-back habit. Copy its contents into your project's
-   `CLAUDE.md`. Instructions rely on the agent remembering them — good
-   baseline, imperfect adherence.
-2. **[hooks/](hooks)** make the loop automatic. Hooks are executed by
-   Claude Code itself, so they fire every time, no agent judgment
-   involved — the same trick memory layers use, minus the LLM:
-   - `ochakai-recall.sh` (**UserPromptSubmit**) runs `ochakai context
-     "<prompt>"` and injects the resulting pack — full concepts behind the top
-     hits, links expanded — into the context before the agent starts working,
-     and records what it recalls for the Stop hook below. Automatic recall.
-   - `ochakai-write-back.sh` (**Stop**) interrupts the agent once per data-work
-     session, right before it stops, and asks it to save reusable queries and
-     metric insights (write-back), and whether a concept recall handed it held
-     up when acted on (`report_outcome`) — or decide neither applies.
+1. **[CLAUDE.md](CLAUDE.md)** はエージェントにコマンドと「学んだことを
+   書き戻す」習慣を教える。中身をあなたのプロジェクトの `CLAUDE.md` に
+   コピーする。指示はエージェントが覚えていることに頼るので、出発点
+   としては良いが、遵守は完全ではない。
+2. **[hooks/](hooks)** はループを自動にする。フックを実行するのは
+   Claude Code 自身なので毎回必ず発火し、エージェントの判断は挟まらない
+   — メモリ層が使っているのと同じ手を、LLM 抜きでやる:
+   - `ochakai-recall.sh`(**UserPromptSubmit**)は `ochakai context
+     "<prompt>"` を実行し、返ってきたパック — 上位ヒットの背後にある
+     concept の全文と、展開されたリンク — をエージェントが作業を始める前に
+     コンテキストへ差し込み、何を想起したかを下の Stop フックのために
+     記録する。自動の想起である。
+   - `ochakai-write-back.sh`(**Stop**)はデータ作業のセッションごとに
+     一度、エージェントが止まる直前に割り込み、再利用できるクエリと
+     メトリクスの気づきを保存するか(書き戻し)、想起で渡された concept が
+     実際に使って持ちこたえたか(`report_outcome`)を訊く — あるいは
+     どちらでもないと判断させる。
 
-## Install
+## 導入
 
 ```sh
-# once per machine: point the CLI at your server
+# マシンごとに一度: CLI をあなたのサーバーに向ける
 ochakai use https://ochakai-<hash>.run.app
 
-# per project
+# プロジェクトごと
 mkdir -p .claude/hooks
 cp hooks/ochakai-*.sh .claude/hooks/
 chmod +x .claude/hooks/ochakai-*.sh
-# merge the "hooks" key of settings.json into .claude/settings.json
+# settings.json の "hooks" キーを .claude/settings.json にマージする
 ```
 
-Both scripts need `jq` and fail silently: an unreachable knowledge base
-never blocks a prompt or a stop.
+どちらのスクリプトも `jq` を要り、失敗しても黙る: 届かないナレッジ
+ベースがプロンプトや停止を塞ぐことはない。
 
-## Tuning
+## 調整
 
-| Env var | Effect |
+| 環境変数 | 効果 |
 |---|---|
-| `OCHAKAI_RECALL_BUDGET` | Max bytes the recall hook injects (default 4000) |
+| `OCHAKAI_RECALL_BUDGET` | 想起フックが差し込む最大バイト数(既定 4000) |
 
-The budget is the only knob, and it is the one that matters: what the
-hook spends is your agent's context window. The rendered output stops
-printing concepts once it is reached and says how many it left, so
-lowering it costs reach, not correctness — the agent can still
-`ochakai get` what it was told about.
+つまみはこれ一つで、そしてこれが効くつまみである: フックが使うのは
+あなたのエージェントのコンテキストウィンドウだからである。出力は上限に
+達した時点で concept の印字をやめ、いくつ残したかを言うので、下げて
+失うのは到達範囲であって正しさではない — エージェントは知らされた
+concept を `ochakai get` で取りに行ける。
 
-The recall hook skips slash commands. The write-back hook only fires in
-sessions whose transcript looks like data work (SQL, ochakai usage) and
-at most once per session; it never fires twice in a row thanks to
-`stop_hook_active`.
+想起フックはスラッシュコマンドを飛ばす。書き戻しフックは、トランス
+クリプトがデータ作業に見える(SQL や ochakai の利用がある)セッション
+でのみ、しかもセッションごとに最大一度だけ発火する。`stop_hook_active`
+のおかげで二度続けて発火することはない。
