@@ -28,6 +28,22 @@ to verify or reject them](docs/images/webui-review.png)
 
 ## Quick start
 
+A public demo already holds the knowledge base below. It reads no
+identity and writes nothing, which is what makes it safe to leave open
+([design doc 0066](docs/design/0066-four-postures-one-word.md) §3), so
+there is no account and nothing to configure:
+
+```sh
+go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
+ochakai use https://demo.ochak.ai
+ochakai context "why is revenue down?"
+```
+
+It is also the one deployment where plain curl works — nothing to sign:
+`curl 'https://demo.ochak.ai/api/v1/search?q=revenue'`.
+
+To hold knowledge of your own, run a server:
+
 ```sh
 git clone https://github.com/na0fu3y/ochakai && cd ochakai
 docker compose -f deploy/compose.yaml up -d
