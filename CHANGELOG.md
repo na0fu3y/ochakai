@@ -19,6 +19,23 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The CLI can reach a public deployment without a Google account.**
+  Against any `https://` URL it used to resolve a Google ID token before
+  sending anything and abort when it found none — so `ochakai use
+  https://demo.example` saved fine and the next command died with "no
+  Google credentials", on the one posture that reads no identity and
+  never answers 401
+  ([0066](docs/design/0066-four-postures-one-word.md) §3). The client no
+  longer predicts the server's answer: holding no credentials it sends
+  none, and a deployment that wanted an identity says so with a 401 —
+  which is where the `gcloud auth login` advice now appears, carrying the
+  reason the request went out bare. Nothing changes for a caller who has
+  credentials, and `ochakai ui` and `ochakai mcp-stdio` reach a public
+  demo by the same path. No new flag, variable or command
+  ([docs/guides/operating.md](docs/guides/operating.md#public-demo)).
+
 ## [0.19.0] - 2026-08-05
 
 ### Added

@@ -22,16 +22,29 @@ import (
 )
 
 type Client struct {
-	base     string // scheme://host, no trailing slash
-	http     *http.Client
-	tokens   oauth2.TokenSource // nil for plain-http development servers
-	auth     string             // human-readable auth path, for Identity
-	producer string             // "<producer>/<version>", sent on every request when set
+	base   string // scheme://host, no trailing slash
+	http   *http.Client
+	tokens oauth2.TokenSource // nil when this client sends no credentials
+	auth   string             // human-readable auth path, for Identity
+	// noCreds is why tokens is nil on an https server: the credentials
+	// could not be resolved. Nil when they were, and on plain http, where
+	// sending none is the intent rather than a failure.
+	noCreds  error
+	producer string // "<producer>/<version>", sent on every request when set
 }
 
 // New builds a client for the ochakai server at baseURL. For https URLs a
 // Google ID token source is resolved (design doc 0004 §4); plain http is
 // for local development and sends no credentials.
+//
+// Failing to resolve credentials is not an error here. Whether a
+// deployment wants an identity is the server's answer, and the client
+// cannot read it off the URL: a public demo (design doc 0066 §3) reads no
+// identity and never answers 401, so a caller with no Google account is
+// exactly who it is for. Refusing to send the request would deny that
+// caller on the client's guess. The reason is kept instead and surfaced
+// if the server does answer 401 — the deployments that need credentials
+// say so themselves, and only they.
 func New(ctx context.Context, baseURL string) (*Client, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
@@ -39,12 +52,16 @@ func New(ctx context.Context, baseURL string) (*Client, error) {
 	}
 	c := &Client{base: strings.TrimRight(baseURL, "/"), http: http.DefaultClient, auth: "plain http, no credentials"}
 	if u.Scheme == "https" {
-		if c.tokens, c.auth, err = tokenSource(ctx, u.Scheme+"://"+u.Host); err != nil {
-			return nil, err
+		if c.tokens, c.auth, err = resolveTokenSource(ctx, u.Scheme+"://"+u.Host); err != nil {
+			c.noCreds, c.auth = err, "no Google credentials found"
 		}
 	}
 	return c, nil
 }
+
+// resolveTokenSource is tokenSource, indirected so tests can drive both
+// outcomes without depending on the machine's Google credentials.
+var resolveTokenSource = tokenSource
 
 // SetProducer declares the software this client runs as, in SPEC §7's
 // "<producer>/<version>" form. It rides on every request and the server
@@ -56,14 +73,18 @@ func (c *Client) SetProducer(p string) { c.producer = p }
 
 // TokenSource exposes the resolved Google ID token source so callers can
 // build request paths of their own (e.g. `ochakai ui`'s reverse proxy).
-// Nil for plain-http development servers — send no credentials then.
+// Nil for plain-http development servers and for an https server this
+// machine has no credentials for — send no credentials then, and let the
+// server say whether it wanted any.
 func (c *Client) TokenSource() oauth2.TokenSource { return c.tokens }
 
 // Identity resolves, locally, the identity this client would present:
 // the ID token's email, prefixed the way the server maps actors (design
 // doc 0002) — service accounts to process:, everyone else to human:.
-// Plain-http development servers see human:anonymous. The server's actor
-// resolution is authoritative; this is the client's best-effort view.
+// A client sending no credentials — plain http, or an https server this
+// machine has none for — presents human:anonymous, which is what a public
+// deployment resolves every caller to (design doc 0066 §3). The server's
+// actor resolution is authoritative; this is the client's best-effort view.
 func (c *Client) Identity() (actor, auth string, err error) {
 	if c.tokens == nil {
 		return "human:anonymous", c.auth, nil
@@ -791,6 +812,14 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		if json.Unmarshal(data, &msg) == nil {
 			apiErr.Message = msg.Error
+		}
+		// This client sent nothing because it had nothing, and this
+		// server — unlike a public one, which never answers 401 (design
+		// doc 0066 §3) — wanted an identity. Say why the request went out
+		// bare: Cloud Run rejects ahead of the container, so the body is
+		// Google's HTML and APIError alone would say only "Unauthorized".
+		if resp.StatusCode == http.StatusUnauthorized && c.noCreds != nil {
+			return nil, fmt.Errorf("server answered %w: %w", apiErr, c.noCreds)
 		}
 		return nil, apiErr
 	}
