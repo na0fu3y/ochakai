@@ -65,7 +65,7 @@ that is missing one rather than guessing what it meant.
 
 | Field | Where it comes from |
 |---|---|
-| `sync_identity` | the email claim of the ID token the run used — who the entries will say wrote them |
+| `sync_identity` | the email claim of the ID token the run used — who the entries will say wrote them. Empty when there was no token to mint, and the attester refuses a receipt that cannot name its run |
 | `project` | the `--project` the run used |
 | `datasets` | the `--datasets` it was given, sorted |
 | `prefix` | the `--prefix` the ids were built under |
