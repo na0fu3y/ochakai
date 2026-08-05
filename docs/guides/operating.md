@@ -129,8 +129,11 @@ provenance はそれが起きるのを見ていたインスタンスに属する
 ### ログ
 
 すべては `slog` を通した JSON なので、Cloud Logging は手を加えずに
-パースできる。アラートや保存クエリを組む価値があるメッセージは、
-すべて**劣化しているが動いている**ことを表す warning である:
+パースできる。アラートや保存クエリを組む価値があるメッセージは次の
+表の通りである。ほとんどは**劣化しているが動いている**ことを表す
+warning だが、レベルで絞り込むとこの表を素通りする行が三つ混ざって
+いる: `Error` が一つ(export の失敗)、エラーではないキュレーション
+行為の監査ログが二つ(検証・破棄)である。
 
 | メッセージ | 意味 |
 |---|---|
@@ -568,7 +571,7 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --member=serviceAccount:ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
   --role=roles/run.invoker
 
-# IAP を前段に立てて非公開でデプロイする — デプロイガイド §3 と同じ $IMAGE。
+# IAP を前段に立てて非公開でデプロイする — デプロイガイド §1 と同じ $IMAGE。
 # (--iap には gcloud beta コンポーネントが要る; 下の iap web コマンドには
 #  Resource Manager API が要る)
 gcloud services enable iap.googleapis.com cloudresourcemanager.googleapis.com
