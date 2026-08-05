@@ -785,6 +785,27 @@ curl -s -o /dev/null -w '%{http_code}\n' -X DELETE "$OCHAKAI_URL/api/v1/bundle/q
 read-only になった後では拒否される。デモのバンドルにはファイルが無い
 ので、デプロイガイド §4b のバケットはこれには要らない。
 
+### 訪問者が何を打つか
+
+Google アカウントを持たない人が、curl だけでなく CLI でも到達できる。
+クライアントは https だからという理由で資格情報を要求したりはせず、
+持っていなければ持たずに送り、**要ると言うかどうかはサーバーに任せる**
+— public は 401 を返さないので、そのまま通る:
+
+```sh
+go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
+ochakai use https://demo.example      # デモの URL
+ochakai context "why is revenue down?"
+```
+
+`ochakai whoami` はこのとき `human:anonymous (no Google credentials
+found)` と表示する。これは推測ではなく、public が全員をそう解決する
+ことそのものである(設計ドキュメント 0066 §3)。`ochakai ui` と
+`ochakai mcp-stdio` も同じ資格情報無しの経路で動くので、web UI を
+公開ホストしなくても、訪問者は自分の loopback で UI を開ける。
+資格情報を要求するデプロイに同じことをすれば、サーバーが 401 で
+そう言い、CLI はそこで初めて `gcloud auth login` を促す。
+
 ### コスト
 
 デプロイガイド冒頭の表と同じ形である — デモは一つの Cloud Run サービス

@@ -195,8 +195,11 @@ func cmdWhoami(ctx context.Context, args []string) error {
 
 	c, err := newClient(ctx, *target)
 	if err != nil {
+		// Not missing credentials any more: a client that cannot resolve
+		// them is still built and still asks the server (apiclient.New).
+		// What reaches here is a URL or a producer this shell got wrong.
 		report.Error = err.Error()
-		report.Health = "skipped (no credentials)"
+		report.Health = "skipped (no client)"
 	} else {
 		var actor string
 		if actor, report.Auth, err = c.Identity(); err != nil {
