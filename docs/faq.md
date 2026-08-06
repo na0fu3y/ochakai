@@ -74,7 +74,7 @@ MCP からはできない。削除はそもそもツールですらない — �
 verified・rejected・deprecated — を拒み、拒否は代わりに何をすべきかを
 言う:
 
-> cannot update metrics/revenue from this surface: it is verified, and
+> cannot replace metrics/revenue from this surface: it is verified, and
 > this surface has no If-Match precondition to replace curated knowledge
 > safely. If it is wrong, say so with report_outcome failed — that puts it
 > in the re-verification feed. If you have something better,

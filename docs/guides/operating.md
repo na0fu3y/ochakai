@@ -58,9 +58,9 @@ ochakai export --no-files -   # concept のみ; バイト列はすでに GCS に
 
 バンドルは OKF v0.2 のディレクトリである: concept ごとに YAML
 frontmatter 付きの markdown ファイルが一つ、ファイルはその concept の
-隣に、そしてディレクトリごとに `index.md` が一つ。10 個の concept を
-持つデモベースを export すると 20 ファイルになる — concept 10 個と
-index 10 個である。
+隣に、そしてディレクトリごとに `index.md` と `log.md` が一つずつ。
+10 個の concept を持つデモベースを export すると 30 ファイルになる —
+concept 10 個と、10 ディレクトリ分の index と log である。
 
 スケジュール実行するなら、これが人間に読め、diff でき、commit できる
 バックアップである。インスタンス間の移行経路でもあり、ochakai を聞いた
@@ -293,8 +293,8 @@ gap	3	arr by segment
 - **検索**: 5000 件の concept に対する日本語検索で約 16 ms、ラテン文字
   の語なら 0.2 ms。日本語の語がスキャンで答えられているのは、trigram
   索引が二文字のパターンを引けないからである。
-- **Attachments**: 5 MiB per file, 20 files per concept, enforced by the
-  server.
+- **ファイル**: 1 ファイル 5 MiB まで(サーバが強制)。件数に上限は
+  無い。
 - **usage バッファ**: メモリ上に 20,000 イベント、5 秒ごとに flush
   される。上限を超えるとイベントはキューイングされず捨てられる(設計
   ドキュメント 0069 §3)。
@@ -654,11 +654,6 @@ issuer をすべてのリクエストで検証し、audience を設定した後�
 
 最初から最後まで試してみて分かったこと:
 
-- **0.9.0 より前の webui デプロイのアップグレード**(別にビルドされた
-  イメージ、あるいは `allUsers` で公開されていたもの): 同じ `gcloud
-  beta run deploy` がそのまま変換する — IAP を有効にするとサービスの
-  invoker ポリシーが置き換わるので、残っていた `allUsers` の binding は
-  自動的に外れる。
 - **プログラムからのアクセス**(curl、スクリプト)は、`--iap` が使う
   Google 管理の OAuth クライアントによって制限される: 普通の ID
   トークンは拒否される。`roles/iap.httpsResourceAccessor` を付与された
@@ -920,36 +915,13 @@ gcloud run services update ochakai --region=$REGION \
 
 ### バージョンごとの注記
 
-- **→ 0.9.0(破壊的変更)**: MCP OAuth コネクタサービスは廃止された。
-  `OCHAKAI_CONNECTOR_PUBLIC_URL` は今は黙って無視される — **コネクタの
-  デプロイをこのイメージに向けては決していけない**: あのサービスは
-  公開で呼び出し可能であり、このイメージはそこに、ヘッダーを信じる
-  非公開向けの surface を提供してしまう。コネクタサービスはアップ
-  グレードするのではなく削除せよ(`gcloud run services delete
-  ochakai-connector --region=$REGION`)。そして Google OAuth クライアント、
-  Secret Manager のクライアント secret、そして Domain Restricted
-  Sharing の免除があればそれも片付けよ。非公開サービスは影響を受けない;
-  その起動時マイグレーションは、もう使われていない `oauth_*` テーブルを
-  drop する(非公開サービスはそれらを読んだことが無いので、後で
-  ロールバックしても安全なままである)。
-  0.9.0 で他に削除されたもの: `DATABASE_URL` のエイリアス
-  (`OCHAKAI_DATABASE_URL` を使うこと)、`OCHAKAI_ADDR`(`PORT` を使う
-  こと)、`/healthz` のエイリアス(`/health` を使うこと)、起動時の
-  bytea→GCS backfill(添付ファイルのバイト列がまだ Postgres にあるなら
-  `OCHAKAI_GCS_BUCKET` を設定した状態で 0.8.x を経由してアップグレード
-  すること、デプロイガイド §4b)、そして 0.4 より前のネストした
-  `attrs:` frontmatter 形式の OKF import(古いバンドルを再 export する
-  か、キーをトップレベルに上げること — SPEC §4.1)。
-- **0.8.0 より古い何からでも**: 0.9.0 より前のリリースはすべて
+- **0.9.0 より前から**: それより古いリリースはすべて
   [retract](https://go.dev/ref/mod#go-mod-file-retract) されており、
-  バージョンごとのアップグレード注記はここから取り除かれている —
-  必要なら git の履歴から回収すること(`git log --
-  docs/guides/operating.md deploy/cloudrun/README.md`)。かいつまむと:
-  0.3 より前の設定(`OCHAKAI_CLIENTS`、`OCHAKAI_AUTH`、
-  `OCHAKAI_CORS_ORIGINS`、`OCHAKAI_EMBEDDING_PROVIDER` — 古い変数は
-  黙って無視されるので、設定されていないことを確認すること)を外し、
-  デプロイガイド §3 の姿勢(`--no-allow-unauthenticated` + IAM の
-  invoker 付与、identity ヘッダー、パスワード無しのデータベース)を
-  採用し、該当するなら添付ファイルの backfill のために **0.8.x** を
-  経由し(デプロイガイド §4b)、それから上の注記と共に 0.9.0 に着地
-  すること。
+  バージョンごとの注記(0.9.0 自身の破壊的変更を含む)はここから
+  取り除かれている — 必要なら git の履歴から回収すること(`git log --
+  docs/guides/operating.md deploy/cloudrun/README.md`)。一つだけ残す:
+  **廃止された MCP OAuth コネクタサービスのデプロイを、このイメージに
+  向けては決していけない** — あれは公開で呼び出し可能であり、この
+  イメージはそこに、ヘッダーを信じる非公開向けの surface を提供して
+  しまう。アップグレードするのではなく削除せよ(`gcloud run services
+  delete ochakai-connector --region=$REGION`)。

@@ -135,7 +135,7 @@ jobs:
                   "$OCHAKAI_URL/api/v1/usage/$id" >/dev/null
               else
                 # 再検証を記録し、台帳に追記する
-                # (concept を両方のフィードから外す)
+                # (要レビューのフィードから外し、検証の古さを更新する)
                 curl -s -X POST -H "Authorization: Bearer $TOKEN" \
                   -H 'Content-Type: application/json' \
                   -d '{"ruling":"verified"}' \

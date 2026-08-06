@@ -236,13 +236,15 @@ vocabulary の隣にあるチーム独自の vocabulary のように、ディレ
 **Files** は concept の隣に住む — insight の裏にある dashboard の
 スクリーンショット、table concept の裏にある ER 図、dataset の裏に
 ある seeds.txt や spec の PDF — そして OKF bundle を通じて、その隣の
-ただのファイルとして round trip する。受け付ける形式は Claude が
-読めるものと Gemini が embed できるものの積である: PNG、JPEG、
-WebP、PDF、プレーンテキスト。ファイル名からではなくバイト列から
-判定する — これは 0075 §4 が bundle address に畳み込んでいる操作の
-一つで、その畳み込みはまだ着地の途中だからである。バイト列は Cloud
-Storage に置かれ、必要になったときに取得される。1 オブジェクト
-あたり 5 MiB まで、住所を保持するのはデータベースの側である(設計
+ただのファイルとして round trip する。**メディアタイプを理由に拒む
+ことはしない** — ファイルが消えて戻ってくる bundle は、渡したはずの
+bundle ではないからである。埋め込みが効くのは PNG・JPEG・WebP・PDF・
+プレーンテキストで、それ以外も保存され配信される。型はファイル名から
+ではなくバイト列を sniff して決まる — これは 0075 §4 が bundle
+address に畳み込んでいる操作の一つで、その畳み込みはまだ着地の途中
+だからである。バイト列は Cloud Storage に置かれ、必要になったときに
+取得される。1 オブジェクトあたり 5 MiB まで、住所を保持するのは
+データベースの側である(設計
 ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §1)。`OCHAKAI_GCS_BUCKET` が
 未設定なら、そのインスタンスは markdown の concept だけを保存し、
 markdown 以外の書き込みは拒否される。Files は検索対象でもある:

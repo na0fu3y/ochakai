@@ -84,7 +84,7 @@ ochakai use http://localhost:8080   # Cloud Run: ochakai use https://your-servic
 ochakai whoami                      # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question
 ochakai search "revenue" --type Metric --trust human-reviewed
-ochakai verify metrics/revenue      # promotes a draft; re-affirms a verified concept
+ochakai verify metrics/revenue      # re-affirms a concept; status and ETag stay put
 ochakai ui                          # web UI at http://127.0.0.1:8098, acting as you
 ```
 

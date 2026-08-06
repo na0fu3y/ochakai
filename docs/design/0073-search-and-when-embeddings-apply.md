@@ -9,7 +9,7 @@ Status: Accepted(2026-08-03)。**検索と埋め込みの現行ドキュメン�
 スコアの床を持たないことは
 [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` が
 順位に徹することは [0067](0067-four-faces-and-what-they-decline.md) §4、
-住所で絞る `prefix` は [0041](0041-path-scoped-search.md) が持つ
+住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6 が持つ
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと
