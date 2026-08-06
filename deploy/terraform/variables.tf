@@ -244,10 +244,13 @@ variable "embedding_model" {
     needs a particular model, region or project:
     "projects/<project>/locations/<location>/publishers/google/models/<model>".
     Leave null for the product's default — the project ochakai runs in,
-    gemini-embedding-001 in us-central1 (design doc 0080). Use
+    gemini-embedding-001 in the region this service runs in (design doc 0080
+    §1.2), so text is embedded where you deployed it rather than in a region
+    the product picked. Use
     .../locations/global/publishers/google/models/gemini-embedding-2 to also
     search image and PDF files by content; that model wants a location of
-    global, us or eu.
+    global, us or eu — which means naming it moves the embedding call out of
+    this service's own region.
 
     Naming a model asks for semantic search by name, so the service refuses to
     start where Vertex AI or pgvector is unavailable, where the default would

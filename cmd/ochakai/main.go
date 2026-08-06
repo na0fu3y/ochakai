@@ -176,23 +176,33 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 // whether this deployment has one at all.
 //
 // Embeddings are the default on Google Cloud (design doc 0080 §1.1): a
-// deployment that names no model gets the project it is running in and
-// the product's own model, and whether it may call Vertex AI there is
-// IAM's answer rather than a setting — so the answer is asked for, once,
-// with a probe. A deployment that named a model asked for semantic search
-// and is told when it cannot have it; a discovered one falls back to
-// lexical search, which is what it would have had before this was the
-// default.
+// deployment that names no model gets the project *and the region* it is
+// running in (design doc 0080 §1.2) and the product's own model, and whether
+// it may call Vertex AI there is IAM's answer rather than a setting — so
+// the answer is asked for, once, with a probe. That one probe now covers
+// two ways of not having it: the identity may not call Vertex AI, or the
+// region may not carry the model. A deployment that named a model asked
+// for semantic search and is told when it cannot have it; a discovered
+// one falls back to lexical search, which is what it would have had
+// before this was the default.
 func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (embed.Embedder, error) {
+	discoveredProject, discoveredRegion := "", ""
 	if cfg.Embedding == nil && !cfg.EmbeddingsOff {
-		if project := config.DiscoverVertexProject(ctx); project != "" {
-			cfg.EnableDiscoveredEmbedding(project)
-		}
+		discoveredProject, discoveredRegion = config.DiscoverVertex(ctx)
+		cfg.EnableDiscoveredEmbedding(discoveredProject, discoveredRegion)
 	}
 	if cfg.Embedding == nil {
-		if cfg.EmbeddingsOff {
+		switch {
+		case cfg.EmbeddingsOff:
 			log.Info("semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only")
-		} else {
+		case discoveredProject != "" && discoveredRegion == "":
+			// The project answered but the region did not. Picking one
+			// would send this deployment's text to a region nobody
+			// chose, which is the decision design doc 0080 §1.2 declines to
+			// make for an operator.
+			log.Warn("semantic search off: this deployment's region could not be read from the metadata server, and ochakai will not embed in a region nobody chose. Name one to turn it on: OCHAKAI_EMBEDDINGS=projects/<project>/locations/<region>/publishers/google/models/gemini-embedding-001",
+				"project", discoveredProject)
+		default:
 			log.Info("semantic search disabled; using lexical search only")
 		}
 		return nil, nil
@@ -212,13 +222,14 @@ func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (
 		if !cfg.Embedding.Discovered {
 			return nil, err
 		}
-		log.Warn("semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on",
-			"project", cfg.Embedding.Project, "err", err)
+		log.Warn("semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on. If this region has no such model, name a region that does with OCHAKAI_EMBEDDINGS — knowing that it is where the text will go",
+			"project", cfg.Embedding.Project, "location", cfg.Embedding.Location, "err", err)
 		cfg.Embedding = nil
 		return nil, nil
 	}
 	log.Info("semantic search enabled", "model", cfg.Embedding.Model, "dim", cfg.Embedding.Dim,
-		"project", cfg.Embedding.Project, "discovered", cfg.Embedding.Discovered)
+		"project", cfg.Embedding.Project, "location", cfg.Embedding.Location,
+		"discovered", cfg.Embedding.Discovered)
 	return v, nil
 }
 

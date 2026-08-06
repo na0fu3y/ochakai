@@ -234,14 +234,15 @@ const (
 	embeddingsOff = "off"
 )
 
-// The product's own choice of model and location, used wherever nobody
-// named one. Changing the model here would leave every deployment's
-// stored vectors in a space nothing queries, so it is a decision rather
-// than a default to tune (design doc 0080 §5).
-const (
-	defaultEmbeddingModel    = "gemini-embedding-001"
-	defaultEmbeddingLocation = "us-central1"
-)
+// The product's own choice of model, used wherever nobody named one.
+// Changing it here would leave every deployment's stored vectors in a
+// space nothing queries, so it is a decision rather than a default to
+// tune (design doc 0080 §5).
+//
+// There is no companion default location: the location is the region the
+// deployment is running in, which discovery reads rather than the product
+// choosing (design doc 0080 §1.2).
+const defaultEmbeddingModel = "gemini-embedding-001"
 
 // embeddingResourceForm is the third spelling, quoted back in every error
 // that refuses one.
@@ -272,47 +273,81 @@ func embeddingFromResourceName(v string) (*EmbeddingConfig, error) {
 	return &EmbeddingConfig{Project: p[1], Location: p[3], Model: p[7], Dim: dim}, nil
 }
 
-// EnableDiscoveredEmbedding turns semantic search on for a project
-// nobody configured — the deployment is running on Google Cloud, and
-// that is where embeddings are the default (design doc 0080 §1.1). What
-// discovery supplies is the project; the model, the location and the
-// width that follows from the model are the product's own.
+// EnableDiscoveredEmbedding turns semantic search on for a deployment
+// nobody configured — it is running on Google Cloud, and that is where
+// embeddings are the default (design doc 0080 §1). What discovery
+// supplies is the project *and the region*; the model and the width that
+// follows from it are the product's own.
+//
+// Both are required. Embedding somewhere the deployment did not choose
+// is a data-residency decision, and this is not the place to make one on
+// an operator's behalf — a region nobody could read leaves semantic
+// search to be asked for by name (design doc 0080 §1.2).
 //
 // A deployment that set OCHAKAI_EMBEDDINGS=off never reaches here, and
 // one that named a model keeps it.
-func (c *Config) EnableDiscoveredEmbedding(project string) {
-	if c.EmbeddingsOff || c.Embedding != nil || project == "" {
+func (c *Config) EnableDiscoveredEmbedding(project, region string) {
+	if c.EmbeddingsOff || c.Embedding != nil || project == "" || region == "" {
 		return
 	}
 	// Known by construction: TestTheDefaultModelHasAWidth holds it.
 	dim, _ := embed.Dimension(defaultEmbeddingModel)
 	c.Embedding = &EmbeddingConfig{
 		Project:    project,
-		Location:   defaultEmbeddingLocation,
+		Location:   region,
 		Model:      defaultEmbeddingModel,
 		Dim:        dim,
 		Discovered: true,
 	}
 }
 
-// DiscoverVertexProject names the Google Cloud project this process is
-// running in, or "" when it is not running on Google Cloud. The answer
-// comes from the metadata server, which is the same source Cloud SQL IAM
-// auth already takes its access token from — no configuration, and
-// nothing to hold (design doc 0003).
+// DiscoverVertex names the Google Cloud project and region this process
+// is running in, or "", "" when it is not running on Google Cloud. The
+// answers come from the metadata server, which is the same source Cloud
+// SQL IAM auth already takes its access token from — no configuration,
+// and nothing to hold (design doc 0003).
 //
-// It says where ochakai runs, not what it may do there: whether the
-// service identity can call Vertex AI is IAM's answer, given once the
-// first embedding is attempted (design doc 0080 §1.2).
-func DiscoverVertexProject(ctx context.Context) string {
+// The region is half the answer because it decides where the text goes:
+// ochakai embeds in the region it was deployed to, so a deployment in
+// asia-northeast1 does not send concept bodies and search queries to
+// another continent to have them embedded (design doc 0080 §1.2).
+//
+// Together they say where ochakai runs, not what it may do there:
+// whether the service identity can call Vertex AI, and whether the model
+// exists in that region at all, is one answer given by the probe at
+// startup (design doc 0080 §1.3).
+func DiscoverVertex(ctx context.Context) (project, region string) {
 	if !metadata.OnGCE() {
-		return ""
+		return "", ""
 	}
 	project, err := metadata.ProjectIDWithContext(ctx)
 	if err != nil {
+		return "", ""
+	}
+	return project, discoverRegion(ctx)
+}
+
+// discoverRegion reads the region out of the metadata server, or ""
+// when it cannot be read. Cloud Run — the deployment this project
+// documents (design doc 0003) — answers `instance/region` with
+// projects/<number>/regions/<region>. A GCE VM has no such key and
+// answers `instance/zone` with projects/<number>/zones/<region>-<letter>
+// instead, so the zone's last segment is dropped to get back to a
+// region.
+func discoverRegion(ctx context.Context) string {
+	if v, err := metadata.GetWithContext(ctx, "instance/region"); err == nil {
+		if r := v[strings.LastIndex(v, "/")+1:]; r != "" {
+			return r
+		}
+	}
+	zone, err := metadata.ZoneWithContext(ctx)
+	if err != nil {
 		return ""
 	}
-	return project
+	if i := strings.LastIndex(zone, "-"); i > 0 {
+		return zone[:i]
+	}
+	return ""
 }
 
 func envOr(key, fallback string) string {

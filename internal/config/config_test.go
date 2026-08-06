@@ -58,7 +58,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if !cfg.EmbeddingsOff {
 			t.Fatal("OCHAKAI_EMBEDDINGS=off did not turn embeddings off")
 		}
-		cfg.EnableDiscoveredEmbedding("some-project")
+		cfg.EnableDiscoveredEmbedding("some-project", "asia-northeast1")
 		if cfg.Embedding != nil {
 			t.Errorf("a discovered project turned embeddings back on: %+v", cfg.Embedding)
 		}
@@ -72,7 +72,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if cfg.Embedding != nil {
 			t.Fatalf("Embedding = %+v before discovery, want nil", cfg.Embedding)
 		}
-		cfg.EnableDiscoveredEmbedding("some-project")
+		cfg.EnableDiscoveredEmbedding("some-project", "asia-northeast1")
 		if cfg.Embedding == nil || cfg.Embedding.Project != "some-project" {
 			t.Fatalf("Embedding = %+v, want the discovered project", cfg.Embedding)
 		}
@@ -81,10 +81,41 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if !cfg.Embedding.Discovered {
 			t.Error("a discovered default was recorded as named")
 		}
+		// The location is the discovered region, not a constant: the text
+		// is embedded where the deployment runs (design doc 0080 §1.2).
 		if cfg.Embedding.Model != "gemini-embedding-001" ||
-			cfg.Embedding.Location != "us-central1" || cfg.Embedding.Dim != 768 {
-			t.Errorf("model=%q location=%q dim=%d, want the product's defaults around the discovered project",
+			cfg.Embedding.Location != "asia-northeast1" || cfg.Embedding.Dim != 768 {
+			t.Errorf("model=%q location=%q dim=%d, want the product's model in the discovered region",
 				cfg.Embedding.Model, cfg.Embedding.Location, cfg.Embedding.Dim)
+		}
+	})
+
+	// The whole point of reading the region: two deployments of the same
+	// image embed in two different places, each its own.
+	t.Run("the discovered region is where the text goes", func(t *testing.T) {
+		for _, region := range []string{"asia-northeast1", "europe-west4", "us-central1"} {
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.EnableDiscoveredEmbedding("some-project", region)
+			if cfg.Embedding == nil || cfg.Embedding.Location != region {
+				t.Errorf("deployed in %s, embedding at %+v", region, cfg.Embedding)
+			}
+		}
+	})
+
+	// Refusing here is the decision: any region this code picked would be
+	// one nobody chose, and where the text goes is not ochakai's call to
+	// make quietly (design doc 0080 §1.2).
+	t.Run("no region means no discovered embedding", func(t *testing.T) {
+		cfg, err := FromEnv()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.EnableDiscoveredEmbedding("some-project", "")
+		if cfg.Embedding != nil {
+			t.Errorf("Embedding = %+v; a region nobody could read was filled in anyway", cfg.Embedding)
 		}
 	})
 
@@ -107,9 +138,9 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if cfg.Embedding.Dim != 768 {
 			t.Errorf("Dim = %d, want 768 — the width ochakai carries for this model", cfg.Embedding.Dim)
 		}
-		cfg.EnableDiscoveredEmbedding("some-other-project")
-		if cfg.Embedding.Project != "named-project" {
-			t.Errorf("Project = %q; discovery overrode a named model", cfg.Embedding.Project)
+		cfg.EnableDiscoveredEmbedding("some-other-project", "asia-northeast1")
+		if cfg.Embedding.Project != "named-project" || cfg.Embedding.Location != "global" {
+			t.Errorf("Embedding = %+v; discovery overrode a named model", cfg.Embedding)
 		}
 	})
 

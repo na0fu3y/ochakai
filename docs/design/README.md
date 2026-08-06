@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索) |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
@@ -240,7 +240,11 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 - [0080 検索が何を融合し、このデプロイがどう埋め込むか](0080-search-and-how-a-deployment-embeds.md)
   — **Accepted**。**検索と埋め込みの現行ドキュメント**(0020 / 0053 /
   0073 / 0078 を一冊にまとめたもの)。Google Cloud の上では埋め込みが既定
-  で、使えるかを決めるのは設定ではなく IAM。検索は字句・concept のベクトル・
+  で、使えるかを決めるのは設定ではなく IAM。**埋め込みはデプロイが動いて
+  いるリージョンで行う** — プロジェクトと同じくメタデータサーバーから読み、
+  読めなければ誰も選んでいないリージョンで埋め込むより字句検索に落ちる
+  (§1.2。どの固定値も、それを選ばなかったデプロイには間違いである)。
+  検索は字句・concept のベクトル・
   ファイルのベクトルの三本を融合し、ファイルは独立して返らず、ochakai は
   ファイルを解釈しない。設定は `OCHAKAI_EMBEDDINGS` 一語 — 未設定 / `on` /
   `off` / Vertex AI のモデル resource name で、どれでもない綴りは起動エラー
