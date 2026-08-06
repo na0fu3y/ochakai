@@ -19,6 +19,15 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **Each CLI release archive ships with an SPDX SBOM** (`*.sbom.json`,
+  attached to the GitHub release beside the archive), so a dependency
+  scanner can read what is inside without unpacking anything. The
+  container image already carried an SBOM in its manifest; the archives
+  now match ([docs/guides/operating.md](docs/guides/operating.md)
+  (Japanese) has the verification commands).
+
 ### Changed
 
 - **The two records a newcomer opens first no longer describe a world

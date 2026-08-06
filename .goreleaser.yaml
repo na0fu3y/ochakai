@@ -66,6 +66,15 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# One SPDX SBOM per archive, attached to the release beside it. The
+# container image already carries an SBOM in its manifest (release.yaml
+# builds it with `sbom: true`); these are for people who deploy the CLI
+# archives instead, and for the dependency scanners an OSS review points
+# at release assets. goreleaser shells out to syft, which release.yaml
+# installs right before it runs.
+sboms:
+  - artifacts: archive
+
 # The release notes are written by hand in CHANGELOG.md and assembled by
 # .github/release.yml. A generator here would compete with both.
 changelog:
