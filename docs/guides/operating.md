@@ -158,22 +158,32 @@ warning だが、レベルで絞り込むとこの表を素通りする行が三
 
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
-"semantic search enabled" model=gemini-embedding-001 dim=768 project=… discovered=true
+"semantic search enabled" model=gemini-embedding-001 dim=768 project=… location=asia-northeast1 discovered=true
 "files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only"
 ```
 
 `discovered=true` は、model・location・project のどれもデプロイが書いた
-ものではないことを意味する — project はメタデータサーバーから来ており、
-残りは製品の既定である(`OCHAKAI_EMBEDDINGS` にモデルの resource name を
-書けば `discovered=false` になる、設計ドキュメント
+ものではないことを意味する — **project と location はメタデータサーバーから
+来ており**、model だけが製品の既定である(`OCHAKAI_EMBEDDINGS` にモデルの
+resource name を書けば `discovered=false` になる、設計ドキュメント
 [0080](../design/0080-search-and-how-a-deployment-embeds.md))。semantic
-search は Google Cloud 上での既定だからである(設計ドキュメント
-[0080](../design/0080-search-and-how-a-deployment-embeds.md))。これに
-代わる行はどちらに転んだかを言う:
+search は Google Cloud 上での既定だからである(同 §1)。
+
+**`location=` は監査で訊かれる行である。** 埋め込みは動いているリージョン
+で行われるので、この値は「concept の本文と検索クエリがどこの Vertex AI に
+送られたか」そのものである(設計ドキュメント
+[0080](../design/0080-search-and-how-a-deployment-embeds.md) §1.2)。
+asia-northeast1 のデプロイなら `location=asia-northeast1` が出る。
+`gemini-embedding-2` を名指したデプロイだけは別で、そのモデルは
+`global`/`us`/`eu` にしか居ないため、**名指した時点で埋め込み呼び出しが
+自リージョンの外に出る** — 画像・PDF 検索と引き換えに払うものがそれである。
+
+これに代わる行はどちらに転んだかを言う:
 
 | 行 | 意味 |
 |---|---|
-| `semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on` | 起動時の probe が拒否された。メッセージ自体が対処法を運んでいる; 権限を付与してから再起動せよ |
+| `semantic search off: Vertex AI did not answer for this deployment; …` | 起動時の probe が答えを得られなかった。理由は二つあり、`location=` が見分ける — ロールが無い(`roles/aiplatform.user` を付与して再起動)か、**そのリージョンにモデルが居ない**(`gemini-embedding-001` は大半のリージョンに居るが全部ではない。別リージョンを名指せば直るが、それはテキストがそこへ行くということである) |
+| `semantic search off: this deployment's region could not be read from the metadata server, …` | project は読めたが region が読めなかった。ochakai は誰も選んでいないリージョンでは埋め込まないので、字句検索で動いている。resource name でリージョンを名指せば有効になる |
 | `semantic search is off: this database cannot hold vectors` | pgvector が無く、このロールには作成できないかもしれない。admin ユーザーとして extension を作成せよ(デプロイガイド §3) |
 | `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only` | 頼んだ通り — ここにある行の中で、調べる価値の無い唯一のものである |
 | `semantic search disabled; using lexical search only` | モデルが名指されておらず、project も発見されなかった — ochakai は Google Cloud 上で動いていない |

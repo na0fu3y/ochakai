@@ -19,6 +19,30 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **Text is now embedded in the region you deployed to, not in
+  `us-central1`.** A deployment that names no model discovers its project
+  from the metadata server and turns semantic search on; until now the
+  *region* of that call was a constant the product held, so a service
+  running in `asia-northeast1` sent every concept body and every search
+  query to Vertex AI in the United States to be embedded. That is a
+  data-residency decision, and ochakai was making it silently on an
+  operator's behalf. The region is now discovered alongside the project
+  ([0080](docs/design/0080-search-and-how-a-deployment-embeds.md) §1.2).
+  **What an operator does: nothing, and no `reembed`** — the model is
+  unchanged, and the same string embedded in `asia-northeast1`,
+  `us-central1` and `europe-west4` came back bit-identical (3072 values,
+  maximum difference 0.0), so vectors already stored stay comparable.
+  Two things do change: the startup line now carries `location=`, which
+  is the answer to "where did the text go", and a deployment in a region
+  with no `gemini-embedding-001` (`asia-northeast2`, for one) falls back
+  to lexical search with a log line saying so, where before it would
+  quietly have embedded in the US. A named resource name still wins over
+  all of this — and naming `gemini-embedding-2` still means
+  `global`/`us`/`eu`, so that choice moves the call out of your region on
+  purpose.
+
 ### Added
 
 - **Each CLI release archive ships with an SPDX SBOM** (`*.sbom.json`,
