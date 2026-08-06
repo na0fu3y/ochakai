@@ -1129,7 +1129,7 @@ func cmdVerify(ctx context.Context, args []string) error {
 }
 
 // cmdReject records the ruling that stops an agent re-proposing knowledge
-// a human already turned down (design doc 0001 §9.1). Like verify it is a
+// a human already turned down (design doc 0081 §4). Like verify it is a
 // ruling and not an edit, so it does not touch the document (design doc
 // 0043 §3.3) — which is why it is its own command rather than a status.
 func cmdReject(ctx context.Context, args []string) error {

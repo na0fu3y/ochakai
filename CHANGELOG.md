@@ -28,6 +28,29 @@ last entry.
   now match ([docs/guides/operating.md](docs/guides/operating.md)
   (Japanese) has the verification commands).
 
+### Changed
+
+- **The two records a newcomer opens first no longer describe a world
+  that is gone.** `0001` (the founding architecture record) named six MCP
+  tools and three REST paths that do not exist, a four-value `status`
+  vocabulary that became three plus two ledgers, and a repository layout
+  with directories nobody has: the quarter of it that was still a live
+  decision moves to
+  [0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md),
+  whose §5 says which record owns each of the rest. `0073` and `0078`
+  were one subject split across a record and its amendment, and reading
+  only the first told you to set four variables that were folded away a
+  release ago; both become
+  [0080](docs/design/0080-search-and-how-a-deployment-embeds.md). Four
+  records become two, the corpus drops 278 lines, and no decision
+  changes — except that 0073 §6's claim of a write-side media-type
+  allowlist is retired, because there has been none since the bundle
+  round-trip rule replaced it. **What an operator sees:** two error
+  messages cite a new number — a model that cannot take file input now
+  names design doc 0080 §5, and semantic search being off names 0080 §1.
+  The retired records stay in the tree as tombstones pointing at their
+  replacements, so every existing link still lands somewhere.
+
 ## [0.19.1] - 2026-08-06
 
 ### Fixed

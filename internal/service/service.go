@@ -540,7 +540,7 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 // did not ask for rejected ones (design doc 0043 §3.3).
 //
 // This is the memory of no that the write-back loop is built on (design
-// doc 0001 §9.1) — it is what stops an agent re-proposing knowledge a
+// doc 0081 §4) — it is what stops an agent re-proposing knowledge a
 // human already declined. Not an MCP tool, for the same reason Verify is
 // not: it is the human's side of the loop.
 func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Actor) (*domain.Knowledge, error) {

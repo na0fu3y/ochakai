@@ -47,7 +47,7 @@ number. The alternatives you dropped stay in the PR history.
 
 Two decisions to check any proposal against first:
 
-- **No LLM inside, no SQL execution** (0001). Interpretation and
+- **No LLM inside, no SQL execution** (0081). Interpretation and
   execution belong to the client agent.
 - **Google Cloud only, secret-zero** (0065, 0003). Cloud Run IAM + Cloud
   SQL IAM; no tokens, no passwords.

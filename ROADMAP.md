@@ -75,7 +75,7 @@ if the proposal is concrete.
   That is fine at the scale a curated knowledge base reaches, and embeddings
   are the answer — which is why they stopped being opt-in: running on Google
   Cloud, ochakai turns them on by itself
-  ([0073](docs/design/0073-search-and-when-embeddings-apply.md)). A better lexical index
+  ([0080](docs/design/0080-search-and-how-a-deployment-embeds.md)). A better lexical index
   has not been designed, and nothing here promises one.
 
 Beyond that this roadmap is thin, and honestly so. Work has been arriving from
@@ -93,7 +93,7 @@ it.
 - **An LLM inside.** ochakai returns human-verified golden queries verbatim,
   and the definitions and caveats around them. Interpretation is the client
   agent's job, and staying LLM-free is what the trust in human verification
-  rests on ([0001](docs/design/0001-architecture.md)). Summarization, chat, and
+  rests on ([0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)). Summarization, chat, and
   automatic verification are out for the same reason.
 - **SQL execution.** ochakai holds no warehouse credentials; your agent
   executes. `compile_sql` — deterministic SQL generation from a semantic model,

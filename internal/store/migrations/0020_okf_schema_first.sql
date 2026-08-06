@@ -6,7 +6,7 @@
 -- Design doc 0036 §2.3 replaces that with a spec-centered one — the keys OKF defines are
 -- fields, because the consumers who read them are the bundle's readers and
 -- the humans editing them, not this server. Holding executor and attester
--- is still not running them (0001 stands: no LLM, no SQL execution).
+-- is still not running them (0081 stands: no LLM, no SQL execution).
 --
 -- One column per family: jsonb where the shape is structured (the links /
 -- attrs precedent), text where the spec's value is a scalar. A single blob

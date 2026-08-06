@@ -27,7 +27,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 
 | 領域 | いま読むドキュメント |
 |---|---|
-| 全体アーキテクチャ | [0001](0001-architecture.md) |
+| 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
 | デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
@@ -35,8 +35,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
-| ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0073](0073-search-and-when-embeddings-apply.md)(検索) |
-| 検索と埋め込み | [0073](0073-search-and-when-embeddings-apply.md) が現行。埋め込みの設定面(`OCHAKAI_EMBEDDINGS` 一つ)は [0078](0078-one-variable-says-how-it-embeds.md)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索) |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
@@ -67,14 +67,21 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## アーキテクチャと基盤
 
-- [0001 全体アーキテクチャ](0001-architecture.md) — **Accepted**。
-  LLM を内蔵せず SQL を実行しないナレッジストアという中核。双方向ループ
-  (エージェントが下書きし、人が検証する)、Postgres + pgvector 一本、
-  利用テレメトリ。
+- [0081 ochakai が何であり、何を持たないか](0081-what-ochakai-is-and-what-it-refuses-to-hold.md)
+  — **Accepted**。**全体アーキテクチャの現行ドキュメント**(0001 のうち
+  他のどの記録も持っていない決定だけを引き継いだもの)。LLM を内蔵せず
+  SQL を実行しない Context Provider、Go 単一バイナリと PostgreSQL 一本
+  (Redis もベクトル DB も検索クラスタも持たない)、配布とサプライ
+  チェーン、そして却下の記憶 —— No を覚えていることが verified を覚えて
+  いることと同じだけ要る。§5 は 0001 の各節がいまどの記録に移ったかの
+  行き先表である。
+- [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
+  最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
+  持つか、もう事実でなかった。
 - [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
-- [0053 埋め込みは既定であり、ベクトル空間は捨ててよい](0053-embeddings-by-default.md) — **Superseded by 0073**。
+- [0053 埋め込みは既定であり、ベクトル空間は捨ててよい](0053-embeddings-by-default.md) — **Superseded by 0080**(0073 経由)。
 
 ## 実装の品質ゲート
 
@@ -208,7 +215,8 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   — **Accepted**、**BREAKING(文言のみ)**。**知識の単位の呼び名領域の
   現行ドキュメントの一つ**(0054 の決定を §0 に統合する)。0054 は MCP
   のツール名 5 本の `knowledge` を OKF SPEC §2 の語 `concept` に改めた
-  (`search_concepts` 等、ツールは 8 本のまま)。0057 はその数え方が
+  (`search_concepts` 等、当時はツール 8 本のまま。うち 2 本は
+  [0076](0076-two-tools-leave-mcp.md) が降ろして 6 本になった)。0057 はその数え方が
   取りこぼしていたのが**利用者が読む英語**だったと気づく — 0.16.0 の直後で
   英語ドキュメントは `entry` 287 回に対し `concept` 6 回、`get_concept`
   自身の説明が「Fetch one entry」、Web UI のボタンが「New entry」で
@@ -229,23 +237,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
 
+- [0080 検索が何を融合し、このデプロイがどう埋め込むか](0080-search-and-how-a-deployment-embeds.md)
+  — **Accepted**。**検索と埋め込みの現行ドキュメント**(0020 / 0053 /
+  0073 / 0078 を一冊にまとめたもの)。Google Cloud の上では埋め込みが既定
+  で、使えるかを決めるのは設定ではなく IAM。検索は字句・concept のベクトル・
+  ファイルのベクトルの三本を融合し、ファイルは独立して返らず、ochakai は
+  ファイルを解釈しない。設定は `OCHAKAI_EMBEDDINGS` 一語 — 未設定 / `on` /
+  `off` / Vertex AI のモデル resource name で、どれでもない綴りは起動エラー
+  (0066 と同じ形)。幅はデプロイの設定ではなくモデルごとの定数で、知らない
+  モデルは拒否する(**ベクトルは導出物である**)。
 - [0073 検索が何を融合し、埋め込みがいつ効くか](0073-search-and-when-embeddings-apply.md)
-  — **Accepted**。**検索と埋め込みの現行ドキュメント**(0020 / 0053 を
-  一冊にまとめたもの)。Google Cloud の上では埋め込みが既定で、使えるかを
-  決めるのは設定ではなく IAM。次元変更は製品が行う(**ベクトルは導出物で
-  ある**)。検索は字句・concept のベクトル・ファイルのベクトルの三本を融合し、
-  ファイルは独立して返らず、ochakai はファイルを解釈しない。設定面は
-  0078 が改訂した。
+  — **Superseded by 0080**。0020 / 0053 を一冊にした前身。
 - [0078 このデプロイがどう埋め込むかを、一つの変数で言う](0078-one-variable-says-how-it-embeds.md)
-  — **Accepted**。**埋め込みの設定面の現行ドキュメント**(0073 を改訂)。
-  五つの変数(`OCHAKAI_EMBEDDINGS` / `OCHAKAI_VERTEX_PROJECT` /
-  `OCHAKAI_VERTEX_LOCATION` / `OCHAKAI_VERTEX_MODEL` /
-  `OCHAKAI_EMBEDDING_DIM`)を `OCHAKAI_EMBEDDINGS` 一つに畳む — 未設定 /
-  `on` / `off` / Vertex AI のモデル resource name で、どれでもない綴りは
-  起動エラー(0066 と同じ形)。次元は設定面から消えてモデルごとの定数に
-  なり、幅を知らないモデルは拒否する。モデルを名指すことは意味的検索を
-  要求することであり、0073 §1.3 の「発見は落ちてよい、名指しは落ちない」
-  はそのまま効く。
+  — **Superseded by 0080**。五つの設定を `OCHAKAI_EMBEDDINGS` 一語に畳んだ
+  決定。0073 の設定面だけを改訂する記録だったため、0080 が両方を受けた。
 - [0008 画像添付](0008-image-attachments.md) — **Superseded by 0046**。
   画像添付の導入。「原本ではなく根拠」の位置づけと `<id>/<name>` は、
   0046 では帰属の**導出規則**として残る。
@@ -255,7 +260,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   — **Superseded by 0046**。任意ファイル形式への一般化と GCS 一本化。
   sniff によるメディアタイプ判定と markdown-only 運用は 0046 も維持し、
   SVG / HTML の書き込み拒否だけが配信側の防御に置き換わる。
-- [0020 添付ファイルの検索](0020-attachment-search.md) — **Superseded by 0073**。
+- [0020 添付ファイルの検索](0020-attachment-search.md) — **Superseded by 0080**(0073 経由)。
 
 `attachments` / `Attachment` という wire 上の綴りは 0046 §2.1 が概念と
 しては既に対象消滅させていたが、名前だけ残っていた。**その綴りの retire

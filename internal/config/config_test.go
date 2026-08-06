@@ -39,7 +39,7 @@ func TestGCSBucket(t *testing.T) {
 	})
 }
 
-// One variable says how a deployment embeds (design doc 0078): unset or
+// One variable says how a deployment embeds (design doc 0080): unset or
 // "on" for the product's default around a discovered project, "off" for
 // none, and a Vertex AI model resource name for a deployment that needs a
 // particular model, region or project. A deployment that wants no Vertex
@@ -123,7 +123,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 			"projects//locations/l/publishers/google/models/gemini-embedding-001",
 			"projects/p/locations/l/models/gemini-embedding-001",
 			// A model ochakai has no width for: guessing one writes
-			// vectors nobody can compare (design doc 0078 §3).
+			// vectors nobody can compare (design doc 0080 §3).
 			"projects/p/locations/l/publishers/google/models/gemini-embedding-99",
 		} {
 			t.Run(v, func(t *testing.T) {

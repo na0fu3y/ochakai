@@ -293,8 +293,8 @@ state per area, so when a design doc lands:
 
 ### How long a record gets
 
-    RECORD-LINES: 891
-    RECORD-CAP-FROM: 0063
+    RECORD-LINES: 300
+    RECORD-CAP-FROM: 0065
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
 and the corpus grew accordingly — record count and total lines both
@@ -306,7 +306,7 @@ index and a paragraph in
 thing explained is the shape the numbers have been showing for several
 releases.
 
-So a record from 0063 on stays under that line, and
+So a record from 0065 on stays under that line, and
 `TestDesignRecordsStayUnderTheirCeiling` reads both numbers back out of
 this file.
 The ceiling is the same bargain [docs/surface.md](docs/surface.md)
@@ -325,50 +325,34 @@ Going over usually means one of three things, in order of likelihood:
    0046 rebuilt the address space in 601 lines and earned every one; it
    is a tombstone now, so 0064 is both the precedent and the customer.
 
-What the ceiling must not buy is denser prose. Records earlier than 0063
+What the ceiling must not buy is denser prose. Records earlier than 0065
 are not measured: they are immutable, and immutability is a promise about
 decisions somebody could be depending on, not a licence to keep writing
 at whatever length the last one happened to be.
 
-364 → 554 is the third case, and 0064 is the record it was written for.
-0064 is `RECORD-CAP-FROM`'s first real customer — it is numbered at or
-after 0063, so the ceiling does apply to it, and it landed exactly on the
-line — and it is not one decision the way most records are: it is the
-*last* batch that can break REST, so every breaking change anyone still
-wanted has to be in it or never happen. Five more went in this pass —
-`title` becoming optional on the wire, the PUT's missing `requestBody`,
-`observed.generated.at`, the `type` character set, and the responses the
-server already sent that the contract never declared. None of them is a
-second subject: each is one wire decision that the freeze makes
-irreversible, and splitting them across new numbers would say the
-opposite of what the record is for, that they were separable from the
-freeze. The ceiling goes back down when the freeze's record stops being
-the one that sets it — the next-largest record is 0001 at 402, so the
-drop when it comes is a large one.
+**891 → 300, and 0063 → 0065, is that batch closing.** This ceiling spent
+its whole life so far being set by one record. 0064 is not one decision
+the way most records are: it is the *last* batch that can break REST, so
+every breaking change anyone still wanted had to be in it or never
+happen, and each round of pre-release review found more — 364 → 554 →
+789 → 891, every step the third case above and every step honest. The
+review's recurring find is the part worth keeping: not a missing feature
+but **a place where the contract and the code disagreed in silence**, and
+once the fingerprint's own blind spot turned out to be one of them, **the
+check that guards the freeze had a gap the freeze's own record had
+already described** — which is the argument for reading an invariant from
+outside rather than trusting that a record and a test agree
+([0035](docs/design/0035-verifiability.md)).
 
-**554 → 789 is the same case again, and the batch is why.** 0064 landed
-exactly on 554, so any further work on the freeze moves this line by
-construction. The review before the release found a dozen more things the
-wire would have made permanent, and almost every one is the same shape:
-not a missing feature, but **a place where the contract and the code
-disagreed in silence.** Six were preconditions and query keys that were
-accepted and then dropped, so a caller who sent one got the unconditioned
-write it was trying to prevent; one was `change` frozen as a closed enum
-over a vocabulary that had already moved twice; one was `Accept` read by
-substring, so the six-representation rule §4 had written down and the
-code that served it agreed only by luck; and one was the fingerprint's
-own blind spot — it read no schema constraint at all, so the `pattern`
-§18 had just written down as unwidenable was about to freeze unchecked.
-
-That last one is the part worth keeping. **The check that guards the
-freeze had a gap the freeze's own record had already described**, which is
-the argument for reading an invariant from outside rather than trusting
-that a record and a test agree ([0035](docs/design/0035-verifiability.md)).
-
-**A batch record grows until the batch closes, and this one closes when
-the release ships** — after that `/api/v1` cannot move, so neither can
-this number for this reason. If it moves again before then, the thing to
-ask is not whether the record is too long but whether the freeze is ready.
+A batch record grows until the batch closes, and this one closed: the
+freeze shipped in v0.18.0, `/api/v1` cannot move again, so neither can
+0064. The ceiling it was holding open is now holding nothing — a record
+six times the median could land under it without a word — so the floor
+moves past it and the line comes down to 300, which is where the records
+actually written since the freeze put it (0069 at 282 is the tallest).
+0064 stays exactly as tall as it is. It is released and immutable, and
+the floor is how this file has always excused a record it cannot ask to
+be shorter.
 
 ### What a superseded record keeps
 
@@ -401,8 +385,13 @@ record is still carrying prose nobody rereads.
 
 `RECORD-LINES` bounds one record's thickness. Nothing bounded how many
 records there are, and that turned out to be the number that moved: 19
-records at v0.10.0, 61 now — 4.6x, against 2.3x for non-test Go and REST's
-own retreat from 19 operations to 11. Folding a surface leaves a record
+records at v0.10.0 against 78 today, 4.1x, while non-test Go grew 2.5x
+(7,938 → 19,527) and REST retreated from 19 operations to 11. **Lines are
+no longer the half that outruns the code** — the corpus is 2,536 → 5,121,
+2.0x, under Go's own growth — but that is the tombstone rule and the
+ceiling below doing their work, not the count slowing down: a record
+still arrives about as often, it just stops costing lines once something
+replaces it. Count is what to watch. Folding a surface leaves a record
 behind, and [docs/surface.md](docs/surface.md)'s DOC section already names
 that residue — an index entry in each language, an English summary, a
 paragraph in that file or this one — for the manual it counts. Records are
@@ -640,7 +629,7 @@ Two decisions worth knowing before proposing features:
 
 - **No LLM inside, no SQL execution.** ochakai stores and serves
   knowledge; interpretation and execution belong to the client agent
-  (0001).
+  (0081).
 - **Google Cloud only, secret-zero.** Auth is Cloud Run IAM + Cloud SQL
   IAM; features must not introduce tokens or passwords (0065, 0003).
 
