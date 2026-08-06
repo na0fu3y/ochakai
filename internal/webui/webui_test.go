@@ -415,6 +415,31 @@ func TestBodyLinksToFilesResolve(t *testing.T) {
 	}
 }
 
+// A description keeps its line structure through the store — OKF writes
+// a multi-line one as a `description: |-` block — and the page used to
+// drop that on the floor, putting the text in an element where HTML
+// collapses every newline into a space. A description written as
+// several lines, or opening with a heading, arrived as one run-on line.
+// Every place that shows one now goes through the same renderer the
+// body does, so the guard is that no call site escapes the text into an
+// element by hand again.
+func TestADescriptionIsRenderedAsTheMarkdownItIs(t *testing.T) {
+	page := string(Index)
+	body := section(t, page, "function descHTML(", "\n}")
+	if !strings.Contains(body, "md(text)") {
+		t.Errorf("descHTML no longer renders the description as markdown:\n%s", body)
+	}
+	// The old failure mode, in the form it would come back.
+	for _, gone := range []string{"esc(h.description)", "esc(entry.description)"} {
+		if strings.Contains(page, gone) {
+			t.Errorf("a description is escaped into an element again (%s), so its line breaks are lost", gone)
+		}
+	}
+	if n := len(indexesOf(page, "descHTML(")); n < 4 {
+		t.Errorf("only %d descHTML references; a place that shows a description stopped using it", n)
+	}
+}
+
 // The loop strip is the human side of design doc 0051: the review page
 // is where the person who runs the loop already is, so the instance's
 // numbers are drawn there rather than on a page of their own.

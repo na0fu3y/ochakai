@@ -342,6 +342,15 @@
   .md table { border-collapse: collapse; margin: .6em 0; max-width: 100%; }
   .md th, .md td { border: 1px solid var(--border); padding: .35rem .6rem; }
   .md th { background: var(--code-bg); font-weight: 600; text-align: left; }
+  /* A description is markdown too (see descHTML), so it carries the
+     rules above. What it must not do is out-shout what it describes: on
+     a card it sits under the title, so a description opening with
+     "## Overview" keeps body-sized headings, and it neither leads nor
+     trails with a margin of its own. */
+  .desc.md > :first-child { margin-top: 0; }
+  .desc.md > :last-child { margin-bottom: 0; }
+  .card .desc h1, .card .desc h2, .card .desc h3 { font-size: .95rem; margin: .6em 0 .2em; }
+  .desc.lead { font-size: 1.02rem; }
 
   /* ---- browse tree ---- */
   .browse details.node > summary {
@@ -712,6 +721,21 @@ function md(src, resolveFile, resolveEntry) {
   if (inCode) out += '</code></pre>';
   flushPara(); flushList();
   return out;
+}
+
+// A description is prose written inside a markdown document, so it is
+// rendered the way the body is. It is stored with its line structure
+// intact — OKF writes a multi-line one as a `description: |-` block —
+// and putting that text in an element as-is loses exactly that, because
+// HTML collapses the newlines: a description that opens with a heading
+// came back as one run-on line.
+//
+// No resolvers: a reference from a description is not a link the server
+// derives an edge from (design doc 0024 reads the body), so rendering
+// one as a link here would draw an edge that does not exist. An http(s)
+// target is a link, as it is anywhere else.
+function descHTML(text, cls) {
+  return `<div class="desc md${cls ? ' ' + cls : ''}">${md(text)}</div>`;
 }
 
 /* ============================== api ============================== */
@@ -1152,7 +1176,7 @@ function hitCard(h) {
       <span class="badge ${esc(h.status)}">${esc(h.status)}</span>
       ${tags}
     </div>
-    ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
+    ${h.description ? descHTML(h.description) : ''}
     ${sql}
     ${cardThumbs(h)}
   </article>`;
@@ -1691,7 +1715,7 @@ async function viewDetail(id) {
     // their own: OKF's own model is body footnotes keyed to source ids, so
     // whoever is reading the body is exactly who needs the list.
     overview: () => `
-      ${entry.description ? `<p style="font-size:1.02rem">${esc(entry.description)}</p>` : ''}
+      ${entry.description ? descHTML(entry.description, 'lead') : ''}
       ${docBody ? `<div class="md">${md(docBody, resolveFile, resolveEntry)}</div>` : ''}
       ${!entry.description && !docBody ? '<div class="empty">No description or body.</div>' : ''}`,
     // The document, whole and unrendered. It replaced tabs that each
@@ -2176,7 +2200,7 @@ function reviewCard(h) {
       </span>
     </div>
     <div class="meta">${meta}</div>
-    ${h.description ? `<div class="desc">${esc(h.description)}</div>` : ''}
+    ${h.description ? descHTML(h.description) : ''}
     ${cardThumbs(h)}
   </article>`;
 }
