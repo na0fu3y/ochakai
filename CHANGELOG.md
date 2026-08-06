@@ -19,10 +19,21 @@ last entry.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-07
+
+### Added
+
+- **Each CLI release archive ships with an SPDX SBOM** (`*.sbom.json`,
+  attached to the GitHub release beside the archive), so a dependency
+  scanner can read what is inside without unpacking anything. The
+  container image already carried an SBOM in its manifest; the archives
+  now match ([docs/guides/operating.md](docs/guides/operating.md)
+  (Japanese) has the verification commands).
+
 ### Changed
 
-- **Text is now embedded in the region you deployed to, not in
-  `us-central1`.** A deployment that names no model discovers its project
+- **BREAKING (deployment behavior)** — text is now embedded in the region
+  you deployed to, not in `us-central1`. A deployment that names no model discovers its project
   from the metadata server and turns semantic search on; until now the
   *region* of that call was a constant the product held, so a service
   running in `asia-northeast1` sent every concept body and every search
@@ -42,17 +53,6 @@ last entry.
   all of this — and naming `gemini-embedding-2` still means
   `global`/`us`/`eu`, so that choice moves the call out of your region on
   purpose.
-
-### Added
-
-- **Each CLI release archive ships with an SPDX SBOM** (`*.sbom.json`,
-  attached to the GitHub release beside the archive), so a dependency
-  scanner can read what is inside without unpacking anything. The
-  container image already carried an SBOM in its manifest; the archives
-  now match ([docs/guides/operating.md](docs/guides/operating.md)
-  (Japanese) has the verification commands).
-
-### Changed
 
 - **The two records a newcomer opens first no longer describe a world
   that is gone.** `0001` (the founding architecture record) named six MCP
@@ -74,6 +74,33 @@ last entry.
   names design doc 0080 §5, and semantic search being off names 0080 §1.
   The retired records stay in the tree as tombstones pointing at their
   replacements, so every existing link still lands somewhere.
+
+- **The BigQuery catalog example answers a deployment that grows its
+  catalog on demand.** Ownership of a projected entry is now keyed to the
+  `Ochakai-Producer` stamp rather than to the account that ran the job, so
+  any run recognizes every other run's entries while a person's edit still
+  takes an entry out of the projection. A table that disappears between the
+  listing and the read is recorded as `missing` — an outcome the
+  conservation check expects, not a failed night. `OCHAKAI_ID_TOKEN` lets a
+  person run the job by hand, because user ADC cannot mint an ID token. And
+  each dataset gets its own entry at `<prefix>/<project>/<dataset>`, written
+  only by a run that enumerated the whole dataset, so its table list never
+  recites tables the run did not see. The bundle ships in the release
+  archives ([examples/bigquery-catalog](examples/bigquery-catalog)).
+
+### Fixed
+
+- **The web UI's type dropdown does something again.** It had been inert
+  since `0.16.0`: reseeding was gated on the form's dirty flag, and a
+  `<select>` raises `input` before its own `change`, so the flag was always
+  up by the time the handler read it — picking a type silently did nothing,
+  on the one control that tells a writer an Attested Computation needs a
+  `runtime` before the server's 400 does. The gate now asks the document
+  whether it is still the one that was seeded. Choosing a type in a document
+  somebody has already written in edits the type line in place instead of
+  doing nothing, carrying the keys that type is refused without, and leaving
+  keys the writer already named alone. The label reads "Type" rather than
+  "Start from", because it now edits the document in front of you.
 
 ## [0.19.1] - 2026-08-06
 
@@ -3104,7 +3131,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/na0fu3y/ochakai/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/na0fu3y/ochakai/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/na0fu3y/ochakai/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/na0fu3y/ochakai/compare/v0.17.0...v0.18.0

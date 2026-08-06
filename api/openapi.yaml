@@ -83,7 +83,7 @@ info:
     is a security defect, shipped in the next release with no deprecation
     window (SECURITY.md). MCP, the CLI and the stored shape stay unstable
     while the major version is 0 and may still change in a minor release.
-  version: 0.19.1
+  version: 0.20.0
   license:
     name: MIT
 servers:
