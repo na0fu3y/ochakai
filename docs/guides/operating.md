@@ -346,8 +346,9 @@ trimmed-path な Go ビルドである。デプロイしようとしているも
 gh attestation verify oci://ghcr.io/na0fu3y/ochakai:<tag> -R na0fu3y/ochakai
 ```
 
-CLI のリリースアーカイブも同じ attestation に加えて `checksums.txt` を
-運ぶ。Binary Authorization はデプロイ時にこのチェックを強制できる —
+CLI のリリースアーカイブも同じ attestation に加えて `checksums.txt` と、
+アーカイブごとの SPDX SBOM(`*.sbom.json`、リリースの隣に添付)を運ぶ。
+Binary Authorization はデプロイ時にこのチェックを強制できる —
 下の[ハードニング](#hardening)を見よ。
 
 <a id="hardening"></a>

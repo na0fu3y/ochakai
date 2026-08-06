@@ -4,6 +4,7 @@
 [![release](https://img.shields.io/github/v/release/na0fu3y/ochakai?sort=semver)](https://github.com/na0fu3y/ochakai/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/na0fu3y/ochakai.svg)](https://pkg.go.dev/github.com/na0fu3y/ochakai)
 [![Go Report Card](https://goreportcard.com/badge/github.com/na0fu3y/ochakai)](https://goreportcard.com/report/github.com/na0fu3y/ochakai)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/na0fu3y/ochakai/badge)](https://scorecard.dev/viewer/?uri=github.com/na0fu3y/ochakai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **ochakai is a context provider for data agents.** Semantic layers tell

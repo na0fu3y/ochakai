@@ -1,0 +1,37 @@
+# OpenSSF Scorecard: automated supply-chain checks (pinned dependencies,
+# token permissions, branch protection, and the rest), with the score
+# published so that an OSS review — the kind an enterprise security team
+# runs before adopting a dependency — reads a maintained number instead
+# of auditing the repository by hand. The README carries the badge.
+name: scorecard
+on:
+  # A schedule as well as push: Scorecard also reads repository settings
+  # (branch protection, for one), and a settings change pushes no commit.
+  schedule:
+    - cron: "26 2 * * 1"
+  push:
+    branches: [main]
+permissions: read-all
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # publish_results signs the results via OIDC
+      security-events: write # upload the SARIF to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publishing is what makes the badge and the public API serve
+          # this repository's score; the raw results stay viewable at
+          # https://scorecard.dev/viewer/?uri=github.com/na0fu3y/ochakai.
+          publish_results: true
+      # Also surface the findings in this repository's own code-scanning
+      # tab, so a regression shows up here and not only on scorecard.dev.
+      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          sarif_file: results.sarif
