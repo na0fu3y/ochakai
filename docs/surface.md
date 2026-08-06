@@ -384,7 +384,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 **スクリプトの都合であって利用者が払う額の話ではない**。
 
 PARAM と同じく数えるのは**名前の異なり数**である。`--json` は 14 の
-コマンドに、`--url` は 25 のうち 23 に付くが、覚えるのは一度きりなので
+コマンドに、`--url` は 24 のうち 22 に付くが、覚えるのは一度きりなので
 1 と数える — 既存のフラグを使い回すのは無料で、語を発明することが代金で
 ある。
 
@@ -560,14 +560,14 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 
 ページは利用者が払うものである。README は 20 以上の文書へ送り出し、
 デプロイする人は
-[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 473 行を
+[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 517 行を
 通る。No FDE(C4)がドキュメントを正当化するが、C4 が求めるのは
 **自分で立ち上げられること**であって行数ではない。
 
 **そこは 2026-07 まで 983 行だった**([#355](https://github.com/na0fu3y/ochakai/issues/355))。
 private IP・team web UI・hardening checklist・upgrade path の全文を
 [docs/guides/operating.md](guides/operating.md) に移し、短い参照だけを
-残した。ページは増えず(`DOC` は 25 のまま) — 総行数への効果は下の
+残した。ページは増えず(`DOC` は当時の 25 のまま) — 総行数への効果は下の
 天井の節にある。
 
 **そしてここは、どの次元より速く増えてきた。** v0.10.0 から現在まで、
