@@ -1,6 +1,7 @@
 # ochakai 設計ドキュメント 0020: 添付ファイルの検索
 
-Status: Superseded by [0073](0073-search-and-when-embeddings-apply.md)
+Status: Superseded by [0080](0080-search-and-how-a-deployment-embeds.md)
+(0073 経由)
 Date: 2026-07-20
 
 ファイル名を字句のハイスタックに入れ、ファイルのベクトルを融合の第三の

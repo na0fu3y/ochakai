@@ -159,7 +159,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if err := st.Migrate(ctx, embedDim); err != nil {
 		// A database that cannot hold vectors is not a reason to refuse
 		// to serve knowledge, unless this deployment asked for semantic
-		// search by name (design doc 0073 §1.3). Everything else the
+		// search by name (design doc 0080 §1.3). Everything else the
 		// migration does has already run — the vector schema is the last
 		// step — so there is nothing to redo here.
 		if cfg.Embedding == nil || !cfg.Embedding.Discovered ||
@@ -175,7 +175,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 // semanticSearch builds the embedder behind hybrid search, and decides
 // whether this deployment has one at all.
 //
-// Embeddings are the default on Google Cloud (design doc 0073 §1.1): a
+// Embeddings are the default on Google Cloud (design doc 0080 §1.1): a
 // deployment that names no model gets the project it is running in and
 // the product's own model, and whether it may call Vertex AI there is
 // IAM's answer rather than a setting — so the answer is asked for, once,

@@ -244,14 +244,14 @@ variable "embedding_model" {
     needs a particular model, region or project:
     "projects/<project>/locations/<location>/publishers/google/models/<model>".
     Leave null for the product's default — the project ochakai runs in,
-    gemini-embedding-001 in us-central1 (design doc 0078). Use
+    gemini-embedding-001 in us-central1 (design doc 0080). Use
     .../locations/global/publishers/google/models/gemini-embedding-2 to also
     search image and PDF files by content; that model wants a location of
     global, us or eu.
 
     Naming a model asks for semantic search by name, so the service refuses to
     start where Vertex AI or pgvector is unavailable, where the default would
-    have degraded to lexical search (design doc 0073 §1.3) — the pgvector
+    have degraded to lexical search (design doc 0080 §1.3) — the pgvector
     bootstrap below is manual, so run it first. Changing the model leaves the
     vectors already stored invisible to the new one: `ochakai reembed` refills
     them, and search is lexical-only meanwhile. The vector width is not

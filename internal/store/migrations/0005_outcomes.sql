@@ -1,4 +1,4 @@
--- Outcome feedback (design doc 0001 §9.4): callers report whether used
+-- Outcome feedback (design doc 0069): callers report whether used
 -- knowledge actually worked. Two new event kinds close the write-back
 -- loop's last edge, and events gain a free-form note ("what was run,
 -- what went wrong") — recorded with the raw event, pruned with it.

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 ochakai is a knowledge store for data-analysis agents. Two decisions
-frame everything: no LLM inside and no SQL execution (0001), and
+frame everything: no LLM inside and no SQL execution (0081), and
 Google Cloud only with zero secrets — Cloud Run IAM + Cloud SQL IAM,
 never tokens or passwords (0065, 0003).
 
@@ -38,9 +38,10 @@ records included; the same test file reads both back. The corpus ceiling
 sits on a grid the width of its own slack, so adding a record usually
 moves no number at all — it moves when the corpus crosses a boundary,
 which is when the paragraph explaining it is worth reading. 0048 narrowed
-what earns a number, not how many records pile up or how long they run
-together — that was the direction the corpus grew, 4.6x against non-test
-Go's 2.3x. Over a line usually means two decisions, or a record restating
+what earns a number, not how many pile up: records have grown 4.1x since
+v0.10.0 against non-test Go's 2.5x, and it is the tombstone rule, not a
+slowdown, that keeps their line total under the code's.
+Over a line usually means two decisions, or a record restating
 one that already exists — not a record that needs denser prose, and not a
 corpus whose answer is a bigger number rather than a look at what it is
 carrying.
@@ -104,6 +105,14 @@ fuzzing.
   (REST / MCP / CLI / Web UI — including deliberate omissions), and
   [docs/surface.md](docs/surface.md) has to stay true to what shipped.
 - Write commit messages and code comments in English.
+- **A new manual page under `docs/` is written in Japanese** — C8 is why,
+  and the pages a person reads to operate and curate have all moved.
+  English stays for the front door and the contract: `README.md`,
+  `api/openapi.yaml`, the generated `docs/cli.md`,
+  `docs/compatibility.md`, `ROADMAP.md`, `SECURITY.md`, `SUPPORT.md`,
+  `CONTRIBUTING.md` and this file. No page gets a translated mirror —
+  one page, one language, because nobody can tell which half of a pair
+  went stale (CONTRIBUTING.md, *Translating a manual page*).
 - Cutting a release is a reviewed PR, then a tag, then verification —
   use the `release` skill rather than working from memory. A pushed tag
   is permanent.

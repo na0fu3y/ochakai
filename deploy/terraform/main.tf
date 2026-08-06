@@ -85,11 +85,11 @@ locals {
     },
     local.mode != "" ? { OCHAKAI_MODE = local.mode } : {},
     var.enable_gcs_files ? { OCHAKAI_GCS_BUCKET = local.gcs_bucket_name } : {},
-    # One variable says how this deployment embeds (design doc 0078).
+    # One variable says how this deployment embeds (design doc 0080).
     # Nothing is set when embeddings are on and no model is named:
     # ochakai discovers the project it runs in, and a discovered default
     # is the mode that falls back to lexical search instead of refusing
-    # to start (design doc 0073 §1.3). That matters here, because the
+    # to start (design doc 0080 §1.3). That matters here, because the
     # pgvector extension is a documented manual bootstrap step below — an
     # apply that lands before somebody ran it should degrade, not fail to
     # serve. Naming a model is the other side of that trade, and

@@ -26,7 +26,7 @@
 
 Vertex AI embeddings(§4)はサーバーと合わせて**既定で on** である: モジュ
 ールが `roles/aiplatform.user` を付与して API を有効化し、ochakai はそこか
-ら自分のプロジェクトを見つける(設計ドキュメント 0073)。既定で off なのは
+ら自分のプロジェクトを見つける(設計ドキュメント 0080)。既定で off なのは
 private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
 
 ### パスワードはどこにも無い
@@ -124,7 +124,7 @@ GRANT "<database_user output>" TO "you@your-org.example";
 |---|---|---|
 | `enable_private_ip` | §2b | Cloud SQL の公開エンドポイントを落とす。peering range と Cloud Run 側の Direct VPC egress。無料。ローカルの `cloud-sql-proxy` アクセスには、その後 VPC に接続したワークステーションか一時的なパブリック IP が要る。 |
 | `enable_vertex_embeddings` | §4 | **既定で on**: `roles/aiplatform.user` を付与し `aiplatform.googleapis.com` を有効化する。on にすると何が手に入るか、デプロイ後に何をすべきかは[デプロイガイド](../cloudrun/README.md#4-hybrid-semantic-search-vertex-ai-on-by-default)にある。`false` にすると `OCHAKAI_EMBEDDINGS=off` を渡し、何も付与しない。 |
-| `embedding_model` | §4 | 既定は null — ochakai が自分のプロジェクトと製品既定のモデルを使う。モデル・リージョン・プロジェクトを選ぶなら Vertex AI のモデル resource name をそのまま渡す(`OCHAKAI_EMBEDDINGS` はこの一つで三つを運ぶ、設計ドキュメント 0078)。名指したデプロイは semantic search を**要求する**ので、pgvector の bootstrap を先に済ませておくこと。次元は設定できない — モデルのものであってデプロイのものではない。 |
+| `embedding_model` | §4 | 既定は null — ochakai が自分のプロジェクトと製品既定のモデルを使う。モデル・リージョン・プロジェクトを選ぶなら Vertex AI のモデル resource name をそのまま渡す(`OCHAKAI_EMBEDDINGS` はこの一つで三つを運ぶ、設計ドキュメント 0080)。名指したデプロイは semantic search を**要求する**ので、pgvector の bootstrap を先に済ませておくこと。次元は設定できない — モデルのものであってデプロイのものではない。 |
 | `enable_gcs_files` | §4b | バケット + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`。無いとファイルの書き込みは 501 を返す。 |
 | `enable_webui` | §5b | `serve-ui` を、同じイメージ・専用の identity で、IAP の背後にある二つ目の Cloud Run サービスとして立てる。`webui_records_browser_user`(既定 on)は、UI のサービスアカウントではなくブラウザの本人を記録する。 |
 | `read_only` | §5d | `OCHAKAI_MODE=read-only` を設定する — 非公開のままである。on にする*前*にベースへ import しておくこと: read-only なデプロイには import できない。 |

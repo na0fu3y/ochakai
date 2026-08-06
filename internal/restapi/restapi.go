@@ -1178,7 +1178,7 @@ func readBody(w http.ResponseWriter, r *http.Request, limit int64, tooLarge stri
 // far as any consumer is concerned.
 const documentMediaType = "text/markdown; charset=utf-8"
 
-// maxDocument bounds a written document. The body limit (design doc 0001)
+// maxDocument bounds a written document. The body limit (design doc 0081)
 // is 4 MiB and the frontmatter is small beside it, so this is the same
 // number with room for the envelope rather than a new policy.
 const maxDocument = 5 << 20

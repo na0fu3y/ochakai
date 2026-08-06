@@ -10,7 +10,7 @@ BigQuery のテーブルメタデータを `BigQuery Table` concept として、
 持たない: サーバーの中に住む収集器は、ochakai が意図して持たないウェア
 ハウスの資格情報を要るし、ここでのナレッジは収集ではなくキュレーション
 されるものだからである(README の「断るもの」の表、設計ドキュメント
-[0001](../../docs/design/0001-architecture.md) §2)。それは*あなたが*
+[0081](../../docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。それは*あなたが*
 カタログを埋めることを何ら妨げない — このジョブは外で、CLI が使うのと
 同じ REST API の普通のクライアントとして、あなた自身のサービス
 アカウントで動く。

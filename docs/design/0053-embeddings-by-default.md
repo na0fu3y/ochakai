@@ -1,6 +1,7 @@
 # ochakai 設計ドキュメント 0053: 埋め込みは既定であり、ベクトル空間は捨ててよい
 
-Status: Superseded by [0073](0073-search-and-when-embeddings-apply.md)
+Status: Superseded by [0080](0080-search-and-how-a-deployment-embeds.md)
+(0073 経由)
 Date: 2026-07-29
 
 Google Cloud の上ではプロジェクトをメタデータサーバから発見して意味的検索を

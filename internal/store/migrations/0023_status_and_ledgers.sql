@@ -69,7 +69,7 @@ ON CONFLICT DO NOTHING;
 -- back to draft.
 --
 -- status_note carries the rejection reason for these rows — design doc
--- 0001 §9.1 made it the place to write one — so it moves to the ledger's
+-- 0081 §4 made it the place to write one — so it moves to the ledger's
 -- note and is cleared. Left behind, it would read as a draft explaining
 -- why it was rejected, which is neither true of the status nor useful to
 -- the next writer.

@@ -166,9 +166,9 @@ warning だが、レベルで絞り込むとこの表を素通りする行が三
 ものではないことを意味する — project はメタデータサーバーから来ており、
 残りは製品の既定である(`OCHAKAI_EMBEDDINGS` にモデルの resource name を
 書けば `discovered=false` になる、設計ドキュメント
-[0078](../design/0078-one-variable-says-how-it-embeds.md))。semantic
+[0080](../design/0080-search-and-how-a-deployment-embeds.md))。semantic
 search は Google Cloud 上での既定だからである(設計ドキュメント
-[0073](../design/0073-search-and-when-embeddings-apply.md))。これに
+[0080](../design/0080-search-and-how-a-deployment-embeds.md))。これに
 代わる行はどちらに転んだかを言う:
 
 | 行 | 意味 |
@@ -898,7 +898,7 @@ gcloud run services update ochakai --region=$REGION \
   `OCHAKAI_VERTEX_PROJECT` / `OCHAKAI_EMBEDDING_DIM` を設定している
   なら、アップグレードの*前*に `OCHAKAI_EMBEDDINGS` を書き換える。**
   四つは 0.18.0 で黙って無視されるようになった(設計ドキュメント
-  [0078](../design/0078-one-variable-says-how-it-embeds.md))。無視された
+  [0080](../design/0080-search-and-how-a-deployment-embeds.md))。無視された
   デプロイは既定のモデル・リージョン・幅に落ちる。**そこで起きることは
   ログにしか出ない**: 幅が違えばベクトルテーブルは新しい幅で再構築されて
   空になり、幅が同じでモデルだけ違えば古い行は残るが新しいモデルの
@@ -907,7 +907,7 @@ gcloud run services update ochakai --region=$REGION \
   だけである。直すのは `ochakai reembed` で、それは Vertex AI の呼び出し
   をベースの規模ぶん支払う。手で `DROP TABLE` する必要は無い: ベクトルは
   それが記述する concept から導出されるものだからである(設計ドキュメント
-  [0073](../design/0073-search-and-when-embeddings-apply.md) §2)。
+  [0080](../design/0080-search-and-how-a-deployment-embeds.md) §3)。
 - **semantic search が到達可能になったり、モデルが変わったりしても、
   backfill はされない。** 既存の concept は `ochakai reembed` まで
   embedding が無いままである。これは Vertex AI のトークンをベースの

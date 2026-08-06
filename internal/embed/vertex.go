@@ -56,7 +56,7 @@ func (v *Vertex) Model() string { return v.model }
 
 // modelDims is the vector width ochakai asks each model it knows for, and
 // stores. It lives here rather than in a setting because a vector is a
-// derived value the product owns (design doc 0073 §2): the width is a
+// derived value the product owns (design doc 0080 §3): the width is a
 // property of the model, not of the deployment, and the two numbers a
 // deployment could disagree about — the column it created and the vector
 // it writes — must never be two numbers.
@@ -78,7 +78,7 @@ var modelDims = map[string]int{
 // knows the model at all. A model it does not know has no width it could
 // ask for, and guessing at one is the failure that shows up in the
 // knowledge rather than in the log — every write rejected for its width,
-// search quietly lexical (design doc 0078 §3).
+// search quietly lexical (design doc 0080 §3).
 func Dimension(model string) (int, bool) {
 	dim, ok := modelDims[model]
 	return dim, ok

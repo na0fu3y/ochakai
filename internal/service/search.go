@@ -1,5 +1,5 @@
 // Search: the hybrid read. Lexical and vector results come back as two
-// rankings and are fused here (design doc 0001), and the miss — a question
+// rankings and are fused here (design doc 0080), and the miss — a question
 // nothing answered — is recorded on the way out (0051).
 package service
 

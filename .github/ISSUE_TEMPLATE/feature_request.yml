@@ -71,7 +71,7 @@ body:
         - label: >-
             No LLM inside, no SQL execution — `ochakai` stores and serves
             knowledge; interpretation and execution belong to the client agent
-            (design doc 0001).
+            (design doc 0081).
           required: true
         - label: >-
             Google Cloud only, secret-zero — auth is Cloud Run IAM + Cloud SQL

@@ -1,5 +1,5 @@
 // Package domain defines the knowledge model shared by the store, MCP
-// server, and REST API. See docs/design/0001-architecture.md §3.
+// server, and REST API. See design docs 0074 and 0075.
 package domain
 
 import (
@@ -319,7 +319,7 @@ func ValidDate(s string) bool {
 // ValidStaleAfter reports whether s can be a stale_after.
 func ValidStaleAfter(s string) bool { return ValidDate(s) }
 
-// Usage event kinds recorded per knowledge entry (design doc 0001 §9).
+// Usage event kinds recorded per knowledge entry (design doc 0069).
 // The first two are recorded passively by reads; worked/failed are
 // deliberate outcome reports (report_outcome) closing the write-back loop.
 //
@@ -541,7 +541,7 @@ type Verification struct {
 
 // Rejection is this instance's ruling that an entry was not accepted —
 // the memory that stops an agent re-proposing knowledge a human already
-// turned down (design doc 0001 §9.1).
+// turned down (design doc 0081 §4).
 //
 // It is a ledger rather than a status because it is not a lifecycle
 // value: OKF's three statuses say how ready a concept is, and "we said
@@ -697,7 +697,7 @@ func (p Parameter) sameAs(o Parameter) bool {
 // Executor says how an Attested Computation is run and what a run must
 // hand back as evidence (OKF SPEC §10.2). ochakai stores it and never
 // runs it: executing the computation and checking the receipt belong to
-// the consumer (SPEC §10.5, design docs 0001, 0036 §5).
+// the consumer (SPEC §10.5, design docs 0081, 0036 §5).
 type Executor struct {
 	Resource string   `json:"resource"`          // run instructions or code — what the key is for
 	Receipt  []string `json:"receipt,omitempty"` // optional: the fields a run must return
@@ -749,7 +749,7 @@ type Knowledge struct {
 	//
 	// ochakai records this contract and never acts on it: it does not run
 	// Executor, check a receipt, run Attester, or fetch Computation. That
-	// is the consumer's procedure (SPEC §10.5, design docs 0001, 0036 §5).
+	// is the consumer's procedure (SPEC §10.5, design docs 0081, 0036 §5).
 	Runtime     string      `json:"runtime,omitempty"`     // required by SPEC when the type is Attested Computation
 	Parameters  []Parameter `json:"parameters,omitempty"`  // inputs an agent may fill in
 	Computation string      `json:"computation,omitempty"` // path to the computation; empty means the body's "# Computation" fence

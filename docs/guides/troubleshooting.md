@@ -169,7 +169,7 @@ webui のサービスアカウントがサーバーの `OCHAKAI_DELEGATING_CALLE
 モデルなら vector テーブルはその幅で再構築され、空で戻ってくる。どちらも
 ログに残り、curate されたものは何も失われない: vector は元の concept から
 導出されるものだからである(design doc
-[0073](../design/0073-search-and-when-embeddings-apply.md) §2)。
+[0080](../design/0080-search-and-how-a-deployment-embeds.md) §3)。
 `ochakai reembed` を実行して埋め直す、これがお金を使う工程である。
 それが終わるまでランキングは lexical のみになる。**0.18.0 へ上げた
 直後にこれが起きたなら**、原因は退役した `OCHAKAI_VERTEX_MODEL` /

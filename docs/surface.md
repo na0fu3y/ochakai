@@ -28,9 +28,9 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | C3 | 形式は Open Knowledge Format v0.2 — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md)) |
 | C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0067](design/0067-four-faces-and-what-they-decline.md)) |
 | C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0067](design/0067-four-faces-and-what-they-decline.md) §3) |
-| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0001](design/0001-architecture.md)・[0067](design/0067-four-faces-and-what-they-decline.md) §1) |
+| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)・[0067](design/0067-four-faces-and-what-they-decline.md) §1) |
 | C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0069](design/0069-the-loop-and-what-measures-it.md)) |
-| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — trigram 索引は二文字の日本語語を引けず、埋め込みは Google Cloud 上で既定である([0073](design/0073-search-and-when-embeddings-apply.md)) |
+| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — trigram 索引は二文字の日本語語を引けず、埋め込みは Google Cloud 上で既定である([0080](design/0080-search-and-how-a-deployment-embeds.md)) |
 
 **どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
 逆は成り立たない — 条件に当たることは必要条件であって十分条件では
@@ -456,7 +456,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 のモデル resource name — **プロジェクト・リージョン・モデルを一度に運ぶ
 綴りが既に存在していた**ので、三つの変数はそれを分解して持っていただけ
 である。次元は消えて戻らない: ベクトルは導出物であって運用者のつまみでは
-なく([0073](design/0073-search-and-when-embeddings-apply.md) §2)、
+なく([0080](design/0080-search-and-how-a-deployment-embeds.md) §3)、
 モデルごとの定数としてコードに移った。
 
 - `OCHAKAI_DATABASE_URL`
