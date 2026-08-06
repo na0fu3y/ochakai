@@ -108,20 +108,27 @@ v0.2 バンドルとして往復する
 半分)と、意味を書き起こす常駐エンジニア(FDE)である。
 
 ochakai の賭けは、2026 年にはこの二つの支払いがどちらも要らなくなった、
-というものである。kinetic の半分 — Action、ライブデータへの接続、
-write-back — は、ツールを持ったエージェント自身の仕事になった。残る
-建設対象は semantic の半分、それも意思決定に効く中核だけである:
-検証済みの定義、sanctioned な計算、読み方、方針、そしてそれらを結ぶ
-リンク。書き起こす労働は消えない — 担い手が FDE からエージェントに
-変わり、人には判断の要る中核の検証だけが残る(README の C4、
-[ループ](loop.md))。
+というものである。kinetic の半分のうち**実行** — Action を発火させ、
+ライブデータに接続し、write-back する — は、ツールを持ったエージェント
+自身の仕事になった。実のところ Foundry でも Ontology は実行主体では
+ない: action type はスキーマとして Ontology に定義され、実行するのは
+その上のアプリケーションである。線は定義と実行の間に引かれ、**定義の
+側はここに住む** — sanctioned な計算とその契約(`Attested Computation`
+の `runtime` / `executor` / `attester`)も手順(`Skill`)も通常の
+concept として検証と provenance の下に置かれ、他の知識と同じ検索で
+実行主体に届き、実行した側は結果を `report_outcome` で書き戻す
+([architecture](architecture.md))。残る建設対象は semantic の中核と
+kinetic の定義、それだけである。書き起こす労働は消えない — 担い手が
+FDE からエージェントに変わり、人には判断の要る中核の検証だけが残る
+(README の C4、[ループ](loop.md))。
 
 この意味で ochakai は**最小のオントロジー**と呼べる: concept とリンクが
 オブジェクトとリンクに、`verified` の台帳と provenance がガバナンスに
 対応し、全体が OKF バンドルとして持ち出せるので
 ([0075](design/0075-the-bundle-is-the-address-space.md))、オントロジーが
 プラットフォームのものになることはない。持たないものは意図して持たない。
-Action が要る、オペレーショナルな write-back が要る、concept 単位の
+Action の実行基盤が要る、オペレーショナルな write-back が要る、
+kinetic の三つ目の要素 — 誰が実行してよいかの Role — や concept 単位の
 権限が要る([0065](design/0065-identity-and-provenance.md) §1)、
 Google Cloud の外で動かす([0003](design/0003-gcp-only.md)) — どれか
 一つでも真なら、FDE 型を買う理由はまだそこにある。
@@ -235,8 +242,9 @@ vault が持たないのは、ファイル形式でないすべてである:
   文脈 — なら → メモリ層。
 - 一人、一台、自分で書くノートなら → vault と、その上の MCP サーバー。
 - オントロジーの約束には頷くが、プラットフォームと FDE という買い方を
-  断りたい — そして kinetic の半分(Action、write-back)をエージェントに
-  任せられるなら → semantic の中核だけを最小に持つ、それがこの枠である。
+  断りたい — そして kinetic の実行(Action、write-back)をエージェントに
+  任せられるなら → semantic の中核と kinetic の定義を最小に持つ、それが
+  この枠である。
 - **エージェントと人が複数いて、足りないのが誰かが確かめたナレッジ** —
   どのクエリが sanctioned か、その数字が何を意味するか、何が既に試され
   却下されたか — であり、Google Cloud で動かせるなら → それがこれの
