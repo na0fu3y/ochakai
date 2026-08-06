@@ -84,9 +84,15 @@ func TestAStatusChangeEditsTheDocumentRatherThanRebuildingIt(t *testing.T) {
 	// not write a status its writer left out (design doc 0046 §3.9), and
 	// the document a read hands back is the one that was written (§2.2) —
 	// so a replace-only edit would report success and change nothing.
+	// The append path lives in withFrontmatterKey, which the type
+	// dropdown shares; a second copy is what this guard exists to stop.
 	fn := section(t, page, "function withStatus(doc, status)", "\n}")
-	if !strings.Contains(fn, "doc.match(") {
-		t.Error("withStatus only replaces a status line; a document that names none would come back unchanged")
+	if !strings.Contains(fn, "withFrontmatterKey(doc, 'status', status)") {
+		t.Errorf("withStatus no longer goes through the shared line edit:\n%s", fn)
+	}
+	shared := section(t, page, "function withFrontmatterKey(doc, key, value)", "\n}")
+	if !strings.Contains(shared, "doc.match(") {
+		t.Error("withFrontmatterKey only replaces a line; a document that names no such key would come back unchanged")
 	}
 }
 
@@ -150,6 +156,64 @@ func TestTypeVocabularyMatchesDomain(t *testing.T) {
 		if strings.Contains(icons, retired) {
 			t.Errorf("the page still offers %q, retired by design doc 0038 or 0063", retired)
 		}
+	}
+}
+
+// The editor's type dropdown shipped inert from v0.16.0 to v0.19.1: the
+// reseed was gated on the form's dirty flag, and a <select> fires `input`
+// before its `change`, so the flag the select itself raised was always up
+// by the time the handler read it. Picking a type did nothing, silently,
+// on the one control that tells a writer an Attested Computation needs a
+// runtime before the server's 400 does.
+//
+// What the gate has to ask is whether the document is still the one the
+// dropdown seeded — that is the question the flag was standing in for.
+func TestTheTypeDropdownAsksTheDocumentNotTheDirtyFlag(t *testing.T) {
+	page := string(Index)
+	body := section(t, page, "typeSel.addEventListener('change'", "\n    });")
+	if strings.Contains(body, "dirty") {
+		t.Errorf("the type change is gated on the form's dirty flag again, which the select's own `input` raises before this runs:\n%s", body)
+	}
+	for _, want := range []string{"doc === seeded", "withType(doc, typeSel.value)"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the type change no longer does %q:\n%s", want, body)
+		}
+	}
+}
+
+// Setting the type on a document somebody is already writing has to carry
+// the keys that type is refused without, or the dropdown hands back a
+// document the server rejects — which is worse than the nothing it used
+// to do, because it looks like it worked. Only Attested Computation has
+// one: runtime is the single place the write path holds a type to a
+// schema (design doc 0036 §5), and internal/service is where that is
+// enforced.
+//
+// The illustrative half must stay out of it. A sample `year` parameter
+// pasted into a half-written document is the page putting words in its
+// writer's mouth.
+func TestATypeChangeCarriesWhatTheTypeIsRefusedWithout(t *testing.T) {
+	page := string(Index)
+	required := section(t, page, "const TYPE_REQUIRED = {", "\n};")
+	if !strings.Contains(required, "'Attested Computation': 'runtime:") {
+		t.Errorf("an Attested Computation no longer requires a runtime here, but the write path still does:\n%s", required)
+	}
+	if strings.Contains(required, "parameters:") || strings.Contains(required, "resource:") {
+		t.Errorf("TYPE_REQUIRED carries illustrative keys, which a type change would paste into a written document:\n%s", required)
+	}
+	// The seed half is what only ever opens an empty document.
+	seed := section(t, page, "const TYPE_SEED = {", "\n};")
+	if !strings.Contains(seed, "parameters:") || !strings.Contains(seed, "resource:") {
+		t.Errorf("the seed templates no longer show the shape of a type:\n%s", seed)
+	}
+	// A key the writer already named is theirs. Overwriting it would be
+	// the dropdown deciding a runtime somebody chose was wrong.
+	fn := section(t, page, "function withType(doc, type)", "\n}")
+	if !strings.Contains(fn, "TYPE_REQUIRED[type]") {
+		t.Errorf("withType does not add the keys the type requires:\n%s", fn)
+	}
+	if !strings.Contains(fn, "if (!new RegExp('^' + key + ':', 'm').test(out))") {
+		t.Errorf("withType no longer checks whether the document already names the key:\n%s", fn)
 	}
 }
 
