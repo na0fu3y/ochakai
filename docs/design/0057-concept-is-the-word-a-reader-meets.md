@@ -8,9 +8,14 @@ Status: Accepted(2026-07-29)。**BREAKING(文言のみ)。**
 ツールチップ、MCP のツール説明と `jsonschema` の説明文、OpenAPI の
 `description`、サーバのエラー文。0054 §3.4 の「`domain.Knowledge` は
 改名しない」は維持し、**JSON のフィールド名 `entries` も動かさない**
-(§3.2)。ワイヤの形・引数・応答・能力・保存形はどれも 1 バイトも変わらない
+(§3.2)。ワイヤの形・引数・応答・能力・保存形はどれも 1 バイトも変わらない。
 [0064](0064-rest-stops-at-api-v1.md) §7 が §3.2 の JSON フィールド名の
-除外を撤回し、`entries` を `concepts` に改名した(issue #411)。
+除外を撤回し、`entries` を `concepts` に改名した(issue #411)ので、
+§3.2 の一つ目の項目と §3.3 と §4 の該当案はもう当たらない。**§0 の表も
+今の MCP を写していない**: `delete_concept` と `get_concept_usage` は
+[0076](0076-two-tools-leave-mcp.md) が降ろし、`get_attachment` は 0064 §6
+が `get_file` に改めたので、**本数は 8 ではなく 6 本**である。改名そのもの
+——読む語は `concept`——は残る 4 本と散文で現行のまま
 Date: 2026-07-29
 
 ## 0. 0054 が決めたこと: MCP ツール名 5 本の改名

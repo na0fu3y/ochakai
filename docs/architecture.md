@@ -252,7 +252,7 @@ markdown 以外の書き込みは拒否される。Files は検索対象でも�
 ところではハイブリッド検索に加わる — テキストはどの embedding
 model でも、画像と PDF は `gemini-embedding-2` で。ヒットは常に
 それを持つ concept であって、ファイル自身がヒットすることは無い
-(設計ドキュメント [0073](design/0073-search-and-when-embeddings-apply.md) §3)。
+(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md) §4)。
 
 **trust はナレッジと一緒に旅をする。** OKF v0.2 のスキーマは
 ochakai のスキーマでもある: spec が定義するキーはすべて第一級の
@@ -358,7 +358,7 @@ restore を求められたときである(設計ドキュメント
 合計、そして埋め込みベクトルはすべて PostgreSQL に住む — ベクトルに
 は pgvector を使い、これは Cloud SQL でもプレーンな Postgres でも
 使えるので、ハイブリッド検索は追加のインフラを一つも要らない(設計
-ドキュメント [0001](design/0001-architecture.md) §4)。Redis も、
+ドキュメント [0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §2)。Redis も、
 別のベクトルデータベースも、検索クラスタも無い。マイグレーションは
 バイナリの中に入って出荷される。markdown 以外のバイト列だけは例外
 で、上の Files の節で述べたとおり Cloud Storage に住む。
@@ -404,7 +404,7 @@ files のファイル名 — に対してマッチさせる。ラテン文字の
 キーは無い。字句面の ranking とは reciprocal rank fusion で融合
 される — は、**ochakai が Google Cloud 上で動いているところでは
 既定で on になる**(設計ドキュメント
-[0073](design/0073-search-and-when-embeddings-apply.md) §1。何がそれを決めるか、
+[0080](design/0080-search-and-how-a-deployment-embeds.md) §1。何がそれを決めるか、
 どう断るかは[要件と設定](configuration.md#environment-variables)に
 ある)。ベクトルは concept が書かれたときに書かれるので、embeddings
 が届く前に読み込んだベースや、model を変えた後のベースは、
@@ -424,7 +424,7 @@ score — ナレッジそのものの二つ目のコピーではない(設計ド
 
 ## 書き戻しと検証のループ
 
-設計ドキュメント [0001](design/0001-architecture.md) が賭けている
+設計ドキュメント [0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) が賭けている
 のは、エージェントが広さを、人間が判断を供給するということである:
 エージェントは学んだことを `draft` として書き、人間はそれを
 確認するか、deprecate するか、理由を付けて reject する。provenance

@@ -1620,7 +1620,7 @@ paths:
                     not ask for them (`rejected=true`), which is how an
                     agent checks whether a proposal was already turned
                     down before making it again — the memory of *no* the
-                    write-back loop is built on (design doc 0001 §9.1).
+                    write-back loop is built on (design doc 0081 §4).
                     Verifications are not cleared: somebody vouched for
                     this and somebody later ruled against it is exactly
                     the history worth keeping.
@@ -2043,7 +2043,7 @@ paths:
         hybrid search stays quietly lexical-only until every concept
         happens to be rewritten. Changing the embedding model has the
         same shape: the old vectors sit in a space nothing queries any
-        more (design doc 0073 §2). This fills the gap.
+        more (design doc 0080 §3). This fills the gap.
 
 
         File vectors are covered too: only writing a file records one, so

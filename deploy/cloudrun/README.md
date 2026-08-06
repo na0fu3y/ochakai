@@ -279,7 +279,7 @@ curl http://localhost:8787/health
 
 Cloud Run 上では、ochakai はメタデータサーバーに自分がどのプロジェク
 トで動いているかを尋ね、それに合わせてセマンティック検索を有効にする
-(設計ドキュメント 0073)— 設定する変数は無く、認証は ADC 経由のサー
+(設計ドキュメント 0080)— 設定する変数は無く、認証は ADC 経由のサー
 ビス identity なので、ここでも API キーは無い。
 
 **実際に使えるかどうかを決めるのは設定ではなく IAM である。**
@@ -318,7 +318,7 @@ Vertex AI の呼び出しを引き起こせる** — キュレーションされ
 ベースの規模では数セントで済む。
 
 別のモデル・リージョン・プロジェクトを使うなら、変数は同じ一つで、値が
-Vertex AI のモデル resource name になる(設計ドキュメント 0078):
+Vertex AI のモデル resource name になる(設計ドキュメント 0080):
 
 ```sh
 gcloud run services update ochakai --region=$REGION \

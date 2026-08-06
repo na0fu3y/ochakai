@@ -2,6 +2,9 @@
 
 Status: Accepted(2026-08-02)。MCP のツールを 8 本から 6 本にする。
 [0067](0067-four-faces-and-what-they-decline.md) §5.1・§6・§7 を改訂する。
+[0057](0057-concept-is-the-word-a-reader-meets.md) §0 を改訂する — 改名の
+表に載る `delete_concept` と `get_concept_usage` は本書が降ろした 2 本で
+あり、「ツールの本数 8」も本書が動かした。
 Date: 2026-08-02
 
 ## 0. 決めたこと

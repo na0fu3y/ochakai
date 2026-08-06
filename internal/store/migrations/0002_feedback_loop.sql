@@ -1,4 +1,4 @@
--- Feedback-loop hardening (design doc 0001 §9): rejected status with
+-- Feedback-loop hardening (design doc 0069): rejected status with
 -- rejection provenance, a free-form status note, and knowledge usage
 -- recording (raw events pruned after 180 days; aggregates kept forever).
 
