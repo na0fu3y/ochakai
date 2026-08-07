@@ -474,6 +474,31 @@ instead of replacing. With --if-match it lands only if the concept still
 has the version you read, and fails instead of overwriting someone
 else's edit.
 
+Pick the type by what the concept holds. These are the recommended
+vocabulary; any single-line value works as a type, and one of your own
+is first-class:
+
+- Metric: what a number means and what it is called — its definition and
+  synonyms, one concept per metric (id metrics/<name>), not the SQL
+- Attested Computation: a computation others run instead of improvising —
+  the code in a # Computation fence, the contract in runtime (required),
+  parameters, executor and attester; a confirmed question-and-SQL pair is
+  one of these, with a top-level question key for the question it answers
+- Skill: the procedure an executor.resource points at — how to actually run
+  a computation in a given runtime
+- Insight: how to read a metric — baselines, seasonality, the artifacts that
+  fake a move, when a number is worth escalating
+- Policy: the rule that decides a number, such as revenue recognition or
+  cost allocation — what a sources[].resource cites
+- Glossary Term: one term of the shared vocabulary, defined once
+- BigQuery Dataset: a dataset's catalog entry — the container its tables sit
+  in; resource is its canonical URI
+- BigQuery Table: a table's catalog entry — where the data comes from,
+  column notes, known problems; resource is its canonical URI, and the
+  conventional sections are # Schema and # Common query patterns
+- Reference: a copy of material that lives outside — enum definitions,
+  licenses, schema docs; resource is the original
+
 As a file: any bytes, up to 5 MiB, and the media type is sniffed from
 them rather than taken from the name. Nothing derives the file's
 concept from where it sits, so the hint printed afterwards is the

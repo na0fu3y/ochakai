@@ -10,6 +10,12 @@
 (あるいは OCHAKAI_URL を設定する。こちらが優先される — CI で便利。)
 `ochakai whoami` が、どのサーバーに誰として向いていて、届いているかを
 言う。
+
+ナレッジベースがまだ空で、concept の形を先に見たいなら、ochakai の
+リポジトリで `ochakai import examples/demo` を**捨ててよいサーバー**に
+対して走らせる — 9 型のうち 8 型の見本が 10 concept 入っている。数字も
+店も全部作り物なので、実際に使うナレッジベースには入れない
+([examples/README.md](../README.md))。
 -->
 
 ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
@@ -22,7 +28,7 @@ ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
   concept が上位に来る)、リンクを一段展開するので、メトリクスを説明する
   insight がそれと一緒に届く。まずここから。細かい参照には下の
   search / get を使う。
-- `ochakai search "<question or keyword>" [--type Metric|'Attested Computation'|Skill|Insight|Policy|'Glossary Term'|'BigQuery Dataset'|'BigQuery Table'|Reference] [--trust human-reviewed]`
+- `ochakai search "<question or keyword>" [--type '<Type>'] [--trust human-reviewed]`
   — 1 行 1 ヒット: score、uri、status、title。検証済みの concept は信用
   してよい。`draft` の concept は provenance で判断する(`--json` が
   `created_by` を出す)。
@@ -59,9 +65,14 @@ ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
 `runbook/…`)、関連するナレッジをまとめるために id は階層的でよい
 (`queries/sales/monthly-revenue`)。
 
-自分が書いたクエリが正しく、しかも役に立つと分かったら保存すること:
-`type: Attested Computation` に `runtime`(その SQL がどこで走るか)を
-付け、SQL は本文の `# Computation` フェンスに入れ、トップレベルに
-`question` キー(自然言語の問い)を置く — OKF の frontmatter は平坦
-なので、自分のキーは spec が定義するキーの**隣**に置き、その下に入れ子に
-しない。後で人が `ochakai verify` で確かめる。
+**型は concept が何を持つかで選ぶ。** 推奨の 9 型それぞれに何を書くかは
+`ochakai put -h` が一行ずつ言う — 閉じた集合ではないので、自分の型
+(`runbook` など)を書いてもよい。迷ったら同じ型の concept を一つ読んで
+形を真似ること: `ochakai search "<話題>" --type '<Type>'` で見つけ、
+`ochakai get <id>` で全文を出す。
+
+自分が書いたクエリが正しく、しかも役に立つと分かったら
+`type: Attested Computation` として保存すること。OKF の frontmatter は
+平坦なので、自分のキー(その SQL が答える問いを運ぶ `question` など)は
+spec が定義するキーの**隣**に置き、その下に入れ子にしない。後で人が
+`ochakai verify` で確かめる。

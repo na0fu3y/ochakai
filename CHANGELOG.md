@@ -19,6 +19,18 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The write faces now say what each recommended type holds**, one line
+  per type, instead of handing over nine spellings and nothing to tell
+  them apart: `put_concept`'s description and `ochakai put -h` both render
+  the same sentences from one place in `internal/domain`, so a tenth type
+  cannot arrive on one face and not the other. The scattered advice
+  `put_concept` had grown for four of the nine types is folded into it —
+  including the line that still told agents to write `attrs.question`,
+  which 0.16.0 flattened away — the guard that pins this for the shipped
+  prose now reads the MCP tool too.
+
 ## [0.20.0] - 2026-08-07
 
 ### Added

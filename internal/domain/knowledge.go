@@ -80,6 +80,82 @@ func TypesHint() string {
 	return strings.Join(names, ", ")
 }
 
+// guide says what a writer puts in each recommended type, in the words
+// docs/architecture.md's table uses (design doc 0071 §2). The comments on
+// the constants above are notes for whoever reads this file — spec
+// references and why a spelling is in the vocabulary; these are the
+// sentences somebody choosing a type is shown.
+//
+// The filters get the bare spellings (TypesHint): a caller narrowing a
+// search already knows what they are after. It is the write faces that
+// were handing over nine names and no way to tell them apart, and that
+// had grown their own scattered advice for four of the nine.
+var guide = map[Type]string{
+	TypeMetrics: "what a number means and what it is called — its definition and synonyms, " +
+		"one concept per metric (id metrics/<name>), not the SQL",
+	TypeComputations: "a computation others run instead of improvising — the code in a " +
+		"# Computation fence, the contract in runtime (required), parameters, executor and " +
+		"attester; a confirmed question-and-SQL pair is one of these, with a top-level " +
+		"question key for the question it answers",
+	TypeSkills: "the procedure an executor.resource points at — how to actually run a " +
+		"computation in a given runtime",
+	TypeInsights: "how to read a metric — baselines, seasonality, the artifacts that fake a " +
+		"move, when a number is worth escalating",
+	TypePolicies: "the rule that decides a number, such as revenue recognition or cost " +
+		"allocation — what a sources[].resource cites",
+	TypeTerms:    "one term of the shared vocabulary, defined once",
+	TypeDatasets: "a dataset's catalog entry — the container its tables sit in; resource is its canonical URI",
+	TypeTables: "a table's catalog entry — where the data comes from, column notes, known " +
+		"problems; resource is its canonical URI, and the conventional sections are " +
+		"# Schema and # Common query patterns",
+	TypeReferences: "a copy of material that lives outside — enum definitions, licenses, " +
+		"schema docs; resource is the original",
+}
+
+// TypesGuide renders the recommended vocabulary with what each type
+// holds, one per line, for the faces where somebody is choosing a type to
+// write rather than one to filter on. It has the same single home as
+// TypesHint (design doc 0071 §6), for the same reason: the sentences were
+// going to be copied into the MCP write tool, the CLI's put help and the
+// manual otherwise, and a copy is what falls behind.
+func TypesGuide() string {
+	lines := make([]string, len(Types))
+	for i, t := range Types {
+		lines[i] = wrapItem("- "+string(t)+": "+guide[t], guideWidth)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// guideWidth is the column the guide wraps at: the CLI's help is
+// hand-wrapped narrower than this, and a terminal is where the widest
+// line shows first.
+const guideWidth = 76
+
+// wrapItem folds one bullet at width, indenting what carries over so the
+// item reads as one item. It splits on spaces alone — the sentences are
+// English, and a word longer than the width keeps its line rather than
+// being cut mid-token. Width counts runes: the sentences carry em dashes,
+// which are three bytes and one column.
+func wrapItem(s string, width int) string {
+	var b strings.Builder
+	col := 0
+	for i, word := range strings.Fields(s) {
+		n := utf8.RuneCountInString(word)
+		switch {
+		case i == 0:
+			b.WriteString(word)
+			col = n
+		case col+1+n > width:
+			b.WriteString("\n  " + word)
+			col = 2 + n
+		default:
+			b.WriteString(" " + word)
+			col += 1 + n
+		}
+	}
+	return b.String()
+}
+
 // TypesQuoted renders the recommended vocabulary as shell words, wrapping
 // the types that contain a space in q so the shell sees one word per type.
 // Completion scripts interpolate this rather than spelling the list out,

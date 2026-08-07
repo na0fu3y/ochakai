@@ -193,9 +193,16 @@ func TestShippedInstructionsNameFlagsThatExist(t *testing.T) {
 // The list is the authoring instructions alone, not every shipped file:
 // the deploy guide names the pre-0.4 nested form on purpose, in the
 // paragraph about importing a bundle written back then.
+//
+// The MCP write tool is on it because it is authoring instructions too —
+// the ones an agent is handed on every call, and the only ones nobody
+// reads as prose. It went on telling agents to write attrs.question from
+// 0.16.0, which flattened the frontmatter, to 0.20.0 — precisely as long
+// as this list went without it.
 func TestConceptAuthoringInstructionsKeepFrontmatterFlat(t *testing.T) {
 	for _, path := range []string{
 		"../../README.md",
+		"../../internal/mcpserver/mcpserver.go",
 		"../../docs/architecture.md",
 		"../../docs/guides/golden-query-canary.md",
 		"../../examples/README.md",
