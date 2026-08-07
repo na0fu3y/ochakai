@@ -35,6 +35,24 @@ last entry.
 
 ### Changed
 
+- **A search for a name now finds the concept with that name.** Ask for
+  売上 and the concept *called* 売上 comes first, ahead of the reports
+  that mention the word — which is not what happened before: the lexical
+  haystack is one column (id, title, description, tags, body, filenames
+  concatenated), so a concept whose whole name is the query and a monthly
+  report that says the word eight times in five kilobytes contained the
+  same fragments and the same whole query, scored identically, and the
+  order between them was whatever the scan produced. Two terms fix it.
+  Fragments landing in the name count half again, weighted the same way,
+  so it works for a question and not only for a keyword; and a name that
+  *is* the query outranks everything that merely contains it. Either name
+  serves — the title, or the id's last segment, since a filename is a name
+  somebody chose (design doc 0022). The rule survives fusion, which reads
+  rank alone and would otherwise hand the top back to whatever the vectors
+  liked, and every face reads the same ranking, `get_context` included.
+  No migration, no reindex, no reembed: both terms are expressions on rows
+  the scan already reads, and the candidate set is unchanged (a Japanese
+  keyword scan measured about 4% slower on 5,000 entries).
 - **The write faces now say what each recommended type holds**, one line
   per type, instead of handing over nine spellings and nothing to tell
   them apart: `put_concept`'s description and `ochakai put -h` both render

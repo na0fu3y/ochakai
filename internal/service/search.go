@@ -89,17 +89,49 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, err
 	}
-	fused := rrfFuse(limit, lexical, vector, attachments)
+	fused := rrfFuse(query, limit, lexical, vector, attachments)
 	return fused, nil
 }
 
+// namedBy reports whether the query is what the concept is called, rather
+// than something it mentions. Either name answers, as in the store's
+// scorer: the title, or the id's last segment (design doc 0022).
+//
+// The comparison is the store's, repeated here rather than carried: a hit
+// arrives with both fields on it, and a flag would be a new thing to keep
+// in sync across three lists that come from three queries.
+func namedBy(h domain.SearchHit, query string) bool {
+	name := h.ID
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		name = name[i+1:]
+	}
+	return strings.EqualFold(domain.Normalize(h.Title), query) ||
+		strings.EqualFold(domain.Normalize(name), query)
+}
+
 // rrfFuse merges ranked lists with reciprocal rank fusion (k=60), adding a
-// small boost for verified concepts so certified knowledge surfaces first.
-func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
+// small boost for verified concepts so certified knowledge surfaces first,
+// and keeping a concept the query names ahead of the rest.
+//
+// Fusion is where a name would otherwise be lost. The store ranks an
+// exact name first by a margin no other term can close, but RRF reads
+// rank alone: at k=60 a concept topping one list scores 1/61 and a
+// concept placing well in all three scores three times that, so 売上 the
+// concept lands below whatever the vectors liked — the store's ruling
+// undone by the arithmetic of the merge, not by a judgement about
+// relevance. So it is a sort key rather than another addend. Any weight
+// large enough to be reliable here would be large enough to dominate
+// every fused score, which is the same rule written less legibly.
+//
+// Ties among several concepts of the same name — the same filename in two
+// bundles — fall through to the fused score, which is the ordering the
+// question deserves.
+func rrfFuse(query string, limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 	const k = 60
 	type entry struct {
 		hit   domain.SearchHit
 		score float64
+		named bool
 	}
 	byKey := map[string]*entry{}
 	for _, list := range lists {
@@ -107,13 +139,13 @@ func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 			key := hit.ID
 			e, ok := byKey[key]
 			if !ok {
-				e = &entry{hit: hit}
+				e = &entry{hit: hit, named: namedBy(hit, query)}
 				byKey[key] = e
 			}
 			e.score += 1.0 / float64(k+rank+1)
 		}
 	}
-	out := make([]domain.SearchHit, 0, len(byKey))
+	ranked := make([]*entry, 0, len(byKey))
 	for _, e := range byKey {
 		// Any confirmation earns the nudge, whichever tier it is: the
 		// boost is about "somebody checked this", and weighting the tiers
@@ -123,14 +155,21 @@ func rrfFuse(limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
 			e.score += 0.002
 		}
 		e.hit.Score = e.score
+		ranked = append(ranked, e)
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].named != ranked[j].named {
+			return ranked[i].named
+		}
+		if ranked[i].hit.Score != ranked[j].hit.Score {
+			return ranked[i].hit.Score > ranked[j].hit.Score
+		}
+		return ranked[i].hit.ID < ranked[j].hit.ID
+	})
+	out := make([]domain.SearchHit, 0, len(ranked))
+	for _, e := range ranked {
 		out = append(out, e.hit)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Score != out[j].Score {
-			return out[i].Score > out[j].Score
-		}
-		return out[i].ID < out[j].ID
-	})
 	if len(out) > limit {
 		out = out[:limit]
 	}
