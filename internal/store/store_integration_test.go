@@ -1758,6 +1758,113 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 	}
 }
 
+// A keyword search is a search for a name. Ask for 売上 and the concept
+// *called* 売上 is the answer; the twenty that mention it in a body are
+// context, however often they say the word.
+//
+// Fragment scoring alone cannot tell those apart. The haystack is one
+// column — id, title, description, tags, body, filenames concatenated —
+// so an entry whose whole name is the query and an entry that says the
+// word once in five kilobytes both contain every fragment and both
+// contain the query verbatim: identical scores, and the order between
+// them is whatever the scan happened to produce. This plants exactly that
+// tie and requires the name to break it.
+func TestIntegrationLexicalSearchRanksTheNamedConceptFirst(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	run := testdb.Unique(t, "it-name-")
+	mine := Filter{Tags: []string{run}}
+	// Two shapes of name, because an entry has two (design doc 0022): the
+	// id's last segment when no title is set, and the title when one is.
+	byID, byTitle := run+"/売上", run+"/cogs"
+	titled := run + "/revenue-howto"
+	ids := []string{byID, byTitle, titled}
+	for i := range 20 {
+		ids = append(ids, fmt.Sprintf("%s/filler-%d", run, i))
+	}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		}
+	})
+	create := func(id, title, body string) {
+		t.Helper()
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: title, Tags: []string{run},
+			Status: domain.StatusDraft, CreatedBy: actor, Body: body,
+		}, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	// Written worst-first on purpose. Tied scores come back in whatever
+	// order the scan produced, which is insertion order, so a fixture that
+	// plants the answer first passes without ranking anything — this one
+	// fails unless the score really separates them.
+	//
+	// The fillers say both words far more often than the definitions do,
+	// which is also the point: frequency in a body is not aboutness.
+	for i := range 20 {
+		create(fmt.Sprintf("%s/filler-%d", run, i), fmt.Sprintf("月次レポート %d", i),
+			strings.Repeat("今月の売上と原価の内訳、売上の推移、原価の推移。", 8))
+	}
+	create(titled, "売上の読み方", "売上は前年同期比で見ないと誤読する。原価と併せて読む。")
+	create(byID, "", "全社の売上をどう数えるかの定義。")
+	create(byTitle, "原価", "原価に何を含めるかの定義。")
+
+	rank := func(hits []domain.SearchHit, id string) int {
+		for i, h := range hits {
+			if h.ID == id {
+				return i
+			}
+		}
+		return -1
+	}
+	for _, tc := range []struct{ query, first, why string }{
+		{"売上", byID, "the id's last segment is the concept's name"},
+		{"原価", byTitle, "the title is the concept's name"},
+	} {
+		hits, err := s.SearchLexical(ctx, tc.query, mine, 50)
+		if err != nil {
+			t.Fatalf("SearchLexical(%q): %v", tc.query, err)
+		}
+		if len(hits) == 0 || hits[0].ID != tc.first {
+			got := "nothing"
+			if len(hits) > 0 {
+				got = hits[0].ID
+			}
+			t.Errorf("SearchLexical(%q) ranked %s first, want %s (%s)",
+				tc.query, got, tc.first, tc.why)
+		}
+	}
+
+	// A name the query only partly matches is still a name: "売上の読み方"
+	// is more about 売上 than a report that lists the word eight times.
+	hits, err := s.SearchLexical(ctx, "売上", mine, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 20 {
+		filler := fmt.Sprintf("%s/filler-%d", run, i)
+		if got, other := rank(hits, titled), rank(hits, filler); other >= 0 && other < got {
+			t.Fatalf("SearchLexical(売上) ranked %s (mentions only) above %s (named)", filler, titled)
+		}
+	}
+}
+
 // Verify is the exit from both review feeds (design doc 0025 §6). It
 // stamps a fresh verified_at even when the entry is already verified —
 // which Update cannot do — and an entry whose last failure report predates

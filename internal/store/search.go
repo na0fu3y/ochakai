@@ -164,24 +164,64 @@ func contentChar(r rune) bool {
 	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Katakana, r)
 }
 
-// SearchLexical ranks entries by how much of the query they contain,
-// verified entries boosted. The haystack is the search_text column
-// (migration 0016): the id (design doc 0022 — with title optional, the
-// filename may be the entry's only name), the envelope fields, the body,
-// and the attachment filenames (design doc 0020 — "seeds" finds the entry
-// carrying seeds.txt, embedder or not), maintained by trigger.
+// nameText is the entry's name as a search matches it: the title, and the
+// id's last segment beside it.
+//
+// Both, not the resolved one. domain.DisplayTitle picks the title when
+// there is one and falls back to the filename, because a reader needs a
+// single string to print; a search is not printing anything, and an entry
+// titled "月次の数字" filed at metrics/売上 is named 売上 by whoever filed
+// it there (design doc 0022). The parent segments stay out: under
+// 売上/2026-q1 every child would otherwise be named 売上, which is what
+// the prefix filter is for.
+const (
+	filenameText = `regexp_replace(k.id, '^.*/', '')`
+	nameText     = `k.title || ' ' || ` + filenameText
+)
+
+// SearchLexical ranks entries by how much of the query they contain and
+// by where it lands, verified entries boosted. The haystack is the
+// search_text column (migration 0016): the id (design doc 0022 — with
+// title optional, the filename may be the entry's only name), the
+// envelope fields, the body, and the attachment filenames (design doc
+// 0020 — "seeds" finds the entry carrying seeds.txt, embedder or not),
+// maintained by trigger.
 //
 // The score is the fraction of the query's fragments the entry contains,
 // plus a bonus when the whole query appears verbatim (a keyword search
 // should outrank an entry that merely shares terms with a question), plus
-// the verified boost. An entry containing none of the fragments is not a
-// result — the floor is "matched something", not a magic number.
+// the two name terms below, plus the verified boost. An entry containing
+// none of the fragments is not a result — the floor is "matched
+// something", not a magic number.
 //
-// Every term of that is a substring test against one column, so the
-// candidate predicate and the score read the same expressions, and the
-// GIN trigram index serves the ones it can — patterns of three characters
-// or more (migration 0016; two-character Japanese windows are answered by
-// a scan, see queryFragments). Fragment matching
+// The name terms are what makes a keyword search find a definition. That
+// haystack is one column, so a concept whose entire name is 売上 and a
+// monthly report that says the word eight times in five kilobytes contain
+// the same fragments and the same whole query: identical scores, and the
+// order between them was whatever the scan produced. Frequency in a body
+// is not aboutness, and the column cannot express the difference —
+// nameText can.
+//
+//   - Fragments landing in the name count half again, per fragment and
+//     weighted the same way, so it works for the question get_context is
+//     built for and not only for a keyword: "なぜ売上が下がっているのか"
+//     lifts the concept named 売上 without the question matching it whole.
+//   - A name that *is* the query outranks every entry that merely
+//     contains it. The bonus is 1.0 against a ceiling of 1.85 for
+//     everything else, so this is a rule rather than a nudge: asking for
+//     売上 puts 売上 first. Either name serves — the deep-linked filename
+//     is a name a person chose as much as the title is.
+//
+// Both terms read expressions on the row the scan already has, and a name
+// match implies a search_text match (title and id are both inside it), so
+// the candidate set is unchanged and no index is asked for anything new.
+//
+// Every term of that is a substring test — against search_text, or
+// against the name read off the same row — so the candidate predicate and
+// the score read the same expressions, and the GIN trigram index serves
+// the ones it can: patterns of three characters or more (migration 0016;
+// two-character Japanese windows are answered by a scan, see
+// queryFragments). Fragment matching
 // replaced a similarity()/`%` pair that could not work: `%` is true only
 // above pg_trgm.similarity_threshold (0.3) and a real query never scores
 // that against a real document, so the candidate set was whatever the
@@ -192,17 +232,25 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// every entry and flattens the ranking ('_' matches any one character).
 	args = append(args, "%"+escapeLike(query)+"%")
 	wholeParam := len(args)
+	// The same escaped query with no wildcards around it: ILIKE without a
+	// pattern is case-insensitive equality, which is the exact-name test.
+	args = append(args, escapeLike(query))
+	nameParam := len(args)
 	frags := queryFragments(query)
-	var hit, weight, weighted, weights, tests []string
+	var hit, weight, weighted, named, weights, tests []string
 	for i, frag := range frags {
 		args = append(args, "%"+escapeLike(frag)+"%")
 		tests = append(tests, fmt.Sprintf("k.search_text ILIKE $%d", len(args)))
 		hit = append(hit, fmt.Sprintf("k.search_text ILIKE $%d AS h%d", len(args), i))
+		hit = append(hit, fmt.Sprintf("nm.name ILIKE $%d AS n%d", len(args), i))
 		// Document frequency over the candidates, not the whole table: one
 		// window pass, no extra scans.
 		weight = append(weight, fmt.Sprintf(
 			"ln(1 + total::float / GREATEST(count(*) FILTER (WHERE h%d) OVER (), 1)) AS w%d", i, i))
 		weighted = append(weighted, fmt.Sprintf("CASE WHEN h%d THEN w%d ELSE 0 END", i, i))
+		// A fragment in the name is scored with the same weight it earns
+		// in the body, so a rare term stays rare wherever it lands.
+		named = append(named, fmt.Sprintf("CASE WHEN n%d THEN w%d ELSE 0 END", i, i))
 		weights = append(weights, fmt.Sprintf("w%d", i))
 	}
 	// Scoring carries ids and booleans, never rows. The window functions
@@ -216,24 +264,30 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// known.
 	q := fmt.Sprintf(`
 		WITH scored AS (
-			SELECT w.id, (%[1]s) / NULLIF(%[2]s, 0) + w.whole + w.verified AS score
+			SELECT w.id,
+				((%[1]s) + 0.5 * (%[2]s)) / NULLIF(%[3]s, 0)
+					+ w.whole + w.named + w.verified AS score
 			FROM (
-				SELECT c.*, %[3]s FROM (
-					SELECT k.id, %[4]s, count(*) OVER () AS total,
-						CASE WHEN k.search_text ILIKE $%[5]d THEN 0.3 ELSE 0 END AS whole,
+				SELECT c.*, %[4]s FROM (
+					SELECT k.id, %[5]s, count(*) OVER () AS total,
+						CASE WHEN k.search_text ILIKE $%[6]d THEN 0.3 ELSE 0 END AS whole,
+						CASE WHEN k.title ILIKE $%[7]d
+							OR `+filenameText+` ILIKE $%[7]d
+							THEN 1 ELSE 0 END AS named,
 						CASE WHEN EXISTS (SELECT 1 FROM knowledge_verification v
 							WHERE v.id = k.id) THEN 0.05 ELSE 0 END AS verified
-					FROM object k
-					WHERE (%[6]s) AND %[7]s
+					FROM object k, LATERAL (SELECT `+nameText+` AS name) nm
+					WHERE (%[8]s) AND %[9]s
 				) c
 			) w
-			ORDER BY score DESC LIMIT %[8]d
+			ORDER BY score DESC LIMIT %[10]d
 		)
 		SELECT `+knowledgeSelectK+`, scored.score
 		FROM object k JOIN scored ON scored.id = k.id
 		ORDER BY scored.score DESC`,
-		strings.Join(weighted, " + "), strings.Join(weights, " + "),
-		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam,
+		strings.Join(weighted, " + "), strings.Join(named, " + "),
+		strings.Join(weights, " + "),
+		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam, nameParam,
 		strings.Join(tests, " OR "), where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {

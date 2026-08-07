@@ -67,7 +67,7 @@ func verifiedHit(id string) domain.SearchHit {
 func TestRRFFuseMergesAndRanks(t *testing.T) {
 	lexical := []domain.SearchHit{hit("a", domain.StatusDraft), hit("b", domain.StatusDraft)}
 	vector := []domain.SearchHit{hit("b", domain.StatusDraft), hit("c", domain.StatusDraft)}
-	out := rrfFuse(10, lexical, vector)
+	out := rrfFuse("q", 10, lexical, vector)
 	if len(out) != 3 {
 		t.Fatalf("want 3 fused hits, got %d", len(out))
 	}
@@ -81,9 +81,49 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 	// Same single-list rank; verified must win the tie.
 	lexical := []domain.SearchHit{hit("draft-doc", domain.StatusDraft)}
 	vector := []domain.SearchHit{verifiedHit("verified-doc")}
-	out := rrfFuse(10, lexical, vector)
+	out := rrfFuse("q", 10, lexical, vector)
 	if out[0].ID != "verified-doc" {
 		t.Errorf("verified concept should outrank draft at equal RRF score, got %s first", out[0].ID)
+	}
+}
+
+// The store ranks the concept a query names first, and RRF must not undo
+// it. A concept placing in all three lists earns three times the reciprocal
+// of one that tops a single list, so nothing short of a sort key keeps 売上
+// above the entries the vectors liked (design doc 0022 for the two names).
+func TestRRFFuseKeepsTheNamedConceptFirst(t *testing.T) {
+	titled := hit("metrics/kpi", domain.StatusStable)
+	titled.Title = "売上"
+	byFilename := hit("metrics/売上", domain.StatusStable)
+	popular := verifiedHit("reports/monthly")
+	popular.Title = "売上の推移レポート"
+
+	for _, tc := range []struct {
+		name  string
+		named domain.SearchHit
+	}{
+		{"title is the name", titled},
+		{"filename is the name", byFilename},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The named concept tops the lexical list alone; the other
+			// concept places in all three, and is verified besides.
+			out := rrfFuse("売上", 10,
+				[]domain.SearchHit{tc.named, popular},
+				[]domain.SearchHit{popular},
+				[]domain.SearchHit{popular})
+			if out[0].ID != tc.named.ID {
+				t.Errorf("fused ranking put %s first, want the concept named 売上 (%s)",
+					out[0].ID, tc.named.ID)
+			}
+		})
+	}
+
+	// Merely containing the query is not being named by it, or every
+	// report about 売上 would claim the top of the list.
+	out := rrfFuse("売上", 10, []domain.SearchHit{popular, titled})
+	if out[0].ID != titled.ID {
+		t.Errorf("fused ranking put %s first, want the concept named 売上", out[0].ID)
 	}
 }
 
@@ -92,7 +132,7 @@ func TestRRFFuseLimit(t *testing.T) {
 	for _, id := range []string{"a", "b", "c", "d"} {
 		list = append(list, hit(id, domain.StatusDraft))
 	}
-	if got := len(rrfFuse(2, list)); got != 2 {
+	if got := len(rrfFuse("q", 2, list)); got != 2 {
 		t.Errorf("want limit 2, got %d", got)
 	}
 }
