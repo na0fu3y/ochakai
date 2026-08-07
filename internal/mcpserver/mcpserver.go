@@ -329,19 +329,12 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"status is the lifecycle only — draft, stable, deprecated (OKF SPEC §5.4). Whether anyone " +
 			"has confirmed the concept is not yours to set: it comes from the verification ledger, and " +
 			"this surface does not verify or reject. Put the reason for deprecating in status_note. " +
-			"For BigQuery Table/BigQuery Dataset/Reference concepts, set resource to the asset's canonical URI and favor " +
-			"the conventional body sections: # Schema, # Common query patterns. " +
-			"An \"Attested Computation\" concept records a sanctioned computation others must run instead of " +
-			"improvising: put the computation in a # Computation fence in body and the contract in the " +
-			"runtime, parameters, executor and attester fields. ochakai stores it and never runs it. " +
-			"A confirmed question-and-SQL pair is one of these: runtime says where the SQL runs, and " +
-			"attrs.question carries the natural-language question it answers. " +
+			"Pick the type by what the concept holds. These are the recommended ones; any other " +
+			"single-line type works too, and one of your own is first-class:\n" + domain.TypesGuide() + "\n" +
+			"ochakai records what a concept says and never runs any of it. " +
 			"Cite the material a concept derives from in sources — each needs a resource, and an id lets " +
 			"markdown footnotes in body attribute single claims to it. " +
 			"Set stale_after when the knowledge has a known expiry date. " +
-			"Give each metric its own \"Metric\" concept (last id segment = the metric name, e.g. " +
-			"metrics/<name>) so definitions are searchable on their own, and have table concepts link " +
-			"to it from their body. " +
 			"Links are never a field: write a markdown link to the other concept's path in body — " +
 			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other concept gains a backlink). " +
 			"An id whose concept was deleted can be reused, which revives it as your draft — unless a human had " +
@@ -625,7 +618,7 @@ func view(k *domain.Knowledge, notes []string) (knowledgeOut, error) {
 
 type writeIn struct {
 	ID       string `json:"id" jsonschema:"where the concept lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
-	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — recommended: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; omitted reads as stable, OKF's default — whether anyone confirmed the concept is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified, usage_window} — the material this derives from; an entry's own usage_window overrides the shared one), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, and optionally receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other concepts with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the concept's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) never set who created or confirmed the concept, so a document read back from ochakai can be edited and returned as-is; a document from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
+	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — this tool's description lists the recommended types and what each one holds; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; omitted reads as stable, OKF's default — whether anyone confirmed the concept is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified, usage_window} — the material this derives from; an entry's own usage_window overrides the shared one), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, and optionally receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other concepts with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the concept's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) never set who created or confirmed the concept, so a document read back from ochakai can be edited and returned as-is; a document from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
 }
 
 // toKnowledge parses the document. Notes — values read differently than

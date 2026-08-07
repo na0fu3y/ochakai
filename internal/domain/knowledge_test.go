@@ -406,6 +406,34 @@ func TestTypesHintCoversEveryBuiltin(t *testing.T) {
 	}
 }
 
+// A type a write face names but cannot describe is a name an agent picks
+// by guessing. The guide is a map, so a tenth type joins Types and lands
+// on every surface with an empty sentence after its name unless this
+// fails first.
+func TestTypesGuideDescribesEveryBuiltin(t *testing.T) {
+	g := TypesGuide()
+	for _, ty := range Types {
+		if guide[ty] == "" {
+			t.Errorf("no guide for the recommended type %q", ty)
+		}
+		if !strings.Contains(g, "- "+string(ty)+": ") {
+			t.Errorf("TypesGuide() omits %q:\n%s", ty, g)
+		}
+	}
+	if len(guide) != len(Types) {
+		t.Errorf("guide has %d entries for %d recommended types: a retired spelling is still described",
+			len(guide), len(Types))
+	}
+	// The sentences are shown where somebody writes a concept, so they
+	// have to say what goes in one. A bare restatement of the name is
+	// what the filters already offer (TypesHint).
+	for ty, s := range guide {
+		if len(s) < len(string(ty)) {
+			t.Errorf("the guide for %q says nothing the spelling did not: %q", ty, s)
+		}
+	}
+}
+
 // SPEC §7's third actor form, as ochakai admits it: software and version,
 // told apart from the two identity forms by the slash it uses and the
 // colon it must not (design doc 0052 §3.2).
