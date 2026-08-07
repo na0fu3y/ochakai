@@ -109,6 +109,19 @@ reject したり、ファイルを添えたりしても precondition は有効�
 [動作要件と設定](configuration.md#authentication-has-no-configuration)に
 ある。
 
+**境界が要るなら、インスタンスを分ける。** 部門ごとに読める範囲を変え
+たいときの答えは concept ごとの権限ではなく、デプロイをもう一つ立てる
+ことである。増えるのは Cloud Run のサービスと、**同じ Cloud SQL イン
+スタンスの中の別データベース**だけで — `OCHAKAI_DATABASE_URL` の dbname
+を変え、[deploy ガイド](../deploy/cloudrun/README.md)の bootstrap SQL を
+その新しいデータベースにもう一度流す — インスタンスは増えない。Cloud
+Run はリクエスト課金なので、境界一つの限界費用はほぼゼロである。
+
+**しかも二重に効く。** 境界ごとに専用のサービスアカウントを使えば、誰が
+到達できるかを Cloud Run IAM が決め、そのサービスがどのデータベースを
+開けるかを Cloud SQL IAM の GRANT が決める。どちらの層にも置く secret
+は無い。
+
 ### ochakai を使うのをやめたら、ナレッジはどうなるか
 
 `ochakai export ./knowledge` がベース全体を、git に置ける OKF v0.2 の
@@ -118,6 +131,23 @@ reject したり、ファイルを添えたりしても precondition は有効�
 は[デプロイの運用](guides/operating.md#backup-and-restore)にある。
 Git をレビュー経路にする運用そのものは
 [Git をレビュー経路にする](guides/git-review.md)にある。
+
+### 維持者が止まったら、どうなるか
+
+維持者は一人で([SUPPORT.md](../SUPPORT.md))、後任も、それを約束する
+組織も無い。答えはサポート体制ではなく、**人質を取っていない**ことで
+ある。
+
+動いているデプロイは止まらない。ochakai が話す相手はあなた自身の
+プロジェクトの Google Cloud API だけで、ライセンスサーバーにも SaaS
+にもテレメトリにも問い合わせない — 上流が消えた日に期限切れになる
+ものが一つも無い。ナレッジは一つ上の問いのとおり丸ごと出て、MIT なので
+フォークできる。
+
+止まるのは**次のリリース**である。最新リリースだけがサポートされ
+バックポートは無いので([互換性とサポート](compatibility.md#support))、
+その時点で脆弱性修正も止まる。選択はフォークして直すか、バンドルを
+持って出るかで、どちらも今日できる。
 
 ### ホスティング版はあるか
 
