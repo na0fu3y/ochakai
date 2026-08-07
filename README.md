@@ -43,6 +43,48 @@ ochakai context "why is revenue down?"
 It is also the one deployment where plain curl works — nothing to sign:
 `curl 'https://demo.ochak.ai/api/v1/search?q=revenue'`.
 
+### What that one call is worth
+
+`ochakai context` is the read an agent makes before a data question: it
+returns the concepts that bear on it in full and names the rest. Here is
+part of what comes back above, condensed — the quoted sentences are
+verbatim, and `ochakai get insights/reading-revenue` prints the whole
+entry:
+
+> **Seasonality.** The shape repeats every year and is larger than almost
+> anything you will be asked to investigate. December, +30 to +40%; March,
+> +10 to +15%; **August, -15%** — Obon, the whole country stops buying for
+> a week. "August being down 15% is the single fact most worth knowing
+> here. It comes back every year, it has never meant anything, and it
+> generates a review every year anyway."
+>
+> **Threshold.** "Escalate when two consecutive months are more than 8%
+> below the same months last year […] One month below, however far below,
+> has never been" — including the month a payment provider outage cost a
+> full day.
+
+An agent with warehouse access alone can see that August fell. Nothing in
+the schema says the fall arrives every year, that a month-over-month move
+inside ±6% is this series' own noise, or that a late 06:00 JST partition
+reads exactly like a bad day and has caused more false alarms than any
+real decline. Those are somebody's conclusions about their own data, and
+they are the difference between *revenue is down 15%* and *it is August*.
+
+The same response hands back what is **not** settled, which is the half a
+retrieval system usually drops. The repeat-purchase-rate metric comes back
+marked `draft`, carrying the three questions nobody has answered yet — the
+lookback window, guest checkout, the denominator — and its frontmatter says
+who wrote it: `by: analysis_agent/gemini-2.5-pro`. An agent drafted it
+while looking into this very question, a human has not ruled on it, and
+ochakai says so instead of quietly ranking it beside the verified ones. The
+deprecated channel-code reference comes back too, by name, for the same
+reason.
+
+**No LLM ran inside ochakai to produce any of that.** It returned what
+people wrote and verified, with the provenance still attached; the reading
+is your agent's job ([design doc
+0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §6).
+
 To hold knowledge of your own, run a server:
 
 ```sh

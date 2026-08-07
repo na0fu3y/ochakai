@@ -19,6 +19,20 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The README now shows what `ochakai context` actually returns.** The
+  quick start had a reader point the CLI at the public demo and run the
+  one call an agent makes before a data question, without ever showing
+  the answer — seeing it meant installing first. A condensed excerpt from
+  the demo bundle now stands beside it: the seasonal shape that explains
+  a 15% August, the escalation threshold, and the draft metric that comes
+  back marked `draft` with its three unsettled questions and the agent
+  that wrote it still named in its frontmatter. No surface moved: the
+  nine dimensions in [docs/surface.md](docs/surface.md) are unchanged,
+  and the added prose fits under the `DOC-LINES` ceiling 0.20.0 already
+  raised, so no ceiling moves either.
+
 ### Changed
 
 - **The write faces now say what each recommended type holds**, one line
