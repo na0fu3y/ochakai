@@ -33,8 +33,9 @@ last entry.
 ### Changed
 
 - **BREAKING (deployment behavior)** — text is now embedded in the region
-  you deployed to, not in `us-central1`. A deployment that names no model discovers its project
-  from the metadata server and turns semantic search on; until now the
+  you deployed to, not in `us-central1`. A deployment that names no model
+  discovers its project from the metadata server and turns semantic search
+  on; until now the
   *region* of that call was a constant the product held, so a service
   running in `asia-northeast1` sent every concept body and every search
   query to Vertex AI in the United States to be embedded. That is a
@@ -89,6 +90,20 @@ last entry.
   archives ([examples/bigquery-catalog](examples/bigquery-catalog)).
 
 ### Fixed
+
+- **A description keeps the line breaks it was stored with in the web UI.**
+  OKF stores a multi-line description as a `description: |-` block and the
+  round trip keeps every line, but the page put that text into an element
+  as escaped plain text, where HTML collapses newlines into spaces — so a
+  description written as a heading and a paragraph arrived on screen as one
+  run-on line, hash marks and all. Nothing was ever lost in the store; it
+  went missing only on the page a person reads. Every place a description
+  is shown now renders it through the same markdown renderer the body goes
+  through: the Overview tab, the search and browse cards, and the review
+  queue. References written in a description are not drawn as concept
+  links, because the server derives edges from the body rather than from a
+  description (design doc 0024) and drawing one would claim an edge that
+  does not exist; an `http(s)` target is a link as it is anywhere else.
 
 - **The web UI's type dropdown does something again.** It had been inert
   since `0.16.0`: reseeding was gated on the form's dirty flag, and a
