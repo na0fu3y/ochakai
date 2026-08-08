@@ -85,6 +85,11 @@ func (m memBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 	return data, nil
 }
 
+func (m memBlobStore) Delete(_ context.Context, sum string) error {
+	delete(m, sum) // already gone is success, like GCS
+	return nil
+}
+
 // TestAttachmentSearchIntegration exercises the write-to-search loop of
 // design doc 0020: Attach embeds a text/plain file, hybrid search then
 // surfaces the owning entry for a query that matches only the attachment;

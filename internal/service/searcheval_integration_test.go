@@ -96,23 +96,28 @@ var japaneseSupplement = map[string]string{
 		"受注は支払い確定時点で数える。キャンセルは受注から差し引く。\n",
 }
 
-// Floors pin the measured baseline: recall@10 = 1.00, MRR = 0.85 as of
-// the indexed lexical search (lexical-only, 14 cases). They sit under
-// those numbers so ordinary noise passes and a real regression does
-// not; a change that moves them — either way — should say so in its PR,
-// because that is the point of having them.
+// Floors pin the measured baseline: recall@10 = 1.00, MRR = 0.90
+// (lexical-only, 14 cases). They sit under those numbers so ordinary
+// noise passes and a real regression does not; a change that moves them
+// — either way — should say so in its PR, because that is the point of
+// having them.
 //
-// MRR was 0.90 when this harness landed, against the ILIKE haystack.
-// What took it to 0.85 is not a ranking that got worse but one that
-// stopped being decided by an accident: a fragment no document contains
-// used to earn the largest possible weight (rarity is the weight), and
-// concepts whose *name* contained such a fragment collected half of it.
-// English stopwords are exactly those fragments now that the query is
-// stemmed, so "by" in a title was worth more than any term anybody
-// searched for. Removing it leaves the ties it had been hiding: five of
-// these ten concepts score identically for "why is revenue down", and
-// the order among them is arbitrary. That is the next thing to fix, and
-// it is measured here rather than argued about.
+// MRR dipped to 0.85 once, when a fragment no document contains stopped
+// earning the largest possible weight (rarity is the weight) and the
+// names that had been collecting half of it stopped ranking by an
+// accident. That change did not make the ranking worse; it uncovered
+// the ties the accident had been hiding — five of these concepts scored
+// identically for "why is revenue down", and the order among them was
+// whatever the scan produced.
+//
+// Those ties are now broken by verification recency and then by id, so
+// the order is the same twice and defensible once (store/search.go).
+// The number this harness reports barely moved — one case rose from
+// rank 5 to rank 4 — and that is expected: a golden set measures which
+// concept surfaces, while what the tie-break buys is that the answer
+// does not depend on the scan. The thing worth measuring next is the
+// vector half, which needs a fake encoder before it can be measured at
+// all.
 const (
 	evalK           = 10
 	evalRecallFloor = 0.92 // one miss out of 14 passes; two fail
