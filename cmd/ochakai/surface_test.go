@@ -361,6 +361,17 @@ var surfaceCapRe = regexp.MustCompile(`^- ([A-Z-]+): (\d+)$`)
 // section whose amount it caps.
 const capMeasures = "-LINES"
 
+// capBytes is the other amount a section can be capped in. DOC is capped
+// in lines because a page is read; MCP is capped in bytes because a tool
+// schema is not read at all — it is held, for the whole conversation, in
+// the context window of every agent that connects. The count of six
+// tools was a budget while one tool's prose grew past the two that were
+// removed to protect it (design doc 0076), which is the same blind spot
+// PARAM and FLAG found: the pressure escapes to whatever nobody counts.
+// What measures it is internal/mcpserver's own test, from a real
+// session's tools/list.
+const capBytes = "-BYTES"
+
 // slackSuffix marks the tolerance declared beside a -LINES cap, and
 // capSlack is that suffix appended to capMeasures: "DOC-LINES-SLACK"
 // says how much of DOC-LINES's ceiling may sit unspent before that is
@@ -441,14 +452,14 @@ earned it.`, name, section.declared, limit, name, section.declared)
 		}
 	}
 	for name := range caps {
-		if strings.HasSuffix(name, capSlack) {
+		if strings.HasSuffix(name, slackSuffix) {
 			base := strings.TrimSuffix(name, slackSuffix)
 			if _, ok := caps[base]; !ok {
 				t.Errorf("%s declares %s but no %s for it to soften", surfaceDoc, name, base)
 			}
 			continue
 		}
-		counted := strings.TrimSuffix(name, capMeasures)
+		counted := strings.TrimSuffix(strings.TrimSuffix(name, capMeasures), capBytes)
 		if _, ok := sections[counted]; !ok {
 			t.Errorf("%s caps %s, which it does not count", surfaceDoc, name)
 		}
