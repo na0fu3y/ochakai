@@ -96,6 +96,14 @@ last entry.
   shell out — Claude Desktop, and your own services — instead of naming
   hosted agents, which the guide has always said cannot reach an
   IAM-restricted deployment at all. `DOC-LINES` drops 5,800 → 5,700.
+- **`DOC-LINES` is back at 5,800**, because the two entries above landed
+  in parallel and only met on `main`: the fold was real (−176 lines) and
+  the dogfooding entrance was a page-sized decision (+27), but neither PR
+  could see the other, and the merged total is 5,720 — past the ceiling
+  the first of them had just lowered. [docs/surface.md](docs/surface.md)
+  already described two PRs' prose merging across a boundary in the
+  upward direction; this is the first time it happened against a ceiling
+  on the way down, and the paragraph it earns is in that document.
 - **`ochakai import` keeps eight requests in flight instead of one.** An
   import (and its `--dry-run`, which makes the same round trips) was one
   sequential HTTP call per document, which priced a real catalog
