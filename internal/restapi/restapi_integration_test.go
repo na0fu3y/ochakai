@@ -313,6 +313,10 @@ func TestRESTIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("archive status = %d: %s", resp.StatusCode, b)
+	}
 	gz, err = gzip.NewReader(resp.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -2238,6 +2242,10 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("archive status = %d: %s", resp.StatusCode, b)
+	}
 	gz, err := gzip.NewReader(resp.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -2293,6 +2301,12 @@ func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
+	// An error answer is JSON, not an archive: naming the status and the
+	// body beats failing on "gzip: invalid header" (#546).
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("archive status = %d: %s", resp.StatusCode, b)
+	}
 	gz, err := gzip.NewReader(resp.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -2403,18 +2417,30 @@ func TestRESTIntegrationHistoryIsAtTheObjectAndTheDirectory(t *testing.T) {
 		t.Errorf("the directory's history = %+v, want the concept and its file", log.Changes)
 	}
 
-	// The root, likewise — and it is the same set the markdown lists.
+	// And the markdown beside it lists the same set. The agreement is
+	// checked here and not at the root: nothing else writes under this
+	// prefix, so the two reads see one feed. The root's window is shared
+	// with every parallel test, and an entry another test pushed past its
+	// edge between the JSON read and the markdown read failed the
+	// comparison there (#546).
+	dirDoc := getMarkdown(t, srv.URL+"/api/v1/bundle/"+typ+"/log.md")
+	for _, c := range log.Changes {
+		if rel := strings.TrimPrefix(c.Path, typ+"/"); !strings.Contains(dirDoc, "("+rel+")") {
+			t.Errorf("the JSON names %s and the document does not:\n%s", c.Path, dirDoc)
+			break
+		}
+	}
+
+	// The root, likewise, in both representations — existence only, for
+	// the same reason the archive test reads only the root history's
+	// title.
 	log.Changes = nil
 	getJSON(t, srv.URL+"/api/v1/bundle/log.md", &log)
 	if len(log.Changes) == 0 {
 		t.Error("the root history has no JSON representation")
 	}
-	rootDoc := getMarkdown(t, srv.URL+"/api/v1/bundle/log.md")
-	for _, c := range log.Changes {
-		if !strings.Contains(rootDoc, "(/"+c.Path+")") && !strings.Contains(rootDoc, c.Path) {
-			t.Errorf("the JSON names %s and the document does not:\n%s", c.Path, rootDoc)
-			break
-		}
+	if rootDoc := getMarkdown(t, srv.URL+"/api/v1/bundle/log.md"); !strings.Contains(rootDoc, "# Update Log") {
+		t.Errorf("the root history is not titled as one:\n%s", rootDoc)
 	}
 
 	// ?history on the concept: its own revisions, carrying the document.
