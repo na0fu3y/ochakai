@@ -7,7 +7,9 @@
 # example, examples) is left out on purpose: documentation stays free to
 # improve after the freeze. Moving any line below is a change to a contract
 # design doc 0064 froze at /api/v1, and §11 says the only reason left is a
-# security defect.
+# security defect — except for a property added under components/schemas
+# for a schema no requestBody reaches, which design doc 0082 says the
+# freeze was never holding still.
 
 DELETE /api/v1/bundle/{path}
 DELETE /api/v1/bundle/{path} header If-Match ref=IfMatch
