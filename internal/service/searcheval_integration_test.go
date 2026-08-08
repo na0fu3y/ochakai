@@ -22,8 +22,9 @@ import (
 // The corpus is examples/demo — the same ten concepts the quick start
 // loads — imported under a run-unique prefix so a shared test database
 // neither collides nor pollutes, plus three Japanese concepts defined
-// inline: the demo bundle is English, and the two-character-window scan
-// (design doc 0080 §1) needs Japanese text to be exercised at all.
+// inline: the demo bundle is English, and the two-character windows a
+// Japanese question is cut into (migration 0036) need Japanese text to
+// be exercised at all.
 //
 // Embeddings are off in the test environment, so the numbers measure
 // the lexical half and the fusion around it. That is the half a
@@ -95,11 +96,23 @@ var japaneseSupplement = map[string]string{
 		"受注は支払い確定時点で数える。キャンセルは受注から差し引く。\n",
 }
 
-// Floors pin the measured baseline: recall@10 = 1.00, MRR = 0.90 as of
-// the harness landing (lexical-only, 14 cases). They sit one notch
-// under those numbers so ordinary noise passes and a real regression
-// does not; a change that moves them — either way — should say so in
-// its PR, because that is the point of having them.
+// Floors pin the measured baseline: recall@10 = 1.00, MRR = 0.85 as of
+// the indexed lexical search (lexical-only, 14 cases). They sit under
+// those numbers so ordinary noise passes and a real regression does
+// not; a change that moves them — either way — should say so in its PR,
+// because that is the point of having them.
+//
+// MRR was 0.90 when this harness landed, against the ILIKE haystack.
+// What took it to 0.85 is not a ranking that got worse but one that
+// stopped being decided by an accident: a fragment no document contains
+// used to earn the largest possible weight (rarity is the weight), and
+// concepts whose *name* contained such a fragment collected half of it.
+// English stopwords are exactly those fragments now that the query is
+// stemmed, so "by" in a title was worth more than any term anybody
+// searched for. Removing it leaves the ties it had been hiding: five of
+// these ten concepts score identically for "why is revenue down", and
+// the order among them is arbitrary. That is the next thing to fix, and
+// it is measured here rather than argued about.
 const (
 	evalK           = 10
 	evalRecallFloor = 0.92 // one miss out of 14 passes; two fail
