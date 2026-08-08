@@ -310,6 +310,7 @@ components/parameters/Producer name=Ochakai-Producer in=header required=false
 components/parameters/Producer schema type=string maxLength=128
 components/responses/Error
 components/responses/Error content application/json type=object
+components/responses/Error content application/json.code required=true type=string enum=["already_exists" "forbidden" "internal" "invalid" "method_not_allowed" "no_rejection" "not_deleted" "not_found" "precondition_failed" "read_only" "too_large" "unsupported"]
 components/responses/Error content application/json.error required=true type=string
 components/responses/Error header Ochakai-Read-Only ref=ReadOnly
 components/responses/Forbidden

@@ -21,6 +21,26 @@ last entry.
 
 ### Added
 
+- **Every error response now carries a machine-readable `code`.** The
+  envelope was `{"error": "<English prose>"}` and nothing else, so a
+  client that wanted to tell "this id is taken" from "there is no
+  rejection to withdraw" — both 409 — had to match a sentence
+  [docs/compatibility.md](docs/compatibility.md) says may be reworded in
+  any release. `code` is a closed vocabulary of twelve words beside the
+  sentence, declared as an enum in
+  [api/openapi.yaml](api/openapi.yaml) and checked against the product's
+  own list, so the two cannot drift. It separates the three conditions
+  that share 409 and the two that share 412 (a stale `If-Match`, and an
+  occupied path under `If-None-Match: *`). The sentence stays exactly as
+  free to change as it was; branch on the code. This is an addition to a
+  response-only schema, which
+  [0082](docs/design/0082-what-the-freeze-holds-still.md) places outside
+  the freeze — its rule now reads both places a response schema can live,
+  which is how the envelope qualified. `VOCAB` rises 34 → 46: prose that
+  becomes something a client branches on is prose that stopped being free
+  to reword, and `docs/surface.md` had named error wording as the next
+  place surface would hide ([0083](docs/design/0083-an-error-carries-a-code.md)).
+
 - **The positioning page now answers the graph-database claim.**
   "Operationalizing ontology takes a graph engine" is the pitch
   NebulaGraph and Neo4j publish under; the neighbours table had no row

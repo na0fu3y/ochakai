@@ -761,6 +761,12 @@ func TestSurfaceDocCountsVocabulary(t *testing.T) {
 	add("change", domain.Changes...)
 	add("outcome", domain.Outcomes...)
 	add("queue", queueWordsToLearn(t)...)
+	// The codes an error response carries (design doc 0083). Prose was
+	// the escape hatch docs/surface.md named for itself — "the wording of
+	// an error is not counted" — and it stayed true only while the wording
+	// was all there was. A closed vocabulary a client branches on is a
+	// vocabulary somebody learns.
+	add("error", domain.ErrorCodes...)
 	compareSurface(t, "VOCAB", words)
 }
 
@@ -1241,4 +1247,32 @@ func jsonFieldNames(t *testing.T, v any) []string {
 		names = append(names, tag)
 	}
 	return names
+}
+
+// The codes the product can say and the codes the contract declares are
+// one vocabulary written twice — in Go for the server, in the enum for
+// every client that validates against api/openapi.yaml (design doc
+// 0083). A code the server emits and the contract does not declare is a
+// value a validating client rejects; one the contract declares and the
+// server never emits is a branch nobody reaches. Both are the drift this
+// reads out of the two files rather than trusting a convention.
+func TestErrorCodesMatchTheContract(t *testing.T) {
+	responses := wireMap(wireMap(readSpecTree(t)["components"])["responses"])
+	schema := wireMap(wireMap(wireMap(wireMap(
+		wireMap(responses["Error"])["content"])["application/json"])["schema"])["properties"])
+	var declared []string
+	enum, _ := wireMap(schema["code"])["enum"].([]any)
+	for _, v := range enum {
+		declared = append(declared, wireStr(v))
+	}
+	if len(declared) == 0 {
+		t.Fatal("the Error response declares no code enum: this check now guards nothing")
+	}
+	sort.Strings(declared)
+	codes := append([]string(nil), domain.ErrorCodes...)
+	sort.Strings(codes)
+	if !equalStrings(declared, codes) {
+		t.Errorf("the contract's error codes and the product's disagree:\n contract: %v\n product:  %v",
+			declared, codes)
+	}
 }

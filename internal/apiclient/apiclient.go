@@ -133,6 +133,12 @@ func (c *Client) ReadOnly(ctx context.Context) (bool, error) {
 type APIError struct {
 	StatusCode int
 	Message    string
+	// Code is the machine-readable condition the server named beside its
+	// sentence (design doc 0083), e.g. "already_exists" or "not_deleted"
+	// — the two of the three conditions sharing 409 that a status code
+	// cannot tell apart. Empty when the response carried no envelope,
+	// which is what a rejection ahead of the container looks like.
+	Code string
 }
 
 func (e *APIError) Error() string {
@@ -808,10 +814,11 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 		apiErr := &APIError{StatusCode: resp.StatusCode}
 		var msg struct {
 			Error string `json:"error"`
+			Code  string `json:"code"`
 		}
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		if json.Unmarshal(data, &msg) == nil {
-			apiErr.Message = msg.Error
+			apiErr.Message, apiErr.Code = msg.Error, msg.Code
 		}
 		// This client sent nothing because it had nothing, and this
 		// server — unlike a public one, which never answers 401 (design

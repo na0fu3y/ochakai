@@ -3076,3 +3076,112 @@ func TestRESTIntegrationGeneratedAtIsTheContentsInstant(t *testing.T) {
 		t.Errorf("the document's generated.at is not the JSON's %s:\n%s", want, served)
 	}
 }
+
+// Three conditions answer 409 and one answers 412, and until design doc
+// 0083 the only thing separating them on the wire was an English
+// sentence the compatibility policy lets move in any release. The code
+// is what a client branches on, so it is pinned here per condition
+// rather than trusted to a mapping nobody reads.
+func TestRESTIntegrationErrorCodes(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "restcode")
+	id := typ + "/reading"
+	t.Cleanup(func() { removeEntries(t, srv, id) })
+
+	codeOf := func(t *testing.T, resp *http.Response) string {
+		t.Helper()
+		defer resp.Body.Close()
+		var body struct {
+			Error string `json:"error"`
+			Code  string `json:"code"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode error envelope: %v", err)
+		}
+		if body.Error == "" {
+			t.Error("the envelope carries a code but no sentence; both are the contract")
+		}
+		if !domain.ValidErrorCode(body.Code) {
+			t.Errorf("code %q is outside the vocabulary the contract declares", body.Code)
+		}
+		return body.Code
+	}
+
+	doc := docFrom(t, map[string]any{"type": typ, "id": id, "title": "codes"})
+	resp := putDoc(t, srv.URL, id, doc, true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	// 404: nothing at this address.
+	resp, err := http.Get(srv.URL + "/api/v1/bundle/" + typ + "/nothing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := codeOf(t, resp); got != domain.CodeNotFound {
+		t.Errorf("missing concept code = %q, want %q", got, domain.CodeNotFound)
+	}
+
+	// 412 with a different meaning than the 412 below: the path is
+	// occupied. Same status, different problem — pick another id, rather
+	// than re-read and retry — which is exactly what the code is for.
+	resp = putDoc(t, srv.URL, id, doc, true)
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		resp.Body.Close()
+		t.Fatalf("create over a live id = %d, want 412", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodeAlreadyExists {
+		t.Errorf("taken id code = %q, want %q", got, domain.CodeAlreadyExists)
+	}
+
+	// 409: purge of a live concept. Destruction takes two steps.
+	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md?purge=true", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict {
+		resp.Body.Close()
+		t.Fatalf("purge of a live concept = %d, want 409", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodeNotDeleted {
+		t.Errorf("live purge code = %q, want %q", got, domain.CodeNotDeleted)
+	}
+
+	// 409, a different condition under the same status.
+	resp, err = postRuling(srv.URL, id, `{"ruling":"withdrawn"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict {
+		resp.Body.Close()
+		t.Fatalf("withdraw with no rejection = %d, want 409", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodeNoRejection {
+		t.Errorf("absent rejection code = %q, want %q", got, domain.CodeNoRejection)
+	}
+
+	// 412: the If-Match precondition did not hold.
+	req, err = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+id+".md", bytes.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "text/markdown")
+	req.Header.Set("If-Match", `"not-the-stored-hash"`)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		resp.Body.Close()
+		t.Fatalf("stale If-Match = %d, want 412", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodePreconditionFailed {
+		t.Errorf("stale precondition code = %q, want %q", got, domain.CodePreconditionFailed)
+	}
+
+}

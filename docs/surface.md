@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - CLI: 24
 - FLAG: 28
 - ENV: 11
-- VOCAB: 34
+- VOCAB: 46
 - DOC: 25
 - DOC-LINES: 5800
 - DOC-LINES-SLACK: 100
@@ -488,7 +488,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `OCHAKAI_URL`
 - `PORT`
 
-## VOCAB (34)
+## VOCAB (46)
 
 八つ目の次元は**語**である。上の七つが数えているのは機構 — 呼べるもの、
 設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
@@ -531,6 +531,17 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 — SPEC の例示にはあったが、ochakai 自身の examples にも OKF 公式の
 リファレンスバンドルにも一度も書かれていなかった。
 
+**34 → 46 は [0083](design/0083-an-error-carries-a-code.md) の
+`error.*` 12 語である。天井を上げる決定であり、そう言って上げている。**
+そしてこれは、下の「次の逃げ道」の段落が**自分で名指していた**一つで
+ある — 「エラーの文言も…数えていない」。文言でいるあいだは数えなくて
+よかった: いつでも書き直せるものは、覚える語ではない。三つの条件が
+409 を共有していて、区別する手立てが散文の照合しかなく、しかも
+[compatibility](compatibility.md) がその散文は minor で変わってよいと
+言っている、という状態が代金だった。符号にすると分岐できるようになり、
+同時に**書き直せなくなる** — つまり覚える語になる。**能力と一緒に数え先が
+増えたのであって、片方だけを取ることはできない。**
+
 - `change.add_file`
 - `change.create`
 - `change.delete`
@@ -540,6 +551,18 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `change.update`
 - `change.verify`
 - `change.withdraw`
+- `error.already_exists`
+- `error.forbidden`
+- `error.internal`
+- `error.invalid`
+- `error.method_not_allowed`
+- `error.no_rejection`
+- `error.not_deleted`
+- `error.not_found`
+- `error.precondition_failed`
+- `error.read_only`
+- `error.too_large`
+- `error.unsupported`
 - `outcome.failed`
 - `outcome.worked`
 - `queue.drafts`
@@ -868,8 +891,10 @@ FLAG が塞いだのはもう一つで、「REST を畳んで CLI に逃がせ�
 **そして次の逃げ道が見えている。** 4 つのモードは 4 語と数えられるように
 なったが、それぞれが別の limit 既定値と別の cursor 可否を持つことは
 まだどこにも数えられていない。`GET /api/v1/bundle/{path}` は Accept と
-パスの接尾辞で 6 通りの別物を返して 1 と数えられる。エラーの文言も、
-`ochakai://` という URI 形式も、`human:` / `process:` という actor の
-綴りも数えていない。**数え方を一つ足すたびに、次の逃げ道が一つ見える
+パスの接尾辞で 6 通りの別物を返して 1 と数えられる。`ochakai://` という
+URI 形式も、`human:` / `process:` という actor の綴りも数えていない。
+エラーはここに並んでいたが、[0083](design/0083-an-error-carries-a-code.md)
+が文言の隣に符号を置いたぶんだけ VOCAB に移った — 残る文言のほうは、
+書き直してよいものとして今も数えていない。**数え方を一つ足すたびに、次の逃げ道が一つ見える
 ようになるだけである。** それでよい。これは判断を置き換える装置では
 なく、判断すべき瞬間を見えるようにする装置である。

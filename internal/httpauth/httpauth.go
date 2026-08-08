@@ -27,9 +27,17 @@ type ctxKey struct{}
 // "Forbidden" and leave the operator guessing. Written here rather than
 // borrowed from restapi, which imports this package.
 func writeError(w http.ResponseWriter, status int, msg string) {
+	// The code beside the sentence is the part a client branches on
+	// (internal/domain/errorcode.go). Everything refused here is either
+	// the caller's request (400/401) or the caller's standing (403);
+	// nothing this middleware answers is a condition of the knowledge.
+	code := domain.CodeInvalid
+	if status == http.StatusForbidden {
+		code = domain.CodeForbidden
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg, "code": code})
 }
 
 // Middleware resolves the actor from the Google-verified ID token that
