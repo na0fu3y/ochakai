@@ -52,6 +52,9 @@ func (s *Store) Stats(ctx context.Context, since time.Time, prefixes []string) (
 	if err := s.statsOutcomes(ctx, st, since, prefixes); err != nil {
 		return nil, err
 	}
+	if err := s.statsCoverage(ctx, st, since, prefixes); err != nil {
+		return nil, err
+	}
 	if err := s.statsMisses(ctx, st, since); err != nil {
 		return nil, err
 	}
@@ -207,6 +210,40 @@ func (s *Store) statsOutcomes(ctx context.Context, st *domain.Stats, since time.
 		}
 	}
 	return rows.Err()
+}
+
+// statsCoverage counts the concepts the window handed over and how many
+// of them anybody reported on — the coverage of report_outcome.
+//
+// Both sides are windowed, and the reported set is intersected with the
+// used one rather than counted on its own: a report about a concept
+// nobody read in this window says nothing about whether the concepts
+// that *were* read are coming back with evidence, which is the question.
+//
+// "Handed over" is the fetched event, not the search hit. Appearing in a
+// ranking is not use — it is the ranker's opinion, and counting it would
+// make the coverage look better the more results a search returns.
+func (s *Store) statsCoverage(ctx context.Context, st *domain.Stats, since time.Time, prefixes []string) error {
+	scope, scopeArgs := prefixScope("knowledge_id", prefixes, 4)
+	if scope != "" {
+		scope = " AND " + scope
+	}
+	args := append([]any{since, domain.EventFetched,
+		[]string{domain.EventWorked, domain.EventFailed}}, scopeArgs...)
+	if err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+		WITH used AS (
+			SELECT DISTINCT knowledge_id FROM knowledge_event
+			WHERE at >= $1 AND event = $2%[1]s
+		), reported AS (
+			SELECT DISTINCT knowledge_id FROM knowledge_event
+			WHERE at >= $1 AND event = ANY($3)%[1]s
+		)
+		SELECT (SELECT count(*) FROM used),
+			(SELECT count(*) FROM used JOIN reported USING (knowledge_id))`, scope), args...).
+		Scan(&st.Outcomes.ConceptsUsed, &st.Outcomes.ConceptsReported); err != nil {
+		return fmt.Errorf("stats: outcome coverage: %w", err)
+	}
+	return nil
 }
 
 // statsMisses counts the searches that found nothing in the window and

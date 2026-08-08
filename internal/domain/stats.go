@@ -99,6 +99,18 @@ type StatsReview struct {
 type StatsOutcomes struct {
 	Worked int64 `json:"worked"`
 	Failed int64 `json:"failed"`
+	// ConceptsUsed is how many distinct concepts were handed over in the
+	// window — delivered in full, not merely listed in a ranking.
+	ConceptsUsed int64 `json:"concepts_used"`
+	// ConceptsReported is how many of those came back with an outcome.
+	//
+	// This is the coverage of the loop's evidence edge, and without it
+	// the two counts above cannot be read. report_outcome is the one
+	// signal nobody is obliged to send: an agent that never calls it
+	// leaves the re-verification feed empty, and an empty feed is what a
+	// healthy knowledge base looks like too. The difference between
+	// these two numbers is which of those a deployment is looking at.
+	ConceptsReported int64 `json:"concepts_reported"`
 }
 
 // StatsMisses is what was asked for and not found in the window: the
