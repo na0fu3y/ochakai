@@ -63,7 +63,9 @@ const frozenWireHeader = `# The frozen REST wire, read out of api/openapi.yaml b
 # example, examples) is left out on purpose: documentation stays free to
 # improve after the freeze. Moving any line below is a change to a contract
 # design doc 0064 froze at /api/v1, and §11 says the only reason left is a
-# security defect.
+# security defect — except for a property added under components/schemas
+# for a schema no requestBody reaches, which design doc 0082 says the
+# freeze was never holding still.
 
 `
 
@@ -87,6 +89,20 @@ func TestFrozenWireHasNotMoved(t *testing.T) {
 	if want == got {
 		return
 	}
+	if onlyResponseAdditions(t, want, got) {
+		t.Errorf(`the frozen REST wire grew:
+
+%s
+Adding a property to a response-only schema is outside the freeze (design
+doc 0082): a client ignores a response key it does not know, and `+"`required`"+`
+in a response is a promise the server makes rather than a demand on the
+caller. It still has to show in a diff, so regenerate the golden in the
+same PR and say in the description what the addition is for:
+
+	go test ./cmd/ochakai -run TestFrozenWireHasNotMoved -update`,
+			wireDiff(want, got))
+		return
+	}
 	t.Errorf(`the frozen REST wire moved:
 
 %s
@@ -95,11 +111,125 @@ contract is the address list a client holds onto, and after the freeze the
 only reason to move a line above is a security defect (0064 §11). Prose is
 not fingerprinted, so a documentation edit never lands here.
 
+What 0082 leaves outside the freeze is narrower than this diff: properties
+*added* to a schema no `+"`requestBody`"+` can reach. A line that disappeared or
+changed — a rename, a type, a requiredness, an address — is the freeze
+itself, and only a security defect moves it.
+
 If this change is meant, regenerate the golden in the same PR and say in the
 description which security defect it closes:
 
 	go test ./cmd/ochakai -run TestFrozenWireHasNotMoved -update`,
 		wireDiff(want, got))
+}
+
+// onlyResponseAdditions reports whether every difference between the
+// golden and the spec is a line added under a schema no request can
+// reach — the one movement design doc 0082 leaves outside the freeze.
+//
+// A removal is never one of those, and neither is a change: the
+// fingerprint is a sorted set of lines, so an edited line arrives here as
+// a removal beside an addition, and the removal is what fails.
+func onlyResponseAdditions(t *testing.T, want, got string) bool {
+	t.Helper()
+	old := map[string]bool{}
+	for _, line := range fingerprintLines(want) {
+		old[line] = true
+	}
+	added := []string{}
+	for _, line := range fingerprintLines(got) {
+		if !old[line] {
+			added = append(added, line)
+		}
+		delete(old, line)
+	}
+	if len(old) > 0 || len(added) == 0 {
+		return false // something left, or nothing arrived
+	}
+	responseOnly := responseOnlySchemas(t)
+	for _, line := range added {
+		name, ok := schemaOfLine(line)
+		if !ok || !responseOnly[name] {
+			return false
+		}
+	}
+	return true
+}
+
+// schemaOfLine names the component schema a fingerprint line belongs to,
+// for the lines that belong to one: "components/schemas/Stats.dropped
+// required=true type=object" is Stats. A line anywhere else — an
+// operation, a parameter, a header — has no schema and is never an
+// addition this rule covers.
+func schemaOfLine(line string) (string, bool) {
+	rest, ok := strings.CutPrefix(line, "components/schemas/")
+	if !ok {
+		return "", false
+	}
+	name, _, _ := strings.Cut(rest, " ")
+	name, _, _ = strings.Cut(name, ".")
+	return name, name != ""
+}
+
+// responseOnlySchemas names the component schemas no requestBody can
+// reach, directly or through a $ref.
+//
+// The distinction is the whole of 0082 §3: adding a required property to
+// a schema a client *sends* is the 400 that 0064 §2 introduced, while
+// adding one to a schema a client *receives* is a key it ignores. One
+// fingerprint line cannot tell the two apart, so the contract is read
+// again here to say which schemas are which.
+func responseOnlySchemas(t *testing.T) map[string]bool {
+	t.Helper()
+	out := responseOnlySchemasIn(readSpecTree(t))
+	if len(out) == 0 {
+		t.Fatal("no component schemas found: the response-only rule now guards nothing")
+	}
+	return out
+}
+
+// responseOnlySchemasIn is the reachability walk, over any contract. It
+// takes the document rather than reading the file so the rule can be
+// tested on a spec that actually has a request body pointing at a
+// component — ochakai's own spells every request body out inline today,
+// which makes the distinction correct and invisible.
+func responseOnlySchemasIn(doc map[string]any) map[string]bool {
+	schemas := wireMap(wireMap(doc["components"])["schemas"])
+	reachable := map[string]bool{}
+	var walk func(node any)
+	walk = func(node any) {
+		switch v := node.(type) {
+		case map[string]any:
+			if ref := wireStr(v["$ref"]); strings.HasPrefix(ref, "#/components/schemas/") {
+				name := shortRef(ref)
+				if !reachable[name] {
+					reachable[name] = true
+					walk(schemas[name])
+				}
+			}
+			for key, child := range v {
+				if key != "$ref" {
+					walk(child)
+				}
+			}
+		case []any:
+			for _, child := range v {
+				walk(child)
+			}
+		}
+	}
+	for _, pathItem := range wireMap(doc["paths"]) {
+		for method, node := range wireMap(pathItem) {
+			if httpMethods[method] {
+				walk(wireMap(node)["requestBody"])
+			}
+		}
+	}
+	out := map[string]bool{}
+	for name := range schemas {
+		out[name] = !reachable[name]
+	}
+	return out
 }
 
 // wireDiff names what moved, rather than leaving the author to diff two
@@ -467,4 +597,86 @@ func wireSeq(v any) []any {
 func wireStr(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// The rule design doc 0082 leaves outside the freeze rests on two
+// judgments this test pins, because both of them fail open: a
+// reachability walk that found nothing would call every schema
+// response-only, and a diff reader that missed a removal would wave a
+// break through as an addition.
+
+// TestResponseOnlySchemasSeparatesRequestFromResponse gives the walk a
+// contract with one schema on each side.
+//
+// Synthetic on purpose. Every request body in api/openapi.yaml is spelled
+// out inline, so every component schema there is response-only and the
+// real spec cannot show the distinction working — which is exactly the
+// shape of a guard that quietly stopped guarding.
+func TestResponseOnlySchemasSeparatesRequestFromResponse(t *testing.T) {
+	const spec = `
+paths:
+  /api/v1/thing:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Write" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Read" }
+components:
+  schemas:
+    Write:
+      type: object
+      properties:
+        nested: { $ref: "#/components/schemas/WritePart" }
+    WritePart: { type: object }
+    Read: { type: object }
+`
+	var doc any
+	if err := yaml.Unmarshal([]byte(spec), &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := responseOnlySchemasIn(wireMap(doc))
+	for name, want := range map[string]bool{"Write": false, "WritePart": false, "Read": true} {
+		if got[name] != want {
+			t.Errorf("%s: response-only = %v, want %v — a schema a client sends cannot grow a "+
+				"required property without producing the 400 design doc 0064 §2 introduced",
+				name, got[name], want)
+		}
+	}
+	// And the real contract still answers, or the rule guards nothing.
+	if real := responseOnlySchemas(t); !real["Stats"] {
+		t.Error("Stats reads as request-reachable; it is a response schema")
+	}
+}
+
+// TestOnlyResponseAdditionsRefusesEverythingElse walks the cases the
+// looser message must not cover.
+func TestOnlyResponseAdditionsRefusesEverythingElse(t *testing.T) {
+	const base = "components/schemas/Stats.misses required=true type=object"
+	for _, c := range []struct {
+		name   string
+		golden string // the checked-in fingerprint
+		spec   string // what the contract fingerprints to now
+		ok     bool
+	}{
+		{"an added response property", base,
+			base + "\ncomponents/schemas/Stats.dropped required=true type=integer", true},
+		{"a removed line", base, "", false},
+		{"a changed line", base,
+			"components/schemas/Stats.misses required=false type=object", false},
+		{"an added operation", base, base + "\nGET /api/v1/new", false},
+		{"an added request parameter", base,
+			base + "\nGET /api/v1/stats query weeks required=false type=integer", false},
+		{"nothing at all", base, base, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := onlyResponseAdditions(t, c.golden, c.spec); got != c.ok {
+				t.Errorf("onlyResponseAdditions = %v, want %v", got, c.ok)
+			}
+		})
+	}
 }
