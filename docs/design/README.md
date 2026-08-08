@@ -45,7 +45,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
@@ -347,6 +347,17 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   要求するので diff に出る。きっかけは C7 の計器で、取りこぼし件数を
   `stats` に載せる先が REST 以外に無かった(CLI も Web UI も REST の
   クライアント、0067 §2)。
+- [0083 エラーは機械が読む符号を運ぶ](0083-an-error-carries-a-code.md) —
+  **Accepted**。エラー応答が `error`(人のための一文、いつでも書き直して
+  よい)の隣に `code`(クライアントが分岐してよい 12 語の閉じた語彙)を
+  運ぶ。三つの条件が 409 を共有しており、区別する手立てが散文の照合しか
+  無かった — しかも compatibility.md はその散文が minor で変わってよいと
+  宣言していて、REST を埋め込む開発者(C6)に壊れると分かっている方法しか
+  渡していなかった。ステータスが条件を決めている場合も符号は繰り返す
+  (一部にしか付かない鍵は分岐の道具にならない)。RFC 9457 を採らないのは
+  メディアタイプが動くこと・`type` の URI がドメインの生存を契約に持ち込む
+  こと・運ぶ情報が同じことの三つ。0082 が凍結の外と定めた応答専用スキーマ
+  への追加であり、VOCAB は 34 → 46 に上がる。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
   **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは

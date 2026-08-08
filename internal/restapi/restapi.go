@@ -644,10 +644,9 @@ func Handler(svc *service.Service) http.Handler {
 			// any other path is a caller storing a JSON file, which is
 			// an object of the bundle like any other.
 			if mt := r.Header.Get("Content-Type"); isMarkdown && strings.HasPrefix(mt, "application/json") {
-				writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
-					"error": "a concept is written as an OKF document (Content-Type: text/markdown), " +
-						"not as JSON: the frontmatter is the metadata and the markdown is the body",
-				})
+				writeErrorBody(w, http.StatusUnsupportedMediaType, domain.CodeInvalid,
+					"a concept is written as an OKF document (Content-Type: text/markdown), "+
+						"not as JSON: the frontmatter is the metadata and the markdown is the body")
 				return
 			}
 			body, ok := readBody(w, r, maxDocument, fmt.Sprintf("object exceeds %d bytes", maxDocument))
@@ -999,11 +998,11 @@ func (w *defaultEnvelopeWriter) WriteHeader(status int) {
 		return
 	}
 	w.rewriting = true
-	msg := "not found"
+	msg, code := "not found", domain.CodeNotFound
 	if status == http.StatusMethodNotAllowed {
-		msg = "method not allowed"
+		msg, code = "method not allowed", domain.CodeMethodNotAllowed
 	}
-	body, _ := json.Marshal(map[string]string{"error": msg})
+	body, _ := json.Marshal(map[string]string{"error": msg, "code": code})
 	h := w.Header()
 	h.Set("Content-Type", "application/json; charset=utf-8")
 	h.Set("Content-Length", strconv.Itoa(len(body)))
@@ -1164,9 +1163,9 @@ func readBody(w http.ResponseWriter, r *http.Request, limit int64, tooLarge stri
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": tooLarge})
+			writeErrorBody(w, http.StatusRequestEntityTooLarge, domain.CodeTooLarge, tooLarge)
 		} else {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "read body: " + err.Error()})
+			writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid, "read body: "+err.Error())
 		}
 		return nil, false
 	}
@@ -1230,10 +1229,9 @@ func refuseReserved(w http.ResponseWriter, path, because string) bool {
 	if !domain.ReservedBundleName(base) {
 		return false
 	}
-	writeJSON(w, http.StatusConflict, map[string]string{
-		"error": fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0075 §4.2), %s",
-			base, because),
-	})
+	writeErrorBody(w, http.StatusConflict, domain.CodeInvalid,
+		fmt.Sprintf("%s is generated from the bundle, not stored in it (design doc 0075 §4.2), %s",
+			base, because))
 	return true
 }
 
@@ -1275,10 +1273,8 @@ func refuseObjectAsArchive(w http.ResponseWriter, r *http.Request, svc *service.
 	if !isObject {
 		return false, nil
 	}
-	writeJSON(w, http.StatusConflict, map[string]string{
-		"error": fmt.Sprintf(
-			"%s is an object, not a directory (design doc 0064 §4); there is no subtree here to archive, ask the directory it sits in", path),
-	})
+	writeErrorBody(w, http.StatusConflict, domain.CodeInvalid, fmt.Sprintf(
+		"%s is an object, not a directory (design doc 0064 §4); there is no subtree here to archive, ask the directory it sits in", path))
 	return true, nil
 }
 
@@ -1457,7 +1453,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 ) {
 	d, notes, err := okf.Parse(body)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid, err.Error())
 		return
 	}
 	// The path is the address; the document carries the metadata — type
@@ -1501,7 +1497,12 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 			// ErrAlreadyExists (move onto an occupied id, a file where a
 			// concept already sits), none of which came with a
 			// precondition to fail (design doc 0064).
-			writeJSON(w, http.StatusPreconditionFailed, map[string]string{"error": err.Error()})
+			//
+			// The code says which 412 this is, and that is the point of
+			// having one: a stale If-Match and an occupied path are the
+			// same status and different problems — retry after re-reading
+			// versus pick another id (design doc 0083).
+			writeErrorBody(w, http.StatusPreconditionFailed, domain.CodeAlreadyExists, err.Error())
 			return
 		}
 	default:
@@ -1617,15 +1618,15 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 		// is simply too big — readBody already answers 413 here.
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeJSON(w, http.StatusRequestEntityTooLarge,
-				map[string]string{"error": fmt.Sprintf("request body exceeds %d bytes", maxErr.Limit)})
+			writeErrorBody(w, http.StatusRequestEntityTooLarge, domain.CodeTooLarge,
+				fmt.Sprintf("request body exceeds %d bytes", maxErr.Limit))
 			return false
 		}
 		if field, ok := strings.CutPrefix(err.Error(), `json: unknown field "`); ok {
 			writeError(w, service.Invalidf("unknown field %q", strings.TrimSuffix(field, `"`)))
 			return false
 		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
+		writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid, "invalid JSON: "+err.Error())
 		return false
 	}
 	if dec.More() {
@@ -1635,26 +1636,37 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
+// writeError maps a sentinel to the status and the machine-readable code
+// that stand for it. The mapping lives here, once, rather than at the
+// sixty-odd call sites: what a caller can branch on is the condition,
+// and the condition is what the sentinel already names.
 func writeError(w http.ResponseWriter, err error) {
-	status := http.StatusInternalServerError
+	status, code := http.StatusInternalServerError, domain.CodeInternal
 	var inputErr *service.InvalidInputError
 	var unsupportedErr *service.UnsupportedError
 	switch {
 	case errors.Is(err, service.ErrReadOnly):
 		// 403, not 404: the route exists and the request was understood.
 		// This deployment declines to write (design doc 0040).
-		status = http.StatusForbidden
+		status, code = http.StatusForbidden, domain.CodeReadOnly
 	case errors.Is(err, store.ErrNotFound):
-		status = http.StatusNotFound
+		status, code = http.StatusNotFound, domain.CodeNotFound
 	case errors.Is(err, store.ErrConflict):
 		// The If-Match precondition failed: the concept changed since read.
-		status = http.StatusPreconditionFailed
-	case errors.Is(err, store.ErrAlreadyExists), errors.Is(err, store.ErrNotDeleted), errors.Is(err, store.ErrNoRejection):
-		status = http.StatusConflict
+		status, code = http.StatusPreconditionFailed, domain.CodePreconditionFailed
+	// The three conditions that share 409 are the reason the code exists:
+	// on the wire they were one status and three sentences, and the
+	// sentences are the half the compatibility policy lets move.
+	case errors.Is(err, store.ErrAlreadyExists):
+		status, code = http.StatusConflict, domain.CodeAlreadyExists
+	case errors.Is(err, store.ErrNotDeleted):
+		status, code = http.StatusConflict, domain.CodeNotDeleted
+	case errors.Is(err, store.ErrNoRejection):
+		status, code = http.StatusConflict, domain.CodeNoRejection
 	case errors.As(err, &inputErr):
-		status = http.StatusBadRequest
+		status, code = http.StatusBadRequest, domain.CodeInvalid
 	case errors.As(err, &unsupportedErr):
-		status = http.StatusNotImplemented
+		status, code = http.StatusNotImplemented, domain.CodeUnsupported
 	}
 	if status == http.StatusInternalServerError {
 		// Every status above is a message a caller is meant to read; this
@@ -1662,10 +1674,17 @@ func writeError(w http.ResponseWriter, err error) {
 		// text or a connection string. Logged for an operator instead of
 		// put on the wire.
 		slog.Default().Error("unhandled REST error", "error", err)
-		writeJSON(w, status, map[string]string{"error": "internal error"})
+		writeErrorBody(w, status, domain.CodeInternal, "internal error")
 		return
 	}
-	writeJSON(w, status, map[string]string{"error": err.Error()})
+	writeErrorBody(w, status, code, err.Error())
+}
+
+// writeErrorBody is the one place the error envelope is spelled: a
+// sentence for a person, a code for a client (design doc 0082 leaves a
+// response-only addition outside the freeze).
+func writeErrorBody(w http.ResponseWriter, status int, code, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
 }
 
 // missingObject reports what a read or delete that fell through to the

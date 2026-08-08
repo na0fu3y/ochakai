@@ -53,6 +53,17 @@ moves:
   (`cmd/ochakai/frozenwire_test.go`), so a rename that keeps every count
   still cannot land quietly. Prose is deliberately outside it: the
   documentation in the contract stays free to improve.
+- **An error's sentence is unstable; its `code` is not.** Every error
+  response carries both ([0083](design/0083-an-error-carries-a-code.md)):
+  `error` is a sentence for a person and may be reworded in any release,
+  and `code` is a closed vocabulary a client may branch on. Branch on the
+  code, never on the prose — the prose was the only thing separating
+  three conditions that share 409 (`already_exists`, `not_deleted`,
+  `no_rejection`) and two that share 412 (a stale `If-Match`, and an
+  occupied path under `If-None-Match: *`), which is what made a
+  string match the only way to tell them apart and this policy's
+  permission to reword them a trap. New codes may be added, so treat an
+  unrecognized one as the status alone would be treated.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now, and the five
   tools that said `knowledge` say `concept`.

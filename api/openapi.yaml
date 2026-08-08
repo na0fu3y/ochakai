@@ -2322,7 +2322,14 @@ components:
       schema: { type: string, maxLength: 128 }
   responses:
     Error:
-      description: Error.
+      description: >
+        Error. `error` is a sentence for a person and may be reworded in
+        any release (docs/compatibility.md); `code` is the part a client
+        branches on. Three conditions answer 409 — `already_exists`,
+        `not_deleted`, `no_rejection` — and telling them apart used to
+        mean matching the prose. Where the status already determines the
+        condition the code repeats it, so a client never has to ask
+        whether this particular failure carries one.
       headers:
         Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
       content:
@@ -2331,7 +2338,24 @@ components:
             type: object
             properties:
               error: { type: string }
-            required: [error]
+              code:
+                type: string
+                enum:
+                  [
+                    already_exists,
+                    forbidden,
+                    internal,
+                    invalid,
+                    method_not_allowed,
+                    no_rejection,
+                    not_deleted,
+                    not_found,
+                    precondition_failed,
+                    read_only,
+                    too_large,
+                    unsupported,
+                  ]
+            required: [error, code]
     Forbidden:
       description: >
         Refused — the route exists and the request was understood, but
