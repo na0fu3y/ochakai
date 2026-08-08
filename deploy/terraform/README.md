@@ -14,12 +14,15 @@
 ## 何を作るか
 
 既定値はガイドのコスト最小化した例(月 $10 程度、そのほとんどが Cloud SQL
-インスタンス)を再現する:
+インスタンス)を一箇所だけ除いて再現する — **日次バックアップは既定で on**
+である(ガイドの例は `--no-backup`)。データベースはナレッジベースそのもの
+であり、そこだけは安さより先に立つ。上乗せはこの規模で月 $1 に届かない程度
+で、使い捨ての評価なら `database_backups = false` で外せる:
 
 | | |
 |---|---|
 | Artifact Registry | `ghcr.io` をプロキシする**リモートリポジトリ**(§1)— Cloud Run は GHCR から直接 pull できない |
-| Cloud SQL | `db-f1-micro`、Postgres 17、10 GB SSD、単一ゾーン、バックアップ無し、`cloudsql.iam_authentication=on`(§2) |
+| Cloud SQL | `db-f1-micro`、Postgres 17、10 GB SSD、単一ゾーン、日次バックアップ、`cloudsql.iam_authentication=on`(§2) |
 | サービスアカウント | `ochakai-run`。`roles/cloudsql.client` + `roles/cloudsql.instanceUser` と、IAM データベースログイン(§3) |
 | Cloud Run | ochakai サービス本体、scale-to-zero、**公開呼び出し不可**、`OCHAKAI_DB_IAM_AUTH=true`(§3) |
 | IAM | 名指したメンバーへの `roles/run.invoker` — アクセス制御の面はこれがすべて |
@@ -130,7 +133,7 @@ GRANT "<database_user output>" TO "you@your-org.example";
 | `read_only` | §5d | `OCHAKAI_MODE=read-only` を設定する — 非公開のままである。on にする*前*にベースへ import しておくこと: read-only なデプロイには import できない。 |
 | `public_read_only` | §5d | `OCHAKAI_MODE=public` を設定し、このモジュール唯一の `allUsers` を付与する。`read_only` を含意する。その姿勢が何を手放すかは[デプロイガイド](../cloudrun/README.md#5d-optional-a-public-read-only-demo-the-one-public-posture)にある。書き込み可能な状態で apply し、`ochakai import examples/demo` した後、これを on にして再度 apply する。 |
 | `maintenance_users` | §6 | 人のための Cloud SQL IAM ログイン、パスワードは無い。 |
-| `database_backups` | §6 | 日次バックアップ。コストのため既定は off。大事なものには on にする。 |
+| `database_backups` | §6 | 日次バックアップ。**既定で on** — データベースはナレッジベースそのものである。使い捨ての評価だけ off にしてよい。 |
 
 web UI を有効にすると `google-beta` provider が付いてくる: Cloud Run 上の
 IAP(`iap_enabled`)はまだベータの面だからである。provider はどちらにせよ

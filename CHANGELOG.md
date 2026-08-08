@@ -21,6 +21,17 @@ last entry.
 
 ### Added
 
+- **The positioning page now answers the graph-database claim.**
+  "Operationalizing ontology takes a graph engine" is the pitch
+  NebulaGraph and Neo4j publish under; the neighbours table had no row
+  for that category, though it already answered Palantir's FDE model. A
+  row and a short section map the claim onto decisions already made —
+  untyped links ([0074 §2](docs/design/0074-the-document-and-the-vocabulary-that-asks-it.md)),
+  the open type vocabulary ([0038](docs/design/0038-type-vocabulary-realignment.md)),
+  and the human review loop their maturity model sells as its final
+  stage. `DOC-LINES` crosses a boundary, 5,700 → 5,800
+  ([#542](https://github.com/na0fu3y/ochakai/issues/542)).
+
 - **The README now shows what `ochakai context` actually returns.** The
   quick start had a reader point the CLI at the public demo and run the
   one call an agent makes before a data question, without ever showing
@@ -35,6 +46,31 @@ last entry.
 
 ### Changed
 
+- **`ochakai import` keeps eight requests in flight instead of one.** An
+  import (and its `--dry-run`, which makes the same round trips) was one
+  sequential HTTP call per document, which priced a real catalog
+  projection — thousands of documents — in tens of minutes against a
+  Cloud Run service. The counts and the exit code are unchanged; output
+  lines now land in completion order, so the summary line is the stable
+  thing to read. A fatal error (auth, network, 5xx) still aborts: it
+  cancels the requests not yet started and returns once the ones in
+  flight finish.
+- **A transient Vertex AI failure no longer silently degrades search on
+  the first try.** An embedding call now gets three attempts with a short
+  backoff on a 429, a 5xx or a dropped connection, and a 30-second
+  per-attempt deadline instead of none — a call that hung held the
+  search that was waiting on it. A 4xx is still never retried.
+- **Daily Cloud SQL backups are on by default in the Terraform module.**
+  The database is the knowledge base, and the copy-paste starting
+  configuration protected everything except it. The cost example rises by
+  under a dollar; a throwaway evaluation can still opt out with
+  `database_backups = false`.
+- **The server now bounds request reads and idle keep-alive.** A body
+  must arrive within a minute (the largest accepted body is the 4 MiB
+  PUT cap) and an idle connection is closed after two; previously only
+  header reads had a deadline, so a slow-drip body or a hoarded
+  connection was held open indefinitely. Response writes stay unbounded,
+  deliberately: MCP's streamable GET is a hanging stream by design.
 - **A search for a name now finds the concept with that name.** Ask for
   売上 and the concept *called* 売上 comes first, ahead of the reports
   that mention the word — which is not what happened before: the lexical

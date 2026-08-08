@@ -52,8 +52,10 @@ invoker_members = [
 # get an IAM login (cloud-sql-proxy --auto-iam-authn), never a password.
 # maintenance_users = ["you@your-org.example"]
 
-# Real knowledge deserves backups; the cost example skips them.
-# database_backups = true
+# Daily backups are ON by default — the database is the knowledge base.
+# Opting out is for throwaway evaluations only.
+# database_backups = false
 
-# Set to false and apply once before `terraform destroy`.
-# deletion_protection = true
+# Deletion protection is ON by default. Set to false and apply once
+# before `terraform destroy`.
+# deletion_protection = false

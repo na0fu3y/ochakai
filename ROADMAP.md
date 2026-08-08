@@ -69,14 +69,17 @@ if the proposal is concrete.
 
 ## Next
 
-- **Japanese lexical search does not stay fast forever.** A trigram index
-  cannot serve a two-character pattern, so Japanese terms are answered by
-  scanning: about 16 ms across 5000 concepts, against 0.2 ms for a latin word.
-  That is fine at the scale a curated knowledge base reaches, and embeddings
-  are the answer — which is why they stopped being opt-in: running on Google
-  Cloud, ochakai turns them on by itself
-  ([0080](docs/design/0080-search-and-how-a-deployment-embeds.md)). A better lexical index
-  has not been designed, and nothing here promises one.
+- **Lexical ranking saturates.** The scan this entry used to describe is gone:
+  a trigram index cannot serve a two-character pattern, so Japanese terms are
+  now looked up in one whose entries are the same two-character windows a
+  question is cut into, and latin words stem on the way. Embeddings remain the
+  other half of the answer and stay on by default
+  ([0080](docs/design/0080-search-and-how-a-deployment-embeds.md)). What the
+  index exposed is the score — a fraction reaching 1.0 whenever a concept holds
+  every term, so a short question leaves several tied at the top and the reader
+  gets whichever the scan produced. Term frequency was tried as the tie-break
+  and measured worse. Nothing here promises the next attempt, but the golden
+  query set now says whether one worked.
 
 Beyond that this roadmap is thin, and honestly so. Work has been arriving from
 use and from release reviews rather than from a plan; the open issues are the

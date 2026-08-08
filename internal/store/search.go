@@ -1,7 +1,8 @@
-// Search: turning a question into a ranking. Lexical fragmentation for
-// pg_trgm, the two vector searches, and the ANN tuning around them. What
-// narrows a search rather than orders it is in filter.go; what lists
-// instead of ranking is in list.go (design doc 0050).
+// Search: turning a question into a ranking. Lexical fragmentation and
+// the tsquery each fragment becomes, the two vector searches, and the ANN
+// tuning around them. What narrows a search rather than orders it is in
+// filter.go; what lists instead of ranking is in list.go (design doc
+// 0050).
 package store
 
 import (
@@ -39,15 +40,16 @@ const maxQueryFragments = 24
 // for Japanese, and the smallest unit that still carries meaning (売上,
 // 受注, 原価).
 //
-// Two characters is below what a trigram index can serve, and pg_trgm
-// does not narrow the scan for such a pattern: LIKE '%売上%' has no word
-// boundary to pad against, so no whole trigram can be extracted and the
-// planner reads the table. Measured on 5000 entries, '%revenue%' and
-// '%売上の%' are index scans at 0.2ms while '%売上%' is a sequential scan
-// at 16ms. Three-character windows would restore the index and lose 売上,
-// 原価, 客数 — the terms the search is for — so the scan is the price of
-// finding them. SearchLexical keeps that scan cheap by scoring over ids
-// alone.
+// Two characters is below what a trigram index can serve — LIKE '%売上%'
+// has no word boundary to pad against, so no whole trigram can be
+// extracted and the planner reads the table — and for as long as the
+// haystack was matched with ILIKE, that scan was the price of finding
+// 売上, 原価 and 客数 at all (16ms against 0.2ms for a latin word, on
+// 5000 entries, and growing with the corpus). It is not any more.
+// Migration 0036 stores the document's own windows as lexemes, so the
+// window this function cuts is looked up rather than searched for: the
+// index entries are the same two characters the query is. What each
+// fragment becomes on the way there is fragmentQuery.
 func queryFragments(query string) []string {
 	// Fragments are collected per run and then interleaved, so the cap
 	// falls evenly across the query instead of truncating its tail. A
@@ -164,6 +166,40 @@ func contentChar(r rune) bool {
 	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Katakana, r)
 }
 
+// fragmentQuery renders the tsquery that finds one fragment in
+// search_tsv, as SQL reading the fragment from parameter n.
+//
+// Which of the three it is follows from what the fragment is made of,
+// because migration 0036 built the column that way: a space-less script
+// is in there as windows and is asked for with the 'simple' dictionary,
+// which normalizes case and stems nothing; everything else is in there
+// stemmed by the 'english' dictionary and has to be asked for the same
+// way, or "revenues" would not find the body that says "revenue" — the
+// recall this replaced ILIKE to get.
+//
+// A one-character fragment is the exception, and it is asked for as a
+// prefix. queryFragments keeps a run of one or two characters whole, so
+// 額 arrives alone; the document holds two-character windows, and no
+// lexeme equals 額 unless the document had it alone as well. 額:* finds
+// the windows it begins. It cannot find the ones it ends — a cost worth
+// naming, and cheaper than storing every unigram beside every window.
+func fragmentQuery(frag string, n int) string {
+	runes := []rune(frag)
+	switch {
+	case len(runes) == 0:
+		return "''::tsquery"
+	case !scriptWithoutSpaces(runes[0]):
+		return fmt.Sprintf("plainto_tsquery('english', $%d::text)", n)
+	case len(runes) == 1:
+		// to_tsquery parses its argument, so a lexeme that happened to
+		// spell an operator would be syntax rather than a term. None of
+		// the scripts this branch sees has one.
+		return fmt.Sprintf("to_tsquery('simple', $%d::text || ':*')", n)
+	default:
+		return fmt.Sprintf("plainto_tsquery('simple', $%d::text)", n)
+	}
+}
+
 // nameText is the entry's name as a search matches it: the title, and the
 // id's last segment beside it.
 //
@@ -185,7 +221,10 @@ const (
 // title optional, the filename may be the entry's only name), the
 // envelope fields, the body, and the attachment filenames (design doc
 // 0020 — "seeds" finds the entry carrying seeds.txt, embedder or not),
-// maintained by trigger.
+// maintained by trigger. Terms are matched against search_tsv, which is
+// that same text as an index can hold it — stemmed latin words, and the
+// two-character windows of the scripts written without spaces
+// (migration 0036).
 //
 // The score is the fraction of the query's fragments the entry contains,
 // plus a bonus when the whole query appears verbatim (a keyword search
@@ -212,20 +251,22 @@ const (
 //     売上 puts 売上 first. Either name serves — the deep-linked filename
 //     is a name a person chose as much as the title is.
 //
-// Both terms read expressions on the row the scan already has, and a name
-// match implies a search_text match (title and id are both inside it), so
-// the candidate set is unchanged and no index is asked for anything new.
+// Both terms read expressions on the row the candidate scan already has,
+// and a name match implies a search_tsv match (title and id are both
+// inside the haystack it is built from), so the candidate set is
+// unchanged and no index is asked for anything new.
 //
-// Every term of that is a substring test — against search_text, or
-// against the name read off the same row — so the candidate predicate and
-// the score read the same expressions, and the GIN trigram index serves
-// the ones it can: patterns of three characters or more (migration 0016;
-// two-character Japanese windows are answered by a scan, see
-// queryFragments). Fragment matching
-// replaced a similarity()/`%` pair that could not work: `%` is true only
-// above pg_trgm.similarity_threshold (0.3) and a real query never scores
-// that against a real document, so the candidate set was whatever the
-// whole-query substring test found — nothing, for a question.
+// The candidate predicate is one tsquery — the fragments OR-ed together
+// — so the GIN index on search_tsv answers the whole disjunction in a
+// single scan, and it answers it for Japanese too: the two-character
+// windows this splits a question into are exactly the lexemes migration
+// 0036 stores. The per-fragment tests below repeat the same expressions,
+// so what makes a row a candidate and what scores it stay one thing.
+//
+// The whole-query bonus is still a substring test against search_text,
+// and stays one on purpose. It asks whether the question appears
+// verbatim, which is a question about the raw text rather than about
+// terms; it reads rows the tsquery already chose, so it costs no index.
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	// Each pattern is escaped: unescaped, a query containing '%' matches
@@ -239,14 +280,33 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	frags := queryFragments(query)
 	var hit, weight, weighted, named, weights, tests []string
 	for i, frag := range frags {
+		// Two spellings of the same fragment: the term itself, which the
+		// tsquery reads, and the escaped pattern the name test reads. The
+		// name is one short string on the row, so it is matched as a
+		// substring rather than through the index the body needs.
+		args = append(args, frag)
+		match := fragmentQuery(frag, len(args))
 		args = append(args, "%"+escapeLike(frag)+"%")
-		tests = append(tests, fmt.Sprintf("k.search_text ILIKE $%d", len(args)))
-		hit = append(hit, fmt.Sprintf("k.search_text ILIKE $%d AS h%d", len(args), i))
+		tests = append(tests, match)
+		hit = append(hit, fmt.Sprintf("k.search_tsv @@ %s AS h%d", match, i))
 		hit = append(hit, fmt.Sprintf("nm.name ILIKE $%d AS n%d", len(args), i))
 		// Document frequency over the candidates, not the whole table: one
 		// window pass, no extra scans.
+		//
+		// A fragment no candidate has weighs nothing. Candidates are the
+		// union of the fragments, so a count of zero here means the term
+		// is nowhere in the corpus — and the score is a fraction whose
+		// denominator is the weight of everything asked for, so leaving
+		// such a term in it would dilute every row by the same amount
+		// while ranking none of them. Worse, it would dilute by the
+		// *largest* amount: rarity is the weight, and a term nobody has
+		// is as rare as a term can be. English stopwords land here now
+		// that the query is stemmed ("why is revenue down" asks for four
+		// terms and two of them are dropped by the dictionary), which is
+		// how this came to be measured rather than reasoned about.
 		weight = append(weight, fmt.Sprintf(
-			"ln(1 + total::float / GREATEST(count(*) FILTER (WHERE h%d) OVER (), 1)) AS w%d", i, i))
+			"CASE WHEN count(*) FILTER (WHERE h%[1]d) OVER () = 0 THEN 0 "+
+				"ELSE ln(1 + total::float / count(*) FILTER (WHERE h%[1]d) OVER ()) END AS w%[1]d", i))
 		weighted = append(weighted, fmt.Sprintf("CASE WHEN h%d THEN w%d ELSE 0 END", i, i))
 		// A fragment in the name is scored with the same weight it earns
 		// in the body, so a rare term stays rare wherever it lands.
@@ -256,7 +316,9 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// Scoring carries ids and booleans, never rows. The window functions
 	// force every candidate to be materialized before LIMIT can apply, and
 	// the candidate set is an OR over fragments — one common two-character
-	// window and it is most of the table. Selecting k.* through those
+	// window and it is a large part of the table, found by index now
+	// rather than by reading it, but still materialized. Selecting k.*
+	// through those
 	// layers would push every body, and search_text (a near-copy of the
 	// body) alongside it, through a sort node: tens of megabytes on a
 	// corpus of a few thousand, spilling work_mem on the instance size
@@ -277,7 +339,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 						CASE WHEN EXISTS (SELECT 1 FROM knowledge_verification v
 							WHERE v.id = k.id) THEN 0.05 ELSE 0 END AS verified
 					FROM object k, LATERAL (SELECT `+nameText+` AS name) nm
-					WHERE (%[8]s) AND %[9]s
+					WHERE k.search_tsv @@ (%[8]s) AND %[9]s
 				) c
 			) w
 			ORDER BY score DESC LIMIT %[10]d
@@ -288,7 +350,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		strings.Join(weighted, " + "), strings.Join(named, " + "),
 		strings.Join(weights, " + "),
 		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam, nameParam,
-		strings.Join(tests, " OR "), where, limit)
+		strings.Join(tests, " || "), where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

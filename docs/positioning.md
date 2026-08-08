@@ -32,6 +32,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
 | AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
+| グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
 | **MCP サーバー付きの markdown vault(Obsidian、Logseq、ノートの git リポジトリ)** | markdown + frontmatter、リンク、ローカルな所有、エージェントが読めること | 生きた状態としての検証、ループ、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
 
 ### ウェアハウス native の semantic layer
@@ -132,6 +133,36 @@ kinetic の三つ目の要素 — 誰が実行してよいかの Role — や co
 権限が要る([0065](design/0065-identity-and-provenance.md) §1)、
 Google Cloud の外で動かす([0003](design/0003-gcp-only.md)) — どれか
 一つでも真なら、FDE 型を買う理由はまだそこにある。
+
+### グラフ DB ネイティブのオントロジー基盤
+
+*主張は頷けるが、規模が前提から違う。* このカテゴリの売り文句は
+「オントロジーを運用するには専用のグラフエンジンが要る」である — 型ごとの
+必須プロパティを書き込み時に強制し、型間に許されるリレーションを制約し
+(Customer は Order を place できるが Supplier はできない)、数十億ノードを
+多段にたどる([NebulaGraph の二部作](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)が典型)。
+断片化した数十の業務システムを一つの意味の層でつなぐなら、正しい道具である。
+
+ochakai の前提はその逆側にある: 人を通った数千の concept(下の「負ける
+ところ」の規模の項)であり、その規模に専用エンジンは要らない。多段の
+辿りは `get_context` が予算内で edge を両方向に展開する。型付き
+リレーションは持たない — `rel` は機械可読な型として導入され、機械が
+一度も読まなかったので、関係の種類は周囲の散文が運ぶ
+([0074 §2](design/0074-the-document-and-the-vocabulary-that-asks-it.md))。
+書き込み時のスキーマ強制も同じ向きで断っている: 型は開いた語彙
+([0038](design/0038-type-vocabulary-realignment.md))で、品質は制約では
+なく人の裁定で買う(C7)。
+
+対比が最も鋭いのは成熟モデルの終点である。あちらの四段階の最終段 —
+AI が生んだ洞察を人が検証してオントロジーへ還流する閉ループ — は、
+12〜18 ヶ月の投資の先にある最前線として売られる。ここではそれが初日の
+中核であり(draft → 裁定 → verified、`report_outcome`、
+[ループ](loop.md))、その段が言う「LLM は推測せず、決定論的な意味の層に
+問う」は ochakai が中に LLM を持たない理由と同じ線である
+([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))。
+実体が数十億で機械的な多段推論が仕事ならあちらを買う。足りないのが
+誰かが確かめたナレッジとそのループなら、グラフ DB を運用していても
+この枠は別に残る。
 
 <a id="a-markdown-vault-with-an-mcp-server"></a>
 

@@ -602,6 +602,100 @@ func (s *Store) ListLinkingToDocs(ctx context.Context, id string, limit int) ([]
 	return s.listLinkingTo(ctx, id, limit, knowledgeSelectDoc, scanKnowledgeDoc)
 }
 
+// StatementCount reports how many times a statement has taken a
+// connection from the pool since the store opened — one per query, and
+// one per transaction however many statements it runs.
+//
+// It exists so that a caller's cost in round trips can be read from
+// outside rather than reasoned about (design doc 0035). The context pack
+// is the case: it used to read once per hit and once per link, and
+// nothing about its result said so. The difference across a call is what
+// TestContextReadsDoNotGrowWithThePack asserts against.
+func (s *Store) StatementCount() int64 { return s.pool.Stat().AcquireCount() }
+
+// GetManyDocs returns the live entries holding these ids, with their
+// documents, keyed by id. Ids that name nothing live are absent rather
+// than an error: the caller asked about several, and one deleted target
+// is not a failed read of the others.
+//
+// The context pack is why this exists. It used to call Get once per hit
+// and once per link, which is one round trip each — up to sixty for the
+// one call an agent is told to make before a data question, all of them
+// waiting on the previous one. The rows are the same rows; only the
+// number of times the server asks for them changes.
+func (s *Store) GetManyDocs(ctx context.Context, ids []string) (map[string]*domain.Knowledge, error) {
+	out := map[string]*domain.Knowledge{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeSelectDoc+` FROM object WHERE deleted_at IS NULL AND id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	found, err := pgx.CollectRows(rows, scanKnowledgeDoc)
+	if err != nil {
+		return nil, err
+	}
+	for i := range found {
+		out[found[i].ID] = &found[i]
+	}
+	return out, nil
+}
+
+// LinkersByTargetDocs answers ListLinkingToDocs for several ids at once,
+// grouped by the id linked at and each group ordered and capped exactly
+// as the single-id form is.
+//
+// The lateral join is what makes it the same answer rather than a
+// cheaper approximation: a union ordered globally would let one id's
+// linkers crowd out another's, and the caller reads the groups in rank
+// order precisely because the first id's companions matter most. An
+// entry linking at two of the ids appears in both groups, as it did when
+// each id was asked separately.
+func (s *Store) LinkersByTargetDocs(ctx context.Context, ids []string, perID int) (map[string][]domain.Knowledge, error) {
+	out := map[string][]domain.Knowledge{}
+	if len(ids) == 0 || perID <= 0 {
+		return out, nil
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+knowledgeSelectDoc+`, t.target
+		 FROM unnest($1::text[]) AS t(target)
+		 CROSS JOIN LATERAL (
+			SELECT * FROM object o
+			WHERE o.deleted_at IS NULL
+			  AND o.links @> jsonb_build_array(jsonb_build_object('target', t.target))
+			ORDER BY o.updated_at DESC LIMIT $2
+		 ) object`, ids, perID)
+	if err != nil {
+		return nil, err
+	}
+	linkers, err := pgx.CollectRows(rows, scanKnowledgeDocForTarget)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range linkers {
+		out[l.target] = append(out[l.target], l.knowledge)
+	}
+	return out, nil
+}
+
+// targetedKnowledge is one row of LinkersByTargetDocs: the entry, and
+// which of the asked-for ids its links pointed at.
+type targetedKnowledge struct {
+	target    string
+	knowledge domain.Knowledge
+}
+
+func scanKnowledgeDocForTarget(row pgx.CollectableRow) (targetedKnowledge, error) {
+	var t targetedKnowledge
+	dests, finish := knowledgeDestWithDoc(&t.knowledge)
+	if err := row.Scan(append(dests, &t.target)...); err != nil {
+		return t, err
+	}
+	return t, finish()
+}
+
 func (s *Store) listLinkingTo(ctx context.Context, id string, limit int, cols string,
 	scan func(pgx.CollectableRow) (domain.Knowledge, error),
 ) ([]domain.Knowledge, error) {

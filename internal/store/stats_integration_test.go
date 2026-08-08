@@ -70,7 +70,7 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	// Three misses of one question, buffered: nothing is written until
 	// the flush (design doc 0029's bargain, extended to misses).
 	for range 3 {
-		if err := s.RecordMiss(ctx, query, actor); err != nil {
+		if err := s.RecordMiss(ctx, query, domain.MissKey(query), actor); err != nil {
 			t.Fatalf("RecordMiss: %v", err)
 		}
 	}
