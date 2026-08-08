@@ -86,6 +86,18 @@ last entry.
 
 ### Changed
 
+- **`put_concept` now tells an agent to link the concept its draft would
+  replace.** The instruction was already there — a verified concept that
+  is wrong gets `report_outcome failed`, or a better draft at a different
+  id for a human to promote — but nothing joined it to the sentence about
+  links, so the relationship that makes a replacement reviewable was left
+  to chance. A body link is how any relationship is written here
+  ([0074 §2](docs/design/0074-the-document-and-the-vocabulary-that-asks-it.md)),
+  and it is two-way, so the reviewer reaching either concept sees the
+  other. No tool, no argument, no ceiling moved: the MCP schema budget
+  goes 11,733 → 11,812 bytes against its 12,000.
+
+
 - **Search ties are broken by verification recency instead of by
   whatever the scan produced.** A short question leaves several concepts
   holding exactly the same score — five of them, for the README's own

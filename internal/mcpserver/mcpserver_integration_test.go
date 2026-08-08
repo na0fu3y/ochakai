@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -242,5 +243,175 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 		if !strings.Contains(said, want) {
 			t.Errorf("the refusal does not mention %q: %s", want, said)
 		}
+	}
+}
+
+// The write-back loop's second half, walked from the six tools alone.
+//
+// The claim this pins is that an MCP-only agent — a hosted client with no
+// shell, which the README calls the primary case for this surface — can
+// carry out the instruction put_concept's own description gives it: when
+// a verified concept is wrong, "put a better draft at a different id and
+// let a human promote it". That instruction is worth only as much as the
+// agent's ability to see what became of the draft, and nothing had
+// checked that it can.
+//
+// Three things are needed and all three are already here: the draft can
+// name what it would replace (a body link, which is how relationships are
+// written at all — design doc 0074 §2), the agent can see the human's
+// ruling on its own draft (get_concept carries the verification ledger),
+// and it can find out that a proposal was already turned down before
+// spending a write on it (rejected=true). What it cannot do is rule —
+// verify, reject, delete — and that is design doc 0076's decision rather
+// than a gap.
+func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{InsecureDev: true}
+	svc := &service.Service{Store: s, Config: cfg, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(httpauth.Middleware(cfg, Handler(svc, "test")))
+	defer srv.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "host", Version: "0"}, nil).
+		Connect(ctx, &mcp.StreamableClientTransport{Endpoint: srv.URL}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer"}
+	run := testdb.Unique(t, "mcploop")
+	original, replacement := run+"/metrics/revenue", run+"/metrics/revenue-net"
+	defer func() {
+		for _, id := range []string{original, replacement} {
+			_ = svc.Delete(context.Background(), id, human, nil)
+		}
+	}()
+
+	// A verified concept, as a human left it.
+	if _, _, _, err := svc.Put(ctx, &domain.Knowledge{
+		Type: domain.TypeMetrics, ID: original, Title: "mcp loop " + original,
+		Status: domain.StatusStable, Body: "受注合計。", CreatedBy: human,
+	}, human, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Verify(ctx, original, human); err != nil {
+		t.Fatal(err)
+	}
+
+	call := func(t *testing.T, name string, args map[string]any) *mcp.CallToolResult {
+		t.Helper()
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if res.IsError {
+			t.Fatalf("%s failed: %+v", name, res.Content)
+		}
+		return res
+	}
+	conceptOf := func(t *testing.T, res *mcp.CallToolResult) domain.View {
+		t.Helper()
+		var out knowledgeOut
+		raw, err := json.Marshal(res.StructuredContent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.Knowledge
+	}
+
+	// The agent drafts the replacement, naming what it would replace with
+	// an ordinary body link. No field carries the relationship: links are
+	// written in prose, and the surrounding sentence says what kind it is.
+	call(t, "put_concept", map[string]any{
+		"id": replacement,
+		"document": "---\ntype: Metric\ntitle: mcp loop " + replacement + "\nstatus: draft\n---\n\n" +
+			"[" + original + "](/" + original + ".md) の置き換え案: 返品を除いた受注合計。\n",
+	})
+
+	// Before the ruling: the agent's own draft reads back as unverified,
+	// which is how it knows nothing has happened yet.
+	drafted := conceptOf(t, call(t, "get_concept", map[string]any{"id": replacement}))
+	if drafted.Summary.Trust != domain.TrustUnverified {
+		t.Errorf("a fresh draft reads as trust %q, want %q", drafted.Summary.Trust, domain.TrustUnverified)
+	}
+	if len(drafted.Observed.Verified) != 0 {
+		t.Errorf("a fresh draft carries %d verifications", len(drafted.Observed.Verified))
+	}
+
+	// The link is two-way, so the human reviewing the draft reaches the
+	// concept it would replace and the concept names its challenger.
+	// Asked here the way the human surfaces ask it: the backlink listing
+	// is REST, CLI and the web UI, and is deliberately not an MCP tool
+	// (design doc 0067 §5.1) — the ruling belongs to the person, and so
+	// does the question "what is waiting to replace this?".
+	back, err := svc.SearchOrList(ctx, "", "", "", store.Filter{LinksTo: original}, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, h := range back.Hits {
+		if h.ID == replacement {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the draft's body link did not make it findable from %s", original)
+	}
+
+	// The human rules. Confirming is not on this surface (design doc
+	// 0076) — that is the point of the split, not a missing tool.
+	if _, err := svc.Verify(ctx, replacement, human); err != nil {
+		t.Fatal(err)
+	}
+
+	// And the agent sees it: same tool, same id, the ledger now naming
+	// who confirmed it and when.
+	promoted := conceptOf(t, call(t, "get_concept", map[string]any{"id": replacement}))
+	if promoted.Summary.Trust != domain.TrustHuman {
+		t.Errorf("after a human confirmed it the draft reads as trust %q, want %q",
+			promoted.Summary.Trust, domain.TrustHuman)
+	}
+	last := promoted.Observed.LastVerified()
+	if last == nil || last.By.Name != human.Name {
+		t.Fatalf("the promotion is not visible in the ledger: %+v", promoted.Observed.Verified)
+	}
+
+	// And the memory of no: a rejected proposal is findable before the
+	// agent spends a write re-proposing it.
+	if _, err := svc.Reject(ctx, replacement, "duplicate of the original", human); err != nil {
+		t.Fatal(err)
+	}
+	var rejected searchOut
+	raw, err := json.Marshal(call(t, "search_concepts", map[string]any{
+		"query": "mcp loop", "rejected": true, "prefixes": []string{run},
+	}).StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &rejected); err != nil {
+		t.Fatal(err)
+	}
+	seen := false
+	for _, h := range rejected.Hits {
+		if h.ID == replacement {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Errorf("a rejected proposal is not findable with rejected=true: %+v", rejected.Hits)
 	}
 }
