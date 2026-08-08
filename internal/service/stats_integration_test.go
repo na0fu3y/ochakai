@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/config"
+	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/store"
 	"github.com/na0fu3y/ochakai/internal/testdb"
 )
@@ -167,5 +168,71 @@ func deleteMisses(ctx context.Context, t *testing.T, dbURL, query string) {
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `DELETE FROM search_miss WHERE query = $1`, query); err != nil {
 		t.Errorf("cleaning up misses: %v", err)
+	}
+}
+
+// TestMissesGroupByMeaningIntegration pins what migration 0037 bought:
+// the same question asked several ways is one row of the list a curator
+// reads to decide what to write next, not several.
+//
+// The list is ten long, so spellings of one question used to spend the
+// slots that other questions needed — and the count beside each spelling
+// understated how much anybody wanted the answer.
+func TestMissesGroupByMeaningIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	stem := uid(t, "gapit")
+	// One question, five askings: capitalization, a trailing question
+	// mark, doubled spacing, and full-width characters. The words are
+	// nonsense on purpose — the test database is shared, and a question
+	// made of real words would find somebody else's concepts and stop
+	// being a miss at all.
+	askings := []string{
+		stem + " qqzz",
+		stem + " QQZZ",
+		stem + " qqzz?",
+		stem + "  qqzz",
+		stem + " ｑｑｚｚ",
+	}
+	t.Cleanup(func() {
+		for _, q := range askings {
+			deleteMisses(ctx, t, dbURL, q)
+		}
+	})
+
+	since := time.Now().Add(-time.Hour)
+	for _, q := range askings {
+		if hits, err := svc.Search(ctx, q, store.Filter{}, 10); err != nil {
+			t.Fatal(err)
+		} else if len(hits) != 0 {
+			t.Fatalf("%q matched %d concepts; the question has to go unanswered", q, len(hits))
+		}
+	}
+	if err := svc.Store.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := svc.Store.Stats(ctx, since, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []domain.MissedQuery
+	for _, q := range st.Misses.Queries {
+		if strings.Contains(q.Query, stem) {
+			rows = append(rows, q)
+		}
+	}
+	if len(rows) != 1 {
+		t.Fatalf("five askings of one question became %d rows, want 1: %+v", len(rows), rows)
+	}
+	if rows[0].Count != int64(len(askings)) {
+		t.Errorf("the gap is counted %d times, want %d — the group carries every asking",
+			rows[0].Count, len(askings))
+	}
+	// Shown in somebody's own words: the query column is never folded,
+	// and the most recent asking is the one a reader is shown.
+	if rows[0].Query != askings[len(askings)-1] {
+		t.Errorf("the row reads %q, want the most recent asking %q", rows[0].Query, askings[len(askings)-1])
 	}
 }

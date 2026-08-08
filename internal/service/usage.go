@@ -108,7 +108,9 @@ func (s *Service) recordMiss(ctx context.Context, query string) {
 	if query == "" {
 		return
 	}
-	if err := s.Store.RecordMiss(ctx, query, httpauth.Actor(ctx)); err != nil {
+	// The key groups this asking with the others that meant the same
+	// thing; the query is kept as it was typed (migration 0037).
+	if err := s.Store.RecordMiss(ctx, query, domain.MissKey(query), httpauth.Actor(ctx)); err != nil {
 		s.Log.Warn("search miss recording failed", "error", err)
 	}
 }

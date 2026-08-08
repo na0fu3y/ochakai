@@ -216,10 +216,18 @@ func (s *Store) statsMisses(ctx context.Context, st *domain.Stats, since time.Ti
 		`SELECT count(*) FROM search_miss WHERE at >= $1`, since).Scan(&st.Misses.Count); err != nil {
 		return fmt.Errorf("stats: misses: %w", err)
 	}
+	// Grouped by what the askings meant, shown in the words of the most
+	// recent one (migration 0037). DISTINCT ON picks that asking; the
+	// counts and the last time are the whole group's.
 	rows, err := s.pool.Query(ctx, `
-		SELECT query, count(*) AS n, max(at) AS last_at FROM search_miss
-		WHERE at >= $1 GROUP BY query
-		ORDER BY n DESC, last_at DESC, query LIMIT $2`, since, missQueryLimit)
+		SELECT query, n, last_at FROM (
+			SELECT DISTINCT ON (normalized)
+				normalized,
+				first_value(query) OVER (PARTITION BY normalized ORDER BY at DESC, seq DESC) AS query,
+				count(*) OVER (PARTITION BY normalized) AS n,
+				max(at) OVER (PARTITION BY normalized) AS last_at
+			FROM search_miss WHERE at >= $1
+		) g ORDER BY n DESC, last_at DESC, query LIMIT $2`, since, missQueryLimit)
 	if err != nil {
 		return fmt.Errorf("stats: missed queries: %w", err)
 	}
