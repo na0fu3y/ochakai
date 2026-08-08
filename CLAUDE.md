@@ -116,3 +116,18 @@ fuzzing.
 - Cutting a release is a reviewed PR, then a tag, then verification —
   use the `release` skill rather than working from memory. A pushed tag
   is permanent.
+
+## The project's own knowledge base
+
+[kb/](kb) is ochakai's own OKF bundle — development and operating
+knowledge, dogfooded through a local instance (see
+[kb/README.md](kb/README.md)). When that instance is up, a hook recalls
+relevant concepts into your context, and the ochakai MCP tools are the
+write path: learnings land as drafts via `put_concept`, outcomes via
+`report_outcome`. Never write through the `ochakai` CLI here — the
+checked-in deny list enforces it — because the dev instance records CLI
+callers as the anonymous human, while the MCP connection carries your
+process identity, and that distinction is what keeps the trust tier
+honest about who reviewed what
+([kb/policies/ai-human-identity.md](kb/policies/ai-human-identity.md)).
+Rulings — verify and reject — belong to the human.
