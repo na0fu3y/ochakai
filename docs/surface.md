@@ -84,7 +84,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - ENV: 11
 - VOCAB: 34
 - DOC: 25
-- DOC-LINES: 5700
+- DOC-LINES: 5800
 - DOC-LINES-SLACK: 100
 
 `-LINES` と `-BYTES` で終わる行だけは、一覧ではなく**量**に天井を置いて
@@ -325,6 +325,16 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 `files` になったのと同じ改名で、**変わったのは利用者が知る語そのもの**
 であって、能力も引数も応答も変わらない。応答の JSON キーも
 `attachment` から `file` に変わっている。
+
+6 本のまま、`search_concepts` と `get_context` の `trust` を `trusts` に
+改めた。この面のフィルタは値の配列で、`types` / `statuses` / `tags` /
+`prefixes` は複数形を名乗っていたのに**この一つだけが単数だった** —
+同じ規則の中で綴りが割れていただけで、能力も応答も変わらない。REST の
+`trust=` と CLI の `--trust` は繰り返す単数のパラメータで、そちらでは
+`type` / `status` / `tag` / `prefix` と揃っているので動かさない。
+**OKF も動かない**: SPEC §5.3 の trust は `verified` から導出される段で
+あって frontmatter のキーではなく、応答が運ぶ `trust`(段は一つなので
+単数)も三つの段の綴りもそのままである。
 
 ## CLI (24)
 
@@ -718,6 +728,14 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
 開発・運用ナレッジが [kb/](../kb) の OKF バンドルになった。frontmatter
 を持つ md は保存されるものであって説明ではない(下の箇条)ので
 `kb/bundle` は数えず、入口の一枚 [kb/README.md](../kb/README.md) だけが出る。
+
+**そして 5,700 → 5,800 に戻る。またいだのは一本の PR ではない** —
+[#553](https://github.com/na0fu3y/ochakai/issues/553) と
+[#554](https://github.com/na0fu3y/ochakai/issues/554) がそれぞれ天井を
+動かさずに着地し、**二本の和が境界を越えた**。0076 と 0078 のときと同じ
+合流で、今度は天井を**下げた直後**に起きている。下げるのが日常である
+ことの代金はこれ — 天井は往復してよく、読む価値があるのは往復の回数
+ではなく、そのとき何が大きくなったかである。
 
 残すのは**次に効く発見**だけ:
 
