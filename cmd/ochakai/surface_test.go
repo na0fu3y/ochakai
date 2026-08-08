@@ -889,6 +889,7 @@ func userDocs(t *testing.T) ([]string, int) {
 	forChangers := map[string]bool{
 		"CHANGELOG.md": true, "CONTRIBUTING.md": true,
 		"CODE_OF_CONDUCT.md": true, "CLAUDE.md": true,
+		"PLAN.md": true,
 	}
 	generatedReference := map[string]bool{
 		"docs/cli.md": true,
