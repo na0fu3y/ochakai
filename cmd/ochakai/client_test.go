@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -246,6 +247,51 @@ func TestRenderContext(t *testing.T) {
 	}
 	if !strings.Contains(s, "1 more concepts beyond --budget") {
 		t.Errorf("omitted concepts must be reported:\n%s", s)
+	}
+}
+
+// The import loop keeps several requests in flight, so the properties a
+// sequential loop gave for free are pinned here instead: every index
+// runs exactly once, and the first fatal error stops new work rather
+// than draining the rest of a five-thousand-document bundle against a
+// server that already said no.
+func TestEachConcurrently(t *testing.T) {
+	var mu sync.Mutex
+	ran := map[int]int{}
+	if err := eachConcurrently(context.Background(), 100, func(_ context.Context, i int) error {
+		mu.Lock()
+		defer mu.Unlock()
+		ran[i]++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 100 {
+		t.Errorf("ran %d distinct indices, want 100", len(ran))
+	}
+	for i, n := range ran {
+		if n != 1 {
+			t.Errorf("index %d ran %d times", i, n)
+		}
+	}
+
+	boom := errors.New("boom")
+	started := 0
+	err := eachConcurrently(context.Background(), 1000, func(ctx context.Context, i int) error {
+		mu.Lock()
+		started++
+		mu.Unlock()
+		if i == 0 {
+			return boom
+		}
+		<-ctx.Done() // the error must reach later calls as cancellation
+		return ctx.Err()
+	})
+	if !errors.Is(err, boom) {
+		t.Errorf("err = %v, want the first real error, not a cancellation", err)
+	}
+	if started >= 1000 {
+		t.Error("an early error should stop new work from starting")
 	}
 }
 

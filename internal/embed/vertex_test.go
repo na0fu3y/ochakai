@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // newTestVertex points a Vertex at a fake API and captures request bodies.
@@ -163,5 +164,55 @@ func TestVertexDimensionMismatch(t *testing.T) {
 	})
 	if _, err := v.Embed(context.Background(), TaskQuery, []string{"x"}); err == nil {
 		t.Error("dimension mismatch should error")
+	}
+}
+
+// A transient failure does not merely fail the call — search degrades to
+// lexical and a write leaves vector search — so a 5xx is retried before
+// the caller hears about it, and a 4xx is not: it is the request's own
+// fault and would fail the same way three times.
+func TestVertexRetriesTransientFailures(t *testing.T) {
+	old := vertexBackoff
+	vertexBackoff = time.Millisecond
+	t.Cleanup(func() { vertexBackoff = old })
+
+	calls := 0
+	v := newTestVertex(t, "gemini-embedding-2", true, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls < 3 {
+			http.Error(w, "backend overloaded", http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, `{"embedding":{"values":[1,2,3,4]}}`)
+	})
+	if _, err := v.Embed(context.Background(), TaskQuery, []string{"x"}); err != nil {
+		t.Fatalf("two 503s then success should succeed, got %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("calls = %d, want 3", calls)
+	}
+
+	calls = 0
+	exhausted := newTestVertex(t, "gemini-embedding-2", true, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		http.Error(w, "backend overloaded", http.StatusServiceUnavailable)
+	})
+	if _, err := exhausted.Embed(context.Background(), TaskQuery, []string{"x"}); err == nil {
+		t.Error("a 503 on every attempt should error")
+	}
+	if calls != 3 {
+		t.Errorf("calls = %d, want 3 attempts before giving up", calls)
+	}
+
+	calls = 0
+	badRequest := newTestVertex(t, "gemini-embedding-2", true, func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		http.Error(w, "invalid argument", http.StatusBadRequest)
+	})
+	if _, err := badRequest.Embed(context.Background(), TaskQuery, []string{"x"}); err == nil {
+		t.Error("a 400 should error")
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d, want no retry on a 400", calls)
 	}
 }

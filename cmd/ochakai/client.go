@@ -18,7 +18,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/na0fu3y/ochakai/internal/apiclient"
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -1383,6 +1386,28 @@ func cmdExport(ctx context.Context, args []string) error {
 	return nil
 }
 
+// importWorkers is how many requests an import (or its dry run) keeps in
+// flight. The unit of work is one small HTTP round trip, so the win is
+// latency hiding, not bandwidth — eight is enough to hide a Cloud Run
+// round trip without turning an import into a load test of the smallest
+// instance this is documented to run on.
+const importWorkers = 8
+
+// eachConcurrently runs fn(i) for every i in [0, n) across importWorkers
+// goroutines. The first error cancels the context the remaining calls
+// see and is the one returned; calls already in flight finish.
+func eachConcurrently(ctx context.Context, n int, fn func(ctx context.Context, i int) error) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(importWorkers)
+	for i := range n {
+		if ctx.Err() != nil {
+			break
+		}
+		g.Go(func() error { return fn(ctx, i) })
+	}
+	return g.Wait()
+}
+
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
@@ -1437,8 +1462,17 @@ func cmdImport(ctx context.Context, args []string) error {
 	// frozen into the wire forever (design doc 0064).
 	//
 	// Anything else (auth, network, 5xx) still aborts.
+	//
+	// The loop keeps importWorkers requests in flight: a real catalog is
+	// thousands of documents, and one round trip at a time priced the
+	// flagship use case in minutes. Lines land in completion order, so
+	// two runs of the same bundle may print them differently — the
+	// summary line is the stable part.
 	var created, updated, unchanged int
 	refused := map[string]bool{}
+	// One mutex guards the counters, the skip list and the output; the
+	// network calls happen outside it.
+	var mu sync.Mutex
 	skipEntry := func(k *domain.Knowledge, err error) {
 		refused[k.ID] = true
 		skipped = append(skipped, k.ID+".md: refused as a concept and not stored: "+err.Error()+
@@ -1451,22 +1485,24 @@ func cmdImport(ctx context.Context, args []string) error {
 	// this instance's ledger: what the document said stays a claim beside
 	// it (design doc 0046 §2.2), and the verification recorded here is
 	// the importer's own.
-	confirm := func(d *okf.Doc) {
+	confirm := func(ctx context.Context, d *okf.Doc) string {
 		if !d.Verified {
-			return
+			return ""
 		}
 		if _, err := c.Verify(ctx, d.ID); err != nil {
-			noted++
-			fmt.Fprintf(os.Stderr, "note: %s imported, but recording its verification failed: %v\n", d.ID, err)
+			return fmt.Sprintf("%s imported, but recording its verification failed: %v", d.ID, err)
 		}
+		return ""
 	}
-	for i := range entries {
+	err = eachConcurrently(ctx, len(entries), func(ctx context.Context, i int) error {
 		d := &entries[i]
 		k := &d.Knowledge
 		doc, err := documentOf(k)
 		if err != nil {
+			mu.Lock()
+			defer mu.Unlock()
 			skipEntry(k, err)
-			continue
+			return nil
 		}
 		// One call per document, with no precondition: import deliberately
 		// replaces whatever is stored (the bundle is the source of truth
@@ -1475,8 +1511,10 @@ func cmdImport(ctx context.Context, args []string) error {
 		stored, wasCreated, changed, notes, err := c.Put(ctx, k.ID, doc, "", false)
 		if err != nil {
 			if isInvalid(err) {
+				mu.Lock()
+				defer mu.Unlock()
 				skipEntry(k, err)
-				continue
+				return nil
 			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
@@ -1487,25 +1525,37 @@ func cmdImport(ctx context.Context, args []string) error {
 		// (design doc 0046 §2.2), which is what keeps the Git review loop
 		// note-free.
 		notes = okf.NoteStoredClaim(notes, d.Claimed, stored.Document)
+		verifyNote := ""
+		if wasCreated || changed {
+			verifyNote = confirm(ctx, d)
+		}
+		mu.Lock()
+		defer mu.Unlock()
 		noted += len(notes)
 		reportNotes(notes)
-		if wasCreated {
-			created++
-			confirm(d)
-			fmt.Printf("created %s\n", k.URI())
-			continue
+		if verifyNote != "" {
+			noted++
+			fmt.Fprintln(os.Stderr, "note:", verifyNote)
 		}
-		if !changed {
+		switch {
+		case wasCreated:
+			created++
+			fmt.Printf("created %s\n", k.URI())
+		case !changed:
 			unchanged++
 			fmt.Printf("unchanged %s\n", k.URI())
-			continue
+		default:
+			updated++
+			fmt.Printf("updated %s\n", k.URI())
 		}
-		updated++
-		confirm(d)
-		fmt.Printf("updated %s\n", k.URI())
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	attached, orphaned := 0, 0
-	for _, a := range atts {
+	err = eachConcurrently(ctx, len(atts), func(ctx context.Context, i int) error {
+		a := atts[i]
 		// At the path the bundle carried it at, which is the whole of
 		// what preserving a foreign location means now (design doc 0046
 		// §3.3): the concept claims it because its body points there.
@@ -1520,13 +1570,19 @@ func cmdImport(ctx context.Context, args []string) error {
 		// refusal cost every file the document pointed at (design doc
 		// 0079 §1). It is written either way; only the line saying who
 		// claims it changes, because right now nobody does.
+		mu.Lock()
+		defer mu.Unlock()
 		if refused[a.ID] {
 			orphaned++
 			fmt.Printf("wrote %s (its concept %s was not imported)\n", a.Path, a.ID)
-			continue
+			return nil
 		}
 		attached++
 		fmt.Printf("attached %s (%s)\n", a.Path, a.ID)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	// The files that belong to no concept, at the paths they arrived at.
 	// A bundle carries more than its concepts, and what enters it leaves
@@ -1535,17 +1591,26 @@ func cmdImport(ctx context.Context, args []string) error {
 	// type. Whether a concept ever claims one is a question that concept's
 	// body answers (§3.3), so nothing is attributed here.
 	var written int
-	for _, f := range loose {
+	err = eachConcurrently(ctx, len(loose), func(ctx context.Context, i int) error {
+		f := loose[i]
 		if _, err := c.PutBundleFile(ctx, f.Path, f.Data); err != nil {
 			if !isInvalid(err) {
 				return fmt.Errorf("write %s: %w", f.Path, err)
 			}
+			mu.Lock()
+			defer mu.Unlock()
 			skipped = append(skipped, f.Path+": rejected by the server: "+err.Error())
 			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
-			continue
+			return nil
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		written++
 		fmt.Printf("wrote %s\n", f.Path)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	// A file whose concept was refused belongs to nobody, so it counts
 	// where the bundle's other unclaimed objects do.
@@ -1577,28 +1642,35 @@ func cmdImport(ctx context.Context, args []string) error {
 func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 	atts []okf.AttributedFile, loose []okf.BundleFile, skipped []string, noted int, strict bool,
 ) error {
+	// Concurrent for the same reason the real import is: the dry run is
+	// the same N round trips, and a CI gate pays for them on every push.
 	var created, updated, unchanged int
 	refused := map[string]bool{}
+	var mu sync.Mutex
 	skip := func(what, why string) {
 		skipped = append(skipped, what+": "+why)
 		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 	}
-	for i := range entries {
+	err := eachConcurrently(ctx, len(entries), func(ctx context.Context, i int) error {
 		d := &entries[i]
 		k := &d.Knowledge
 		doc, err := documentOf(k)
 		if err != nil {
+			mu.Lock()
+			defer mu.Unlock()
 			refused[k.ID] = true
 			skip(k.ID+".md", "rejected by the server: "+err.Error())
-			continue
+			return nil
 		}
 		planned, plan, notes, err := c.Plan(ctx, k.ID, doc)
 		if err != nil {
 			if isInvalid(err) {
+				mu.Lock()
+				defer mu.Unlock()
 				refused[k.ID] = true
 				skip(k.ID+".md", "refused as a concept and not stored: "+err.Error()+
 					" — the document is still in the bundle you imported from")
-				continue
+				return nil
 			}
 			return fmt.Errorf("%s: %w", k.URI(), err)
 		}
@@ -1606,6 +1678,8 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		// claim still on the concept the write would leave behind is one
 		// the document made and this instance did not observe.
 		notes = okf.NoteStoredClaim(notes, d.Claimed, planned.Document)
+		mu.Lock()
+		defer mu.Unlock()
 		noted += len(notes)
 		reportNotes(notes)
 		switch plan {
@@ -1619,50 +1693,64 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 			updated++
 			fmt.Printf("would update %s\n", k.URI())
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	// A file's plan is a yes or a no: the counts the summary keeps for
 	// files are of the objects the bundle carries, not of the rows they
 	// would move, so ok=false means the server refused this one.
-	planFile := func(path string, data []byte) (ok bool, err error) {
+	planFile := func(ctx context.Context, path string, data []byte) (ok bool, err error) {
 		if _, err := c.PlanBundleFile(ctx, path, data); err != nil {
 			if !isInvalid(err) {
 				return false, fmt.Errorf("write %s: %w", path, err)
 			}
+			mu.Lock()
+			defer mu.Unlock()
 			skip(path, "rejected by the server: "+err.Error())
 			return false, nil
 		}
 		return true, nil
 	}
 	attached, orphaned := 0, 0
-	for _, a := range atts {
-		ok, err := planFile(a.Path, a.Data)
-		if err != nil {
+	err = eachConcurrently(ctx, len(atts), func(ctx context.Context, i int) error {
+		a := atts[i]
+		ok, err := planFile(ctx, a.Path, a.Data)
+		if err != nil || !ok {
 			return err
-		}
-		if !ok {
-			continue
 		}
 		// Written whether or not its concept was — the write loop's rule
 		// (design docs 0075 §5, 0079 §1), planned rather than done.
+		mu.Lock()
+		defer mu.Unlock()
 		if refused[a.ID] {
 			orphaned++
 			fmt.Printf("would write %s (its concept %s would not be imported)\n", a.Path, a.ID)
-			continue
+			return nil
 		}
 		attached++
 		fmt.Printf("would attach %s (%s)\n", a.Path, a.ID)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	var wrote int
-	for _, f := range loose {
-		ok, err := planFile(f.Path, f.Data)
-		if err != nil {
+	err = eachConcurrently(ctx, len(loose), func(ctx context.Context, i int) error {
+		f := loose[i]
+		ok, err := planFile(ctx, f.Path, f.Data)
+		if err != nil || !ok {
 			return err
 		}
-		if !ok {
-			continue
-		}
+		mu.Lock()
+		defer mu.Unlock()
 		wrote++
 		fmt.Printf("would write %s\n", f.Path)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	wrote += orphaned
 	fmt.Printf("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
