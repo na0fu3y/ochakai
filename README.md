@@ -140,10 +140,12 @@ Every command carries its flags and worked examples in `ochakai <command> -h`;
 [docs/cli.md](docs/cli.md) is that same text rendered, for reading before
 you install anything.
 
-Agents without a shell — Claude Desktop, hosted agents — connect over
-MCP instead, and it's the primary interface for that case. Which form
-each client wants (a URL, or the `ochakai mcp-stdio` bridge against
-Cloud Run), and the six tools it will see:
+MCP is for the clients that cannot shell out: Claude Desktop, and your
+own services calling ochakai under their own identity. Both take one of
+two forms — a URL, or the `ochakai mcp-stdio` bridge against Cloud Run —
+and see the same six tools. An assistant hosted by a vendor opens the
+connection from that vendor's infrastructure rather than from your
+machine, so an IAM-restricted deployment is out of its reach by design:
 [connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)

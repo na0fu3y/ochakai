@@ -46,6 +46,22 @@ last entry.
 
 ### Changed
 
+- **The MCP client guide writes out only the two setups anyone here
+  runs.** Six clients — Cursor, VS Code, Windsurf, Cline, Zed, Gemini CLI
+  — carried a full configuration example each, copied from their own
+  documentation in July 2026 and, as the page itself said, run by nobody
+  here. That is design doc 0068 §3's rule (an entrance nobody arrived
+  through comes down) landing on the *description* of an entrance rather
+  than an entrance, and an unrun example goes stale with no one to
+  notice. The two forms are identical across clients anyway — a URL, or
+  the `ochakai mcp-stdio` bridge — so what survives is one row per client
+  naming its config file and the key it spells the URL with
+  (`serverUrl`, `httpUrl`, `servers`, `context_servers`), plus the two
+  wrong-key failures that fail silently. Nothing became unreachable, no
+  tool moved, and the README now says MCP is for clients that cannot
+  shell out — Claude Desktop, and your own services — instead of naming
+  hosted agents, which the guide has always said cannot reach an
+  IAM-restricted deployment at all. `DOC-LINES` drops 5,800 → 5,700.
 - **`ochakai import` keeps eight requests in flight instead of one.** An
   import (and its `--dry-run`, which makes the same round trips) was one
   sequential HTTP call per document, which priced a real catalog
