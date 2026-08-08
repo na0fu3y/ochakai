@@ -2824,7 +2824,28 @@ components:
           properties:
             worked: { type: integer }
             failed: { type: integer }
-          required: [worked, failed]
+            concepts_used:
+              type: integer
+              description: >
+                Distinct concepts handed over in the window — delivered in
+                full, not merely listed in a ranking. Appearing in search
+                results is the ranker's opinion, not use, and counting it
+                would make the coverage below look better the more results
+                a search returned.
+            concepts_reported:
+              type: integer
+              description: >
+                How many of `concepts_used` came back with an outcome —
+                the coverage of the loop's evidence edge.
+
+
+                Without it the two counts above cannot be read.
+                `report_outcome` is the one signal nobody is obliged to
+                send, and an agent that never calls it leaves the
+                re-verification feed empty — which is also what a healthy
+                knowledge base looks like. The gap between these two
+                numbers says which of the two a deployment is looking at.
+          required: [worked, failed, concepts_used, concepts_reported]
         misses:
           type: object
           description: >
