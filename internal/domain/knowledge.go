@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
+	"golang.org/x/text/width"
 )
 
 // Type is the kind of a knowledge entry. Any single-line string is a valid
@@ -1021,6 +1022,28 @@ func DisplayTitle(title, id string) string {
 // accepts one normalizes first (design doc 0022). Bodies and titles are
 // content, not keys, and are kept as written.
 func Normalize(s string) string { return norm.NFC.String(s) }
+
+// MissKey is what two askings of the same question have to share to be
+// counted as one gap (migration 0037). It is a grouping key and never a
+// stored answer: what a person typed is kept as they typed it, and this
+// only decides which typings land in the same row of the list.
+//
+// Folded, in this order: compatibility normalization, so ＡＢＣ and ABC
+// and ｶﾀｶﾅ and カタカナ are one word; case, so a sentence and its
+// capitalization are one question; inner whitespace, so a double space
+// is not a second gap; and punctuation at either end, so "売上とは?" and
+// "売上とは" are the same asking. Punctuation *inside* stays — "q3" and
+// "q/3" are not obviously the same thing, and a key that folds too much
+// merges gaps that wanted separate answers.
+func MissKey(s string) string {
+	folded := strings.ToLower(width.Fold.String(norm.NFKC.String(s)))
+	return strings.Trim(strings.Join(strings.Fields(folded), " "), missKeyEdge)
+}
+
+// missKeyEdge is the punctuation dropped from either end of a miss key.
+// Latin and Japanese spellings of the same marks, because a question
+// mark is a question mark.
+const missKeyEdge = `?？!！.。,、:：;；'"“”「」『』()（）[]【】 `
 
 // SameContent reports whether o carries the same authored content as k:
 // the fields a writer controls (title, description, resource, tags,

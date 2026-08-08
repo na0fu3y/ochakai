@@ -36,7 +36,10 @@ type usageEvent struct {
 // the server's own observation of a read, worth losing before a read is
 // (0029 §3.1).
 type missEvent struct {
-	query     string
+	query string
+	// key groups this asking with the others that meant the same thing
+	// (domain.MissKey, migration 0037). The query stays as typed.
+	key       string
 	actorKind string
 	actorName string
 	at        time.Time
@@ -68,7 +71,7 @@ func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Act
 // immediately (design doc 0051 §3.2). Same contract as RecordEvents: the
 // row is written by the background flush loop, and the error says only
 // that the buffer was full, never that the search failed.
-func (s *Store) RecordMiss(ctx context.Context, query string, actor domain.Actor) error {
+func (s *Store) RecordMiss(ctx context.Context, query, key string, actor domain.Actor) error {
 	if query == "" {
 		return nil
 	}
@@ -78,7 +81,7 @@ func (s *Store) RecordMiss(ctx context.Context, query string, actor domain.Actor
 	if len(s.missBuf) >= usageBufferMax {
 		return errUsageBufferFull
 	}
-	s.missBuf = append(s.missBuf, missEvent{query, actor.Kind, actor.Name, now})
+	s.missBuf = append(s.missBuf, missEvent{query, key, actor.Kind, actor.Name, now})
 	return nil
 }
 
@@ -178,16 +181,18 @@ func (s *Store) flushMisses(ctx context.Context, batch []missEvent) error {
 		return nil
 	}
 	queries := make([]string, len(batch))
+	keys := make([]string, len(batch))
 	kinds := make([]string, len(batch))
 	names := make([]string, len(batch))
 	ats := make([]time.Time, len(batch))
 	for i, m := range batch {
-		queries[i], kinds[i], names[i], ats[i] = m.query, m.actorKind, m.actorName, m.at
+		queries[i], keys[i] = m.query, m.key
+		kinds[i], names[i], ats[i] = m.actorKind, m.actorName, m.at
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO search_miss (query, actor_kind, actor_name, at)
-		SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::timestamptz[])`,
-		queries, kinds, names, ats)
+		INSERT INTO search_miss (query, normalized, actor_kind, actor_name, at)
+		SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::timestamptz[])`,
+		queries, keys, kinds, names, ats)
 	if err != nil {
 		return fmt.Errorf("writing %d buffered search misses: %w", len(batch), err)
 	}
