@@ -347,6 +347,16 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 であって、能力も引数も応答も変わらない。応答の JSON キーも
 `attachment` から `file` に変わっている。
 
+6 本のまま、`search_concepts` と `get_context` の `trust` を `trusts` に
+改めた。この面のフィルタは値の配列で、`types` / `statuses` / `tags` /
+`prefixes` は複数形を名乗っていたのに**この一つだけが単数だった** —
+同じ規則の中で綴りが割れていただけで、能力も応答も変わらない。REST の
+`trust=` と CLI の `--trust` は繰り返す単数のパラメータで、そちらでは
+`type` / `status` / `tag` / `prefix` と揃っているので動かさない。
+**OKF も動かない**: SPEC §5.3 の trust は `verified` から導出される段で
+あって frontmatter のキーではなく、応答が運ぶ `trust`(段は一つなので
+単数)も三つの段の綴りもそのままである。
+
 ## CLI (25)
 
 - `ochakai browse`
