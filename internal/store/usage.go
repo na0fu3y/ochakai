@@ -59,6 +59,7 @@ func (s *Store) RecordEvents(ctx context.Context, event string, actor domain.Act
 	s.usageMu.Lock()
 	defer s.usageMu.Unlock()
 	if len(s.usageBuf)+len(ids) > usageBufferMax {
+		s.droppedEvents += int64(len(ids))
 		return errUsageBufferFull
 	}
 	for _, id := range ids {
@@ -79,6 +80,7 @@ func (s *Store) RecordMiss(ctx context.Context, query, key string, actor domain.
 	s.usageMu.Lock()
 	defer s.usageMu.Unlock()
 	if len(s.missBuf) >= usageBufferMax {
+		s.droppedMisses++
 		return errUsageBufferFull
 	}
 	s.missBuf = append(s.missBuf, missEvent{query, key, actor.Kind, actor.Name, now})
@@ -129,7 +131,10 @@ func (s *Store) usageFlushLoop() {
 // queue: usage is best-effort, and design doc 0029 §3.1 chose that
 // deliberately over spending memory on a stalled database. What the
 // decision also asked for is that the loss be visible — the error says
-// how many events went with it, and the flush loop logs it.
+// how many events went with it, and the flush loop logs it. How much was
+// lost altogether is counted too, and written to usage_drop by the next
+// flush that reaches the database (migration 0038), so it reaches the
+// stats beside the numbers it damaged rather than only a log line.
 func (s *Store) FlushUsage(ctx context.Context) error {
 	s.usageMu.Lock()
 	batch, misses := s.usageBuf, s.missBuf
@@ -140,7 +145,11 @@ func (s *Store) FlushUsage(ctx context.Context) error {
 	// with no aggregate to maintain, and a batch of events failing is no
 	// reason to drop the questions that came with it.
 	missErr := s.flushMisses(ctx, misses)
+	if missErr != nil {
+		s.countDropped(0, int64(len(misses)))
+	}
 	if len(batch) == 0 {
+		s.recordDrops(ctx)
 		return missErr
 	}
 
@@ -167,10 +176,47 @@ func (s *Store) FlushUsage(ctx context.Context) error {
 			last_at = GREATEST(knowledge_usage.last_at, EXCLUDED.last_at)`,
 		ids, events, kinds, names, ats)
 	if err != nil {
+		s.countDropped(int64(len(batch)), 0)
+		s.recordDrops(ctx)
 		return fmt.Errorf("writing %d buffered usage events: %w", len(batch), err)
 	}
+	s.recordDrops(ctx)
 	s.maybePruneEvents(ctx)
 	return missErr
+}
+
+// countDropped remembers observations that never reached the database.
+func (s *Store) countDropped(events, misses int64) {
+	if events == 0 && misses == 0 {
+		return
+	}
+	s.usageMu.Lock()
+	defer s.usageMu.Unlock()
+	s.droppedEvents += events
+	s.droppedMisses += misses
+}
+
+// recordDrops writes what this process has lost so far and clears it,
+// leaving the count where every instance's stats can read it.
+//
+// Taken and put back rather than read and cleared: if this insert is the
+// statement that fails — the same stalled database that caused the drop
+// — the count has to survive for the next attempt, or the fix would lose
+// exactly the numbers it exists to keep. What is dropped between here
+// and the process dying goes with it, which is the retry queue design
+// doc 0029 refused, and the honest edge of this.
+func (s *Store) recordDrops(ctx context.Context) {
+	s.usageMu.Lock()
+	events, misses := s.droppedEvents, s.droppedMisses
+	s.droppedEvents, s.droppedMisses = 0, 0
+	s.usageMu.Unlock()
+	if events == 0 && misses == 0 {
+		return
+	}
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO usage_drop (at, events, misses) VALUES (now(), $1, $2)`, events, misses); err != nil {
+		s.countDropped(events, misses)
+	}
 }
 
 // flushMisses writes one search_miss row per buffered miss. Same bargain
@@ -241,6 +287,8 @@ func (s *Store) maybePruneEvents(ctx context.Context) {
 	_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_event WHERE at < now() - $1::interval`,
 		eventRetention.String())
 	_, _ = s.pool.Exec(ctx, `DELETE FROM search_miss WHERE at < now() - $1::interval`,
+		eventRetention.String())
+	_, _ = s.pool.Exec(ctx, `DELETE FROM usage_drop WHERE at < now() - $1::interval`,
 		eventRetention.String())
 }
 

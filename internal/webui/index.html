@@ -2107,6 +2107,10 @@ async function loadLoopStats() {
   const trust = s.concepts?.trust || {};
   const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
   const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
+  // Shown only when it happened. The tiles above are the always-there
+  // numbers; this is a fault in the measurement behind them, and a
+  // permanent "0 lost" line would be one more thing to read past.
+  const dropped = (s.dropped?.events ?? 0) + (s.dropped?.misses ?? 0);
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
       <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concepts</div></div>
@@ -2114,7 +2118,12 @@ async function loadLoopStats() {
       <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
       <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
         <div class="lbl">searches that found nothing</div></div>
-    </div>` + (gaps.length ? `
+    </div>` + (dropped ? `
+    <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
+      ${dropped} observation${dropped === 1 ? '' : 's'} were recorded and then lost in these
+      ${s.window_days} days, so the numbers above undercount by at least that much. Usage is
+      buffered in memory and written in batches; an instance that went away took what it was
+      holding with it.</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
       <summary style="cursor:pointer;color:var(--muted)">Asked for, not found — what to write next</summary>
       <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">Searches from the last ${s.window_days} days

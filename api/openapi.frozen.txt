@@ -422,6 +422,9 @@ components/schemas/Stats.concepts.status.* type=integer
 components/schemas/Stats.concepts.total required=true type=integer
 components/schemas/Stats.concepts.trust required=true type=object
 components/schemas/Stats.concepts.trust.* type=integer
+components/schemas/Stats.dropped required=true type=object
+components/schemas/Stats.dropped.events required=true type=integer
+components/schemas/Stats.dropped.misses required=true type=integer
 components/schemas/Stats.misses required=true type=object
 components/schemas/Stats.misses.count required=true type=integer
 components/schemas/Stats.misses.queries required=true type=array

@@ -55,6 +55,9 @@ func (s *Store) Stats(ctx context.Context, since time.Time, prefixes []string) (
 	if err := s.statsMisses(ctx, st, since); err != nil {
 		return nil, err
 	}
+	if err := s.statsDropped(ctx, st, since); err != nil {
+		return nil, err
+	}
 	return st, nil
 }
 
@@ -238,6 +241,19 @@ func (s *Store) statsMisses(ctx context.Context, st *domain.Stats, since time.Ti
 	})
 	if err != nil {
 		return fmt.Errorf("stats: missed queries: %w", err)
+	}
+	return nil
+}
+
+// statsDropped reads what the loop lost in the window (migration 0038).
+// The rows are written by whichever instance recovered from the loss, so
+// this is the deployment's gap rather than one process's.
+func (s *Store) statsDropped(ctx context.Context, st *domain.Stats, since time.Time) error {
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(sum(events), 0), COALESCE(sum(misses), 0)
+		FROM usage_drop WHERE at >= $1`, since).
+		Scan(&st.Dropped.Events, &st.Dropped.Misses); err != nil {
+		return fmt.Errorf("stats: dropped observations: %w", err)
 	}
 	return nil
 }
