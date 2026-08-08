@@ -44,8 +44,42 @@ last entry.
   and the added prose fits under the `DOC-LINES` ceiling 0.20.0 already
   raised, so no ceiling moves either.
 
+### Fixed
+
+- **A purge now erases the file bytes too.** Purge destroyed every row
+  keyed by a concept's id and left the bytes behind its files in the
+  bucket forever — the store said so in a comment and told the operator
+  to write the sweep themselves. It contradicted what a purge promises
+  ([0031](docs/design/0031-purge.md)) and the first of the eight
+  conditions ([docs/surface.md](docs/surface.md): the asset leaves whole,
+  returns whole, and is deleted on request), which mattered most for
+  exactly the files an erasure request is about. Blobs are
+  content-addressed and shared, so no single delete can reclaim them as
+  its own side effect: the store now answers the global question
+  instead, deleting every blob no object and no attachment references
+  any more, and the service runs that sweep after a purge and after a
+  file delete. Bytes go before the row that names them, so an
+  interrupted sweep finishes on the next run; writers and the sweep
+  share an advisory lock, so bytes uploaded for a row not yet committed
+  are never swept out from under it. No migration, and no new surface —
+  `purge` and `DELETE` mean what they already said.
+
 ### Changed
 
+- **Search ties are broken by verification recency instead of by
+  whatever the scan produced.** A short question leaves several concepts
+  holding exactly the same score — five of them, for the README's own
+  "why is revenue down" — and the order among them decided what an agent
+  reading the top of the list under a byte budget saw. When the text
+  cannot separate two concepts, the loop's own signal can: the one
+  somebody confirmed most recently leads, and the id closes the order so
+  two concepts equal in every way still arrive the same way twice. Both
+  the store's ranking and the fused hybrid ranking follow the rule. It
+  breaks ties only — no weight, no addend — so nothing the text does
+  distinguish is outranked. The golden set barely moves (one case rose
+  from rank 5 to 4; recall@10 1.00 and MRR 0.90 both hold), which is
+  expected: what this buys is that the answer no longer depends on the
+  scan.
 - **The MCP client guide writes out only the two setups anyone here
   runs.** Six clients — Cursor, VS Code, Windsurf, Cline, Zed, Gemini CLI
   — carried a full configuration example each, copied from their own
@@ -62,6 +96,14 @@ last entry.
   shell out — Claude Desktop, and your own services — instead of naming
   hosted agents, which the guide has always said cannot reach an
   IAM-restricted deployment at all. `DOC-LINES` drops 5,800 → 5,700.
+- **`DOC-LINES` is back at 5,800**, because the two entries above landed
+  in parallel and only met on `main`: the fold was real (−176 lines) and
+  the dogfooding entrance was a page-sized decision (+27), but neither PR
+  could see the other, and the merged total is 5,720 — past the ceiling
+  the first of them had just lowered. [docs/surface.md](docs/surface.md)
+  already described two PRs' prose merging across a boundary in the
+  upward direction; this is the first time it happened against a ceiling
+  on the way down, and the paragraph it earns is in that document.
 - **`ochakai import` keeps eight requests in flight instead of one.** An
   import (and its `--dry-run`, which makes the same round trips) was one
   sequential HTTP call per document, which priced a real catalog

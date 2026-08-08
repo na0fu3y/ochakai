@@ -7,6 +7,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
@@ -109,6 +110,14 @@ func namedBy(h domain.SearchHit, query string) bool {
 		strings.EqualFold(domain.Normalize(name), query)
 }
 
+// sameTime compares two optional verification times, absent included.
+func sameTime(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
+}
+
 // rrfFuse merges ranked lists with reciprocal rank fusion (k=60), adding a
 // small boost for verified concepts so certified knowledge surfaces first,
 // and keeping a concept the query names ahead of the rest.
@@ -163,6 +172,17 @@ func rrfFuse(query string, limit int, lists ...[]domain.SearchHit) []domain.Sear
 		}
 		if ranked[i].hit.Score != ranked[j].hit.Score {
 			return ranked[i].hit.Score > ranked[j].hit.Score
+		}
+		// The store's tie-break, repeated on the fused ranking for the
+		// same reason: RRF gives concepts appearing at the same ranks in
+		// the same lists exactly the same score, and something has to
+		// decide which one an agent's byte budget spends itself on. The
+		// most recently confirmed goes first; the id closes the order.
+		if a, b := ranked[i].hit.VerifiedAt, ranked[j].hit.VerifiedAt; !sameTime(a, b) {
+			if a == nil || b == nil {
+				return b == nil // confirmed at all beats never confirmed
+			}
+			return a.After(*b)
 		}
 		return ranked[i].hit.ID < ranked[j].hit.ID
 	})

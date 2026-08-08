@@ -211,10 +211,30 @@ func (s *Service) GetFileMeta(ctx context.Context, p string) (*domain.File, erro
 	return s.Store.GetFileMeta(ctx, domain.Normalize(p))
 }
 
-// DeleteFile removes the file at a bundle path.
+// DeleteFile removes the file at a bundle path, and then whatever bytes
+// the removal left unreferenced.
 func (s *Service) DeleteFile(ctx context.Context, p string, actor domain.Actor) error {
 	if err := s.readOnly(); err != nil {
 		return err
 	}
-	return s.Store.DeleteFile(ctx, domain.Normalize(p), actor)
+	if err := s.Store.DeleteFile(ctx, domain.Normalize(p), actor); err != nil {
+		return err
+	}
+	s.sweepBlobs(ctx)
+	return nil
+}
+
+// sweepBlobs reclaims bytes nothing references any more. An error is a
+// warning, not a failure: the rows the caller asked to destroy are
+// already gone, and the sweep is self-healing — the next destructive
+// operation finishes the job (store/sweep.go).
+func (s *Service) sweepBlobs(ctx context.Context) {
+	n, err := s.Store.SweepBlobs(ctx)
+	if err != nil {
+		s.Log.Warn("blob sweep failed; unreferenced bytes remain until the next sweep", "error", err)
+		return
+	}
+	if n > 0 {
+		s.Log.Info("blob sweep", "deleted", n)
+	}
 }
