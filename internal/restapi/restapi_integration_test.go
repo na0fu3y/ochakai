@@ -548,6 +548,11 @@ func (m memBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 	return data, nil
 }
 
+func (m memBlobStore) Delete(_ context.Context, sum string) error {
+	delete(m, sum) // already gone is success, like GCS
+	return nil
+}
+
 // docFrom renders a test's entry map as the OKF document the server takes
 // (design doc 0043 §3.5). The maps stay: they are how these tests say
 // "an entry with these fields", and only the wire format changed.

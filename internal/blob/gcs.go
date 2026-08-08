@@ -67,6 +67,17 @@ func (g *GCS) Get(ctx context.Context, sha256 string) ([]byte, error) {
 	return data, nil
 }
 
+// Delete removes the object; an object already gone is success, so a
+// sweep interrupted between deleting bytes and forgetting the hash can
+// run again.
+func (g *GCS) Delete(ctx context.Context, sha256 string) error {
+	err := g.bucket.Object(objectName(sha256)).Delete(ctx)
+	if err == nil || errors.Is(err, storage.ErrObjectNotExist) {
+		return nil
+	}
+	return fmt.Errorf("gcs delete %s: %w", sha256, err)
+}
+
 func alreadyExists(err error) bool {
 	var apiErr *googleapi.Error
 	return errors.As(err, &apiErr) && apiErr.Code == http.StatusPreconditionFailed

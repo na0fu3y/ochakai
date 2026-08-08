@@ -596,6 +596,10 @@ func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) erro
 		return err
 	}
 	s.Log.Info("knowledge purged", "id", id, "actor", actor.String())
+	// The promise of a purge reaches the file bytes: what the rows above
+	// stopped referencing leaves the blob store too (design doc 0031,
+	// condition C1).
+	s.sweepBlobs(ctx)
 	return nil
 }
 

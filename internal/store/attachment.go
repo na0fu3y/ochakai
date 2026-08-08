@@ -116,13 +116,18 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 	if s.blobs == nil {
 		return nil, errNoBlobStore
 	}
-	// The external upload happens outside (before) the transaction:
-	// create-only and content-addressed, so a DB failure afterwards
-	// leaves only an unreferenced object the next identical attach reuses.
-	if err := s.blobs.Put(ctx, att.SHA256, mediaType, data); err != nil {
-		return nil, err
-	}
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
+		// The upload happens under the writers' shared lock (sweep.go):
+		// create-only and content-addressed, a DB failure afterwards
+		// leaves only an unreferenced object — which the sweep may
+		// reclaim, but never between this Put and the commit that names
+		// its hash.
+		if err := lockBlobsShared(ctx, tx); err != nil {
+			return err
+		}
+		if err := s.blobs.Put(ctx, att.SHA256, mediaType, data); err != nil {
+			return err
+		}
 		k, err := s.Get(ctx, id)
 		if err != nil {
 			return err
@@ -252,10 +257,10 @@ func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain
 	return &att, nil
 }
 
-// DeleteAttachment removes the entry→blob mapping. The blob itself stays:
-// revisions still name its hash, and content-addressed rows are cheap.
-// Nothing reclaims a blob that no revision names any more — there is no
-// sweep, so the bucket only grows.
+// DeleteAttachment removes the entry→blob mapping. The blob itself is
+// not touched here: content-addressed bytes are shared, so whether they
+// can go is a global question — SweepBlobs (sweep.go) answers it, and
+// the service runs it after this commit.
 func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor domain.Actor) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		k, err := s.Get(ctx, id)
@@ -361,12 +366,17 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 		createdBy domain.Actor
 		createdAt time.Time
 	)
-	// Outside the transaction, and content-addressed, so a failure after
-	// it leaves only an unreferenced object the next write reuses.
-	if err := s.blobs.Put(ctx, hash, mediaType, data); err != nil {
-		return nil, false, err
-	}
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
+		// Under the writers' shared lock (sweep.go), and content-addressed,
+		// so a failure after the upload leaves only an unreferenced object
+		// the next write reuses — or the sweep reclaims, though never
+		// between this Put and the commit that names its hash.
+		if err := lockBlobsShared(ctx, tx); err != nil {
+			return err
+		}
+		if err := s.blobs.Put(ctx, hash, mediaType, data); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO blob (sha256, media_type, size)
 			VALUES ($1, $2, $3) ON CONFLICT (sha256) DO NOTHING`, hash, mediaType, int64(len(data))); err != nil {
 			return err
