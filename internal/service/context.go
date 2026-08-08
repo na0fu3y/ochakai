@@ -70,44 +70,83 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 	seen := map[string]bool{}
 	var entries []domain.Knowledge
 	addFetched := func(k *domain.Knowledge) {
-		if len(entries) >= 2*limit || seen[k.ID] || k.Rejection != nil {
+		if k == nil || len(entries) >= 2*limit || seen[k.ID] || k.Rejection != nil {
 			return // rejected companions stay out of the pack
 		}
 		seen[k.ID] = true
 		entries = append(entries, *k)
 	}
-	add := func(id string) {
-		if len(entries) >= 2*limit || seen[id] {
-			return
+	// The primaries, a batch at a time. A hit can fail to become one —
+	// deleted between the search and the read, or rejected when the
+	// caller asked for rejected concepts — so this takes the next batch
+	// rather than assuming the first `limit` ids will do. In the ordinary
+	// case that is one round trip and the loop ends.
+	for rest := hits; len(entries) < limit && len(rest) > 0; {
+		n := min(limit-len(entries), len(rest))
+		batch := make([]string, 0, n)
+		for _, h := range rest[:n] {
+			if !seen[h.ID] {
+				batch = append(batch, h.ID)
+			}
 		}
-		k, err := s.Store.Get(ctx, id)
+		rest = rest[n:]
+		found, err := s.Store.GetManyDocs(ctx, batch)
 		if err != nil {
-			return // deleted targets stay out of the pack
+			return nil, err
 		}
-		addFetched(k)
-	}
-	for _, h := range hits {
-		if len(entries) >= limit {
-			break
+		for _, id := range batch {
+			addFetched(found[id])
 		}
-		add(h.ID)
 	}
 	// One hop through the primary concepts' links, both directions: the
 	// query a metric links to, and the insight that links to the metric
 	// (rel: explains points at the metric, not the other way round).
 	// Companions share the 2*limit cap and are never expanded themselves.
-	primaries := len(entries)
+	//
+	// Both directions are read for every primary before any of them is
+	// added, so the whole hop is two round trips rather than two per
+	// primary. The order companions are added in is unchanged — each
+	// primary's forward links, then what links back at it, in rank order
+	// — because that order is what the cap spends on the highest-ranked
+	// concepts first.
+	primaries := entries
+	primaryIDs := make([]string, len(primaries))
+	var targets []string
+	wanted := map[string]bool{}
 	for i := range primaries {
-		for _, l := range entries[i].Links {
-			add(l.Target)
+		primaryIDs[i] = primaries[i].ID
+		for _, l := range primaries[i].Links {
+			// No more than the cap could ever admit, and each id once.
+			// A hub concept linking at five hundred others would
+			// otherwise have all five hundred documents read to fill a
+			// pack that can hold 2*limit of them.
+			if len(targets) >= 2*limit {
+				break
+			}
+			if !seen[l.Target] && !wanted[l.Target] {
+				wanted[l.Target] = true
+				targets = append(targets, l.Target)
+			}
 		}
-		linking, err := s.Store.ListLinkingToDocs(ctx, entries[i].ID, 2*limit)
-		if err != nil {
-			s.Log.Warn("backlink lookup failed", "id", entries[i].ID, "error", err)
-			continue
+	}
+	linked, err := s.Store.GetManyDocs(ctx, targets)
+	if err != nil {
+		return nil, err
+	}
+	linkers, err := s.Store.LinkersByTargetDocs(ctx, primaryIDs, 2*limit)
+	if err != nil {
+		// A pack without its backlinks is worth more than no pack; the
+		// forward hop and the primaries are already in hand.
+		s.Log.Warn("backlink lookup failed", "error", err)
+		linkers = nil
+	}
+	for i := range primaries {
+		for _, l := range primaries[i].Links {
+			addFetched(linked[l.Target])
 		}
-		for j := range linking {
-			addFetched(&linking[j])
+		group := linkers[primaries[i].ID]
+		for j := range group {
+			addFetched(&group[j])
 		}
 	}
 	// Concepts become views here: a context pack hands over the document
