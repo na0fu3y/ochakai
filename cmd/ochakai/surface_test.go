@@ -878,9 +878,10 @@ across d28c3c8 and its follow-up). Lower the cap to %d, or close to it.`,
 //   - docs/design — decision records, read by somebody changing ochakai.
 //     What earns a number is already narrowed by design doc 0048; the same
 //     thing is not tightened twice.
-//   - OKF documents — a file with frontmatter under examples/ is
+//   - OKF documents — a file with frontmatter under examples/ or kb/ is
 //     knowledge, the thing ochakai stores, not prose about it. That is
-//     examples/demo and the bundle under examples/bigquery-catalog.
+//     examples/demo, the bundle under examples/bigquery-catalog, and the
+//     project's own bundle under kb/bundle.
 //   - internal — fixtures.
 //   - CHANGELOG, CONTRIBUTING, CLAUDE.md, the code of conduct, and the
 //     dot-directories — a ledger read one entry at a time, and the surface
@@ -930,13 +931,14 @@ func userDocs(t *testing.T) ([]string, int) {
 			return err
 		}
 		// Frontmatter is read as "this is an OKF document" only under
-		// examples/, where a real bundle (examples/demo,
-		// examples/bigquery-catalog/bundle) sits beside plain README
-		// prose. Trusting the first line anywhere else would let a page
-		// in docs/ drop out of the manual by starting with "---" for a
-		// reason that has nothing to do with OKF — this test caught
+		// examples/ and kb/, where a real bundle (examples/demo,
+		// examples/bigquery-catalog/bundle, kb/bundle) sits beside plain
+		// README prose. Trusting the first line anywhere else would let a
+		// page in docs/ drop out of the manual by starting with "---" for
+		// a reason that has nothing to do with OKF — this test caught
 		// nothing telling the two apart until it did.
-		if strings.HasPrefix(rel, "examples/") && strings.HasPrefix(string(content), "---\n") {
+		if (strings.HasPrefix(rel, "examples/") || strings.HasPrefix(rel, "kb/")) &&
+			strings.HasPrefix(string(content), "---\n") {
 			return nil // an OKF document: knowledge, not documentation
 		}
 		docs = append(docs, rel)

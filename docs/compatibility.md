@@ -5,7 +5,9 @@ The short version, so nobody has to infer it:
 > **REST is frozen at `/api/v1`.** Everything else is still unstable while the
 > major version is 0: MCP, the CLI and the stored shape may all change in a
 > minor release. There is no deprecation window for any of them. Only the
-> latest release is supported. Only a security defect can still break it.
+> latest release is supported. Only a security defect can still break it —
+> though a *new field in a response* was never a break, and is allowed
+> ([0082](design/0082-what-the-freeze-holds-still.md)).
 
 That is the actual policy, not a disclaimer. If you are deciding whether
 to build on ochakai, decide against *this*, not against what "SemVer"
@@ -19,7 +21,13 @@ moves:
 - **REST is frozen.** [0064](design/0064-rest-stops-at-api-v1.md) closed
   the last batch of breaking changes — an unrecognized query parameter is
   now a 400 naming it rather than a silent no-op, which is what makes it
-  safe to add one later without breaking a client that predates it. That
+  safe to add one later without breaking a client that predates it. On
+  that same footing, [0082](design/0082-what-the-freeze-holds-still.md)
+  says what the freeze was never holding still: a property *added* to a
+  schema that only ever travels in a response, which a client that
+  predates it ignores. What stays frozen is every address, everything a
+  client sends, and every removal, rename, retype or requiredness change
+  in what it receives. That
   batch is also where the last *value* changes had to go, because a
   response's shape is what a validating client holds: `title` became
   optional the way OKF SPEC §4.1 always had it,

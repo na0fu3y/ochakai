@@ -88,11 +88,18 @@ type Store struct {
 	// never touches the read path (design doc 0029). usageBuf is
 	// guarded by usageMu; the flush loop stops on flushStop and drains
 	// once more before flushWG releases (see New/Close, usage.go).
-	usageMu   sync.Mutex
-	usageBuf  []usageEvent
-	missBuf   []missEvent
-	flushStop chan struct{}
-	flushWG   sync.WaitGroup
+	// dropped counts what the buffer refused and what a failed flush took
+	// with it, under the same lock. The next flush that reaches the
+	// database writes it to usage_drop and clears it (migration 0038), so
+	// the number outlives the instance that lost the events; until then it
+	// is this process's memory of its own gap.
+	usageMu       sync.Mutex
+	usageBuf      []usageEvent
+	missBuf       []missEvent
+	droppedEvents int64
+	droppedMisses int64
+	flushStop     chan struct{}
+	flushWG       sync.WaitGroup
 }
 
 // UseLogger routes the store's own diagnostics to l — the flush loop's

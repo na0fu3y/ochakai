@@ -1,5 +1,18 @@
 {
-  "$comment": "Checked-in Claude Code settings for this repository. Hooks only — permissions are a personal choice and belong in the untracked settings.local.json.",
+  "$comment": "Checked-in Claude Code settings for this repository. Hooks, plus the one permissions rule that is not a personal choice: the deny list keeps agent sessions from writing to the dogfood knowledge base through the CLI, which the dev instance would record as the anonymous human — agent writes go through the ochakai MCP tools, whose connection carries the process identity (kb/policies/ai-human-identity.md). Everything else about permissions belongs in the untracked settings.local.json.",
+  "permissions": {
+    "deny": [
+      "Bash(ochakai put:*)",
+      "Bash(ochakai verify:*)",
+      "Bash(ochakai reject:*)",
+      "Bash(ochakai delete:*)",
+      "Bash(ochakai purge:*)",
+      "Bash(ochakai move:*)",
+      "Bash(ochakai reembed:*)",
+      "Bash(ochakai import:*)",
+      "Bash(ochakai report:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -12,6 +25,17 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ochakai-recall.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -19,6 +43,17 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gofmt.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ochakai-write-back.sh",
             "timeout": 10
           }
         ]

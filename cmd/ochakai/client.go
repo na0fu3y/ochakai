@@ -709,6 +709,11 @@ func cmdStats(ctx context.Context, args []string) error {
 	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
 		st.WindowDays, st.Concepts.Created, st.Review.Verifications,
 		st.Outcomes.Worked, st.Outcomes.Failed)
+	// Printed even at zero, for the reason the queue counts are: a number
+	// that appears only when something is wrong cannot be told from one
+	// nobody reported. Zero is what says the rest of these are whole.
+	fmt.Printf("dropped_events\t%d\ndropped_misses\t%d\n",
+		st.Dropped.Events, st.Dropped.Misses)
 	if !st.Misses.Recording {
 		// Not zero — unknown. A deployment that keeps no questions must
 		// not read as one that was asked none.

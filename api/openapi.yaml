@@ -2851,7 +2851,32 @@ components:
                   last_at: { type: string, format: date-time }
                 required: [query, count, last_at]
           required: [recording, count, queries]
-      required: [at, window_days, concepts, queues, review, outcomes, misses]
+        dropped:
+          type: object
+          description: >
+            Flow: observations the loop made and then lost inside the
+            window — the footnote every other number here depends on.
+            Usage is best-effort by decision (design doc 0029 §3.1): it
+            buffers in memory, refuses events past a cap rather than
+            growing without bound, and loses a batch whose write fails
+            instead of keeping a retry queue. On Cloud Run an instance is
+            killed on scale-to-zero and on every rollout, so this is not
+            an exotic number.
+
+
+            Zero is what makes the rest trustworthy: with anything else
+            here, the counts above undercount by at least that much.
+            Unscoped by `prefix`, for the reason misses are — a dropped
+            batch is a number, and the ids that were in it are gone.
+          properties:
+            events:
+              type: integer
+              description: Search hits, fetches and outcome reports lost together.
+            misses:
+              type: integer
+              description: Unanswered questions lost the same two ways.
+          required: [events, misses]
+      required: [at, window_days, concepts, queues, review, outcomes, misses, dropped]
     QueueCounts:
       type: object
       description: >

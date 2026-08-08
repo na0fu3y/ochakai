@@ -83,8 +83,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 28
 - ENV: 11
 - VOCAB: 34
-- DOC: 24
-- DOC-LINES: 5800
+- DOC: 25
+- DOC-LINES: 5700
 - DOC-LINES-SLACK: 100
 
 `-LINES` と `-BYTES` で終わる行だけは、一覧ではなく**量**に天井を置いて
@@ -566,7 +566,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
-## DOC (24)
+## DOC (25)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -705,6 +705,20 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
 成熟モデルが最終段として売る閉ループが C7 の中核であること)への
 到達経路である。
 
+**5,800 → 5,700 が、初めての下向きのまたぎである。** 畳んだのは
+[mcp-clients.md](guides/mcp-clients.md) の六クライアント分の設定例で、
+その文書自身が「ここでは誰も動かしていない」と書いていたものである —
+[0068 §3](design/0068-how-a-face-is-added-and-removed.md) の「通行の跡が
+無い入口は降ろす」が、入口ではなく**入口の説明**に当たった。形は URL と
+ブリッジの二つしかないので、残ったのはキー名の一行ずつであり、届く先は
+一つも減っていない。**上げるのが決定なら、下げるのも同じ幅で効く**と
+書いてあったことが、初めて下向きに効いた一件である。
+
+**dogfooding の玄関はページで出る(DOC 24 → 25)。** ochakai 自身の
+開発・運用ナレッジが [kb/](../kb) の OKF バンドルになった。frontmatter
+を持つ md は保存されるものであって説明ではない(下の箇条)ので
+`kb/bundle` は数えず、入口の一枚 [kb/README.md](../kb/README.md) だけが出る。
+
 残すのは**次に効く発見**だけ:
 
 - **翻訳は行数を減らさない。** 日本語は語間に空白を置かないので一行が
@@ -744,9 +758,10 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
   `RECORD-LINES`(一冊の天井)と同じ読者の同じ種類の天井だから、ここに
   十一本目の上限を足すより、その天井の隣に置くほうが筋が通る。
 - **OKF ドキュメント。** `examples/demo` の 10 件も
-  `examples/bigquery-catalog/bundle` も、ochakai が**保存するもの**で
-  あって ochakai についての説明ではない。frontmatter を持つ md は
-  知識であり、ここでは数えない。
+  `examples/bigquery-catalog/bundle` も、プロジェクト自身のナレッジで
+  ある `kb/bundle` も、ochakai が**保存するもの**であって ochakai に
+  ついての説明ではない。frontmatter を持つ md は知識であり、ここでは
+  数えない。
 - **CHANGELOG。** 過去の台帳で、読むのは一エントリである。通して読む
   ものを数えるこの節に、追記だけで伸びるものを混ぜない。
 - **CONTRIBUTING・CLAUDE.md・行動規範・`.github`・`.claude`。**
@@ -776,6 +791,7 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
 - `examples/bigquery-catalog/README.md`
 - `examples/claude-code/CLAUDE.md`
 - `examples/claude-code/README.md`
+- `kb/README.md`
 
 ## 数えていないもの
 

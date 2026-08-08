@@ -45,7 +45,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
@@ -334,6 +334,19 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 - [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Superseded by 0067**。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。
 - [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md) — **Superseded by 0068**。
+- [0082 凍結が止めているのは何か](0082-what-the-freeze-holds-still.md) —
+  **Accepted**。0064 §11 の「凍結を破ってよい唯一の理由はセキュリティ上の
+  欠陥である」を改訂する。凍結が守るのは**住所・リクエストの形・応答からの
+  削除と変更**であり、**応答専用スキーマへのプロパティ追加はその外**である
+  — 0064 §2 が未知のクエリキーを 400 にしたのは「凍結後に何かを安全に
+  足せるかを決める」ためで、その土台の上では知らない応答キーを既存
+  クライアントは無視するだけだからである。応答の `required` はサーバの
+  約束であってクライアントへの要求ではない、が向きを分ける理由。応答
+  *専用*に限るのは、`requestBody` から到達できるスキーマへの必須追加は
+  0064 §2 の下で 400 を生むから。追加は今までどおり golden の再生成を
+  要求するので diff に出る。きっかけは C7 の計器で、取りこぼし件数を
+  `stats` に載せる先が REST 以外に無かった(CLI も Web UI も REST の
+  クライアント、0067 §2)。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
   **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは
