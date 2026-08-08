@@ -305,6 +305,19 @@ func runServer(ctx context.Context, addr string, handler http.Handler) error {
 	server := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		// A request body arrives within a minute or not at all: the
+		// largest accepted body is the 4 MiB PUT cap, so this asks
+		// ~70 KB/s of the slowest legitimate writer while ending the
+		// slow-drip connection that ReadHeaderTimeout cannot see.
+		ReadTimeout: time.Minute,
+		// Idle keep-alive connections are the other way to hoard a
+		// listener without ever tripping a per-request deadline.
+		IdleTimeout: 2 * time.Minute,
+		// WriteTimeout stays unset, deliberately: the MCP endpoint is a
+		// streamable-HTTP handler whose GET is a hanging stream by
+		// design, and a write deadline would sever it — and sever an
+		// export to a slow reader with it. Where response duration
+		// needs a bound, Cloud Run's own request timeout is that bound.
 	}
 	return serveAndDrain(ctx, server, ln)
 }

@@ -171,9 +171,9 @@ variable "database_disk_size_gb" {
 }
 
 variable "database_backups" {
-  description = "Enable daily backups. Off by default to match the guide's cost-minimized example; turn it on for anything you care about (deploy/cloudrun/README.md §6)."
+  description = "Enable daily backups. On by default: the database is the knowledge base, and losing it to a zonal incident is the one cost this module must not minimize. Set to false only for a throwaway evaluation (deploy/cloudrun/README.md §6)."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "database_backup_start_time" {

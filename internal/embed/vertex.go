@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -42,12 +43,18 @@ func NewVertex(ctx context.Context, project, location, model string, dim int) (*
 	if err != nil {
 		return nil, fmt.Errorf("Vertex AI credentials (ADC) not found: %w", err)
 	}
+	client := oauth2.NewClient(ctx, ts)
+	// A call that hangs is worse than one that fails: search falls back
+	// to lexical the moment this errors, but only once it errors. The
+	// deadline is per attempt; the retry loop in post decides how many
+	// attempts a call gets.
+	client.Timeout = 30 * time.Second
 	return &Vertex{
 		model: model,
 		dim:   dim,
 		base: fmt.Sprintf("https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s",
 			vertexHost(location), project, location, model),
-		client:       oauth2.NewClient(ctx, ts),
+		client:       client,
 		embedContent: strings.HasPrefix(model, "gemini-embedding-2"),
 	}, nil
 }
@@ -256,25 +263,61 @@ func (v *Vertex) embedContentOne(ctx context.Context, req embedContentRequest) (
 	return out.Embedding.Values, nil
 }
 
+// post sends one embedding request, retrying what deserves a retry. A
+// transient failure here does not merely fail the call: a search that
+// cannot embed its query silently degrades to lexical, and a write leaves
+// the entry out of vector search until `ochakai reembed` — so a 429, a
+// 5xx or a dropped connection gets three attempts with a short backoff
+// before the caller hears about it. A 4xx is the request's own fault and
+// is never retried.
 func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
+	var lastErr error
+	backoff := vertexBackoff
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 4
+		}
+		respBody, retryable, err := v.postOnce(ctx, url, body)
+		if err == nil {
+			return respBody, nil
+		}
+		if !retryable || ctx.Err() != nil {
+			return nil, err
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+// vertexBackoff is the wait before the first retry; each further retry
+// waits four times longer. A variable so tests do not sleep for real.
+var vertexBackoff = 500 * time.Millisecond
+
+// postOnce is one attempt; retryable says whether post may try again.
+func (v *Vertex) postOnce(ctx context.Context, url string, body []byte) (respBody []byte, retryable bool, err error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := v.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("Vertex AI embeddings: %w", err)
+		return nil, true, fmt.Errorf("Vertex AI embeddings: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	respBody, err = io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		err := fmt.Errorf("Vertex AI embeddings: %s: %s", resp.Status, truncate(string(respBody), 500))
@@ -284,7 +327,7 @@ func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) 
 		// rather than by giving up on the entry.
 		if resp.StatusCode == http.StatusBadRequest {
 			if inputTooLong(string(respBody)) {
-				return nil, fmt.Errorf("%w: %w", ErrInputTooLong, err)
+				return nil, false, fmt.Errorf("%w: %w", ErrInputTooLong, err)
 			}
 			// Every other 400 is logged loudly, because the phrase list
 			// below is the only thing standing between a token-limit
@@ -294,9 +337,9 @@ func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) 
 			slog.Warn("Vertex AI rejected the request and the reason was not recognized as a token limit;"+
 				" if it is one, the shorten-and-retry path is not running", "body", truncate(string(respBody), 200))
 		}
-		return nil, err
+		return nil, resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500, err
 	}
-	return respBody, nil
+	return respBody, false, nil
 }
 
 // inputTooLong recognizes the model's complaint about input length in a
