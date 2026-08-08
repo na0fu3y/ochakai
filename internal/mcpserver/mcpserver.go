@@ -141,32 +141,27 @@ func tool[In, Out any](svc *service.Service,
 	}
 }
 
+// instructions is what a client holds for the whole conversation,
+// beside the tool list. It is counted with the tools rather than treated
+// as free (TestMCPStaysUnderItsResidentByteCap).
+const instructions = "ochakai serves human-curated knowledge for data work: metric definitions, " +
+	"attested computations (sanctioned SQL and other computations), interpretation " +
+	"knowledge (how to read a metric), glossary terms, dataset and table catalog " +
+	"entries, and references. Those types are recommendations; any single-line string " +
+	"is a type. It runs no SQL and no LLM.\n" +
+	"Before answering a data question, call get_context once — it returns the relevant " +
+	"concepts in full, links expanded.\n" +
+	"A concept's id is its path (metrics/revenue, ga4/tables/orders). Place together " +
+	"what should be read together; the type is metadata, not a location.\n" +
+	"Judge trust from provenance, not from status: status is the lifecycle (draft, " +
+	"stable, deprecated) and whether anyone confirmed a concept is recorded separately, " +
+	"by whoever confirmed it. A passed stale_after means due for re-checking, not wrong.\n" +
+	"After acting on knowledge, call report_outcome. Write learnings back with " +
+	"put_concept as drafts for a human to confirm. Knowledge is co-owned by humans and agents."
+
 func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
-		Instructions: "ochakai is a context provider for data agents: metric definitions, " +
-			"attested computations (sanctioned SQL and other computations, including verified " +
-			"question-and-answer queries), interpretation knowledge (how to read a metric), " +
-			"glossary terms, dataset and table catalog entries, and references " +
-			"(mirrors of external material such as enum definitions or schema docs) — those " +
-			"types are recommendations, and any single-line string works as a type for your own " +
-			"document kinds. " +
-			"A concept's id is its path: slash-separated segments (e.g. metrics/revenue, " +
-			"ga4/tables/orders) forming directories. Place together what should be read " +
-			"together; the type is metadata, not a location. " +
-			"It executes no SQL and uses no LLM. " +
-			"Before answering a data question, call get_context once — it returns the relevant " +
-			"concepts in full, links expanded. " +
-			"Prefer verified knowledge and judge trust from provenance (created_by / updated_by / verifications), " +
-			"and treat a concept whose stale_after has passed as due for re-checking, not as wrong. " +
-			"After acting on knowledge (running an attested computation, writing SQL from a metric definition), report " +
-			"whether it actually worked with report_outcome — failed reports are how stale " +
-			"verified knowledge gets caught. " +
-			"Write learnings back with put_concept; leave new concepts as drafts for a human to " +
-			"confirm — status is how ready a concept is (draft, stable, deprecated), and whether " +
-			"anyone checked it is recorded separately, by whoever checked it. Knowledge that was " +
-			"reviewed and not accepted is marked rejected by a human, with the reason; " +
-			"rejected concepts are hidden from search unless you ask for them (rejected=true) — check before " +
-			"re-proposing similar knowledge. Knowledge is co-owned by humans and agents.",
+		Instructions: instructions,
 	})
 
 	// Expose concepts as MCP resources so clients can @-mention them by their
@@ -218,28 +213,19 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "search_concepts",
 		Annotations: readOnly,
-		Description: "Search the knowledge base across all types (recommended: " + domain.TypesHint() + "; custom types welcome). " +
-			"Verified concepts rank higher. Filter with types/statuses/tags. Returns scored hits. " +
-			"Files count too — filenames and file contents — and a hit is always the owning concept. " +
-			"Rejected concepts are excluded unless you pass rejected=true — ask for them " +
-			"to check whether a proposal was already rejected before creating similar knowledge. " +
-			"With sort=\"verified_at\" the tool lists concepts by verification age instead of searching " +
-			"(oldest first, never-verified last; omit query, scores are 0) — the feed for " +
-			"canary runs and for finding stale verified knowledge. With sort=\"usage\" it " +
-			"lists by demand (most search_hits first, never-used drafts oldest-first at the bottom) and " +
-			"each hit carries its usage totals — the draft review/promotion feed. With sort=\"failed\" it " +
-			"lists concepts callers reported wrong (report_outcome failed), worst first — the re-verification " +
-			"feed; empty when nothing was reported wrong. With sort=\"stale_after\" it lists concepts whose " +
-			"author declared an expiry that has now passed, most overdue first — re-check them and, if they " +
-			"still hold, update stale_after; verifying alone does not clear this feed, because the date is " +
-			"the writer's declaration and only an edit changes it. Exactly one of query / sort is required. " +
-			"source and prefixes are filters rather than modes, and combine with a query or with any sort: " +
-			"source narrows to the concepts citing one resource — use it when a source document changed and " +
-			"you need everything derived from it — while prefixes narrows to the concepts living under given " +
-			"paths, which is how you separate a team's own knowledge from the company-wide vocabulary. " +
-			"A listing (any sort, or source alone) answers with a cursor when more concepts follow: pass it " +
-			"back to read the next page, and walk a feed in pages rather than asking for one huge one. " +
-			"A search has no cursor — it is bounded by limit, and a ranking has no page two.",
+		Description: "Search the knowledge base; verified concepts rank higher. Filenames and file " +
+			"contents count too, and a hit is always the owning concept. Rejected concepts are " +
+			"excluded unless you pass rejected=true — ask for them to check whether a proposal " +
+			"was already turned down.\n" +
+			"Exactly one of query / sort. A sort lists instead of searching, pages with cursor, " +
+			"and scores 0:\n" +
+			"- verified_at: by verification age, oldest first — stale verified knowledge.\n" +
+			"- usage: by demand — the draft review feed.\n" +
+			"- failed: reported wrong via report_outcome, worst first — the re-verification feed.\n" +
+			"- stale_after: past the author's declared expiry, most overdue first — verifying " +
+			"alone does not clear this feed, because the date is the writer's declaration and " +
+			"only an edit changes it.\n" +
+			"A search is bounded by limit and has no page two.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		f := store.Filter{
 			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
@@ -256,13 +242,13 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_context",
 		Annotations: readOnly,
-		Description: "The one call to make before answering a data question: searches the knowledge " +
-			"base (verified concepts rank higher), returns the full concepts behind the top hits, " +
-			"and expands one hop through links so the insight explaining a metric and the " +
-			"computation answering the question arrive together. Prefer this over search+get chains; " +
-			"fall back to search_concepts/get_concept for precise lookups. \"concepts\" is the " +
-			"knowledge; \"hits\" is only the ranking behind it. Concepts that do not fit the byte " +
-			"budget are listed under \"outline\" — fetch any of them by id with get_concept.",
+		Description: "The one call to make before answering a data question: searches (verified " +
+			"concepts rank higher), returns the full concepts behind the top hits, and expands " +
+			"one hop through links so the insight explaining a metric and the computation " +
+			"answering the question arrive together. Prefer it over search+get chains; fall " +
+			"back to search_concepts/get_concept for precise lookups. \"concepts\" is the " +
+			"knowledge, \"hits\" only the ranking behind it; concepts past the byte budget are " +
+			"named under \"outline\", fetchable by id with get_concept.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in contextIn) (*mcp.CallToolResult, contextOut, error) {
 		budget := in.Budget
 		if budget <= 0 {
@@ -288,9 +274,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_concept",
 		Annotations: readOnly,
-		Description: "Get one knowledge concept by id, including its full markdown body, structured attrs, " +
-			"links, and file metadata (files the body references: images, PDFs, plain-text data — " +
-			"fetch bytes with get_file).",
+		Description: "Get one concept by id: its full markdown body, structured attrs, links, and " +
+			"the files its body references (fetch their bytes with get_file).",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
@@ -313,33 +298,22 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "put_concept",
 		Annotations: nonDestructive,
-		Description: "Write a knowledge concept: create it if the id is free, replace it if it is taken. " +
-			"Write back what you learned: metric caveats, confirmed answers, glossary terms. " +
-			"Write status: draft unless you are recording something already agreed — a document that " +
-			"names no status reads as stable (OKF SPEC §5.4). Your identity is recorded as created_by, " +
-			"and the concept stays unverified until a person confirms it. " +
-			"The document you send is the whole concept: a key you leave out is cleared, so on a replace, " +
-			"get_concept first, change what you mean to change, and send the rest back as it came. " +
-			"Every change is kept as a revision; a write identical to the stored content writes nothing. " +
-			"Before writing something new, search with rejected=true to avoid re-proposing knowledge " +
-			"that was already rejected (the ruling records why). " +
-			"Concepts a human has ruled on — verified, rejected, or deprecated — cannot be replaced from " +
-			"this surface: if a verified concept is wrong, report_outcome failed; otherwise put_concept " +
-			"a better draft at a different id and let a human promote it. " +
-			"status is the lifecycle only — draft, stable, deprecated (OKF SPEC §5.4). Whether anyone " +
-			"has confirmed the concept is not yours to set: it comes from the verification ledger, and " +
-			"this surface does not verify or reject. Put the reason for deprecating in status_note. " +
-			"Pick the type by what the concept holds. These are the recommended ones; any other " +
-			"single-line type works too, and one of your own is first-class:\n" + domain.TypesGuide() + "\n" +
-			"ochakai records what a concept says and never runs any of it. " +
-			"Cite the material a concept derives from in sources — each needs a resource, and an id lets " +
-			"markdown footnotes in body attribute single claims to it. " +
-			"Set stale_after when the knowledge has a known expiry date. " +
-			"Links are never a field: write a markdown link to the other concept's path in body — " +
-			"[revenue](/metrics/revenue.md) — and it becomes a link both ways (the other concept gains a backlink). " +
-			"An id whose concept was deleted can be reused, which revives it as your draft — unless a human had " +
-			"ruled on it (verified, rejected, deprecated), in which case this surface refuses: propose at a " +
-			"different id instead.",
+		Description: "Write a concept: created if the id is free, replaced if it is taken.\n" +
+			"The document you send is the whole concept — a key you leave out is cleared, so on a " +
+			"replace, get_concept first and send back what you are not changing. Every change is " +
+			"kept as a revision; an identical write does nothing.\n" +
+			"Write status: draft unless you are recording something already agreed. You are " +
+			"recorded as the author and the concept stays unverified until a person confirms it; " +
+			"confirming and rejecting are not on this surface.\n" +
+			"A concept a human has ruled on — verified, rejected, deprecated — cannot be " +
+			"replaced here: if a verified concept is wrong, report_outcome failed, otherwise put " +
+			"a better draft at a different id and let a human promote it. An id whose concept " +
+			"was deleted can be reused, which revives it as your draft — unless a human had " +
+			"ruled on it (verified, rejected, or deprecated), and then this surface refuses too. " +
+			"Search rejected=true first so you do not re-propose what was already turned down.\n" +
+			"Links are never a field: a markdown link to another concept's path in body — " +
+			"[revenue](/metrics/revenue.md) — becomes a link both ways.\n" +
+			"Pick the type by what the concept holds; any other single-line type works too:\n" + domain.TypesGuide(),
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		write, notes, claimed, err := in.toKnowledge()
 		if err != nil {
@@ -382,13 +356,11 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_file",
 		Annotations: readOnly,
-		Description: "Fetch one file of the bundle by its path (get_concept lists the files a " +
-			"concept shows under \"files\", each with its path: images, PDFs, plain-text data " +
-			"files, anything a producer put there). Returns the file as content plus its metadata. Files are context-heavy — fetch them " +
-			"deliberately, when the concept's body references one you need to see (a dashboard's " +
-			"normal shape, an ER diagram, a seeds file). ochakai never interprets files; " +
-			"if you learn something from one, write it back into the concept's body with " +
-			"put_concept so the knowledge becomes searchable text.",
+		Description: "Fetch one file of the bundle by its path (get_concept lists a concept's files " +
+			"under \"files\": images, PDFs, plain-text data). Files are context-heavy — fetch one " +
+			"deliberately, when the body references something you need to see. ochakai never " +
+			"interprets files; if you learn something from one, write it into the concept's body " +
+			"with put_concept so the knowledge becomes searchable text.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in fileIn) (*mcp.CallToolResult, fileOut, error) {
 		att, data, err := svc.GetFile(ctx, in.Path)
 		if err != nil {
@@ -426,11 +398,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 		Name:        "report_outcome",
 		Annotations: nonDestructive,
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
-			"write-back loop. After running an attested computation or SQL you wrote from a concept, report worked " +
-			"(the result was correct) or failed (wrong or unusable; say what went wrong in note). " +
-			"Reports feed the concept's usage totals, where failed counts " +
-			"against verified concepts flag them for re-verification. Your identity is recorded " +
-			"with each report. Returns the concept's updated usage totals.",
+			"write-back loop. After running an attested computation, or SQL you wrote from a " +
+			"metric definition, report worked, or failed with what went wrong in note: failed " +
+			"reports against verified concepts flag them for re-verification. Returns the " +
+			"concept's updated usage totals.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
 		id := strings.TrimPrefix(in.Target, uriScheme)
 		if !domain.ValidID(id) {
@@ -495,17 +466,17 @@ type searchIn struct {
 	// Query drives the search. Optional in the schema because sort mode
 	// rejects it — exactly one of query / sort must be set (the service
 	// rejects an empty search, the handler rejects the combination).
-	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set (omit it then)"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed a concept is a separate question — use verified"`
-	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the concept: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable concept unverified"`
-	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only concepts a human turned down — how you check whether a proposal was already rejected before making it again. Omit and rejected concepts stay out of results"`
+	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trust"`
+	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR, omit to not ask. Independent of status"`
+	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only concepts a human turned down — how you check whether a proposal was already rejected. Omit and they stay out"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — the reverse lookup for \"this material changed, what derives from it?\"; a filter, so it combines with query or sort"`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree (\"metrics\" covers metrics and everything under metrics/, but not metrics-legacy/); listing several ORs them, which is how you ask your own scope and the shared one in one call; a filter, so it combines with query or sort"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; \"verified_at\" lists by verification age, \"usage\" lists by demand (draft review feed), \"failed\" lists concepts reported wrong (re-verification feed), \"stale_after\" lists concepts past their declared expiry (most overdue first) — all mutually exclusive with query"`
+	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — \"this material changed, what derives from it?\". A filter: it combines with query or sort"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/); several are OR-ed. A filter: it combines with query or sort"`
+	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; verified_at | usage | failed | stale_after to list instead (the description says what each feed is). Mutually exclusive with query"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
-	Cursor   string   `json:"cursor,omitempty" jsonschema:"resume a listing where the last page ended: pass back the cursor that page returned, with the same sort and filters. Only for listings (any sort, or source alone) — a search is bounded by limit and refuses it"`
+	Cursor   string   `json:"cursor,omitempty" jsonschema:"resume a listing: pass back the cursor the last page returned, with the same sort and filters. Listings only — a search refuses it"`
 }
 
 type searchOut struct {
@@ -526,13 +497,13 @@ type searchOut struct {
 // §2.1).
 type contextIn struct {
 	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type (Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type); matched case-insensitively"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated. Whether anyone confirmed a concept is a separate question — use verified"`
-	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed the concept: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); repeat to OR them, omit to not ask. Independent of status: a draft can be human-reviewed and a stable concept unverified"`
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trust"`
+	Trust    []string `json:"trust,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed; repeat to OR, omit to not ask. Independent of status"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts addressed under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes the search to a subtree; listing several ORs them, which is how you ask your own scope and the shared one in one call. It scopes the search, not the link expansion: a concept in scope that cites a term outside it still arrives with that term"`
-	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x limit total cap"`
-	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the knowledge in the response — the concepts plus the outline rows naming the rest (default 12000); nothing else carries a body, since \"hits\" is the ranking only. Concepts past it are listed under \"outline\" with their size, fetchable by id with get_concept, and those rows count against the same budget. Raise it when you need whole concepts, lower it when context is tight"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree; several are OR-ed. It scopes the search, not the link expansion: a concept in scope still arrives with the term it cites outside"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x total cap"`
+	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of knowledge in the response — the concepts plus the outline rows naming the rest, which count against it too (default 12000). \"hits\" carries no body and is outside it. Raise it when you need whole concepts, lower it when context is tight"`
 }
 
 type contextOut struct {
@@ -591,9 +562,9 @@ type usageOut struct {
 }
 
 type outcomeIn struct {
-	Target  string `json:"target" jsonschema:"the id of the concept the outcome is about (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
-	Outcome string `json:"outcome" jsonschema:"\"worked\" = acting on the concept gave a correct result; \"failed\" = it gave a wrong or unusable one"`
-	Note    string `json:"note,omitempty" jsonschema:"optional context recorded with the report: what was run, what went wrong (max 2000 bytes)"`
+	Target  string `json:"target" jsonschema:"the concept's id (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
+	Outcome string `json:"outcome" jsonschema:"worked = acting on it gave a correct result; failed = a wrong or unusable one"`
+	Note    string `json:"note,omitempty" jsonschema:"what was run, what went wrong (max 2000 bytes)"`
 }
 
 // writeIn is an id and a document. It was a field-by-field mirror of the
@@ -617,8 +588,8 @@ func view(k *domain.Knowledge, notes []string) (knowledgeOut, error) {
 }
 
 type writeIn struct {
-	ID       string `json:"id" jsonschema:"where the concept lives: its full path, segments separated by / (e.g. metrics/revenue, 用語/売上); place together what should be read together; the last segment must not be \"index\" or \"log\""`
-	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown. Frontmatter: type (required, one line — this tool's description lists the recommended types and what each one holds; any custom type works), title (optional — the id's last segment is the name without one), description, tags, resource (the underlying asset's URI), status (draft, stable or deprecated; omitted reads as stable, OKF's default — whether anyone confirmed the concept is recorded separately and is not yours to set), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, author, usage_count, last_modified, usage_window} — the material this derives from; an entry's own usage_window overrides the shared one), usage_window ({from, to}), and for an Attested Computation runtime (required), parameters (list of {name, type, required}), computation, executor ({resource, and optionally receipt}), attester ({resource}). Producer-defined keys go at the top level beside these and are kept as written. Link to other concepts with a markdown link to their path in the body — [revenue](/metrics/revenue.md) — and those links become the concept's links. Keys the server owns (generated, verified, created_by, rejected_by, rejected_at) never set who created or confirmed the concept, so a document read back from ochakai can be edited and returned as-is; a document from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
+	ID       string `json:"id" jsonschema:"where the concept lives: its full path, / separated (e.g. metrics/revenue, 用語/売上). The last segment must not be \"index\" or \"log\""`
+	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted reads as stable), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Server-owned keys (generated, verified, created_by, rejected_by, rejected_at) are never read as truth: a document read back from ochakai can be returned as-is, and one from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
 }
 
 // toKnowledge parses the document. Notes — values read differently than
