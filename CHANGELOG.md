@@ -21,6 +21,17 @@ last entry.
 
 ### Added
 
+- **The positioning page now answers the graph-database claim.**
+  "Operationalizing ontology takes a graph engine" is the pitch
+  NebulaGraph and Neo4j publish under; the neighbours table had no row
+  for that category, though it already answered Palantir's FDE model. A
+  row and a short section map the claim onto decisions already made —
+  untyped links ([0074 §2](docs/design/0074-the-document-and-the-vocabulary-that-asks-it.md)),
+  the open type vocabulary ([0038](docs/design/0038-type-vocabulary-realignment.md)),
+  and the human review loop their maturity model sells as its final
+  stage. `DOC-LINES` crosses a boundary, 5,700 → 5,800
+  ([#542](https://github.com/na0fu3y/ochakai/issues/542)).
+
 - **The README now shows what `ochakai context` actually returns.** The
   quick start had a reader point the CLI at the public demo and run the
   one call an agent makes before a data question, without ever showing
