@@ -24,12 +24,7 @@ JSON-RPC メッセージをそのまま転送する(設計ドキュメント
 |---|---|---|---|
 | [Claude Code](#claude-code)* | URL | ブリッジ | `.mcp.json`、または `claude mcp add` |
 | [Claude Desktop](#claude-desktop) | ブリッジ | ブリッジ | `claude_desktop_config.json` |
-| [Cursor](#cursor) | URL | ブリッジ | `~/.cursor/mcp.json` または `.cursor/mcp.json` |
-| [VS Code](#vs-code) | URL | ブリッジ | `.vscode/mcp.json` |
-| [Windsurf](#windsurf) | URL | ブリッジ | `~/.codeium/windsurf/mcp_config.json` |
-| [Cline](#cline) | URL | ブリッジ | 専用の設定ファイル — パネルから開く |
-| [Zed](#zed) | URL | ブリッジ | `~/.config/zed/settings.json` |
-| [Gemini CLI](#gemini-cli) | URL | ブリッジ | `~/.gemini/settings.json` |
+| [その他のクライアント](#その他のクライアント) | URL | ブリッジ | クライアントごと(下の表) |
 | [ホスト型アシスタント](#clients-that-cannot-reach-your-deployment) | — | — | 設計上、届かない |
 
 下にあるローカル URL は `http://localhost:8080/mcp` で、
@@ -38,10 +33,10 @@ JSON-RPC メッセージをそのまま転送する(設計ドキュメント
 \* Claude Code はこの表の唯一の例外である: シェルを持っているので、
 [推奨される経路は CLI](#claude-code) であって MCP ではない。
 
-Claude Code とブリッジはこのプロジェクトが実際に動かしているものである。
-残りは各クライアント自身のドキュメントから 2026 年 7 月時点で書き写した
-もので、ここで誰も動かしていない箇所には印を付けてある — 違っていた
-設定は issue にする価値がある。
+**設定を全文で書き下すのは二つだけである** — Claude Code とブリッジ、
+つまりこのプロジェクトが実際に動かしているものである。残りは形が同じで
+JSON のキー名が違うだけなので、[その他のクライアント](#その他のクライアント)
+がその一行ずつを持つ。
 
 ## エージェントが手にするもの
 
@@ -199,137 +194,36 @@ Cloud Run に対しては、この設定だけではマシンに gcloud とロ�
 その接続はあなたのマシンではなく Anthropic のインフラから開かれる —
 [下](#clients-that-cannot-reach-your-deployment)を見よ。
 
-## Cursor
+## その他のクライアント
 
-`~/.cursor/mcp.json` はすべてのプロジェクトに、`.cursor/mcp.json` は
-一つのプロジェクトに:
+**二つの形はどのクライアントでも同じで、違うのは JSON のキー名だけ
+である。** URL 形式は上の `http://localhost:8080/mcp` を、ブリッジ形式は
+[Claude Desktop](#claude-desktop) の `command` / `args` を、下の器に
+そのまま入れる。
 
-```json
-{
-  "mcpServers": {
-    "ochakai": { "url": "http://localhost:8080/mcp" }
-  }
-}
-```
+| クライアント | 設定の置き場所 | URL 形式の器 |
+|---|---|---|
+| Cursor | `~/.cursor/mcp.json`(全プロジェクト)、`.cursor/mcp.json`(一つ) | `mcpServers` → `url` |
+| VS Code | `.vscode/mcp.json`、または **MCP: Open User Configuration** | `servers` → `type: "http"` と `url` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` → **`serverUrl`** |
+| Cline | **MCP Servers → Configure MCP Servers**(ドキュメントとソースがパスで食い違うので、パネルから開く) | `mcpServers` → `type: "streamableHttp"` と `url` |
+| Zed | `~/.config/zed/settings.json` | `context_servers` → `url` |
+| Gemini CLI | `~/.gemini/settings.json`、またはプロジェクトごとの `.gemini/settings.json` | `mcpServers` → **`httpUrl`** |
 
-Cloud Run: `url` の項目を [Claude Desktop](#claude-desktop) 上のブリッジ
-形式に置き換える — Cursor は同じ `mcpServers` の形を使う。
+ブリッジ形式はどれも `url` の項目を `command` / `args` に置き換えたもの
+で、VS Code だけ `"type": "stdio"` を添える。
 
-ローカルサーバーに対しては、上と同じ設定をそのままエンコードした
-インストールリンクもある:
+**キー名を間違えると黙って失敗する。** Gemini CLI の `url` は SSE を
+意味するので `/mcp` に向けると原因の分からない形で落ち、Cline は `type`
+の綴りを間違えると黙って SSE にフォールバックする。この二つは
+[繋がらないとき](#繋がらないとき)より先に疑う。
 
-```markdown
-[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=ochakai&config=eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjgwODAvbWNwIn0%3D)
-```
-
-自分のデプロイを指すものを作るには、サーバーオブジェクトだけを
-base64 化する —
-`{"url":"https://your-service.run.app/mcp"}` — ただしこれは認証無しで
-クライアントが届けるサーバーにしか役立たないことに注意する。
-
-## VS Code
-
-ワークスペースの `.vscode/mcp.json`、あるいは **MCP: Open User
-Configuration** が開くユーザーレベルのファイル。キーは `mcpServers`
-ではなく `servers` である:
-
-```json
-{
-  "servers": {
-    "ochakai": { "type": "http", "url": "http://localhost:8080/mcp" }
-  }
-}
-```
-
-Cloud Run、同じファイル:
-
-```json
-{
-  "servers": {
-    "ochakai": { "type": "stdio", "command": "ochakai", "args": ["mcp-stdio"] }
-  }
-}
-```
-
-ローカルの場合のインストールリンク(二つ目は Insiders 用):
-
-```markdown
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=ochakai&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22http%3A%2F%2Flocalhost%3A8080%2Fmcp%22%7D)
-[![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=ochakai&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22http%3A%2F%2Flocalhost%3A8080%2Fmcp%22%7D&quality=insiders)
-```
-
-MCP の設定は VS Code 1.102 で `settings.json` の外に移り、既存の
-concept は移行された。設定の中に `"mcp"` キーが見つかったら、それは
-そこから来たものである。
-
-## Windsurf
-
-`~/.codeium/windsurf/mcp_config.json`。URL のフィールドは `url` では
-なく `serverUrl` である:
-
-```json
-{
-  "mcpServers": {
-    "ochakai": { "serverUrl": "http://localhost:8080/mcp" }
-  }
-}
-```
-
-Cloud Run: [Claude Desktop](#claude-desktop) と同じブリッジ形式。ここでは
-未検証。
-
-## Cline
-
-Cline 自身のドキュメントとソースコードは設定ファイルの置き場所に
-ついて食い違っているので、パスではなくパネルから開く —
-**MCP Servers → Configure MCP Servers**。`type` は必須で、綴りを
-間違えると黙って SSE にフォールバックする:
-
-```json
-{
-  "mcpServers": {
-    "ochakai": {
-      "type": "streamableHttp",
-      "url": "http://localhost:8080/mcp"
-    }
-  }
-}
-```
-
-Cloud Run: ブリッジ形式。ここでは未検証。
-
-## Zed
-
-`~/.config/zed/settings.json` の `context_servers` の下:
-
-```json
-{
-  "context_servers": {
-    "ochakai": { "url": "http://localhost:8080/mcp" }
-  }
-}
-```
-
-Cloud Run: 同じ場所に `{ "command": "ochakai", "args": ["mcp-stdio"] }`。
-ここでは未検証。
-
-## Gemini CLI
-
-`~/.gemini/settings.json`、またはプロジェクトごとの
-`.gemini/settings.json`。streamable HTTP 用のフィールドは
-**`httpUrl`** である — このクライアントで `url` は SSE を意味し、
-それを `/mcp` に向けると、原因の分からない形で失敗する:
-
-```json
-{
-  "mcpServers": {
-    "ochakai": { "httpUrl": "http://localhost:8080/mcp" }
-  }
-}
-```
-
-あるいは `gemini mcp add -t http ochakai http://localhost:8080/mcp`。
-Cloud Run: ブリッジ形式。ここでは未検証。
+この六つは各クライアント自身のドキュメントから 2026 年 7 月時点で
+写したもので、**ここでは誰も動かしていない** — 正はそれぞれのクライアント
+のドキュメントであり、食い違っていたら issue にする価値がある。設定の
+全文を置かないのはそのためである: 動かしていない設定が古びたことには、
+誰も気づかない(設計ドキュメント
+[0068](../design/0068-how-a-face-is-added-and-removed.md) §3)。
 
 ## Cloud Run に対して機能する URL
 
