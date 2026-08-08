@@ -40,6 +40,26 @@ type Stats struct {
 	Review   StatsReview   `json:"review"`
 	Outcomes StatsOutcomes `json:"outcomes"`
 	Misses   StatsMisses   `json:"misses"`
+	// Dropped is what the loop observed and then lost inside the window
+	// — the footnote every other number here depends on. Usage is
+	// best-effort by decision (design doc 0029 §3.1): it buffers in
+	// memory, refuses events past a cap rather than growing without
+	// bound, and loses a batch whose write fails instead of keeping a
+	// retry queue. That the loss showed only in a log line was the gap:
+	// a curator reading how often a concept was fetched could not tell 4
+	// from 40. Zero here is what makes the rest trustworthy.
+	Dropped StatsDropped `json:"dropped"`
+}
+
+// StatsDropped counts the observations that never reached the database
+// in the window. Unscoped by prefix, for the reason misses are: a
+// dropped batch is a number, and the ids that were in it are gone.
+type StatsDropped struct {
+	// Events is search hits, fetches and outcome reports together —
+	// refused by the buffer, or lost with a failed flush.
+	Events int64 `json:"events"`
+	// Misses is unanswered questions lost the same two ways.
+	Misses int64 `json:"misses"`
 }
 
 // StatsConcepts is what the base is made of (state), plus how much of it

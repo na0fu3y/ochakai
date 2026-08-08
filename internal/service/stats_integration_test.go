@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -234,5 +235,48 @@ func TestMissesGroupByMeaningIntegration(t *testing.T) {
 	// and the most recent asking is the one a reader is shown.
 	if rows[0].Query != askings[len(askings)-1] {
 		t.Errorf("the row reads %q, want the most recent asking %q", rows[0].Query, askings[len(askings)-1])
+	}
+}
+
+// TestDroppedObservationsReachTheStatsIntegration pins the honest
+// footnote (migration 0038): usage is best-effort, and the loss now
+// shows up beside the numbers it damaged instead of only in a log line.
+//
+// The buffer is filled past its cap rather than a failing database
+// simulated, because that is the drop a deployment actually meets — an
+// instance holding more than it can write. The other one, a flush whose
+// statement fails, is counted on the same path.
+func TestDroppedObservationsReachTheStatsIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	since := time.Now().Add(-time.Hour)
+
+	before, err := svc.Store.Stats(ctx, since, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One call bigger than the whole buffer: refused entire, and counted.
+	const dropped = 20001
+	run := uid(t, "dropit")
+	ids := make([]string, dropped)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("%s/%d", run, i)
+	}
+	if err := svc.Store.RecordEvents(ctx, domain.EventSearchHit,
+		domain.Actor{Kind: domain.ActorHuman, Name: "test"}, ids); err == nil {
+		t.Fatal("a batch larger than the buffer was accepted; nothing was dropped to count")
+	}
+	// The count reaches the database with the next flush that works.
+	if err := svc.Store.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.Store.Stats(ctx, since, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := got.Dropped.Events - before.Dropped.Events; n != dropped {
+		t.Errorf("stats report %d dropped events, want %d: what the loop lost has to be "+
+			"readable beside what it kept", n, dropped)
 	}
 }
