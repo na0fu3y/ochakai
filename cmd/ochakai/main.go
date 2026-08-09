@@ -280,7 +280,12 @@ For the web UI, run the bundled proxy on your machine:
 then open http://127.0.0.1:8098. See also: ochakai --help
 `, version)
 	})
-	mux.Handle("/mcp", httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))
+	// /mcp gets the same line as /api/v1 (internal/restapi/requestlog.go).
+	// Its whole surface is one address, so the route is that address; a
+	// deployment whose agents talk MCP would otherwise have a request log
+	// covering the half of its traffic it reads least.
+	mux.Handle("/mcp", restapi.RequestLog(log, "/mcp",
+		httpauth.Middleware(cfg, mcpserver.Handler(svc, version))))
 	mux.Handle("/api/v1/", restapi.AnnounceReadOnly(svc, httpauth.Middleware(cfg, restapi.Handler(svc))))
 
 	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
