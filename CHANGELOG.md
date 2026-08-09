@@ -21,6 +21,28 @@ last entry.
 
 ### Added
 
+- **A deployment can authenticate with its own OIDC issuer**
+  ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)).
+  Outside Google Cloud there were two postures and neither is a
+  deployment: `dev` authenticates nobody, `read-only` authenticates
+  nobody and refuses every write, and everything in between rested on
+  Cloud Run's IAM check having already happened in front of the process.
+  Setting `OCHAKAI_OIDC_ISSUER` and `OCHAKAI_OIDC_AUDIENCE` makes ochakai
+  verify the bearer token itself — signature, issuer, audience, expiry —
+  against the issuer's published keys.
+
+  **No secret is introduced.** Verification reads public keys over
+  HTTPS and the algorithm allowlist is asymmetric only, so there is still
+  nothing to issue and nothing to rotate — which is the property
+  [0003](docs/design/0003-gcp-only.md) was protecting rather than Google
+  Cloud itself. Also unchanged: there is still no authorization, and
+  embeddings are still Vertex AI or nothing, so search off Google Cloud
+  is lexical — which since migration 0036 looks Japanese terms up in an
+  index rather than scanning for them. A verified email is recorded as a
+  person; an email the issuer will not vouch for is never used, and the
+  subject is recorded as a process instead. Half a pair, or a pair beside
+  `OCHAKAI_MODE=dev` or `public`, is refused at startup. `ENV` 11 → 13.
+
 - **One page of the manual is in English** ([docs/en.md](docs/en.md)).
   The manual is Japanese by decision — condition C8 — and the front door
   and the contract are the seven pages that stay English, which left an

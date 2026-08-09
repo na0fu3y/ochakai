@@ -28,7 +28,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 領域 | いま読むドキュメント |
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
-| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md) |
+| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない) |
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
 | デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -78,6 +78,17 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
   最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
   持つか、もう事実でなかった。
+- [0086 誰が呼んでいるかを言う、二つ目の方法](0086-a-second-way-to-say-who-is-calling.md) —
+  **Accepted**。`OCHAKAI_OIDC_ISSUER` と `OCHAKAI_OIDC_AUDIENCE` を設定した
+  デプロイは、Bearer トークンの署名・発行者・audience・有効期限を自分で
+  検証する。Google Cloud の外にあった姿勢は `dev`(誰も認証しない)と
+  `read-only`(誰も認証せず書き込みも断る)の二つだけで、その間は
+  Cloud Run の IAM チェックがプロセスの前で済んでいることに乗っていた。
+  **secret は増えない** — 検証に使うのは発行者が HTTPS で公開する公開鍵で、
+  共有鍵系のアルゴリズムは許可リストに入れていない。認可は相変わらず無く、
+  埋め込みは Vertex AI か無いか(GCP 外は lexical のみ。移行 0036 以降、
+  日本語の二文字語は索引で引ける)。片方だけの設定と、`dev` / `public` との
+  組み合わせは起動時に断る。ENV 11 → 13。
 - [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。

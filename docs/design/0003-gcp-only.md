@@ -7,7 +7,10 @@ ADC / IAM である)。§2 の環境変数表はその時点の一覧であり�
 読むかは [docs/surface.md](../surface.md) と
 [configuration.md](../configuration.md) が持つ — 表に載っている
 `OCHAKAI_INSECURE_DEV` は [0060](0060-one-word-for-the-posture.md) が
-`OCHAKAI_MODE=dev` に改訂した
+`OCHAKAI_MODE=dev` に改訂した。**認証だけは
+[0086](0086-a-second-way-to-say-who-is-calling.md) が第二の経路を足した** —
+OIDC 発行者を名指したデプロイは自分でトークンを検証する。secret-zero は
+そのままである(検証に使うのは発行者の公開鍵)
 Date: 2026-07-16
 
 ## 1. 決定
