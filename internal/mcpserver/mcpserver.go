@@ -33,7 +33,7 @@ const (
 
 // Handler returns the streamable HTTP handler serving the MCP endpoint.
 func Handler(svc *service.Service, version string) http.Handler {
-	server := newServer(svc, version)
+	server := newServer(svc, version, RetiredToolNames)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 }
 
@@ -159,10 +159,15 @@ const instructions = "ochakai serves human-curated knowledge for data work: metr
 	"After acting on knowledge, call report_outcome. Write learnings back with " +
 	"put_concept as drafts for a human to confirm. Knowledge is co-owned by humans and agents."
 
-func newServer(svc *service.Service, version string) *mcp.Server {
+func newServer(svc *service.Service, version string, retired []RetiredToolName) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
 		Instructions: instructions,
 	})
+
+	// A name this release renamed still answers, for this release only
+	// (design doc 0088). It goes on before any tool is registered because
+	// it decides which registration a call reaches.
+	s.AddReceivingMiddleware(answerForRetiredNames(retired))
 
 	// Expose concepts as MCP resources so clients can @-mention them by their
 	// canonical ochakai:// URI. Only the template is advertised — enumerating
