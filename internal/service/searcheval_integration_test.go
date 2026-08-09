@@ -5,10 +5,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
@@ -26,11 +28,15 @@ import (
 // Japanese question is cut into (migration 0036) need Japanese text to
 // be exercised at all.
 //
-// Embeddings are off in the test environment, so the numbers measure
-// the lexical half and the fusion around it. That is the half a
-// deployment without Vertex gets, and the half every ranking change
-// touches first; the vector half needs its own harness when a fake
-// encoder exists.
+// Both halves are measured. The lexical run is the search a deployment
+// without Vertex AI gets; the fused run adds a vector ranking from the
+// stand-in encoder in fakeencoder_test.go and fuses the two exactly as
+// the product does, which is the configuration every Google Cloud
+// deployment runs (design doc 0080 §1.1) and the one nothing measured
+// before. Read them for different things: the lexical number is ranking
+// quality, and the fused number is the arithmetic of the merge — the
+// stand-in shares the lexical side's vocabulary, so it cannot stand in
+// for what a trained encoder is for.
 
 // evalCase is one golden question: a query somebody would actually ask,
 // and the concept a good ranking puts in front of them.
@@ -56,12 +62,40 @@ var evalCases = []evalCase{
 	{query: "orders table schema", want: "tables/shop-orders"},
 	{query: "how to run a bigquery query", want: "skills/run-bigquery-query"},
 	{query: "when should a revenue drop be escalated", want: "insights/reading-revenue"},
+	// A second pass over the same corpus, phrased the way somebody asks
+	// rather than the way a title reads. Fourteen cases put MRR inside
+	// its own noise — one case moving from rank 1 to 2 moved it by 0.036
+	// — so the set is widened as far as thirteen concepts honestly
+	// support. Beyond that a case stops being a question anybody has and
+	// becomes a restatement of a title, which measures the fixture.
+	{query: "august is down 15 percent", want: "insights/reading-revenue"},
+	{query: "obon", want: "insights/reading-revenue"},
+	{query: "what is a normal month", want: "insights/reading-revenue"},
+	{query: "bulk order faking a spike", want: "insights/reading-revenue"},
+	{query: "late partition", want: "insights/reading-revenue"},
+	{query: "does revenue include tax", want: "metrics/revenue"},
+	{query: "which orders count as revenue", want: "policies/revenue-recognition"},
+	{query: "are refunds deducted", want: "policies/revenue-recognition"},
+	{query: "cancelled orders", want: "glossary/completed-order"},
+	{query: "web_direct", want: "references/order-channel-codes"},
+	{query: "channel_code enum", want: "references/order-channel-codes"},
+	{query: "split revenue by channel", want: "queries/sales/revenue-by-channel"},
+	{query: "revenue for the fiscal year by month", want: "queries/sales/monthly-revenue"},
+	{query: "how many customers bought again", want: "metrics/repeat-purchase-rate"},
+	{query: "guest checkout", want: "metrics/repeat-purchase-rate"},
+	{query: "where do orders live", want: "tables/shop-orders"},
+	{query: "total_price column", want: "tables/shop-orders"},
+	{query: "execute an attested computation", want: "skills/run-bigquery-query"},
 	// Japanese, against the inline supplement below. 売上 and 解約 are
 	// two-character terms — exactly the shape the trigram index cannot
 	// serve and the windowed scan answers.
 	{query: "売上が下がった理由", want: "ja/insights/uriage-yomikata"},
 	{query: "解約率", want: "ja/metrics/kaiyakuritsu"},
 	{query: "受注とは", want: "ja/glossary/juchu"},
+	{query: "八月の売上", want: "ja/insights/uriage-yomikata"},
+	{query: "季節性", want: "ja/insights/uriage-yomikata"},
+	{query: "解約の分母", want: "ja/metrics/kaiyakuritsu"},
+	{query: "支払いが確定した注文", want: "ja/glossary/juchu"},
 }
 
 // japaneseSupplement holds the inline Japanese concepts, keyed by id
@@ -96,32 +130,44 @@ var japaneseSupplement = map[string]string{
 		"受注は支払い確定時点で数える。キャンセルは受注から差し引く。\n",
 }
 
-// Floors pin the measured baseline: recall@10 = 1.00, MRR = 0.90
-// (lexical-only, 14 cases). They sit under those numbers so ordinary
-// noise passes and a real regression does not; a change that moves them
-// — either way — should say so in its PR, because that is the point of
-// having them.
+// Floors pin the measured baseline so a regression fails instead of
+// shipping quietly. They sit under the numbers the harness reports, and
+// a change that moves those numbers — either way — says so in its PR,
+// because that is the point of having them.
 //
 // MRR dipped to 0.85 once, when a fragment no document contains stopped
 // earning the largest possible weight (rarity is the weight) and the
 // names that had been collecting half of it stopped ranking by an
-// accident. That change did not make the ranking worse; it uncovered
-// the ties the accident had been hiding — five of these concepts scored
-// identically for "why is revenue down", and the order among them was
-// whatever the scan produced.
+// accident. That change did not make the ranking worse; it uncovered the
+// ties the accident had been hiding — five concepts scored identically
+// for "why is revenue down", and the order among them was whatever the
+// scan produced. Those ties are now broken by verification recency and
+// then by id (store/search.go).
 //
-// Those ties are now broken by verification recency and then by id, so
-// the order is the same twice and defensible once (store/search.go).
-// The number this harness reports barely moved — one case rose from
-// rank 5 to rank 4 — and that is expected: a golden set measures which
-// concept surfaces, while what the tie-break buys is that the answer
-// does not depend on the scan. The thing worth measuring next is the
-// vector half, which needs a fake encoder before it can be measured at
-// all.
+// The set grew from 14 cases to 36. Fourteen put MRR inside its own
+// noise: one case moving from rank 1 to rank 2 moved it by 0.036, which
+// is the size of the differences anybody was reading. The second pass
+// asks the same corpus the way somebody asks rather than the way a title
+// reads — "obon", "does revenue include tax", "guest checkout" — and
+// thirteen concepts do not honestly support many more than that.
+//
+// The fused floors are separate. A stand-in that shares the lexical
+// side's vocabulary can only reorder a list the words already reached,
+// so fusion neither adds a concept here nor loses one, and what the
+// number certifies is that the merge does no harm: RRF's arithmetic, the
+// named-concept sort key surviving it, the tie-break under it. Dropping
+// the lexical list from the fuse takes MRR from 0.92 to 0.81, which is
+// how it is known the floor has teeth. What a trained encoder buys is
+// matching text that shares no vocabulary at all, and no number on this
+// page says how much that is.
 const (
 	evalK           = 10
-	evalRecallFloor = 0.92 // one miss out of 14 passes; two fail
+	evalRecallFloor = 0.92
 	evalMRRFloor    = 0.78
+	// Fused: the same questions with the stand-in encoder on, measured
+	// at 1.00 / 0.89.
+	evalFusedRecallFloor = 0.92
+	evalFusedMRRFloor    = 0.85
 )
 
 // loadDemoBundle imports every document under examples/demo with the
@@ -182,9 +228,26 @@ func TestSearchEvalIntegration(t *testing.T) {
 		}
 	}
 
+	recall, mrr := scoreGoldenSet(t, ctx, svc, prefix, "lexical only")
+	if recall < evalRecallFloor {
+		t.Errorf("recall@%d fell to %.2f, under the %.2f baseline: a ranking change made the golden set worse", evalK, recall, evalRecallFloor)
+	}
+	if mrr < evalMRRFloor {
+		t.Errorf("MRR fell to %.2f, under the %.2f baseline: the golden set still surfaces but lower than it did", mrr, evalMRRFloor)
+	}
+
+	// The same questions with the vector half on, which is the
+	// configuration a Google Cloud deployment runs.
+	scoreFusedGoldenSet(t, ctx, svc, prefix)
+}
+
+// scoreGoldenSet runs every case and reports recall@k and MRR, naming
+// the configuration in the line it logs — a number without its
+// configuration beside it is the thing this harness exists to stop.
+func scoreGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix, config string) (recall, mrr float64) {
+	t.Helper()
 	filter := store.Filter{Prefixes: []string{prefix}}
 	found := 0
-	mrr := 0.0
 	for _, c := range evalCases {
 		hits, err := svc.Search(ctx, c.query, filter, evalK)
 		if err != nil {
@@ -202,21 +265,141 @@ func TestSearchEvalIntegration(t *testing.T) {
 			for _, h := range hits {
 				got = append(got, strings.TrimPrefix(h.ID, prefix+"/"))
 			}
-			t.Logf("miss: %q did not surface %s in the top %d; got %v", c.query, c.want, evalK, got)
+			t.Logf("miss (%s): %q did not surface %s in the top %d; got %v", config, c.query, c.want, evalK, got)
 			continue
 		}
 		found++
 		mrr += 1.0 / float64(rank)
-		t.Logf("hit: %q -> %s at rank %d", c.query, c.want, rank)
+		t.Logf("hit (%s): %q -> %s at rank %d", config, c.query, c.want, rank)
+	}
+	recall = float64(found) / float64(len(evalCases))
+	mrr /= float64(len(evalCases))
+	t.Logf("recall@%d = %.2f (%d/%d), MRR = %.2f, %s", evalK, recall, found, len(evalCases), mrr, config)
+	return recall, mrr
+}
+
+// scoreFusedGoldenSet re-runs the golden set with a vector ranking
+// beside the lexical one, fused exactly as the product fuses them.
+//
+// **The second ranking is built here rather than in the database, and
+// that is a deliberate limit.** Turning the store's vector half on means
+// migrating the vector schema and filling it, and both are global: the
+// column has one width for the whole database, and a reembed pass walks
+// the whole corpus. The packages beside this one run against the same
+// throwaway server, so doing either from here dropped a neighbour's
+// vectors mid-run and reembedded concepts another test was deleting.
+// A harness that makes the suite flaky is not measuring anything.
+//
+// So the vector list is computed in process — the same encoder over the
+// same concepts, ranked by cosine — and handed to the same rrfFuse the
+// service calls. What that measures is the merge: RRF's arithmetic, the
+// named-concept sort key surviving it, the verification tie-break under
+// it. What it does not measure is the SQL that produces the vector list
+// in production, which the store's own vector tests cover.
+func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix string) {
+	t.Helper()
+	dim, ok := embed.Dimension("gemini-embedding-001")
+	if !ok {
+		t.Fatal("the product no longer knows its own embedding width")
+	}
+	enc := fakeEncoder{dim: dim}
+	corpus := embedCorpus(t, ctx, svc, prefix, enc)
+	if len(corpus) < 13 {
+		t.Fatalf("embedded %d concepts, want the whole corpus", len(corpus))
 	}
 
+	filter := store.Filter{Prefixes: []string{prefix}}
+	found, mrr := 0, 0.0
+	for _, c := range evalCases {
+		lexical, err := svc.Store.SearchLexical(ctx, c.query, filter, evalK*2)
+		if err != nil {
+			t.Fatalf("search %q: %v", c.query, err)
+		}
+		vectors, err := enc.Embed(ctx, embed.TaskQuery, []string{c.query})
+		if err != nil {
+			t.Fatal(err)
+		}
+		hits := rrfFuse(c.query, evalK, lexical, nearest(corpus, vectors[0], evalK*2))
+		rank := 0
+		for i, h := range hits {
+			if h.ID == prefix+"/"+c.want {
+				rank = i + 1
+				break
+			}
+		}
+		if rank == 0 {
+			t.Logf("miss (fused): %q did not surface %s in the top %d", c.query, c.want, evalK)
+			continue
+		}
+		found++
+		mrr += 1.0 / float64(rank)
+	}
 	recall := float64(found) / float64(len(evalCases))
 	mrr /= float64(len(evalCases))
-	t.Logf("recall@%d = %.2f (%d/%d), MRR = %.2f, lexical only", evalK, recall, found, len(evalCases), mrr)
-	if recall < evalRecallFloor {
-		t.Errorf("recall@%d fell to %.2f, under the %.2f baseline: a ranking change made the golden set worse", evalK, recall, evalRecallFloor)
+	t.Logf("recall@%d = %.2f (%d/%d), MRR = %.2f, lexical + vector (stand-in encoder)",
+		evalK, recall, found, len(evalCases), mrr)
+	if recall < evalFusedRecallFloor {
+		t.Errorf("fused recall@%d fell to %.2f, under the %.2f baseline", evalK, recall, evalFusedRecallFloor)
 	}
-	if mrr < evalMRRFloor {
-		t.Errorf("MRR fell to %.2f, under the %.2f baseline: the golden set still surfaces but lower than it did", mrr, evalMRRFloor)
+	if mrr < evalFusedMRRFloor {
+		t.Errorf("fused MRR fell to %.2f, under the %.2f baseline", mrr, evalFusedMRRFloor)
 	}
+}
+
+// embedded is one concept with the vector the stand-in encoder gave it.
+type embedded struct {
+	hit domain.SearchHit
+	vec []float32
+}
+
+// embedCorpus reads every concept under the prefix and embeds it, the
+// way a write would have.
+func embedCorpus(t *testing.T, ctx context.Context, svc *Service, prefix string, enc fakeEncoder) []embedded {
+	t.Helper()
+	listing, err := svc.SearchOrList(ctx, "", "verified_at", "",
+		store.Filter{Prefixes: []string{prefix}}, 1000)
+	if err != nil {
+		t.Fatalf("list corpus: %v", err)
+	}
+	out := make([]embedded, 0, len(listing.Hits))
+	for _, h := range listing.Hits {
+		k, err := svc.Get(ctx, h.ID)
+		if err != nil {
+			t.Fatalf("get %s: %v", h.ID, err)
+		}
+		vecs, err := enc.Embed(ctx, embed.TaskDocument,
+			[]string{k.ID + " " + k.Title + " " + k.Description + " " + k.Body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, embedded{hit: h, vec: vecs[0]})
+	}
+	return out
+}
+
+// nearest ranks the corpus by cosine against the query vector, as the
+// store's vector search does, and returns the top n.
+func nearest(corpus []embedded, query []float32, n int) []domain.SearchHit {
+	type scored struct {
+		hit domain.SearchHit
+		sim float64
+	}
+	ranked := make([]scored, 0, len(corpus))
+	for _, c := range corpus {
+		var dot float64
+		for i := range query {
+			dot += float64(query[i]) * float64(c.vec[i])
+		}
+		ranked = append(ranked, scored{hit: c.hit, sim: dot}) // both sides are unit vectors
+	}
+	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].sim > ranked[j].sim })
+	out := make([]domain.SearchHit, 0, n)
+	for _, r := range ranked {
+		if len(out) == n {
+			break
+		}
+		r.hit.Score = r.sim
+		out = append(out, r.hit)
+	}
+	return out
 }
