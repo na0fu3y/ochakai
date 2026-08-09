@@ -754,6 +754,14 @@ number is stale. `TestReleaseVersionsAgree` now does: it reads the newest
 dated heading in the changelog and requires the other two to say the same
 thing, so the prep PR is green only once all three have moved.
 
+The same PR is where a deprecation window closes. A renamed MCP tool or
+CLI command answers under its old name for exactly one release
+([0088](docs/design/0088-a-retired-name-answers-for-one-release.md)), so
+delete any entry in `mcpserver.RetiredToolNames` or `retiredCommands`
+whose `Release` is no longer the newest one. Nobody has to remember
+this either: `TestARetiredNameLastsOneRelease` reads the same changelog
+heading, so bumping it is what makes last release's names overdue.
+
 While the major version is 0, a release with any **BREAKING** entry takes
 the minor, not the patch.
 

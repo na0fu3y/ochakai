@@ -56,6 +56,13 @@ func main() {
 	}
 	cmd := os.Args[1]
 
+	// A name this release renamed still runs, for this release only
+	// (design doc 0088). This sits in front of the dispatch rather than
+	// behind it because the notice belongs on the way in; nothing here
+	// may shadow a name that exists, which is what
+	// TestARetiredNameIsNotAlsoLive checks rather than trust.
+	cmd = commandAfterRenames(cmd, os.Stderr)
+
 	if _, ok := clientCommands[cmd]; ok {
 		os.Exit(runClient(cmd, os.Args[2:]))
 	}
