@@ -76,7 +76,7 @@ type StatsDropped struct {
 // StatsEmbedding is what the vector half of search can see.
 //
 // A concept longer than the model's input window is embedded from its
-// front and the rest is dropped (design doc 0088). Nothing about the
+// front and the rest is dropped (design doc 0089). Nothing about the
 // result looks wrong: the concept still has a vector, still ranks, still
 // comes back. It is simply unfindable by anything said in its second
 // half — and the longer the document, the more of it is gone. That is

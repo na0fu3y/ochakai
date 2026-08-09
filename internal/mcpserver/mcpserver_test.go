@@ -19,7 +19,7 @@ func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	if _, err := newServer(&service.Service{}, "test").Connect(ctx, st, nil); err != nil {
+	if _, err := newServer(&service.Service{}, "test", RetiredToolNames).Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, ct, nil)
@@ -663,7 +663,7 @@ func serverSession(t *testing.T, client *mcp.Implementation) *mcp.ServerSession 
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := newServer(&service.Service{}, "test")
+	srv := newServer(&service.Service{}, "test", RetiredToolNames)
 	if _, err := srv.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}

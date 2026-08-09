@@ -2917,7 +2917,7 @@ components:
             State: how much of the base the vector half of search can
             actually see. A concept longer than the model's input window
             is embedded from its front and the rest is dropped (design
-            doc 0088), and nothing about the result looks wrong — the
+            doc 0089), and nothing about the result looks wrong — the
             concept has a vector, ranks, and comes back. It is simply
             unfindable by anything said in its second half.
 

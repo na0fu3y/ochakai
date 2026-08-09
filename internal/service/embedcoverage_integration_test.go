@@ -19,7 +19,7 @@ import (
 // front and the rest is dropped. Nothing about the result looks wrong:
 // the concept has a vector, ranks, comes back — it is simply unfindable
 // by anything said in its second half, and until this was counted no
-// surface said so (issue #532, design doc 0088).
+// surface said so (issue #532, design doc 0089).
 //
 // The test is the whole path, because the fact is assembled along it:
 // embeddingText decides the text does not fit, embedDocument reports how

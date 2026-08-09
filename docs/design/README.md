@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索) |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md) |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
@@ -46,6 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
 | REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
@@ -296,9 +297,9 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   `off` / Vertex AI のモデル resource name で、どれでもない綴りは起動エラー
   (0066 と同じ形)。幅はデプロイの設定ではなくモデルごとの定数で、知らない
   モデルは拒否する(**ベクトルは導出物である**)。§3 は
-  [0088](0088-a-half-embedded-concept-says-so.md) が改訂 — 列の幅の話に、
+  [0089](0089-a-half-embedded-concept-says-so.md) が改訂 — 列の幅の話に、
   入力窓の話が加わる。
-- [0088 半分しか埋め込まれていない concept は、そう言う](0088-a-half-embedded-concept-says-so.md)
+- [0089 半分しか埋め込まれていない concept は、そう言う](0089-a-half-embedded-concept-says-so.md)
   — **Accepted**。0080 §3 を改訂する。モデルの入力窓に収まらなかった
   concept は前半だけがベクトル検索に載り、**それが成功と区別できなかった** —
   ベクトルはあり、順位に乗り、後半で引けないだけである。切り捨てはベクトル
@@ -416,6 +417,22 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   メディアタイプが動くこと・`type` の URI がドメインの生存を契約に持ち込む
   こと・運ぶ情報が同じことの三つ。0082 が凍結の外と定めた応答専用スキーマ
   への追加であり、VOCAB は 34 → 46 に上がる。
+- [0088 名前が変わっても、一リリースは答える](0088-a-retired-name-answers-for-one-release.md)
+  — **Accepted**。**MCP と CLI の安定性契約の現行ドキュメント**。あるリリースが
+  MCP のツール名か CLI のコマンド名を改名したら、古い綴りはそのリリースの
+  あいだ答え続け、次のリリースで消える。それまでの規則は「猶予期間は無い」で、
+  正直ではあったが、**壊れる側に告知が届かない** —— エージェントの設定は
+  ツール名を名指しで持っていて、CHANGELOG を読むのは人だけである(C5・C4)。
+  要点は §3: **呼べるが、載らない**。`tools/list` も usage も `docs/cli.md` も
+  補完も古い名前を出さないので、まだ知らない側は永久に知らず、ツール説明文の
+  コンテキスト代([0067](0067-four-faces-and-what-they-decline.md) §1)を
+  二重に払わずに済む。実装がミドルウェアなのはそのため —— 登録した時点で
+  `tools/list` に出てしまう。各エントリは改名したリリース番号を持ち、
+  CHANGELOG の最新リリースより古くなるとテストが落ちるので、**窓を閉じるのは
+  release 準備 PR の仕事**になる(§4。猶予期間の失敗は破られることではなく
+  閉じられないことである)。遡らない(§5)。対象は名前だけで、フラグも
+  出力の形も保存形も含まない。[0082](0082-what-the-freeze-holds-still.md) が
+  REST 側で緩めたぶんとの釣り合いであり、面の数は動かない。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
   **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは

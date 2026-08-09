@@ -21,6 +21,35 @@ last entry.
 
 ### Added
 
+- **A renamed MCP tool or CLI command keeps answering for one release**
+  ([0088](docs/design/0088-a-retired-name-answers-for-one-release.md)).
+  The policy used to be that there was no deprecation window for
+  anything but REST. That was honest, and it sent the notice to the
+  wrong reader: an agent's configuration names tools literally, a CI
+  script names commands literally, and it is people — not agents — who
+  read a changelog. From this release, a rename leaves the old spelling
+  answering until the next release. An MCP call under the old name is
+  forwarded and comes back with a line naming the tool to use; a CLI
+  command says the same on stderr.
+
+  **Callable, but not listed.** `tools/list`, `ochakai help`,
+  `docs/cli.md` and the completion scripts stay quiet about the old
+  name, so an agent that never learned it never will — a tool
+  description is paid for out of an agent's context window, and one
+  about to stop existing is not worth the room. Nothing is retroactive:
+  names dropped before this release stay dropped. Names only — flags,
+  argument names, printed shapes and the stored form have no window,
+  and REST is frozen so nothing there is renamed at all.
+
+  The window closes on schedule because closing it is checked: each
+  retired name carries the release that retired it, and CI fails once a
+  later release is cut with the entry still in place, which puts the
+  deletion in the release PR (`TestARetiredNameLastsOneRelease`). No
+  surface count moves — `MCP` reads `tools/list` and `CLI` reads the
+  command table, which is what a user actually pays for. This is the
+  counterweight to what [0082](docs/design/0082-what-the-freeze-holds-still.md)
+  loosened on the REST side; `docs/compatibility.md` states both.
+
 - **`stats` says how much of the base vector search can actually see.**
   A concept longer than the embedding model's input window is embedded
   from its front and the rest is dropped — and the result is
@@ -34,7 +63,7 @@ last entry.
   as it does for dropped observations. Read the two together — three in
   four is the shape of the corpus and wants a wider model, three in four
   hundred is one long runbook and wants splitting. **Chunking is
-  declined for now**, and [0088](docs/design/0088-a-half-embedded-concept-says-so.md)
+  declined for now**, and [0089](docs/design/0089-a-half-embedded-concept-says-so.md)
   §4 states the condition for reopening it. The vector rows gain a
   column, filled by the next write or by `ochakai reembed`; existing
   rows read `false`, which is "not known to be truncated" rather than a

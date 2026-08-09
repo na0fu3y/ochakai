@@ -2158,7 +2158,7 @@ async function loadLoopStats() {
   // Same rule, same reason: a fault in what search can see, drawn only
   // where it exists. A permanent "0 truncated" is one more line to read
   // past, and this one is worth stopping at — nothing else on any
-  // surface says a concept is half in the index (design doc 0088).
+  // surface says a concept is half in the index (design doc 0089).
   const truncated = s.embedding?.enabled ? (s.embedding.truncated ?? 0) : 0;
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">

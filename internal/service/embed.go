@@ -298,7 +298,7 @@ func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, 
 // what it buys is the difference between a knowledge base that has this
 // problem and one that merely might: everything downstream of a
 // truncated vector looks exactly like everything downstream of a whole
-// one (design doc 0088).
+// one (design doc 0089).
 func embeddingText(k *domain.Knowledge, max int) (text string, full bool) {
 	parts := []string{k.ID, k.Title, k.Description, strings.Join(k.Tags, " ")}
 	if q, ok := k.Attrs["question"].(string); ok {

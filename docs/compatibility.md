@@ -4,8 +4,11 @@ The short version, so nobody has to infer it:
 
 > **REST is frozen at `/api/v1`.** Everything else is still unstable while the
 > major version is 0: MCP, the CLI and the stored shape may all change in a
-> minor release. There is no deprecation window for any of them. Only the
-> latest release is supported. Only a security defect can still break it —
+> minor release. **A name gets one release** — an MCP tool or a CLI command a
+> release renames keeps answering under its old spelling until the next
+> release, and nothing else gets a window
+> ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only the
+> latest release is supported. Only a security defect can still break REST —
 > though a *new field in a response* was never a break, and is allowed
 > ([0082](design/0082-what-the-freeze-holds-still.md)).
 
@@ -66,8 +69,20 @@ moves:
   unrecognized one as the status alone would be treated.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now, and the five
-  tools that said `knowledge` say `concept`.
-- **The CLI** — commands, flags, and the shape of what they print.
+  tools that said `knowledge` say `concept`. **A tool a release renames
+  goes on answering under its old name for that release**
+  ([0088](design/0088-a-retired-name-answers-for-one-release.md)): the
+  call is forwarded, and the answer opens with a line naming the tool to
+  call instead. The old name is never in `tools/list`, so an agent that
+  has not already learned it never does — a tool description is paid for
+  out of an agent's context window, and one that is about to stop
+  existing is not worth the room. Arguments have no window; only names
+  do.
+- **The CLI** — commands, flags, and the shape of what they print. A
+  renamed *command* gets the same one release, and says so on stderr. It
+  is not in `ochakai help`, `docs/cli.md` or the completion scripts,
+  for the reason the MCP one is not listed either. Flags and printed
+  shapes have no window.
 - **The stored data** — migrations run automatically at server start, and
   they are one-way. There is no downgrade path.
 
@@ -81,6 +96,13 @@ anything that stores bundles in git.
 
 Not a promise that nothing breaks. A promise that you are told what did:
 
+- **A rename reaches you at the call, not only in the changelog**, which
+  is the one place a script or an agent configuration was never going to
+  read. And the window closes on time because closing it is checked:
+  each retired name carries the release that retired it, and CI fails as
+  soon as a later release is cut with the entry still in place. A
+  deprecation window's failure mode is not being broken, it is never
+  ending.
 - **Every breaking change to MCP, the CLI or the stored shape is marked
   `BREAKING` in [the changelog](../CHANGELOG.md)**, with what an operator has
   to do about it — which migration runs, whether `updated_at` moves, whether

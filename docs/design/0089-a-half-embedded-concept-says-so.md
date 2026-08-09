@@ -1,4 +1,4 @@
-# ochakai 設計ドキュメント 0088: 半分しか埋め込まれていない concept は、そう言う
+# ochakai 設計ドキュメント 0089: 半分しか埋め込まれていない concept は、そう言う
 
 Status: Accepted(2026-08-09)。[0080](0080-search-and-how-a-deployment-embeds.md)
 を改訂する — §3「幅はモデルのものであって、デプロイのものではない」が

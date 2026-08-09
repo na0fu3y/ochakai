@@ -730,7 +730,7 @@ func cmdStats(ctx context.Context, args []string) error {
 	// Truncation is invisible everywhere else: a concept over the model's
 	// input window is embedded from its front, keeps its vector, keeps
 	// ranking, and is simply unfindable by its second half (design doc
-	// 0088). The pair is printed together because one without the other
+	// 0089). The pair is printed together because one without the other
 	// cannot be read — three truncated out of four is a corpus of long
 	// documents, three out of four hundred is one runbook.
 	if !st.Embedding.Enabled {
