@@ -29,6 +29,14 @@ type Stats struct {
 	// WindowDays is how far back the flow numbers reach.
 	WindowDays int `json:"window_days"`
 
+	// Sandbox marks the disposable public deployment (design doc 0087):
+	// anyone may write, nobody is identified, and the whole base is
+	// restored on a schedule. It travels with the loop's own numbers
+	// because that is what a client reads before deciding whether to
+	// trust them — or whether to curate anything here at all. Absent
+	// everywhere else, which is what a client that predates it reads.
+	Sandbox bool `json:"sandbox,omitempty"`
+
 	Concepts StatsConcepts `json:"concepts"`
 	// Queues is what design doc 0049's GET /api/v1/queues returns, under
 	// the key it returns it under: how much each review queue is

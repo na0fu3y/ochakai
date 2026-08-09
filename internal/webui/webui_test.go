@@ -126,7 +126,11 @@ func TestFeedNamesDoNotCollideOnStale(t *testing.T) {
 // the queue stay full, so the page has to say it.
 func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
 	page := string(Index)
-	if !strings.Contains(page, "Verifying does <em>not</em> clear this one") {
+	// The page is Japanese (C8), so the sentence is checked in the
+	// language a reader meets it in — what is pinned is that the banner
+	// still says verifying does not empty this queue, not which words
+	// say it.
+	if !strings.Contains(page, "<strong>検証してもこのキューは片付きません</strong>") {
 		t.Error("the stale feed banner no longer explains that verifying does not empty it")
 	}
 }

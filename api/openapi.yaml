@@ -2791,6 +2791,15 @@ components:
       properties:
         at: { type: string, format: date-time, description: When the server computed this. }
         window_days: { type: integer, description: How far back the flow numbers reach. }
+        sandbox:
+          type: boolean
+          description: >
+            Present and true on a disposable public deployment (design
+            doc 0087): anyone may write, nobody is identified, and the
+            whole base is restored on a schedule. It travels with the
+            loop's own numbers because that is what a client reads
+            before deciding whether to trust them — or whether to
+            curate anything here at all. Absent everywhere else.
         concepts:
           type: object
           description: What the base is made of. Deleted concepts are in none of it.

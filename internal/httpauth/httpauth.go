@@ -69,7 +69,7 @@ func Middleware(cfg *config.Config, next http.Handler) http.Handler {
 // later call to whoever opened the session (see mcpserver).
 // The returned status accompanies a non-nil error.
 func ActorFromHeader(cfg *config.Config, h http.Header) (domain.Actor, int, error) {
-	if cfg.PublicReadOnly {
+	if cfg.Anonymous() {
 		// Anyone may reach this deployment, so nothing verified the token
 		// and believing it would let a stranger name any person (design
 		// doc 0042). Reading it and ignoring the result would be the same

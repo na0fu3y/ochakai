@@ -21,6 +21,31 @@ last entry.
 
 ### Added
 
+- **`OCHAKAI_MODE=sandbox`: a public deployment anyone can write to, and
+  that says so** ([0087](docs/design/0087-a-sandbox-says-it-is-one.md)).
+  The loop is what this product is about — an agent drafts, a human
+  rules, an outcome comes back — and it was the one thing nobody could
+  try: the public demo is `public`, which implies read-only, so seeing a
+  single write-back meant standing up Postgres first. A sandbox is the
+  fourth cell of the posture square deployed on purpose: anonymous like
+  `public`, writable like the default, and restored on a schedule by
+  whoever runs it. It is not `dev` renamed — `dev` says in its own
+  documentation that it is not for a deployment, an operator reading a
+  config cannot tell an accident from an intent, and the Terraform module
+  grants `allUsers` only to a posture that asked for it (`sandbox = true`
+  now does, beside `public_read_only`).
+
+  **A sandbox that does not announce itself steals the work somebody
+  curated into it**, so the product says it rather than a README hoping
+  to be read: `GET /api/v1/stats` answers `sandbox: true` — a
+  response-only addition, outside the freeze
+  ([0082](docs/design/0082-what-the-freeze-holds-still.md)) — and the
+  bundled web UI carries one banner on every page. Misses are not
+  recorded, for the reason a public deployment does not record them. No
+  new environment variable: one more word for the one that already says
+  what a deployment is. The restore job is the operator's, and
+  [the operating guide](docs/guides/operating.md) has it.
+
 - **A deployment can authenticate with its own OIDC issuer**
   ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)).
   Outside Google Cloud there were two postures and neither is a
@@ -201,6 +226,42 @@ last entry.
   `purge` and `DELETE` mean what they already said.
 
 ### Changed
+
+- **The bundled web UI is in Japanese.** The manual has been Japanese
+  since the C8 translation, and the interface it describes was not: the
+  reader the product is aimed at was reading a Japanese page about an
+  English screen. Every user-visible string is translated — labels,
+  banners, empty states, the feed explanations, the placeholders and the
+  titles — and the page declares `lang="ja"`. Nothing else moved: no
+  route, no id, no `data-` marker, no API call, and the tests that pin
+  the write affordances read markers rather than words, so they still
+  say what they said. The three Japanese pages that quoted a button by
+  its English label now quote the Japanese one.
+
+  Two things are deliberately left: comments in the source stay English
+  (CLAUDE.md's rule for code), and **the screenshot in the README and
+  [the loop guide](docs/loop.md) still shows the English UI** — it is a
+  binary this change cannot regenerate, and a caption that lies is worse
+  than one that is late.
+
+- **`DOC-LINES` moves on a 500-line grid instead of a 100-line one.** The
+  ceiling on how much manual a reader gets through was widened once
+  before, from 10 lines to 100, because a line every documentation PR
+  rewrites is a line nobody reads and a collision every parallel PR has.
+  The same thing happened again at the new width: between 2026-08-03 and
+  08-09 it went 5,300 → 5,400 → 5,500 → 5,600 → 5,700 → 5,800 → 5,700 →
+  5,800 → 5,900 → 6,000. **Adding one feature and writing down how to use
+  it crosses 100 lines by itself**, so the paragraph each crossing earns
+  stopped being worth reading — which is the failure the mechanism names
+  for itself ("an alarm that rings every time tells you nothing"). The
+  record corpus already made this call at 500
+  ([CONTRIBUTING.md](CONTRIBUTING.md)), and two ceilings on two amounts
+  have no reason to ring at different widths. The cost is accepted and
+  stated: up to 500 lines of headroom can now go unreturned. Retiring the
+  ceiling was considered and declined — of the ten crossings only one or
+  two were the escape hatch it exists to catch (folding a surface and
+  writing prose about the fold), and a wider grid is what leaves only
+  those ringing.
 
 - **A confirmation is worth one rank position in the hybrid ranking,
   where it used to be worth 7.6.** The addend a verified concept got in

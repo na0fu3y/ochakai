@@ -18,7 +18,7 @@
      answer (design doc 0051) — and OKF export.
      (/api/v1/context is an agent surface — see api/openapi.yaml.)
      A starting point for building your own UI. -->
-<html lang="en">
+<html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -462,30 +462,46 @@
     border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
     font-size: .92rem; color: var(--muted);
   }
+  /* A sandbox is writable, so nothing is hidden — what it needs is to
+     say what it is (design doc 0087). It is the one banner that stays on
+     every page, because the thing it warns about (your writing is going
+     to be erased) applies to every page. */
+  .sandbox-note { display: none; }
+  body.sandbox .sandbox-note {
+    display: block; background: var(--accent-weak); border: 1px solid var(--border);
+    border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+    font-size: .92rem;
+  }
 </style>
 </head>
 <body>
 <header class="topbar">
-  <button id="side-toggle" title="Show / hide the knowledge tree" aria-label="Toggle sidebar">☰</button>
+  <button id="side-toggle" title="Show / hide the knowledge tree" aria-label="サイドバーの開閉">☰</button>
   <a class="brand" href="#/">🍵 ochakai</a>
   <nav class="topnav" id="topnav">
-    <a href="#/search" data-route="search">Search</a>
-    <a href="#/review" data-route="review">Review<span class="waiting" id="nav-waiting" hidden></span></a>
+    <a href="#/search" data-route="search">検索</a>
+    <a href="#/review" data-route="review">レビュー<span class="waiting" id="nav-waiting" hidden></span></a>
   </nav>
   <span class="spacer"></span>
 </header>
 <div class="shell" id="shell">
   <aside class="sidebar">
     <details id="side-details">
-      <summary>Knowledge tree</summary>
+      <summary>ナレッジのツリー</summary>
       <div class="side-head">
-        <span class="lbl">Knowledge</span>
-        <button class="btn small" id="tree-refresh" title="Reload the tree">↻</button>
-        <a class="btn small write-only" href="#/new" title="Create a concept">＋</a>
+        <span class="lbl">ナレッジ</span>
+        <button class="btn small" id="tree-refresh" title="ツリーを読み直す">↻</button>
+        <a class="btn small write-only" href="#/new" title="concept を作る">＋</a>
       </div>
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
   </aside>
+  <div class="sandbox-note" role="status">
+    <strong>ここはサンドボックスです。</strong>誰でも書き込めて、誰も識別されず、
+    ナレッジベース全体が定期的に復元されます — つまり、ここに書いたものはすべて
+    消えます。試すための場所です: concept を下書きし、検証し、結果を報告して
+    みてください。<strong>失って困るものは置かないでください。</strong>
+  </div>
   <main id="view"></main>
 </div>
 <div id="toast"></div>
@@ -616,7 +632,7 @@ const dirHash = p => '#/dir/' + idPath(String(p).replace(/\/+$/, ''));
 // while an entry's breadcrumb stops at its folder (the entry's own name
 // is right below it, as the heading).
 function crumbTrail(dirs, leaf) {
-  let prefix = '', out = '<a href="#/" title="Root index">/</a>';
+  let prefix = '', out = '<a href="#/" title="ルートの索引">/</a>';
   for (const d of dirs) {
     prefix += d + '/';
     out += `<a href="${dirHash(prefix)}">${esc(d)}/</a>`;
@@ -761,6 +777,18 @@ function setReadOnly(on) {
   document.body.classList.toggle('read-only', on);
 }
 
+// A sandbox is learned from /api/v1/stats rather than from a header
+// (design doc 0087 §4): the wire is frozen at /api/v1 and a new header
+// is not a response-only addition, while a field on a response schema
+// is. It is asked for once, at startup, because the answer is a property
+// of the deployment rather than of a request.
+async function markSandbox() {
+  try {
+    const s = await api('/api/v1/stats');
+    document.body.classList.toggle('sandbox', s.sandbox === true);
+  } catch (e) { /* a banner is not worth failing the page over */ }
+}
+
 // The archive is a representation of the bundle root, asked for with an
 // Accept header (design doc 0046 §3.5) — and a plain <a href> cannot
 // send one, so the download goes through fetch and a blob URL.
@@ -847,7 +875,7 @@ let unsaved = null; // () => boolean
 window.addEventListener('beforeunload', e => { if (unsaved && unsaved()) e.preventDefault(); });
 
 function route() {
-  if (unsaved && unsaved() && !confirm('Discard unsaved changes?')) {
+  if (unsaved && unsaved() && !confirm('保存していない変更を捨てますか?')) {
     // Put the URL back; replaceState does not re-fire hashchange.
     history.replaceState(null, '', route._current || '#/');
     return;
@@ -957,10 +985,10 @@ function viewExplore() {
     // point — and being able to read them is how somebody checks what was
     // already declined.
     + `
-    <label class="chip" title="Only concepts somebody has confirmed — machine-confirmed or human-reviewed (OKF SPEC §5.3)"><input type="checkbox" id="f-verified"
-      aria-label="confirmed only" ${explore.verified ? 'checked' : ''}>✓ confirmed</label>
-    <label class="chip" title="Only concepts a human reviewed and turned down — hidden everywhere else"><input type="checkbox" id="f-rejected"
-      aria-label="rejected only" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
+    <label class="chip" title="誰かが確認した concept だけ — machine-confirmed か human-reviewed(OKF SPEC §5.3)"><input type="checkbox" id="f-verified"
+      aria-label="確認済みのみ" ${explore.verified ? 'checked' : ''}>✓ confirmed</label>
+    <label class="chip" title="人がレビューして却下した concept だけ — 他の場所では隠れている"><input type="checkbox" id="f-rejected"
+      aria-label="却下されたもののみ" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
   // Filters collapse into a disclosure on narrow screens; keep it open on
   // wide ones (the summary is hidden there, so it could never be reopened).
   const wide = matchMedia('(min-width: 761px)').matches;
@@ -969,44 +997,43 @@ function viewExplore() {
   <section>
     <div class="searchbox">
       ${explore.ageFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Verification-age feed — oldest verified first,
-           the canary list for re-checking golden queries. Uncheck <strong>verification age</strong> to search.</div>`
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">検証の古さのフィード — 検証が古い順で、検証済みクエリを再確認するためのカナリアです。
+           検索に戻るには <strong>検証の古さ</strong> のチェックを外してください。</div>`
         : explore.failedFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Re-verification feed — concepts whose failure reports
-           (report_outcome failed) are still unanswered, worst first. Open one, re-read it, and verify it to take it
-           out of the feed. Uncheck <strong>reported wrong</strong> to search.</div>`
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">再検証のフィード — 失敗の報告(report_outcome failed)にまだ応えていない concept を、
+           ひどい順に。開いて読み直し、検証するとこのフィードから外れます。検索に戻るには
+           <strong>間違いと報告された</strong> のチェックを外してください。</div>`
         : explore.source
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Concepts citing
-           <code>${esc(explore.source)}</code> — everything that derives from this material.
-           <a href="#/search">Back to search</a>.</div>`
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0"><code>${esc(explore.source)}</code> を引いている concept — この資料から派生したものすべてです。
+           <a href="#/search">検索に戻る</a>.</div>`
         : explore.expiredFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">Stale feed — concepts past the <code>stale_after</code>
-           their author declared, most overdue first. Verifying does <em>not</em> clear this one: the date is the writer's
-           claim, so re-check the concept and then edit it to declare a new expiry (or remove it).
-           Uncheck <strong>stale</strong> to search.</div>`
-        : `<input type="text" id="q" placeholder="Search metrics, golden queries, insights, terms, tables…"
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">期限切れのフィード — 著者が宣言した <code>stale_after</code> を過ぎた concept を、
+           超過が大きい順に。<strong>検証してもこのキューは片付きません</strong>: その日付は書き手の宣言なので、
+           concept を確かめ直したうえで編集し、新しい期限を宣言する(あるいは外す)必要があります。
+           検索に戻るには <strong>期限切れ</strong> のチェックを外してください。</div>`
+        : `<input type="text" id="q" placeholder="メトリクス・検証済みクエリ・insight・用語・テーブルを検索…"
                   value="${esc(explore.q)}" autocomplete="off">`}
-      <a class="btn write-only" href="#/new" title="Create a concept">＋ New concept</a>
+      <a class="btn write-only" href="#/new" title="concept を作る">＋ concept を作る</a>
     </div>
     <details id="filter-details" class="filterbar" ${wide ? 'open' : ''}>
-      <summary>Filters</summary>
+      <summary>絞り込み</summary>
       <div class="fb-row">
         ${typeChips}${extraTypes}
-        <input type="text" id="f-type-extra" placeholder="other type…" aria-label="other type" style="width:6.5rem">
+        <input type="text" id="f-type-extra" placeholder="その他の型…" aria-label="その他の型" style="width:6.5rem">
         <span class="fb-sep"></span>
         ${statusChips}
         <span class="fb-sep"></span>
-        <input type="text" id="f-tag" placeholder="tag" aria-label="tag" value="${esc(explore.tag)}" style="width:6rem">
-        <input type="text" id="f-prefix" placeholder="path" aria-label="path scope"
-               title="Only concepts under this path, e.g. teams/growth — the tree's “Search here” fills this in"
+        <input type="text" id="f-tag" placeholder="タグ" aria-label="タグ" value="${esc(explore.tag)}" style="width:6rem">
+        <input type="text" id="f-prefix" placeholder="パス" aria-label="パスで絞る"
+               title="このパスの下にある concept だけ(例: teams/growth)— ツリーの「ここを検索」がここを埋める"
                value="${esc(explore.prefix)}" style="width:8rem">
         <span class="fb-sep"></span>
-        <label class="chip" title="Oldest-verified first — the canary feed for re-checking golden queries"><input
-          type="checkbox" id="f-age" aria-label="verification age feed" ${explore.ageFeed ? 'checked' : ''}>verification age</label>
-        <label class="chip" title="Concepts reported wrong (report_outcome failed) and not verified since — the re-verification feed"><input
-          type="checkbox" id="f-failed" aria-label="re-verification feed" ${explore.failedFeed ? 'checked' : ''}>reported wrong</label>
-        <label class="chip" title="Past the stale_after their author declared — cleared by editing the concept, not by verifying"><input
-          type="checkbox" id="f-expired" aria-label="stale feed" ${explore.expiredFeed ? 'checked' : ''}>stale</label>
+        <label class="chip" title="検証が古い順 — 検証済みクエリを再確認するためのカナリア"><input
+          type="checkbox" id="f-age" aria-label="検証の古さのフィード" ${explore.ageFeed ? 'checked' : ''}>verification age</label>
+        <label class="chip" title="間違いと報告され(report_outcome failed)、その後検証されていない concept — 再検証のフィード"><input
+          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>reported wrong</label>
+        <label class="chip" title="著者が宣言した stale_after を過ぎたもの — 検証ではなく、concept を編集すると消える"><input
+          type="checkbox" id="f-expired" aria-label="期限切れのフィード" ${explore.expiredFeed ? 'checked' : ''}>stale</label>
       </div>
     </details>
     <div id="results"><div class="empty">…</div></div>
@@ -1065,7 +1092,7 @@ async function runSearch(append = false) {
   const p = new URLSearchParams();
   const isFeed = explore.ageFeed || explore.failedFeed || explore.expiredFeed || !!explore.source;
   // The query as the server and the messages below see it: a box holding
-  // only spaces is no query, and saying `No knowledge found for “  ”`
+  // only spaces is no query, and saying `ナレッジが見つかりません for “  ”`
   // describes something the user did not ask.
   const q = explore.q.trim();
   // source is a filter, not a mode: it rides along with whatever the
@@ -1123,7 +1150,7 @@ async function runSearch(append = false) {
     const hits = explore.loaded = explore.loaded.concat(page.hits || []);
     explore.cursor = page.cursor || '';
     if (!hits.length) {
-      out.innerHTML = scopeNote + `<div class="empty">No knowledge found${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
+      out.innerHTML = scopeNote + `<div class="empty">ナレッジが見つかりません${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
       wireScope();
       return;
     }
@@ -1136,12 +1163,12 @@ async function runSearch(append = false) {
     }
     let html = strong.map(hitCard).join('');
     if (!strong.length) {
-      html = `<div class="empty">No strong matches for “${esc(q)}”.</div>`;
+      html = `<div class="empty">「${esc(q)}」に強く一致するものはありません。</div>`;
     }
     // Nothing typed: this is the most-searched listing, not everything
     // there is. The feeds say what they are; this one said nothing.
     if (!isFeed && !q) {
-      html = `<div class="truncation-note">Nothing searched yet — the most-searched concepts first.</div>` + html;
+      html = `<div class="truncation-note">まだ検索がありません — よく検索される concept から並べています。</div>` + html;
     }
     if (weak.length) {
       html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
@@ -1153,7 +1180,7 @@ async function runSearch(append = false) {
     } else if (!isFeed && hits.length >= limit) {
       // A search does not page: 50 is the whole contract, and the way on
       // is a narrower question rather than a next page (0050 §2.2).
-      html += `<div class="truncation-note">Showing the first ${limit} ${q ? 'matches' : 'concepts'}
+      html += `<div class="truncation-note">先頭 ${limit} ${q ? '件の一致' : '件の concept'} を表示
            (server cap) — narrow with filters or a more specific query.</div>`;
     }
     out.innerHTML = scopeNote + html;
@@ -1221,7 +1248,7 @@ async function refreshTree() {
   const tree = $('#tree');
   try {
     const res = await api('/api/v1/bundle/index.md');
-    tree.innerHTML = levelHTML(res, '') || '<div class="empty">No knowledge yet.</div>';
+    tree.innerHTML = levelHTML(res, '') || '<div class="empty">まだナレッジがありません。</div>';
     wireNodes(tree);
     // A deep link may have rendered before the tree existed (boot) or
     // before this refresh; re-reveal the current entry or directory in
@@ -1244,7 +1271,7 @@ function nodeHTML(prefix, label, count) {
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
     <summary>${label}<span class="count">${count}</span><a class="node-new write-only"
       href="#/new/${prefix.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/"
-      title="New concept in ${esc(prefix)}">＋</a></summary>
+      title="${esc(prefix)} に concept を作る">＋</a></summary>
     <div class="children"><div class="empty">…</div></div>
   </details>`;
 }
@@ -1261,7 +1288,7 @@ function nodeHTML(prefix, label, count) {
 function levelHTML(res, prefix) {
   const dirs = (res.dirs || []).map(dir => nodeHTML(prefix + dir.name + '/',
     `<span class="type-ico">📁</span><a class="dir-name mono" href="${dirHash(prefix + dir.name)}"
-       title="Open the index of ${esc(prefix + dir.name)}/">${esc(dir.name)}/</a>`, dir.count)).join('');
+       title="${esc(prefix + dir.name)}/ の索引を開く">${esc(dir.name)}/</a>`, dir.count)).join('');
   const concepts = (res.concepts || []).map(e => `
     <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="${READ_ONLY ? 'false' : 'true'}"
        title="${esc(e.id)} · ${esc(e.status)}">
@@ -1298,9 +1325,9 @@ function loadNode(d) {
       const res = await api(`/api/v1/bundle/${idPath(prefix)}/index.md`);
       const body = levelHTML(res, prefix);
       const note = res.truncated
-        ? `<div class="truncation-note">Showing the first 1000 concepts at this level — a directory this wide is
+        ? `<div class="truncation-note">この階層の先頭 1000 concept を表示 — これだけ広いディレクトリは
            better split into subdirectories.</div>` : '';
-      box.innerHTML = (body + note) || '<div class="empty">Empty.</div>';
+      box.innerHTML = (body + note) || '<div class="empty">空です。</div>';
       wireNodes(box);
       markTreeSelection();
     } catch (e) {
@@ -1440,7 +1467,7 @@ async function moveEntry(from, to) {
     dragId = null;
     const to = prefix + from.split('/').pop();
     if (to === from) return; // dropped on its own directory
-    if (confirm(`Move ${from} → ${to}?\nInbound references are rewritten; history follows the concept.`)) {
+    if (confirm(`Move ${from} → ${to}?\nこの concept を指している参照は書き換えられ、履歴も付いていきます。`)) {
       moveEntry(from, to);
     }
   });
@@ -1493,7 +1520,7 @@ async function loadDirIndex(container, prefix, emptyText) {
     const concepts = (res.concepts || []).map(hitCard).join('');
     const files = (res.files || []).map(fileCard).join('');
     const note = res.truncated
-      ? `<div class="truncation-note">Showing the first 1000 concepts at this level — a directory this wide is
+      ? `<div class="truncation-note">この階層の先頭 1000 concept を表示 — これだけ広いディレクトリは
          better split into subdirectories.</div>` : '';
     container.innerHTML = (dirs + concepts + files + note) || `<div class="empty">${emptyText}</div>`;
   } catch (e) {
@@ -1514,8 +1541,8 @@ function viewDir(rawPrefix) {
       <div class="section-title" style="margin:0"><span class="type-ico">📁</span> <span class="mono">/${esc(prefix)}</span></div>
       <span class="grow"></span>
       ${clean ? `<a class="btn small" href="#/search/in/${idPath(clean)}"
-        title="Search only what lives under ${esc(prefix)}">🔍 Search here</a>` : ''}
-      <a class="btn small write-only" href="${newHref}" title="Create a concept in ${esc(prefix) || 'the root'}">＋ New concept here</a>
+        title="${esc(prefix)} の下だけを検索">🔍 ここを検索</a>` : ''}
+      <a class="btn small write-only" href="${newHref}" title="Create a concept in ${esc(prefix) || 'the root'}">＋ ここに concept を作る</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;
   loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the concepts in them.');
@@ -1524,18 +1551,19 @@ function viewDir(rawPrefix) {
 function viewHome() {
   view.innerHTML = `
     <div class="section-title" style="font-size:1.5rem">🍵 ochakai</div>
-    <p style="color:var(--muted);max-width:42rem">Knowledge is a folder tree — a concept's id is its path
-    (<code>queries/sales/monthly-revenue</code>), so the tree in the sidebar is the way in: place together
-    what should be read together, and browse it like documentation. Search when you don't know where to look.</p>
+    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです — concept の id が
+    そのパスなので(<code>queries/sales/monthly-revenue</code>)、サイドバーのツリーが入口になります。
+    一緒に読まれるべきものは一緒に置き、ドキュメントのように辿ってください。どこを見ればよいか
+    分からないときが、検索の出番です。</p>
     <div class="searchbox" style="max-width:36rem">
-      <input type="text" id="home-q" placeholder="Search metrics, golden queries, insights, terms, tables…" autocomplete="off">
-      <a class="btn" id="home-go" href="#/search">Search</a>
+      <input type="text" id="home-q" placeholder="メトリクス・検証済みクエリ・insight・用語・テーブルを検索…" autocomplete="off">
+      <a class="btn" id="home-go" href="#/search">検索</a>
     </div>
     <p style="color:var(--muted);font-size:.9rem">
-      <a href="#/review">Review queue</a> — verify or reject what agents drafted ·
-      <a href="#/search/reported-wrong">Reported wrong</a> — verified knowledge that came back wrong ·
+      <a href="#/review">レビューキュー</a> — verify or reject what agents drafted ·
+      <a href="#/search/reported-wrong">間違いと報告された</a> — verified knowledge that came back wrong ·
       <a class="write-only" href="#/new">＋ New concept</a> ·
-      <a href="#" id="home-export" title="Download the knowledge base as an OKF bundle (tar.gz)">Export OKF</a>
+      <a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出す">OKF を書き出す</a>
     </p>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
   $('#home-q').addEventListener('keydown', e => {
@@ -1544,7 +1572,7 @@ function viewHome() {
   $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
   $('#home-export').addEventListener('click', downloadBundle);
   if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
-  loadDirIndex($('#home-index'), '', 'No knowledge yet — create the first concept.');
+  loadDirIndex($('#home-index'), '', 'まだナレッジがありません — 最初の concept を作りましょう。');
 }
 
 /* ============================== detail ============================== */
@@ -1581,7 +1609,7 @@ async function viewDetail(id) {
     observed = v.observed || {};
     document_ = v.document || '';
   } catch (e) {
-    view.innerHTML = `<div class="error-banner">Could not load ${esc(id)}: ${esc(e.message)}</div>`;
+    view.innerHTML = `<div class="error-banner">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
     return;
   }
   // The body, cut from the document at the closing delimiter. Cutting on
@@ -1624,28 +1652,28 @@ async function viewDetail(id) {
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(displayTitle(entry))}</h1>
-      <span class="badge status-pick ${esc(entry.status)}" title="Change status">
+      <span class="badge status-pick ${esc(entry.status)}" title="ステータスを変える">
         <span aria-hidden="true">${esc(entry.status)}</span>
-        <select class="write-only" id="act-status" aria-label="status">
+        <select class="write-only" id="act-status" aria-label="ステータス">
           ${STATUSES.map(s => `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </span>
-      ${isVerified(entry) ? `<span class="badge verified-mark" title="The trust tier OKF derives from the verification ledger (SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
-      ${entry.rejected ? '<span class="badge rejected-mark" title="Reviewed and not accepted">rejected</span>' : ''}
+      ${isVerified(entry) ? `<span class="badge verified-mark" title="検証台帳から OKF が導く trust の段(SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
+      ${entry.rejected ? '<span class="badge rejected-mark" title="レビューされ、受け入れられなかった">rejected</span>' : ''}
       ${tags}
       <span class="actions write-only">
-        <a class="btn small" href="#/edit/${idPath(entry.id)}">Edit</a>
+        <a class="btn small" href="#/edit/${idPath(entry.id)}">編集</a>
         <details class="menu" id="more-menu">
-          <summary class="btn small" title="More actions" aria-label="More actions">⋯</summary>
+          <summary class="btn small" title="その他の操作" aria-label="その他の操作">⋯</summary>
           <div class="menu-body">
             <button id="act-verify" title="${isVerified(entry)
-              ? 'Checked again and still right — appends a verification, which is what clears the review feeds'
-              : 'Confirm this concept — recorded as a verification by you'}">${isVerified(entry) ? 'Re-verify' : 'Verify'}</button>
+              ? 'もう一度確かめて、やはり正しい — 検証を追記する。レビューのフィードが片付くのはこれによる'
+              : 'この concept を確認する — あなたによる検証として記録されます'}">${isVerified(entry) ? '再検証' : '検証'}</button>
             ${entry.rejected
-              ? `<button id="act-withdraw" title="Withdraw the ruling and return the concept to the ordinary pool">Withdraw rejection</button>`
-              : `<button class="danger" id="act-reject" title="Reviewed and not accepted — hidden from search, with the reason kept for the next agent">Reject…</button>`}
-            <button id="act-move" title="Move to another path (references are rewritten)">Move…</button>
-            <button class="danger" id="act-delete">Delete…</button>
+              ? `<button id="act-withdraw" title="裁定を取り下げ、concept を通常の扱いに戻す">却下を取り下げる</button>`
+              : `<button class="danger" id="act-reject" title="レビューして受け入れなかった — 検索から隠れ、理由は次のエージェントのために残る">却下…</button>`}
+            <button id="act-move" title="別のパスへ移す(参照は書き換えられる)">移動…</button>
+            <button class="danger" id="act-delete">削除…</button>
           </div>
         </details>
       </span>
@@ -1656,25 +1684,25 @@ async function viewDetail(id) {
     <div id="move-panel" style="display:none;margin-top:.7rem">
       <div class="toolbar" style="margin-bottom:0">
         <input type="text" id="move-to" class="mono" list="move-dirs" value="${esc(entry.id)}"
-               style="max-width:28rem" aria-label="new path">
+               style="max-width:28rem" aria-label="新しいパス">
         <datalist id="move-dirs"></datalist>
-        <button class="btn small primary" id="move-go">Move</button>
-        <button class="btn small" id="move-cancel">Cancel</button>
+        <button class="btn small primary" id="move-go">移動</button>
+        <button class="btn small" id="move-cancel">キャンセル</button>
       </div>
-      <p class="provenance" style="margin-top:.3rem">The concept's new path. Inbound references are rewritten;
-      revisions, usage, and files follow the concept.</p>
+      <p class="provenance" style="margin-top:.3rem">concept の新しいパスです。ここを指している参照は
+      書き換えられ、リビジョン・利用回数・ファイルも concept に付いていきます。</p>
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     ${staleNote}
     ${entry.resource ? `<div class="provenance">resource: ${resourceHTML(entry.resource)}</div>` : ''}
     <div class="tabs" id="tabs">
-      <button data-tab="overview" class="active">Overview</button>
-      <button data-tab="document">Document</button>
+      <button data-tab="overview" class="active">概要</button>
+      <button data-tab="document">ドキュメント</button>
       <button data-tab="links">Links${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
       <button data-tab="files">Files${atts.length ? ' (' + atts.length + ')' : ''}</button>
-      <button data-tab="linked">Linked from</button>
-      <button data-tab="usage">Usage</button>
-      <button data-tab="history">History</button>
+      <button data-tab="linked">ここを指しているもの</button>
+      <button data-tab="usage">利用</button>
+      <button data-tab="history">履歴</button>
     </div>
     <div id="tab-body"></div>`;
 
@@ -1732,21 +1760,21 @@ async function viewDetail(id) {
     overview: () => `
       ${entry.description ? descHTML(entry.description, 'lead') : ''}
       ${docBody ? `<div class="md">${md(docBody, resolveFile, resolveEntry)}</div>` : ''}
-      ${!entry.description && !docBody ? '<div class="empty">No description or body.</div>' : ''}`,
+      ${!entry.description && !docBody ? '<div class="empty">description も本文もありません。</div>' : ''}`,
     // The document, whole and unrendered. It replaced tabs that each
     // redrew a slice of the frontmatter in some other shape — which is
     // the duplication document-first exists to remove, and the reason
     // design doc 0044 puts the format itself in front of the reader.
     document: () => `
-      <p class="provenance" style="margin:0 0 .8rem">The concept as ochakai stores it —
-      OKF frontmatter and markdown. This is the text Edit opens, and the text an export writes.</p>
+      <p class="provenance" style="margin:0 0 .8rem">ochakai が保存しているままの concept —
+      OKF の frontmatter と markdown です。「編集」が開くのもこのテキストで、export が書き出すのもこれです。</p>
       <pre class="mono">${esc(document_)}</pre>`,
     // Read-only: links come from the body's markdown links (design doc
     // 0024), so the body editor is where they are changed.
     links: () => {
       const links = entry.links || [];
-      if (!links.length) return '<div class="empty">The body links to no other concepts yet.</div>';
-      return `<p class="provenance" style="margin:0 0 .8rem">Taken from the markdown links in the body — edit the body to change them.</p>`
+      if (!links.length) return '<div class="empty">本文はまだ他の concept を指していません。</div>';
+      return `<p class="provenance" style="margin:0 0 .8rem">本文の markdown リンクから取られている — 変えるには本文を編集する。</p>`
         + '<table class="kv">' + links.map(l => {
         const target = String(l.target || '').replace(/^ochakai:\/\//, '');
         const href = target ? '#/k/' + idPath(target) : null;
@@ -1769,17 +1797,17 @@ async function viewDetail(id) {
             <span class="mono">${esc(a.name)}</span>
             <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
             <span class="meta">body reference: <code>${ref}</code></span>
-            <button class="btn small danger write-only" data-remove-file="${esc(a.path)}" data-name="${esc(a.name)}">Remove</button>
+            <button class="btn small danger write-only" data-remove-file="${esc(a.path)}" data-name="${esc(a.name)}">外す</button>
           </div>
         </div>`;
       }).join('');
       return `
-        ${cards || '<div class="empty">No files.</div>'}
+        ${cards || '<div class="empty">ファイルはありません。</div>'}
         <div class="toolbar write-only" style="margin-top:1rem">
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
-          <button class="btn small" id="att-choose">Choose files…</button>
+          <button class="btn small" id="att-choose">ファイルを選ぶ…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
-          <button class="btn small primary" id="att-upload">Add files</button>
+          <button class="btn small primary" id="att-upload">ファイルを追加</button>
         </div>
         <p class="provenance write-only">Any file, max 5 MiB each. Reference a file from the
         body (<code>![alt](${esc(lastSeg)}/name.png)</code> or <code>[name](${esc(lastSeg)}/name.txt)</code>) so it is findable and survives OKF export.</p>`;
@@ -1797,18 +1825,18 @@ async function viewDetail(id) {
     });
     $('#att-upload').addEventListener('click', async () => {
       const files = [...fileInput.files];
-      if (!files.length) { toast('Choose files first.'); return; }
+      if (!files.length) { toast('先にファイルを選んでください。'); return; }
       try {
         for (const f of files) {
           await api(attPath(canonicalPath(f.name)), { method: 'PUT', raw: f });
         }
         toast(files.length > 1 ? `Added ${files.length} files.` : 'Added.');
         viewDetail(entry.id);
-      } catch (e) { toast('Add files failed: ' + e.message); }
+      } catch (e) { toast('ファイルの追加に失敗しました: ' + e.message); }
     });
     body.querySelectorAll('[data-remove-file]').forEach(b => b.addEventListener('click', async () => {
       const path = b.dataset.removeFile;
-      if (!confirm(`Remove ${b.dataset.name}? The change is kept as a revision.`)) return;
+      if (!confirm(`Remove ${b.dataset.name}? 変更はリビジョンとして残ります。`)) return;
       try {
         await api(attPath(path), { method: 'DELETE' });
         toast('Removed.');
@@ -1835,9 +1863,9 @@ async function viewDetail(id) {
     linked: async () => {
       const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
       return () => (entries && entries.length)
-        ? `<p class="provenance" style="margin:0 0 .8rem">Concepts whose links point here — the concept's own links are in the Links tab.</p>`
+        ? `<p class="provenance" style="margin:0 0 .8rem">ここを指しているリンクを持つ concept — この concept 自身のリンクはリンクのタブにある。</p>`
           + entries.map(hitCard).join('')
-        : '<div class="empty">Nothing links to this concept yet.</div>';
+        : '<div class="empty">この concept を指しているものは、まだありません。</div>';
     },
     history: async () => {
       // ?history is the object's own ledger, at the object's own address
@@ -1908,7 +1936,7 @@ async function viewDetail(id) {
   });
   $('#act-reject')?.addEventListener('click', async () => {
     closeMenu();
-    const note = prompt('Why is this not accepted? (kept as the ruling, so agents stop re-proposing it)', '');
+    const note = prompt('なぜ受け入れないのか?(裁定として残るので、エージェントは同じ提案を繰り返さなくなる)', '');
     if (note === null) return;
     try {
       await rejectEntry(entry.id, note);
@@ -1940,7 +1968,7 @@ async function viewDetail(id) {
   });
   $('#act-delete').addEventListener('click', async () => {
     closeMenu();
-    if (!confirm(`Soft-delete ${entry.id}? Revision history is retained.`)) return;
+    if (!confirm(`Soft-delete ${entry.id}? リビジョンの履歴は残ります。`)) return;
     try {
       await api(conceptURL(entry.id), { method: 'DELETE' });
       toast('Deleted.');
@@ -2079,16 +2107,17 @@ const review = { staleOnly: false, loaded: [], cursor: '' };
 
 function viewReview() {
   view.innerHTML = `
-    <div class="section-title">Draft review queue</div>
-    <div class="read-only-note">This ochakai is read-only, so the review
-    actions are not shown. The queue is real — it is what a reviewer on a
-    writable deployment would work through.</div>
-    <p style="color:var(--muted);max-width:48rem">Drafts agents wrote back, most-demanded first — ranked by search hits, how
-    often the draft already surfaces when people search. Verify what's true, reject what isn't (the reason is recorded as
-    status_note so agents stop re-proposing it). Never-used drafts sink to the bottom; toggle <em>stale</em> to triage them.</p>
-    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">Verified knowledge has two queues of its own:
-    <a href="#/search/reported-wrong">reported wrong</a> — concepts whose failure reports are unanswered — and
-    <a href="#/search/verification-age">verification age</a>, oldest-verified first. Verifying a concept empties it from both.
+    <div class="section-title">draft のレビューキュー</div>
+    <div class="read-only-note">この ochakai は read-only なので、レビューの操作は
+    表示されません。キューそのものは本物です — 書き込めるデプロイのレビュアーが
+    片付けていくのが、これと同じ列です。</div>
+    <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に — 検索ヒット数と、
+    その draft が実際に検索で浮いた回数で順位が付きます。正しいものは検証し、そうでないものは却下します
+    (理由は status_note として残るので、エージェントは同じ提案を繰り返さなくなります)。一度も使われていない
+    draft は下に沈みます。<em>stale</em> を切り替えると、その仕分けができます。</p>
+    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身の二つのキューがある:
+    <a href="#/search/reported-wrong">間違いと報告された</a>(失敗の報告に応えていない concept)と、
+    <a href="#/search/verification-age">検証の古さ</a>(検証が古い順)です。検証すると、その concept は両方から消えます。
     A third, <a href="#/search/stale">stale</a>, lists concepts past the expiry their author declared — that one is cleared by
     editing the concept, not by verifying.</p>
     <div id="loop-stats"></div>
@@ -2143,7 +2172,7 @@ async function loadLoopStats() {
       holding with it.</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
       <summary style="cursor:pointer;color:var(--muted)">Asked for, not found — what to write next</summary>
-      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">Searches from the last ${s.window_days} days
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日の検索
       that returned nothing, most-asked first. Not a queue anything empties: it stops appearing when the answer exists.</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
@@ -2180,7 +2209,7 @@ async function runReview(append = false) {
     let list = hits;
     if (review.staleOnly) list = list.filter(isStaleDraft);
     if (!list.length) {
-      out.innerHTML = `<div class="empty">${review.staleOnly ? 'No stale drafts — nothing gathering dust.' : 'No drafts awaiting review.'}</div>`;
+      out.innerHTML = `<div class="empty">${review.staleOnly ? '放置された draft はありません。' : 'レビュー待ちの draft はありません。'}</div>`;
       return;
     }
     out.innerHTML = list.map(reviewCard).join('')
@@ -2192,7 +2221,7 @@ async function runReview(append = false) {
     wireReviewActions(out);
   } catch (e) {
     if (my !== runReview._seq || out !== $('#review-results')) return;
-    out.innerHTML = `<div class="error-banner">Could not load the review queue: ${esc(e.message)}</div>`;
+    out.innerHTML = `<div class="error-banner">レビューキューを読み込めませんでした: ${esc(e.message)}</div>`;
   }
 }
 
@@ -2218,11 +2247,11 @@ function reviewCard(h) {
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
       <span class="badge draft">draft</span>
-      ${isStaleDraft(h) ? '<span class="badge" title="0 search hits and idle — a candidate to drop">🕸️ stale</span>' : ''}
+      ${isStaleDraft(h) ? '<span class="badge" title="検索ヒット 0 で動きもない — 落とす候補">🕸️ stale</span>' : ''}
       ${tags}
       <span class="actions write-only" style="margin-left:auto;display:flex;gap:.45rem">
-        <button class="btn small primary" data-act="verify">✓ Verify</button>
-        <button class="btn small danger" data-act="reject">Reject</button>
+        <button class="btn small primary" data-act="verify">✓ 検証</button>
+        <button class="btn small danger" data-act="reject">却下</button>
       </span>
     </div>
     <div class="meta">${meta}</div>
@@ -2243,7 +2272,7 @@ function wireReviewActions(container) {
         await verifyEntry(id);
         toast('Verified.');
       } else {
-        const note = prompt('Why is this not accepted? (kept as the ruling, so agents stop re-proposing it)', '');
+        const note = prompt('なぜ受け入れないのか?(裁定として残るので、エージェントは同じ提案を繰り返さなくなる)', '');
         if (note === null) return;
         await rejectEntry(id, note);
         toast('Rejected.');
@@ -2328,7 +2357,7 @@ async function viewEditor(id, prefix = '') {
       doc = v.document || '';
       entryID = v.id;
     } catch (e) {
-      view.innerHTML = `<div class="error-banner">Could not load ${esc(id)}: ${esc(e.message)}</div>`;
+      view.innerHTML = `<div class="error-banner">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
       return;
     }
   }
@@ -2343,37 +2372,37 @@ async function viewEditor(id, prefix = '') {
                  placeholder="sales/monthly-revenue"
                  ${editing ? 'disabled' : 'required'}>
           <div class="hint">${editing
-            ? 'Where the concept lives (move it from the concept page).'
-            : 'The full path, directories separated by “/”. The last segment is the concept’s name, e.g. 売上 or monthly-revenue; place together what should be read together.'}</div>
+            ? 'concept の置き場所(移動は concept のページから)。'
+            : 'ディレクトリを「/」で区切ったフルパス。最後の区切りが concept の名前(例: 売上、monthly-revenue)。一緒に読まれるべきものは一緒に置く。'}</div>
         </div>`;
 
   view.innerHTML = `
-    <div class="section-title">${editing ? `Edit ${esc(entryID)}` : 'New knowledge concept'}</div>
+    <div class="section-title">${editing ? `${esc(entryID)} を編集` : '新しいナレッジの concept'}</div>
     <form class="form" id="editor">
       <div class="row">
         ${idField}
         ${editing ? '' : `
         <div class="field">
-          <label class="top" for="e-type">Type</label>
+          <label class="top" for="e-type">型</label>
           <select id="e-type">${KNOWN_TYPES.map(t =>
             `<option value="${t}"${t === 'Insight' ? ' selected' : ''}>${t}</option>`).join('')}</select>
           <div class="hint">Sets <code>type:</code> in the document below, with any key that type is refused without.
-          Until you edit the document it is reseeded whole; after that only those lines change.
-          The document is what gets saved.</div>
+          ドキュメントを編集するまでは全体が入れ直され、編集した後はその行だけが変わります。
+          保存されるのはこのドキュメントです。</div>
         </div>`}
       </div>
       <div class="field">
-        <label class="top" for="e-doc">Document</label>
+        <label class="top" for="e-doc">ドキュメント</label>
         <textarea id="e-doc" rows="26" class="mono" spellcheck="false" required>${esc(doc)}</textarea>
         <div class="hint">OKF frontmatter between <code>---</code> lines, then markdown.
-        Link to another concept with a markdown link to its path — <code>[revenue](/metrics/revenue.md)</code> —
-        and it becomes a link both ways. Keys ochakai does not define are kept as written.
-        The keys the server owns (<code>generated</code>, <code>verified</code>, <code>created_by</code>)
+        他の concept へは、そのパスへの markdown リンクで結ぶ — <code>[revenue](/metrics/revenue.md)</code> —
+        and it becomes a link both ways. ochakai が定義していないキーは書いたまま保たれます。
+        サーバーが持つキー(<code>generated</code>・<code>verified</code>・<code>created_by</code>)は
         are not yours to set and are ignored if present.</div>
       </div>
       <div id="editor-error"></div>
       <div class="toolbar" style="justify-content:flex-end">
-        <a class="btn" href="${editing ? '#/k/' + idPath(entryID) : '#/search'}">Cancel</a>
+        <a class="btn" href="${editing ? '#/k/' + idPath(entryID) : '#/search'}">キャンセル</a>
         <button class="btn primary write-only" type="submit">${editing ? 'Save' : 'Create'}</button>
       </div>
     </form>`;
@@ -2410,7 +2439,7 @@ async function viewEditor(id, prefix = '') {
     errBox.innerHTML = '';
     const entryId = editing ? entryID : $('#e-id').value.trim().replace(/^\/+|\/+$/g, '');
     if (!entryId) {
-      errBox.innerHTML = '<div class="error-banner">An ID is required.</div>';
+      errBox.innerHTML = '<div class="error-banner">ID は必須です。</div>';
       return;
     }
     const document_ = $('#e-doc').value;
@@ -2418,7 +2447,7 @@ async function viewEditor(id, prefix = '') {
     // stays the only judge of a document; this just saves a round trip on
     // the mistake a text editor makes most (design doc 0044 §2.3).
     if (!/^---\r?\n[\s\S]*?\r?\n---/.test(document_.trim())) {
-      errBox.innerHTML = '<div class="error-banner">The document needs YAML frontmatter: a <code>---</code> line, the keys, then a closing <code>---</code> line.</div>';
+      errBox.innerHTML = '<div class="error-banner">ドキュメントには YAML frontmatter が要ります: <code>---</code> の行、キー、そして閉じる <code>---</code> の行。</div>';
       return;
     }
     try {
@@ -2464,6 +2493,7 @@ $('#side-toggle').addEventListener('click', () => {
 
 refreshTree();
 refreshQueues();
+markSandbox();
 route();
 </script>
 </body>

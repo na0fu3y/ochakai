@@ -70,6 +70,13 @@ type Config struct {
 	// the server's own observation rather than content a caller wrote.
 	ReadOnly bool
 
+	// Sandbox is the disposable public deployment (design doc 0087):
+	// anonymous, writable, and restored on a schedule by whoever runs
+	// it. The server's part is to say so — anything written here is
+	// going to be erased, and a caller that does not know that may
+	// curate into it.
+	Sandbox bool
+
 	// PublicReadOnly is the posture for a deployment anyone may reach: a
 	// demo, or a reference-only copy handed out (design doc 0042). It
 	// reads no identity at all — the Authorization header is ignored,
@@ -177,11 +184,38 @@ const (
 	// request acts as human:anonymous and writes are allowed. Never on a
 	// deployment.
 	ModeDev = "dev"
+	// ModeSandbox is the fourth cell of the square deployed on purpose:
+	// anonymous and writable, reachable by anyone, and **disposable**
+	// (design doc 0087). It exists so the loop this product is about —
+	// draft, ruling, outcome — can be tried without standing up a
+	// database, which the read-only demo could never show.
+	//
+	// It is not ModeDev under another name. dev says in its own
+	// documentation that it is not for a deployment, and an operator
+	// reading a config cannot tell an accident from an intent; a word of
+	// its own can be granted allUsers deliberately, and — the part that
+	// matters — it makes the impermanence something the product says
+	// rather than something a README hopes was read. A sandbox that does
+	// not announce itself steals the work somebody curated into it.
+	ModeSandbox = "sandbox"
 )
 
 // Modes is every spelling OCHAKAI_MODE takes, for the error that lists
 // them.
-var Modes = []string{ModeReadOnly, ModePublic, ModeDev}
+var Modes = []string{ModeReadOnly, ModePublic, ModeDev, ModeSandbox}
+
+// Anonymous reports whether no identity is read from the request at all:
+// the Authorization header is ignored, delegation is ignored, and every
+// caller is human:anonymous. Both postures anyone may reach answer yes,
+// for the same reason — nothing in front of the process verified a
+// token, so believing one would let any caller name any person (design
+// docs 0042 §2.2, 0087 §3).
+//
+// Derived rather than stored, and that is the point: a field would be
+// one more thing a hand-built config could set inconsistently, which is
+// the class of mistake one word for the posture exists to remove
+// (design doc 0060).
+func (c *Config) Anonymous() bool { return c.PublicReadOnly || c.Sandbox }
 
 func FromEnv() (*Config, error) {
 	cfg := &Config{
@@ -215,6 +249,17 @@ func FromEnv() (*Config, error) {
 		cfg.RecordMisses = false
 	case ModeDev:
 		cfg.InsecureDev = true
+	case ModeSandbox:
+		// Anonymous like public, writable like the default. The
+		// anonymity is spelled here rather than checked, as public's
+		// read-only is (design doc 0042 §2.1): there is no way to ask
+		// for a sandbox and get a deployment that records who wrote
+		// what, so the combination that would be wrong never exists.
+		cfg.Sandbox = true
+		// And it keeps nothing its visitors typed, for public's reason
+		// (0042 §2.2, 0051 §3.4): a deployment that does not identify
+		// its callers does not collect what strangers asked it.
+		cfg.RecordMisses = false
 	default:
 		// Not a posture, and guessing at one is the wrong way to be
 		// wrong: a deployment that misspelled "read-only" and got a
@@ -256,7 +301,7 @@ func FromEnv() (*Config, error) {
 		return nil, fmt.Errorf(
 			"OCHAKAI_OIDC_ISSUER and OCHAKAI_OIDC_AUDIENCE are set together or not at all (design doc 0086)")
 	}
-	if cfg.OIDCIssuer != "" && (cfg.InsecureDev || cfg.PublicReadOnly) {
+	if cfg.OIDCIssuer != "" && (cfg.InsecureDev || cfg.Anonymous()) {
 		// Both of those postures answer "who is calling" without reading
 		// anything, so an issuer beside them is a configuration that
 		// says two different things. Naming the conflict is the whole

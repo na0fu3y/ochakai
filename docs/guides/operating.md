@@ -712,6 +712,36 @@ issuer をすべてのリクエストで検証し、audience を設定した後�
 
 <a id="public-demo"></a>
 
+## 使い捨てのサンドボックス
+
+`OCHAKAI_MODE=sandbox`(設計ドキュメント
+[0087](../design/0087-a-sandbox-says-it-is-one.md))は、**匿名で・書けて・
+消える**デプロイである。公開デモ(下)は read-only なので、この製品の
+中心であるループ — draft を書き、人が裁定し、結果が戻る — だけが試せない
+という状態だった。サンドボックスはそこを埋める。
+
+**復元はあなたの仕事で、ochakai は行わない。** 定期的に import する
+コンテナは cron であって製品ではないからである。Cloud Scheduler が
+Cloud Run job を叩き、job が既知のバンドルを書き戻す形にする:
+
+```sh
+# ジョブが実行するもの。ベースを空にしてから、種のバンドルを入れ直す。
+ochakai export - > /tmp/before.tar.gz   # 任意: 直前の状態を残したいとき
+ochakai list --json | jq -r '.hits[].id' | while read -r id; do
+  ochakai delete "$id" && ochakai purge "$id"
+done
+ochakai import /seed
+```
+
+**サンドボックスは自分でそう言う。** `GET /api/v1/stats` が
+`sandbox: true` を返し、同梱の Web UI は全ページにバナーを出す。
+これは親切ではなく設計上の要請である — **言わないサンドボックスは、
+そこに書いた人の作業を盗む**(0087 §3)。バナーを消したいと思ったときは、
+消したいのはバナーではなく姿勢のほうである。
+
+Terraform では `sandbox = true` が `allUsers` の付与まで面倒を見る。
+`public_read_only` とは併用しない — サーバーが取るのは一語である。
+
 ## 公開デモ
 
 デプロイガイドのすべては、誰かが書き込めるあらゆるデプロイに対して

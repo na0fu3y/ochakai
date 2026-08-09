@@ -77,7 +77,12 @@ the normal one: private, writable, Cloud Run IAM decides who reaches it.
 posture the demo runs in — reachable without a Google account, read-only,
 and reading no identity at all. `dev` turns authentication off and makes
 every caller `human:anonymous`; it is for a laptop, never for a
-deployment.
+deployment. `sandbox` deploys that same cell on purpose — anonymous and
+**writable**, restored on a schedule by whoever runs it, and the only
+public posture where the write-back loop can be tried. It says so about
+itself: `GET /api/v1/stats` answers `sandbox: true` and the web UI
+carries a banner, because a sandbox that does not announce itself steals
+the work somebody curated into it.
 
 **Off Google Cloud, `OCHAKAI_OIDC_ISSUER` and `OCHAKAI_OIDC_AUDIENCE`
 are how a deployment authenticates.** On Cloud Run the IAM check happens
