@@ -164,16 +164,31 @@ const usageLateral = `
 		WHERE knowledge_id = k.id
 	) u ON true`
 
-// ListByUsage returns filtered entries ordered by demand, most-searched
-// first: search_hits descending, then oldest-created (created_at ascending)
+// ListByUsage returns filtered entries ordered by demand, most-read
+// first: fetches descending, then oldest-created (created_at ascending)
 // as the tiebreak. This is the draft review feed — the promotion queue at
-// the top, and never-used drafts (search_hits 0) sinking oldest-first to
-// the bottom for inventory. Each hit carries its usage totals so the
-// caller renders the signal without a per-entry round trip. Score is 0.
+// the top, and never-read drafts (fetches 0) sinking oldest-first to the
+// bottom for inventory. Each hit carries its usage totals so the caller
+// renders the signal without a per-entry round trip. Score is 0.
+//
+// Fetches rather than search_hits, which this ordered by until now. A
+// search hit is recorded for every id in every result set: it says the
+// ranker put the concept in front of somebody, and ordering a queue by
+// it makes the ranker's own output the demand it is supposed to measure
+// — whatever surfaces keeps surfacing, and a curator reads that back as
+// "people want this". A fetch is the body actually delivered into a
+// caller's context, by a pack or by name.
+//
+// Neither is innocent of the ranker — a context pack is chosen by it too
+// — but a pack holds five to twenty concepts against a result set's
+// fifty, and what it holds was read rather than listed. The number that
+// explains the order is already beside it in every rendering, which is
+// the other half of the change: search_hits stays, and stops being the
+// one the queue is sorted on.
 func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	keyset, err := keysetAfter([]orderCol{
-		{expr: "u.search_hits", cast: "bigint", desc: true},
+		{expr: "u.fetches", cast: "bigint", desc: true},
 		{expr: "k.created_at", cast: "timestamptz"},
 	}, "k.id", after, &args)
 	if err != nil {
@@ -184,7 +199,7 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit i
 			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
 		FROM object k`+usageLateral+`
 		WHERE %s%s
-		ORDER BY u.search_hits DESC, k.created_at ASC, k.id LIMIT %d`, where, keyset, limit)
+		ORDER BY u.fetches DESC, k.created_at ASC, k.id LIMIT %d`, where, keyset, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

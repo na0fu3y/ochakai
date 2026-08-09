@@ -265,3 +265,55 @@ func TestEnglishSearchStems(t *testing.T) {
 		}
 	}
 }
+
+// TestUsageFeedRanksByReadsNotByListings pins what the draft review feed
+// orders by. A search hit is recorded for every id in every result set,
+// so ordering the promotion queue by it made the ranker's own output the
+// demand it was supposed to measure — whatever surfaced kept surfacing,
+// and a curator read that back as "people want this".
+func TestUsageFeedRanksByReadsNotByListings(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "usgord")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	// Two drafts. One the ranker keeps listing and nobody opens; one
+	// listed half as often and read every time.
+	listed, read := run+"/listed", run+"/read"
+	for _, id := range []string{listed, read} {
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: id,
+			Status: domain.StatusDraft, CreatedBy: actor,
+		}, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	for range 20 {
+		if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []string{listed}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 10 {
+		if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []string{read}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{read}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := s.ListByUsage(ctx, Filter{Prefixes: []string{run}}, nil, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("the feed held %d concepts, want the two this test wrote", len(hits))
+	}
+	if hits[0].ID != read {
+		t.Errorf("the feed puts %q first; want %q — the one that was read, not the one "+
+			"the ranker listed twice as often", hits[0].ID, read)
+	}
+}
