@@ -1350,7 +1350,20 @@ func (o *Observed) LastVerified() *Verification {
 type SearchHit struct {
 	Summary
 	Score float64 `json:"score"`
-	Usage *Usage  `json:"usage,omitempty"`
+	// Snippet is the passage of the body where the query's own words
+	// land, cut to a readable window. It answers "why did this match?",
+	// which title and description cannot: they say what somebody wrote
+	// about the concept as a whole, and a caller deciding which of ten
+	// hits to open was paying a fetch per row to find out.
+	//
+	// Absent for two reasons, both meaning "there is no passage to
+	// show": the words landed in the name or the description rather than
+	// the body, where the row already shows the match; or the concept
+	// was found by meaning rather than by text, where pointing at the
+	// opening of the body would answer the question with something that
+	// is not the reason.
+	Snippet string `json:"snippet,omitempty"`
+	Usage   *Usage `json:"usage,omitempty"`
 	// Files is metadata only, and only on the REST list surface,
 	// so a UI can draw a thumbnail without a round trip per row (design
 	// doc 0015). It is not part of Summary: a row is a projection of the

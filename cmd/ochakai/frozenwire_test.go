@@ -179,6 +179,12 @@ func schemaOfLine(line string) (string, bool) {
 	}
 	name, _, _ := strings.Cut(rest, " ")
 	name, _, _ = strings.Cut(name, ".")
+	// A schema composed with allOf fingerprints its members under a path
+	// — "SearchHit/allOf/1.snippet" — and the schema whose reachability
+	// decides the rule is the one at the head of it. Without this cut the
+	// name is "SearchHit/allOf/1", which matches no schema, and every
+	// composed schema fell outside 0082's rule for a spelling reason.
+	name, _, _ = strings.Cut(name, "/")
 	return name, name != ""
 }
 

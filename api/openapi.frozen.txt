@@ -411,6 +411,7 @@ components/schemas/SearchHit/allOf/1 type=object
 components/schemas/SearchHit/allOf/1.files required=false type=array readOnly=true
 components/schemas/SearchHit/allOf/1.files[] ref=File
 components/schemas/SearchHit/allOf/1.score required=true type=number
+components/schemas/SearchHit/allOf/1.snippet required=false type=string
 components/schemas/SearchHit/allOf/1.usage required=false readOnly=true
 components/schemas/SearchHit/allOf/1.usage/allOf/0 ref=Usage
 components/schemas/Stats type=object

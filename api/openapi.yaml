@@ -2959,6 +2959,22 @@ components:
         - type: object
           properties:
             score: { type: number }
+            snippet:
+              type: string
+              description: >
+                The passage of the body where the query's own words land,
+                cut to a readable window and marked with … where it was
+                cut. It answers "why did this match?", which title and
+                description cannot: they say what somebody wrote about
+                the concept as a whole, and a caller deciding which of
+                ten hits to open was paying a fetch per row to find out.
+
+                Absent when there is no passage to show — the words
+                landed in the name or the description, where the hit
+                already shows the match, or the concept was found by
+                meaning rather than by text (the vector half), where the
+                opening of the body would not be the reason it matched.
+                Listings carry no snippet: they have no query.
             usage:
               allOf: [ { $ref: "#/components/schemas/Usage" } ]
               readOnly: true

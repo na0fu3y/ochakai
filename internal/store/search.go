@@ -367,7 +367,9 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanHit)
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
+		return scanHitWithSnippet(row, frags)
+	})
 }
 
 // SearchVector ranks by cosine distance against stored embeddings.
@@ -462,6 +464,42 @@ func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) 
 // selected whole — the projection is derived from the same columns every
 // other read uses, and narrowing the SELECT per caller would put a second
 // column list in the file to fall behind.
+// scanHitWithSnippet is scanHit plus the passage that explains the hit
+// (snippet.go). The body is already on the row — the final select fetches
+// whole entries for the top N once scoring has decided who they are — so
+// this costs no query and no round trip.
+func scanHitWithSnippet(row pgx.CollectableRow, frags []string) (domain.SearchHit, error) {
+	var h domain.SearchHit
+	var k domain.Knowledge
+	dests, finish := knowledgeDest(&k)
+	if err := row.Scan(append(dests, &h.Score)...); err != nil {
+		return h, err
+	}
+	if err := finish(); err != nil {
+		return h, err
+	}
+	h.Summary = domain.SummaryOf(&k)
+	// Only when the body is where the words landed: a name or description
+	// carrying the query is already on the row, and repeating it spends
+	// the caller's context to say what they can already read.
+	if !namesOrDescribes(&k, frags) {
+		h.Snippet = snippetFor(k.Body, frags)
+	}
+	return h, nil
+}
+
+// namesOrDescribes reports whether the row itself already shows the
+// match — the fragment is in the title or the description.
+func namesOrDescribes(k *domain.Knowledge, frags []string) bool {
+	shown := strings.ToLower(k.Title + " " + k.Description)
+	for _, frag := range frags {
+		if frag != "" && strings.Contains(shown, strings.ToLower(frag)) {
+			return true
+		}
+	}
+	return false
+}
+
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
 	var k domain.Knowledge

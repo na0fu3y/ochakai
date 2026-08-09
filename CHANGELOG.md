@@ -21,6 +21,23 @@ last entry.
 
 ### Added
 
+- **A search hit now says why it matched.** `snippet` carries the passage
+  of the body where the query's own words land, cut to about 140
+  characters and marked with … where it was cut. Title and description
+  say what somebody wrote about the concept as a whole, not what answered
+  this question, so choosing among ten hits meant fetching bodies — for
+  an agent, nine documents' worth of context spent to find the one it
+  wanted. It is absent when there is no passage to point at: the words
+  landed in the name or the description, where the hit already shows the
+  match, or the concept was found by meaning rather than text, where the
+  opening of the body would not be the reason. Listings have no query and
+  so no snippet. REST, the CLI (` · ` after the description; the
+  tab-separated fields are unchanged) and the web UI show it; MCP
+  responses carry it and its tool descriptions do not grow
+  ([0084](docs/design/0084-a-hit-says-why-it-matched.md)). No new
+  parameter, flag, command or environment variable, and no migration —
+  the bodies are already fetched for the hits being returned.
+
 - **Every error response now carries a machine-readable `code`.** The
   envelope was `{"error": "<English prose>"}` and nothing else, so a
   client that wanted to tell "this id is taken" from "there is no
