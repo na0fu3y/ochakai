@@ -124,6 +124,22 @@ last entry.
 
 ### Changed
 
+- **The search evaluation harness now measures the merge, and asks 36
+  questions instead of 14.** Fourteen cases put MRR inside its own noise
+  — one case moving from rank 1 to rank 2 moved it by 0.036, which is the
+  size of the differences people were reading — so the golden set gained
+  a second pass over the same corpus, phrased the way somebody asks
+  rather than the way a title reads. Beside it, a deterministic stand-in
+  encoder gives the harness a second ranking to fuse, so RRF's
+  arithmetic, the named-concept sort key surviving it and the
+  verification tie-break under it are measured rather than reasoned
+  about: lexical 1.00 / 0.92, fused 1.00 / 0.89, and dropping the lexical
+  list from the fuse takes it to 0.80. The stand-in shares the lexical
+  side's vocabulary, so it stands in for the merge and not for an
+  encoder — what a trained one buys is matching text that shares no words
+  at all, and no number here says how much that is. Tests only; no
+  surface, no wire, no behaviour change.
+
 - **`put_concept` now tells an agent to link the concept its draft would
   replace.** The instruction was already there — a verified concept that
   is wrong gets `report_outcome failed`, or a better draft at a different
