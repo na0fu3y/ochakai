@@ -48,6 +48,9 @@ type Stats struct {
 	Review   StatsReview   `json:"review"`
 	Outcomes StatsOutcomes `json:"outcomes"`
 	Misses   StatsMisses   `json:"misses"`
+	// Embedding is how much of the base the vector half of search can
+	// actually see. It is a state, not a flow.
+	Embedding StatsEmbedding `json:"embedding"`
 	// Dropped is what the loop observed and then lost inside the window
 	// — the footnote every other number here depends on. Usage is
 	// best-effort by decision (design doc 0029 §3.1): it buffers in
@@ -68,6 +71,36 @@ type StatsDropped struct {
 	Events int64 `json:"events"`
 	// Misses is unanswered questions lost the same two ways.
 	Misses int64 `json:"misses"`
+}
+
+// StatsEmbedding is what the vector half of search can see.
+//
+// A concept longer than the model's input window is embedded from its
+// front and the rest is dropped (design doc 0089). Nothing about the
+// result looks wrong: the concept still has a vector, still ranks, still
+// comes back. It is simply unfindable by anything said in its second
+// half — and the longer the document, the more of it is gone. That is
+// the failure this counts, and it is counted rather than logged because
+// a number a curator can read is the difference between a knowledge base
+// that has this problem and one that merely might.
+//
+// The two numbers are read together. Truncated alone says how many; over
+// Vectors it says whether this is one long runbook or the shape of the
+// whole corpus, which are different problems with different answers —
+// split the concept, or move the deployment to a model with a wider
+// window.
+type StatsEmbedding struct {
+	// Enabled is false where no embedder is configured, which is the
+	// reading Vectors: 0 would otherwise be ambiguous — a deployment
+	// with no semantic search and one whose corpus is entirely
+	// unembedded produce the same zero and want different actions.
+	Enabled bool `json:"enabled"`
+	// Vectors is how many live concepts hold a vector for the model in
+	// use. Concepts minus this is what `ochakai reembed` has left to do.
+	Vectors int64 `json:"vectors"`
+	// Truncated is how many of those vectors saw only the front of their
+	// concept.
+	Truncated int64 `json:"truncated"`
 }
 
 // StatsConcepts is what the base is made of (state), plus how much of it

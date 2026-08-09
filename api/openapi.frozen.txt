@@ -427,6 +427,10 @@ components/schemas/Stats.concepts.trust.* type=integer
 components/schemas/Stats.dropped required=true type=object
 components/schemas/Stats.dropped.events required=true type=integer
 components/schemas/Stats.dropped.misses required=true type=integer
+components/schemas/Stats.embedding required=true type=object
+components/schemas/Stats.embedding.enabled required=true type=boolean
+components/schemas/Stats.embedding.truncated required=true type=integer
+components/schemas/Stats.embedding.vectors required=true type=integer
 components/schemas/Stats.misses required=true type=object
 components/schemas/Stats.misses.count required=true type=integer
 components/schemas/Stats.misses.queries required=true type=array

@@ -163,5 +163,15 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	// is about to be erased, and a caller that does not know that may
 	// curate into it (design doc 0087).
 	st.Sandbox = s.Config != nil && s.Config.Sandbox
+	// The model is the service's, not the store's — the store holds
+	// vectors and never asks who made them — so the coverage is read
+	// here, beside the other two answers the service alone can give.
+	if s.Embedder != nil {
+		vectors, truncated, err := s.Store.EmbeddingCoverage(ctx, s.Embedder.Model(), f.Prefixes)
+		if err != nil {
+			return nil, err
+		}
+		st.Embedding = domain.StatsEmbedding{Enabled: true, Vectors: vectors, Truncated: truncated}
+	}
 	return st, nil
 }

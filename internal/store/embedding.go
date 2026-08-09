@@ -106,12 +106,49 @@ func (s *Store) CountUnembedded(ctx context.Context, model string) (int, error) 
 }
 
 // UpsertEmbedding stores the document embedding for a knowledge entry.
-func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []float32) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (id, model, embedding, updated_at)
-		VALUES ($1, $2, $3::vector, now())
-		ON CONFLICT (id) DO UPDATE SET model = $2, embedding = $3::vector, updated_at = now()`,
-		id, model, encodeVector(vec))
+//
+// truncated says the vector was computed over the front of the concept
+// rather than all of it: the text did not fit the model's input window,
+// so the tail is not in semantic search. It is recorded rather than
+// logged because it is a property of the stored vector — the same
+// concept is truncated under one model and whole under another, and
+// nothing else on the row remembers which window it met.
+func (s *Store) UpsertEmbedding(ctx context.Context, id, model string, vec []float32, truncated bool) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO knowledge_embedding (id, model, embedding, truncated, updated_at)
+		VALUES ($1, $2, $3::vector, $4, now())
+		ON CONFLICT (id) DO UPDATE SET model = $2, embedding = $3::vector, truncated = $4, updated_at = now()`,
+		id, model, encodeVector(vec), truncated)
 	return err
+}
+
+// EmbeddingCoverage counts the live concepts holding a vector for the
+// model in use, and how many of those vectors saw only part of their
+// concept.
+//
+// Truncation is the failure this exists to make visible. A concept over
+// the window still embeds, still ranks, and still looks like every other
+// concept in the results — it is simply missing its second half from the
+// vector half of search, and until this counted them nothing said so on
+// any surface. The longer and more valuable the document, the more of it
+// disappears (issue #532).
+//
+// Scoped by prefix like the concept tallies, because it is a fact about
+// concepts. Absent tables mean semantic search was never configured here,
+// which is zero of both rather than an error.
+func (s *Store) EmbeddingCoverage(ctx context.Context, model string, prefixes []string) (vectors, truncated int64, err error) {
+	cond, args := prefixScope("k.id", prefixes, 2)
+	if cond != "" {
+		cond = " AND " + cond
+	}
+	err = s.pool.QueryRow(ctx,
+		`SELECT count(*), count(*) FILTER (WHERE e.truncated)
+		   FROM object k JOIN knowledge_embedding e ON e.id = k.id AND e.model = $1
+		  WHERE k.deleted_at IS NULL AND k.id IS NOT NULL`+cond,
+		append([]any{model}, args...)...).Scan(&vectors, &truncated)
+	if err != nil && isUndefinedTable(err) {
+		return 0, 0, nil
+	}
+	return vectors, truncated, err
 }
 
 // UpsertAttachmentEmbedding stores the document embedding for one

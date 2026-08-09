@@ -2155,6 +2155,11 @@ async function loadLoopStats() {
   // numbers; this is a fault in the measurement behind them, and a
   // permanent "0 lost" line would be one more thing to read past.
   const dropped = (s.dropped?.events ?? 0) + (s.dropped?.misses ?? 0);
+  // Same rule, same reason: a fault in what search can see, drawn only
+  // where it exists. A permanent "0 truncated" is one more line to read
+  // past, and this one is worth stopping at — nothing else on any
+  // surface says a concept is half in the index (design doc 0089).
+  const truncated = s.embedding?.enabled ? (s.embedding.truncated ?? 0) : 0;
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
       <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concepts</div></div>
@@ -2169,7 +2174,12 @@ async function loadLoopStats() {
       ${dropped} observation${dropped === 1 ? '' : 's'} were recorded and then lost in these
       ${s.window_days} days, so the numbers above undercount by at least that much. Usage is
       buffered in memory and written in batches; an instance that went away took what it was
-      holding with it.</p>` : '') + (gaps.length ? `
+      holding with it.</p>` : '') + (truncated ? `
+    <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
+      ${truncated} 件の concept が、埋め込みモデルの入力窓に収まらず<strong>前半だけ</strong>
+      ベクトル検索に載っています(全 ${s.embedding.vectors} 件中)。後半に書かれていることでは
+      見つかりません — 語句そのものが含まれていれば字句検索は当てます。長すぎる concept を
+      分けるか、より広い窓のモデルに移すかのどちらかです。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
       <summary style="cursor:pointer;color:var(--muted)">Asked for, not found — what to write next</summary>
       <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日の検索

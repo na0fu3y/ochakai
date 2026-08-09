@@ -2911,6 +2911,42 @@ components:
                   last_at: { type: string, format: date-time }
                 required: [query, count, last_at]
           required: [recording, count, queries]
+        embedding:
+          type: object
+          description: >
+            State: how much of the base the vector half of search can
+            actually see. A concept longer than the model's input window
+            is embedded from its front and the rest is dropped (design
+            doc 0089), and nothing about the result looks wrong — the
+            concept has a vector, ranks, and comes back. It is simply
+            unfindable by anything said in its second half.
+
+
+            Read the two numbers together. `truncated` alone says how
+            many; against `vectors` it says whether this is one long
+            runbook or the shape of the corpus, which want different
+            answers — split the concept, or move the deployment to a
+            model with a wider window. Concepts, not files: an
+            attachment's text is capped the same way and is not counted
+            here.
+          properties:
+            enabled:
+              type: boolean
+              description: >
+                False where no embedder is configured. Without it
+                `vectors: 0` is ambiguous — no semantic search and an
+                entirely unembedded corpus read the same and want
+                different actions.
+            vectors:
+              type: integer
+              description: >
+                Live concepts holding a vector for the model in use.
+                `concepts.total` minus this is what `ochakai reembed`
+                has left to do.
+            truncated:
+              type: integer
+              description: Of those, how many saw only the front of their concept.
+          required: [enabled, vectors, truncated]
         dropped:
           type: object
           description: >
@@ -2936,7 +2972,7 @@ components:
               type: integer
               description: Unanswered questions lost the same two ways.
           required: [events, misses]
-      required: [at, window_days, concepts, queues, review, outcomes, misses, dropped]
+      required: [at, window_days, concepts, queues, review, outcomes, misses, embedding, dropped]
     QueueCounts:
       type: object
       description: >

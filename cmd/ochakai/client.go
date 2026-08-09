@@ -727,6 +727,20 @@ func cmdStats(ctx context.Context, args []string) error {
 		st.Outcomes.ConceptsUsed, st.Outcomes.ConceptsReported)
 	fmt.Printf("dropped_events\t%d\ndropped_misses\t%d\n",
 		st.Dropped.Events, st.Dropped.Misses)
+	// Truncation is invisible everywhere else: a concept over the model's
+	// input window is embedded from its front, keeps its vector, keeps
+	// ranking, and is simply unfindable by its second half (design doc
+	// 0089). The pair is printed together because one without the other
+	// cannot be read — three truncated out of four is a corpus of long
+	// documents, three out of four hundred is one runbook.
+	if !st.Embedding.Enabled {
+		// Unknown, not zero, as with misses: a deployment with no
+		// semantic search has no vectors to be whole or truncated.
+		fmt.Print("vectors\t-\ntruncated\t-\n")
+	} else {
+		fmt.Printf("vectors\t%d\ntruncated\t%d\n",
+			st.Embedding.Vectors, st.Embedding.Truncated)
+	}
 	if !st.Misses.Recording {
 		// Not zero — unknown. A deployment that keeps no questions must
 		// not read as one that was asked none.

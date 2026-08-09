@@ -537,6 +537,19 @@ grew to acknowledge the amendment. That is what the ceiling is for — the
 corpus grew because a decision was made, and the decision is named one
 line above the number.
 
+6,000 → 6,500 is two records that landed together, and they are the same
+record twice: 0088 (a renamed MCP tool or CLI command answers for one
+release) and 0089 (a half-embedded concept says so). Both say that a
+thing the product was already doing *silently* has to announce itself —
+a rename that left an agent's configuration pointing at nothing, and an
+embedding that took the front of a concept and dropped the rest while
+looking exactly like a success. Neither restates the other and neither
+compresses: the decision in each is what gets said and to whom, and the
+prose is where that lives. What the pair says about this corpus is that
+the expensive decisions right now are not new mechanisms but **the
+places where ochakai was quiet and should not have been** — which is
+C7's argument arriving in the record ceiling.
+
 5,500 → 6,000 is three records landing in one stretch of work, none of
 them large: 0083 (an error carries a code), 0084 (a hit says why it
 matched) and 0085 (the empty base, and what fills it). Each is a decision
@@ -555,7 +568,7 @@ accept, and two of those refusals had cited the spec for a requirement
 the spec does not state — the kind of finding a record exists to correct
 rather than to compress away.
 
-    RECORD-CORPUS-LINES: 6000
+    RECORD-CORPUS-LINES: 6500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

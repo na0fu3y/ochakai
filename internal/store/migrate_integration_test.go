@@ -736,7 +736,7 @@ func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
 	// A write at the new width is what the old refusal was protecting
 	// against, and it now works without an operator touching the schema.
 	if err := s.UpsertEmbedding(ctx, "queries/x", "test-model",
-		[]float32{1, 0, 0, 0, 0, 0, 0, 0}); err != nil {
+		[]float32{1, 0, 0, 0, 0, 0, 0, 0}, false); err != nil {
 		t.Errorf("writing a vector at the new dimension: %v", err)
 	}
 	if err := s.Migrate(ctx, 8); err != nil {

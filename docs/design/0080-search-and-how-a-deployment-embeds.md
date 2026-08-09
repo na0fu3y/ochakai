@@ -9,7 +9,8 @@ Status: Accepted(2026-08-07)。**検索と埋め込みの現行ドキュメン�
 の決定も、墓標を二段たどらずに済むよう本書が直接受ける。スコアの床を持たないことは
 [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` が
 順位に徹することは [0067](0067-four-faces-and-what-they-decline.md) §4、
-住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6 が持つ
+住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6 が持つ。入力窓に収まらなかった
+ベクトルがそう名乗ることと、チャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)(§3・§7 を改訂)
 Date: 2026-08-07
 
 ## 0. この記録が決めたこと

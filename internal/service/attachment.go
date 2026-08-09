@@ -40,7 +40,13 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 		// truncateUTF8 still runs on the capped slice: the cut above may
 		// have landed inside a character.
 		body := truncateUTF8(string(head), max)
-		vecs, err := s.embedDocument(ctx, truncateUTF8(att.Name+"\n"+body, max))
+		// A file's text is capped the same way a concept's is, and the
+		// tail is lost the same way. It is not counted yet: the vectors
+		// live in their own table with their own key, so it is a second
+		// column and a second number, and a file stays findable by name
+		// whatever happens to its bytes (design doc 0020). The concept is
+		// where the knowledge is, and that is what stats answers for.
+		vecs, _, err := s.embedDocument(ctx, truncateUTF8(att.Name+"\n"+body, max))
 		if err != nil {
 			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "id", id, "name", att.Name, "error", err)
 			return
