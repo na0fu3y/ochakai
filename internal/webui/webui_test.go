@@ -458,3 +458,55 @@ func TestLoopStatsDistinguishNotRecordedFromZero(t *testing.T) {
 		t.Errorf("the loop strip draws misses without asking whether they are recorded:\n%s", body)
 	}
 }
+
+// The page must branch on the error code, never on the sentence beside
+// it. The compatibility policy says the sentence may be reworded in any
+// release, and this page proved the point: it decided whether to offer
+// "view the existing concept" by matching /already exists/, against a
+// message the server has since rewritten twice — once to name what holds
+// the id and what to do about it.
+//
+// Two invariants, and they fail for different reasons. The first is that
+// api() hands the code up at all: an error object that drops it leaves
+// prose as the only thing to read, which is how the regex got there. The
+// second is that every code the page names is one the product can
+// actually say — a branch on a code with a typo in it is a branch that
+// never runs, and nothing else would notice.
+func TestThePageBranchesOnErrorCodesRatherThanProse(t *testing.T) {
+	page := string(Index)
+
+	body := section(t, page, "async function api(", "\n}")
+	if !strings.Contains(body, "err.code = code") {
+		t.Errorf("api() no longer carries the error code up to its caller:\n%s", body)
+	}
+
+	// Reading a code the product cannot say is a branch that never runs.
+	codes := 0
+	for _, i := range indexesOf(page, ".code === '") {
+		rest := page[i+len(".code === '"):]
+		end := strings.IndexByte(rest, '\'')
+		if end < 0 {
+			t.Fatalf("unterminated code literal at offset %d", i)
+		}
+		codes++
+		if got := rest[:end]; !domain.ValidErrorCode(got) {
+			t.Errorf("the page branches on error code %q, which is not one of %v",
+				got, domain.ErrorCodes)
+		}
+	}
+	if codes == 0 {
+		t.Error("no branch reads an error code; the page went back to reading prose")
+	}
+
+	// The shapes prose-matching comes back in.
+	for _, gone := range []string{
+		".test(e.message)", ".test(err.message)",
+		"e.message.includes(", "err.message.includes(",
+		"e.message.match(", "err.message.match(",
+	} {
+		if strings.Contains(page, gone) {
+			t.Errorf("the page decides something by matching an error sentence (%s); "+
+				"the sentence may be reworded in any release, the code may not", gone)
+		}
+	}
+}

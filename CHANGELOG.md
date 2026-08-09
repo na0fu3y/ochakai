@@ -169,6 +169,19 @@ last entry.
 
 ### Fixed
 
+- **The web UI read the error sentence to decide what to offer.** The
+  editor decided whether to show *"view the existing concept"* by
+  matching `/already exists/` against the message — the half the
+  compatibility policy says may be reworded in any release, and which
+  the server has since rewritten twice, most recently to name what holds
+  the id and what to do about it. The condition has been a code on the
+  wire since 0.20.0's error envelope; ochakai's own client was the one
+  integrator still not reading it, which is the case that made the code
+  worth having. `api()` now carries `code` up to its callers, and a test
+  reads the page back: every code a branch names has to be one the
+  product can actually say, and the shapes prose-matching returns in fail
+  the build ([#534](https://github.com/na0fu3y/ochakai/issues/534)).
+
 - **A purge now erases the file bytes too.** Purge destroyed every row
   keyed by a concept's id and left the bytes behind its files in the
   bucket forever — the store said so in a comment and told the operator
