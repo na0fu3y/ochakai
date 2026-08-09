@@ -68,7 +68,12 @@ locals {
   # booleans onto the single OCHAKAI_MODE the server reads, and public
   # wins because it is the stronger of the two — it is read-only plus
   # believing nobody.
-  mode = var.public_read_only ? "public" : (var.read_only ? "read-only" : "")
+  # sandbox is checked first because it is the one posture that is
+  # public *and* writable: read-only would silently win over it, and a
+  # sandbox that cannot be written is the demo it exists to replace.
+  mode = (var.sandbox ? "sandbox"
+    : var.public_read_only ? "public"
+  : (var.read_only ? "read-only" : ""))
 
   server_env = merge(
     {
@@ -457,7 +462,7 @@ resource "google_cloud_run_v2_service_iam_member" "invokers" {
 # Domain Restricted Sharing (guide §6) rejects this binding, as it should —
 # a demo project is the place to lift it, not the org.
 resource "google_cloud_run_v2_service_iam_member" "public_demo" {
-  count = var.public_read_only ? 1 : 0
+  count = var.public_read_only || var.sandbox ? 1 : 0
 
   project  = var.project_id
   location = var.region

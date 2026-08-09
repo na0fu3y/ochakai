@@ -159,5 +159,9 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	st.At = now
 	st.WindowDays = days
 	st.Misses.Recording = s.Config == nil || s.Config.RecordMisses
+	// A sandbox says so beside its own numbers: everything counted here
+	// is about to be erased, and a caller that does not know that may
+	// curate into it (design doc 0087).
+	st.Sandbox = s.Config != nil && s.Config.Sandbox
 	return st, nil
 }

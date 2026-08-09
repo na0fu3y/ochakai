@@ -30,7 +30,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない) |
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
-| デプロイの姿勢(read-only / public / dev) | [0066](0066-four-postures-one-word.md) |
+| デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
@@ -78,6 +78,19 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
   最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
   持つか、もう事実でなかった。
+- [0087 サンドボックスは、自分がそれだと言う](0087-a-sandbox-says-it-is-one.md) —
+  **Accepted**。`OCHAKAI_MODE=sandbox` は姿勢の四つ目のセル(匿名かつ
+  書ける)を**意図して配る**綴りである。この製品の中心はループなのに、
+  公開デモは `public`(read-only を含意)なので**看板の機能だけが体験
+  できなかった** — 書き戻しを一度見るのに Postgres が要った。`dev` の
+  再利用ではないのは、`dev` が自分で「デプロイに使うな」と言っており、
+  設定を読む人が事故と意図を区別できず、Terraform が `allUsers` を許すのは
+  公開姿勢だけだからである。要点は §3: **言わないサンドボックスは、
+  書いたものを盗む** — だから `GET /api/v1/stats` が `sandbox: true` を
+  返し、Web UI が全ページにバナーを出す。ヘッダにできないのは凍結の
+  ためで([0082](0082-what-the-freeze-holds-still.md) が外に置いたのは
+  応答スキーマへの追加であってヘッダ名ではない)、`stats` はもともと
+  ループについて答える面である。miss は記録しない(0051 §3.4)。
 - [0086 誰が呼んでいるかを言う、二つ目の方法](0086-a-second-way-to-say-who-is-calling.md) —
   **Accepted**。`OCHAKAI_OIDC_ISSUER` と `OCHAKAI_OIDC_AUDIENCE` を設定した
   デプロイは、Bearer トークンの署名・発行者・audience・有効期限を自分で

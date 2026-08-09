@@ -313,3 +313,47 @@ func TestPublicModeKeepsNoQueries(t *testing.T) {
 		t.Error("a public deployment is keeping what its callers typed")
 	}
 }
+
+// The fourth cell of the posture square, deployed on purpose: anonymous
+// and writable (design doc 0087). Each of the four spellings is pinned
+// against the others, because what separates them is exactly what an
+// operator would get wrong.
+func TestSandboxPosture(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
+	for mode, want := range map[string]struct {
+		sandbox, anonymous, readOnly, dev, misses bool
+	}{
+		"":          {misses: true},
+		"read-only": {readOnly: true, misses: true},
+		"public":    {anonymous: true, readOnly: true},
+		"dev":       {dev: true, misses: true},
+		"sandbox":   {sandbox: true, anonymous: true},
+	} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			t.Setenv("OCHAKAI_MODE", mode)
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := struct{ sandbox, anonymous, readOnly, dev, misses bool }{
+				cfg.Sandbox, cfg.Anonymous(), cfg.ReadOnly, cfg.InsecureDev, cfg.RecordMisses,
+			}
+			if got != want {
+				t.Errorf("mode %q = %+v, want %+v", mode, got, want)
+			}
+		})
+	}
+}
+
+// A sandbox reads no identity, so an issuer beside it is a configuration
+// saying two different things — the same refusal public and dev already
+// get.
+func TestSandboxRefusesAnIssuer(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
+	t.Setenv("OCHAKAI_MODE", "sandbox")
+	t.Setenv("OCHAKAI_OIDC_ISSUER", "https://issuer.example")
+	t.Setenv("OCHAKAI_OIDC_AUDIENCE", "ochakai")
+	if _, err := FromEnv(); err == nil {
+		t.Error("a sandbox with an OIDC issuer was accepted; it reads no identity")
+	}
+}

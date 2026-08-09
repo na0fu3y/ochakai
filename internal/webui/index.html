@@ -462,6 +462,16 @@
     border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
     font-size: .92rem; color: var(--muted);
   }
+  /* A sandbox is writable, so nothing is hidden — what it needs is to
+     say what it is (design doc 0087). It is the one banner that stays on
+     every page, because the thing it warns about (your writing is going
+     to be erased) applies to every page. */
+  .sandbox-note { display: none; }
+  body.sandbox .sandbox-note {
+    display: block; background: var(--accent-weak); border: 1px solid var(--border);
+    border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+    font-size: .92rem;
+  }
 </style>
 </head>
 <body>
@@ -486,6 +496,13 @@
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
   </aside>
+  <div class="sandbox-note" role="status">
+    <strong>This is a sandbox.</strong> Anyone can write here, nobody is
+    identified, and the whole knowledge base is restored on a schedule —
+    so everything you write is going to be erased. It is here to be tried:
+    draft a concept, verify it, report an outcome. Keep nothing you mind
+    losing.
+  </div>
   <main id="view"></main>
 </div>
 <div id="toast"></div>
@@ -759,6 +776,18 @@ function setReadOnly(on) {
   if (READ_ONLY === on) return;
   READ_ONLY = on;
   document.body.classList.toggle('read-only', on);
+}
+
+// A sandbox is learned from /api/v1/stats rather than from a header
+// (design doc 0087 §4): the wire is frozen at /api/v1 and a new header
+// is not a response-only addition, while a field on a response schema
+// is. It is asked for once, at startup, because the answer is a property
+// of the deployment rather than of a request.
+async function markSandbox() {
+  try {
+    const s = await api('/api/v1/stats');
+    document.body.classList.toggle('sandbox', s.sandbox === true);
+  } catch (e) { /* a banner is not worth failing the page over */ }
 }
 
 // The archive is a representation of the bundle root, asked for with an
@@ -2464,6 +2493,7 @@ $('#side-toggle').addEventListener('click', () => {
 
 refreshTree();
 refreshQueues();
+markSandbox();
 route();
 </script>
 </body>

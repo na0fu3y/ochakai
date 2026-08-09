@@ -21,6 +21,31 @@ last entry.
 
 ### Added
 
+- **`OCHAKAI_MODE=sandbox`: a public deployment anyone can write to, and
+  that says so** ([0087](docs/design/0087-a-sandbox-says-it-is-one.md)).
+  The loop is what this product is about — an agent drafts, a human
+  rules, an outcome comes back — and it was the one thing nobody could
+  try: the public demo is `public`, which implies read-only, so seeing a
+  single write-back meant standing up Postgres first. A sandbox is the
+  fourth cell of the posture square deployed on purpose: anonymous like
+  `public`, writable like the default, and restored on a schedule by
+  whoever runs it. It is not `dev` renamed — `dev` says in its own
+  documentation that it is not for a deployment, an operator reading a
+  config cannot tell an accident from an intent, and the Terraform module
+  grants `allUsers` only to a posture that asked for it (`sandbox = true`
+  now does, beside `public_read_only`).
+
+  **A sandbox that does not announce itself steals the work somebody
+  curated into it**, so the product says it rather than a README hoping
+  to be read: `GET /api/v1/stats` answers `sandbox: true` — a
+  response-only addition, outside the freeze
+  ([0082](docs/design/0082-what-the-freeze-holds-still.md)) — and the
+  bundled web UI carries one banner on every page. Misses are not
+  recorded, for the reason a public deployment does not record them. No
+  new environment variable: one more word for the one that already says
+  what a deployment is. The restore job is the operator's, and
+  [the operating guide](docs/guides/operating.md) has it.
+
 - **A deployment can authenticate with its own OIDC issuer**
   ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)).
   Outside Google Cloud there were two postures and neither is a

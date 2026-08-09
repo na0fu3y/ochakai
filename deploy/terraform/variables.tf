@@ -100,6 +100,33 @@ variable "read_only" {
   default     = false
 }
 
+variable "sandbox" {
+  description = <<-EOT
+    The disposable public sandbox (OCHAKAI_MODE=sandbox, design doc 0087).
+    The second posture where a publicly invokable ochakai is intended, and
+    the only writable one: the module grants allUsers roles/run.invoker,
+    so anyone with the URL can draft a concept, verify it and report an
+    outcome — the loop this product is about, which the read-only demo
+    could never show.
+
+    What makes it safe is that nothing here is kept. Anyone may write, so
+    nobody is identified (the Authorization header is unverifiable without
+    Cloud Run IAM in front, and believing it would let any caller name any
+    person), and **you restore the base on a schedule** — the module does
+    not do that for you; deploy/../docs/guides/operating.md has the job.
+    The server says so on its own: GET /api/v1/stats answers
+    sandbox: true and the bundled web UI carries a banner, because a
+    sandbox that does not announce itself steals the work somebody
+    curated into it.
+
+    Never point this at a knowledge base you mind losing, and never
+    combine it with public_read_only — the two are different postures and
+    the server takes one word.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "public_read_only" {
   description = <<-EOT
     The public read-only demo (OCHAKAI_MODE=public, design doc 0042).
