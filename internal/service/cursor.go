@@ -122,7 +122,7 @@ func cursorKeys(sort string, h domain.SearchHit) []*string {
 	case "stale_after":
 		return []*string{cursorText(h.StaleAfter)}
 	case "usage":
-		return []*string{cursorCount(usageOf(h).SearchHits), cursorTime(&h.CreatedAt)}
+		return []*string{cursorCount(usageOf(h).Fetches), cursorTime(&h.CreatedAt)}
 	case "failed":
 		u := usageOf(h)
 		return []*string{cursorCount(u.Failed), cursorCount(u.Worked), cursorTime(h.VerifiedAt)}

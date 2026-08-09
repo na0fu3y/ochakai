@@ -220,7 +220,7 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"Exactly one of query / sort. A sort lists instead of searching, pages with cursor, " +
 			"and scores 0:\n" +
 			"- verified_at: by verification age, oldest first — stale verified knowledge.\n" +
-			"- usage: by demand — the draft review feed.\n" +
+			"- usage: by how often the concept was read — the draft review feed.\n" +
 			"- failed: reported wrong via report_outcome, worst first — the re-verification feed.\n" +
 			"- stale_after: past the author's declared expiry, most overdue first — verifying " +
 			"alone does not clear this feed, because the date is the writer's declaration and " +

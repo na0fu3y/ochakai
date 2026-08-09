@@ -116,12 +116,15 @@ func TestCursorKeysMatchTheOrder(t *testing.T) {
 	at := time.Date(2026, 7, 14, 2, 33, 41, 19778000, time.UTC)
 	hit := domain.SearchHit{
 		Summary: domain.Summary{ID: "metrics/revenue", StaleAfter: "2026-12-31", VerifiedAt: &at, CreatedAt: at},
-		Usage:   &domain.Usage{SearchHits: 74, Worked: 2, Failed: 3},
+		// search_hits and fetches differ on purpose: the usage feed ranks
+		// by reads, and a cursor built from the listings it was ranked by
+		// until now would pass every other assertion here.
+		Usage: &domain.Usage{SearchHits: 74, Fetches: 41, Worked: 2, Failed: 3},
 	}
 	for sort, want := range map[string][]string{
 		"verified_at": {"2026-07-14T02:33:41.019778Z"},
 		"stale_after": {"2026-12-31"},
-		"usage":       {"74", "2026-07-14T02:33:41.019778Z"},
+		"usage":       {"41", "2026-07-14T02:33:41.019778Z"},
 		"failed":      {"3", "2", "2026-07-14T02:33:41.019778Z"},
 		"source":      {},
 	} {

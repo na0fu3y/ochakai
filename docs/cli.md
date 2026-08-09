@@ -330,7 +330,7 @@ with --cursor reads the next one.
 
 The feed is the argument; it sets the order and the first column:
 
-  usage         most search_hits first, never-used oldest first at the
+  usage         most fetches first, never-read oldest first at the
                 bottom. With --status draft, the draft review feed
   verified_at   oldest verification first, never-verified last — the
                 canary feed
