@@ -537,6 +537,17 @@ grew to acknowledge the amendment. That is what the ceiling is for — the
 corpus grew because a decision was made, and the decision is named one
 line above the number.
 
+5,500 → 6,000 is three records landing in one stretch of work, none of
+them large: 0083 (an error carries a code), 0084 (a hit says why it
+matched) and 0085 (the empty base, and what fills it). Each is a decision
+a user can observe and none restates another, which is the test this
+ceiling asks — what it catches is the case where the answer would have
+been "compress the prose", and it is not this one. Worth naming: two of
+the three record a *refusal* holding while the thing somebody wanted got
+built anyway (RFC 9457 declined but errors made machine-readable; a
+warehouse connector declined but the empty base filled), and a refusal
+that is only ever asserted is the kind that quietly stops being true.
+
 5,000 → 5,500 is 0079, the second crossing and the first by an ordinary
 new record rather than by lines an existing one grew into. It states
 where ochakai refused a document OKF SPEC §11 says a consumer must
@@ -544,7 +555,7 @@ accept, and two of those refusals had cited the spec for a requirement
 the spec does not state — the kind of finding a record exists to correct
 rather than to compress away.
 
-    RECORD-CORPUS-LINES: 5500
+    RECORD-CORPUS-LINES: 6000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

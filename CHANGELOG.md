@@ -21,6 +21,31 @@ last entry.
 
 ### Added
 
+- **`ochakai seed` fills an empty base without ochakai touching a
+  warehouse.** A new deployment starts empty, and catalog products solve
+  that with connectors that crawl the warehouse — which ochakai does not
+  have and will not
+  ([0081 §1](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)).
+  `seed` is the third way: you run the `INFORMATION_SCHEMA` query
+  yourself, with your own client and your own identity, and pipe the rows
+  in; it prints an OKF bundle of `BigQuery Table` **drafts**, and the
+  existing `ochakai import` writes them.
+
+  ```sh
+  bq query --format=json --nouse_legacy_sql '…' | ochakai seed - | ochakai import -
+  ```
+
+  No warehouse client is linked into the binary and no credential is
+  read, so the refusal is untouched and the command serves any warehouse
+  that can spell those rows. Every concept comes out `draft` with an
+  empty description on purpose: what a table is for, which column lies
+  and when the load is late are the reasons anybody reads the entry, the
+  schema knows none of them, and a sentence nobody wrote is one everybody
+  would trust. A connector produces thousands of rows nobody vouches for;
+  this produces thousands of questions, which land in the review queue.
+  CLI 24 → 25 and FLAG 28 → 29, said out loud
+  ([0085](docs/design/0085-the-empty-base-and-what-fills-it.md)).
+
 - **Every request now logs one structured line.** `/health` was the whole
   observability surface, so "search got slow" had no answer short of
   attaching to Cloud SQL by hand and "what is failing" had none at all.

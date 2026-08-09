@@ -79,12 +79,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP: 6
 - MCP-BYTES: 12000
 - MCP-BYTES-SLACK: 500
-- CLI: 24
-- FLAG: 28
+- CLI: 25
+- FLAG: 29
 - ENV: 11
 - VOCAB: 46
 - DOC: 25
-- DOC-LINES: 5800
+- DOC-LINES: 5900
 - DOC-LINES-SLACK: 100
 
 `-LINES` と `-BYTES` で終わる行だけは、一覧ではなく**量**に天井を置いて
@@ -326,7 +326,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 であって、能力も引数も応答も変わらない。応答の JSON キーも
 `attachment` から `file` に変わっている。
 
-## CLI (24)
+## CLI (25)
 
 - `ochakai browse`
 - `ochakai completion`
@@ -346,6 +346,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 - `ochakai report`
 - `ochakai revisions`
 - `ochakai search`
+- `ochakai seed`
 - `ochakai stats`
 - `ochakai ui`
 - `ochakai usage`
@@ -369,6 +370,16 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 `--source` / `--links-to` だけを渡すと順位付けをやめること。
 そして `search -h` の前置き散文は 30 行から 9 行になった。
 
+24 → 25 は [0085](design/0085-the-empty-base-and-what-fills-it.md) の
+`ochakai seed` である。**天井を上げる決定**であり、そう言って上げている。
+新しいデプロイが最初に持つのは空のベースで、カタログ製品はそこをコネクタで
+埋める — ochakai はコネクタを持たないと決めている([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
+`seed` はその二択の外にあり、**ウェアハウスには一切接続しない**: 運用者が
+自分のクライアントと自分の identity で撃った `INFORMATION_SCHEMA` の答えを
+受け取り、draft の OKF バンドルとして吐くだけである。書き込みは既存の
+`ochakai import` が行うので、書き込み経路は増えていない。フラグは
+`--project` 一本ぶんだけ増えた(`--prefix` は既存の語である)。
+
 26 → 24 は [0077](design/0077-one-address-for-a-file.md) が、退役した語で
 綴られていた attach / detach の二本を畳んだぶんである。**能力は落ちて
 いない** — バンドルは一つのアドレス空間で、`PUT` / `DELETE` は既に両方の
@@ -380,7 +391,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 なった以上(0075 §5)、誰もリンクしないファイルは誰にも見つからない。
 `--name` は `ochakai use` にも付いているので FLAG は 28 のままである。
 
-## FLAG (28)
+## FLAG (29)
 
 コマンド数を数えることは、**REST で操作数だけを数えていたのと同じ形の
 見落とし**だった。PARAM の節が書いているとおり、操作をパラメータに畳めば
@@ -431,6 +442,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `only-if-new`
 - `port`
 - `prefix`
+- `project`
 - `rejected`
 - `source`
 - `status`
@@ -741,6 +753,15 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
 開発・運用ナレッジが [kb/](../kb) の OKF バンドルになった。frontmatter
 を持つ md は保存されるものであって説明ではない(下の箇条)ので
 `kb/bundle` は数えず、入口の一枚 [kb/README.md](../kb/README.md) だけが出る。
+
+**5,800 → 5,900 は、二つの到達経路と一つの計器である。**
+[0084](design/0084-a-hit-says-why-it-matched.md) と
+[0085](design/0085-the-empty-base-and-what-fills-it.md) が節を足し、
+リクエストログの読み方が[運用ガイド](guides/operating.md)に一節ぶん増えた。
+どれも畳み込みの弁明ではなく、**既にある能力・新しく足した能力への到達
+経路**である — 0085 の `seed` は空のベースを埋める最初の 30 分を、
+0084 のスニペットはヒットを開くかどうかの判断を、ログの節は「遅い」の
+診断を、それぞれ手順として書いている。
 
 **そして 5,700 → 5,800 に戻っている。上の二段落が同時に着地したから
 である。** 畳み込みは本物で(mcp-clients.md は 176 行減った)、新しい

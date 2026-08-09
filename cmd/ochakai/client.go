@@ -47,6 +47,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"revisions": cmdRevisions,
 	"log":       cmdLog,
 	"export":    cmdExport,
+	"seed":      cmdSeed,
 	"import":    cmdImport,
 	"use":       cmdUse,
 	"whoami":    cmdWhoami,
