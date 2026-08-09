@@ -3,6 +3,10 @@
 まずは [README](../README.md) を読む — ochakai とは何か、クイックスタート、
 そして何をしないか。README はわざと短くしてあり、詳しい説明はここにある。
 
+**English speakers: [docs/en.md](en.md)** — one page that says what each
+Japanese page holds, in what order to read them, and the names you would
+otherwise have to hunt for. Not a translation; a way in.
+
 **このマニュアルは日本語である**(C8、[surface.md](surface.md))。英語で
 残るのは玄関と契約だけで、それは決定である — [README](../README.md)
 (使うかどうかを決める場所であり、その読者は国際的である)、

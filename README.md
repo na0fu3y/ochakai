@@ -21,7 +21,8 @@ SQL](deploy/terraform/README.md) (Japanese) for about $10/month, or Docker
 and nothing else locally.
 
 [Quick start](#quick-start) · [Why ochakai](#why-ochakai) ·
-[Requirements](#requirements) · [All docs](docs/README.md) (Japanese) ·
+[Requirements](#requirements) · [All docs](docs/README.md) (Japanese;
+[one page in English](docs/en.md)) ·
 [REST API](api/openapi.yaml) · [Changelog](CHANGELOG.md)
 
 ![The draft review queue: concepts agents wrote back, waiting for a human
@@ -260,6 +261,11 @@ in the version you are running.
   [Golden query canary](docs/guides/golden-query-canary.md) (Japanese)
 - **Building on it** — [REST API](api/openapi.yaml) ·
   [Examples](examples) (Japanese) · [All docs](docs/README.md) (Japanese)
+- **Reading it in English** — [docs/en.md](docs/en.md): what each Japanese
+  page holds, in what order to read them, and the names you would
+  otherwise have to hunt for inside a page you cannot skim. The manual is
+  Japanese by decision (condition C8), and this is the way in rather than
+  a translation of it
 - **Deciding** — [The surface](docs/surface.md), the eight conditions
   ochakai exists to satisfy and everything counted against them, and
   [docs/design](docs/design/README.md), the numbered decision records

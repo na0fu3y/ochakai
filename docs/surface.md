@@ -83,8 +83,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 29
 - ENV: 11
 - VOCAB: 46
-- DOC: 25
-- DOC-LINES: 5900
+- DOC: 26
+- DOC-LINES: 6000
 - DOC-LINES-SLACK: 100
 
 `-LINES` と `-BYTES` で終わる行だけは、一覧ではなく**量**に天井を置いて
@@ -601,7 +601,7 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `type.Reference`
 - `type.Skill`
 
-## DOC (25)
+## DOC (26)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -754,6 +754,20 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
 を持つ md は保存されるものであって説明ではない(下の箇条)ので
 `kb/bundle` は数えず、入口の一枚 [kb/README.md](../kb/README.md) だけが出る。
 
+**DOC 25 → 26、5,900 → 6,000 は英語話者のための一枚である
+([docs/en.md](en.md))。** マニュアルが日本語であることは C8 の決定で、
+対訳を置かない規則もそのままである — このページは訳ではなく、
+**日本語のページを使うための一枚**である: どのページに何があり、どの順で
+読み、そして「読めないページの中を探さないと分からない名前」は何か。
+機械翻訳は散文をよく訳すが、どのページを開くべきかは教えてくれない。
+
+環境変数の一覧だけは重複する。ここが対訳禁止を曲げる唯一の場所で、
+**知らない名前を日本語のページから拾うことはできない**からである。
+重複は古びるので、`cmd/ochakai/surface_test.go` が en.md の一覧と実物を
+突き合わせる — この repo が重複に払う代金はいつもこれである
+([0035](design/0035-verifiability.md))。意味は
+[configuration.md](configuration.md) にあり、そちらは重複していない。
+
 **5,800 → 5,900 は、二つの到達経路と一つの計器である。**
 [0084](design/0084-a-hit-says-why-it-matched.md) と
 [0085](design/0085-the-empty-base-and-what-fills-it.md) が節を足し、
@@ -833,6 +847,7 @@ PR も自分の tree では正しく、落ちたのは合流点だった。100 �
 - `docs/architecture.md`
 - `docs/compatibility.md`
 - `docs/configuration.md`
+- `docs/en.md`
 - `docs/faq.md`
 - `docs/guides/git-review.md`
 - `docs/guides/golden-query-canary.md`

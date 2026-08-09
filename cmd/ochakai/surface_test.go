@@ -612,6 +612,39 @@ func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 		names = append(names, name)
 	}
 	compareSurface(t, "ENV", names)
+	englishPageNamesEveryEnvVar(t, names)
+}
+
+// docs/en.md repeats the environment variables, which is the one place
+// the no-mirrors rule is bent: an English speaker cannot skim a Japanese
+// page for a name they do not yet know to look for, and the names are
+// the part machine translation renders least usefully. A repeated list
+// is exactly what goes stale, so it is checked rather than trusted —
+// which is how this repo pays for a duplicate anywhere (design doc
+// 0035). The meanings stay in configuration.md, unrepeated.
+func englishPageNamesEveryEnvVar(t *testing.T, names []string) {
+	t.Helper()
+	const page = "../../docs/en.md"
+	content, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("read %s: %v", page, err)
+	}
+	listed := map[string]bool{}
+	for _, line := range strings.Split(string(content), "\n") {
+		if m := surfaceItemRe.FindStringSubmatch(line); m != nil {
+			listed[m[1]] = true
+		}
+	}
+	for _, name := range names {
+		if !listed[name] {
+			t.Errorf("%s does not name %s: an English reader is sent to configuration.md "+
+				"for the meaning, so the list of names has to be complete", page, name)
+		}
+		delete(listed, name)
+	}
+	for name := range listed {
+		t.Errorf("%s names %s, which nothing reads any more", page, name)
+	}
 }
 
 // testSupportPkg is the one package under internal that ships with the
