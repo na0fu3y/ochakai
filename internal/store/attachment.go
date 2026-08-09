@@ -21,7 +21,7 @@ import (
 // store (GCS): attaching the same file twice stores it once, and a
 // revision can name any historical content by hash. Blobs are never
 // deleted, so the bucket only grows. Without a configured blob store,
-// files are unsupported — writes fail with errNoBlobStore.
+// files are unsupported — writes fail with ErrNoBlobStore.
 //
 // Which entry a file belongs to is derived rather than recorded (0046
 // §3.3): it is the entry whose <id>/ namespace the file sits directly
@@ -114,7 +114,7 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 		CreatedAt: time.Now().UTC(),
 	}
 	if s.blobs == nil {
-		return nil, errNoBlobStore
+		return nil, ErrNoBlobStore
 	}
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		// The upload happens under the writers' shared lock (sweep.go):
@@ -169,10 +169,16 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 	return att, nil
 }
 
-// errNoBlobStore is the backstop for attachment operations on an
+// ErrNoBlobStore is the backstop for attachment operations on an
 // instance without a blob store; the service layer checks first and
 // wraps the condition in a client-facing error (design doc 0013).
-var errNoBlobStore = errors.New("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
+//
+// Exported because one caller cannot check first: the archive reads the
+// store directly, and whether it needs a blob store is not a property of
+// the request but of what the snapshot turned out to contain
+// (ExportSnapshot.FileMeta). So the sentinel travels, and writeError
+// gives it the 501 the other paths get.
+var ErrNoBlobStore = errors.New("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 
 // GetAttachment returns one attachment with its bytes. Attachments of
 // soft-deleted entries are gone with the entry.
@@ -182,7 +188,7 @@ func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.Fil
 		return nil, nil, err
 	}
 	if s.blobs == nil {
-		return nil, nil, errNoBlobStore
+		return nil, nil, ErrNoBlobStore
 	}
 	data, err := s.blobs.Get(ctx, att.SHA256)
 	if err != nil {
@@ -300,7 +306,7 @@ type ExportAttachment struct {
 // export.
 func (s *Store) AttachmentBytes(ctx context.Context, sha256 string) ([]byte, error) {
 	if s.blobs == nil {
-		return nil, errNoBlobStore
+		return nil, ErrNoBlobStore
 	}
 	return s.blobs.Get(ctx, sha256)
 }
@@ -357,7 +363,7 @@ func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.File
 // the entry there means PUT on the entry.
 func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, actor domain.Actor) (att *domain.File, created bool, err error) {
 	if s.blobs == nil {
-		return nil, false, errNoBlobStore
+		return nil, false, ErrNoBlobStore
 	}
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
@@ -427,7 +433,7 @@ func (s *Store) GetFile(ctx context.Context, p string) (*domain.File, []byte, er
 		return nil, nil, err
 	}
 	if s.blobs == nil {
-		return nil, nil, errNoBlobStore
+		return nil, nil, ErrNoBlobStore
 	}
 	data, err := s.blobs.Get(ctx, att.SHA256)
 	if err != nil {

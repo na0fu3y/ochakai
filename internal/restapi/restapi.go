@@ -1675,6 +1675,16 @@ func writeError(w http.ResponseWriter, err error) {
 		status, code = http.StatusBadRequest, domain.CodeInvalid
 	case errors.As(err, &unsupportedErr):
 		status, code = http.StatusNotImplemented, domain.CodeUnsupported
+	// The same condition arriving from the store rather than the service.
+	// Every other path asks the service, which checks for a blob store
+	// and says so; the archive reads the store directly, because whether
+	// it needs one is a property of what the snapshot contains rather
+	// than of the request. Without this the one endpoint that exists to
+	// be a backup answered "internal error" for a deployment that has
+	// file rows and no bucket — the true reason left in the server's log,
+	// in exactly the case an operator most needs it.
+	case errors.Is(err, store.ErrNoBlobStore):
+		status, code = http.StatusNotImplemented, domain.CodeUnsupported
 	}
 	if status == http.StatusInternalServerError {
 		// Every status above is a message a caller is meant to read; this

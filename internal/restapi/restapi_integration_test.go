@@ -60,6 +60,42 @@ func lockLiveAttachments(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close(ctx) }) // closing the session releases the lock
 }
 
+// The lock above is a convention until something checks it, and a
+// convention is what issue #546 was: one archive test out of five did not
+// take it, and that one flaked twice in two days on a CI run where
+// another package happened to be holding a live file. The failure was
+// unreadable from here — `gzip: invalid header`, because the archive had
+// answered with an error envelope whose first byte is `{`.
+//
+// So the rule is read back off the source: a test that asks for an
+// archive scans every file the snapshot contains, and every file's bytes
+// resolve against some other package's in-memory fake.
+func TestEveryArchiveTestSerializesAgainstLiveFiles(t *testing.T) {
+	src, err := os.ReadFile("restapi_integration_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Function bodies, split on the column-0 brace that ends each one.
+	// Crude, and enough: this file's functions are all top-level.
+	bodies := strings.Split(string(src), "\nfunc ")
+	checked := 0
+	for _, body := range bodies[1:] {
+		name, _, _ := strings.Cut(body, "(")
+		if name == "getArchive" || !strings.Contains(body, "getArchive(t,") {
+			continue
+		}
+		checked++
+		if !strings.Contains(body, "lockLiveAttachments(t)") {
+			t.Errorf("%s asks for an archive without lockLiveAttachments(t): "+
+				"a file another package holds resolves against a blob fake this "+
+				"server cannot read, and the archive fails on it (#546)", name)
+		}
+	}
+	if checked < 4 {
+		t.Errorf("only %d archive tests found; the guard stopped matching them", checked)
+	}
+}
+
 // newIntegrationService is a Service over a real, migrated PostgreSQL,
 // skipping the test without OCHAKAI_TEST_DATABASE_URL.
 //
@@ -2288,6 +2324,7 @@ func TestRESTIntegrationIndexListsTheFilesInADirectory(t *testing.T) {
 // bound, so a reader extracting the bundle and a reader calling the
 // endpoint are not reading two different histories.
 func TestRESTIntegrationTheArchiveCarriesTheHistory(t *testing.T) {
+	lockLiveAttachments(t) // it archives the root, so it scans every live file
 	srv, _ := newIntegrationServer(t)
 
 	typ := testdb.Unique(t, "restlog")
@@ -2478,6 +2515,94 @@ func TestRESTIntegrationHistoryIsAtTheObjectAndTheDirectory(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("history of an object that never existed = %d, want 404", resp.StatusCode)
+	}
+}
+
+// A bundle holding files cannot be archived by a deployment with no blob
+// store, and the archive says which of the two it is.
+//
+// The store decided this deliberately — an archive that silently omitted
+// the files would be a backup missing half of what it claims to hold
+// (ExportSnapshot.FileMeta) — but the sentinel it raised reached the wire
+// as `{"code":"internal","error":"internal error"}`. Design doc 0013's
+// answer for a missing bucket is 501, and every path that goes through
+// the service gives it; this one reads the store directly, because
+// whether it needs a bucket is a property of what the snapshot contains
+// rather than of the request.
+//
+// An operator meets this by removing OCHAKAI_GCS_BUCKET from a database
+// that has file rows, and meets it at the endpoint that exists to be
+// their backup. Issue #546 found it as a CI flake: a test archiving the
+// root while another package held a live file, failing on `gzip: invalid
+// header` — an error envelope where the gzip magic should be.
+func TestRESTIntegrationArchivingFilesWithoutABucketIs501(t *testing.T) {
+	lockLiveAttachments(t)
+	// The file is written through a server that has somewhere to put the
+	// bytes, which is how the row comes to exist at all.
+	writer, ws := newIntegrationServer(t)
+	ws.UseBlobStore(memBlobStore{})
+	typ := testdb.Unique(t, "restnobucket")
+	id := typ + "/owner"
+	removeEntries(t, writer, id)
+	resp := putDoc(t, writer.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Owner"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+	file := id + "/chart.png"
+	req, err := http.NewRequest(http.MethodPut, writer.URL+"/api/v1/bundle/"+file,
+		bytes.NewReader(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err = http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	t.Cleanup(func() {
+		rq, _ := http.NewRequest(http.MethodDelete, writer.URL+"/api/v1/bundle/"+file, nil)
+		if rr, err := http.DefaultClient.Do(rq); err == nil {
+			rr.Body.Close()
+		}
+	})
+
+	// And read back by one that has nowhere to get them from.
+	blobless, _ := newIntegrationServer(t)
+	arch, err := getArchive(t, blobless.URL+"/api/v1/bundle/", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer arch.Body.Close()
+	if arch.StatusCode != http.StatusNotImplemented {
+		body, _ := io.ReadAll(arch.Body)
+		t.Fatalf("archive over a file with no bucket = %d, want 501: %s", arch.StatusCode, body)
+	}
+	var refused struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(arch.Body).Decode(&refused); err != nil {
+		t.Fatal(err)
+	}
+	if refused.Code != domain.CodeUnsupported {
+		t.Errorf("code = %q, want %q", refused.Code, domain.CodeUnsupported)
+	}
+	// And it names the bucket, rather than the "internal error" the
+	// generic 500 branch hands back on purpose.
+	if !strings.Contains(refused.Error, "OCHAKAI_GCS_BUCKET") {
+		t.Errorf("the refusal does not name the setting that fixes it: %q", refused.Error)
+	}
+
+	// ?files=false asks for the concepts alone, which needs no bucket.
+	plain, err := getArchive(t, blobless.URL+"/api/v1/bundle/", "files=false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plain.Body.Close()
+	if plain.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(plain.Body)
+		t.Errorf("archive without files = %d, want 200: %s", plain.StatusCode, body)
 	}
 }
 

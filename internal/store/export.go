@@ -135,7 +135,7 @@ func (e *ExportSnapshot) FileMeta(ctx context.Context, prefix string) ([]domain.
 		return nil, err
 	}
 	if len(atts) > 0 && e.store.blobs == nil {
-		return nil, errNoBlobStore
+		return nil, ErrNoBlobStore
 	}
 	return atts, nil
 }

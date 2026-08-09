@@ -805,6 +805,12 @@ paths:
             that is not a concept's: at `<id>.md` the answer is the
             concept's own 404, because what was asked about is the
             concept and not the deployment.
+
+            An archive answers 501 for the same reason without a file
+            having been named: the bundle under the requested path holds
+            files, and one that omitted them would be a backup missing
+            what it claims to carry. `?files=false` asks for the concepts
+            alone and succeeds.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:

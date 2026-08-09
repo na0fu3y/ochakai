@@ -194,6 +194,19 @@ last entry.
 
 ### Fixed
 
+- **Archiving a bundle that holds files, on a deployment with no bucket,
+  answered `internal error`.** The store refuses that archive on purpose
+  — one that silently omitted the files would be a backup missing what it
+  claims to carry — but the sentinel it raises never became a client
+  error, so the one endpoint that exists to *be* a backup answered 500
+  with the reason left in the server's log. It is 501 `unsupported` now,
+  naming `OCHAKAI_GCS_BUCKET`, which is what design doc 0013 says a
+  missing bucket is and what every path through the service already
+  returned. An operator meets this by removing the bucket from a database
+  that has file rows. `?files=false` asks for the concepts alone and
+  still succeeds. No contract change: the address already declared 501
+  ([#546](https://github.com/na0fu3y/ochakai/issues/546)).
+
 - **The web UI read the error sentence to decide what to offer.** The
   editor decided whether to show *"view the existing concept"* by
   matching `/already exists/` against the message — the half the
