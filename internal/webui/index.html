@@ -810,12 +810,23 @@ async function api(path, opts = {}) {
   // write affordances; a button that can only ever 403 is a lie.
   setReadOnly(res.headers.get('Ochakai-Read-Only') === 'true');
   if (!res.ok) {
-    let msg = res.status + ' ' + res.statusText;
+    // Two halves, and the page must not confuse them: `error` is a
+    // sentence for a person and may be reworded in any release
+    // (docs/compatibility.md), `code` is the part to branch on. Anything
+    // here that decides what to *do* reads err.code; err.message is only
+    // ever shown.
+    let msg = res.status + ' ' + res.statusText, code = '';
     try {
       const text = await res.text();
-      try { msg = JSON.parse(text).error || text; } catch { msg = text || msg; }
+      try {
+        const body = JSON.parse(text);
+        msg = body.error || text;
+        code = body.code || '';
+      } catch { msg = text || msg; }
     } catch { /* keep status text */ }
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.code = code;
+    throw err;
   }
   return res.status === 204 ? null : res.json();
 }
@@ -2421,7 +2432,13 @@ async function viewEditor(id, prefix = '') {
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);
       if (editing) route(); // hash may be unchanged; re-render
     } catch (e) {
-      const dupLink = !editing && /already exists/.test(e.message)
+      // The id is taken. This asked the sentence for as long as there
+      // was nothing else to ask — and the sentence it matched is one the
+      // server rewrote twice since, once to name what holds the id and
+      // what to do about it. The condition arrives as a code now, on a
+      // 412 rather than a 409 because the page writes with If-None-Match
+      // and that is a precondition failing (design doc 0083).
+      const dupLink = !editing && e.code === 'already_exists'
         ? ` — <a href="#/k/${idPath(entryId)}">view the existing ${esc(entryId)}</a> (edit it, or pick another ID)`
         : '';
       errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
