@@ -289,6 +289,27 @@ last entry.
 
 ### Changed
 
+- **BREAKING (MCP): the `trust` filter on `search_concepts` and
+  `get_context` is now `trusts`.** This surface takes its filters as
+  arrays of values, and the other four say so in their name — `types`,
+  `statuses`, `tags`, `prefixes` — while this one alone was singular. It
+  is the same rule with one spelling broken, so no capability, argument
+  or response changed, and the descriptions now say "several are OR-ed"
+  the way `prefixes` already did instead of REST's "repeat to OR". REST's
+  `trust=` and the CLI's `--trust` are unchanged: those are repeatable
+  singular parameters, aligned there with `type` / `status` / `tag` /
+  `prefix`. OKF is untouched — SPEC §5.3's trust is a tier derived from
+  `verified` rather than a frontmatter key, and the `trust` a response
+  carries (one concept, one tier) keeps its singular name and its three
+  values. A client still sending `trust` fails the call rather than
+  silently searching unfiltered — the tool schemas are
+  `additionalProperties: false`, so the rename surfaces the same way an
+  unknown REST query parameter does (design doc 0064 §2). Check any MCP
+  caller that pinned a tier: design doc 0088's one-release window is for
+  tool and command *names*, and it says so — arguments, flags and output
+  shapes are outside it (§2), so this takes effect on the release that
+  carries it.
+
 - **The bundled web UI is in Japanese.** The manual has been Japanese
   since the C8 translation, and the interface it describes was not: the
   reader the product is aimed at was reading a Japanese page about an

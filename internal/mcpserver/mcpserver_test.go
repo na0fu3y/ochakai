@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -141,6 +142,70 @@ func TestFMIsNotOnTheToolSchemas(t *testing.T) {
 		if _, ok := schema.Properties["fm"]; ok {
 			t.Errorf("%s exposes fm: a frontmatter filter is REST and CLI vocabulary, "+
 				"and its schema costs every agent that connects (design doc 0058 §2.2)", tool.Name)
+		}
+	}
+}
+
+// TestArrayFiltersAreNamedInThePlural pins the one naming rule this
+// surface has that REST and the CLI do not. A filter here is a JSON array
+// of values to OR, so its name says so; REST and the CLI spell the same
+// filters singular (type, status, tag, prefix, trust) because they repeat
+// a parameter instead. trust was the one that broke it — it stood beside
+// types, statuses, tags and prefixes as an array and called itself
+// singular, which no number in docs/surface.md moved, since field names
+// are counted by no dimension.
+//
+// The assertion is the exact set rather than "ends in s": status ends in
+// one and is singular, so the cheap heuristic would wave through the
+// regression this exists to catch.
+func TestArrayFiltersAreNamedInThePlural(t *testing.T) {
+	want := map[string][]string{
+		"search_concepts": {"prefixes", "statuses", "tags", "trusts", "types"},
+		"get_context":     {"prefixes", "statuses", "tags", "trusts", "types"},
+	}
+	cs := connect(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, tool := range res.Tools {
+		expect, ok := want[tool.Name]
+		if !ok {
+			continue
+		}
+		seen[tool.Name] = true
+		raw, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s schema: %v", tool.Name, err)
+		}
+		// "type" is a string or a list of them, so it is read loosely: a
+		// property that can be an array at all is one whose value the
+		// caller writes as a list.
+		var schema struct {
+			Properties map[string]struct {
+				Type json.RawMessage `json:"type"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatalf("unmarshal %s schema: %v", tool.Name, err)
+		}
+		var got []string
+		for name, prop := range schema.Properties {
+			if strings.Contains(string(prop.Type), `"array"`) {
+				got = append(got, name)
+			}
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, expect) {
+			t.Errorf("%s takes arrays %v, want %v — a filter this surface reads as a "+
+				"list of values is named in the plural, the way types/statuses/tags/prefixes are",
+				tool.Name, got, expect)
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("%s is not offered: this check now guards less than it says", name)
 		}
 	}
 }
