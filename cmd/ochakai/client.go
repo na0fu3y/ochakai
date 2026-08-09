@@ -437,6 +437,14 @@ func printHits(page *apiclient.SearchResult, feed string) {
 		if h.Description != "" {
 			line += " — " + h.Description
 		}
+		// The passage that answers "why did this match?", when the answer
+		// is not already on the line: the server sends one only when the
+		// query landed in the body rather than in the name or the
+		// description. The first four fields stay tab-separated, so a
+		// pipeline cutting them is unaffected.
+		if h.Snippet != "" {
+			line += " · " + h.Snippet
+		}
 		fmt.Println(line)
 	}
 }

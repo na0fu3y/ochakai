@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索) |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
@@ -237,6 +237,18 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
 
+- [0084 ヒットは、なぜ一致したかを言う](0084-a-hit-says-why-it-matched.md) —
+  **Accepted**。検索のヒットが `snippet`(クエリの語が本文のどこに落ちたか、
+  読める幅で切り出したもの)を運ぶ。行にあった title と description は
+  「この concept は全体として何か」であって「この問いに何が答えたか」では
+  なく、10 件から 1 件を選ぶ呼び出し元は本文を取りに行くしかなかった —
+  0067 §4 が結果に文書を載せないと決めたときの計算が、一段ずれた場所で
+  そのまま起きていた。名前や description で一致したときと、ベクトルで
+  見つかったときは出さない: どちらも指させる一節が無い(後者に本文の冒頭を
+  出すのは、理由でないもので理由に答えることである)。`ts_headline` では
+  なく Go で切るのは、上位 N の本文が既に手元にあり、一致の単位が移行
+  0036 の二文字窓というこちらの規則だからである。MCP の応答には出るが、
+  ツールの説明文には足さない。
 - [0080 検索が何を融合し、このデプロイがどう埋め込むか](0080-search-and-how-a-deployment-embeds.md)
   — **Accepted**。**検索と埋め込みの現行ドキュメント**(0020 / 0053 /
   0073 / 0078 を一冊にまとめたもの)。Google Cloud の上では埋め込みが既定

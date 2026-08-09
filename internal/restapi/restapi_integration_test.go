@@ -3185,3 +3185,45 @@ func TestRESTIntegrationErrorCodes(t *testing.T) {
 	}
 
 }
+
+// The passage that explains a hit travels on the wire, and a listing —
+// which has no query — carries none (design doc 0084).
+func TestRESTIntegrationSearchCarriesTheMatchingPassage(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "restsnip")
+	id := typ + "/reading"
+	t.Cleanup(func() { removeEntries(t, srv, id) })
+
+	body := "毎年のことなので調査には値しない。" + strings.Repeat("前置きが長い。", 30) +
+		"棚卸資産の回転が落ちるのは在庫の積み増しによる。"
+	doc := docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "八月の読み方", "body": body,
+	})
+	resp := putDoc(t, srv.URL, id, doc, true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	var searched struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?q="+url.QueryEscape("棚卸資産")+"&type="+typ, &searched)
+	if len(searched.Hits) != 1 {
+		t.Fatalf("hits = %d, want the one concept", len(searched.Hits))
+	}
+	if snip := searched.Hits[0].Snippet; !strings.Contains(snip, "棚卸資産") {
+		t.Errorf("snippet = %q, want the passage where the query landed", snip)
+	}
+
+	var listed struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?sort=verified_at&type="+typ, &listed)
+	if len(listed.Hits) != 1 {
+		t.Fatalf("listed = %d, want the one concept", len(listed.Hits))
+	}
+	if snip := listed.Hits[0].Snippet; snip != "" {
+		t.Errorf("a listing carries snippet %q; there is no query to have matched", snip)
+	}
+}

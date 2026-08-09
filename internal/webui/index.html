@@ -241,6 +241,9 @@
   .type-ico { font-size: 1rem; }
   .card .meta { color: var(--muted); font-size: .8rem; margin-top: .15rem; overflow-wrap: anywhere; }
   .card .desc { margin-top: .3rem; font-size: .92rem; }
+  /* The passage that matched, as plain text: it is cut from the body
+     mid-sentence, so it is quoted rather than rendered as markdown. */
+  .card .snippet { color: var(--muted); font-size: .88rem; }
   .card pre { margin-bottom: 0; }
 
   .badge {
@@ -1177,6 +1180,7 @@ function hitCard(h) {
       ${tags}
     </div>
     ${h.description ? descHTML(h.description) : ''}
+    ${h.snippet ? `<div class="desc snippet">${esc(h.snippet)}</div>` : ''}
     ${sql}
     ${cardThumbs(h)}
   </article>`;
