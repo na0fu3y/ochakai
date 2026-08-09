@@ -227,6 +227,23 @@ last entry.
 
 ### Changed
 
+- **The bundled web UI is in Japanese.** The manual has been Japanese
+  since the C8 translation, and the interface it describes was not: the
+  reader the product is aimed at was reading a Japanese page about an
+  English screen. Every user-visible string is translated — labels,
+  banners, empty states, the feed explanations, the placeholders and the
+  titles — and the page declares `lang="ja"`. Nothing else moved: no
+  route, no id, no `data-` marker, no API call, and the tests that pin
+  the write affordances read markers rather than words, so they still
+  say what they said. The three Japanese pages that quoted a button by
+  its English label now quote the Japanese one.
+
+  Two things are deliberately left: comments in the source stay English
+  (CLAUDE.md's rule for code), and **the screenshot in the README and
+  [the loop guide](docs/loop.md) still shows the English UI** — it is a
+  binary this change cannot regenerate, and a caption that lies is worse
+  than one that is late.
+
 - **`DOC-LINES` moves on a 500-line grid instead of a 100-line one.** The
   ceiling on how much manual a reader gets through was widened once
   before, from 10 lines to 100, because a line every documentation PR
