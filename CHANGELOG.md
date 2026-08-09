@@ -227,6 +227,25 @@ last entry.
 
 ### Changed
 
+- **`DOC-LINES` moves on a 500-line grid instead of a 100-line one.** The
+  ceiling on how much manual a reader gets through was widened once
+  before, from 10 lines to 100, because a line every documentation PR
+  rewrites is a line nobody reads and a collision every parallel PR has.
+  The same thing happened again at the new width: between 2026-08-03 and
+  08-09 it went 5,300 → 5,400 → 5,500 → 5,600 → 5,700 → 5,800 → 5,700 →
+  5,800 → 5,900 → 6,000. **Adding one feature and writing down how to use
+  it crosses 100 lines by itself**, so the paragraph each crossing earns
+  stopped being worth reading — which is the failure the mechanism names
+  for itself ("an alarm that rings every time tells you nothing"). The
+  record corpus already made this call at 500
+  ([CONTRIBUTING.md](CONTRIBUTING.md)), and two ceilings on two amounts
+  have no reason to ring at different widths. The cost is accepted and
+  stated: up to 500 lines of headroom can now go unreturned. Retiring the
+  ceiling was considered and declined — of the ten crossings only one or
+  two were the escape hatch it exists to catch (folding a surface and
+  writing prose about the fold), and a wider grid is what leaves only
+  those ringing.
+
 - **A confirmation is worth one rank position in the hybrid ranking,
   where it used to be worth 7.6.** The addend a verified concept got in
   the fused score was 0.002 and its comment called it small; against
