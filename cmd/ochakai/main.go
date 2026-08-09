@@ -139,6 +139,17 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		return nil, nil, err
 	}
 	st.UseLogger(log)
+	// The second way to answer "who is calling" (design doc 0086). Built
+	// here so a misconfigured issuer stops the deployment starting
+	// rather than failing the first request that needs it.
+	if cfg.OIDCIssuer != "" {
+		v, err := httpauth.NewOIDC(cfg.OIDCIssuer, cfg.OIDCAudience)
+		if err != nil {
+			return nil, nil, err
+		}
+		cfg.Verifier = v
+		log.Info("authenticating with OIDC", "issuer", cfg.OIDCIssuer, "audience", cfg.OIDCAudience)
+	}
 	embedder, err := semanticSearch(ctx, cfg, log)
 	if err != nil {
 		return nil, nil, err

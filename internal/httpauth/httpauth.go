@@ -122,11 +122,39 @@ func authenticated(cfg *config.Config, h http.Header) (domain.Actor, int, error)
 	if token == "" {
 		token = bearerFrom(h.Get("Authorization"))
 	}
-	actor, err := actorFromIDToken(token)
+	actor, err := callerFrom(cfg, token)
 	if err != nil {
 		return domain.Actor{}, http.StatusUnauthorized, err
 	}
 	return delegate(actor, h.Values(OnBehalfOfHeader), cfg.Delegators)
+}
+
+// callerFrom resolves the caller by whichever of the two checks this
+// deployment runs (design doc 0086).
+//
+// With a verifier, the signature, the issuer, the audience and the
+// expiry are checked here, because nothing in front of the process did
+// it. Without one, the token was verified by Cloud Run's IAM check
+// before the request arrived and this reads the claims it already
+// vouched for — which is why parsing an unverified token is safe there
+// and would be a hole anywhere else.
+func callerFrom(cfg *config.Config, token string) (domain.Actor, error) {
+	v, ok := cfg.Verifier.(Verifier)
+	if !ok || v == nil {
+		return actorFromIDToken(token)
+	}
+	id, err := v.Verify(context.Background(), token)
+	if err != nil {
+		return domain.Actor{}, err
+	}
+	if id.Name == "" {
+		return domain.Actor{}, errors.New("the verified token names nobody: no email and no subject claim")
+	}
+	kind := domain.ActorHuman
+	if id.Machine {
+		kind = domain.ActorProcess
+	}
+	return domain.Actor{Kind: kind, Name: id.Name}, nil
 }
 
 // OnBehalfOfHeader carries the end-user identity a trusted caller is

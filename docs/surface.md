@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP-BYTES-SLACK: 500
 - CLI: 25
 - FLAG: 29
-- ENV: 11
+- ENV: 13
 - VOCAB: 46
 - DOC: 26
 - DOC-LINES: 6000
@@ -453,7 +453,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `url`
 - `withdraw`
 
-## ENV (11)
+## ENV (13)
 
 環境変数も表面である — デプロイする人が読み、間違えられる。No FDE(C4)
 を掲げる以上、**設定の数は「自分で立ち上げられるか」に直接効く**。
@@ -488,6 +488,21 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 なく([0080](design/0080-search-and-how-a-deployment-embeds.md) §3)、
 モデルごとの定数としてコードに移った。
 
+11 → 13 は [0086](design/0086-a-second-way-to-say-who-is-calling.md) の
+`OCHAKAI_OIDC_ISSUER` と `OCHAKAI_OIDC_AUDIENCE` である。**天井を上げる
+決定**であり、そう言って上げている。Google Cloud の外にあった姿勢は
+`dev`(誰も認証しない)と `read-only`(誰も認証せず書き込みも断る)の
+二つだけで、その間はすべて Cloud Run の IAM チェックがプロセスの前で
+済んでいることに乗っていた。二語で買っているのは**その間**である。
+
+**一語にできなかった。** [0078](design/0078-one-variable-says-how-it-embeds.md)
+が五語を一語に畳めたのは、プロジェクト・リージョン・モデルを一度に運ぶ
+綴り(Vertex のモデル resource name)が**既に存在していた**からである。
+発行者と audience は独立した二つの事実で、両方を運ぶ既存の綴りは無い —
+ここで発明すれば、それは ochakai が作った第二の形式になる(C3 が
+避けているもの)。片方だけの設定は起動時に断るので、二語は必ず揃って
+現れる。
+
 - `OCHAKAI_DATABASE_URL`
 - `OCHAKAI_DB_IAM_AUTH`
 - `OCHAKAI_DELEGATING_CALLERS`
@@ -495,6 +510,8 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `OCHAKAI_GCS_BUCKET`
 - `OCHAKAI_IAP_AUDIENCE`
 - `OCHAKAI_MODE`
+- `OCHAKAI_OIDC_AUDIENCE`
+- `OCHAKAI_OIDC_ISSUER`
 - `OCHAKAI_PRODUCER`
 - `OCHAKAI_RECORD_MISSES`
 - `OCHAKAI_URL`

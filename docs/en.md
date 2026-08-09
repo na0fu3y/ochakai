@@ -64,6 +64,8 @@ to look up.
 - `OCHAKAI_GCS_BUCKET`
 - `OCHAKAI_IAP_AUDIENCE`
 - `OCHAKAI_MODE`
+- `OCHAKAI_OIDC_AUDIENCE`
+- `OCHAKAI_OIDC_ISSUER`
 - `OCHAKAI_PRODUCER`
 - `OCHAKAI_RECORD_MISSES`
 - `OCHAKAI_URL`
@@ -76,6 +78,14 @@ posture the demo runs in — reachable without a Google account, read-only,
 and reading no identity at all. `dev` turns authentication off and makes
 every caller `human:anonymous`; it is for a laptop, never for a
 deployment.
+
+**Off Google Cloud, `OCHAKAI_OIDC_ISSUER` and `OCHAKAI_OIDC_AUDIENCE`
+are how a deployment authenticates.** On Cloud Run the IAM check happens
+in front of the process; elsewhere, naming an OpenID Connect issuer makes
+ochakai verify the bearer token itself — signature, issuer, audience,
+expiry — against the issuer's published keys. No secret is introduced,
+which is the property that made Google Cloud a requirement in the first
+place. Search there is lexical-only: embeddings are Vertex AI or nothing.
 
 **There is no authorization.** Whoever can reach a deployment can read
 and write everything; identity is recorded as provenance, and trust is

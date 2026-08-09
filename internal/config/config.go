@@ -43,6 +43,25 @@ type Config struct {
 	// can already read and write everything (design doc 0002).
 	Delegators []string
 
+	// OIDCIssuer and OIDCAudience configure the second way a deployment
+	// can say who is calling: an OpenID Connect issuer of its own, for a
+	// deployment that is not behind Cloud Run's IAM check (design doc
+	// 0086). Both are set together or neither is — an issuer without an
+	// audience would accept a token it minted for some other service,
+	// which is the confused deputy `aud` exists to prevent, so the pair
+	// is checked at startup rather than left to be discovered.
+	//
+	// No secret arrives with them: verification reads the issuer's
+	// public keys over HTTPS, so a deployment configured this way still
+	// has nothing to issue and nothing to rotate (0065, 0003).
+	OIDCIssuer   string
+	OIDCAudience string
+
+	// Verifier is built from the pair above at startup, and is nil on the
+	// Cloud Run path — where the token was verified in front of the
+	// process and parsing it is all that is left to do.
+	Verifier any
+
 	// ReadOnly makes the deployment refuse every change to knowledge
 	// (design doc 0040). It is not authorization: it does not look at the
 	// caller, and it cannot be narrowed to some entries or some people —
@@ -171,6 +190,9 @@ func FromEnv() (*Config, error) {
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
+		OIDCIssuer:  os.Getenv("OCHAKAI_OIDC_ISSUER"),
+
+		OIDCAudience: os.Getenv("OCHAKAI_OIDC_AUDIENCE"),
 		// The only default-on boolean here, so the only one read as
 		// "anything but false": an operator turning it off writes false.
 		RecordMisses: os.Getenv("OCHAKAI_RECORD_MISSES") != "false",
@@ -224,6 +246,25 @@ func FromEnv() (*Config, error) {
 		cfg.Embedding = e
 	}
 
+	// The pair is refused at startup rather than half-honoured: an
+	// issuer with no audience accepts tokens minted for other services,
+	// and an audience with no issuer authenticates nothing while looking
+	// configured. Both are the shape of failure design doc 0027 §5.2
+	// refuses — a deployment that believes it is authenticating must not
+	// find out otherwise from an audit.
+	if (cfg.OIDCIssuer == "") != (cfg.OIDCAudience == "") {
+		return nil, fmt.Errorf(
+			"OCHAKAI_OIDC_ISSUER and OCHAKAI_OIDC_AUDIENCE are set together or not at all (design doc 0086)")
+	}
+	if cfg.OIDCIssuer != "" && (cfg.InsecureDev || cfg.PublicReadOnly) {
+		// Both of those postures answer "who is calling" without reading
+		// anything, so an issuer beside them is a configuration that
+		// says two different things. Naming the conflict is the whole
+		// reason OCHAKAI_MODE became one word (design doc 0060).
+		return nil, fmt.Errorf(
+			"OCHAKAI_OIDC_ISSUER cannot be combined with OCHAKAI_MODE=%s: that posture reads no identity",
+			os.Getenv("OCHAKAI_MODE"))
+	}
 	return cfg, nil
 }
 
