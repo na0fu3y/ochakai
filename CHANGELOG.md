@@ -21,6 +21,24 @@ last entry.
 
 ### Added
 
+- **One page of the manual is in English** ([docs/en.md](docs/en.md)).
+  The manual is Japanese by decision — condition C8 — and the front door
+  and the contract are the seven pages that stay English, which left an
+  evaluator who reads neither Japanese nor Go at a wall on step two: the
+  pitch was in their language and everything needed to run it was not.
+  This is not a translation and there is still no mirrored page, because
+  two texts saying the same thing go out of step and nobody can tell
+  which half is stale. It is the page that makes the Japanese ones
+  usable: what each holds, in what order to read them, and the handful of
+  names — the environment variables, the four postures of
+  `OCHAKAI_MODE`, the two shapes of an MCP connection, the absence of
+  authorization — that you cannot find by skimming a page you cannot
+  skim. Machine translation handles prose well; what it cannot tell you
+  is which page to open. The environment-variable list is the one
+  duplicate, and it is checked against the build rather than trusted
+  (`cmd/ochakai/surface_test.go`). `DOC` 25 → 26 and `DOC-LINES`
+  5,900 → 6,000.
+
 - **`ochakai seed` fills an empty base without ochakai touching a
   warehouse.** A new deployment starts empty, and catalog products solve
   that with connectors that crawl the warehouse — which ochakai does not
