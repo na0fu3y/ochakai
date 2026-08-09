@@ -237,6 +237,16 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
 
+- [0085 空のベースと、それを埋めるもの](0085-the-empty-base-and-what-fills-it.md) —
+  **Accepted**。`ochakai seed` が、運用者自身が撃った
+  `INFORMATION_SCHEMA` の答えを読んで `BigQuery Table` の **draft** バンドル
+  を吐き、書き込みは既存の `import` が行う。**ウェアハウスには接続しない** —
+  クライアントはバイナリにリンクされず、資格情報も読まないので、
+  [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 の
+  「コネクタを持たない」は一行も緩んでいない。出るのが draft で
+  `description` が空なのは要点であり、誰も書いていない一文は全員が信じて
+  しまうからである。カタログのコネクタが作るのは誰も請け合っていない
+  数千行、こちらが作るのは数千個の問いである。CLI 24 → 25、FLAG 28 → 29。
 - [0084 ヒットは、なぜ一致したかを言う](0084-a-hit-says-why-it-matched.md) —
   **Accepted**。検索のヒットが `snippet`(クエリの語が本文のどこに落ちたか、
   読める幅で切り出したもの)を運ぶ。行にあった title と description は

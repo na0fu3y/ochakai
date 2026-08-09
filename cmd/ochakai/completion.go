@@ -93,6 +93,7 @@ _ochakai() {
     'revisions:list the change history of a concept (newest first)'
     'log:print the history under a path as OKF log.md'
     'export:download the knowledge base as an OKF bundle'
+    'seed:turn a warehouse schema listing into a bundle of draft concepts'
     'import:upload an OKF bundle'
     'use:pick the server for later commands'
     'whoami:print target server, identity, and reachability'
@@ -201,6 +202,9 @@ _ochakai() {
     export)
       _arguments '--no-files[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
       ;;
+    seed)
+      _arguments '--project[warehouse project for the resource address]:project:' '--prefix[id prefix]:prefix:' '1:file:_files'
+      ;;
     import)
       _arguments '--dry-run[parse and list, write nothing]' '--strict[fail on any note or skip]' '--url[server URL]:url:' '1:bundle:_files'
       ;;
@@ -240,7 +244,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search list browse context get put verify reject delete purge reembed move usage stats report revisions export import use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search list browse context get put verify reject delete purge reembed move usage stats report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -279,6 +283,7 @@ _ochakai() {
     purge|move)    opts="--url" ;;
     reembed)       opts="--limit --once --json --url" ;;
     export)        opts="--url --no-files" ;;
+    seed)          opts="--project --prefix" ;;
     import)        opts="--dry-run --strict --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
@@ -324,6 +329,7 @@ complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (wo
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of a concept (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a log -d 'print the history under a path as OKF log.md'
 complete -c ochakai -n __fish_use_subcommand -a export -d 'download the knowledge base as an OKF bundle'
+complete -c ochakai -n __fish_use_subcommand -a seed -d 'turn a warehouse schema listing into a bundle of draft concepts'
 complete -c ochakai -n __fish_use_subcommand -a import -d 'upload an OKF bundle'
 complete -c ochakai -n __fish_use_subcommand -a use -d 'pick the server for later commands'
 complete -c ochakai -n __fish_use_subcommand -a whoami -d 'print target server, identity, and reachability'
@@ -371,5 +377,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to 
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
 complete -c ochakai -n '__fish_seen_subcommand_from export' -l no-files -d 'export the markdown only'
+complete -c ochakai -n '__fish_seen_subcommand_from seed' -l project -x -d 'warehouse project for the resource address'
+complete -c ochakai -n '__fish_seen_subcommand_from seed' -l prefix -x -d 'id prefix'
 complete -c ochakai -n '__fish_seen_subcommand_from export' -a '(__fish_complete_directories)'
 `

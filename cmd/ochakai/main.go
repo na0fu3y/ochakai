@@ -110,6 +110,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   revisions <id>          list a concept's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
   export <dir | ->        download the knowledge base as an OKF bundle
+  seed <file.json | ->    turn a warehouse's own schema listing into a bundle of
+                          draft concepts (pipe into import; reads no warehouse)
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)
   mcp-stdio               speak MCP on stdin/stdout, forwarding to the server

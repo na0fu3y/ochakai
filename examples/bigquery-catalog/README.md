@@ -15,6 +15,24 @@ BigQuery のテーブルメタデータを `BigQuery Table` concept として、
 同じ REST API の普通のクライアントとして、あなた自身のサービス
 アカウントで動く。
 
+## その前に: 初日の一回なら `ochakai seed`
+
+ここにあるのは**毎日走る同期**である(receipt、attester、差分)。
+最初の一回だけ、空のベースにテーブルを入れて眺めたいなら、Python も
+receipt も要らない — 自分で撃ったクエリの答えを `ochakai seed` に渡すと、
+draft の OKF バンドルになって出てくる([0085](../../docs/design/0085-the-empty-base-and-what-fills-it.md)):
+
+```sh
+bq query --format=json --nouse_legacy_sql \
+  'SELECT table_schema, table_name, column_name, data_type, is_nullable
+     FROM `proj.dataset.INFORMATION_SCHEMA.COLUMNS` ORDER BY ordinal_position' |
+  ochakai seed --project proj - | ochakai import -
+```
+
+`seed` もウェアハウスには接続しない — 撃つのはあなたの `bq` であり、
+ochakai が受け取るのはその出力だけである。出てくる draft の中身を
+書き始めて、同期を毎日回したくなったときに読むのが以下である。
+
 ## スクリプトの入ったフォルダではなく、ナレッジとして出荷される
 
 `bundle/` は 3 concept の OKF バンドルである。これを import すると、

@@ -49,6 +49,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   revisions <id>          list a concept's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
   export <dir | ->        download the knowledge base as an OKF bundle
+  seed <file.json | ->    turn a warehouse's own schema listing into a bundle of
+                          draft concepts (pipe into import; reads no warehouse)
   import <dir | tgz | ->  upload an OKF bundle (any producer's, not just ours)
   ui                      serve the web UI locally, acting as you (no deploy)
   mcp-stdio               speak MCP on stdin/stdout, forwarding to the server
@@ -652,6 +654,40 @@ Examples:
   ochakai search churn --json | jq -r '.hits[] | .id'
   ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one
   ochakai search revenue --links-to metrics/revenue --type Insight   # among what reads this metric
+```
+
+## ochakai seed
+
+```
+Usage: ochakai seed [flags] <file.json | ->
+
+Turn a warehouse's own schema listing into a bundle of draft concepts,
+printed as a tar.gz on stdout. One `BigQuery Table` concept per table,
+with its columns as a markdown table and its address as `resource`.
+Reads JSON rows (an array, or one object per line) with the
+INFORMATION_SCHEMA.COLUMNS column names: table_schema, table_name,
+column_name, data_type, is_nullable, and description where there is one.
+Rows for the same table are gathered however they arrive.
+
+ochakai connects to no warehouse and holds no credential of one: you run
+the query, with your own client and your own identity, and pipe the answer
+here. Every concept comes out as a draft, because a projected schema is a
+skeleton somebody still has to say something about — which is what the
+review queue is for.
+
+Flags:
+  -prefix string
+    	the id prefix each concept is written under, e.g. tables/shop/orders (default "tables")
+  -project resource
+    	the warehouse project or account the tables live in, written into each concept's resource address
+
+Examples:
+  bq query --format=json --nouse_legacy_sql \
+    'SELECT table_schema, table_name, column_name, data_type, is_nullable
+       FROM `proj.dataset.INFORMATION_SCHEMA.COLUMNS` ORDER BY ordinal_position' |
+    ochakai seed - | ochakai import -
+  ochakai seed columns.json > catalog.tar.gz   # look before you import
+  ochakai seed --project my-proj --prefix warehouse/tables - | ochakai import -
 ```
 
 ## ochakai stats
