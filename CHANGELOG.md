@@ -21,6 +21,26 @@ last entry.
 
 ### Added
 
+- **`stats` says how much of the base vector search can actually see.**
+  A concept longer than the embedding model's input window is embedded
+  from its front and the rest is dropped — and the result is
+  indistinguishable from success: it has a vector, it ranks, it comes
+  back, and it is simply unfindable by anything said in its second half.
+  The longer and more valuable the document, the more of it is gone, and
+  no surface said this was happening. `GET /api/v1/stats` now answers
+  `embedding` with `enabled`, `vectors` and `truncated`; `ochakai stats`
+  prints the pair (`-` where there is no embedder, as with misses); the
+  web UI's review page draws a line about it only when it is not zero,
+  as it does for dropped observations. Read the two together — three in
+  four is the shape of the corpus and wants a wider model, three in four
+  hundred is one long runbook and wants splitting. **Chunking is
+  declined for now**, and [0088](docs/design/0088-a-half-embedded-concept-says-so.md)
+  §4 states the condition for reopening it. The vector rows gain a
+  column, filled by the next write or by `ochakai reembed`; existing
+  rows read `false`, which is "not known to be truncated" rather than a
+  claim. Concepts, not files
+  ([#532](https://github.com/na0fu3y/ochakai/issues/532)).
+
 - **`OCHAKAI_MODE=sandbox`: a public deployment anyone can write to, and
   that says so** ([0087](docs/design/0087-a-sandbox-says-it-is-one.md)).
   The loop is what this product is about — an agent drafts, a human

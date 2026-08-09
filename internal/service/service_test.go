@@ -269,7 +269,10 @@ func TestEmbeddingText(t *testing.T) {
 		Attrs:       map[string]any{"question": "monthly revenue?"},
 		Body:        "body text",
 	}
-	got := embeddingText(k, embed.ConservativeInputBytes)
+	got, full := embeddingText(k, embed.ConservativeInputBytes)
+	if !full {
+		t.Error("a short concept reports itself truncated")
+	}
 	for _, want := range []string{"Revenue", "total sales", "finance kpi", "monthly revenue?", "body text"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("embeddingText misses %q:\n%s", want, got)
@@ -281,7 +284,10 @@ func TestEmbeddingText(t *testing.T) {
 // the envelope fields must survive untouched.
 func TestEmbeddingTextTruncatesBody(t *testing.T) {
 	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", embed.ConservativeInputBytes+1000)}
-	got := embeddingText(k, embed.ConservativeInputBytes)
+	got, full := embeddingText(k, embed.ConservativeInputBytes)
+	if full {
+		t.Error("a concept over the window reports itself whole; the stats count depends on this")
+	}
 	if len(got) > embed.ConservativeInputBytes {
 		t.Errorf("embeddingText length = %d, want capped at %d", len(got), embed.ConservativeInputBytes)
 	}
@@ -296,7 +302,7 @@ func TestEmbeddingTextTruncatesBody(t *testing.T) {
 func TestEmbeddingTextTruncatesOnRuneBoundary(t *testing.T) {
 	// 2001 characters * 3 bytes = 6003 bytes: the cap falls mid-character.
 	k := &domain.Knowledge{Body: strings.Repeat("売", 2001)}
-	got := embeddingText(k, embed.ConservativeInputBytes)
+	got, _ := embeddingText(k, embed.ConservativeInputBytes)
 	if !utf8.ValidString(got) {
 		t.Errorf("embeddingText produced invalid UTF-8 (length %d)", len(got))
 	}
@@ -320,8 +326,14 @@ func TestEmbeddingTextCapsTheWholeText(t *testing.T) {
 		Attrs:       map[string]any{"question": strings.Repeat("q", 2000)},
 		Body:        strings.Repeat("b", embed.ConservativeInputBytes),
 	}
-	if got := len(embeddingText(k, embed.ConservativeInputBytes)); got > embed.ConservativeInputBytes {
+	text, full := embeddingText(k, embed.ConservativeInputBytes)
+	if got := len(text); got > embed.ConservativeInputBytes {
 		t.Errorf("embeddingText length = %d, want the whole text capped at %d", got, embed.ConservativeInputBytes)
+	}
+	// The envelope alone is over the window here, which is the case the
+	// count would miss if truncation were measured on the body.
+	if full {
+		t.Error("a concept whose envelope alone overruns reports itself whole")
 	}
 }
 
@@ -339,7 +351,8 @@ func TestEmbedBytesFollowsTheModel(t *testing.T) {
 		t.Errorf("an embedder that says = %d, want 20000", got)
 	}
 	k := &domain.Knowledge{Title: "T", Body: strings.Repeat("x", 30000)}
-	if got := len(embeddingText(k, roomy.embedBytes())); got != 20000 {
+	text, _ := embeddingText(k, roomy.embedBytes())
+	if got := len(text); got != 20000 {
 		t.Errorf("text capped at %d, want the model's 20000", got)
 	}
 }
@@ -642,8 +655,15 @@ func TestEmbedDocumentShortensOnOverlongInput(t *testing.T) {
 	t.Run("retries shorter until it fits", func(t *testing.T) {
 		e := &shrinkEmbedder{acceptUnder: 1200}
 		svc := &Service{Embedder: e, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
-		if _, err := svc.embedDocument(context.Background(), long); err != nil {
+		_, embedded, err := svc.embedDocument(context.Background(), long)
+		if err != nil {
 			t.Fatalf("embedDocument: %v", err)
+		}
+		// The number the caller records the truncation from: the provider
+		// shortened the text, and a vector written as whole here would
+		// hide seven eighths of a concept.
+		if embedded >= len(long) {
+			t.Errorf("embedded %d of %d bytes reported; the shortening is invisible", embedded, len(long))
 		}
 		if e.calls < 2 {
 			t.Errorf("calls = %d, want a retry after the rejection", e.calls)
@@ -658,7 +678,7 @@ func TestEmbedDocumentShortensOnOverlongInput(t *testing.T) {
 	t.Run("does not retry other failures", func(t *testing.T) {
 		e := &shrinkEmbedder{fail: errors.New("connection refused")}
 		svc := &Service{Embedder: e, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
-		if _, err := svc.embedDocument(context.Background(), long); err == nil {
+		if _, _, err := svc.embedDocument(context.Background(), long); err == nil {
 			t.Fatal("want the error surfaced")
 		}
 		if e.calls != 1 {

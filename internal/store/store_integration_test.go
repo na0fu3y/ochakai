@@ -75,7 +75,7 @@ func TestIntegration(t *testing.T) {
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertEmbedding(ctx, k.ID, "test-model", []float32{1, 0, 0, 0}); err != nil {
+	if err := s.UpsertEmbedding(ctx, k.ID, "test-model", []float32{1, 0, 0, 0}, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -753,7 +753,7 @@ func TestIntegrationMove(t *testing.T) {
 	if _, err := s.PutAttachment(ctx, "it-move-src/metric", "chart.png", "image/png", "", []byte("png"), actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertEmbedding(ctx, "it-move-src/metric", "test-model", []float32{1, 0, 0, 0}); err != nil {
+	if err := s.UpsertEmbedding(ctx, "it-move-src/metric", "test-model", []float32{1, 0, 0, 0}, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{"it-move-src/metric"}); err != nil {

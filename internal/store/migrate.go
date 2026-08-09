@@ -431,9 +431,23 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 			id         text NOT NULL PRIMARY KEY,
 			model      text NOT NULL,
 			embedding  vector(%d) NOT NULL,
+			truncated  boolean NOT NULL DEFAULT false,
 			updated_at timestamptz NOT NULL DEFAULT now()
 		)`, dim)); err != nil {
 		return fmt.Errorf("%w: create knowledge_embedding: %w", ErrEmbeddingUnavailable, err)
+	}
+	// For a table that already exists: CREATE TABLE IF NOT EXISTS keeps
+	// the shape it found. The column records that the vector above covers
+	// only the front of its concept, which is the one thing about a
+	// vector a reader cannot recompute from the object it describes —
+	// the model's window at the moment it was written is not stored
+	// anywhere else. Existing rows default to false and are corrected by
+	// the next write or by `ochakai reembed`; a vector is derived, and
+	// wrong-by-default here means "not known to be truncated", which is
+	// what an un-reembedded row honestly is.
+	if _, err := s.pool.Exec(ctx,
+		`ALTER TABLE knowledge_embedding ADD COLUMN IF NOT EXISTS truncated boolean NOT NULL DEFAULT false`); err != nil {
+		return fmt.Errorf("%w: knowledge_embedding.truncated: %w", ErrEmbeddingUnavailable, err)
 	}
 	// Attachment vectors (design doc 0020): one row per embedded
 	// attachment, mapped back to the owning entry at search time.

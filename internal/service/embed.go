@@ -22,12 +22,13 @@ func (s *Service) updateEmbedding(ctx context.Context, k *domain.Knowledge) {
 	if s.Embedder == nil {
 		return
 	}
-	vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
+	text, full := embeddingText(k, s.embedBytes())
+	vecs, embedded, err := s.embedDocument(ctx, text)
 	if err != nil {
 		s.Log.Warn("document embedding failed; concept remains findable by the lexical half of search", "type", k.Type, "id", k.ID, "error", err)
 		return
 	}
-	if err := s.Store.UpsertEmbedding(ctx, k.ID, s.Embedder.Model(), vecs[0]); err != nil {
+	if err := s.Store.UpsertEmbedding(ctx, k.ID, s.Embedder.Model(), vecs[0], !full || embedded < len(text)); err != nil {
 		s.Log.Warn("storing embedding failed", "id", k.ID, "error", err)
 	}
 }
@@ -124,13 +125,14 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 			s.Log.Warn("reembed: concept disappeared", "id", id, "error", err)
 			continue
 		}
-		vecs, err := s.embedDocument(ctx, embeddingText(k, s.embedBytes()))
+		text, full := embeddingText(k, s.embedBytes())
+		vecs, embedded, err := s.embedDocument(ctx, text)
 		if err != nil {
 			res.Failed++
 			s.Log.Warn("reembed: embedding failed", "id", id, "error", err)
 			continue
 		}
-		if err := s.Store.UpsertEmbedding(ctx, id, s.Embedder.Model(), vecs[0]); err != nil {
+		if err := s.Store.UpsertEmbedding(ctx, id, s.Embedder.Model(), vecs[0], !full || embedded < len(text)); err != nil {
 			res.Failed++
 			s.Log.Warn("reembed: storing failed", "id", id, "error", err)
 			continue
@@ -255,12 +257,19 @@ func decodeReembedCursor(c string) (entryID, attachID, attachName string, err er
 }
 
 // embedDocument embeds text, halving it and retrying while the model says
-// it is too long. Byte budgets only approximate a token count, and the
+// it is too long, and reports how many bytes the vector was computed
+// over. Byte budgets only approximate a token count, and the
 // approximation is worst for Japanese; without this, a concept that
 // overruns is dropped from vector search silently — logged, but with the
 // write reported as a success. Halving converges in a couple of rounds
 // and only runs on the rejection, so an outage still costs one call.
-func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, error) {
+//
+// The returned length is what makes the halving visible past this
+// function. It is the second way a concept loses its tail — the estimate
+// in embeddingText is the first — and a caller that only knew about the
+// first would record a vector as whole when the provider had just made
+// the product throw away seven eighths of it.
+func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, int, error) {
 	// Four attempts halve a 5000-byte text to 625, well under any
 	// plausible window; the floor below stops it before it embeds a
 	// fragment too short to mean anything.
@@ -270,21 +279,27 @@ func (s *Service) embedDocument(ctx context.Context, text string) ([][]float32, 
 			if attempt > 0 {
 				s.Log.Info("embedded after shortening", "bytes", len(text), "attempts", attempt+1)
 			}
-			return vecs, nil
+			return vecs, len(text), nil
 		}
 		if !errors.Is(err, embed.ErrInputTooLong) || len(text) < 500 {
-			return nil, err
+			return nil, 0, err
 		}
 		text = truncateUTF8(text, len(text)/2)
 	}
-	return nil, fmt.Errorf("still over the embedding model's input limit after shortening")
+	return nil, 0, fmt.Errorf("still over the embedding model's input limit after shortening")
 }
 
 // embeddingText builds the document text to embed: envelope fields plus the
 // golden query question, body truncated to keep within model input limits.
 // The id leads (design doc 0022): with title optional, the filename may be
 // the concept's only name, and the path carries the domain hierarchy.
-func embeddingText(k *domain.Knowledge, max int) string {
+//
+// full is false when the concept did not fit. The caller stores it, and
+// what it buys is the difference between a knowledge base that has this
+// problem and one that merely might: everything downstream of a
+// truncated vector looks exactly like everything downstream of a whole
+// one (design doc 0088).
+func embeddingText(k *domain.Knowledge, max int) (text string, full bool) {
 	parts := []string{k.ID, k.Title, k.Description, strings.Join(k.Tags, " ")}
 	if q, ok := k.Attrs["question"].(string); ok {
 		parts = append(parts, q)
@@ -293,7 +308,8 @@ func embeddingText(k *domain.Knowledge, max int) string {
 	// The cap covers the joined text: a concept whose envelope is long
 	// (a deep path, a paragraph of description) must not push the total
 	// past the window just because the body fit on its own.
-	return truncateUTF8(strings.TrimSpace(strings.Join(parts, "\n")), max)
+	joined := strings.TrimSpace(strings.Join(parts, "\n"))
+	return truncateUTF8(joined, max), len(joined) <= max
 }
 
 // truncateUTF8 caps s at max bytes and then drops a trailing partial rune.

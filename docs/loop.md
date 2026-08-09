@@ -119,6 +119,14 @@ query を実行して違う数字を得たエージェントがそう言い、�
 フィードを空にする(設計ドキュメント
 [0069](design/0069-the-loop-and-what-measures-it.md) §1)。
 
+`ochakai stats` の `vectors` と `truncated` は、**ベクトル検索がこのナレッジ
+ベースのどれだけを見ているか**である。埋め込みモデルの入力窓に収まらない
+concept は前半だけが載り、後半に書かれたことでは引けない — それでもベクトル
+は在り、順位に乗り、結果として返るので、数を見るまで区別がつかない(設計
+ドキュメント [0088](design/0088-a-half-embedded-concept-says-so.md))。
+二つは対で読む: `vectors` の大半が `truncated` なら窓の広いモデルへ移る話
+であり、数件だけなら長すぎる concept を分ける話である。
+
 エージェントが躓くのを待たずに golden query を信頼できる状態に保つには、
 CI からカナリアとして実行する:
 [golden query canary](guides/golden-query-canary.md)。
