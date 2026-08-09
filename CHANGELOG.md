@@ -21,6 +21,43 @@ last entry.
 
 ### Added
 
+- **A search hit now says why it matched.** `snippet` carries the passage
+  of the body where the query's own words land, cut to about 140
+  characters and marked with … where it was cut. Title and description
+  say what somebody wrote about the concept as a whole, not what answered
+  this question, so choosing among ten hits meant fetching bodies — for
+  an agent, nine documents' worth of context spent to find the one it
+  wanted. It is absent when there is no passage to point at: the words
+  landed in the name or the description, where the hit already shows the
+  match, or the concept was found by meaning rather than text, where the
+  opening of the body would not be the reason. Listings have no query and
+  so no snippet. REST, the CLI (` · ` after the description; the
+  tab-separated fields are unchanged) and the web UI show it; MCP
+  responses carry it and its tool descriptions do not grow
+  ([0084](docs/design/0084-a-hit-says-why-it-matched.md)). No new
+  parameter, flag, command or environment variable, and no migration —
+  the bodies are already fetched for the hits being returned.
+
+- **Every error response now carries a machine-readable `code`.** The
+  envelope was `{"error": "<English prose>"}` and nothing else, so a
+  client that wanted to tell "this id is taken" from "there is no
+  rejection to withdraw" — both 409 — had to match a sentence
+  [docs/compatibility.md](docs/compatibility.md) says may be reworded in
+  any release. `code` is a closed vocabulary of twelve words beside the
+  sentence, declared as an enum in
+  [api/openapi.yaml](api/openapi.yaml) and checked against the product's
+  own list, so the two cannot drift. It separates the three conditions
+  that share 409 and the two that share 412 (a stale `If-Match`, and an
+  occupied path under `If-None-Match: *`). The sentence stays exactly as
+  free to change as it was; branch on the code. This is an addition to a
+  response-only schema, which
+  [0082](docs/design/0082-what-the-freeze-holds-still.md) places outside
+  the freeze — its rule now reads both places a response schema can live,
+  which is how the envelope qualified. `VOCAB` rises 34 → 46: prose that
+  becomes something a client branches on is prose that stopped being free
+  to reword, and `docs/surface.md` had named error wording as the next
+  place surface would hide ([0083](docs/design/0083-an-error-carries-a-code.md)).
+
 - **The positioning page now answers the graph-database claim.**
   "Operationalizing ontology takes a graph engine" is the pitch
   NebulaGraph and Neo4j publish under; the neighbours table had no row
@@ -44,8 +81,54 @@ last entry.
   and the added prose fits under the `DOC-LINES` ceiling 0.20.0 already
   raised, so no ceiling moves either.
 
+### Fixed
+
+- **A purge now erases the file bytes too.** Purge destroyed every row
+  keyed by a concept's id and left the bytes behind its files in the
+  bucket forever — the store said so in a comment and told the operator
+  to write the sweep themselves. It contradicted what a purge promises
+  ([0031](docs/design/0031-purge.md)) and the first of the eight
+  conditions ([docs/surface.md](docs/surface.md): the asset leaves whole,
+  returns whole, and is deleted on request), which mattered most for
+  exactly the files an erasure request is about. Blobs are
+  content-addressed and shared, so no single delete can reclaim them as
+  its own side effect: the store now answers the global question
+  instead, deleting every blob no object and no attachment references
+  any more, and the service runs that sweep after a purge and after a
+  file delete. Bytes go before the row that names them, so an
+  interrupted sweep finishes on the next run; writers and the sweep
+  share an advisory lock, so bytes uploaded for a row not yet committed
+  are never swept out from under it. No migration, and no new surface —
+  `purge` and `DELETE` mean what they already said.
+
 ### Changed
 
+- **`put_concept` now tells an agent to link the concept its draft would
+  replace.** The instruction was already there — a verified concept that
+  is wrong gets `report_outcome failed`, or a better draft at a different
+  id for a human to promote — but nothing joined it to the sentence about
+  links, so the relationship that makes a replacement reviewable was left
+  to chance. A body link is how any relationship is written here
+  ([0074 §2](docs/design/0074-the-document-and-the-vocabulary-that-asks-it.md)),
+  and it is two-way, so the reviewer reaching either concept sees the
+  other. No tool, no argument, no ceiling moved: the MCP schema budget
+  goes 11,733 → 11,812 bytes against its 12,000.
+
+
+- **Search ties are broken by verification recency instead of by
+  whatever the scan produced.** A short question leaves several concepts
+  holding exactly the same score — five of them, for the README's own
+  "why is revenue down" — and the order among them decided what an agent
+  reading the top of the list under a byte budget saw. When the text
+  cannot separate two concepts, the loop's own signal can: the one
+  somebody confirmed most recently leads, and the id closes the order so
+  two concepts equal in every way still arrive the same way twice. Both
+  the store's ranking and the fused hybrid ranking follow the rule. It
+  breaks ties only — no weight, no addend — so nothing the text does
+  distinguish is outranked. The golden set barely moves (one case rose
+  from rank 5 to 4; recall@10 1.00 and MRR 0.90 both hold), which is
+  expected: what this buys is that the answer no longer depends on the
+  scan.
 - **The MCP client guide writes out only the two setups anyone here
   runs.** Six clients — Cursor, VS Code, Windsurf, Cline, Zed, Gemini CLI
   — carried a full configuration example each, copied from their own
@@ -62,6 +145,14 @@ last entry.
   shell out — Claude Desktop, and your own services — instead of naming
   hosted agents, which the guide has always said cannot reach an
   IAM-restricted deployment at all. `DOC-LINES` drops 5,800 → 5,700.
+- **`DOC-LINES` is back at 5,800**, because the two entries above landed
+  in parallel and only met on `main`: the fold was real (−176 lines) and
+  the dogfooding entrance was a page-sized decision (+27), but neither PR
+  could see the other, and the merged total is 5,720 — past the ceiling
+  the first of them had just lowered. [docs/surface.md](docs/surface.md)
+  already described two PRs' prose merging across a boundary in the
+  upward direction; this is the first time it happened against a ceiling
+  on the way down, and the paragraph it earns is in that document.
 - **`ochakai import` keeps eight requests in flight instead of one.** An
   import (and its `--dry-run`, which makes the same round trips) was one
   sequential HTTP call per document, which priced a real catalog

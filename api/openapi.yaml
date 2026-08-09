@@ -2322,7 +2322,14 @@ components:
       schema: { type: string, maxLength: 128 }
   responses:
     Error:
-      description: Error.
+      description: >
+        Error. `error` is a sentence for a person and may be reworded in
+        any release (docs/compatibility.md); `code` is the part a client
+        branches on. Three conditions answer 409 — `already_exists`,
+        `not_deleted`, `no_rejection` — and telling them apart used to
+        mean matching the prose. Where the status already determines the
+        condition the code repeats it, so a client never has to ask
+        whether this particular failure carries one.
       headers:
         Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
       content:
@@ -2331,7 +2338,24 @@ components:
             type: object
             properties:
               error: { type: string }
-            required: [error]
+              code:
+                type: string
+                enum:
+                  [
+                    already_exists,
+                    forbidden,
+                    internal,
+                    invalid,
+                    method_not_allowed,
+                    no_rejection,
+                    not_deleted,
+                    not_found,
+                    precondition_failed,
+                    read_only,
+                    too_large,
+                    unsupported,
+                  ]
+            required: [error, code]
     Forbidden:
       description: >
         Refused — the route exists and the request was understood, but
@@ -2956,6 +2980,22 @@ components:
         - type: object
           properties:
             score: { type: number }
+            snippet:
+              type: string
+              description: >
+                The passage of the body where the query's own words land,
+                cut to a readable window and marked with … where it was
+                cut. It answers "why did this match?", which title and
+                description cannot: they say what somebody wrote about
+                the concept as a whole, and a caller deciding which of
+                ten hits to open was paying a fetch per row to find out.
+
+                Absent when there is no passage to show — the words
+                landed in the name or the description, where the hit
+                already shows the match, or the concept was found by
+                meaning rather than by text (the vector half), where the
+                opening of the body would not be the reason it matched.
+                Listings carry no snippet: they have no query.
             usage:
               allOf: [ { $ref: "#/components/schemas/Usage" } ]
               readOnly: true

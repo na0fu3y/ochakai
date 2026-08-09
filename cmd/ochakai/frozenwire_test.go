@@ -148,6 +148,17 @@ func onlyResponseAdditions(t *testing.T, want, got string) bool {
 	}
 	responseOnly := responseOnlySchemas(t)
 	for _, line := range added {
+		// A schema written straight into components/responses is
+		// response-only by construction — OpenAPI has no spelling in
+		// which a requestBody reaches a responses component — so it
+		// needs no reachability test to earn 0082's rule (0082 §3, which
+		// names both of the two places a response schema can live).
+		// Without this arm the rule reached one of the two, and the
+		// error envelope, which lives in the other, would have needed a
+		// security defect to grow a field.
+		if strings.HasPrefix(line, "components/responses/") {
+			continue
+		}
 		name, ok := schemaOfLine(line)
 		if !ok || !responseOnly[name] {
 			return false
@@ -168,6 +179,12 @@ func schemaOfLine(line string) (string, bool) {
 	}
 	name, _, _ := strings.Cut(rest, " ")
 	name, _, _ = strings.Cut(name, ".")
+	// A schema composed with allOf fingerprints its members under a path
+	// — "SearchHit/allOf/1.snippet" — and the schema whose reachability
+	// decides the rule is the one at the head of it. Without this cut the
+	// name is "SearchHit/allOf/1", which matches no schema, and every
+	// composed schema fell outside 0082's rule for a spelling reason.
+	name, _, _ = strings.Cut(name, "/")
 	return name, name != ""
 }
 

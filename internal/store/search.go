@@ -324,11 +324,23 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// corpus of a few thousand, spilling work_mem on the instance size
 	// this is meant to run on. The entries are fetched once the top N is
 	// known.
+	// Ties are broken by verification recency, then id. The score is a
+	// fraction over a handful of addends, so a short query leaves several
+	// concepts holding exactly the same number — and "whatever order the
+	// scan produced" decided what an agent reading top-N under a byte
+	// budget saw. When the text cannot tell two concepts apart, the
+	// loop's own signal can: the one somebody confirmed most recently
+	// goes first (the same recency sort=verified_at feeds on), and the id
+	// closes the order so equal-in-every-way concepts still arrive the
+	// same way twice. This breaks ties only — no weight, no addend — so
+	// it cannot outrank anything the text distinguishes (compare the
+	// named sort key in the service's fuse, which follows the same rule).
 	q := fmt.Sprintf(`
 		WITH scored AS (
-			SELECT w.id,
+			SELECT w.id, w.last_verified,
 				((%[1]s) + 0.5 * (%[2]s)) / NULLIF(%[3]s, 0)
-					+ w.whole + w.named + w.verified AS score
+					+ w.whole + w.named
+					+ CASE WHEN w.last_verified IS NOT NULL THEN 0.05 ELSE 0 END AS score
 			FROM (
 				SELECT c.*, %[4]s FROM (
 					SELECT k.id, %[5]s, count(*) OVER () AS total,
@@ -336,17 +348,17 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 						CASE WHEN k.title ILIKE $%[7]d
 							OR `+filenameText+` ILIKE $%[7]d
 							THEN 1 ELSE 0 END AS named,
-						CASE WHEN EXISTS (SELECT 1 FROM knowledge_verification v
-							WHERE v.id = k.id) THEN 0.05 ELSE 0 END AS verified
+						(SELECT max(v.at) FROM knowledge_verification v
+							WHERE v.id = k.id) AS last_verified
 					FROM object k, LATERAL (SELECT `+nameText+` AS name) nm
 					WHERE k.search_tsv @@ (%[8]s) AND %[9]s
 				) c
 			) w
-			ORDER BY score DESC LIMIT %[10]d
+			ORDER BY score DESC, last_verified DESC NULLS LAST, id LIMIT %[10]d
 		)
 		SELECT `+knowledgeSelectK+`, scored.score
 		FROM object k JOIN scored ON scored.id = k.id
-		ORDER BY scored.score DESC`,
+		ORDER BY scored.score DESC, scored.last_verified DESC NULLS LAST, k.id`,
 		strings.Join(weighted, " + "), strings.Join(named, " + "),
 		strings.Join(weights, " + "),
 		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam, nameParam,
@@ -355,7 +367,9 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanHit)
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.SearchHit, error) {
+		return scanHitWithSnippet(row, frags)
+	})
 }
 
 // SearchVector ranks by cosine distance against stored embeddings.
@@ -450,6 +464,42 @@ func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) 
 // selected whole — the projection is derived from the same columns every
 // other read uses, and narrowing the SELECT per caller would put a second
 // column list in the file to fall behind.
+// scanHitWithSnippet is scanHit plus the passage that explains the hit
+// (snippet.go). The body is already on the row — the final select fetches
+// whole entries for the top N once scoring has decided who they are — so
+// this costs no query and no round trip.
+func scanHitWithSnippet(row pgx.CollectableRow, frags []string) (domain.SearchHit, error) {
+	var h domain.SearchHit
+	var k domain.Knowledge
+	dests, finish := knowledgeDest(&k)
+	if err := row.Scan(append(dests, &h.Score)...); err != nil {
+		return h, err
+	}
+	if err := finish(); err != nil {
+		return h, err
+	}
+	h.Summary = domain.SummaryOf(&k)
+	// Only when the body is where the words landed: a name or description
+	// carrying the query is already on the row, and repeating it spends
+	// the caller's context to say what they can already read.
+	if !namesOrDescribes(&k, frags) {
+		h.Snippet = snippetFor(k.Body, frags)
+	}
+	return h, nil
+}
+
+// namesOrDescribes reports whether the row itself already shows the
+// match — the fragment is in the title or the description.
+func namesOrDescribes(k *domain.Knowledge, frags []string) bool {
+	shown := strings.ToLower(k.Title + " " + k.Description)
+	for _, frag := range frags {
+		if frag != "" && strings.Contains(shown, strings.ToLower(frag)) {
+			return true
+		}
+	}
+	return false
+}
+
 func scanHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var h domain.SearchHit
 	var k domain.Knowledge

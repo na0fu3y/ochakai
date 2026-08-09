@@ -548,6 +548,11 @@ func (m memBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 	return data, nil
 }
 
+func (m memBlobStore) Delete(_ context.Context, sum string) error {
+	delete(m, sum) // already gone is success, like GCS
+	return nil
+}
+
 // docFrom renders a test's entry map as the OKF document the server takes
 // (design doc 0043 §3.5). The maps stay: they are how these tests say
 // "an entry with these fields", and only the wire format changed.
@@ -3069,5 +3074,156 @@ func TestRESTIntegrationGeneratedAtIsTheContentsInstant(t *testing.T) {
 	want := `at: "` + after.Observed.Generated.At.UTC().Format(time.RFC3339) + `"`
 	if !strings.Contains(string(served), want) {
 		t.Errorf("the document's generated.at is not the JSON's %s:\n%s", want, served)
+	}
+}
+
+// Three conditions answer 409 and one answers 412, and until design doc
+// 0083 the only thing separating them on the wire was an English
+// sentence the compatibility policy lets move in any release. The code
+// is what a client branches on, so it is pinned here per condition
+// rather than trusted to a mapping nobody reads.
+func TestRESTIntegrationErrorCodes(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "restcode")
+	id := typ + "/reading"
+	t.Cleanup(func() { removeEntries(t, srv, id) })
+
+	codeOf := func(t *testing.T, resp *http.Response) string {
+		t.Helper()
+		defer resp.Body.Close()
+		var body struct {
+			Error string `json:"error"`
+			Code  string `json:"code"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode error envelope: %v", err)
+		}
+		if body.Error == "" {
+			t.Error("the envelope carries a code but no sentence; both are the contract")
+		}
+		if !domain.ValidErrorCode(body.Code) {
+			t.Errorf("code %q is outside the vocabulary the contract declares", body.Code)
+		}
+		return body.Code
+	}
+
+	doc := docFrom(t, map[string]any{"type": typ, "id": id, "title": "codes"})
+	resp := putDoc(t, srv.URL, id, doc, true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	// 404: nothing at this address.
+	resp, err := http.Get(srv.URL + "/api/v1/bundle/" + typ + "/nothing.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := codeOf(t, resp); got != domain.CodeNotFound {
+		t.Errorf("missing concept code = %q, want %q", got, domain.CodeNotFound)
+	}
+
+	// 412 with a different meaning than the 412 below: the path is
+	// occupied. Same status, different problem — pick another id, rather
+	// than re-read and retry — which is exactly what the code is for.
+	resp = putDoc(t, srv.URL, id, doc, true)
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		resp.Body.Close()
+		t.Fatalf("create over a live id = %d, want 412", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodeAlreadyExists {
+		t.Errorf("taken id code = %q, want %q", got, domain.CodeAlreadyExists)
+	}
+
+	// 409: purge of a live concept. Destruction takes two steps.
+	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md?purge=true", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict {
+		resp.Body.Close()
+		t.Fatalf("purge of a live concept = %d, want 409", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodeNotDeleted {
+		t.Errorf("live purge code = %q, want %q", got, domain.CodeNotDeleted)
+	}
+
+	// 409, a different condition under the same status.
+	resp, err = postRuling(srv.URL, id, `{"ruling":"withdrawn"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict {
+		resp.Body.Close()
+		t.Fatalf("withdraw with no rejection = %d, want 409", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodeNoRejection {
+		t.Errorf("absent rejection code = %q, want %q", got, domain.CodeNoRejection)
+	}
+
+	// 412: the If-Match precondition did not hold.
+	req, err = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+id+".md", bytes.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "text/markdown")
+	req.Header.Set("If-Match", `"not-the-stored-hash"`)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		resp.Body.Close()
+		t.Fatalf("stale If-Match = %d, want 412", resp.StatusCode)
+	}
+	if got := codeOf(t, resp); got != domain.CodePreconditionFailed {
+		t.Errorf("stale precondition code = %q, want %q", got, domain.CodePreconditionFailed)
+	}
+
+}
+
+// The passage that explains a hit travels on the wire, and a listing —
+// which has no query — carries none (design doc 0084).
+func TestRESTIntegrationSearchCarriesTheMatchingPassage(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "restsnip")
+	id := typ + "/reading"
+	t.Cleanup(func() { removeEntries(t, srv, id) })
+
+	body := "毎年のことなので調査には値しない。" + strings.Repeat("前置きが長い。", 30) +
+		"棚卸資産の回転が落ちるのは在庫の積み増しによる。"
+	doc := docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "八月の読み方", "body": body,
+	})
+	resp := putDoc(t, srv.URL, id, doc, true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	var searched struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?q="+url.QueryEscape("棚卸資産")+"&type="+typ, &searched)
+	if len(searched.Hits) != 1 {
+		t.Fatalf("hits = %d, want the one concept", len(searched.Hits))
+	}
+	if snip := searched.Hits[0].Snippet; !strings.Contains(snip, "棚卸資産") {
+		t.Errorf("snippet = %q, want the passage where the query landed", snip)
+	}
+
+	var listed struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?sort=verified_at&type="+typ, &listed)
+	if len(listed.Hits) != 1 {
+		t.Fatalf("listed = %d, want the one concept", len(listed.Hits))
+	}
+	if snip := listed.Hits[0].Snippet; snip != "" {
+		t.Errorf("a listing carries snippet %q; there is no query to have matched", snip)
 	}
 }

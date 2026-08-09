@@ -1208,6 +1208,20 @@ func (f *fakeBlobStore) Get(_ context.Context, sum string) ([]byte, error) {
 	return append([]byte(nil), data...), nil
 }
 
+func (f *fakeBlobStore) Delete(_ context.Context, sum string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.m, sum) // already gone is success, like GCS
+	return nil
+}
+
+func (f *fakeBlobStore) has(sum string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.m[sum]
+	return ok
+}
+
 // search_text is maintained by trigger, so every write path keeps the
 // haystack current without remembering to. These are the two paths a
 // Go-side implementation would most easily miss: a file attached after
@@ -3419,5 +3433,154 @@ func TestIntegrationQueueCounts(t *testing.T) {
 		int64(len(expired)) != got.StaleAfter {
 		t.Errorf("counts %+v disagree with the feeds (%d drafts, %d reported wrong, %d past expiry)",
 			got, len(drafts), len(reported), len(expired))
+	}
+}
+
+// When the text cannot tell two concepts apart, something still has to
+// decide which one an agent reading the top of the list under a byte
+// budget sees. It used to be whatever order the scan produced. Now it is
+// the loop's own signal: the concept somebody confirmed most recently
+// goes first, and the id closes the order so two concepts equal in every
+// way still arrive the same way twice.
+func TestIntegrationLexicalSearchBreaksTiesByVerification(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	run := testdb.Unique(t, "it-tie-")
+	mine := Filter{Tags: []string{run}}
+	// Three concepts carrying the identical body and no distinguishing
+	// name: every term in the query lands in all three, so the score is
+	// the same number three times over.
+	ids := []string{run + "/gamma", run + "/beta", run + "/alpha"}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_verification WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		}
+	})
+	// Created in an order that is neither the id order nor the answer, so
+	// insertion order passing by accident is not one of the outcomes.
+	for _, id := range ids {
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Tags: []string{run},
+			Status: domain.StatusDraft, CreatedBy: actor,
+			Body: "四半期の粗利の推移をどう読むか。",
+		}, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+
+	hits, err := s.SearchLexical(ctx, "粗利", mine, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 3 {
+		t.Fatalf("got %d hits, want the 3 tied concepts", len(hits))
+	}
+	for _, h := range hits[1:] {
+		if h.Score != hits[0].Score {
+			t.Fatalf("the fixture is meant to tie: scores %v", hits)
+		}
+	}
+	// Nothing confirmed yet: the id closes the order.
+	if hits[0].ID != run+"/alpha" || hits[2].ID != run+"/gamma" {
+		t.Errorf("unconfirmed ties = %s, %s, %s; want alpha, beta, gamma",
+			hits[0].ID, hits[1].ID, hits[2].ID)
+	}
+	// Confirm the one the id order puts last: recency outranks the id.
+	if _, err := s.Verify(ctx, run+"/gamma", actor); err != nil {
+		t.Fatal(err)
+	}
+	hits, err = s.SearchLexical(ctx, "粗利", mine, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits[0].ID != run+"/gamma" {
+		t.Errorf("after confirming gamma the order is %s first; want gamma — "+
+			"the concept somebody checked most recently leads a tie", hits[0].ID)
+	}
+}
+
+// A hit says which concept matched; the snippet says why. It is filled
+// only when the reason is not already on the row — a concept whose title
+// or description carries the query needs no passage, because the caller
+// can read the match without one.
+func TestIntegrationLexicalSearchCarriesTheMatchingPassage(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	run := testdb.Unique(t, "it-snip-")
+	mine := Filter{Tags: []string{run}}
+	inBody, inTitle := run+"/insights/reading", run+"/metrics/named"
+	t.Cleanup(func() {
+		for _, id := range []string{inBody, inTitle} {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		}
+	})
+	create := func(id, title, desc, body string) {
+		t.Helper()
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: title, Description: desc,
+			Tags: []string{run}, Status: domain.StatusDraft, CreatedBy: actor, Body: body,
+		}, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	create(inBody, "八月の読み方", "季節性の説明",
+		"毎年のことなので調査には値しない。"+strings.Repeat("前置きが長い。", 30)+
+			"棚卸資産の回転が落ちるのは在庫の積み増しによる。")
+	create(inTitle, "棚卸資産の定義", "", "定義の本文。")
+
+	hits, err := s.SearchLexical(ctx, "棚卸資産", mine, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]domain.SearchHit{}
+	for _, h := range hits {
+		byID[h.ID] = h
+	}
+	body, ok := byID[inBody]
+	if !ok {
+		t.Fatalf("the concept matching in its body is not in the hits: %+v", hits)
+	}
+	if !strings.Contains(body.Snippet, "棚卸資産") {
+		t.Errorf("snippet = %q, want the passage where the query landed", body.Snippet)
+	}
+	if !strings.HasPrefix(body.Snippet, "…") {
+		t.Errorf("snippet = %q, want a mark saying the passage was cut", body.Snippet)
+	}
+	named, ok := byID[inTitle]
+	if !ok {
+		t.Fatalf("the concept matching in its title is not in the hits: %+v", hits)
+	}
+	if named.Snippet != "" {
+		t.Errorf("a concept whose title is the query carries snippet %q; the row already shows the match",
+			named.Snippet)
 	}
 }

@@ -307,7 +307,8 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"confirming and rejecting are not on this surface.\n" +
 			"A concept a human has ruled on — verified, rejected, deprecated — cannot be " +
 			"replaced here: if a verified concept is wrong, report_outcome failed, otherwise put " +
-			"a better draft at a different id and let a human promote it. An id whose concept " +
+			"a better draft at a different id, linking the concept it would replace from its " +
+			"body so the reviewer sees both, and let a human promote it. An id whose concept " +
 			"was deleted can be reused, which revives it as your draft — unless a human had " +
 			"ruled on it (verified, rejected, or deprecated), and then this surface refuses too. " +
 			"Search rejected=true first so you do not re-propose what was already turned down.\n" +

@@ -36,7 +36,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索) |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4 |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
@@ -45,7 +45,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
@@ -237,6 +237,18 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
 
+- [0084 ヒットは、なぜ一致したかを言う](0084-a-hit-says-why-it-matched.md) —
+  **Accepted**。検索のヒットが `snippet`(クエリの語が本文のどこに落ちたか、
+  読める幅で切り出したもの)を運ぶ。行にあった title と description は
+  「この concept は全体として何か」であって「この問いに何が答えたか」では
+  なく、10 件から 1 件を選ぶ呼び出し元は本文を取りに行くしかなかった —
+  0067 §4 が結果に文書を載せないと決めたときの計算が、一段ずれた場所で
+  そのまま起きていた。名前や description で一致したときと、ベクトルで
+  見つかったときは出さない: どちらも指させる一節が無い(後者に本文の冒頭を
+  出すのは、理由でないもので理由に答えることである)。`ts_headline` では
+  なく Go で切るのは、上位 N の本文が既に手元にあり、一致の単位が移行
+  0036 の二文字窓というこちらの規則だからである。MCP の応答には出るが、
+  ツールの説明文には足さない。
 - [0080 検索が何を融合し、このデプロイがどう埋め込むか](0080-search-and-how-a-deployment-embeds.md)
   — **Accepted**。**検索と埋め込みの現行ドキュメント**(0020 / 0053 /
   0073 / 0078 を一冊にまとめたもの)。Google Cloud の上では埋め込みが既定
@@ -347,6 +359,17 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   要求するので diff に出る。きっかけは C7 の計器で、取りこぼし件数を
   `stats` に載せる先が REST 以外に無かった(CLI も Web UI も REST の
   クライアント、0067 §2)。
+- [0083 エラーは機械が読む符号を運ぶ](0083-an-error-carries-a-code.md) —
+  **Accepted**。エラー応答が `error`(人のための一文、いつでも書き直して
+  よい)の隣に `code`(クライアントが分岐してよい 12 語の閉じた語彙)を
+  運ぶ。三つの条件が 409 を共有しており、区別する手立てが散文の照合しか
+  無かった — しかも compatibility.md はその散文が minor で変わってよいと
+  宣言していて、REST を埋め込む開発者(C6)に壊れると分かっている方法しか
+  渡していなかった。ステータスが条件を決めている場合も符号は繰り返す
+  (一部にしか付かない鍵は分岐の道具にならない)。RFC 9457 を採らないのは
+  メディアタイプが動くこと・`type` の URI がドメインの生存を契約に持ち込む
+  こと・運ぶ情報が同じことの三つ。0082 が凍結の外と定めた応答専用スキーマ
+  への追加であり、VOCAB は 34 → 46 に上がる。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
   **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは

@@ -1090,11 +1090,12 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, i
 // single call erases history, and the entry stays recoverable (Create
 // revives it) right up until someone deliberately asks for it to be gone.
 //
-// Attachment bytes are left in the blob store, as DeleteAttachment leaves
-// them: blobs are content-addressed and shared between entries, so
-// reclaiming them cannot be a side effect of one purge. No sweep that
-// reclaims them exists yet — GCS grows monotonically, and an operator who
-// cares has to write the sweep themselves.
+// Attachment bytes are not touched here, as DeleteAttachment does not
+// touch them: blobs are content-addressed and shared between entries, so
+// reclaiming them cannot be a side effect of one purge. SweepBlobs
+// (sweep.go) is the global answer, and the service runs it after this
+// commit — the bytes' erasure is part of what a purge promises (design
+// doc 0031, condition C1).
 //
 // The purge itself is recorded in knowledge_purge (migration 0018), which
 // is the one table it does not touch: the entry is gone, but the fact
