@@ -132,6 +132,42 @@ provenance はそれが起きるのを見ていたインスタンスに属する
 ときにだけ成功する。`ochakai whoami` はシェルから同じことをしつつ、
 サーバーがどの identity を見ているかも表示する。
 
+### リクエストログ
+
+**リクエストは一本ずつ一行になる。** `/api/v1` と `/mcp` のすべての
+リクエストが、応答が終わった時点で `request` という一行を出す:
+
+```
+"request" method=GET route="GET /api/v1/search" status=200 duration_ms=34 bytes=1820 actor=process
+"request" method=PUT route="GET /api/v1/bundle/{path...}" status=409 duration_ms=7 bytes=96 actor=human code=already_exists
+```
+
+- **`route` はパスではなく、mux が一致させたパターンである。**
+  バンドルのパスは concept の住所、つまり利用者のナレッジそのものなので、
+  ログに出せばナレッジベースの形を一行ずつ第二の場所に写すことになる。
+  出るのは「何が呼ばれたか」であって「何に対して呼ばれたか」ではない。
+- **`actor` は kind だけである**(`human` / `process`)。誰が書いたかは
+  provenance であり concept の上に住む(設計ドキュメント
+  [0065](../design/0065-identity-and-provenance.md))。ログはその第二の
+  コピーではない。運用者が率として読むのは人か処理かの別である。
+- **`code`** は失敗のときだけ付く。ステータスが言えない半分がこれで、
+  409 は三つの条件が共有している(設計ドキュメント
+  [0083](../design/0083-an-error-carries-a-code.md))。
+
+**これはテレメトリではない。** 送信先はこのデプロイの stdout で、
+Cloud Run ではこのプロジェクトの Cloud Logging である。そこから先は
+ログベースの指標にできる — ochakai が `/metrics` を生やさず、二つ目の
+アドレス空間もスクレイプ対象も持たずに済むのはそのためである
+(すべては `/api/v1` に載るか、どこにも載らない、設計ドキュメント
+[0067](../design/0067-four-faces-and-what-they-decline.md) §1)。組む
+価値があるのは次の三つである。
+
+| 指標 | クエリの骨子 |
+|---|---|
+| レイテンシ | `jsonPayload.message="request"` の `duration_ms` を分布で。`route` で分けると、遅いのが検索なのか export なのかが出る |
+| エラー率 | 同じ行の `status>=500`。`4xx` は呼び出し元の問題なので、率で見るなら `code` で分ける |
+| 劣化 | `query embedding failed` の件数(下の表)。検索が lexical に落ちている時間である |
+
 ### ログ
 
 すべては `slog` を通した JSON なので、Cloud Logging は手を加えずに

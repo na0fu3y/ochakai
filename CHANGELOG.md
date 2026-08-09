@@ -21,6 +21,27 @@ last entry.
 
 ### Added
 
+- **Every request now logs one structured line.** `/health` was the whole
+  observability surface, so "search got slow" had no answer short of
+  attaching to Cloud SQL by hand and "what is failing" had none at all.
+  Each `/api/v1` and `/mcp` request writes a `request` line when its
+  response ends, carrying the method, the **route pattern** the mux
+  matched, the status, `duration_ms`, the bytes written, the actor's kind
+  and — on a failure — the error `code`. A log-based metric can be built
+  from it, which is why this is not a `/metrics` endpoint: the platform
+  the product already requires is the one that aggregates, and REST stays
+  the only address space ([0067 §1](docs/design/0067-four-faces-and-what-they-decline.md)).
+  Two things are deliberately absent, and both are the same rule: the
+  route rather than the path, because a bundle path is a concept's
+  address and the log is not a second copy of the knowledge base's shape;
+  and the actor's kind rather than their name, because who wrote what is
+  provenance and lives on the concept
+  ([0065](docs/design/0065-identity-and-provenance.md)). Still no
+  telemetry — nothing is reported anywhere, the line goes to this
+  deployment's own stdout. No new endpoint, environment variable or wire
+  field; [the operating guide](docs/guides/operating.md) says how to read
+  it.
+
 - **A search hit now says why it matched.** `snippet` carries the passage
   of the body where the query's own words land, cut to about 140
   characters and marked with … where it was cut. Title and description

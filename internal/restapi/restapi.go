@@ -967,7 +967,15 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	return AnnounceReadOnly(svc, stdlibDefaultsAsJSON(mux))
+	// The log sits inside AnnounceReadOnly and outside the mux: it needs
+	// the pattern the mux matched, which ServeMux.Handler answers without
+	// serving anything, and it should see the status every layer below it
+	// produced.
+	logged := requestLog(svc.Log, func(r *http.Request) string {
+		_, pattern := mux.Handler(r)
+		return pattern
+	}, stdlibDefaultsAsJSON(mux))
+	return AnnounceReadOnly(svc, logged)
 }
 
 // stdlibDefaultsAsJSON rewrites the two responses net/http's ServeMux
@@ -1684,6 +1692,12 @@ func writeError(w http.ResponseWriter, err error) {
 // sentence for a person, a code for a client (design doc 0082 leaves a
 // response-only addition outside the freeze).
 func writeErrorBody(w http.ResponseWriter, status int, code, msg string) {
+	// The request log wants the condition, and the wire already carries
+	// it; handing it over here keeps the log from having to read the body
+	// back (requestlog.go).
+	if rec, ok := w.(codeRecorder); ok {
+		rec.recordCode(code)
+	}
 	writeJSON(w, status, map[string]string{"error": msg, "code": code})
 }
 
