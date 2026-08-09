@@ -2122,6 +2122,8 @@ async function loadLoopStats() {
       <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
       <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
         <div class="lbl">searches that found nothing</div></div>
+      <div class="tile"><div class="num">${s.outcomes?.concepts_reported ?? 0}/${s.outcomes?.concepts_used ?? 0}</div>
+        <div class="lbl">used concepts reported back on</div></div>
     </div>` + (dropped ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
       ${dropped} observation${dropped === 1 ? '' : 's'} were recorded and then lost in these

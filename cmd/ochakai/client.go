@@ -720,6 +720,10 @@ func cmdStats(ctx context.Context, args []string) error {
 	// Printed even at zero, for the reason the queue counts are: a number
 	// that appears only when something is wrong cannot be told from one
 	// nobody reported. Zero is what says the rest of these are whole.
+	// The pair, never one of them: "12 reported" says nothing without
+	// how many were used, and the gap between them is the number.
+	fmt.Printf("concepts_used\t%d\nconcepts_reported\t%d\n",
+		st.Outcomes.ConceptsUsed, st.Outcomes.ConceptsReported)
 	fmt.Printf("dropped_events\t%d\ndropped_misses\t%d\n",
 		st.Dropped.Events, st.Dropped.Misses)
 	if !st.Misses.Recording {

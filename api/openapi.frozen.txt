@@ -436,6 +436,8 @@ components/schemas/Stats.misses.queries[].last_at required=true type=string form
 components/schemas/Stats.misses.queries[].query required=true type=string
 components/schemas/Stats.misses.recording required=true type=boolean
 components/schemas/Stats.outcomes required=true type=object
+components/schemas/Stats.outcomes.concepts_reported required=true type=integer
+components/schemas/Stats.outcomes.concepts_used required=true type=integer
 components/schemas/Stats.outcomes.failed required=true type=integer
 components/schemas/Stats.outcomes.worked required=true type=integer
 components/schemas/Stats.queues required=true

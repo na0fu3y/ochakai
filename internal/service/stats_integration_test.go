@@ -280,3 +280,54 @@ func TestDroppedObservationsReachTheStatsIntegration(t *testing.T) {
 			"readable beside what it kept", n, dropped)
 	}
 }
+
+// TestOutcomeCoverageIsCountedIntegration pins the number that says
+// whether report_outcome is a real signal or an aspiration: of the
+// concepts handed over in the window, how many came back with evidence.
+//
+// An agent that never reports leaves the re-verification feed empty, and
+// an empty feed is what a healthy knowledge base looks like too. Only
+// this pair tells the two apart.
+func TestOutcomeCoverageIsCountedIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "coverage"}
+	run := uid(t, "covit")
+	since := time.Now().Add(-time.Hour)
+
+	// Two concepts, both delivered; one reported on.
+	var ids []string
+	for _, name := range []string{"reported", "silent"} {
+		id := run + "/" + name
+		if _, err := svc.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: name,
+			Status: domain.StatusStable, Body: "About " + run + ".",
+		}, actor); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := svc.Store.RecordEvents(ctx, domain.EventFetched, actor, ids); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReportOutcome(ctx, ids[0], domain.EventWorked, "checked"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Store.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Scoped to this run, so the shared database's other traffic is not
+	// in the answer.
+	st, err := svc.Store.Stats(ctx, since, []string{run})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Outcomes.ConceptsUsed != 2 {
+		t.Errorf("concepts_used = %d, want 2", st.Outcomes.ConceptsUsed)
+	}
+	if st.Outcomes.ConceptsReported != 1 {
+		t.Errorf("concepts_reported = %d, want 1 — the silent one is the whole point of the pair",
+			st.Outcomes.ConceptsReported)
+	}
+}
