@@ -16,9 +16,8 @@ humans and agents together, and served to Claude Code and every other
 data agent over [MCP](https://modelcontextprotocol.io), REST, a CLI, and
 a bundled web UI. More at [ochak.ai](https://ochak.ai).
 
-One Go binary and Postgres: [Terraform stands up Cloud Run + Cloud
-SQL](deploy/terraform/README.md) (Japanese) for about $10/month, or Docker
-and nothing else locally.
+One Go binary and Postgres — Docker and nothing else locally, Cloud Run
+and Cloud SQL when it is real.
 
 [Quick start](#quick-start) · [Why ochakai](#why-ochakai) ·
 [Requirements](#requirements) · [All docs](docs/README.md) (Japanese;
@@ -29,6 +28,11 @@ and nothing else locally.
 to verify or reject them](docs/images/webui-review.png)
 
 ## Quick start
+
+Three steps, in order, and nothing to choose between: read somebody
+else's knowledge, then hold your own, then run it for a team.
+
+### Sixty seconds: the public demo
 
 A public demo already holds the knowledge base below. It reads no
 identity and writes nothing, which is what makes it safe to leave open
@@ -44,7 +48,7 @@ ochakai context "why is revenue down?"
 It is also the one deployment where plain curl works — nothing to sign:
 `curl 'https://demo.ochak.ai/api/v1/search?q=revenue'`.
 
-### What that one call is worth
+#### What that one call is worth
 
 `ochakai context` is the read an agent makes before a data question: it
 returns the concepts that bear on it in full and names the rest. Here is
@@ -86,7 +90,10 @@ people wrote and verified, with the provenance still attached; the reading
 is your agent's job ([design doc
 0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §6).
 
-To hold knowledge of your own, run a server:
+### Ten minutes: a base of your own
+
+The demo above is somebody else's knowledge, and it refuses every write.
+A server of your own is one command, and everything after it writes:
 
 ```sh
 git clone https://github.com/na0fu3y/ochakai && cd ochakai
@@ -97,20 +104,46 @@ This runs with `OCHAKAI_MODE=dev`: authentication is off and every
 request acts as `human:anonymous` — never do this on a deployment
 ([every mode](docs/configuration.md#environment-variables) (Japanese)).
 
-Load the demo knowledge base — [ten concepts](examples/demo) about one
-invented retail domain, linked to each other, some of them drafts — and
-search it. Everything goes through the API, so plain curl works too:
+Point the same CLI at it and load the demo knowledge base — [ten
+concepts](examples/demo) about one invented retail domain, linked to each
+other, some of them drafts. Everything goes through the API, so plain
+curl reaches it too:
 
 ```sh
-docker compose -f deploy/compose.yaml exec ochakai /ochakai import /examples/demo
+ochakai use http://localhost:8080
+ochakai import examples/demo
 curl 'http://localhost:8080/api/v1/search?q=revenue'
 ```
 
-That shop is invented. To fill a base with *your* tables, project a
-BigQuery dataset in: [examples/bigquery-catalog](examples/bigquery-catalog)
-(Japanese) carries the day-one procedure, the job that runs it, and the attester that
-says whether a run counted — outside the server, under your own service
-account, because ochakai has no connectors.
+That shop is invented. Your own tables go in the same way, and ochakai
+never touches the warehouse to get them — you run the schema query with
+your own client and your own identity, and pipe the rows in:
+
+```sh
+bq query --format=json --nouse_legacy_sql \
+  'SELECT table_schema, table_name, column_name, data_type, is_nullable, description
+     FROM `your-project.your_dataset.INFORMATION_SCHEMA.COLUMNS`
+    ORDER BY ordinal_position' \
+  | ochakai seed - | ochakai import -
+```
+
+Every concept lands as a **draft**, because a projected schema is a
+skeleton somebody still has to say something about — which is what the
+review queue is for. When the projection wants to be a job that reruns,
+[examples/bigquery-catalog](examples/bigquery-catalog) (Japanese) carries
+the day-one procedure, the job, and the attester that says whether a run
+counted.
+
+### For real: Cloud Run and Cloud SQL
+
+The same binary, about $10/month, and no secret anywhere — Cloud Run IAM
+decides who reaches it, Cloud SQL IAM authenticates the service, and
+there is nothing to issue or rotate. [Terraform stands the whole thing
+up](deploy/terraform/README.md) (Japanese), or
+[the gcloud commands it runs](deploy/cloudrun/README.md) (Japanese) if
+you would rather see them one at a time. Your knowledge keeps going the
+other way too: `ochakai export` hands back the whole base as an OKF
+bundle, which is markdown you can commit.
 
 ## Connect an agent
 
@@ -118,13 +151,13 @@ For Claude Code — and anything else with a shell (headless agents, CI) —
 the recommended interface is the bundled CLI, a thin client of the same
 REST API: tool schemas don't occupy the agent's context, output composes
 with pipes, and it resolves Google ID tokens itself, so no proxy process
-is needed against Cloud Run. Take a
-[release archive](https://github.com/na0fu3y/ochakai/releases), or:
+is needed against Cloud Run. The quick start already installed it (a
+[release archive](https://github.com/na0fu3y/ochakai/releases) is the
+other way), and it is pointed at your own server; the rest of what it
+does:
 
 ```sh
-go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
-
-ochakai use http://localhost:8080   # Cloud Run: ochakai use https://your-service.run.app
+ochakai use https://your-service.run.app   # or back to http://localhost:8080
 ochakai whoami                      # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question
 ochakai search "revenue" --type Metric --trust human-reviewed
@@ -166,6 +199,17 @@ for what they still don't do:
   tribal knowledge that never fits in a semantic-model YAML and today
   travels by Slack. Your agent gets it in the same search that returns
   the metric definition.
+- **Japanese search works with nothing installed and nothing tuned.**
+  PostgreSQL does not tokenize Japanese, so a knowledge base written in
+  it usually means installing a tokenizer extension and configuring it —
+  which managed Postgres, Cloud SQL included, will not let you do.
+  ochakai cuts Japanese runs into the two-character windows the language
+  actually spells its terms in, stores them as lexemes, and looks a query
+  up in the same index: 売上 is an index lookup, not a scan of the
+  corpus. Latin words stem on the way, so `revenues` finds `revenue`.
+  There is no setting for any of this, and semantic search sits beside it
+  by default on Google Cloud ([design doc
+  0080](docs/design/0080-search-and-how-a-deployment-embeds.md)).
 - **A write-back loop with a memory.** Agents write learnings back as
   drafts and a human promotes them, with provenance on every concept and
   every change kept as a revision. Proposals that don't make it are kept
