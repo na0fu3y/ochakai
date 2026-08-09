@@ -87,6 +87,31 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 	}
 }
 
+// The other half of the same rule, and the half that had no test while the
+// addend was 0.002. A confirmation is worth one rank position, so it wins
+// a tie and closes a gap of less than one place — and a concept the words
+// put third does not overtake the concept they put first by having been
+// checked. That is a re-ranking, and the golden set measured it as one:
+// fused MRR 0.83 with the old constant against 0.90 with this one.
+func TestVerifiedBoostIsWorthOneRank(t *testing.T) {
+	first := hit("words-put-me-first", domain.StatusDraft)
+	third := verifiedHit("checked-but-third")
+	out := rrfFuse("q", 10, []domain.SearchHit{
+		first, hit("second", domain.StatusDraft), third,
+	})
+	if out[0].ID != first.ID {
+		t.Errorf("fused ranking put %s first; a confirmation is one rank position "+
+			"and must not close a two-rank gap", out[0].ID)
+	}
+	// The ceiling, stated in the same unit, so the constant cannot drift
+	// back to a number nobody can read: whatever it is, it may not be
+	// worth two places.
+	if twoRanks := 1.0/float64(rrfK+1) - 1.0/float64(rrfK+3); verifiedBoost >= twoRanks {
+		t.Errorf("verifiedBoost = %g, which is two rank positions or more (%g): "+
+			"a confirmation that re-ranks is not a tie-break", verifiedBoost, twoRanks)
+	}
+}
+
 // The store ranks the concept a query names first, and RRF must not undo
 // it. A concept placing in all three lists earns three times the reciprocal
 // of one that tops a single list, so nothing short of a sort key keeps 売上
@@ -124,6 +149,35 @@ func TestRRFFuseKeepsTheNamedConceptFirst(t *testing.T) {
 	out := rrfFuse("売上", 10, []domain.SearchHit{popular, titled})
 	if out[0].ID != titled.ID {
 		t.Errorf("fused ranking put %s first, want the concept named 売上", out[0].ID)
+	}
+}
+
+// RRF reads rank and throws the score away, which is what lets it merge
+// lists whose numbers share no scale — and which is why a fused list
+// arrives full of exact ties: placing second and fifth in the opposite
+// lists sums to the same thing either way round. The store's score
+// settles those, because it is the only number in the merge that was
+// computed against this query. It settles nothing else: the assertion is
+// on two concepts RRF scored identically.
+//
+// The ids run against the answer on purpose. Before this, a tie fell
+// through to verification recency and then to id, so the weaker concept
+// won on being called "aa".
+func TestRRFFuseBreaksTiesByTheStoresScore(t *testing.T) {
+	strong := hit("zz-strong", domain.StatusDraft)
+	strong.Score = 1.4
+	weak := hit("aa-weak", domain.StatusDraft)
+	weak.Score = 0.3
+
+	out := rrfFuse("q", 10,
+		[]domain.SearchHit{strong, weak}, // the store's ranking
+		[]domain.SearchHit{weak, strong}) // the vectors', reversed
+	if out[0].Score != out[1].Score {
+		t.Fatalf("the fixture no longer produces a tie: %g vs %g", out[0].Score, out[1].Score)
+	}
+	if out[0].ID != strong.ID {
+		t.Errorf("fused ranking put %s first; the tie belongs to the concept the "+
+			"store scored higher (%s)", out[0].ID, strong.ID)
 	}
 }
 

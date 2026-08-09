@@ -149,6 +149,43 @@ last entry.
 
 ### Changed
 
+- **A confirmation is worth one rank position in the hybrid ranking,
+  where it used to be worth 7.6.** The addend a verified concept got in
+  the fused score was 0.002 and its comment called it small; against
+  reciprocal rank fusion's own step — 1/61 for first place, 1/62 for
+  second, so 0.000264 per position — it was large enough that a concept
+  the words put eighth overtook one they put first on the strength of
+  having been checked. That is a re-ranking, and no record asked for one:
+  verification says somebody looked, not that this answers your question.
+  The golden set could not see it because nothing in the corpus was
+  confirmed, so a confirmed concept is now part of the fixture, and it
+  measured the constant at once — **fused MRR 0.83 with the old addend
+  against 0.90 with one rank position**, the confirmed policy climbing
+  over the concepts that actually answered eight questions. Expressed in
+  ranks, a confirmation wins the ties it is in and closes a gap of less
+  than one place, which is what the comment always claimed. The lexical
+  ranking is unchanged; hybrid deployments will see confirmed concepts
+  move less than they did.
+
+- **The store's score now settles the ties reciprocal rank fusion
+  leaves.** RRF reads rank and discards the number, which is what makes
+  it safe to merge lists whose scores share no scale — and why a fused
+  list arrives full of exact ties: placing second and fifth in the
+  opposite lists sums to the same thing either way round. Those fell to
+  verification recency, which is not a statement about the question. The
+  lexical score is, so it decides first, and only where RRF decided
+  nothing. Four percent of adjacent pairs in the golden set are such
+  ties; the measured numbers do not move, and the rule is pinned by a
+  unit test rather than by them.
+
+- **docs/architecture.md said Japanese search reads the table.** It has
+  not since migration 0036 replaced the trigram index with a `tsvector`
+  column whose lexemes are the same two-character windows a question is
+  cut into. The page still carried 0016's 16 ms measurement and its
+  "that scan is the price", which is the product's main differentiator
+  described as the defect it used to be. ROADMAP was already corrected;
+  this page was missed.
+
 - **The search evaluation harness now measures the merge, and asks 36
   questions instead of 14.** Fourteen cases put MRR inside its own noise
   — one case moving from rank 1 to rank 2 moved it by 0.036, which is the

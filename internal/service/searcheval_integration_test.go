@@ -130,6 +130,27 @@ var japaneseSupplement = map[string]string{
 		"受注は支払い確定時点で数える。キャンセルは受注から差し引く。\n",
 }
 
+// evalVerified is the one concept the harness confirms before scoring.
+//
+// A confirmation moves a concept in both halves of the search — the
+// store's own boost in the lexical ranking, and the addend rrfFuse puts
+// on a fused score — and for as long as the corpus was uniformly
+// unverified, neither of those rules was exercised by any number on this
+// page. So one concept is confirmed, and it is deliberately one that
+// answers three of the questions below and is a plausible wrong answer to
+// eight more: whatever a confirmation is worth, it shows up here as those
+// eight moving.
+//
+// That is how the fused addend came to be written in ranks. At 0.002 it
+// was 7.6 rank positions, and turning this one line on measured it: fused
+// MRR 0.83, against 0.89 for the same corpus with nothing confirmed.
+// Confirming a concept made the ranking worse, because the addend was
+// carrying revenue-recognition over the concepts that actually answered
+// those eight questions, on the strength of having been checked. At one
+// rank position the same line reads 0.90 — a confirmation settles the
+// questions it ties on and leaves the rest alone.
+const evalVerified = "policies/revenue-recognition"
+
 // Floors pin the measured baseline so a regression fails instead of
 // shipping quietly. They sit under the numbers the harness reports, and
 // a change that moves those numbers — either way — says so in its PR,
@@ -155,19 +176,22 @@ var japaneseSupplement = map[string]string{
 // side's vocabulary can only reorder a list the words already reached,
 // so fusion neither adds a concept here nor loses one, and what the
 // number certifies is that the merge does no harm: RRF's arithmetic, the
-// named-concept sort key surviving it, the tie-break under it. Dropping
-// the lexical list from the fuse takes MRR from 0.92 to 0.81, which is
-// how it is known the floor has teeth. What a trained encoder buys is
-// matching text that shares no vocabulary at all, and no number on this
-// page says how much that is.
+// named-concept sort key surviving it, the confirmation addend, the
+// tie-breaks under all of it. Dropping the lexical list from the fuse
+// takes MRR from 0.90 to 0.80, which is how it is known the floor has
+// teeth. What a trained encoder buys is matching text that shares no
+// vocabulary at all, and no number on this page says how much that is.
 const (
 	evalK           = 10
 	evalRecallFloor = 0.92
 	evalMRRFloor    = 0.78
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.89.
+	// at 1.00 / 0.90. This floor sits above the 0.83 the fused ranking
+	// scores when the verified addend goes back to 0.002, which is the
+	// regression it exists to catch — that constant is the kind that gets
+	// nudged by whoever is looking at one query.
 	evalFusedRecallFloor = 0.92
-	evalFusedMRRFloor    = 0.85
+	evalFusedMRRFloor    = 0.86
 )
 
 // loadDemoBundle imports every document under examples/demo with the
@@ -226,6 +250,9 @@ func TestSearchEvalIntegration(t *testing.T) {
 		if _, _, _, err := svc.Put(ctx, &d.Knowledge, actor, nil); err != nil {
 			t.Fatalf("put %s: %v", id, err)
 		}
+	}
+	if _, err := svc.Verify(ctx, prefix+"/"+evalVerified, actor); err != nil {
+		t.Fatalf("verify %s: %v", evalVerified, err)
 	}
 
 	recall, mrr := scoreGoldenSet(t, ctx, svc, prefix, "lexical only")

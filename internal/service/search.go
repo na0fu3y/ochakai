@@ -94,6 +94,28 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	return fused, nil
 }
 
+// rrfK is reciprocal rank fusion's damping constant, and the unit the
+// rest of this file's arithmetic is written in. At 60, first place in a
+// list is worth 1/61 and second place 1/62, so **one rank position is
+// worth 0.000264** — and any constant added to a fused score has to be
+// read against that number or it is not a constant anybody can reason
+// about.
+const rrfK = 60
+
+// verifiedBoost is what a confirmation adds to a fused score: exactly one
+// rank position, the difference between placing first in a list and
+// placing second.
+//
+// It was 0.002 for as long as its comment called it small. Against the
+// step above that is 7.6 rank positions — enough that a confirmed concept
+// the words put eighth overtook an unconfirmed one they put first, which
+// is not a nudge but a re-ranking, and one no record asked for. Written
+// in ranks it says what it means: **a confirmation wins a tie, and closes
+// a gap of less than one place. It does not close more than that.** The
+// unit is the point — the next person to weigh this has a number they can
+// compare against something.
+const verifiedBoost = 1.0/(rrfK+1) - 1.0/(rrfK+2)
+
 // namedBy reports whether the query is what the concept is called, rather
 // than something it mentions. Either name answers, as in the store's
 // scorer: the title, or the id's last segment (design doc 0022).
@@ -118,9 +140,9 @@ func sameTime(a, b *time.Time) bool {
 	return a.Equal(*b)
 }
 
-// rrfFuse merges ranked lists with reciprocal rank fusion (k=60), adding a
-// small boost for verified concepts so certified knowledge surfaces first,
-// and keeping a concept the query names ahead of the rest.
+// rrfFuse merges ranked lists with reciprocal rank fusion, adding one rank
+// position for verified concepts so certified knowledge wins the ties it
+// is in, and keeping a concept the query names ahead of the rest.
 //
 // Fusion is where a name would otherwise be lost. The store ranks an
 // exact name first by a margin no other term can close, but RRF reads
@@ -135,15 +157,28 @@ func sameTime(a, b *time.Time) bool {
 // Ties among several concepts of the same name — the same filename in two
 // bundles — fall through to the fused score, which is the ordering the
 // question deserves.
-func rrfFuse(query string, limit int, lists ...[]domain.SearchHit) []domain.SearchHit {
-	const k = 60
+//
+// primary is the lexical list, and it is separate from the rest because
+// its score is the one thing in this function that was calibrated against
+// the query. RRF reads rank and throws the number away; that is what
+// makes it safe to merge lists whose scores share no scale, and it is
+// also why a fused list arrives full of exact ties — two concepts placing
+// second and fifth in the opposite lists score identically, and something
+// has to choose. Until now that choice fell to verification recency,
+// which is not a statement about the question at all. The store's score
+// is, so it decides first: **RRF still rules wherever it ruled, and the
+// discarded number now settles only what RRF left undecided.** A concept
+// the words never reached scores zero here and loses those ties, which is
+// the same sentence read the other way.
+func rrfFuse(query string, limit int, primary []domain.SearchHit, others ...[]domain.SearchHit) []domain.SearchHit {
 	type entry struct {
-		hit   domain.SearchHit
-		score float64
-		named bool
+		hit     domain.SearchHit
+		score   float64
+		lexical float64 // the store's score, or zero if this list missed it
+		named   bool
 	}
 	byKey := map[string]*entry{}
-	for _, list := range lists {
+	for li, list := range append([][]domain.SearchHit{primary}, others...) {
 		for rank, hit := range list {
 			key := hit.ID
 			e, ok := byKey[key]
@@ -151,7 +186,10 @@ func rrfFuse(query string, limit int, lists ...[]domain.SearchHit) []domain.Sear
 				e = &entry{hit: hit, named: namedBy(hit, query)}
 				byKey[key] = e
 			}
-			e.score += 1.0 / float64(k+rank+1)
+			if li == 0 {
+				e.lexical = hit.Score
+			}
+			e.score += 1.0 / float64(rrfK+rank+1)
 		}
 	}
 	ranked := make([]*entry, 0, len(byKey))
@@ -161,7 +199,7 @@ func rrfFuse(query string, limit int, lists ...[]domain.SearchHit) []domain.Sear
 		// against each other would be a ranking decision no record makes
 		// (design docs 0033, 0046 §3.10).
 		if e.hit.Trust == domain.TrustHuman || e.hit.Trust == domain.TrustMachine {
-			e.score += 0.002
+			e.score += verifiedBoost
 		}
 		e.hit.Score = e.score
 		ranked = append(ranked, e)
@@ -172,6 +210,13 @@ func rrfFuse(query string, limit int, lists ...[]domain.SearchHit) []domain.Sear
 		}
 		if ranked[i].hit.Score != ranked[j].hit.Score {
 			return ranked[i].hit.Score > ranked[j].hit.Score
+		}
+		// What RRF left undecided, the store's own ranking decides: the
+		// score it computed for this query, over fragment rarity and
+		// where the fragments landed, is the only relevance judgement in
+		// the tie.
+		if ranked[i].lexical != ranked[j].lexical {
+			return ranked[i].lexical > ranked[j].lexical
 		}
 		// The store's tie-break, repeated on the fused ranking for the
 		// same reason: RRF gives concepts appearing at the same ranks in
