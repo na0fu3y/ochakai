@@ -82,15 +82,22 @@ servers:
 security:
   - GoogleIDToken: []
   - {}
-# Authentication is Cloud Run IAM (Google identity), handled by the
-# infrastructure before requests reach ochakai — there is no
-# application-level auth scheme. ochakai reads the forwarded identity
-# only to record provenance (design docs 0065 §1, 0003). The scheme below
-# (components/securitySchemes/GoogleIDToken) documents what Cloud Run
-# checks before a request reaches this server; ochakai itself verifies
-# nothing, which is why the empty alternative sits beside it — a
-# deployment with OCHAKAI_MODE=public or dev answers with no Authorization
-# header at all (design doc 0066 §1). See
+# Authentication is a bearer identity token, and which party verifies it
+# is the deployment's choice (design doc 0086). On Cloud Run it is IAM:
+# Google checks the token before a request reaches ochakai, and the
+# process reads the claims IAM already vouched for. A deployment that
+# names its own OIDC issuer (OCHAKAI_OIDC_ISSUER / OCHAKAI_OIDC_AUDIENCE)
+# verifies signature, issuer, audience and expiry in-process against the
+# issuer's published keys — still no secret to hold (design docs 0065 §1,
+# 0003). Either way there is no authorization: the identity is read to
+# record provenance, not to gate what a caller may do. The scheme below
+# (components/securitySchemes/GoogleIDToken) documents the token; the
+# empty alternative beside it is the anonymous postures — a deployment
+# with OCHAKAI_MODE=public or dev answers with no Authorization header at
+# all (design doc 0066 §1). A request that needs an identity and carries
+# none the deployment can accept is a 401 from ochakai itself, in the
+# same envelope as every other error here — declared on every operation
+# (components/responses/Unauthorized). See
 # docs/guides/rest-integration.md (Japanese) for a walkthrough of minting
 # a token and what it takes to embed this API in your own service. An
 # application on the delegator allowlist may forward the end user it
@@ -471,6 +478,7 @@ paths:
                   summary: The cursor belongs to a different order
                   value:
                     error: cursor belongs to the usage listing; it cannot resume the failed one
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
@@ -780,6 +788,7 @@ paths:
             ETag: { $ref: "#/components/headers/ETag" }
             Cache-Control: { $ref: "#/components/headers/CacheControl" }
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "501":
           description: >
@@ -978,6 +987,7 @@ paths:
             text/markdown:
               schema: { type: string }
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
           description: >
@@ -1086,6 +1096,7 @@ paths:
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404":
           description: >
@@ -1426,6 +1437,7 @@ paths:
                         status: draft
                         bytes: 1104
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
@@ -1537,6 +1549,7 @@ paths:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -1782,6 +1795,7 @@ paths:
                   summary: A note belongs to a rejection
                   value:
                     error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "409":
@@ -1840,6 +1854,7 @@ paths:
                     failed: 2
                     last_used_at: "2026-07-26T23:58:07.336114Z"
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
@@ -1909,6 +1924,7 @@ paths:
                     failed: 3
                     last_used_at: "2026-07-27T02:07:44.291508Z"
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
@@ -2014,6 +2030,7 @@ paths:
                           count: 3
                           last_at: "2026-07-26T08:11:02.104233Z"
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
@@ -2119,6 +2136,7 @@ paths:
                     failed: 0
                     missing: 0
         "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "501": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
@@ -2133,11 +2151,13 @@ components:
         A Google-signed identity token, audience-bound to this service's
         URL, as `Authorization: Bearer <token>` (design docs 0065 §2,
         0003). Cloud Run IAM verifies it before a request reaches ochakai
-        — the container never checks the signature itself and never sees
-        a caller without one, except on OCHAKAI_MODE=public or dev, where
-        nothing is checked and every caller is `human:anonymous` (design
-        doc 0066 §1); the empty security requirement alongside this
-        scheme covers that case. Mint one with
+        — the container reads the claims IAM already vouched for — while
+        a deployment that names its own OIDC issuer (design doc 0086)
+        verifies the token in-process instead, against that issuer's
+        published keys; on OCHAKAI_MODE=public or dev nothing is checked
+        and every caller is `human:anonymous` (design doc 0066 §1), which
+        is the case the empty security requirement alongside this scheme
+        covers. Mint one with
         `gcloud auth print-identity-token --audiences=$OCHAKAI_URL`, or
         from code with a client library's ID-token helper — see
         [Embedding the REST API](../docs/guides/rest-integration.md)
@@ -2340,6 +2360,32 @@ components:
                     unsupported,
                   ]
             required: [error, code]
+    Unauthorized:
+      description: >
+        No identity this deployment can accept — and answered by ochakai
+        itself, not only by whatever infrastructure sits in front of it.
+        The Cloud Run posture refuses a request whose forwarded token is
+        missing or unreadable; a deployment that names its own OIDC
+        issuer (design doc 0086) refuses a signature, issuer, audience
+        or expiry the issuer will not vouch for. The anonymous postures
+        (OCHAKAI_MODE=public or dev) never answer it, because they
+        authenticate nobody. Same JSON envelope as every other error
+        here; the code is `invalid`, because what failed is the
+        request's credential rather than any condition of the knowledge.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+              code: { type: string, enum: [invalid] }
+            required: [error, code]
+          examples:
+            noToken:
+              summary: The Cloud Run posture, reached without a forwarded token
+              value:
+                error: "auth: no identity token; is the service non-public with Cloud Run IAM enforced? (for local development set OCHAKAI_MODE=dev)"
+                code: invalid
     Forbidden:
       description: >
         Refused — the route exists and the request was understood, but

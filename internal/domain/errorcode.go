@@ -20,7 +20,9 @@ import "slices"
 // client holds onto is a word somebody has to learn, whichever surface
 // teaches it.
 const (
-	// CodeInvalid — the request was understood and refused: 400.
+	// CodeInvalid — the request was understood and refused: 400, and the
+	// auth middleware's 401, where what failed is likewise the request —
+	// its credential — rather than any condition of the knowledge.
 	CodeInvalid = "invalid"
 	// CodeForbidden — this caller may not do this: 403. A delegation
 	// header from a caller that is not an allowed delegator

@@ -63,6 +63,11 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	if _, err := s.Verify(ctx, confirmed.ID, actor); err != nil {
 		t.Fatal(err)
 	}
+	// A second ruling three days back. It belongs in the trend's newest
+	// bucket — seven days ending today — and telling that apart from a
+	// bucket that merely starts today needs a ruling that today alone
+	// would not contain.
+	backdateVerification(t, ctx, s, confirmed.ID, time.Now().AddDate(0, 0, -3))
 
 	// Three misses of one question, buffered: nothing is written until
 	// the flush (design doc 0029's bargain, extended to misses).
@@ -105,15 +110,29 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 		t.Errorf("misses.count = %d, want at least the three this test recorded", got.Misses.Count)
 	}
 	// The same flow as a shape (design doc 0095). Eight buckets always,
-	// oldest first, with this test's verification in the last of them —
-	// a week nobody ruled in has to be a zero in the row rather than a
-	// missing bucket, or the weeks either side are drawn as neighbours.
+	// oldest first, with both of this test's verifications in the last of
+	// them — a week nobody ruled in has to be a zero in the row rather
+	// than a missing bucket, or the weeks either side are drawn as
+	// neighbours.
 	if n := len(got.Review.Weekly); n != domain.ReviewTrendWeeks {
 		t.Fatalf("review.weekly has %d buckets, want %d", n, domain.ReviewTrendWeeks)
 	}
 	last := got.Review.Weekly[len(got.Review.Weekly)-1]
-	if last.Verifications < 1 {
-		t.Errorf("the newest bucket = %+v, want this test's verification in it", last)
+	if last.Verifications < 2 {
+		t.Errorf("the newest bucket = %+v, want this test's two verifications (one now, one three days back) in it", last)
+	}
+	// The newest bucket is a full trailing week, so it opens six days
+	// back — a bucket opening today could only ever hold today, the
+	// always-partial shape 0095 rejects. Asked of the database rather
+	// than computed here, so the expectation and the query read the same
+	// clock and the same time zone.
+	var wantFrom string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT (date_trunc('day', now()) - interval '6 days')::date::text`).Scan(&wantFrom); err != nil {
+		t.Fatal(err)
+	}
+	if last.From != wantFrom {
+		t.Errorf("the newest bucket opens at %q, want %q (six days back, closing tomorrow)", last.From, wantFrom)
 	}
 	for i, w := range got.Review.Weekly {
 		if w.From == "" {
