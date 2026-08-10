@@ -36,6 +36,18 @@ type Stats struct {
 	// trust them — or whether to curate anything here at all. Absent
 	// everywhere else, which is what a client that predates it reads.
 	Sandbox bool `json:"sandbox,omitempty"`
+	// InsecureDev marks a deployment running with authentication off
+	// (OCHAKAI_MODE=dev). Design doc 0087's argument, applied to the mode
+	// beside it: a deployment that does not say what it is takes what you
+	// write. Here what it takes is different — nothing is erased, but
+	// every caller is unauthenticated and the identity on a ruling is
+	// whatever was asked for — so the sentence a reader needs is a
+	// different one, and it travels the same way.
+	//
+	// `dev` says in its own documentation not to deploy it, which is
+	// exactly why this is worth carrying: the deployments that need to be
+	// told are the ones that did it anyway. Absent everywhere else.
+	InsecureDev bool `json:"insecure_dev,omitempty"`
 
 	Concepts StatsConcepts `json:"concepts"`
 	// Queues is what design doc 0049's GET /api/v1/queues returns, under

@@ -2,10 +2,10 @@ package store
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // Browse (design docs 0014, 0016): one level of dirs and entries per
@@ -13,10 +13,7 @@ import (
 // and prefix matching by string (an ID with "_" must not act as a LIKE
 // wildcard).
 func TestIntegrationBrowse(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

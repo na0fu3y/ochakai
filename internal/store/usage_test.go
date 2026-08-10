@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
-	"os"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 	"strings"
 	"testing"
 	"time"
@@ -26,10 +26,7 @@ func usageEvents(prefix string, n int) []usageEvent {
 // on the condition that the loss is visible rather than silent, and
 // nobody but the flush loop is in a position to see it.
 func TestIntegrationFlushErrorNamesTheEventsItLost(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

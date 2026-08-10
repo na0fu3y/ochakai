@@ -198,6 +198,19 @@ try {
     (await evalJS(countOf('#tree .error-banner'))) === 0,
     () => evalJS(`(document.querySelector('#tree') || {}).textContent || ''`));
 
+  // A deployment with authentication off says so on the page, and one
+  // that does not says nothing. Asserted against what the API answers
+  // rather than against CI's own posture, so the check means the same
+  // thing wherever this is pointed: the banner is up exactly when the
+  // deployment admits it is insecure. Both directions matter — a banner
+  // that is always on is a banner nobody reads.
+  const insecure = (await (await fetch(BASE + '/api/v1/stats')).json()).insecure_dev === true;
+  await check(`the dev banner is ${insecure ? 'up' : 'absent'}, as /stats says`,
+    await waitFor(`(() => {
+      const n = document.querySelector('.dev-note');
+      return !!n && (getComputedStyle(n).display !== 'none') === ${insecure};
+    })()`), shown);
+
   await go('#/search');
   // Guarded rather than assumed: on a page that did not finish loading
   // there is no box to type in, and the failure worth printing is the

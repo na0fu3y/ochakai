@@ -53,10 +53,7 @@ func (h *headerSwitcher) set(v string) {
 // A delegating host reuses one session across end users; before the fix,
 // every write was attributed to the first user's identity.
 func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := t.Context()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -149,10 +146,7 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 // replacing a curated entry on the other (design docs 0015 §3.1, 0046
 // §3.14).
 func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := t.Context()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -265,10 +259,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 // verify, reject, delete — and that is design doc 0076's decision rather
 // than a gap.
 func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := t.Context()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {

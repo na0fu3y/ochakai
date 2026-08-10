@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,10 +15,7 @@ import (
 // the blob store, and an instance without one refuses attachment
 // operations.
 func TestIntegrationBlobStoreOnly(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -143,10 +139,7 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 // where they sat invisible until someone revived the entry and got back a
 // file they never attached to the entry they were reviving.
 func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL) // a live file, on a blob fake only this test can read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)

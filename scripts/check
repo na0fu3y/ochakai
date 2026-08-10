@@ -182,7 +182,12 @@ linter_version() {
 # targets a Go newer than the one that built it. CI installs a released
 # binary, which is built with a current Go, and never sees this.
 tool_toolchain() {
-	awk '$1 == "go" {print "go" $2 "+auto"; exit}' go.mod
+	# The toolchain line when there is one, the go line otherwise: a `go`
+	# directive is a minimum like "1.26" and not a toolchain name, so
+	# reading it here would ask for a toolchain that does not exist.
+	awk '$1 == "toolchain" {print $2 "+auto"; found = 1; exit}
+	     $1 == "go" {v = $2}
+	     END {if (!found) print "go" v "+auto"}' go.mod
 }
 
 run_core() {
@@ -195,7 +200,12 @@ run_core() {
 	go vet ./...
 	step "go test -race"
 	if [ -z "${OCHAKAI_TEST_DATABASE_URL:-}" ]; then
-		echo "check: OCHAKAI_TEST_DATABASE_URL unset — store tests will skip (see --db)" >&2
+		# Named rather than "store tests": four packages need a database,
+		# and the run itself cannot say so — `go test ./...` throws away
+		# the output of a package that passed, so the per-package count
+		# testdb.Report prints reaches -v and failures but not this. The
+		# script is the one being watched, so the script says it.
+		echo "check: OCHAKAI_TEST_DATABASE_URL unset — the tests that need PostgreSQL will skip: internal/store, internal/service, internal/restapi, internal/mcpserver (see --db)" >&2
 		skipped_store=yes
 	fi
 	# -count=1 for the same reason CI passes it: the store tests talk to
@@ -262,9 +272,9 @@ done
 # — and so would a run against a PostgreSQL that is not the one CI runs.
 note=""
 if [ "$skipped_store" = yes ]; then
-	note=" — store tests skipped (rerun with --db; CI runs them)"
+	note=" — the tests needing PostgreSQL skipped (rerun with --db; CI runs them)"
 elif [ -n "$db_note" ]; then
-	note=" — store tests ran against $db_note"
+	note=" — the tests needing PostgreSQL ran against $db_note"
 fi
 if [ "$skipped_ui" = yes ]; then
 	note="$note${note:+;} — web UI tests skipped (install node; CI runs them)"

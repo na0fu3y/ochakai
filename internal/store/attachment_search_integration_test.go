@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -33,10 +32,7 @@ func lockLiveAttachments(t *testing.T, dbURL string) {
 // 0020): filenames in the lexical haystack, attachment vectors mapped to
 // their best owning entry, and embedding rows dropped on replace/detach.
 func TestIntegrationAttachmentSearch(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -208,10 +204,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 // directory ranks every concept whose body names it rather than the one
 // that happened to upload it.
 func TestIntegrationAttachmentVectorsAreKeyedByPath(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)

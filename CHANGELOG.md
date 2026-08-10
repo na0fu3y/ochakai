@@ -21,6 +21,20 @@ last entry.
 
 ### Added
 
+- **A deployment with authentication off says so on every page.** `GET
+  /api/v1/stats` answers `insecure_dev: true` under
+  `OCHAKAI_MODE=dev`, and the bundled web UI carries a banner while it
+  does — design doc 0087's argument for the sandbox, applied to the mode
+  beside it. What is at stake differs: a sandbox erases what you wrote,
+  while dev keeps everything and authenticates nobody, so the identity
+  recorded on a verification or a rejection is whatever the caller asked
+  for. The strongest claim this product makes is *a human confirmed
+  this*, and on such a base it means nothing. `dev` tells its own
+  readers not to deploy it, which is exactly why the page says it too:
+  the deployments that need telling are the ones that did it anyway
+  ([#535](https://github.com/na0fu3y/ochakai/issues/535), design doc
+  0087).
+
 - **The review loop has a shape, not only a number.** `GET
   /api/v1/stats` answers `review.weekly` — eight seven-day buckets of
   verifications, oldest first — and the review page draws them as one
@@ -351,6 +365,17 @@ last entry.
   nine dimensions in [docs/surface.md](docs/surface.md) are unchanged,
   and the added prose fits under the `DOC-LINES` ceiling 0.20.0 already
   raised, so no ceiling moves either.
+
+### Changed
+
+- **`go install` works again on a toolchain that is not the newest
+  patch.** `go.mod` named `go 1.26.5`, and a `go` directive naming a
+  patch makes that patch a *requirement*: a CI pinned with
+  `GOTOOLCHAIN=local` on 1.26.2 failed at `go install` instead of
+  building, which is the first command the README gives. The patch moves
+  to a `toolchain` line, where it is the preference it was meant to be —
+  the local setting may decline it, and a toolchain free to fetch still
+  uses 1.26.5 ([#535](https://github.com/na0fu3y/ochakai/issues/535)).
 
 ### Fixed
 

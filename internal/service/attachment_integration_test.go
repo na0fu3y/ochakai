@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 
@@ -96,10 +95,7 @@ func (m memBlobStore) Delete(_ context.Context, sum string) error {
 // surfaces the owning entry for a query that matches only the attachment;
 // non-text attachments are skipped.
 func TestAttachmentSearchIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
@@ -240,10 +236,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 // used to leave every file findable by name alone, forever. Also pins
 // the cursor: a pass must not keep handing back the same window.
 func TestReembedCoversAttachmentsIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)

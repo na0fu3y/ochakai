@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"sort"
@@ -41,10 +40,7 @@ func hitScore(hits []domain.SearchHit, id string) float64 {
 //	docker run -d --rm -p 55433:5432 -e POSTGRES_PASSWORD=t -e POSTGRES_USER=t -e POSTGRES_DB=t pgvector/pgvector:pg17
 //	OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go test ./internal/store/
 func TestIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -390,10 +386,7 @@ func TestIntegration(t *testing.T) {
 // — and those tests then failed somewhere else entirely, a reembed pass
 // reporting work it had just done as still missing.
 func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -439,10 +432,7 @@ func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 // always the resolved id, whichever of SPEC §6's forms the body wrote —
 // and soft-deleted entries must not.
 func TestIntegrationListLinkingTo(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -498,10 +488,7 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 // is the "our team's space and the company-wide one" question the filter
 // exists for.
 func TestIntegrationPrefixFilterMatchesSegments(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -592,10 +579,7 @@ func TestIntegrationPrefixFilterMatchesSegments(t *testing.T) {
 // matched every entry and boosted them all; "_" matched any single
 // character. Here only the entry that literally contains "%" may surface.
 func TestIntegrationSearchLexicalWildcardEscape(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -649,10 +633,7 @@ func TestIntegrationSearchLexicalWildcardEscape(t *testing.T) {
 // invisible until a flush, and Close drains the buffer so a clean shutdown
 // loses nothing.
 func TestIntegrationUsageBuffering(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -706,10 +687,7 @@ func TestIntegrationUsageBuffering(t *testing.T) {
 // targets in both forms, attrs.model) so nothing breaks. The destination
 // must be a fresh id, even against a soft-deleted row.
 func TestIntegrationMove(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL) // the attachment rides a fake blob store other packages' export scans can't read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -878,10 +856,7 @@ func TestIntegrationMove(t *testing.T) {
 // refuses deleted rows). Live entries, including rejected ones, still
 // conflict.
 func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -983,10 +958,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 // Attachments (design doc 0008): content-addressed blobs, replace-by-name,
 // revisions on attach/detach, and disappearance with the soft-deleted entry.
 func TestIntegrationAttachments(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -1109,10 +1081,7 @@ func TestIntegrationAttachments(t *testing.T) {
 // ListRevisions returns the full audit trail newest-first, including for
 // soft-deleted entries; an entry that never existed is ErrNotFound.
 func TestIntegrationListRevisions(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1228,10 +1197,7 @@ func (f *fakeBlobStore) has(sum string) bool {
 // the entry was written (design doc 0020), and an entry renamed into a
 // new id (design doc 0022 put the id in the haystack).
 func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL) // seeds.txt rides a fake blob store other packages' export scans can't read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -1303,10 +1269,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 // is a primary key. Without purge the id would be blocked forever — the
 // exact outcome Create's own comment calls out as unacceptable.
 func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1409,10 +1372,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 // one call history that was in use a moment ago, which is exactly what the
 // two-step delete-then-purge exists to prevent.
 func TestIntegrationPurgeLosesToRevival(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1509,10 +1469,7 @@ func TestIntegrationPurgeLosesToRevival(t *testing.T) {
 // seconds before shutdown — a whole request's worth on a Cloud Run
 // instance scaling to zero — would otherwise never reach the database.
 func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1566,10 +1523,7 @@ func TestIntegrationCloseFlushesBufferedUsage(t *testing.T) {
 // were dropped on the way to the database, the two would be identical and
 // the delegation would be a forgery.
 func TestIntegrationDelegatedProvenance(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1657,10 +1611,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 // the actual subject. So this plants a corpus where the grammar really is
 // common and checks the ordering, not just the presence.
 func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1784,10 +1735,7 @@ func TestIntegrationLexicalSearchAnswersQuestions(t *testing.T) {
 // them is whatever the scan happened to produce. This plants exactly that
 // tie and requires the name to break it.
 func TestIntegrationLexicalSearchRanksTheNamedConceptFirst(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1887,10 +1835,7 @@ func TestIntegrationLexicalSearchRanksTheNamedConceptFirst(t *testing.T) {
 // reads the query's terms (QueryTerms), so the definitions a question
 // names outrank the prose that merely says its words.
 func TestIntegrationLexicalSearchLiftsWhatACompoundQueryNames(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1968,10 +1913,7 @@ func TestIntegrationLexicalSearchLiftsWhatACompoundQueryNames(t *testing.T) {
 // which Update cannot do — and an entry whose last failure report predates
 // that stamp leaves the re-verification feed.
 func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2086,10 +2028,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 // Relative targets are resolved against the entry's id, so changing the
 // directory silently re-aims them (design doc 0024 §3.5).
 func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2159,10 +2098,7 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 // "update" revision (only its referrers do). This is the regression test
 // for Move returning the pre-rewrite body with a stale updated_at.
 func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2269,10 +2205,7 @@ func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
 // deleted after the id list was taken still has to be in the bundle the
 // index promises, or the archive contradicts itself.
 func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2336,10 +2269,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 // draft tombstone stays allowed either way, and the unguarded call — the
 // human surfaces — still revives anything.
 func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := t.Context()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2452,10 +2382,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 // is reverted by the write-back -- and recorded as an ordinary "update"
 // revision, so the history shows a change but not that one was lost.
 func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2551,10 +2478,7 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 // modes over the whole corpus — without the tag, another package's stale
 // entry is indistinguishable from a bug here.
 func TestStaleFeedAndSourceLookupIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2675,10 +2599,7 @@ func backdateVerification(t *testing.T, ctx context.Context, s *Store, id string
 // otherwise a freed id would hand its next occupant a verification of
 // content nobody verified.
 func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2734,10 +2655,7 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 // moved a version whose content nobody had touched, and an editor's held
 // If-Match died for a reason unrelated to their edit.
 func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2815,10 +2733,7 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 // 0043 §3.1), so re-rendering what a read returns must reproduce exactly
 // what is stored. If these drift, the index is no longer derived.
 func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2882,10 +2797,7 @@ func TestIntegrationStoredDocumentMatchesTheIndex(t *testing.T) {
 // can recover. It has to round-trip through the jsonb index columns as
 // well as through the document.
 func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -2951,10 +2863,7 @@ func TestIntegrationProducerKeysInsideObjectsSurviveStorage(t *testing.T) {
 // 0047 §2.3) — the index answers any of them, and the test asks with keys
 // deliberately outside every vocabulary the program knows, to pin that.
 func TestIntegrationFrontmatterFilter(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -3058,10 +2967,7 @@ func TestIntegrationFrontmatterFilter(t *testing.T) {
 // entry at an address nothing resolves — and the revision ledger, which
 // counts by path now, would start a second history for it.
 func TestIntegrationObjectIsKeyedByBundlePath(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -3132,10 +3038,7 @@ func TestIntegrationObjectIsKeyedByBundlePath(t *testing.T) {
 // a file showing up where entries are listed, and a file outliving the
 // entry whose namespace it was in.
 func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL) // live files, on a blob fake only this test can read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -3244,10 +3147,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 // 0052 §3.4). The identity beside it never moves: the self-declaration is
 // admissible precisely because the authenticated name stays in the row.
 func TestIntegrationProducerRidesEveryActor(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -3364,10 +3264,7 @@ func TestIntegrationProducerRidesEveryActor(t *testing.T) {
 // where ochakai would have put it" — a second identity for the same
 // object, and one that could disagree with the row it described.
 func TestIntegrationAFileReportsItsPath(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL) // live files, on a blob fake only this test can read
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
@@ -3432,10 +3329,7 @@ func TestIntegrationAFileReportsItsPath(t *testing.T) {
 // feed would be worse than no count — it would send a reviewer to an
 // empty page, or leave work invisible.
 func TestIntegrationQueueCounts(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -3527,10 +3421,7 @@ func TestIntegrationQueueCounts(t *testing.T) {
 // goes first, and the id closes the order so two concepts equal in every
 // way still arrive the same way twice.
 func TestIntegrationLexicalSearchBreaksTiesByVerification(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -3603,10 +3494,7 @@ func TestIntegrationLexicalSearchBreaksTiesByVerification(t *testing.T) {
 // or description carries the query needs no passage, because the caller
 // can read the match without one.
 func TestIntegrationLexicalSearchCarriesTheMatchingPassage(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

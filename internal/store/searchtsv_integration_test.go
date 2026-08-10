@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,10 +26,7 @@ import (
 // test in this package does, skipping without OCHAKAI_TEST_DATABASE_URL.
 func newSearchStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
 		t.Fatal(err)

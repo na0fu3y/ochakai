@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,10 +23,7 @@ import (
 // schema is rebuilt in a scratch Postgres schema inside one rolled-back
 // transaction — the migration files run there verbatim, in order.
 func TestMigrationLegacyData(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -207,10 +203,7 @@ func TestMigrationLegacyData(t *testing.T) {
 // defined_in link targets 'model/<name>'. Same scratch-schema technique
 // as TestMigrationLegacyData, on the post-0011 shape.
 func TestMigrationSemanticModelEntries(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -360,10 +353,7 @@ func TestMigrationSemanticModelEntries(t *testing.T) {
 // resolvable while every unqualified table reference binds to the
 // scoped schema first.
 func TestMigrateConcurrent(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 
 	admin, err := New(ctx, dbURL, false)
@@ -453,10 +443,7 @@ func TestMigrateConcurrent(t *testing.T) {
 // anchor text — before the column turns into something derived from the
 // body, which is the only way those edges survive the next write.
 func TestMigrationLinksIntoBody(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -578,10 +565,7 @@ func sortLinks(l []domain.Link) {
 // Above pgvector's 2000-dimension indexing limit the migration must skip
 // them rather than fail — the exact scan still answers correctly.
 func TestIntegrationVectorIndexes(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -652,10 +636,6 @@ func TestIntegrationVectorIndexes(t *testing.T) {
 // Scoped to its own schema: this one is destructive by design, and the
 // other store tests share the database.
 func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
 	ctx := context.Background()
 	s := scopedStore(ctx, t, testdb.Unique(t, "embed_dim_"))
 	// The vector tables are created outside the versioned migrations, and
@@ -755,7 +735,7 @@ func TestIntegrationEmbeddingDimChangeRebuilds(t *testing.T) {
 // database. The schema is dropped when the test ends.
 func scopedStore(ctx context.Context, t *testing.T, schema string) *Store {
 	t.Helper()
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	dbURL := testdb.URL(t)
 	admin, err := New(ctx, dbURL, false)
 	if err != nil {
 		t.Fatal(err)
@@ -796,10 +776,7 @@ func scopedStore(ctx context.Context, t *testing.T, schema string) *Store {
 // whole distinction v0.2 draws between verified and generated (design doc
 // 0036 §3.3).
 func TestMigrationUpdatedByBackfill(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -889,10 +866,7 @@ func TestMigrationUpdatedByBackfill(t *testing.T) {
 // not move: it is the optimistic-locking version and OKF's generated.at,
 // so bumping it would invalidate every held ETag and misdate every entry.
 func TestMigrationOKFFamiliesOutOfAttrs(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1038,10 +1012,7 @@ func TestMigrationOKFFamiliesOutOfAttrs(t *testing.T) {
 // kind:name string, so a half-migration would leave "process:tanaka via
 // agent:app" on exactly the rows delegation exists to describe.
 func TestMigrationActorProcess(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1186,10 +1157,7 @@ func TestMigrationActorProcess(t *testing.T) {
 // through the store's connection and cannot be pointed at a search_path
 // set for one transaction.
 func TestBackfillComposesStoredDocuments(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1288,10 +1256,7 @@ func TestBackfillComposesStoredDocuments(t *testing.T) {
 // counting by path, so that a file's history will land beside the
 // concept's rather than in a second place.
 func TestMigrationObjectPathKey(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -1392,10 +1357,7 @@ func TestMigrationObjectPathKey(t *testing.T) {
 // down, which is why this test seeds a file rather than trusting an
 // empty base.
 func TestMigrationFilesBecomeObjects(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

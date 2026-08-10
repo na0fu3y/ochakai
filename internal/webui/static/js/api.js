@@ -21,15 +21,20 @@ export function setReadOnly(on) {
   document.body.classList.toggle('read-only', on);
 }
 
-// A sandbox is learned from /api/v1/stats rather than from a header
-// (design doc 0087 §4): the wire is frozen at /api/v1 and a new header
-// is not a response-only addition, while a field on a response schema
-// is. It is asked for once, at startup, because the answer is a property
-// of the deployment rather than of a request.
-export async function markSandbox() {
+// Which posture the deployment is in is learned from /api/v1/stats
+// rather than from a header (design doc 0087 §4): the wire is frozen at
+// /api/v1 and a new header is not a response-only addition, while a
+// field on a response schema is. It is asked for once, at startup,
+// because the answer is a property of the deployment, not of a request.
+export async function markPosture() {
   try {
     const s = await api('/api/v1/stats');
     document.body.classList.toggle('sandbox', s.sandbox === true);
+    // The same mechanism for the mode beside it (design doc 0087): a
+    // deployment that does not say what it is takes what you write. The
+    // banners are separate because the sentence is — one says what you
+    // write will be erased, the other says nobody here is who they say.
+    document.body.classList.toggle('insecure-dev', s.insecure_dev === true);
   } catch (e) { /* a banner is not worth failing the page over */ }
 }
 

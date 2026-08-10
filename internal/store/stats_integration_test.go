@@ -3,11 +3,11 @@ package store
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // A miss buffers off the read path like a usage event, and lands as its
@@ -18,10 +18,7 @@ import (
 // absolute: every package shares one test database (see CONTRIBUTING), so
 // this test owns the entries it creates and nothing else.
 func TestIntegrationStatsAndMisses(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {
@@ -188,10 +185,7 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 // the feeds' own predicates — so a depth cannot come to mean something
 // other than the feed a reviewer then opens (design doc 0051 §3.5).
 func TestIntegrationStatsQueuesMatchTheFeeds(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := New(ctx, dbURL, false)
 	if err != nil {

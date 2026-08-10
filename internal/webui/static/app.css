@@ -478,6 +478,16 @@ body.read-only .read-only-note {
    every page, because the thing it warns about (your writing is going
    to be erased) applies to every page. */
 .sandbox-note { display: none; }
+/* Louder than the sandbox note, because what it warns about is not
+   recoverable by re-writing: a ruling recorded here is a ruling nobody
+   made. Off unless the server says so, like its neighbour. */
+.dev-note { display: none; }
+body.insecure-dev .dev-note {
+  display: block; background: var(--rejected-bg);
+  border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
+  border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+  font-size: .92rem;
+}
 body.sandbox .sandbox-note {
   display: block; background: var(--accent-weak); border: 1px solid var(--border);
   border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;

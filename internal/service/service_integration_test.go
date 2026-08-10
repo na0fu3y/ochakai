@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -25,10 +24,7 @@ import (
 // and the timestamp — stays with whoever the content already stood by.
 // Byte-identical bytes are still nothing happening at all.
 func TestReformattingIsAChangeToTheFileOnlyIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -120,10 +116,7 @@ func TestReformattingIsAChangeToTheFileOnlyIntegration(t *testing.T) {
 // Skipped unless OCHAKAI_TEST_DATABASE_URL is set (see store integration
 // test for the docker one-liner).
 func TestUpdateNoOpIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -213,10 +206,7 @@ func TestUpdateNoOpIntegration(t *testing.T) {
 // ErrConflict, and once the entry has moved on the old version stays
 // rejected until re-read.
 func TestUpdateIfMatchIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {

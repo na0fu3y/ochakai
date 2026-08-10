@@ -23,10 +23,7 @@ import (
 // cleanup, the same pattern as TestUpdateNoOpIntegration.
 func newIntegrationService(t *testing.T, ctx context.Context) *Service {
 	t.Helper()
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
 		t.Fatal(err)

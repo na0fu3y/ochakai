@@ -163,6 +163,7 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	// is about to be erased, and a caller that does not know that may
 	// curate into it (design doc 0087).
 	st.Sandbox = s.Config != nil && s.Config.Sandbox
+	st.InsecureDev = s.Config != nil && s.Config.InsecureDev
 	// The model is the service's, not the store's — the store holds
 	// vectors and never asks who made them — so the coverage is read
 	// here, beside the other two answers the service alone can give.

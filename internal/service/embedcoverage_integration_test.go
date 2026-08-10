@@ -13,6 +13,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/store"
+	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
 // A concept longer than the model's input window is embedded from its
@@ -120,10 +121,7 @@ func TestEmbeddingCoverageSaysWhenThereIsNoEmbedderIntegration(t *testing.T) {
 // with the packages running beside it.
 func newScopedEmbeddingService(t *testing.T, ctx context.Context) *Service {
 	t.Helper()
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	// The DDL goes through a plain connection rather than the store:
 	// creating and dropping a schema is not something the product does,
 	// and a method on Store existing only for this would be product
