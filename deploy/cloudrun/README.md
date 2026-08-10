@@ -193,7 +193,9 @@ gcloud sql users create $DB_SA_USER --instance=ochakai --type=cloud_iam_service_
 **`cloudsqlsuperuser` も role membership も無い**:
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- replayed history only: 0001 and 0016
+                                         -- build a trigram index that 0036 drops.
+                                         -- No query has read it since
 CREATE EXTENSION IF NOT EXISTS vector;   -- for §4's semantic search, which is on
                                          -- by default; Cloud SQL's pgvector is not
                                          -- a trusted extension, hence admin-created
