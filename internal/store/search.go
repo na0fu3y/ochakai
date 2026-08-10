@@ -136,6 +136,62 @@ func contentWindows(runes []rune) []string {
 	return all
 }
 
+// QueryTerms extracts the terms of a query — the names a compound
+// question might call concepts by. A term is a maximal run of letters
+// and digits that are not hiragana, kept only when it contains a content
+// character (contentChar — Han or Katakana): hiragana spells the grammar
+// between content words (の, を, して), so 「EC事業のアクティブ会員の
+// 継続率を計算して」 carries the terms EC事業, アクティブ会員, 継続率
+// and 計算, with no morphological analyzer. Exported because the name
+// rule reads it in two places — this store's scorer and the service's
+// fusion sort key — and they must agree on what a query names.
+//
+// The content-character condition is where the extraction stops being
+// trustworthy, and it was measured, not reasoned: scripts written with
+// spaces make every word of a question a run — why, is, down — and a
+// question saying revenue is not a lookup of the concept called revenue.
+// Granting those the name rule cost the golden set six points of lexical
+// MRR (0.92 to 0.86), the questions losing their answers to the
+// definitions of their own words. In the scripts without spaces the
+// grammar is excluded by construction, so a term is a word somebody
+// chose to write in the name-bearing scripts. The cost is that a purely
+// latin name (SaaS) or an all-digit one (2026) is lifted only when the
+// query is the name whole — the reach the rule had before terms existed
+// — and a name with hiragana inside it (売り上げ) likewise.
+func QueryTerms(query string) []string {
+	runes := []rune(query)
+	var terms []string
+	seen := map[string]bool{}
+	start, hasContent := -1, false
+	flush := func(end int) {
+		if start < 0 {
+			return
+		}
+		t := string(runes[start:end])
+		start = -1
+		key := strings.ToLower(t)
+		if !hasContent || seen[key] || len(terms) >= maxQueryFragments {
+			return
+		}
+		seen[key] = true
+		terms = append(terms, t)
+	}
+	for i, r := range runes {
+		if (unicode.IsLetter(r) || unicode.IsDigit(r)) && !unicode.Is(unicode.Hiragana, r) {
+			if start < 0 {
+				start, hasContent = i, false
+			}
+			if contentChar(r) {
+				hasContent = true
+			}
+			continue
+		}
+		flush(i)
+	}
+	flush(len(runes))
+	return terms
+}
+
 // scriptRuns splits a token wherever it crosses between a space-less
 // script (Han, kana) and anything else, so "PL科目" becomes "PL" and
 // "科目".
@@ -245,11 +301,16 @@ const (
 //     weighted the same way, so it works for the question get_context is
 //     built for and not only for a keyword: "なぜ売上が下がっているのか"
 //     lifts the concept named 売上 without the question matching it whole.
-//   - A name that *is* the query outranks every entry that merely
-//     contains it. The bonus is 1.0 against a ceiling of 1.85 for
-//     everything else, so this is a rule rather than a nudge: asking for
-//     売上 puts 売上 first. Either name serves — the deep-linked filename
-//     is a name a person chose as much as the title is.
+//   - A name that *is* the query — or is a term of it (QueryTerms) —
+//     outranks every entry that merely contains it. The bonus is 1.0
+//     against a ceiling of 1.85 for everything else, so this is a rule
+//     rather than a nudge: asking for 売上 puts 売上 first, and asking
+//     「EC事業の継続率を計算して」 puts the definitions of EC事業 and
+//     継続率 above the reports that say all its words — a compound
+//     question is the name of nothing, so coverage alone handed its
+//     answer to whichever prose co-mentioned the most terms. Either name
+//     serves — the deep-linked filename is a name a person chose as much
+//     as the title is.
 //
 // Both terms read expressions on the row the candidate scan already has,
 // and a name match implies a search_tsv match (title and id are both
@@ -275,8 +336,21 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	wholeParam := len(args)
 	// The same escaped query with no wildcards around it: ILIKE without a
 	// pattern is case-insensitive equality, which is the exact-name test.
+	// Beside the whole query, each of its terms: a compound question
+	// (「EC事業の継続率を計算して」) is the name of nothing, but it names
+	// EC事業 and 継続率, and the definitions it asks for must not lose to
+	// the reports that merely say all its words (QueryTerms).
 	args = append(args, escapeLike(query))
-	nameParam := len(args)
+	nameTests := []string{fmt.Sprintf(
+		"k.title ILIKE $%[1]d OR "+filenameText+" ILIKE $%[1]d", len(args))}
+	for _, term := range QueryTerms(query) {
+		if strings.EqualFold(term, query) {
+			continue // the whole-query test above already asks this
+		}
+		args = append(args, escapeLike(term))
+		nameTests = append(nameTests, fmt.Sprintf(
+			"k.title ILIKE $%[1]d OR "+filenameText+" ILIKE $%[1]d", len(args)))
+	}
 	frags := queryFragments(query)
 	var hit, weight, weighted, named, weights, tests []string
 	for i, frag := range frags {
@@ -345,8 +419,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 				SELECT c.*, %[4]s FROM (
 					SELECT k.id, %[5]s, count(*) OVER () AS total,
 						CASE WHEN k.search_text ILIKE $%[6]d THEN 0.3 ELSE 0 END AS whole,
-						CASE WHEN k.title ILIKE $%[7]d
-							OR `+filenameText+` ILIKE $%[7]d
+						CASE WHEN %[7]s
 							THEN 1 ELSE 0 END AS named,
 						(SELECT max(v.at) FROM knowledge_verification v
 							WHERE v.id = k.id) AS last_verified
@@ -361,7 +434,8 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		ORDER BY scored.score DESC, scored.last_verified DESC NULLS LAST, k.id`,
 		strings.Join(weighted, " + "), strings.Join(named, " + "),
 		strings.Join(weights, " + "),
-		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam, nameParam,
+		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam,
+		strings.Join(nameTests, " OR "),
 		strings.Join(tests, " || "), where, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {

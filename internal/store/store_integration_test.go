@@ -1879,6 +1879,90 @@ func TestIntegrationLexicalSearchRanksTheNamedConceptFirst(t *testing.T) {
 	}
 }
 
+// A compound question — 社内用語 chained by の, the input the recall hook
+// actually feeds get_context — used to hand the whole ranking to whichever
+// prose co-mentioned the most of its terms: the score is fragment
+// coverage, a meeting memo saying all three terms covers everything, and
+// each term's definition covers only its own third. The name rule now
+// reads the query's terms (QueryTerms), so the definitions a question
+// names outrank the prose that merely says its words.
+func TestIntegrationLexicalSearchLiftsWhatACompoundQueryNames(t *testing.T) {
+	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	run := testdb.Unique(t, "it-compound-")
+	mine := Filter{Tags: []string{run}}
+	// The three names a compound question chains: one by title, one by
+	// filename, one mixed-script (design doc 0022 for the two names).
+	ecJigyo, kaiin, keizoku := run+"/EC事業", run+"/アクティブ会員", run+"/keizoku"
+	definitions := []string{ecJigyo, kaiin, keizoku}
+	ids := append([]string{}, definitions...)
+	for i := range 6 {
+		ids = append(ids, fmt.Sprintf("%s/memo-%d", run, i))
+	}
+	t.Cleanup(func() {
+		for _, id := range ids {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
+			_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
+		}
+	})
+	create := func(id, title, body string) {
+		t.Helper()
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: title, Tags: []string{run},
+			Status: domain.StatusDraft, CreatedBy: actor, Body: body,
+		}, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	// Worst-first, as above: the memos say every term the question asks
+	// for — and 計算, which no definition says — so coverage alone scores
+	// them near 1.0 and each definition near a third of that.
+	for i := range 6 {
+		create(fmt.Sprintf("%s/memo-%d", run, i), fmt.Sprintf("週次定例メモ %d", i),
+			"EC事業のアクティブ会員は微増、継続率は目標圏内で推移。"+
+				"アクティブ会員の獲得施策は継続、EC事業の継続率が下がったら見直す。"+
+				"来週も同じ枠で計算して報告する。")
+	}
+	create(keizoku, "継続率", "前月アクティブだった会員のうち当月もアクティブである会員の割合。")
+	create(kaiin, "", "集計日から30日以内にログインした会員と定義する。")
+	create(ecJigyo, "", "自社ECサイト経由の受注だけを集計するセグメント。")
+
+	hits, err := s.SearchLexical(ctx, "EC事業のアクティブ会員の継続率を計算して", mine, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rank := func(id string) int {
+		for i, h := range hits {
+			if h.ID == id {
+				return i
+			}
+		}
+		return -1
+	}
+	for _, def := range definitions {
+		for i := range 6 {
+			memo := fmt.Sprintf("%s/memo-%d", run, i)
+			if d, m := rank(def), rank(memo); d < 0 || (m >= 0 && m < d) {
+				t.Errorf("SearchLexical(compound) ranked %s (co-mentions every term) "+
+					"above %s (named by one)", memo, def)
+			}
+		}
+	}
+}
+
 // Verify is the exit from both review feeds (design doc 0025 §6). It
 // stamps a fresh verified_at even when the entry is already verified —
 // which Update cannot do — and an entry whose last failure report predates
