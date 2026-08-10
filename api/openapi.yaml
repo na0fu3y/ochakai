@@ -7,27 +7,23 @@ info:
     terms, dataset and table catalog entries, and references (mirrors of
     external material) in one knowledge base. The REST API is a superset
     of the MCP tools — the same operations plus bulk export, the
-    human-facing reverse lookups, deletion, a concept's usage totals (both
-    of those left MCP with design doc 0076), and file writes — so users
-    can build their own web UIs. ochakai executes no SQL and uses no LLM.
+    human-facing reverse lookups, deletion, a concept's usage totals and
+    file writes — so users can build their own web UIs. ochakai executes
+    no SQL and uses no LLM.
+
+    Why an operation is shaped the way it is, and what was considered and
+    declined, is in the design records, cited below as "design doc NNNN":
+    https://github.com/na0fu3y/ochakai/tree/main/docs/design
 
 
     **One address for an object.** A concept and a file are both objects
     of one bundle, and `/api/v1/bundle/{path}` is where they live — a
-    concept at `<id>.md` (design doc 0075 §4). The second spelling,
-    `/api/v1/knowledge/{id}`, is gone: it read, wrote and deleted exactly
-    what the bundle address does, one suffix away.
-
-    What is not an object of the bundle does not live there. A ranking is
-    ochakai's own rather than something the bundle holds, so the list
-    face is `/api/v1/search` — the old spelling `/api/v1/knowledge` made
-    it look like the collection its own detail address indexed into, and
-    it is neither. `/api/v1/backlinks/{id}` is gone the same way: what
-    points at a concept is a set of concepts, so it is `links_to=` on the
-    search face beside `source=`, the reverse lookup that was already
-    there. `/api/v1/export` is gone too: an archive is the bundle at a
-    path, so it is `Accept: application/gzip` on that path, and the root
-    is the whole knowledge base. Design doc 0075 §4's fold is complete.
+    concept at `<id>.md` (design doc 0075 §4). What is not an object of
+    the bundle does not live there: a ranking is ochakai's own rather
+    than something the bundle holds, so the list face is
+    `/api/v1/search`, with `links_to=` and `source=` as its reverse
+    lookups, and an archive is the bundle at a path
+    (`Accept: application/gzip`, the root being the whole base).
 
 
     **An unrecognized query parameter is a 400, naming it** (design doc
@@ -44,8 +40,7 @@ info:
     **An unrecognized JSON body key is a 400, naming it** (design doc
     0064), the same rule applied to the body: `POST /api/v1/move`,
     `POST /api/v1/review/{id}` and `POST /api/v1/usage/{id}` reject a key
-    their schema does not declare, rather than decoding the request and
-    silently dropping it.
+    their schema does not declare.
 
 
     **`Accept` is read as a set of names, not as a ranking** (design doc
@@ -62,20 +57,16 @@ info:
 
     **`q` is dropped with the other parameters, `q=0` included.** RFC 9110
     reads `q=0` as "not this one"; ochakai does not implement it, so
-    `application/gzip;q=0` still gets the archive. There is nothing for an
-    exclusion to express here that omission does not: a caller who wants
-    the default asks for it by not naming the token. This is written down
-    rather than left to be discovered, because it is the one place ochakai
-    knowingly answers a standard header by a rule of its own.
+    `application/gzip;q=0` still gets the archive. This is written down
+    rather than left to be discovered, because it is the one place
+    ochakai knowingly answers a standard header by a rule of its own.
 
     **A repeated query key is a 400, naming it** (design doc 0064 §20.2) —
     unless the parameter is declared as an array, which is how a caller
     spells a set: `?type=Metric&type=Policy` asks for either, and `type`,
     `status`, `trust`, `tag` and `prefix` are the five that work this
     way. Every other key takes one value, and `?limit=10&limit=50` has no
-    answer that is what was asked. The server used to take the first
-    value for most keys and the last for `fm.{key}`, so one contradiction
-    got two different silent answers in the same request.
+    answer that is what was asked.
 
     **REST is frozen at `/api/v1`** (design doc 0064,
     docs/compatibility.md): this contract is the address list a client can
@@ -484,6 +475,40 @@ paths:
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/bundle/{path}:
+    parameters:
+      - name: path
+        in: path
+        required: true
+        description: >
+          The object's bundle path — "metrics/revenue.md",
+          "metrics/revenue/chart.png", or a reserved "index.md" /
+          "metrics/log.md". Slashes are real path separators.
+
+          **The empty path is the bundle itself**: `/api/v1/bundle/`
+          with `Accept: application/gzip` is the archive of everything,
+          and with `Accept: application/json` the root `index.md` is at
+          `/api/v1/bundle/index.md`. A path template parameter cannot
+          be written as empty in OpenAPI, so this is said here rather
+          than in the path — as with the slashes above, the prose is as
+          precise as the format allows.
+
+          **`.md` is mandatory and is part of a concept's bundle path**
+          (design doc 0064), not a representation selector: dropping it
+          does not fall back to `Accept: text/markdown` on the same
+          concept, it stops finding the concept at all. `id` (used bare
+          by `/api/v1/review/{id}` and `/api/v1/usage/{id}`) and
+          `Summary.id` are the identifiers that are always bare — `.md`
+          is never part of an id. `File.path` is bare in the sense of
+          being a file's own real path, not in the sense of never
+          carrying `.md`. `Change.path` is **not** bare either: it is
+          the object's bundle path (see `BundleLog` above), and for a
+          concept that includes `.md` the same way this address does.
+          A single-target operation (this one, `/api/v1/review/{id}`,
+          `/api/v1/usage/{id}`) addresses its concept with a path
+          segment; `/api/v1/move`, which names two, addresses both in
+          the body instead — not a second inconsistency, but the shape
+          a two-target operation has to take.
+        schema: { type: string }
     get:
       operationId: getBundlePath
       summary: Read what is at a bundle path
@@ -509,16 +534,11 @@ paths:
         frontmatter, the generated `index.md` and `log.md` of every
         directory, and every file under the path — including one no
         concept shows, because what enters the bundle leaves it (design
-        doc 0075 §1). The history travels with it (design doc 0075 §4.2): a purge is
-        the only thing that removes a row from the ledger, and an
-        archive without it left the record readable only from the
-        instance holding it. Each generated `log.md` inside the archive
-        carries its newest 1000 lines, the same bound the address
-        itself serves; the ledger's older rows stay on the instance. An
-        import never reads it back. The root
-        (`/api/v1/bundle/`) is the whole knowledge base — this is what `GET /api/v1/export` was, at the address of
-        the thing it returns (design doc 0075 §4). Your knowledge is
-        yours.
+        doc 0075 §1). The history travels with it: each generated
+        `log.md` inside the archive carries its newest 1000 lines, the
+        same bound the address itself serves, and an import never reads
+        it back. The root (`/api/v1/bundle/`) is the whole knowledge
+        base. Your knowledge is yours.
 
         A path is a subtree or it is not: a concept's or a file's own
         address — `metrics/revenue.md` as much as a reserved name — is
@@ -538,15 +558,13 @@ paths:
         The server logs every such failure at error level, naming the
         file it stopped on.
 
-        There is no matching import endpoint, and that is deliberate
-        (design doc 0067 §5.2): importing a bundle is a loop over this
-        very address, so a server-side version would add a second path to
-        the same outcome without adding a capability. To write your own
-        importer against any OKF bundle: walk the tar.gz and PUT every
-        member to `/api/v1/bundle/{path}` at the path it arrived at. One
-        address takes both kinds — the bytes decide which — so there is
-        nothing to attribute and nothing to route. `index.md` files are
-        generated and are not concepts. Frontmatter keys the server owns
+        There is no matching import endpoint (design doc 0067 §5.2).
+        To write your own importer against any OKF bundle: walk the
+        tar.gz and PUT every member to `/api/v1/bundle/{path}` at the
+        path it arrived at. One address takes both kinds — the bytes
+        decide which — so there is nothing to attribute and nothing to
+        route. `index.md` files are generated and are not concepts.
+        Frontmatter keys the server owns
         — `generated`, `verified`, `created_by`, `rejected_by`,
         `rejected_at`, and the pre-v0.2 spellings `timestamp` /
         `verified_by` / `verified_at` — are ignored on write; provenance
@@ -569,9 +587,7 @@ paths:
 
         The representation follows Accept. `application/json` returns the
         listing or the changes; anything else returns the file the path
-        names. Two representations of one thing, at one address — the
-        JSON is what a web UI's tree needs, not a second surface, and it
-        says what the document says.
+        names — two representations of one thing, at one address.
 
         **`?history` is the log.md of the one object at this path**
         (design doc 0075 §4) — the history of a concept or of a file,
@@ -584,39 +600,6 @@ paths:
         PUT and DELETE against the two reserved names are 409: a
         generated file is not one anybody writes.
       parameters:
-        - name: path
-          in: path
-          required: true
-          description: >
-            The object's bundle path — "metrics/revenue.md",
-            "metrics/revenue/chart.png", or a reserved "index.md" /
-            "metrics/log.md". Slashes are real path separators.
-
-            **The empty path is the bundle itself**: `/api/v1/bundle/`
-            with `Accept: application/gzip` is the archive of everything,
-            and with `Accept: application/json` the root `index.md` is at
-            `/api/v1/bundle/index.md`. A path template parameter cannot
-            be written as empty in OpenAPI, so this is said here rather
-            than in the path — as with the slashes above, the prose is as
-            precise as the format allows.
-
-            **`.md` is mandatory and is part of a concept's bundle path**
-            (design doc 0064), not a representation selector: dropping it
-            does not fall back to `Accept: text/markdown` on the same
-            concept, it stops finding the concept at all. `id` (used bare
-            by `/api/v1/review/{id}` and `/api/v1/usage/{id}`) and
-            `Summary.id` are the identifiers that are always bare — `.md`
-            is never part of an id. `File.path` is bare in the sense of
-            being a file's own real path, not in the sense of never
-            carrying `.md`. `Change.path` is **not** bare either: it is
-            the object's bundle path (see `BundleLog` above), and for a
-            concept that includes `.md` the same way this address does.
-            A single-target operation (this one, `/api/v1/review/{id}`,
-            `/api/v1/usage/{id}`) addresses its concept with a path
-            segment; `/api/v1/move`, which names two, addresses both in
-            the body instead — not a second inconsistency, but the shape
-            a two-target operation has to take.
-          schema: { type: string }
         - name: history
           in: query
           description: >
@@ -1158,11 +1141,8 @@ paths:
         Rejected concepts never appear. limit caps the primary concepts
         (default 5, max 20); linked companions share a 2×limit total cap.
 
-        Changed in 0.13.0 (design doc 0067 §4): `hits` carries the ranking
-        only — id, type, title, status, score. It used to repeat every
-        top concept in full, so the knowledge arrived twice and the budget
-        bound one copy of it. A client that read bodies out of `hits`
-        reads them from `concepts` instead, where they always were.
+        `hits` carries the ranking only — id, type, title, status, score
+        (design doc 0067 §4). The concepts themselves are in `concepts`.
       parameters:
         - name: q
           in: query
@@ -1948,13 +1928,7 @@ paths:
 
 
         It carries the queue depths under `queues` (design doc 0069
-        §5). `GET /api/v1/queues` used to answer those three numbers at
-        an address of their own and is gone (design doc 0069 §5): it
-        returned what this response already carried, under the same key
-        and from the same query, and the one thing it could do that this
-        could not was scope them to a subtree. So the scope came here
-        instead — see `prefix` below, which now narrows every number keyed
-        by a concept rather than only the three.
+        §5), and `prefix` narrows every number keyed by a concept.
 
 
         Two kinds of number come back. A *state* is how things stand now
@@ -2049,11 +2023,11 @@ paths:
       summary: Embed concepts that have no vector for the configured model
       description: >
         Vectors are written when a concept is written, so a knowledge base
-        loaded before semantic search was reachable has none, and
-        hybrid search stays quietly lexical-only until every concept
-        happens to be rewritten. Changing the embedding model has the
-        same shape: the old vectors sit in a space nothing queries any
-        more (design doc 0080 §3). This fills the gap.
+        loaded before semantic search was reachable has none, and hybrid
+        search stays quietly lexical-only until every concept happens to
+        be rewritten. Changing the embedding model leaves the same gap:
+        the old vectors sit in a space nothing queries any more (design
+        doc 0080 §3). This fills it.
 
 
         File vectors are covered too: only writing a file records one, so
@@ -2279,12 +2253,12 @@ components:
         §14.2: a concept's GET did not compare it until now).
 
         **Each surface takes one of those two spellings and 400s the
-        other.** A version on a PUT would mean "write only if this is
-        *not* the version", which ochakai does not implement; `*` on a
-        GET would mean "answer only if nothing is here", the opposite of
-        the validator. Both used to be dropped in silence, leaving the
-        write or the read unconditioned — the outcome a caller sending a
-        precondition least wants (design doc 0064 §20.4).
+        other** (design doc 0064 §20.4). A version on a PUT would mean
+        "write only if this is *not* the version", which ochakai does not
+        implement; `*` on a GET would mean "answer only if nothing is
+        here", the opposite of the validator. Neither is ignored: an
+        unconditioned write is what a caller sending a precondition least
+        wants.
 
         **Neither is read where the path holds a file.** The contract
         declares both here because one address writes both kinds, but the
@@ -2710,12 +2684,9 @@ components:
 
         `id`, `document`, `summary` and `observed` are the whole of a
         read; `files` and `plan` are there when there is something to
-        say. It used to declare `created_at`,
-        `updated_at`, `trust` and `content_changed_at` beside them, none
-        of which any release ever sent: the first three are `summary`'s
-        and the fourth is `observed.generated.at`. A schema may not
-        advertise a field the server does not write, which is now checked
-        rather than reviewed (`TestOpenAPISchemasMatchGoTypes`).
+        say. A schema may not advertise a field the server does not
+        write, which is checked rather than reviewed
+        (`TestOpenAPISchemasMatchGoTypes`).
       required: [id, document, summary, observed]
       properties:
         id:
@@ -3099,14 +3070,11 @@ components:
     SearchHit:
       description: >
         One search or listing result: the projection plus what ranked it.
-        A hit no longer carries the concept. Search used to return whole
-        concepts on the reasoning that there they are the answer rather
-        than a duplicate of one (design doc 0067 §4) — true while a concept
-        was a bag of fields, and false once it is a document: a page of
-        results that shipped ten documents to answer "which of these
-        should I read" spends the caller's context on the nine it will
-        not. The document is one fetch away by id, and GET
-        /api/v1/context is the call that returns concepts.
+        **A hit does not carry the concept** (design doc 0067 §4) — a page
+        of ten documents answering "which of these should I read" spends
+        the caller's context on the nine it will not. The document is one
+        fetch away by id, and GET /api/v1/context is the call that
+        returns concepts.
 
         REST hits carry file metadata (filled in batch) so UIs can
         render image previews without a fetch per concept; MCP search
