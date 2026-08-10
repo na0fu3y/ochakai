@@ -1033,15 +1033,28 @@ func TestIntegrationAttachments(t *testing.T) {
 		t.Errorf("replace should keep one attachment with new content: %+v", list)
 	}
 
-	// The dedup blob store keeps both contents (revision history can
-	// reference the old hash).
+	// A replacement is a new blob row, not a mutated one — that is what
+	// content addressing buys. The row this path names now must exist:
+	// SweepBlobs only deletes what no object and no attachment
+	// references, so a hash a live attachment names is the one thing it
+	// may never take (sweep.go, design doc 0099).
+	//
+	// The replaced hash is deliberately not asserted on. It is orphaned
+	// the moment the new bytes land, and the sweep is global — it does
+	// not know about the namespace this test runs in, so any purge or
+	// file delete in another package's tests, running against the shared
+	// database, may legitimately reclaim it first. lockLiveAttachments
+	// does not help: those tests sweep without taking it.
 	var blobs int
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM blob WHERE sha256 IN ($1, $2)`, att.SHA256, list[0].SHA256).Scan(&blobs); err != nil {
+		`SELECT count(*) FROM blob WHERE sha256 = $1`, list[0].SHA256).Scan(&blobs); err != nil {
 		t.Fatal(err)
 	}
-	if blobs != 2 {
-		t.Errorf("blob count = %d, want 2", blobs)
+	if blobs != 1 {
+		t.Errorf("blob rows for the hash the attachment names = %d, want 1", blobs)
+	}
+	if list[0].SHA256 == att.SHA256 {
+		t.Errorf("replacement reused the old hash: %s", att.SHA256)
 	}
 
 	if err := s.DeleteFile(ctx, path, actor); err != nil {
