@@ -72,7 +72,7 @@ func resolveFiles(files map[string][]byte, concepts []*domain.Knowledge) (atts [
 		if seen[k] == nil {
 			seen[k] = map[string]bool{}
 		}
-		if seen[k][name] || !domain.ValidFileName(name) || len(data) > domain.MaxFileSize || len(data) == 0 {
+		if seen[k][name] || domain.ValidateFile(name, len(data)) != nil {
 			return
 		}
 		if _, err := domain.DetectFileMediaType(data); err != nil {

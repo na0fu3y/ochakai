@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -76,103 +75,6 @@ func scanFile(row pgx.CollectableRow) (domain.File, error) {
 	return asFile(path, mediaType, size, hash, by, at), nil
 }
 
-// filePath is where a file with this name, written against this entry,
-// lives: the path it names when the entry's own body points there, and
-// the canonical <id>/<name> otherwise.
-//
-// The body is what decides, because the body is what attributes the file
-// (design doc 0046 §3.3). A caller naming a path the entry says nothing
-// about would otherwise write a file nothing points at — an orphan the
-// moment it lands, and one no export would put back where it was asked
-// for. Under the entry's own namespace it needs no mention: the path
-// says whose it is.
-func filePath(k *domain.Knowledge, name, at string) string {
-	canonical := k.ID + "/" + name
-	if at == "" || at == canonical {
-		return canonical
-	}
-	if slices.Contains(domain.FilesFromBody(k.ID, k.Body), at) {
-		return at
-	}
-	return canonical
-}
-
-// PutAttachment stores data as an attachment of a live entry, replacing
-// any attachment of the same name. mediaType must already be validated
-// (domain.DetectFileMediaType). Attach and detach count as changes
-// to the entry: updated_at is bumped and a revision (with the attachment
-// list in the snapshot) is recorded.
-func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at string, data []byte, actor domain.Actor) (*domain.File, error) {
-	sum := sha256.Sum256(data)
-	att := &domain.File{
-		Name:      name,
-		MediaType: mediaType,
-		Size:      int64(len(data)),
-		SHA256:    hex.EncodeToString(sum[:]),
-		Path:      at,
-		CreatedBy: actor,
-		CreatedAt: time.Now().UTC(),
-	}
-	if s.blobs == nil {
-		return nil, ErrNoBlobStore
-	}
-	err := s.withTx(ctx, func(tx pgx.Tx) error {
-		// The upload happens under the writers' shared lock (sweep.go):
-		// create-only and content-addressed, a DB failure afterwards
-		// leaves only an unreferenced object — which the sweep may
-		// reclaim, but never between this Put and the commit that names
-		// its hash.
-		if err := lockBlobsShared(ctx, tx); err != nil {
-			return err
-		}
-		if err := s.blobs.Put(ctx, att.SHA256, mediaType, data); err != nil {
-			return err
-		}
-		k, err := s.Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		path := filePath(k, name, at)
-		// The caller asked for a name and may have asked for a path; what
-		// it gets back is the address the file actually took, because the
-		// vector and every later read are keyed by it.
-		att.Path = path
-		// The blob row is metadata only now — the object row carries the
-		// media type and size a read answers with — but it stays the
-		// registry of which content exists, and a revision names bytes by
-		// hash alone.
-		if _, err := tx.Exec(ctx, `INSERT INTO blob (sha256, media_type, size)
-			VALUES ($1, $2, $3) ON CONFLICT (sha256) DO NOTHING`,
-			att.SHA256, att.MediaType, att.Size); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO object
-			(path, type, title, body, blob_hash, size, media_type,
-			 created_by_kind, created_by_name, updated_by_kind, updated_by_name,
-			 created_at, updated_at, content_changed_at)
-			VALUES ($1,'','','',$2,$3,$4,$5,$6,$5,$6,$7,$7,$7)
-			ON CONFLICT (path) DO UPDATE SET
-				blob_hash=EXCLUDED.blob_hash, size=EXCLUDED.size, media_type=EXCLUDED.media_type,
-				updated_by_kind=EXCLUDED.updated_by_kind, updated_by_name=EXCLUDED.updated_by_name,
-				updated_at=EXCLUDED.updated_at
-			WHERE object.id IS NULL`,
-			path, att.SHA256, att.Size, att.MediaType, actor.Kind, actor.Name, att.CreatedAt); err != nil {
-			return err
-		}
-		// A replaced file's vector describes the old bytes; drop it here
-		// and let the service re-embed after commit (design doc 0020).
-		if err := execTolerateMissingTable(ctx, tx,
-			`DELETE FROM attachment_embedding WHERE path=$1`, path); err != nil {
-			return err
-		}
-		return s.touchAndRevise(ctx, tx, k, "add_file", actor)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return att, nil
-}
-
 // ErrNoBlobStore is the backstop for attachment operations on an
 // instance without a blob store; the service layer checks first and
 // wraps the condition in a client-facing error (design doc 0013).
@@ -183,23 +85,6 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 // (ExportSnapshot.FileMeta). So the sentinel travels, and writeError
 // gives it the 501 the other paths get.
 var ErrNoBlobStore = errors.New("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
-
-// GetAttachment returns one attachment with its bytes. Attachments of
-// soft-deleted entries are gone with the entry.
-func (s *Store) GetAttachment(ctx context.Context, id, name string) (*domain.File, []byte, error) {
-	att, err := s.GetAttachmentMeta(ctx, id, name)
-	if err != nil {
-		return nil, nil, err
-	}
-	if s.blobs == nil {
-		return nil, nil, ErrNoBlobStore
-	}
-	data, err := s.blobs.Get(ctx, att.SHA256)
-	if err != nil {
-		return nil, nil, err
-	}
-	return att, data, nil
-}
 
 // ListAttachments returns the metadata (no bytes) of the files a live
 // entry is shown by, in name order.
@@ -241,70 +126,6 @@ func (s *Store) ListAttachmentsBatch(ctx context.Context, ids []string) (map[str
 	return out, rows.Err()
 }
 
-// GetAttachmentMeta returns one file's metadata without touching the
-// blob store — enough to answer a conditional GET (the ETag is the
-// content hash) before deciding whether the bytes are needed.
-//
-// The name is the last segment of a path, so a file the entry shows from
-// elsewhere in the bundle answers to its filename here, which is the
-// name every surface has always called it by.
-func (s *Store) GetAttachmentMeta(ctx context.Context, id, name string) (*domain.File, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+fileCols+`
-		FROM object k JOIN object f ON `+attributedTo+`
-		WHERE k.id=$1 AND k.deleted_at IS NULL
-		  AND substr(f.path, length(f.path) - length($2)) = '/' || $2
-		ORDER BY f.path LIMIT 1`, id, name)
-	if err != nil {
-		return nil, err
-	}
-	att, err := pgx.CollectExactlyOneRow(rows, scanFile)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &att, nil
-}
-
-// DeleteAttachment removes the entry→blob mapping. The blob itself is
-// not touched here: content-addressed bytes are shared, so whether they
-// can go is a global question — SweepBlobs (sweep.go) answers it, and
-// the service runs it after this commit.
-func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor domain.Actor) error {
-	return s.withTx(ctx, func(tx pgx.Tx) error {
-		k, err := s.Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		att, err := s.GetAttachmentMeta(ctx, id, name)
-		if err != nil {
-			return err
-		}
-		path := filePath(k, att.Name, att.Path)
-		tag, err := tx.Exec(ctx, `DELETE FROM object WHERE path=$1 AND id IS NULL`, path)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		if err := execTolerateMissingTable(ctx, tx,
-			`DELETE FROM attachment_embedding WHERE path=$1`, path); err != nil {
-			return err
-		}
-		return s.touchAndRevise(ctx, tx, k, "remove_file", actor)
-	})
-}
-
-// ExportAttachment is one attachment with its owner and bytes, as the
-// OKF exporter consumes it.
-type ExportAttachment struct {
-	ID   string
-	Att  domain.File
-	Data []byte
-}
-
 // AttachmentBytes returns the content-addressed bytes behind an
 // attachment. Paired with ExportSnapshot.FileMeta for streaming
 // export.
@@ -313,47 +134,6 @@ func (s *Store) AttachmentBytes(ctx context.Context, sha256 string) ([]byte, err
 		return nil, ErrNoBlobStore
 	}
 	return s.blobs.Get(ctx, sha256)
-}
-
-// touchAndRevise bumps the entry's updated_at and records a revision
-// whose snapshot includes the attachment list after the change —
-// attach/detach are changes to the entry, and every change is kept.
-func (s *Store) touchAndRevise(ctx context.Context, tx pgx.Tx, k *domain.Knowledge, change string, actor domain.Actor) error {
-	// NowStored, like every other write path: time.Now()'s nanoseconds do
-	// not survive the round trip through timestamptz, so the revision
-	// snapshot would carry a version the stored row never had (design
-	// doc 0030).
-	k.UpdatedAt = NowStored()
-	// deleted_at IS NULL, as on every other write: the entry was read
-	// outside this transaction, so a delete can land in the window, and
-	// an attachment plus its revision planted on a tombstone would
-	// resurface whenever someone revived the entry.
-	tag, err := tx.Exec(ctx,
-		`UPDATE object SET updated_at=$2 WHERE id=$1 AND deleted_at IS NULL`, k.ID, k.UpdatedAt)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	atts, err := listAttachmentsTx(ctx, tx, k.ID)
-	if err != nil {
-		return err
-	}
-	k.Files = atts
-	return s.addRevision(ctx, tx, k, change, actor)
-}
-
-// listAttachmentsTx reads the file list inside the writing transaction,
-// so the revision snapshot sees the change it records.
-func listAttachmentsTx(ctx context.Context, tx pgx.Tx, id string) ([]domain.File, error) {
-	rows, err := tx.Query(ctx, `SELECT `+fileCols+`
-		FROM object k JOIN object f ON `+attributedTo+`
-		WHERE k.id=$1 ORDER BY f.path`, id)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanFile)
 }
 
 // PutFile writes a file object at a bundle path, replacing whatever file

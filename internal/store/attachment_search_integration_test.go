@@ -93,7 +93,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 		_ = s.SoftDelete(ctx, a.ID, actor, nil)
 		_ = s.SoftDelete(ctx, b.ID, actor, nil)
 	}()
-	if _, err := s.PutAttachment(ctx, a.ID, "sales-seeds.txt", "text/plain", "", []byte("region,amount\n"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, a.ID+"/sales-seeds.txt", "text/plain", []byte("region,amount\n"), actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,10 +112,10 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 
 	// Vector: an entry with several attachments surfaces once, scored by
 	// its best match; a worse-matching entry ranks below.
-	if _, err := s.PutAttachment(ctx, a.ID, "notes.txt", "text/plain", "", []byte("misc notes"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, a.ID+"/notes.txt", "text/plain", []byte("misc notes"), actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PutAttachment(ctx, b.ID, "other.txt", "text/plain", "", []byte("other"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, b.ID+"/other.txt", "text/plain", []byte("other"), actor); err != nil {
 		t.Fatal(err)
 	}
 	for _, e := range []struct {
@@ -155,7 +155,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 
 	// Replacing an attachment invalidates its vector: the row is dropped
 	// in the same transaction, re-embedding is the writer's follow-up.
-	if _, err := s.PutAttachment(ctx, a.ID, "sales-seeds.txt", "text/plain", "", []byte("region,amount,updated\n"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, a.ID+"/sales-seeds.txt", "text/plain", []byte("region,amount,updated\n"), actor); err != nil {
 		t.Fatal(err)
 	}
 	if n := countEmbeddings(a.ID + "/sales-seeds.txt"); n != 0 {
@@ -166,7 +166,7 @@ func TestIntegrationAttachmentSearch(t *testing.T) {
 	if err := s.UpsertFileEmbedding(ctx, a.ID+"/sales-seeds.txt", "test-model", []float32{1, 0, 0, 0}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteAttachment(ctx, a.ID, "sales-seeds.txt", actor); err != nil {
+	if err := s.DeleteFile(ctx, a.ID+"/sales-seeds.txt", actor); err != nil {
 		t.Fatal(err)
 	}
 	if n := countEmbeddings(a.ID + "/sales-seeds.txt"); n != 0 {

@@ -111,8 +111,8 @@ func FuzzLinksFromBody(f *testing.F) {
 				t.Errorf("duplicate link %+v", l)
 			}
 			seen[l] = true
-			// DisplayText is what every surface renders; an edge with no
-			// readable name is a dead entry in a "linked from" list.
+			// An edge with no readable name would be a dead entry in a
+			// "linked from" list, were a surface to render one.
 			if l.DisplayText() == "" {
 				t.Errorf("link %+v renders as nothing", l)
 			}

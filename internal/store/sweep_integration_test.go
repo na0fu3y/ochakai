@@ -57,7 +57,7 @@ func TestIntegrationSweepBlobs(t *testing.T) {
 	sum := sha256.Sum256(data)
 	sha := hex.EncodeToString(sum[:])
 	for _, k := range []*domain.Knowledge{a, b} {
-		if _, err := s.PutAttachment(ctx, k.ID, "seed.txt", "text/plain", "", data, actor); err != nil {
+		if _, _, err := s.PutFile(ctx, k.ID+"/seed.txt", "text/plain", data, actor); err != nil {
 			t.Fatal(err)
 		}
 	}

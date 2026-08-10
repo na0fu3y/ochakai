@@ -2,10 +2,8 @@ package store
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/testdb"
@@ -76,14 +74,14 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 
 	// Attach → the bytes live in the blob store, metadata in the blob row.
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("gcs only bytes")...)
-	att, err := s.PutAttachment(ctx, k.ID, "chart.png", "image/png", "", png, actor)
+	att, _, err := s.PutFile(ctx, k.ID+"/chart.png", "image/png", png, actor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := fake.m[att.SHA256]; !ok {
 		t.Error("attach should upload to the blob store")
 	}
-	if _, data, err := s.GetAttachment(ctx, k.ID, "chart.png"); err != nil || string(data) != string(png) {
+	if _, data, err := s.GetFile(ctx, k.ID+"/chart.png"); err != nil || string(data) != string(png) {
 		t.Errorf("attachment did not round-trip: %v", err)
 	}
 
@@ -122,113 +120,12 @@ func TestIntegrationBlobStoreOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer bare.Close()
-	if _, err := bare.PutAttachment(ctx, k.ID, "other.png", "image/png", "", png, actor); err == nil ||
+	if _, _, err := bare.PutFile(ctx, k.ID+"/other.png", "image/png", png, actor); err == nil ||
 		!strings.Contains(err.Error(), "OCHAKAI_GCS_BUCKET") {
 		t.Errorf("attach without a blob store = %v, want config hint", err)
 	}
-	if _, _, err := bare.GetAttachment(ctx, k.ID, "chart.png"); err == nil ||
+	if _, _, err := bare.GetFile(ctx, k.ID+"/chart.png"); err == nil ||
 		!strings.Contains(err.Error(), "OCHAKAI_GCS_BUCKET") {
 		t.Errorf("read without a blob store = %v, want config hint", err)
-	}
-}
-
-// An attach and a delete can be in flight together: PutAttachment reads
-// the entry outside its transaction, so a delete can commit in the window
-// between that read and the write. The attach must lose. Before the guard
-// it wrote the attachment and an "attach" revision onto the tombstone,
-// where they sat invisible until someone revived the entry and got back a
-// file they never attached to the entry they were reviving.
-func TestIntegrationAttachRacingDeleteLoses(t *testing.T) {
-	dbURL := testdb.URL(t)
-	lockLiveAttachments(t, dbURL) // a live file, on a blob fake only this test can read
-	ctx := context.Background()
-	s, err := New(ctx, dbURL, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.Migrate(ctx, 0); err != nil {
-		t.Fatal(err)
-	}
-	s.UseBlobStore(newFakeBlobStore())
-	actor := domain.Actor{Kind: "human", Name: "test"}
-
-	id := testdb.Unique(t, "it-attach-race-")
-	defer func() {
-		_, _ = s.pool.Exec(ctx, `DELETE FROM attachment WHERE knowledge_id = $1`, id)
-		for _, table := range []string{"knowledge_revision", "object"} {
-			_, _ = s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id)
-		}
-	}()
-	if err := s.Create(ctx, &domain.Knowledge{
-		Type: domain.TypeTerms, ID: id, Title: id, Status: domain.StatusDraft, CreatedBy: actor,
-	}, false); err != nil {
-		t.Fatal(err)
-	}
-
-	// A delete that has not committed yet: PutAttachment's own read runs
-	// on another connection and still sees a live entry, which is the
-	// window the guard closes.
-	del, err := s.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = del.Rollback(ctx) }()
-	if _, err := del.Exec(ctx,
-		`UPDATE object SET deleted_at = now(), updated_at = now() WHERE id = $1`, id); err != nil {
-		t.Fatal(err)
-	}
-
-	attached := make(chan error, 1)
-	go func() {
-		png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("racing bytes")...)
-		_, err := s.PutAttachment(ctx, id, "chart.png", "image/png", "", png, actor)
-		attached <- err
-	}()
-
-	// Wait for the attach to reach the entry row and block on the delete.
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		var waiting int
-		if err := s.pool.QueryRow(ctx,
-			`SELECT count(*) FROM pg_stat_activity
-			  WHERE wait_event_type = 'Lock'
-			    AND (query LIKE '%object%' OR query LIKE '%knowledge%')`).Scan(&waiting); err != nil {
-			t.Fatal(err)
-		}
-		if waiting > 0 {
-			break
-		}
-		select {
-		case err := <-attached:
-			t.Fatalf("attach finished without blocking: %v", err)
-		default:
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("attach never blocked on the delete")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if err := del.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := <-attached; !errors.Is(err, ErrNotFound) {
-		t.Fatalf("attach racing a delete: got %v, want ErrNotFound", err)
-	}
-	var atts, revs int
-	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM attachment WHERE knowledge_id = $1`, id).Scan(&atts); err != nil {
-		t.Fatal(err)
-	}
-	if atts != 0 {
-		t.Errorf("refused attach left %d attachment rows on the tombstone", atts)
-	}
-	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM knowledge_revision WHERE id = $1 AND change = 'add_file'`, id).Scan(&revs); err != nil {
-		t.Fatal(err)
-	}
-	if revs != 0 {
-		t.Errorf("refused attach left %d attach revisions", revs)
 	}
 }

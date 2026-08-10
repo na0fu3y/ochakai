@@ -101,10 +101,10 @@ func (s *Service) FillFiles(ctx context.Context, ks []*domain.Knowledge) error {
 	return nil
 }
 
-// PutFile writes a file at a bundle path (design doc 0046 §§3.2, 3.5).
-// It is Attach's counterpart for an object that belongs to no entry: a
-// producer's seed data in a shared directory, a diagram two entries
-// show, a markdown file carrying no type and so not a concept.
+// PutFile writes a file at a bundle path (design doc 0046 §§3.2, 3.5),
+// for an object that belongs to no entry: a producer's seed data in a
+// shared directory, a diagram two entries show, a markdown file carrying
+// no type and so not a concept.
 //
 // Attribution is not asked for and not recorded. Whether an entry is
 // shown by this file is a question its body answers (§3.3), so a file
