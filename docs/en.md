@@ -32,8 +32,9 @@ section worth reading first if you are evaluating.
 
 **Running it.** [docs/configuration.md](configuration.md) is every
 setting and what it does. [deploy/terraform](../deploy/terraform) is the
-recommended path — thirteen steps to a Cloud Run + Cloud SQL deployment
-for about $10 a month; [deploy/cloudrun](../deploy/cloudrun) is the
+recommended path — one `terraform apply` and one manual step (the schema
+bootstrap) to a Cloud Run + Cloud SQL deployment for about $10 a month;
+[deploy/cloudrun](../deploy/cloudrun) is the
 gcloud reference it was built from, and stays the source of truth where
 the two disagree. [docs/guides/operating.md](guides/operating.md) covers
 backups, monitoring, hardening, the team web UI and upgrades.

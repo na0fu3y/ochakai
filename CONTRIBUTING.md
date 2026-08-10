@@ -658,7 +658,23 @@ product had outgrown**, which is a different pressure from the one the
 can only grow forwards is one where the earlier records quietly stop
 being true.
 
-    RECORD-CORPUS-LINES: 7000
+7,000 → 7,500 is five records — 0095, 0096, 0097, 0098 and 0099 — and the
+last two name a pressure the earlier crossings did not. Both were written
+because a **review** found a record wrong, not because a feature needed
+one: 0098 retracted 0064 §11's claim that no generator can produce a
+working client once somebody ran one, and 0099 amends 0031 §3.2 after the
+code had already reversed it — a purge reclaims the file bytes now, and
+the record still said it never would, with the implementation citing that
+same record as its authority. That is the failure mode a corpus of
+immutable records has: the code moves, the record cannot be edited, and
+nothing in the build compares the two, because `Status:` headers stay
+self-consistent while the decision underneath them stops being true. The
+6,500 crossing said the expensive records are the ones that go back for a
+decision the product had outgrown; this one says the *cheapest* place to
+find them is a release audit, and that the corpus grows when somebody
+reads it against what shipped rather than when somebody builds.
+
+    RECORD-CORPUS-LINES: 7500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

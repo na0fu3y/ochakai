@@ -40,10 +40,11 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)** |
-| 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
+| 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
+| 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
 | REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
@@ -645,7 +646,12 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   通り道を持たず、キュレーション保護が内部で使う。
 - [0031 purge](0031-purge.md) — **Accepted**。ソフト削除済みエントリを
   完全に破棄して id を解放する二段階目の削除。REST / CLI のみ、監査行を
-  残し、GCS の blob は回収しない。
+  残す。**§3.2 の「GCS の blob は回収しない」は 0099 が改訂した。**
+- [0099 purge の約束はバイト列まで届く](0099-a-purge-reaches-the-bytes.md)
+  — **Accepted**。0031 §3.2 を改訂し、どこからも参照されていない blob を
+  purge とファイル削除のあとに回収する。回収は一つの削除の副作用ではなく
+  大域の掃除として走り、書き手との共有ロックと「バイト列が先、行が後」の
+  順序で、生きている添付を消しうる競合を閉じる。サーフェスは増えない。
 
 ## セマンティックモデルと compile
 

@@ -60,8 +60,9 @@ otherwise have to hunt for. Not a translation; a way in.
 - [動作要件と設定](configuration.md) — ochakai が起動前に必要とするもの、
   そして読み込むすべての環境変数。
 - [Terraform でデプロイ](../deploy/terraform/README.md) — 推奨される
-  経路で、月 $10 程度: `terraform apply` を 13 手順で済ませる。gcloud を
-  直接叩く手順は 36 手順ある。
+  経路で、月 $10 程度: `terraform apply` 一回と、手作業ひとつ(スキーマの
+  bootstrap)で済む。gcloud を直接叩くと、同じものを一手順ずつ組み立てる
+  ことになる。
 - [Cloud Run にデプロイ](../deploy/cloudrun/README.md) — module の内側で
   実際に走っている gcloud の手順そのもの。コマンドを自分の手で打ちたい
   ときは module の代わりにここを読む。各リソースが何で、なぜ必要かの

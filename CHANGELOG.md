@@ -174,7 +174,13 @@ last entry.
   interrupted sweep finishes on the next run; writers and the sweep
   share an advisory lock, so bytes uploaded for a row not yet committed
   are never swept out from under it. No migration, and no new surface —
-  `purge` and `DELETE` mean what they already said.
+  `purge` and `DELETE` mean what they already said. 0031 §3.2 had decided
+  the opposite, weighing a blob's storage cost against the risk of
+  deleting a live attachment; what belonged on that scale was the
+  promise, and the risk is closed rather than accepted, so the record
+  saying so is [0099](docs/design/0099-a-purge-reaches-the-bytes.md).
+  **v0.13.0's notes for `purge` say it does not reclaim attachment
+  bytes** — true then, false from this release.
 
 ### Added
 
@@ -441,7 +447,7 @@ last entry.
   two texts saying the same thing go out of step and nobody can tell
   which half is stale. It is the page that makes the Japanese ones
   usable: what each holds, in what order to read them, and the handful of
-  names — the environment variables, the four postures of
+  names — the environment variables, the five postures of
   `OCHAKAI_MODE`, the two shapes of an MCP connection, the absence of
   authorization — that you cannot find by skimming a page you cannot
   skim. Machine translation handles prose well; what it cannot tell you
@@ -688,9 +694,17 @@ last entry.
 - **The bundled web UI is in Japanese.** The manual has been Japanese
   since the C8 translation, and the interface it describes was not: the
   reader the product is aimed at was reading a Japanese page about an
-  English screen. Every user-visible string is translated — labels,
-  banners, empty states, the feed explanations, the placeholders and the
-  titles — and the page declares `lang="ja"`. Nothing else moved: no
+  English screen. The pages are translated — the navigation, the forms,
+  the banners, the empty states, the feed explanations, the placeholders
+  and the titles — and the page declares `lang="ja"`. **What is left is
+  named rather than implied**: the toast every action answers with, the
+  stat-tile labels on the usage and review views, `load more`, and the
+  editor's two buttons are still English, so the screen a reader meets
+  is Japanese and the screen that answers them is not yet. Finishing
+  that is its own change, because the words an action says back are the
+  ones worth a maintainer's eye rather than a bulk pass.
+
+  Nothing else moved: no
   route, no id, no `data-` marker, no API call, and the tests that pin
   the write affordances read markers rather than words, so they still
   say what they said. The three Japanese pages that quoted a button by
@@ -719,7 +733,9 @@ last entry.
   ceiling was considered and declined — of the ten crossings only one or
   two were the escape hatch it exists to catch (folding a surface and
   writing prose about the fold), and a wider grid is what leaves only
-  those ringing.
+  those ringing. **`DOC-LINES` ends this release at 6,500**: the grid
+  rounds up to the next 500, so the same change that widened it is the
+  last one to move it here.
 
 - **A confirmation is worth one rank position in the hybrid ranking,
   where it used to be worth 7.6.** The addend a verified concept got in
@@ -783,8 +799,8 @@ last entry.
   ([0074 §2](docs/design/0074-the-document-and-the-vocabulary-that-asks-it.md)),
   and it is two-way, so the reviewer reaching either concept sees the
   other. No tool, no argument, no ceiling moved: the MCP schema budget
-  goes 11,733 → 11,812 bytes against its 12,000.
-
+  goes 11,733 → 11,812 bytes, under the 12,000 `MCP-BYTES` stood at when
+  this landed — the tool split above has since raised it to 13,500.
 
 - **Search ties are broken by verification recency instead of by
   whatever the scan produced.** A short question leaves several concepts
@@ -800,6 +816,7 @@ last entry.
   from rank 5 to 4; recall@10 1.00 and MRR 0.90 both hold), which is
   expected: what this buys is that the answer no longer depends on the
   scan.
+
 - **The MCP client guide writes out only the two setups anyone here
   runs.** Six clients — Cursor, VS Code, Windsurf, Cline, Zed, Gemini CLI
   — carried a full configuration example each, copied from their own
@@ -816,14 +833,19 @@ last entry.
   shell out — Claude Desktop, and your own services — instead of naming
   hosted agents, which the guide has always said cannot reach an
   IAM-restricted deployment at all. `DOC-LINES` drops 5,800 → 5,700.
-- **`DOC-LINES` is back at 5,800**, because the two entries above landed
-  in parallel and only met on `main`: the fold was real (−176 lines) and
-  the dogfooding entrance was a page-sized decision (+27), but neither PR
-  could see the other, and the merged total is 5,720 — past the ceiling
-  the first of them had just lowered. [docs/surface.md](docs/surface.md)
+
+- **`DOC-LINES` is back at 5,800**, because the fold above landed in
+  parallel with a change that has no entry of its own — [the dogfooding
+  entrance](kb/README.md), development wiring an operator upgrading does
+  not need — and the two only met on `main`: the fold was real
+  (−176 lines) and that entrance was a page-sized decision (+27), but
+  neither PR could see the other, and the merged total is 5,720 — past
+  the ceiling the first of them had just lowered.
+  [docs/surface.md](docs/surface.md)
   already described two PRs' prose merging across a boundary in the
   upward direction; this is the first time it happened against a ceiling
   on the way down, and the paragraph it earns is in that document.
+
 - **`ochakai import` keeps eight requests in flight instead of one.** An
   import (and its `--dry-run`, which makes the same round trips) was one
   sequential HTTP call per document, which priced a real catalog
@@ -833,22 +855,26 @@ last entry.
   thing to read. A fatal error (auth, network, 5xx) still aborts: it
   cancels the requests not yet started and returns once the ones in
   flight finish.
+
 - **A transient Vertex AI failure no longer silently degrades search on
   the first try.** An embedding call now gets three attempts with a short
   backoff on a 429, a 5xx or a dropped connection, and a 30-second
   per-attempt deadline instead of none — a call that hung held the
   search that was waiting on it. A 4xx is still never retried.
+
 - **Daily Cloud SQL backups are on by default in the Terraform module.**
   The database is the knowledge base, and the copy-paste starting
   configuration protected everything except it. The cost example rises by
   under a dollar; a throwaway evaluation can still opt out with
   `database_backups = false`.
+
 - **The server now bounds request reads and idle keep-alive.** A body
   must arrive within a minute (the largest accepted body is the 4 MiB
   PUT cap) and an idle connection is closed after two; previously only
   header reads had a deadline, so a slow-drip body or a hoarded
   connection was held open indefinitely. Response writes stay unbounded,
   deliberately: MCP's streamable GET is a hanging stream by design.
+
 - **A search for a name now finds the concept with that name.** Ask for
   売上 and the concept *called* 売上 comes first, ahead of the reports
   that mention the word — which is not what happened before: the lexical
@@ -867,6 +893,7 @@ last entry.
   No migration, no reindex, no reembed: both terms are expressions on rows
   the scan already reads, and the candidate set is unchanged (a Japanese
   keyword scan measured about 4% slower on 5,000 entries).
+
 - **A compound question now finds the concepts it names.** 「EC事業の
   アクティブ会員の継続率を計算して」 is the name of nothing, so the rule
   above never fired for it, and coverage decided instead: the score is the
@@ -893,6 +920,7 @@ last entry.
   when the query is the name whole — the reach the rule already had.
   Same candidate set, no migration; the golden set reads the same
   lexical 0.92 as before, and fused 0.90 against 0.89.
+
 - **The write faces now say what each recommended type holds**, one line
   per type, instead of handing over nine spellings and nothing to tell
   them apart: `put_concept`'s description and `ochakai put -h` both render
