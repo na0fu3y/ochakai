@@ -277,13 +277,15 @@ ochakai loses, and says who should pick something else.
 
 ## Requirements
 
-- **Google Cloud**, for a real deployment: Cloud Run IAM and Cloud SQL
-  IAM are how ochakai holds no secret of its own, and there is no
-  supported way to run it elsewhere. This superseded an earlier "runs
-  anywhere" position, for a reason worth knowing before you adopt:
-  keeping a non-GCP path alive meant keeping a second authentication path
-  alive with it, and that is the one thing secret-zero cannot afford.
-  What is portable is the knowledge, not the runtime.
+- **Google Cloud**, recommended: Cloud Run IAM and Cloud SQL IAM are how
+  ochakai holds no secret of its own without any configuration. Off
+  Google Cloud, naming your own OpenID Connect issuer
+  ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)) is a
+  second, supported authentication path — ochakai verifies the bearer
+  token itself against the issuer's published keys, which introduces no
+  secret either, so it costs secret-zero nothing. Embeddings stay Vertex
+  AI or nothing there, so search off Google Cloud is lexical-only. What
+  is portable is the knowledge; a particular runtime is not required.
 - **PostgreSQL 17, able to install `pg_trgm`**. Nothing queries it — the
   lexical index has been a `tsvector` column since the two-character
   windows above replaced trigrams — but the schema replays from its first
