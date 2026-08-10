@@ -1,6 +1,6 @@
 // Boot: the chrome that belongs to no view, then the first render.
 
-import { markSandbox } from './api.js';
+import { markPosture } from './api.js';
 import { $ } from './dom.js';
 import { refreshQueues } from './queues.js';
 import { route } from './router.js';
@@ -22,5 +22,5 @@ $('#side-toggle').addEventListener('click', () => {
 
 refreshTree();
 refreshQueues();
-markSandbox();
+markPosture();
 route();

@@ -32,10 +32,7 @@ import (
 // integration test for the docker one-liner).
 func testDatabaseURL(t *testing.T) string {
 	t.Helper()
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	return dbURL
 }
 

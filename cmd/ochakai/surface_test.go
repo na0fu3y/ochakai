@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -739,6 +740,39 @@ func TestNoTestRollsItsOwnNamespace(t *testing.T) {
 	}
 	if checked == 0 || !found {
 		t.Error("no test builds a run-unique token: this check now guards nothing")
+	}
+}
+
+// A test that needs PostgreSQL asks internal/testdb.URL for it, and gets
+// back the URL or a skip. Reading the environment variable itself works
+// just as well and skips just as quietly — which is the problem: the
+// count of what a database-less run did not verify comes from that one
+// function, and a package whose tests bypass it reports fewer skips than
+// it had, or none at all, while still printing "ok".
+func TestNoTestReadsTheDatabaseURLDirectly(t *testing.T) {
+	direct := []byte(`os.Getenv("OCHAKAI_TEST_DATABASE_URL")`)
+	asks, checked := 0, 0
+	paths, err := filepath.Glob("../../internal/*/*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		checked++
+		rel := filepath.ToSlash(strings.TrimPrefix(filepath.ToSlash(path), "../../"))
+		if bytes.Contains(content, []byte("testdb.URL(t)")) {
+			asks++
+		}
+		if bytes.Contains(content, direct) {
+			t.Errorf("%s reads OCHAKAI_TEST_DATABASE_URL itself — use testdb.URL, "+
+				"which skips with the same words and counts the skip", rel)
+		}
+	}
+	if checked == 0 || asks == 0 {
+		t.Error("no test asks testdb.URL for a database: this check now guards nothing")
 	}
 }
 

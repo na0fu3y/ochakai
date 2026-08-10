@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,10 +22,7 @@ import (
 // surface is covered by the one place they all search through. A search
 // that finds something is not: only the absence is news.
 func TestSearchMissesAreRecordedIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -106,10 +102,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 // The window is the flow numbers' whole meaning, so a window nothing can
 // answer for is refused rather than quietly shortened.
 func TestStatsWindowIsBounded(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
@@ -182,7 +175,7 @@ func deleteMisses(ctx context.Context, t *testing.T, dbURL, query string) {
 func TestMissesGroupByMeaningIntegration(t *testing.T) {
 	ctx := context.Background()
 	svc := newIntegrationService(t, ctx)
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	dbURL := testdb.URL(t)
 	stem := uid(t, "gapit")
 	// One question, five askings: capitalization, a trailing question
 	// mark, doubled spacing, and full-width characters. The words are

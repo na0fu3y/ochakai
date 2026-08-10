@@ -88,6 +88,16 @@ docker run -d --rm -p 55433:5432 -e POSTGRES_PASSWORD=t -e POSTGRES_USER=t -e PO
 OCHAKAI_TEST_DATABASE_URL='postgres://t:t@localhost:55433/t?sslmode=disable' go test ./internal/store/
 ```
 
+A test that needs the database **asks for it with
+`internal/testdb`.URL**, which returns the URL or skips — one wording for
+the skip, and a count. Without a database well over a hundred tests skip,
+so a package that ran none of them prints how many it sent away. That
+line reaches
+`go test -v`, a bare `go test` in the package's directory, and any run
+where something failed; it cannot reach a green `go test ./...`, which
+throws away the output of a package that passed. That is why the summary
+you should trust is `scripts/check`'s closing line.
+
 The database is shared: CI runs one container for a whole run, and by
 hand you keep one up across sessions. So **an integration test takes its
 ids from `internal/testdb`.Unique**, which appends a run-unique number
@@ -209,6 +219,13 @@ OCHAKAI_DATABASE_URL='postgres://…/shots?sslmode=disable' \
 export OCHAKAI_URL=http://127.0.0.1:8095
 go run ./cmd/ochakai import examples/demo
 ```
+
+`dev` is the only posture that is writable without an identity in front,
+and a dev deployment now says so on every page, so a capture taken this
+way carries the banner and the committed ones do not. Crop it out, or
+shoot against a deployment whose callers are authenticated: what the
+pictures are for is the product, and the banner is about the machine you
+happen to be running it on.
 
 The bundle already carries the two drafts the review queue needs and a
 draft whose `stale_after` has passed. The re-verification feed is the one

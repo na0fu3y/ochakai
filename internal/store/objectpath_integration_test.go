@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -26,10 +25,7 @@ import (
 //     in the same log.
 func newObjectPathStore(t *testing.T) (*Store, context.Context, string) {
 	t.Helper()
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	// Every test here holds a live file riding a fake blob store, which
 	// another package's whole-bundle export cannot read.
 	lockLiveAttachments(t, dbURL)

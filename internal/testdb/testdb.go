@@ -19,11 +19,57 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// URL returns the database the caller is about to talk to, and skips the
+// test when the environment names none. It is the only place that reads
+// OCHAKAI_TEST_DATABASE_URL for that purpose, so the skip has one
+// wording and, more usefully, a count.
+//
+// Without a database, well over a hundred of the tree's tests skip, and
+// a skip reason is invisible unless something asks for it — so what a
+// first contributor sees is a green run that verified none of the store,
+// and then a red CI, which does have one.
+func URL(t *testing.T) string {
+	t.Helper()
+	u := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
+	if u == "" {
+		skipped.Add(1)
+		t.Skip("OCHAKAI_TEST_DATABASE_URL not set: this test needs PostgreSQL and did not run")
+	}
+	return u
+}
+
+// skipped counts the tests URL sent away in this package's run.
+var skipped atomic.Int64
+
+// Report runs m and, when tests skipped for want of a database, prints
+// one line saying so before the package's status. A package whose
+// integration tests need it says
+//
+//	func TestMain(m *testing.M) { os.Exit(testdb.Report(m)) }
+//
+// Where that line is visible is worth knowing, because it is not
+// everywhere: `go test ./...` throws away the output of a package that
+// passed, so the line reaches `go test -v`, a bare `go test` inside the
+// package's own directory, and any run where something in the package
+// failed. It cannot reach a plain green `go test ./...` — no test binary
+// can, and a cached package does not run at all. The summary that a
+// whole-tree run gets is scripts/check's closing line, which names the
+// skip because the script, unlike the binary, is the one being watched.
+func Report(m *testing.M) int {
+	code := m.Run()
+	if n := skipped.Load(); n > 0 {
+		fmt.Fprintf(os.Stderr,
+			"testdb: %d test(s) skipped — OCHAKAI_TEST_DATABASE_URL is not set, so nothing here was verified against PostgreSQL (scripts/check --db starts one)\n", n)
+	}
+	return code
+}
 
 // Unique returns name with a run-unique number appended, for a test to
 // build its ids and paths from, and registers the sweep that removes

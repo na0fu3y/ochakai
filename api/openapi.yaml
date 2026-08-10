@@ -2832,6 +2832,20 @@ components:
             loop's own numbers because that is what a client reads
             before deciding whether to trust them — or whether to
             curate anything here at all. Absent everywhere else.
+        insecure_dev:
+          type: boolean
+          description: >
+            Present and true on a deployment running with authentication
+            off (`OCHAKAI_MODE=dev`). Design doc 0087's argument applied
+            to the mode beside it: a deployment that does not say what it
+            is takes what you write. What it takes here is different —
+            nothing is erased, but no caller is authenticated and the
+            identity recorded on a ruling is whatever was asked for, so
+            "a human confirmed this" means nothing on such a base.
+
+            `dev` tells its own readers not to deploy it, which is why
+            this is worth carrying: the deployments that need telling are
+            the ones that did it anyway. Absent everywhere else.
         concepts:
           type: object
           description: What the base is made of. Deleted concepts are in none of it.

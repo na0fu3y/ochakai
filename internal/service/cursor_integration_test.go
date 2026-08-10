@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -26,10 +25,7 @@ import (
 // (stale_after), the nullable time alone (verified_at), and the id by
 // itself (the source lookup).
 func TestListingsWalkToTheEndIntegration(t *testing.T) {
-	dbURL := os.Getenv("OCHAKAI_TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("OCHAKAI_TEST_DATABASE_URL not set")
-	}
+	dbURL := testdb.URL(t)
 	ctx := context.Background()
 	s, err := store.New(ctx, dbURL, false)
 	if err != nil {
