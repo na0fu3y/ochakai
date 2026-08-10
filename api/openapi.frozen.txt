@@ -25,15 +25,18 @@ DELETE /api/v1/bundle/{path} response 401 ref=Unauthorized
 DELETE /api/v1/bundle/{path} response 403 ref=Forbidden
 DELETE /api/v1/bundle/{path} response 404
 DELETE /api/v1/bundle/{path} response 404 content application/json type=object
+DELETE /api/v1/bundle/{path} response 404 content application/json.code required=true type=string enum=["not_found"]
 DELETE /api/v1/bundle/{path} response 404 content application/json.error required=true type=string
 DELETE /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 405 ref=Error
 DELETE /api/v1/bundle/{path} response 409
 DELETE /api/v1/bundle/{path} response 409 content application/json type=object
+DELETE /api/v1/bundle/{path} response 409 content application/json.code required=true type=string enum=["invalid" "not_deleted"]
 DELETE /api/v1/bundle/{path} response 409 content application/json.error required=true type=string
 DELETE /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 412
 DELETE /api/v1/bundle/{path} response 412 content application/json type=object
+DELETE /api/v1/bundle/{path} response 412 content application/json.code required=true type=string enum=["precondition_failed"]
 DELETE /api/v1/bundle/{path} response 412 content application/json.error required=true type=string
 DELETE /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 500 ref=Error
@@ -69,16 +72,19 @@ GET /api/v1/bundle/{path} response 401 ref=Unauthorized
 GET /api/v1/bundle/{path} response 403 ref=Forbidden
 GET /api/v1/bundle/{path} response 404
 GET /api/v1/bundle/{path} response 404 content application/json type=object
+GET /api/v1/bundle/{path} response 404 content application/json.code required=true type=string enum=["not_found"]
 GET /api/v1/bundle/{path} response 404 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/bundle/{path} response 405 ref=Error
 GET /api/v1/bundle/{path} response 409
 GET /api/v1/bundle/{path} response 409 content application/json type=object
+GET /api/v1/bundle/{path} response 409 content application/json.code required=true type=string enum=["invalid"]
 GET /api/v1/bundle/{path} response 409 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/bundle/{path} response 500 ref=Error
 GET /api/v1/bundle/{path} response 501
 GET /api/v1/bundle/{path} response 501 content application/json type=object
+GET /api/v1/bundle/{path} response 501 content application/json.code required=true type=string enum=["unsupported"]
 GET /api/v1/bundle/{path} response 501 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 501 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/context
@@ -139,6 +145,7 @@ GET /api/v1/search response 200 content application/json.hits[] ref=SearchHit
 GET /api/v1/search response 200 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/search response 400
 GET /api/v1/search response 400 content application/json type=object
+GET /api/v1/search response 400 content application/json.code required=true type=string enum=["invalid"]
 GET /api/v1/search response 400 content application/json.error required=true type=string
 GET /api/v1/search response 400 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/search response 401 ref=Unauthorized
@@ -221,6 +228,7 @@ POST /api/v1/review/{id} response 200 header ETag ref=ETag
 POST /api/v1/review/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/review/{id} response 400
 POST /api/v1/review/{id} response 400 content application/json type=object
+POST /api/v1/review/{id} response 400 content application/json.code required=true type=string enum=["invalid"]
 POST /api/v1/review/{id} response 400 content application/json.error required=true type=string
 POST /api/v1/review/{id} response 400 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/review/{id} response 401 ref=Unauthorized
@@ -229,6 +237,7 @@ POST /api/v1/review/{id} response 404 ref=Error
 POST /api/v1/review/{id} response 405 ref=Error
 POST /api/v1/review/{id} response 409
 POST /api/v1/review/{id} response 409 content application/json type=object
+POST /api/v1/review/{id} response 409 content application/json.code required=true type=string enum=["no_rejection"]
 POST /api/v1/review/{id} response 409 content application/json.error required=true type=string
 POST /api/v1/review/{id} response 409 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/review/{id} response 413 ref=Error
@@ -284,15 +293,18 @@ PUT /api/v1/bundle/{path} response 401 ref=Unauthorized
 PUT /api/v1/bundle/{path} response 403 ref=Forbidden
 PUT /api/v1/bundle/{path} response 404
 PUT /api/v1/bundle/{path} response 404 content application/json type=object
+PUT /api/v1/bundle/{path} response 404 content application/json.code required=true type=string enum=["not_found"]
 PUT /api/v1/bundle/{path} response 404 content application/json.error required=true type=string
 PUT /api/v1/bundle/{path} response 404 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 405 ref=Error
 PUT /api/v1/bundle/{path} response 409
 PUT /api/v1/bundle/{path} response 409 content application/json type=object
+PUT /api/v1/bundle/{path} response 409 content application/json.code required=true type=string enum=["already_exists" "invalid"]
 PUT /api/v1/bundle/{path} response 409 content application/json.error required=true type=string
 PUT /api/v1/bundle/{path} response 409 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 412
 PUT /api/v1/bundle/{path} response 412 content application/json type=object
+PUT /api/v1/bundle/{path} response 412 content application/json.code required=true type=string enum=["already_exists" "precondition_failed"]
 PUT /api/v1/bundle/{path} response 412 content application/json.error required=true type=string
 PUT /api/v1/bundle/{path} response 412 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 413 ref=Error
@@ -328,6 +340,7 @@ components/responses/Error content application/json.error required=true type=str
 components/responses/Error header Ochakai-Read-Only ref=ReadOnly
 components/responses/Forbidden
 components/responses/Forbidden content application/json type=object
+components/responses/Forbidden content application/json.code required=true type=string enum=["forbidden" "read_only"]
 components/responses/Forbidden content application/json.error required=true type=string
 components/responses/Forbidden header Ochakai-Read-Only ref=ReadOnly
 components/responses/Unauthorized
