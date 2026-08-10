@@ -35,8 +35,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
-| ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索) |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂) |
+| ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)** |
@@ -309,6 +309,24 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   である。**チャンク化はしない**: 誰が詰まったかまだ誰も言えず、機構は
   一 concept 一ベクトルという前提を四箇所で崩し、そもそも分けるべき concept
   である可能性のほうが高い。再開の条件は §4 にある。
+- [0091 ファイルのベクトルは、パスで引く](0091-a-file-vector-is-keyed-by-its-path.md)
+  — **Accepted**。0080 §5 を改訂する。ファイルのベクトルの鍵は
+  `(concept id, ファイル名)` だった — ファイルが concept の持ち物で
+  `<id>/<name>` にしか置けなかった頃の形で、0046 / 0075 でファイルが
+  bundle のオブジェクトになったあとは、**本文が `charts/q1.png` と
+  `tables/q1.png` を指す concept が両方を同じ行に書き、片方が消えていた**。
+  失敗は静かである — ファイルは保存も配信も export も名前での字句一致も
+  通り、落ちるのはベクトル面だけ、つまり「別の言い方で訊く」経路だけで
+  ある。鍵はパスになり、**どの concept のヒットになるかは検索時に bundle が
+  答える**: 今日リンクされたファイルは今日から引き、リンクを外れた瞬間に
+  引かなくなり、二つの concept が見せる一枚は一本のベクトルで両方を引く。
+  古い行は**移し替えず落とす** — 上書きで消えた側はもう無く、残った行が
+  どちらのものかは行からは分からない。アップグレード後に
+  `ochakai reembed` を一度走らせるのが運用者の手順で、それまでファイルは
+  名前で引ける。未埋め込みの列はファイルの列になり、**このデプロイの
+  モデルが受け取れる媒体型だけ**が並ぶ(zip を並べると列は永久に減らず、
+  `reembed` が毎回「まだ残っている」と言って非ゼロで終わっていた)。面は
+  一つも増えない。
 - [0073 検索が何を融合し、埋め込みがいつ効くか](0073-search-and-when-embeddings-apply.md)
   — **Superseded by 0080**。0020 / 0053 を一冊にした前身。
 - [0078 このデプロイがどう埋め込むかを、一つの変数で言う](0078-one-variable-says-how-it-embeds.md)

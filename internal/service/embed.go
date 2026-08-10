@@ -57,9 +57,7 @@ func (s *Service) embedBytes() int {
 }
 
 // ReembedResult reports what a Reembed pass did. Concepts and Files are
-// this pass's own progress, not a census of the corpus — re-keying
-// attachment_embedding by path later would change what they count
-// without this being a second breaking change (design doc 0064). Missing
+// this pass's own progress, not a census of the corpus. Missing
 // is how many concepts and files still have no vector once the pass is
 // over — the number that decides whether the operator runs it again, so
 // it counts what is actually left rather than what this pass did not get
@@ -109,7 +107,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	if err != nil {
 		return nil, err
 	}
-	entryCursor, attachID, attachName, err := decodeReembedCursor(cursor)
+	entryCursor, filePath, err := decodeReembedCursor(cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +146,7 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	// first and attachments fill the rest of the pass, so a corpus with
 	// both makes progress on both.
 	if rest := limit - len(ids); rest > 0 {
-		attachID, attachName, err = s.reembedAttachments(ctx, res, attachID, attachName, rest)
+		filePath, err = s.reembedFiles(ctx, res, filePath, rest)
 		if err != nil {
 			return nil, err
 		}
@@ -164,52 +162,69 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 		s.Log.Warn("reembed: counting what is left failed", "error", err)
 		return res, nil
 	}
-	attMissing, err := s.Store.CountUnembeddedAttachments(ctx, s.Embedder.Model())
+	fileMissing, err := s.Store.CountUnembeddedFiles(ctx, s.Embedder.Model(), s.embeddableFileTypes())
 	if err != nil {
-		s.Log.Warn("reembed: counting attachments left failed", "error", err)
+		s.Log.Warn("reembed: counting files left failed", "error", err)
 	}
-	res.Missing = missing + attMissing
+	res.Missing = missing + fileMissing
 	if res.Missing > 0 {
-		res.Cursor = encodeReembedCursor(entryCursor, attachID, attachName)
+		res.Cursor = encodeReembedCursor(entryCursor, filePath)
 	}
 	return res, nil
 }
 
-// reembedAttachments re-embeds up to limit attachments, returning the
-// position to resume from. Failures are counted like concept failures: a
-// file the provider rejects must not strand the rest.
-func (s *Service) reembedAttachments(ctx context.Context, res *ReembedResult, afterID, afterName string, limit int) (string, string, error) {
-	pending, err := s.Store.ListUnembeddedAttachments(ctx, s.Embedder.Model(), afterID, afterName, limit)
-	if err != nil {
-		return afterID, afterName, err
+// embeddableFileTypes is what this deployment could hand the model, which
+// is what belongs in the file queue.
+//
+// A text-only embedder is the case that matters: the media types a file
+// vector could ever cover are a property of the model, and on
+// gemini-embedding-001 an image is not a file awaiting a vector — it is a
+// file that will never have one. Counting it as pending left `ochakai
+// reembed` reporting work outstanding on every pass, forever, and
+// pointing at a server log that said nothing, because declining a file
+// the model does not take is the one failure that is deliberately silent.
+func (s *Service) embeddableFileTypes() []string {
+	if _, ok := s.Embedder.(embed.FileEmbedder); ok {
+		return domain.EmbeddableMediaTypes()
 	}
-	for _, a := range pending {
-		att, data, err := s.Store.GetAttachment(ctx, a.KnowledgeID, a.Name)
+	return []string{"text/plain"}
+}
+
+// reembedFiles re-embeds up to limit files, returning the position to
+// resume from. Failures are counted like concept failures: a file the
+// provider rejects must not strand the rest.
+func (s *Service) reembedFiles(ctx context.Context, res *ReembedResult, after string, limit int) (string, error) {
+	pending, err := s.Store.ListUnembeddedFiles(ctx, s.Embedder.Model(), s.embeddableFileTypes(), after, limit)
+	if err != nil {
+		return after, err
+	}
+	for _, p := range pending {
+		att, data, err := s.Store.GetFile(ctx, p)
 		if err != nil {
 			res.Failed++
-			s.Log.Warn("reembed: attachment disappeared", "id", a.KnowledgeID, "name", a.Name, "error", err)
+			s.Log.Warn("reembed: file disappeared", "path", p, "error", err)
 			continue
 		}
-		// The same path attach uses, so the vectors match what a fresh
-		// attach would have produced; it logs and swallows its own
+		// The same path a write uses, so the vectors match what a fresh
+		// write would have produced; it logs and swallows its own
 		// failures, which is why the count below is of rows written.
-		before := s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name)
-		s.updateAttachmentEmbedding(ctx, a.KnowledgeID, att, data)
-		if s.attachmentVectorCount(ctx, a.KnowledgeID, a.Name) > before {
+		before := s.fileVectorCount(ctx, p)
+		s.updateAttachmentEmbedding(ctx, att, data)
+		if s.fileVectorCount(ctx, p) > before {
 			res.Files++
 		} else {
 			res.Failed++
 		}
-		afterID, afterName = a.KnowledgeID, a.Name
+		after = p
 	}
-	return afterID, afterName, nil
+	return after, nil
 }
 
 // attachmentVectorCount reports whether a current-model vector exists,
 // so a pass can tell an embedding that landed from one the provider (or
 // the model's file support) declined.
-func (s *Service) attachmentVectorCount(ctx context.Context, id, name string) int {
-	n, err := s.Store.CountAttachmentEmbedding(ctx, id, name, s.Embedder.Model())
+func (s *Service) fileVectorCount(ctx context.Context, path string) int {
+	n, err := s.Store.CountFileEmbedding(ctx, path, s.Embedder.Model())
 	if err != nil {
 		return 0
 	}
@@ -223,37 +238,44 @@ func (s *Service) attachmentVectorCount(ctx context.Context, id, name string) in
 // count and one would silently be accepted as the other.
 const reembedCursorTag = "reembed"
 
-// The reembed cursor carries three positions — the last concept id and
-// the last attachment's (concept id, name) — packed and base64url-encoded
-// the same way encodeCursor packs a listing position: a version prefix so
-// a later change of shape is a 400 with a sentence, and an opaque token
-// rather than raw ids so the wire survives proxies and WAFs that balk at
-// a NUL byte and needs no client-side encoding to round-trip. "\x00"
-// cannot occur in an id (design doc 0017) or an attachment name.
-func encodeReembedCursor(entryID, attachID, attachName string) string {
-	if entryID == "" && attachID == "" && attachName == "" {
+// The reembed cursor carries two positions — the last concept id and the
+// last file path — packed and base64url-encoded the same way encodeCursor
+// packs a listing position: a version prefix so a later change of shape is
+// a 400 with a sentence, and an opaque token rather than raw ids so the
+// wire survives proxies and WAFs that balk at a NUL byte and needs no
+// client-side encoding to round-trip. "\x00" cannot occur in an id
+// (design doc 0017) or a bundle path.
+//
+// It carried three until design doc 0091 re-keyed the file vectors, when
+// the file half stopped being a (concept, file) pair. A cursor from
+// before that is one field longer and is refused by the length check
+// below — which is the shape change the version prefix exists for, and
+// costs nothing in practice: the migration that re-keys the table empties
+// it, so a pass resumed across the upgrade had nothing left to resume.
+func encodeReembedCursor(entryID, filePath string) string {
+	if entryID == "" && filePath == "" {
 		return ""
 	}
-	raw := strings.Join([]string{cursorVersion, reembedCursorTag, entryID, attachID, attachName}, "\x00")
+	raw := strings.Join([]string{cursorVersion, reembedCursorTag, entryID, filePath}, "\x00")
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
 // decodeReembedCursor reads a cursor back, refusing anything this server
 // did not hand out — including a cursor from a listing's own cursor
 // space, which carries a different tag in the same position.
-func decodeReembedCursor(c string) (entryID, attachID, attachName string, err error) {
+func decodeReembedCursor(c string) (entryID, filePath string, err error) {
 	if c == "" {
-		return "", "", "", nil
+		return "", "", nil
 	}
 	raw, decErr := base64.RawURLEncoding.DecodeString(c)
 	if decErr != nil {
-		return "", "", "", malformedCursor()
+		return "", "", malformedCursor()
 	}
 	parts := strings.Split(string(raw), "\x00")
-	if len(parts) != 5 || parts[0] != cursorVersion || parts[1] != reembedCursorTag {
-		return "", "", "", malformedCursor()
+	if len(parts) != 4 || parts[0] != cursorVersion || parts[1] != reembedCursorTag {
+		return "", "", malformedCursor()
 	}
-	return parts[2], parts[3], parts[4], nil
+	return parts[2], parts[3], nil
 }
 
 // embedDocument embeds text, halving it and retrying while the model says

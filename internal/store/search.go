@@ -470,6 +470,13 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 // embedding (design doc 0020). Each entry appears once, carrying its
 // best attachment's score — attachments never stand alone, so the hit
 // is the owning entry.
+//
+// The vector is reached through the file object, because the file's path
+// is what the vector is keyed by (design doc 0091) and attribution is a
+// property of the bundle, not of the vector table: a file the body names
+// from another directory ranks the concept that names it, and stops
+// ranking it the moment the body stops. A file two concepts both link
+// carries one vector and ranks both.
 func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, model string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
@@ -478,7 +485,8 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 	q := fmt.Sprintf(`
 		SELECT `+withoutDoc(knowledgeCols)+", "+ledgerCols("best")+`, score FROM (
 			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
-			FROM object k JOIN attachment_embedding e ON k.id = e.knowledge_id AND e.model = $%d
+			FROM object k JOIN object f ON `+attributedTo+`
+			JOIN attachment_embedding e ON e.path = f.path AND e.model = $%d
 			WHERE %s
 			ORDER BY k.id, e.embedding <=> $%d::vector
 		) best

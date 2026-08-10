@@ -449,20 +449,69 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 		`ALTER TABLE knowledge_embedding ADD COLUMN IF NOT EXISTS truncated boolean NOT NULL DEFAULT false`); err != nil {
 		return fmt.Errorf("%w: knowledge_embedding.truncated: %w", ErrEmbeddingUnavailable, err)
 	}
-	// Attachment vectors (design doc 0020): one row per embedded
-	// attachment, mapped back to the owning entry at search time.
+	if err := s.rekeyAttachmentVectors(ctx); err != nil {
+		return err
+	}
+	// Attachment vectors (design doc 0020): one row per embedded file,
+	// keyed by the file's path, which is its address (design doc 0075).
+	// The owning concept is found through `object` at search time rather
+	// than stored here — a file may be attributed by a body link from
+	// anywhere in the bundle, and which concept that is can change
+	// without the bytes changing.
 	if _, err := s.pool.Exec(ctx, fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS attachment_embedding (
-			knowledge_id text NOT NULL,
-			name         text NOT NULL,
-			model        text NOT NULL,
-			embedding    vector(%d) NOT NULL,
-			updated_at   timestamptz NOT NULL DEFAULT now(),
-			PRIMARY KEY (knowledge_id, name)
+			path       text NOT NULL PRIMARY KEY,
+			model      text NOT NULL,
+			embedding  vector(%d) NOT NULL,
+			updated_at timestamptz NOT NULL DEFAULT now()
 		)`, dim)); err != nil {
 		return fmt.Errorf("%w: create attachment_embedding: %w", ErrEmbeddingUnavailable, err)
 	}
 	return s.migrateVectorIndexes(ctx, dim)
+}
+
+// rekeyAttachmentVectors drops an attachment_embedding still keyed by
+// (knowledge_id, name), so the create below rebuilds it keyed by path.
+//
+// The old key predates files being objects. Since design doc 0075 a
+// file's address *is* its path, and (owner, last segment) only
+// reconstructs that for a file sitting at the canonical `<id>/<name>` —
+// a concept whose body links `charts/q1.png` and `tables/q1.png` keyed
+// both rows the same way, and the second vector overwrote the first.
+// The read paths moved to `object` in the release that introduced it and
+// this table was left for later (migration 0029); this is later.
+//
+// Dropped rather than backfilled, which is what a vector table is for:
+// every row here can be recomputed from the bytes it describes, the
+// product already rebuilds this space when the dimension moves, and a
+// backfill would have to guess exactly the mapping this key was
+// ambiguous about. The log line names `ochakai reembed`, as the resize
+// does; until it runs, files are found by name, which is where a
+// deployment without embeddings already is (design doc 0080 §5).
+//
+// Schema-qualified for resizeVectorSpace's reason: a store whose
+// search_path carries a second schema must not drop that schema's table.
+func (s *Store) rekeyAttachmentVectors(ctx context.Context) error {
+	var old bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM pg_attribute
+		  WHERE attrelid = to_regclass(quote_ident(current_schema()) || '.attachment_embedding')
+		    AND attname = 'knowledge_id' AND NOT attisdropped)`).Scan(&old)
+	if err != nil {
+		return fmt.Errorf("read the attachment vector key: %w", err)
+	}
+	if !old {
+		return nil
+	}
+	if _, err := s.pool.Exec(ctx,
+		`DO $$ BEGIN
+			EXECUTE format('DROP TABLE IF EXISTS %I.attachment_embedding', current_schema());
+		 END $$`); err != nil {
+		return fmt.Errorf("%w: drop the attachment vectors of the previous key: %w",
+			ErrEmbeddingUnavailable, err)
+	}
+	s.log.Warn("attachment vectors were keyed by (concept, filename), which cannot tell two files of the same name apart; they are keyed by path now and the old rows have been dropped. Files are found by name until `ochakai reembed` rebuilds them")
+	return nil
 }
 
 // resizeVectorSpace rebuilds the vector tables when the configured

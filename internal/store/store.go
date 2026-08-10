@@ -1164,7 +1164,10 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 		// Embedding tables exist only once semantic search has been enabled.
 		for _, q := range []string{
 			`DELETE FROM knowledge_embedding WHERE id=$1`,
-			`DELETE FROM attachment_embedding WHERE knowledge_id=$1`,
+			// The files' vectors go with the files, which is the same
+			// prefix the file objects were deleted under above — and for
+			// the same reason it is starts_with rather than LIKE.
+			`DELETE FROM attachment_embedding WHERE starts_with(path, $1 || '/')`,
 		} {
 			if err := execTolerateMissingTable(ctx, tx, q, id); err != nil {
 				return err

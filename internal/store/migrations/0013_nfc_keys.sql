@@ -44,11 +44,25 @@ BEGIN
         UPDATE knowledge_embedding SET id = normalize(id, NFC)
             WHERE id IS DISTINCT FROM normalize(id, NFC);
     END IF;
+    -- Two shapes, because this table was re-keyed by path after this
+    -- migration shipped (design doc 0091): a database that has not run
+    -- it yet has the (knowledge_id, name) key this was written for, and
+    -- a replay onto a search_path that already carries the new one must
+    -- normalize the path instead of a column that is not there. The
+    -- branch not taken is never planned, so neither reference has to
+    -- resolve for the other's database.
     IF to_regclass('attachment_embedding') IS NOT NULL THEN
-        UPDATE attachment_embedding SET
-                knowledge_id = normalize(knowledge_id, NFC),
-                name = normalize(name, NFC)
-            WHERE (knowledge_id || name)
-                IS DISTINCT FROM normalize(knowledge_id || name, NFC);
+        IF EXISTS (SELECT 1 FROM pg_attribute
+                    WHERE attrelid = to_regclass('attachment_embedding')
+                      AND attname = 'knowledge_id' AND NOT attisdropped) THEN
+            UPDATE attachment_embedding SET
+                    knowledge_id = normalize(knowledge_id, NFC),
+                    name = normalize(name, NFC)
+                WHERE (knowledge_id || name)
+                    IS DISTINCT FROM normalize(knowledge_id || name, NFC);
+        ELSE
+            UPDATE attachment_embedding SET path = normalize(path, NFC)
+                WHERE path IS DISTINCT FROM normalize(path, NFC);
+        END IF;
     END IF;
 END $$;

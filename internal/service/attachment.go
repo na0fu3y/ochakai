@@ -26,7 +26,7 @@ import (
 // takes file input (gemini-embedding-2) and are skipped otherwise —
 // the file stays findable by name. Failures are logged, not returned:
 // attach must not depend on the embedding provider being up.
-func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att *domain.File, data []byte) {
+func (s *Service) updateAttachmentEmbedding(ctx context.Context, att *domain.File, data []byte) {
 	if s.Embedder == nil {
 		return
 	}
@@ -48,7 +48,7 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 		// where the knowledge is, and that is what stats answers for.
 		vecs, _, err := s.embedDocument(ctx, truncateUTF8(att.Name+"\n"+body, max))
 		if err != nil {
-			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "id", id, "name", att.Name, "error", err)
+			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "path", att.Path, "error", err)
 			return
 		}
 		vec = vecs[0]
@@ -70,12 +70,12 @@ func (s *Service) updateAttachmentEmbedding(ctx context.Context, id string, att 
 			return // text-only model: findable by name, no noise in the log
 		}
 		if err != nil {
-			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "id", id, "name", att.Name, "error", err)
+			s.Log.Warn("attachment embedding failed; attachment remains findable by name", "path", att.Path, "error", err)
 			return
 		}
 	}
-	if err := s.Store.UpsertAttachmentEmbedding(ctx, id, att.Name, s.Embedder.Model(), vec); err != nil {
-		s.Log.Warn("storing attachment embedding failed", "id", id, "name", att.Name, "error", err)
+	if err := s.Store.UpsertFileEmbedding(ctx, att.Path, s.Embedder.Model(), vec); err != nil {
+		s.Log.Warn("storing attachment embedding failed", "path", att.Path, "error", err)
 	}
 }
 
@@ -122,12 +122,13 @@ func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor doma
 	if err != nil {
 		return nil, false, err
 	}
-	// The vector is keyed by the entry the file is attributed to, which
-	// a file at a path nothing points at has none of. Reembed picks it up
-	// as soon as an entry names it (design doc 0020).
-	if owner, ok := strings.CutSuffix(p, "/"+att.Name); ok {
-		s.updateAttachmentEmbedding(ctx, owner, att, data)
-	}
+	// Every file gets its vector when it lands, including one no entry
+	// names yet: the vector is keyed by the path, so there is nothing to
+	// wait for an owner to supply. Attribution happens at search time,
+	// which is where it belongs — the day a body links this path, the
+	// file ranks that concept without anything being re-embedded
+	// (design doc 0091).
+	s.updateAttachmentEmbedding(ctx, att, data)
 	return att, created, nil
 }
 
