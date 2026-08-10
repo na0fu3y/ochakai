@@ -100,13 +100,18 @@ it.
 - **A chat UI or dashboards.** The bundled web UI is a curation surface, not a
   BI tool: no charts, no query execution, no chat. It feeds your agents rather
   than competing with them.
-- **Secrets, and clouds that would require them.** Cloud Run IAM decides who
-  reaches a deployment and Cloud SQL authenticates the service account, so
-  there is nothing to issue or rotate. Features must not introduce a token or a
-  password, and porting the auth model to another cloud is not a goal — the
-  secret-zero property is exactly the thing that would be lost
+- **Secrets.** Cloud Run IAM decides who reaches a deployment and Cloud SQL
+  authenticates the service account, so there is nothing to issue or rotate by
+  default. Features must not introduce a token or a password. This declined
+  "a second authentication path" until 2026-08, when
+  [0086](docs/design/0086-a-second-way-to-say-who-is-calling.md) found one
+  that costs secret-zero nothing: a deployment can name its own OpenID
+  Connect issuer and verify bearer tokens itself, against the issuer's
+  published public keys, with nothing to issue or rotate there either. The
+  goal was always secret-zero
   ([0065](docs/design/0065-identity-and-provenance.md),
-  [0003](docs/design/0003-gcp-only.md)).
+  [0003](docs/design/0003-gcp-only.md)) — not Google Cloud, and not one
+  authentication path, for their own sake.
 - **Authorization, and a user database.** Whoever can reach a deployment can
   read and write; identity is recorded as provenance, and trust is judged from
   provenance by whoever reads the concept (0065 §1).
