@@ -21,6 +21,23 @@ last entry.
 
 ### Added
 
+- **The cold start has a second half: draft golden queries from the
+  warehouse's own job history.** `ochakai seed` answers *what tables
+  exist*; a base full of columns still does not know what anybody is
+  asking of them — and the warehouse has been writing that down all
+  along. `examples/bigquery-catalog` gains a second job: it reads
+  `INFORMATION_SCHEMA.JOBS` rows as JSON on stdin, groups the runs that
+  differ only in their literals, comments or whitespace, and writes an
+  OKF bundle of drafts on stdout, one per query somebody keeps running.
+  It connects to nothing — you run the query with your own identity and
+  pipe the answer in, the same shape `seed` takes and for the same
+  reason. **There is no LLM in it**: what a query *means* is the one
+  thing a fingerprint cannot produce, so every draft carries an empty
+  "The question this answers" heading, which is where your own agent
+  belongs. Everything lands as a draft, because a query run forty times
+  is evidence that it matters and not evidence that it is right
+  ([#537](https://github.com/na0fu3y/ochakai/issues/537)).
+
 - **A release now carries `ochakai_X.Y.Z.mcpb`, the one-click install for
   Claude Desktop.** Connecting a desktop app meant finding a JSON file
   the app does not show you, writing a `command` that has to be an

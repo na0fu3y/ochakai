@@ -6,3 +6,8 @@ dist/
 # these are per-developer or per-session and are not.
 .claude/settings.local.json
 .claude/worktrees/
+
+# The Python examples ship as source; running one leaves these behind,
+# and a bundle import would try to store them as files.
+__pycache__/
+*.pyc

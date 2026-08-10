@@ -2,9 +2,12 @@
 
 - **[demo/](demo)** — 10 concept のナレッジベース丸ごと。コマンド一つで
   import できる。下で説明する。
-- **[bigquery-catalog/](bigquery-catalog)** — BigQuery のテーブルメタデータ
-  を毎日投影するジョブ。Attested Computation として、その Python を隣に置いて
-  出荷している。コネクタによる取り込みがサーバーの外に留まると、こうなる。
+- **[bigquery-catalog/](bigquery-catalog)** — 空のベースを BigQuery から
+  埋める二つのジョブ。テーブルのメタデータを毎日投影するものと、**ジョブ履歴
+  から golden query の draft を起こすもの**(何が既に訊かれているかは、倉庫が
+  自分で記録している)。どちらも Attested Computation として、その Python を
+  隣に置いて出荷している。コネクタによる取り込みがサーバーの外に留まると、
+  こうなる。
 - **[claude-code/](claude-code)** — 想起と書き戻しのループを、Claude Code
   の指示とフックにしたもの。
 - **[golden-query.md](golden-query.md)** — concept 一つだけ。
