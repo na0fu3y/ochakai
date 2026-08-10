@@ -58,6 +58,7 @@ tar czf - -C examples/bigquery-catalog/bundle --exclude='*.py' . |
 |---|---|---|
 | [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **ここから** — day-one の順序: 小さく範囲を決め、住所を確定し、テーブルを投影し、一つ verify し、それからやっと computation を付ける |
 | [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`、パラメータ、receipt、そして投影が下すすべての判断 |
+| [`jobs/draft-from-query-history`](bundle/jobs/draft-from-query-history.md) | Attested Computation | **コールドスタートのもう半分** — 何度も撃たれているクエリを golden query の draft として書き戻す |
 | [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | `executor` が指しているもの: どの identity で走らせるか、IAM ロール、receipt のフィールド |
 
 concept と一緒に 2 つのファイルが旅をする。
@@ -94,6 +95,35 @@ concept になっているナレッジベースは、誰も読まない README �
 自分のプロジェクトでジョブを走らせ、receipt がきれいに返ってきてから
 verify すること — それはちょうど、IAM ロールを実際に付与したとおりに
 直したくなる瞬間でもある。
+
+## 何が既に訊かれているか: `draft-from-query-history`
+
+テーブルが入っただけのベースは、**カラム名は答えるが、誰も何を訊いて
+いるかは知らない**。倉庫は自分でそれを記録している — ジョブ履歴である。
+
+`seed` と同じ形で受け取る。あなたが自分の identity でクエリを撃ち、
+答えをパイプで渡す:
+
+```sh
+bq query --format=json --nouse_legacy_sql \
+  'SELECT query, user_email, creation_time, referenced_tables
+     FROM `region-us`.INFORMATION_SCHEMA.JOBS
+    WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+      AND job_type = "QUERY" AND state = "DONE" AND error_result IS NULL' |
+  python3 bundle/jobs/draft-from-query-history/draft-from-query-history.py |
+  ochakai import -
+```
+
+リテラルとコメントと空白だけが違う実行は**一つにまとまり**、5 回以上
+撃たれたものが draft として着地する。**LLM は入っていない** — 「この
+クエリは何の問いに答えるのか」だけは書けないので、各 draft は空の見出し
+を持って出てくる。そこを埋めるのはあなたか、**あなたの**エージェントで
+ある。サーバーは決定論のままである。
+
+これで初日の一続きが揃う: `seed` でテーブル、この二つ目で問い、そして
+[レビューキュー](../../docs/loop.md)で人が裁定する。全部 draft で着地
+するのは、**何度も撃たれていることは「大事だ」の証拠であって「正しい」
+の証拠ではない**からである。
 
 ## 何にも触らずに試す
 
