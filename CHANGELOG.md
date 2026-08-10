@@ -21,6 +21,23 @@ last entry.
 
 ### Added
 
+- **The best match is no longer withheld behind a second round trip.** A
+  concept larger than the whole budget became an outline row even at rank
+  1 — so at the MCP default of 12,000 bytes the single most relevant
+  concept could come back as nothing but its name, forcing exactly the
+  round trip `get_context` exists to prevent. The top outline row now
+  carries an `excerpt` of the concept's opening when no budget-conforming
+  pack could have delivered it. Concepts themselves are still whole or
+  absent, never truncated: the reason for that rule — half of an attested
+  computation's SQL still looks executable — is satisfied rather than
+  set aside. The excerpt is the body and not the front of the document
+  (the frontmatter is already the fields on the row), it stops before the
+  first code fence so it can never contain part of a query, it prefers a
+  paragraph boundary, and `bytes` and `id` beside it say how much more
+  there is and where. Top row only, and never more than a quarter of the
+  budget ([#533](https://github.com/na0fu3y/ochakai/issues/533), design
+  doc 0093).
+
 - **The cold start has a second half: draft golden queries from the
   warehouse's own job history.** `ochakai seed` answers *what tables
   exist*; a base full of columns still does not know what anybody is
@@ -390,6 +407,22 @@ last entry.
   `purge` and `DELETE` mean what they already said.
 
 ### Changed
+
+- **BREAKING (MCP, REST semantics): `get_context`'s byte budget now
+  governs the whole response, `hits` included.** The ranking rode outside
+  it, on the grounds that a rank carries no body and the count is capped.
+  Both are true and neither is enough: `hits` is up to 40 rows and about
+  5 KB, so a caller that asked for 12,000 bytes received 12,000 plus an
+  amount it could not compute — which is not a number a context window
+  can be sized by. The same argument had already moved `outline` inside.
+  The budget governs the response and what it **buys** is whole concepts;
+  the ranking and the outline are the floor and always come back, because
+  only a caller that knows something was there can raise a budget for it.
+  Nothing is trimmed to make room. At the default `limit` of 5 the
+  ranking is about 10% of the default budget, so most callers will see a
+  concept or two fewer; a caller that asked for `limit=20` pays what it
+  chose ([#533](https://github.com/na0fu3y/ochakai/issues/533), design
+  doc 0093).
 
 - **The web UI is ES modules, and its tests run.** The page was one 2,438
   line file, and its thirteen tests were greps over that file as a

@@ -98,6 +98,19 @@ func splitFrontmatter(s string) (fm, rest string, ok bool) {
 	return body[:end+1], body[end+len("\n---\n"):], true
 }
 
+// Body is what a document says after its frontmatter — the prose a
+// reader reads. A document that is not OKF is its own body, since there
+// is no header to skip.
+//
+// Exported for the context pack's excerpt (design doc 0093): the front of
+// a document is mostly keys the caller already has as fields, so an
+// excerpt that started there would spend its bytes repeating the outline
+// row above it.
+func Body(document string) string {
+	_, rest, _ := splitFrontmatter(document)
+	return strings.TrimLeft(rest, "\n")
+}
+
 // StripServerKeys removes the server-owned keys from a document's
 // frontmatter, leaving every other byte — key order, quoting, comments,
 // blank lines — where it was. This is what a write path does with a

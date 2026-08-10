@@ -355,6 +355,7 @@ components/schemas/Change.title required=false type=string
 components/schemas/ContextOutline type=object
 components/schemas/ContextOutline.bytes required=true type=integer
 components/schemas/ContextOutline.description required=false type=string
+components/schemas/ContextOutline.excerpt required=false type=string
 components/schemas/ContextOutline.id required=true type=string
 components/schemas/ContextOutline.status required=true ref=Status
 components/schemas/ContextOutline.title required=false type=string

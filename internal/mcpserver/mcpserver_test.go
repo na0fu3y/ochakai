@@ -459,13 +459,17 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 		if !ok {
 			t.Fatal("get_context must expose budget")
 		}
-		// "the concepts plus the outline rows" is what the cap actually
-		// binds (design doc 0033 §3.2); it is not the response body, and
-		// an agent that reads it as one will size it wrong.
-		for _, want := range []string{"12000", "outline", "the concepts plus the outline rows"} {
+		// The cap binds the whole response now, hits included (design doc
+		// 0093). It used to bind the concepts and the outline only, and
+		// said so — an agent that sized its window by the old sentence
+		// was told a number smaller than what arrived.
+		for _, want := range []string{"12000", "outline", "hits", "whole response"} {
 			if !strings.Contains(budget.Description, want) {
 				t.Errorf("budget description %q does not mention %q", budget.Description, want)
 			}
+		}
+		if strings.Contains(budget.Description, "outside it") {
+			t.Errorf("the budget no longer leaves anything outside itself: %q", budget.Description)
 		}
 		return
 	}
@@ -484,7 +488,7 @@ func TestContextSchemaBoundsResponse(t *testing.T) {
 // by the spelling searchIn accepts, and the status vocabulary is named as
 // what the hint must not reach for.
 func TestContextHint(t *testing.T) {
-	plain := contextHint(0)
+	plain := contextHint(nil)
 	for _, want := range []string{"report_outcome", "put_concept", "rejected=true"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("hint does not mention %q: %s", want, plain)
@@ -497,11 +501,23 @@ func TestContextHint(t *testing.T) {
 	if strings.Contains(plain, "outline") {
 		t.Errorf("nothing was dropped; hint must not mention the outline: %s", plain)
 	}
-	truncated := contextHint(3)
+	dropped := []domain.ContextOutline{{ID: "a"}, {ID: "b"}, {ID: "c"}}
+	truncated := contextHint(dropped)
 	for _, want := range []string{"3 concepts", "outline", "get_concept"} {
 		if !strings.Contains(truncated, want) {
 			t.Errorf("truncated hint does not mention %q: %s", want, truncated)
 		}
+	}
+	if strings.Contains(truncated, "excerpt") {
+		t.Errorf("no row carries an excerpt; the hint must not send the agent looking for one: %s", truncated)
+	}
+	// The excerpt is worth a sentence only on the response that has one:
+	// an agent that does not know it is there makes the round trip the
+	// excerpt exists to save (design doc 0093).
+	dropped[0].Excerpt = "The opening of the best match."
+	withExcerpt := contextHint(dropped)
+	if !strings.Contains(withExcerpt, "excerpt") {
+		t.Errorf("hint does not point at the excerpt the top row carries: %s", withExcerpt)
 	}
 }
 

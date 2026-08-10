@@ -1246,19 +1246,21 @@ paths:
         - name: budget
           in: query
           description: >
-            Cap the serialized bytes of the knowledge in the response: the
-            concepts delivered in full plus the outline rows naming the
-            rest. Nothing else in the response carries a body — `hits` is
-            the ranking only — so the cap cannot be defeated by a second
-            copy of a concept it excluded. Concepts past the
-            cap are listed under `outline` instead — a concept is delivered
-            whole or not at all, never truncated — and those rows count
-            against the same cap, because naming what was left out is not
-            free (an outline row carries a description). Packing is greedy,
-            so one oversized concept high in the ranking does not starve the
-            rest. The floor is the outline of everything that matched: a
-            budget too small even for the names still gets them, since a
-            caller cannot raise a budget for concepts it never heard about.
+            Cap the serialized bytes of the response: `hits`, `outline` and
+            `concepts` together (design doc 0093). What the cap *buys* is
+            whole concepts — the ranking and the outline are the floor,
+            always sent, because a caller cannot raise a budget for
+            concepts it never heard about.
+
+            Concepts past the cap are listed under `outline` instead — a
+            concept is delivered whole or not at all, never truncated —
+            and those rows count against it too, because naming what was
+            left out is not free (an outline row carries a description).
+            Packing is greedy, so one oversized concept high in the ranking
+            does not starve the rest; when that concept is the top-ranked
+            one, its row carries an `excerpt` of the body so the best match
+            is not withheld behind a second round trip.
+
             Defaults to 0 (no cap) here; the MCP get_context tool defaults
             it on, because an agent's context window is the scarce resource
             and an embedding host will not set it.
@@ -1289,7 +1291,9 @@ paths:
                     description: >
                       Concepts the budget dropped: named and sized, not
                       delivered. Fetch any of them by id. Absent when
-                      nothing was dropped.
+                      nothing was dropped. The top-ranked row carries an
+                      `excerpt` when its concept was too large for any
+                      pack.
                     type: array
                     items: { $ref: "#/components/schemas/ContextOutline" }
                 required: [hits, concepts]
@@ -3133,6 +3137,19 @@ components:
         bytes:
           description: What the full concept would have cost.
           type: integer
+        excerpt:
+          description: >
+            The opening of the concept's body. Only the top-ranked row
+            carries one, and only when no budget-conforming pack could
+            have delivered that concept at all — the case where a caller
+            would otherwise be handed nothing but the name of its best
+            match (design doc 0093).
+
+            It is the body, not the front of the document: the
+            frontmatter is the fields above. It stops before any code
+            fence, so an excerpt never contains part of a query. `bytes`
+            says how much more there is, and `id` is where the rest is.
+          type: string
       required: [id, type, status, bytes]
     BundleListing:
       type: object

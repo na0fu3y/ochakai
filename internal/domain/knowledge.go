@@ -1466,6 +1466,16 @@ type ContextOutline struct {
 	Description string `json:"description,omitempty"`
 	Status      Status `json:"status"`
 	Bytes       int    `json:"bytes"`
+	// Excerpt is the opening of the body, and only the top-ranked row
+	// carries one, only when the budget could not hold that concept at
+	// all (design doc 0093). Bytes says how much more there is, and the
+	// id is the address the rest is fetched from.
+	//
+	// It is deliberately not the front of the document: the frontmatter
+	// is the fields above, and an excerpt that repeated them would spend
+	// itself saying what the row already says. It also stops before a
+	// code fence, so no caller is ever handed half a query.
+	Excerpt string `json:"excerpt,omitempty"`
 }
 
 // ConceptPath is the bundle path a concept lives at: its id with ".md"

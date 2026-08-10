@@ -13,6 +13,9 @@ Status: Accepted(2026-08-02)。**面の配分の現行ドキュメント。**
 §5.1・§6・§7 は [0076](0076-two-tools-leave-mcp.md) が改訂する — MCP の
 ツールは 8 → 6 になり(`delete_concept` / `get_concept_usage` が降りる)、
 §7 の「MCP の機能削減はしない」がその一件ぶん書き換わる。
+§4 は [0093](0093-the-budget-governs-the-whole-response.md) が改訂する —
+「`hits` はバイト予算の外」を撤回し、予算は応答全体を縛る。順位が順位に
+徹することは変わらない。
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと
