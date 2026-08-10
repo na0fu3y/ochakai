@@ -951,6 +951,75 @@ across d28c3c8 and its follow-up). Lower the cap to %d, or close to it.`,
 	}
 }
 
+// The contract is prose too, and it was the one piece of prose no
+// ceiling reached. api/openapi.yaml is 3,300-odd lines for eight paths,
+// more than half of it description, and none of it counted: not by DOC
+// (it is not markdown and not a page anyone reads front to back), not by
+// REST or PARAM or HEADER (which count names, and prose has none). So it
+// was free to grow — the escape hatch this document exists to close,
+// found in the one file that declares what ochakai promises.
+//
+// The same shape as DOC-LINES, and for the same reason: a name is
+// learned once however often it appears, while reading is paid by the
+// line. The slack is what an ordinary edit may leave unspent.
+func TestTheContractStaysUnderItsLineCap(t *testing.T) {
+	content, err := os.ReadFile(surfaceDoc)
+	if err != nil {
+		t.Fatalf("read %s: %v", surfaceDoc, err)
+	}
+	limit, slack := 0, -1
+	for _, line := range strings.Split(string(content), "\n") {
+		m := surfaceCapRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		switch m[1] {
+		case "REST" + capMeasures:
+			if limit, err = strconv.Atoi(m[2]); err != nil {
+				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
+			}
+		case "REST" + capSlack:
+			if slack, err = strconv.Atoi(m[2]); err != nil {
+				t.Fatalf("%s: cap %q: %v", surfaceDoc, line, err)
+			}
+		}
+	}
+	if limit == 0 || slack < 0 {
+		t.Fatalf("%s sets no REST%s / REST%s cap: this check now guards nothing",
+			surfaceDoc, capMeasures, capSlack)
+	}
+	// The cap moves in blocks, as DOC-LINES does and for its reason: a
+	// number fitted to what the file measures today leaves the next edit
+	// no room and puts it back on this line.
+	if limit%slack != 0 {
+		t.Errorf(`REST%s is %d, which is not a multiple of the %d REST%s.`,
+			capMeasures, limit, slack, capSlack)
+	}
+	spec, err := os.ReadFile(openAPISpec)
+	if err != nil {
+		t.Fatalf("read %s: %v", openAPISpec, err)
+	}
+	lines := len(strings.Split(strings.TrimRight(string(spec), "\n"), "\n"))
+	switch headroom := limit - lines; {
+	case headroom < 0:
+		t.Errorf(`the contract is %d lines, over its cap of %d.
+
+Prose in api/openapi.yaml is paid for by everybody who reads the contract
+and by every generator that has to carry it. Going past the cap is a
+decision: raise it in the same PR, having answered %s's three questions —
+or move the argument to the design record it is retelling, which is where
+the reasoning belongs and where it is already written down.`,
+			lines, limit, surfaceDoc)
+	case headroom > slack:
+		t.Errorf(`the contract is %d lines, %d under its cap of %d — more than the %d
+REST%s allows.
+
+Trimming is worth as much as not growing, so the budget it earned goes
+back: lower REST%s in the same PR to %d, or close to it.`,
+			lines, headroom, limit, slack, capSlack, capMeasures, lines)
+	}
+}
+
 // userDocs is the manual: every markdown page a reader is sent to in order
 // to evaluate, use or run ochakai, with the total number of lines in them.
 //

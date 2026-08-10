@@ -19,6 +19,25 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A generated REST client works, and the contract was what stopped it.**
+  `/api/v1/bundle/{path}` declared its `path` parameter on `get` only —
+  `put` and `delete` did not — so the contract said three different
+  things about three operations at one address, and every generator
+  stopped at the first one it could not resolve. Declared once on the
+  path item, which OpenAPI shares across the address: `oapi-codegen`
+  now produces a client that compiles, and GET, PUT and DELETE against a
+  slash-bearing id all work against a running server. Design doc 0064
+  §11 had recorded that *no generator produces a working client for this
+  one address*, and that turns out to have been the missing declaration
+  rather than the address; the half of it that stands — the empty root
+  and the slashes are genuinely inexpressible in an OpenAPI path
+  template — is unchanged. **Nothing a caller sends is different**: the
+  two lines added to the frozen fingerprint say what every client was
+  already sending ([#538](https://github.com/na0fu3y/ochakai/issues/538),
+  design doc 0098).
+
 ### Added
 
 - **A write now says what it did in the body, not only in a header.** The
