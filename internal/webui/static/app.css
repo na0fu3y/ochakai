@@ -321,6 +321,18 @@ table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
 /* A nested list sits inside its item, so it needs no margin of its own
    above — the item already provided one. */
 .md li > ul, .md li > ol { margin: .15em 0; }
+/* The review trend. No axes and no grid: it answers one question — is
+   reviewing picking up, holding, or stopping — and anything else drawn
+   here would be the BI tool this surface is not. */
+.spark { margin: 0 0 1.2rem; max-width: 52rem; }
+.spark svg { display: block; }
+.spark .spark-bar { fill: var(--accent); }
+/* A week nobody verified anything still gets a mark, in the colour of
+   the background it sits on, so the row reads as eight weeks rather
+   than as missing data. */
+.spark .spark-bar.zero { fill: var(--border); }
+.spark figcaption { color: var(--muted); font-size: .82rem; margin-top: .25rem; }
+
 .md blockquote {
   margin: .6em 0; padding: .1em 0 .1em .9em;
   border-left: 3px solid var(--border); color: var(--muted);

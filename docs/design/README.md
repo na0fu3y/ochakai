@@ -39,7 +39,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
-| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)** |
+| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)** |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -563,6 +563,22 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   だけ」を意味する)。保存された減衰列は取らない — 定期実行という可動部を
   この製品は持たない。`search_hits` に窓を掛けないのは、それが需要ではない
   から(ランカーの最近の出力が最近の需要になるだけ)。
+- [0095 ループには形がある](0095-the-loop-has-a-shape.md)
+  — **Accepted**。0069 の人間側のフローに時系列を加える。求められていたのは
+  「キュー深度と検証率の時系列」だったが、**前者は取れない** — 三つのキューは
+  いまの状態から数えており、先月そこに何件あったかを記録した表は無い。
+  revision から再構成すれば**それらしく見えて正しくない数**が出る(0089 §4 と
+  同じ理由で足さない)。そして 0069 は既にこう書いていた —「キューは何が
+  残っているかを言い、何が通ったかは決して言わない」。**取れるものが、
+  たまたま正しいものだった**: 検証は台帳に時刻付きで残り剪定されないので、
+  ベースが在るかぎり遡れる。7 日ずつ 8 本、古い順。暦の週にしないのは最新の
+  バケツが必ず途中になり、その落ち込みがキュレーターではなく暦のものに
+  なるから。`days` に従わないのは、長さが変わると二回の測定が比較できない
+  から。**誰も検証していないベースには出さない**(8 本のゼロは「止まった」と
+  読め、「まだ始まっていない」は別のこと)。一件も無い週は 0 として並ぶ —
+  group by だけだとその週は消え、両隣が隣同士として描かれる。Web UI は
+  レビューページに一枚、**軸も目盛りも凡例も無い**(それ以上描けば 0067 §1 が
+  BI ツールではないと言った当のものになる)。MCP には出さない。
 - [0050 一覧はカーソルでページングし、順位はしない](0050-listings-page-rankings-do-not.md) — **Superseded by 0068**。
 - [0062 一覧は検索ではない](0062-a-listing-is-not-a-search.md) — **Superseded by 0068**。
 - [0056 一つの問いに一つのコマンド](0056-one-question-one-command.md) — **Superseded by 0068**。

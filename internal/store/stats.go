@@ -159,6 +159,45 @@ func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Ti
 		return fmt.Errorf("stats: verifications: %w", err)
 	}
 
+	// The same flow, bucketed. generate_series makes the buckets rather
+	// than the rows: a week nobody verified anything has to be a zero in
+	// the shape, and grouping the ledger alone would leave it out and
+	// draw the weeks either side as neighbours.
+	//
+	// Bounded by the trend's own window, not by the caller's: the shape
+	// is a fixed eight weeks so that two readings of it compare, while
+	// `since` is whatever period the caller asked the rest of these
+	// numbers about.
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT w::date::text, count(v.id)
+		  FROM generate_series(
+		         date_trunc('day', now()) - make_interval(days => 7 * ($1::int - 1)),
+		         date_trunc('day', now()), '7 days') AS w
+		  LEFT JOIN knowledge_verification v
+		    ON v.at >= w AND v.at < w + interval '7 days'
+		   AND EXISTS (SELECT 1 FROM object k WHERE k.id = v.id AND k.deleted_at IS NULL)%s
+		 GROUP BY w ORDER BY w`, scope),
+		append([]any{domain.ReviewTrendWeeks}, scopeArgs...)...)
+	if err != nil {
+		return fmt.Errorf("stats: review trend: %w", err)
+	}
+	weekly, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.ReviewWeek, error) {
+		var w domain.ReviewWeek
+		return w, row.Scan(&w.From, &w.Verifications)
+	})
+	if err != nil {
+		return fmt.Errorf("stats: review trend: %w", err)
+	}
+	// A base nobody has ruled on yet gets no shape rather than eight
+	// zeroes: a flat line reads as "review stopped", and "review has not
+	// started" is a different thing to tell somebody.
+	for _, w := range weekly {
+		if w.Verifications > 0 {
+			st.Review.Weekly = weekly
+			break
+		}
+	}
+
 	// The queue depths are design doc 0049's answer, borrowed rather than
 	// recomputed: two counts of one queue are two chances to disagree
 	// about it. They are scoped like everything else here now that this

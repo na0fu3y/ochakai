@@ -133,6 +133,36 @@ type StatsReview struct {
 	// moved through review last week", which a queue depth cannot: a
 	// queue says how much is left, never how much went through.
 	Verifications int64 `json:"verifications"`
+	// Weekly is that same flow as a shape: one bucket per week, oldest
+	// first, so a curator can see whether reviewing is picking up or
+	// falling off rather than only how much of it happened (design doc
+	// 0095). Empty when the deployment has no verifications at all.
+	//
+	// Verifications and not queue depth, and the sentence above is the
+	// reason: the ledger records every ruling with its time, so this is
+	// recoverable for as long as the base exists, while **nothing
+	// snapshots how deep a queue was last month**. A trend rebuilt from
+	// revisions would be a number that looks right and is not.
+	Weekly []ReviewWeek `json:"weekly,omitempty"`
+}
+
+// ReviewTrendWeeks is how many buckets Weekly carries. Eight is two
+// months — long enough that a fortnight of silence is visible against
+// the weeks around it, short enough to read at a glance. A constant
+// rather than a parameter: it is the product's answer to "over what
+// period does review have a rhythm", and one that differed per
+// deployment would make the shape mean something different in each.
+const ReviewTrendWeeks = 8
+
+// ReviewWeek is one bucket of the review trend: the seven days opening
+// at From, and what review did in them.
+type ReviewWeek struct {
+	// From is the bucket's first day, as a date. Buckets are seven days
+	// counted back from today rather than calendar weeks, because a
+	// calendar week would make the newest bucket a partial one whose
+	// dip is the calendar rather than the curator.
+	From          string `json:"from"`
+	Verifications int64  `json:"verifications"`
 }
 
 // StatsOutcomes is what callers reported back in the window — the

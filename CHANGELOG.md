@@ -21,6 +21,25 @@ last entry.
 
 ### Added
 
+- **The review loop has a shape, not only a number.** `GET
+  /api/v1/stats` answers `review.weekly` — eight seven-day buckets of
+  verifications, oldest first — and the review page draws them as one
+  figure with no axes, no gridlines and no legend, answering one
+  question: is reviewing picking up, holding, or stopping. `ochakai
+  stats` prints the same row of integers.
+
+  **Verifications and not queue depth**, because queue depth over time
+  is not recoverable: all three queues are counted from current state
+  and nothing snapshots how deep one was last month. Rebuilding it from
+  revisions would be a number that looks right and is not. The ledger
+  keeps every ruling with its time and is never pruned, so this half is
+  honest for as long as the base exists — and it is the half that
+  answers the question, since a queue says what is left and never what
+  went through. Absent on a base nobody has ruled on yet: eight zeroes
+  read as *"review stopped"*, and *"review has not started"* is a
+  different thing to say ([#536](https://github.com/na0fu3y/ochakai/issues/536),
+  design doc 0095).
+
 - **The web UI is served under a Content-Security-Policy, and the page a
   screen reader meets is no longer a lesser one.** The policy became
   writable when the page stopped carrying an inline script: `script-src

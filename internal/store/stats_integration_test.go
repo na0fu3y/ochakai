@@ -107,6 +107,35 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 	if got.Misses.Count < 3 {
 		t.Errorf("misses.count = %d, want at least the three this test recorded", got.Misses.Count)
 	}
+	// The same flow as a shape (design doc 0095). Eight buckets always,
+	// oldest first, with this test's verification in the last of them —
+	// a week nobody ruled in has to be a zero in the row rather than a
+	// missing bucket, or the weeks either side are drawn as neighbours.
+	if n := len(got.Review.Weekly); n != domain.ReviewTrendWeeks {
+		t.Fatalf("review.weekly has %d buckets, want %d", n, domain.ReviewTrendWeeks)
+	}
+	last := got.Review.Weekly[len(got.Review.Weekly)-1]
+	if last.Verifications < 1 {
+		t.Errorf("the newest bucket = %+v, want this test's verification in it", last)
+	}
+	for i, w := range got.Review.Weekly {
+		if w.From == "" {
+			t.Errorf("bucket %d carries no date: %+v", i, w)
+		}
+		if i > 0 && w.From <= got.Review.Weekly[i-1].From {
+			t.Errorf("buckets are not oldest-first: %q after %q", w.From, got.Review.Weekly[i-1].From)
+		}
+	}
+	// The trend has its own window and does not follow the caller's: a
+	// shape whose length changed with `days` would be two readings that
+	// cannot be compared.
+	narrow, err := s.Stats(ctx, time.Now().Add(-time.Minute), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(narrow.Review.Weekly) != domain.ReviewTrendWeeks {
+		t.Errorf("a one-minute window changed the trend to %d buckets", len(narrow.Review.Weekly))
+	}
 	// Every value of both vocabularies is present, so a reader tells
 	// "none" from "not reported" without knowing the vocabulary.
 	for _, st := range domain.Statuses {

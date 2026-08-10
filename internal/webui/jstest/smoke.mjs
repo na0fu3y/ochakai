@@ -231,6 +231,15 @@ try {
   await check('the review queue renders', await waitFor(`${textOf('#view')}.length > 100`), shown);
   // Only a route the top nav names has a current item — a directory page
   // is under neither tab, and marking one would be a lie.
+  // Eight weeks of review as one shape (design doc 0095). Drawn as
+  // inline SVG with a text label, so the trend is available to a reader
+  // who cannot see the bars at all.
+  await check('the review trend is drawn, and is readable without seeing it',
+    await waitFor(`(() => {
+      const s = document.querySelector('#view .spark');
+      return !!s && s.querySelectorAll('rect').length === 8
+        && (s.querySelector('svg').getAttribute('aria-label') || '').length > 10;
+    })()`), shown);
   await check('the current tab says so to a reader who cannot see it',
     await waitFor(`!!document.querySelector('#topnav a[data-route="review"][aria-current="page"]')`), shown);
 

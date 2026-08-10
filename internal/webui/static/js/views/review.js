@@ -58,6 +58,35 @@ export function viewReview() {
 // Failure to load is silent. Stats are a help, and a review queue that
 // refuses to draw because a tally is unavailable would be worse than one
 // with no tally.
+// sparkline draws the review trend: eight weeks of verifications, oldest
+// first (design doc 0095). Inline SVG rather than a chart library — this
+// is a curation surface and not a BI tool (design doc 0067 §1), and one
+// shape with no axes is the whole of what it has to say: is reviewing
+// picking up, holding, or stopping.
+//
+// Absent when the server sent no trend, which is a base nobody has ruled
+// on yet — eight zeroes would read as "review stopped".
+function sparkline(weeks) {
+  if (!weeks || !weeks.length) return '';
+  const peak = Math.max(...weeks.map(w => w.verifications), 1);
+  const w = 13, gap = 3, h = 26;
+  const bars = weeks.map((week, i) => {
+    // A week with nothing still gets a mark, or a gap in the row reads
+    // as missing data rather than as a week nobody reviewed anything.
+    const tall = Math.max(2, Math.round((week.verifications / peak) * h));
+    return `<rect class="spark-bar${week.verifications ? '' : ' zero'}"
+      x="${i * (w + gap)}" y="${h - tall}" width="${w}" height="${tall}"
+      ><title>${esc(week.from)} から1週間: ${week.verifications} 件</title></rect>`;
+  }).join('');
+  const total = weeks.reduce((n, week) => n + week.verifications, 0);
+  return `<figure class="spark">
+    <svg viewBox="0 0 ${weeks.length * (w + gap) - gap} ${h}" width="${weeks.length * (w + gap) - gap}"
+         height="${h}" role="img" aria-label="直近 ${weeks.length} 週の検証数、古い順: ${
+      weeks.map(week => week.verifications).join('、')}">${bars}</svg>
+    <figcaption>直近 ${weeks.length} 週の検証 — 計 ${total} 件。左が古い</figcaption>
+  </figure>`;
+}
+
 export async function loadLoopStats() {
   const out = $('#loop-stats');
   if (!out) return;
@@ -85,7 +114,7 @@ export async function loadLoopStats() {
         <div class="lbl">searches that found nothing</div></div>
       <div class="tile"><div class="num">${s.outcomes?.concepts_reported ?? 0}/${s.outcomes?.concepts_used ?? 0}</div>
         <div class="lbl">used concepts reported back on</div></div>
-    </div>` + (dropped ? `
+    </div>` + sparkline(s.review?.weekly) + (dropped ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
       ${dropped} observation${dropped === 1 ? '' : 's'} were recorded and then lost in these
       ${s.window_days} days, so the numbers above undercount by at least that much. Usage is
