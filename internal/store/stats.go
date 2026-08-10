@@ -164,6 +164,13 @@ func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Ti
 	// the shape, and grouping the ledger alone would leave it out and
 	// draw the weeks either side as neighbours.
 	//
+	// The buckets end today rather than starting there: the newest one
+	// opens six days back and closes tomorrow at midnight, so it holds a
+	// full trailing week — today included. Anchoring the series on today
+	// would put the newest bucket ahead of the clock, able to hold only
+	// today's rulings, which is exactly the always-partial bucket the
+	// design counts back from today to avoid (design doc 0095).
+	//
 	// Bounded by the trend's own window, not by the caller's: the shape
 	// is a fixed eight weeks so that two readings of it compare, while
 	// `since` is whatever period the caller asked the rest of these
@@ -171,8 +178,9 @@ func (s *Store) statsReview(ctx context.Context, st *domain.Stats, since time.Ti
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT w::date::text, count(v.id)
 		  FROM generate_series(
-		         date_trunc('day', now()) - make_interval(days => 7 * ($1::int - 1)),
-		         date_trunc('day', now()), '7 days') AS w
+		         date_trunc('day', now()) - make_interval(days => 7 * $1::int - 1),
+		         date_trunc('day', now()) - make_interval(days => 6),
+		         '7 days') AS w
 		  LEFT JOIN knowledge_verification v
 		    ON v.at >= w AND v.at < w + interval '7 days'
 		   AND EXISTS (SELECT 1 FROM object k WHERE k.id = v.id AND k.deleted_at IS NULL)%s
