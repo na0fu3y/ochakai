@@ -37,56 +37,54 @@ func (s *Store) ListUnembedded(ctx context.Context, model, after string, limit i
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
-// UnembeddedAttachment names one attachment awaiting a vector.
-type UnembeddedAttachment struct {
-	KnowledgeID string
-	Name        string
-}
+// unembeddedFiles is the queue of files awaiting a vector, shared by the
+// listing and its count so the number an operator is told to work down is
+// the number the passes actually work down.
+//
+// It is a queue of *files*, not of (concept, file) pairs: since design
+// doc 0091 the vector is keyed by the file's path and attribution is
+// resolved at search time, so a file two concepts link is one row of work
+// and a file nobody links yet is still work — it ranks the day a body
+// names it, without a second pass.
+//
+// mediaTypes is what this deployment's model can be handed. It is the
+// caller's because it is a property of the model, not of the corpus: on a
+// text-only embedder a PNG is not pending, it is out of scope, and a
+// queue that held it would never empty.
+const unembeddedFiles = `FROM object f
+	LEFT JOIN attachment_embedding e ON e.path = f.path AND e.model = $1
+	WHERE f.id IS NULL AND f.deleted_at IS NULL AND e.path IS NULL
+	  AND lower(split_part(f.media_type, ';', 1)) = ANY($2)`
 
-// ListUnembeddedAttachments is ListUnembedded for attachment vectors
-// (design doc 0020). Attach writes them, so a corpus loaded before
-// semantic search — or one whose embedding tables were dropped to change
-// dimensions — has none, and the files are findable by name only. The
-// cursor is the (knowledge_id, name) pair, for the same reason.
-func (s *Store) ListUnembeddedAttachments(ctx context.Context, model, afterID, afterName string, limit int) ([]UnembeddedAttachment, error) {
+// ListUnembeddedFiles is ListUnembedded for file vectors (design doc
+// 0020). Writes are what produce them, so a bundle imported before
+// semantic search — or one whose embedding tables were rebuilt to change
+// dimensions — has none, and its files are findable by name only. after
+// is a keyset cursor on the path, which is the key.
+func (s *Store) ListUnembeddedFiles(ctx context.Context, model string, mediaTypes []string, after string, limit int) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT k.id, split_part(f.path, '/', array_length(string_to_array(f.path, '/'), 1))
-		   FROM object k JOIN object f ON `+attributedTo+`
-		   LEFT JOIN attachment_embedding e
-		     ON e.knowledge_id = k.id
-		    AND e.name = split_part(f.path, '/', array_length(string_to_array(f.path, '/'), 1))
-		    AND e.model = $1
-		  WHERE k.id IS NOT NULL AND k.deleted_at IS NULL AND e.knowledge_id IS NULL
-		    AND ($2 = '' OR (k.id, f.path) > ($2, $3))
-		  ORDER BY k.id, f.path LIMIT $4`, model, afterID, afterName, limit)
+		`SELECT f.path `+unembeddedFiles+`
+		  AND ($3 = '' OR f.path > $3)
+		  ORDER BY f.path LIMIT $4`, model, mediaTypes, after, limit)
 	if err != nil {
 		if isUndefinedTable(err) {
 			return nil, nil // embedding tables appear with semantic search
 		}
 		return nil, err
 	}
-	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (UnembeddedAttachment, error) {
-		var a UnembeddedAttachment
-		return a, row.Scan(&a.KnowledgeID, &a.Name)
-	})
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil && isUndefinedTable(err) {
 		return nil, nil
 	}
 	return out, err
 }
 
-// CountUnembeddedAttachments counts what ListUnembeddedAttachments would
-// eventually return.
-func (s *Store) CountUnembeddedAttachments(ctx context.Context, model string) (int, error) {
+// CountUnembeddedFiles counts what ListUnembeddedFiles would eventually
+// return.
+func (s *Store) CountUnembeddedFiles(ctx context.Context, model string, mediaTypes []string) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx,
-		`SELECT count(*)
-		   FROM object k JOIN object f ON `+attributedTo+`
-		   LEFT JOIN attachment_embedding e
-		     ON e.knowledge_id = k.id
-		    AND e.name = split_part(f.path, '/', array_length(string_to_array(f.path, '/'), 1))
-		    AND e.model = $1
-		  WHERE k.id IS NOT NULL AND k.deleted_at IS NULL AND e.knowledge_id IS NULL`, model).Scan(&n)
+		`SELECT count(*) `+unembeddedFiles, model, mediaTypes).Scan(&n)
 	if err != nil && isUndefinedTable(err) {
 		return 0, nil
 	}
@@ -151,13 +149,13 @@ func (s *Store) EmbeddingCoverage(ctx context.Context, model string, prefixes []
 	return vectors, truncated, err
 }
 
-// UpsertAttachmentEmbedding stores the document embedding for one
-// attachment (design doc 0020).
-func (s *Store) UpsertAttachmentEmbedding(ctx context.Context, id, name, model string, vec []float32) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO attachment_embedding (knowledge_id, name, model, embedding, updated_at)
-		VALUES ($1, $2, $3, $4::vector, now())
-		ON CONFLICT (knowledge_id, name) DO UPDATE SET model = $3, embedding = $4::vector, updated_at = now()`,
-		id, name, model, encodeVector(vec))
+// UpsertFileEmbedding stores the document embedding for one file,
+// by the path that is its address (design docs 0020, 0075).
+func (s *Store) UpsertFileEmbedding(ctx context.Context, path, model string, vec []float32) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO attachment_embedding (path, model, embedding, updated_at)
+		VALUES ($1, $2, $3::vector, now())
+		ON CONFLICT (path) DO UPDATE SET model = $2, embedding = $3::vector, updated_at = now()`,
+		path, model, encodeVector(vec))
 	return err
 }
 
@@ -271,15 +269,15 @@ func isUndefinedTable(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "42P01")
 }
 
-// CountAttachmentEmbedding reports whether one attachment has a vector
+// CountFileEmbedding reports whether one attachment has a vector
 // for the named model (0 or 1). Reembed uses it to tell an embedding
 // that landed from one the provider declined — the attach path logs its
 // own failures rather than returning them.
-func (s *Store) CountAttachmentEmbedding(ctx context.Context, id, name, model string) (int, error) {
+func (s *Store) CountFileEmbedding(ctx context.Context, path, model string) (int, error) {
 	var n int
 	err := s.pool.QueryRow(ctx,
 		`SELECT count(*) FROM attachment_embedding
-		 WHERE knowledge_id = $1 AND name = $2 AND model = $3`, id, name, model).Scan(&n)
+		 WHERE path = $1 AND model = $2`, path, model).Scan(&n)
 	if err != nil && isUndefinedTable(err) {
 		return 0, nil
 	}

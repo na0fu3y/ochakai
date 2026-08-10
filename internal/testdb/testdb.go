@@ -94,7 +94,7 @@ func Sweep(t *testing.T, token string) {
 	// not a failure to clean up.
 	for _, q := range []string{
 		`DELETE FROM knowledge_embedding WHERE strpos(id, $1) > 0`,
-		`DELETE FROM attachment_embedding WHERE strpos(knowledge_id, $1) > 0`,
+		`DELETE FROM attachment_embedding WHERE strpos(path, $1) > 0`,
 	} {
 		_, _ = conn.Exec(ctx, q, token)
 	}

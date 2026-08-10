@@ -297,6 +297,28 @@ last entry.
 
 ### Fixed
 
+- **Deleting a file at a bundle path left its vector behind, still
+  ranking the concept that showed it.** `DELETE` on a bundle path
+  removed the object and its bytes but nothing dropped the embedding, so
+  semantic search went on returning the concept for content that was no
+  longer there — and no surface said why. Replacing the bytes had the
+  narrower version of the same problem: the row was overwritten only if
+  the re-embed that followed the write succeeded, so a provider outage
+  or a media type the model declines left the old vector describing
+  bytes that are gone. Both writes now drop the vector in their own
+  transaction, which is what made the fix a line rather than a lookup:
+  the vector is at the path being written.
+
+- **`ochakai reembed` reported work outstanding forever on a bundle
+  holding one zip file.** Anything not embeddable — an archive, a
+  parquet file, a font, and every image on a text-only embedder — sat in
+  the pending queue permanently, because nothing would ever write it a
+  vector. Every pass ended non-zero saying *"N items still missing; see
+  the server log for why they failed"*, and the server log said nothing,
+  since declining a file the model does not take is deliberately silent.
+  The queue now holds only the media types this deployment's model can
+  be handed.
+
 - **The requirements said `pg_trgm` as though search used it.** It has
   not since migration 0036 moved the lexical index to a `tsvector`
   column: a virgin database ends up with the extension installed and
@@ -368,6 +390,31 @@ last entry.
   `purge` and `DELETE` mean what they already said.
 
 ### Changed
+
+- **BREAKING (stored shape): a file's vector is keyed by its path, and
+  the old vectors are dropped at startup. Run `ochakai reembed` once
+  after upgrading.** The key was `(concept id, filename)` — the shape
+  from when a file was something a concept *had*, addressable only at
+  `<id>/<name>`. Since files became objects of the bundle, attributed by
+  any body that links them, the name has been the path's last segment,
+  so **a concept whose body showed `charts/q1.png` and `tables/q1.png`
+  wrote both to one row**: the second vector overwrote the first and one
+  of the two files silently left semantic search. Silently is the word —
+  the file was still stored, served, exported, and found by name; what
+  was missing was the "ask it another way" path that embeddings exist
+  for. The key is the path now and **which concept a hit belongs to is
+  read at search time from the bundle**, so a file the body links today
+  ranks that concept today with nothing re-embedded, a file the body
+  stops linking stops ranking it at once, and one file two concepts show
+  ranks both from a single vector. The old rows are dropped rather than
+  migrated: the overwritten side no longer exists, and a surviving row
+  cannot say which file it described. Until `ochakai reembed` runs,
+  files are found by name — where a deployment without embeddings
+  already is — and concept vectors are untouched. A reembed cursor
+  issued by an earlier release is refused with a 400; the table it would
+  resume into is empty, so there is nothing to resume
+  ([#539](https://github.com/na0fu3y/ochakai/issues/539), design doc
+  0091).
 
 - **The promotion queue and the re-verification feed rank on the last 90
   days.** The usage counters are running totals and never decay, so a

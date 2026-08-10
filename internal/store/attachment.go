@@ -133,6 +133,10 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 			return err
 		}
 		path := filePath(k, name, at)
+		// The caller asked for a name and may have asked for a path; what
+		// it gets back is the address the file actually took, because the
+		// vector and every later read are keyed by it.
+		att.Path = path
 		// The blob row is metadata only now — the object row carries the
 		// media type and size a read answers with — but it stays the
 		// registry of which content exists, and a revision names bytes by
@@ -158,7 +162,7 @@ func (s *Store) PutAttachment(ctx context.Context, id, name, mediaType, at strin
 		// A replaced file's vector describes the old bytes; drop it here
 		// and let the service re-embed after commit (design doc 0020).
 		if err := execTolerateMissingTable(ctx, tx,
-			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
+			`DELETE FROM attachment_embedding WHERE path=$1`, path); err != nil {
 			return err
 		}
 		return s.touchAndRevise(ctx, tx, k, "add_file", actor)
@@ -286,7 +290,7 @@ func (s *Store) DeleteAttachment(ctx context.Context, id, name string, actor dom
 			return ErrNotFound
 		}
 		if err := execTolerateMissingTable(ctx, tx,
-			`DELETE FROM attachment_embedding WHERE knowledge_id=$1 AND name=$2`, id, att.Name); err != nil {
+			`DELETE FROM attachment_embedding WHERE path=$1`, path); err != nil {
 			return err
 		}
 		return s.touchAndRevise(ctx, tx, k, "remove_file", actor)
@@ -414,6 +418,16 @@ func (s *Store) PutFile(ctx context.Context, p, mediaType string, data []byte, a
 			}
 			return err
 		}
+		// The vector at this address describes the bytes that were here;
+		// the service re-embeds after commit. Dropping it in the write
+		// rather than trusting the upsert is what makes the stale case
+		// impossible: bytes the model declines — or a provider that is
+		// down — would otherwise leave the old vector answering for
+		// content that is gone (design doc 0020).
+		if err := execTolerateMissingTable(ctx, tx,
+			`DELETE FROM attachment_embedding WHERE path=$1`, p); err != nil {
+			return err
+		}
 		return s.addFileRevision(ctx, tx, p, "create", actor)
 	})
 	if err != nil {
@@ -470,6 +484,10 @@ func (s *Store) DeleteFile(ctx context.Context, p string, actor domain.Actor) er
 		}
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
+		}
+		if err := execTolerateMissingTable(ctx, tx,
+			`DELETE FROM attachment_embedding WHERE path=$1`, p); err != nil {
+			return err
 		}
 		return s.addFileRevision(ctx, tx, p, "delete", actor)
 	})

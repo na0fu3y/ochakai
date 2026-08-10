@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -288,7 +289,7 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	// attachments unembedded for the model now in use.
 	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
 
-	pending, err := s.ListUnembeddedAttachments(ctx, model, "", "", 100)
+	pending, err := s.ListUnembeddedFiles(ctx, model, domain.EmbeddableMediaTypes(), "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +317,7 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pass %d: %v", pass, err)
 		}
-		left, err := s.ListUnembeddedAttachments(ctx, model, "", "", 100)
+		left, err := s.ListUnembeddedFiles(ctx, model, domain.EmbeddableMediaTypes(), "", 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -333,7 +334,7 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	}
 
 	// Both attachments now have a vector under the current model.
-	if pending, err = s.ListUnembeddedAttachments(ctx, model, "", "", 100); err != nil {
+	if pending, err = s.ListUnembeddedFiles(ctx, model, domain.EmbeddableMediaTypes(), "", 100); err != nil {
 		t.Fatal(err)
 	}
 	if got := countOwned(pending, id); got != 0 {
@@ -341,10 +342,10 @@ func TestReembedCoversAttachmentsIntegration(t *testing.T) {
 	}
 }
 
-func countOwned(pending []store.UnembeddedAttachment, id string) int {
+func countOwned(pending []string, id string) int {
 	n := 0
 	for _, p := range pending {
-		if p.KnowledgeID == id {
+		if strings.HasPrefix(p, id+"/") {
 			n++
 		}
 	}

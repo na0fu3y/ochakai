@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
@@ -62,6 +63,19 @@ var embeddableMediaTypes = map[string]bool{
 func Embeddable(mediaType string) bool {
 	mt, _, _ := strings.Cut(mediaType, ";")
 	return embeddableMediaTypes[strings.ToLower(strings.TrimSpace(mt))]
+}
+
+// EmbeddableMediaTypes is the same list as a sorted slice, for the queue
+// of files awaiting a vector: a file the model would never take does not
+// belong in a backlog, because a backlog that can never empty reports a
+// bundle holding one zip file as an instance with work outstanding.
+func EmbeddableMediaTypes() []string {
+	out := make([]string, 0, len(embeddableMediaTypes))
+	for mt := range embeddableMediaTypes {
+		out = append(out, mt)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // InlineServable reports whether bytes of this media type may be handed

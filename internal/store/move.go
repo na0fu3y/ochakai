@@ -120,7 +120,12 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// re-keying is enough — no re-embed.
 		for _, q := range []string{
 			`UPDATE knowledge_embedding SET id=$2 WHERE id=$1`,
-			`UPDATE attachment_embedding SET knowledge_id=$2 WHERE knowledge_id=$1`,
+			// A file's vector is keyed by the file's path, so it follows
+			// the file — the same prefix rewrite the file objects and
+			// their revisions get above. Files the body names elsewhere
+			// in the bundle do not move and neither do their vectors.
+			`UPDATE attachment_embedding SET path = $2 || substr(path, length($1) + 1)
+			 WHERE starts_with(path, $1 || '/')`,
 		} {
 			if err := execTolerateMissingTable(ctx, tx, q, oldID, newID); err != nil {
 				return err
