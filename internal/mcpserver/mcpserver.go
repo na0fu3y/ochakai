@@ -225,6 +225,16 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"Ranking, so it ends at limit and has no page two: a search that needs more is one " +
 			"that needs narrowing. To walk a whole feed instead, use list_concepts.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
+		// SearchOrList routes an empty query with a source filter to a
+		// listing before it ever checks that search needs a query (0096
+		// §5 put that reverse lookup on list_concepts, which has a cursor
+		// parameter and a listing-sized limit — this schema has neither).
+		// Reject it here so this tool stays one capability, not two
+		// behind one schema (issue #602).
+		if strings.TrimSpace(in.Query) == "" {
+			return nil, searchOut{}, service.Invalidf(
+				"search_concepts needs a query; to list what derives from a source, use list_concepts")
+		}
 		page, err := svc.SearchOrList(ctx, in.Query, "", "", in.filter(), in.Limit)
 		if err != nil {
 			return nil, searchOut{}, err

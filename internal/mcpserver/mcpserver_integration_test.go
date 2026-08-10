@@ -544,4 +544,31 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 	if !strings.Contains(said, "sort") {
 		t.Errorf("the refusal does not name the argument that does not belong: %q", said)
 	}
+
+	// An empty query with a source filter is the other way this tool
+	// could quietly become a listing: SearchOrList routes that shape to
+	// s.list before it ever checks that a search needs a query (0096
+	// §5 put the reverse lookup on list_concepts, which has a cursor
+	// parameter and a listing-sized limit — this schema has neither).
+	// The handler has to refuse it itself, because no JSON Schema shape
+	// says "query required only when source is empty" (issue #602).
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "search_concepts", Arguments: map[string]any{"query": "", "source": "https://example.com/doc"},
+	})
+	if err == nil && !res.IsError {
+		t.Fatal("search_concepts with only a source filter answered as a listing instead of refusing")
+	}
+	said = ""
+	if err != nil {
+		said = err.Error()
+	} else {
+		for _, c := range res.Content {
+			if tc, ok := c.(*mcp.TextContent); ok {
+				said += tc.Text
+			}
+		}
+	}
+	if !strings.Contains(said, "list_concepts") {
+		t.Errorf("the refusal does not point at the tool that does this: %q", said)
+	}
 }
