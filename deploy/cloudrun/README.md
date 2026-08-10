@@ -436,16 +436,22 @@ provenance が崩れる。
 [REST API を自分のサービスに組み込む](../../docs/guides/rest-integration.md)
 にある。
 
-<a id="5d-optional-a-public-read-only-demo-the-one-public-posture"></a>
+<a id="5d-optional-a-public-read-only-demo"></a>
 
-## 5d. 任意: 公開の read-only なデモ(唯一の public な姿勢)
+## 5d. 任意: 公開の read-only なデモ
 
 ここまでは一貫して `allUsers` を禁じており、それは書き込み可能なあら
-ゆるデプロイについて変わらない。デモだけが唯一の例外であり、それも手
-放すものがあるからこそ許される: `OCHAKAI_MODE=public` は identity を
-一切読まず、書き込みも伴わない(設計ドキュメント 0066 §3)— 誰も
-記録せず何も書き込まないサービスだけが、誰にでも開いて安全な唯一の種
-類である。
+ゆるデプロイについて変わらない。例外は二つの姿勢だけで、どちらも手放
+すものがあるからこそ許される。一つはこのデモで、`OCHAKAI_MODE=public`
+は identity を一切読まず、書き込みも伴わない(設計ドキュメント
+0066 §3)。もう一つは `OCHAKAI_MODE=sandbox`(設計ドキュメント
+[0087](../../docs/design/0087-a-sandbox-says-it-is-one.md))で、こちらは
+匿名の書き込みを受ける代わりに、**中身が消えることを自分で宣言する** —
+手順は運用ガイドの
+[使い捨てのサンドボックス](../../docs/guides/operating.md#sandbox)
+にある。誰にでも開いて安全なのは、誰も記録せず何も書き込まないサービス
+か、書いたものが残るとは誰にも思わせないサービスかのどちらかだけで
+ある。
 
 種を入れること、公開サービスが見知らぬ相手の `Authorization` ヘッダー
 をまだ信じてしまう窓を作らずに mode を切り替えること、切り替えが反映

@@ -186,7 +186,7 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 は、この文書が数えようとしているものを増やす。
 
 **ここは名前のほかに量も数える** — `REST-LINES`(+ `-SLACK`)。
-`api/openapi.yaml` は 8 パスに 3,300 行あり、その半分以上が説明文で、
+`api/openapi.yaml` は 8 パスに 3,400 行あまりあり、その半分以上が説明文で、
 **どの天井にも届いていなかった**: `DOC` は markdown のページを数える
 のでこのファイルを見ず、上の一覧と `PARAM` / `HEADER` は名前を数える
 ので散文には目が無い。契約は面の中で唯一「外の人がそのまま読む」文書
@@ -535,7 +535,9 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 ある。`OCHAKAI_READ_ONLY` / `OCHAKAI_PUBLIC_READ_ONLY` /
 `OCHAKAI_INSECURE_DEV` の 3 つのブールが表していたのは、実際には
 **排他的な 4 つの姿勢**(既定 / read-only / public / dev)であり、
-`OCHAKAI_MODE` 一語になった。**減ったのは 2 本だけだが、消えたのは
+`OCHAKAI_MODE` 一語になった(その後 `sandbox` が加わって五つ、
+[0087](design/0087-a-sandbox-says-it-is-one.md))。
+**減ったのは 2 本だけだが、消えたのは
 それだけではない** — 起動時に拒否していた組み合わせが 1 つ、黙って
 補正していた含意が 2 つ、どれも**書き下せなくなった**ので規則ごと消えた。
 この文書が数えているのは名前であって規則ではないから、この行は
@@ -707,7 +709,7 @@ enum は凍結された契約に書いてあり、`ochakai import` はこの三�
 
 ページは利用者が払うものである。README は 20 以上の文書へ送り出し、
 デプロイする人は
-[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 517 行を
+[deploy/cloudrun/README.md](../deploy/cloudrun/README.md) の 500 行あまりを
 通る。No FDE(C4)がドキュメントを正当化するが、C4 が求めるのは
 **自分で立ち上げられること**であって行数ではない。
 

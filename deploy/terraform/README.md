@@ -4,8 +4,9 @@
 したもので、デプロイを diff としてレビューし、環境ごとに再現し、きれいに
 壊せるようにする。
 
-**このモジュールが ochakai を立ち上げる推奨の経路である** — 下の 13 手順で
-済み、gcloud ガイドの 36 手順より少ない。gcloud ガイドは引き続きリファレン
+**このモジュールが ochakai を立ち上げる推奨の経路である** — `terraform
+apply` 一回と、下の手作業ひとつ(スキーマの bootstrap)で済み、gcloud
+ガイドを一手順ずつ辿るより短い。gcloud ガイドは引き続きリファレン
 スであり正とする情報源である: 各部分がなぜそう作られているかを説明し、この
 モジュールが省いているものすべてに触れている。それでも `terraform apply`
 を動かすだけならガイドを読む必要は無い。二つが食い違えば、ガイドが正しく、
@@ -131,7 +132,8 @@ GRANT "<database_user output>" TO "you@your-org.example";
 | `enable_gcs_files` | §4b | バケット + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`。無いとファイルの書き込みは 501 を返す。 |
 | `enable_webui` | §5b | `serve-ui` を、同じイメージ・専用の identity で、IAP の背後にある二つ目の Cloud Run サービスとして立てる。`webui_records_browser_user`(既定 on)は、UI のサービスアカウントではなくブラウザの本人を記録する。 |
 | `read_only` | §5d | `OCHAKAI_MODE=read-only` を設定する — 非公開のままである。on にする*前*にベースへ import しておくこと: read-only なデプロイには import できない。 |
-| `public_read_only` | §5d | `OCHAKAI_MODE=public` を設定し、このモジュール唯一の `allUsers` を付与する。`read_only` を含意する。その姿勢が何を手放すかは[デプロイガイド](../cloudrun/README.md#5d-optional-a-public-read-only-demo-the-one-public-posture)にある。書き込み可能な状態で apply し、`ochakai import examples/demo` した後、これを on にして再度 apply する。 |
+| `public_read_only` | §5d | `OCHAKAI_MODE=public` を設定し、`allUsers` を付与する(`sandbox` と並ぶ、このモジュールで `allUsers` が付く二つの変数の一つ)。`read_only` を含意する。その姿勢が何を手放すかは[デプロイガイド](../cloudrun/README.md#5d-optional-a-public-read-only-demo)にある。書き込み可能な状態で apply し、`ochakai import examples/demo` した後、これを on にして再度 apply する。 |
+| `sandbox` | §5d | `OCHAKAI_MODE=sandbox` を設定し、`allUsers` を付与する — **匿名で書ける**デプロイなので、中身が消えることを製品自身が宣言する(設計ドキュメント 0087)。`public_read_only` とは併用しない。復元のジョブは運用ガイドの[使い捨てのサンドボックス](../../docs/guides/operating.md#sandbox)にある。 |
 | `maintenance_users` | §6 | 人のための Cloud SQL IAM ログイン、パスワードは無い。 |
 | `database_backups` | §6 | 日次バックアップ。**既定で on** — データベースはナレッジベースそのものである。使い捨ての評価だけ off にしてよい。 |
 

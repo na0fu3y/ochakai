@@ -710,7 +710,7 @@ issuer をすべてのリクエストで検証し、audience を設定した後�
   せよ。ここで想定しているクライアントはブラウザである — MCP と CLI は
   デプロイガイド §5 の経路を使う。
 
-<a id="public-demo"></a>
+<a id="sandbox"></a>
 
 ## 使い捨てのサンドボックス
 
@@ -741,6 +741,8 @@ ochakai import /seed
 
 Terraform では `sandbox = true` が `allUsers` の付与まで面倒を見る。
 `public_read_only` とは併用しない — サーバーが取るのは一語である。
+
+<a id="public-demo"></a>
 
 ## 公開デモ
 
@@ -837,8 +839,8 @@ binding だけである。)
 
 ### 切り替えが反映されたことを確認する
 
-デモは、素の `curl` が動くはずの唯一のデプロイなので、proxy 無しで
-検証できる唯一のものでもある:
+デモは(サンドボックスと並んで)素の `curl` が動くはずのデプロイなので、
+proxy 無しで検証できる:
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' "$OCHAKAI_URL/api/v1/search?q=revenue"  # 200、トークン無し

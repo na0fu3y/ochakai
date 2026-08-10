@@ -1,7 +1,10 @@
 # ochakai 設計ドキュメント 0031: purge — id を解放する二段階目の削除
 
-Status: Accepted(2026-07-26)。**二段階・不可逆・監査行・GCS の blob を
-回収しないという決定は不変。** 動いたのは住所で、§3.4 が書いた
+Status: Accepted(2026-07-26)。**二段階・不可逆・監査行という決定は
+不変。** ただし **§3.2 の「GCS 上の添付バイト列は回収しない」は
+[0099](0099-a-purge-reaches-the-bytes.md) が改訂した** — 参照されなく
+なったバイト列は、purge とファイル削除のあとに回収される。動いたのは
+住所で、§3.4 が書いた
 `DELETE /api/v1/knowledge/{id}?purge=true` は
 `DELETE /api/v1/bundle/{path}?purge=true` になった —
 [0046](0046-bundle-address-space.md) §3.5 が言い直し、それが墓標になった
