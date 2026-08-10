@@ -31,7 +31,7 @@
 <header class="topbar">
   <button id="side-toggle" title="Show / hide the knowledge tree" aria-label="サイドバーの開閉">☰</button>
   <a class="brand" href="#/">🍵 ochakai</a>
-  <nav class="topnav" id="topnav">
+  <nav class="topnav" id="topnav" aria-label="主なページ">
     <a href="#/search" data-route="search">検索</a>
     <a href="#/review" data-route="review">レビュー<span class="waiting" id="nav-waiting" hidden></span></a>
   </nav>
@@ -43,8 +43,8 @@
       <summary>ナレッジのツリー</summary>
       <div class="side-head">
         <span class="lbl">ナレッジ</span>
-        <button class="btn small" id="tree-refresh" title="ツリーを読み直す">↻</button>
-        <a class="btn small write-only" href="#/new" title="concept を作る">＋</a>
+        <button class="btn small" id="tree-refresh" title="ツリーを読み直す" aria-label="ツリーを読み直す">↻</button>
+        <a class="btn small write-only" href="#/new" title="concept を作る" aria-label="concept を作る">＋</a>
       </div>
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
@@ -55,9 +55,16 @@
     消えます。試すための場所です: concept を下書きし、検証し、結果を報告して
     みてください。<strong>失って困るものは置かないでください。</strong>
   </div>
-  <main id="view"></main>
+  <!-- tabindex="-1" so the router can move focus here after a
+     navigation: the view is replaced in place, and without it a
+     keyboard or screen-reader user stays where the last click left
+     them while the page around them changes. -->
+  <main id="view" tabindex="-1"></main>
 </div>
-<div id="toast"></div>
+<!-- Every save, refusal and failure is announced here, so it is a live
+     region: a screen reader gets told what a sighted reader sees flash
+     past. polite, not assertive — it reports, it does not interrupt. -->
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

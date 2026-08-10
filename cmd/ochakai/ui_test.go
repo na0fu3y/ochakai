@@ -31,6 +31,62 @@ func TestUIHandlerServesIndex(t *testing.T) {
 	}
 }
 
+// The page renders a concept's body, which is text somebody else wrote,
+// so the second wall behind the escaping is a policy the browser
+// enforces. Both serving paths get it, because both serve the same page
+// to the same kind of reader (design doc 0006).
+//
+// What is pinned is the half that matters: no inline script, and nothing
+// reachable that is not named. `style-src` keeps 'unsafe-inline' for the
+// page's literal style attributes and says so out loud — the test would
+// otherwise pass a policy that had quietly given up on scripts too.
+func TestTheUIPageCarriesASecurityPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mux  func(t *testing.T) http.Handler
+	}{
+		{"ui", func(t *testing.T) http.Handler {
+			h, err := uiHandler("http://ochakai.internal", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return h
+		}},
+		{"serve-ui", func(*testing.T) http.Handler {
+			return serveUIHandler(http.NotFoundHandler())
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8098/", nil)
+			rec := httptest.NewRecorder()
+			tc.mux(t).ServeHTTP(rec, req)
+			csp := rec.Header().Get("Content-Security-Policy")
+			if csp == "" {
+				t.Fatal("the page is served without a Content-Security-Policy")
+			}
+			for _, want := range []string{
+				"default-src 'none'",     // nothing that is not named below
+				"script-src 'self'",      // the modules, and nothing inline
+				"frame-ancestors 'none'", // not somebody else's frame
+				"base-uri 'none'",
+			} {
+				if !strings.Contains(csp, want) {
+					t.Errorf("policy is missing %q:\n%s", want, csp)
+				}
+			}
+			// The one that would undo the rest. A page with no inline
+			// script has no reason to allow one (design doc 0092).
+			if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") ||
+				strings.Contains(csp, "script-src 'unsafe-inline'") {
+				t.Errorf("script-src allows inline again, which is what the policy is for:\n%s", csp)
+			}
+			if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+			}
+		})
+	}
+}
+
 // The proxy substitutes the CLI user's ID token for whatever the browser
 // sent — never forward browser credentials upstream.
 func TestUIHandlerProxiesWithToken(t *testing.T) {

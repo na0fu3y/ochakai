@@ -38,7 +38,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂) |
-| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂) |
+| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)** |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
@@ -374,6 +374,25 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
   「HTML 文字列の grep が 13 本」から三層になり、Go に残るのは Go と JS に
   またがる不変とページ全体についての主張だけ。CSP・a11y・日本語切り替えは
   **可能になっただけで、決めていない**。
+- [0094 ページはポリシーの下で動く](0094-the-page-runs-under-a-policy.md)
+  — **Accepted**。0092 §5 が「可能にするだけで決めていない」と書いた CSP と
+  a11y の基礎を決める。インライン `<script>` が一つも無くなったので
+  `script-src 'self'` が**書けるようになった** — CSP の価値の大半はそこで、
+  一行でも残っていると書けない。実測でも違反はインラインの `style` だけで、
+  スクリプトの違反は一件も出ない。**`frame-ancestors 'none'` は利用者が
+  観測できる拒否である**: Web UI はキュレーションの面で、人の裁定が起きる
+  唯一の場所だから、囲んだ側がボタンの位置を知って上に何でも重ねられる
+  状態にはしない — 埋め込みたい人には REST がある。`img-src` に `https:`
+  を許すのは、ヘッダを足したついでに外部画像を黙って消すのが「安全に
+  見えるように文書を壊すこと」だから。**`style-src` の `'unsafe-inline'` は
+  支払いであって値引きではない** — literal な style 属性が約 40 あり、
+  全部をクラスに移すと三十個のユーティリティと引き換えになる一方、
+  style 属性に攻撃者由来の値は一つも入らない(唯一の動的な表の
+  `text-align` は四つの定数のどれか)。`Referrer-Policy` は足さない —
+  数えるヘッダが 14 本目になるのに、買えるのはブラウザ既定の少し先だけで、
+  ルートは fragment に居るのでパスは `/` である。a11y は網羅ではなく
+  「無いと使えない」四つ: toast が live region、移動後にフォーカスが主領域へ、
+  現在のタブに `aria-current`、エラーバナーが `role="alert"`。
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Superseded by 0072**。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**。
   prefix によるツリー閲覧。

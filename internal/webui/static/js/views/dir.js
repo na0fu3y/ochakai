@@ -26,7 +26,7 @@ export async function loadDirIndex(container, prefix, emptyText) {
     container.innerHTML = (dirs + concepts + files + note) || `<div class="empty">${emptyText}</div>`;
   } catch (e) {
     if (!container.isConnected) return;
-    container.innerHTML = `<div class="error-banner">Browse failed: ${esc(e.message)}</div>`;
+    container.innerHTML = `<div class="error-banner" role="alert">Browse failed: ${esc(e.message)}</div>`;
   }
 }
 

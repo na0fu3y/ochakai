@@ -229,15 +229,37 @@ try {
 
   await go('#/review');
   await check('the review queue renders', await waitFor(`${textOf('#view')}.length > 100`), shown);
+  // Only a route the top nav names has a current item — a directory page
+  // is under neither tab, and marking one would be a lie.
+  await check('the current tab says so to a reader who cannot see it',
+    await waitFor(`!!document.querySelector('#topnav a[data-route="review"][aria-current="page"]')`), shown);
 
   await go('#/new');
   await check('the editor renders', await waitFor(`!!document.querySelector('#view textarea')`), shown);
 
   await go('#/dir/metrics');
   await check('a directory page renders', await waitFor(`${textOf('#view')}.includes('metrics')`), shown);
+
+  // A navigation replaces the main region in place, so focus has to
+  // follow it — otherwise the next Tab continues wherever the last click
+  // left it, in content that is no longer on screen.
+  await check('focus follows the navigation',
+    await waitFor(`document.activeElement && document.activeElement.id === 'view'`), shown);
+  await check('what the page announces is announced to everyone',
+    await waitFor(`(document.querySelector('#toast') || {}).getAttribute
+      && document.querySelector('#toast').getAttribute('aria-live') === 'polite'`), shown);
 } catch (e) {
   await check('the walk reached the end', false, () => String(e && e.message || e));
 }
+
+// The page renders somebody else's text, so it is served under a policy
+// the browser enforces. Checked explicitly because its absence is
+// silent: a page with no policy logs no violations, so the tally below
+// would pass a build that had dropped the header entirely.
+const csp = (await fetch(BASE + '/')).headers.get('content-security-policy') || '';
+await check('the page is served under a content security policy',
+  csp.includes("script-src 'self'") && csp.includes("default-src 'none'"),
+  () => csp || '(no Content-Security-Policy header)');
 
 // One settle, and only here: an error logged by a request still in
 // flight when the last check passed belongs in this tally.

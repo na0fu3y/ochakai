@@ -33,8 +33,16 @@ export function route() {
   unsaved = null;
   route._current = hash || '#/';
   const [head, ...rest] = hash.replace(/^#\/?/, '').split('/');
-  document.querySelectorAll('#topnav a').forEach(a => a.classList.remove('active'));
-  const mark = r => { const a = document.querySelector(`#topnav a[data-route="${r}"]`); if (a) a.classList.add('active'); };
+  document.querySelectorAll('#topnav a').forEach(a => {
+    a.classList.remove('active');
+    a.removeAttribute('aria-current');
+  });
+  // aria-current beside the class: the colour says "you are here" to a
+  // reader who can see it, and nothing said it to one who cannot.
+  const mark = r => {
+    const a = document.querySelector(`#topnav a[data-route="${r}"]`);
+    if (a) { a.classList.add('active'); a.setAttribute('aria-current', 'page'); }
+  };
   if (head === 'k' && rest.length >= 1) {
     viewDetail(rest.map(decodeURIComponent).join('/'));
   } else if (head === 'dir') {
@@ -89,6 +97,12 @@ export function route() {
     viewHome();
   }
   markTreeSelection();
+  // A navigation replaced the main region in place. Focus follows it, so
+  // the next Tab continues inside the new view and a screen reader reads
+  // it out — but not on the first render, where the browser has just
+  // loaded the document and moving focus would fight it.
+  if (route._rendered) view.focus({ preventScroll: true });
+  route._rendered = true;
 }
 window.addEventListener('hashchange', route);
 

@@ -625,7 +625,23 @@ accept, and two of those refusals had cited the spec for a requirement
 the spec does not state — the kind of finding a record exists to correct
 rather than to compress away.
 
-    RECORD-CORPUS-LINES: 6500
+6,500 → 7,000 is four records from one stretch of web-UI work, and what
+they have in common is that each **retracts or completes something an
+earlier record had left standing**: 0091 (a file's vector is keyed by its
+path — 0075 said the path is the address, and one table had not been
+told), 0092 (the page is modules, so it can be tested — 0072's "one
+self-contained file" was how it said "no build step", and only the file
+count changed), 0093 (the budget governs the whole response — 0067 §4 put
+`hits` outside it, on a reason that was true and not enough) and 0094
+(the page runs under a policy — 0092 §5 had listed CSP as made possible
+and not decided). None of them is a new mechanism. **The expensive
+records in this stretch are the ones that go back for a decision the
+product had outgrown**, which is a different pressure from the one the
+6,000 crossing named, and it is the healthier of the two: a corpus that
+can only grow forwards is one where the earlier records quietly stop
+being true.
+
+    RECORD-CORPUS-LINES: 7000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded
