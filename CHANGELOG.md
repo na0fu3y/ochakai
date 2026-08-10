@@ -19,6 +19,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-11
+
 ### Fixed
 
 - **Thirteen error responses were missing the `code` the entry below
@@ -4070,7 +4072,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/na0fu3y/ochakai/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/na0fu3y/ochakai/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/na0fu3y/ochakai/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/na0fu3y/ochakai/compare/v0.18.0...v0.19.0
