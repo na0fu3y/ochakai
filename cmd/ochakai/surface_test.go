@@ -1421,3 +1421,62 @@ func TestErrorCodesMatchTheContract(t *testing.T) {
 			declared, codes)
 	}
 }
+
+// TestEveryErrorResponseDeclaresACode guards the gap issue #601 found:
+// TestErrorCodesMatchTheContract above reads only
+// components/responses/Error, so a response written inline with
+// `properties: {error}` and no `code` — one operation's own 409, a
+// shared component like Forbidden — was invisible to it. An error
+// envelope is identified by shape here, not by which component wrote
+// it: any response whose JSON body carries `error` must carry `code`
+// beside it, with a non-empty enum drawn from domain.ErrorCodes (design
+// doc 0083 §2 — the code is repeated even where the status already
+// determines it, so a client never has to ask whether this particular
+// failure has one).
+func TestEveryErrorResponseDeclaresACode(t *testing.T) {
+	doc := readSpecTree(t)
+	valid := map[string]bool{}
+	for _, c := range domain.ErrorCodes {
+		valid[c] = true
+	}
+	checked := 0
+	check := func(loc string, resp map[string]any) {
+		props := wireMap(wireMap(wireMap(wireMap(resp["content"])["application/json"])["schema"])["properties"])
+		if props["error"] == nil {
+			return // not an error envelope
+		}
+		checked++
+		enum, _ := wireMap(props["code"])["enum"].([]any)
+		if len(enum) == 0 {
+			t.Errorf("%s: carries `error` with no `code` enum beside it (design doc 0083)", loc)
+			return
+		}
+		for _, v := range enum {
+			if !valid[wireStr(v)] {
+				t.Errorf("%s: code enum names %q, which is not one of domain.ErrorCodes", loc, wireStr(v))
+			}
+		}
+	}
+
+	for name, node := range wireMap(wireMap(wireMap(doc["components"])["responses"])) {
+		check("components/responses/"+name, wireMap(node))
+	}
+	for path, item := range wireMap(doc["paths"]) {
+		for method, node := range wireMap(item) {
+			if !httpMethods[method] {
+				continue
+			}
+			loc := strings.ToUpper(method) + " " + path
+			for status, respNode := range wireMap(wireMap(node)["responses"]) {
+				resp := wireMap(respNode)
+				if wireStr(resp["$ref"]) != "" {
+					continue // checked once, above, where it is declared
+				}
+				check(loc+" response "+status, resp)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no error-shaped response found in openapi.yaml: this check now guards nothing")
+	}
+}

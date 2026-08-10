@@ -460,7 +460,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [invalid] }
+                required: [error, code]
               examples:
                 queryAndSortTogether:
                   summary: q and sort are mutually exclusive
@@ -811,7 +812,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [unsupported] }
+                required: [error, code]
               example:
                 error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
         "409":
@@ -840,7 +842,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [invalid] }
+                required: [error, code]
               example:
                 error: >
                   index.md is generated from the bundle, not stored in it
@@ -856,7 +859,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [not_found] }
+                required: [error, code]
               example:
                 error: no object at this path
         "405": { $ref: "#/components/responses/Error" }
@@ -1009,13 +1013,16 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [not_found] }
+                required: [error, code]
         "412":
           description: >
             An If-Match or If-None-Match "*" precondition failed — the
             concept changed since it was read, or (design doc 0064,
             matching RFC 9110) the path was already occupied when
-            If-None-Match "*" asked for a create only.
+            If-None-Match "*" asked for a create only. The code says
+            which: `precondition_failed` for a stale `If-Match`,
+            `already_exists` for the occupied path (design doc 0083).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -1024,7 +1031,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [already_exists, precondition_failed] }
+                required: [error, code]
         "413": { $ref: "#/components/responses/Error" }
         "415": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
@@ -1033,7 +1041,9 @@ paths:
             A generated file is not one anybody writes — and an address
             already taken by the other kind of object is not free: a
             file PUT to a path where a live concept sits (or a concept
-            PUT to a path a file holds) answers 409 naming which.
+            PUT to a path a file holds) answers 409 naming which. The
+            code says which: `invalid` for the reserved name,
+            `already_exists` for the occupied address.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -1042,7 +1052,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [already_exists, invalid] }
+                required: [error, code]
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
         "405": { $ref: "#/components/responses/Error" }
@@ -1113,9 +1124,14 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [not_found] }
+                required: [error, code]
         "409":
-          description: A generated file is not one anybody deletes.
+          description: >
+            Two conditions, and the code says which: a generated file is
+            not one anybody deletes (`invalid`), or `purge=true` named a
+            concept that is still live — destruction takes the two steps
+            design doc 0031 requires, delete before purge (`not_deleted`).
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
           content:
@@ -1124,7 +1140,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [invalid, not_deleted] }
+                required: [error, code]
         "412":
           description: >
             If-Match named a version the concept no longer has (design doc
@@ -1137,7 +1154,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [precondition_failed] }
+                required: [error, code]
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/context:
@@ -1785,7 +1803,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [invalid] }
+                required: [error, code]
               examples:
                 unknownRuling:
                   summary: A ruling outside the vocabulary
@@ -1810,7 +1829,8 @@ paths:
                 type: object
                 properties:
                   error: { type: string }
-                required: [error]
+                  code: { type: string, enum: [no_rejection] }
+                required: [error, code]
               example:
                 error: knowledge carries no rejection to withdraw
         "413": { $ref: "#/components/responses/Error" }
@@ -2397,7 +2417,8 @@ components:
         rather than silently downgrading to the caller's own identity).
         The second reaches every operation, since the header is honored
         on every call; the first only the writes. Same JSON envelope as
-        every other error here.
+        every other error here; the code says which — `read_only` for
+        the deployment posture, `forbidden` for the delegation refusal.
       headers:
         Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
       content:
@@ -2406,7 +2427,8 @@ components:
             type: object
             properties:
               error: { type: string }
-            required: [error]
+              code: { type: string, enum: [forbidden, read_only] }
+            required: [error, code]
           examples:
             readOnly:
               summary: A write against a read-only deployment

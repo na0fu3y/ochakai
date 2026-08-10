@@ -21,6 +21,28 @@ last entry.
 
 ### Fixed
 
+- **Thirteen error responses were missing the `code` the entry below
+  already claimed every one of them carries.** `api/openapi.yaml`
+  declared `code`'s enum on `components/responses/Error` alone;
+  `searchConcepts`'s 400, `reviewConcept`'s 400 and 409, six of
+  `getBundlePath`/`putBundlePath`/`deleteBundlePath`'s own 404/409/412,
+  and the shared `Forbidden` response wrote `properties: {error}` with
+  no `code` at all. That is exactly where the conditions 0083 exists to
+  separate live: the three sharing 409 (`already_exists`/`not_deleted`/
+  `no_rejection`), the two sharing 412 (a stale `If-Match` versus an
+  occupied path under `If-None-Match: *`), and 403's
+  `forbidden`/`read_only` split — a developer embedding the REST API
+  (C6) had the same prose-matching problem 0083 was written to close,
+  on the very statuses it names.
+  `TestErrorCodesMatchTheContract` only read the shared `Error` schema
+  and could not see any of them. Fixed by declaring `code` at all
+  thirteen sites — narrowed to the codes each one can actually answer,
+  several carrying two — and a new `TestEveryErrorResponseDeclaresACode`
+  that finds an error envelope by shape (any JSON body carrying `error`)
+  instead of by which component wrote it, so an inline schema cannot go
+  quiet again
+  ([#601](https://github.com/na0fu3y/ochakai/issues/601)).
+
 - **A generated REST client works, and the contract was what stopped it.**
   `/api/v1/bundle/{path}` declared its `path` parameter on `get` only —
   `put` and `delete` did not — so the contract said three different
