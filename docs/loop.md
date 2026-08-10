@@ -3,7 +3,8 @@
 エージェントが下書きし、人が検証し、その後どうなったかを測る。この
 ページはそのループを端から端まで一周する — クイックスタートで入れた
 [デモバンドル](../examples/demo)には、どの段でも何かが返ってくるだけの
-中身がある。
+中身がある。**自分のテーブルから始めた人**は、その入口が
+[§空のベースから始めるとき](#cold-start)にある。
 
 ## 四つのプロンプト
 
@@ -73,6 +74,51 @@ reject を待っている concept](images/webui-review.png)
 `ochakai serve-ui` はチームで共有するサービスとして配る — サーバーと
 同じコンテナイメージに `--args=serve-ui` を渡すだけである
 ([運用ガイド](guides/operating.md#the-team-web-ui))。
+
+<a id="cold-start"></a>
+
+## 空のベースから始めるとき
+
+デモではなく自分の倉庫から始めるなら、ループの一周目は**書き戻し**では
+なく**投影**で埋まる。入口は二つあり、どちらも ochakai が倉庫に触らない
+形をしている — クエリを撃つのはあなたの identity である。
+
+```sh
+# 何が在るか。テーブルとカラムが concept になる。
+bq query --format=json --nouse_legacy_sql \
+  'SELECT table_schema, table_name, column_name, data_type, is_nullable, description
+     FROM `your-project.your_dataset.INFORMATION_SCHEMA.COLUMNS`
+    ORDER BY ordinal_position' | ochakai seed - | ochakai import -
+
+# 何が既に訊かれているか。5 回以上撃たれたクエリが concept になる。
+#   examples/bigquery-catalog の draft-from-query-history(手順はそちら)
+```
+
+**どちらも全件 draft で着地する。** 投影されたスキーマはまだナレッジでは
+なく骨格であり、5 回撃たれたクエリは「大事だ」の証拠であって「正しい」の
+証拠ではない。ナレッジになるのは、**そのカラムが何を意味するかを誰かが
+言った瞬間**である — それがこのページの残りの部分がやっていることである。
+
+一周目のキューはこう読む:
+
+```sh
+ochakai stats                        # drafts が何件あるか
+ochakai list usage --status draft    # 需要の多い順(直近 90 日)
+```
+
+**初日はここが全部 0 である。** 投影された concept はまだ誰にも読まれて
+いないので、順番が意味を持つのは二周目からである — エージェントを一度
+走らせたあとにもう一度この一覧を見ると、**あなたのチームが実際に触れて
+いる十件が上に来る**。裁定する順番はそれが決める。直近の窓で並ぶことは
+[0090](design/0090-a-queue-ranks-on-what-happened-lately.md) の決定で、
+「昔たくさん読まれた」ではなく「いま読まれている」を上に置くためである。
+
+骨格のまま残った concept は誰の邪魔もしない — 検索では verified が上に
+来るので、**裁定しないことの代償は静かである**。全部を読み切ろうとしない
+こと自体が、このキューの使い方である。
+
+そのあとは上の四つのプロンプトが、デモではなくあなたのテーブルに対して
+そのまま働く。**書き戻しは二周目から**である。
 
 <a id="feeds"></a>
 
