@@ -406,3 +406,115 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 		t.Errorf("a rejected proposal is not findable with rejected=true: %+v", rejected.Hits)
 	}
 }
+
+// TestIntegrationListWalksAFeedAndSearchRefusesTo is the split as an
+// agent meets it (design doc 0096): a feed is walked a page at a time
+// through list_concepts, and the same call aimed at search_concepts does
+// not reach a handler at all.
+//
+// The cursor is the half that only a database can show — a page whose
+// cursor did not resume would look identical to a short feed until the
+// second call.
+func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{InsecureDev: true}
+	svc := &service.Service{Store: s, Config: cfg, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(httpauth.Middleware(cfg, Handler(svc, "test")))
+	defer srv.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "host", Version: "0"}, nil).
+		Connect(ctx, &mcp.StreamableClientTransport{Endpoint: srv.URL}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer"}
+	run := testdb.Unique(t, "mcpfeed")
+	ids := []string{run + "/metrics/a", run + "/metrics/b", run + "/metrics/c"}
+	defer func() {
+		for _, id := range ids {
+			_ = svc.Delete(context.Background(), id, human, nil)
+		}
+	}()
+	// Three verified concepts, so the verified_at feed has something to
+	// walk and a page of one leaves two behind it.
+	for _, id := range ids {
+		if _, _, _, err := svc.Put(ctx, &domain.Knowledge{
+			Type: domain.TypeMetrics, ID: id, Title: "mcp feed " + id,
+			Status: domain.StatusStable, Body: "受注合計。", CreatedBy: human,
+		}, human, nil); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Verify(ctx, id, human); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page := func(t *testing.T, args map[string]any) searchOut {
+		t.Helper()
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "list_concepts", Arguments: args})
+		if err != nil {
+			t.Fatalf("list_concepts: %v", err)
+		}
+		if res.IsError {
+			t.Fatalf("list_concepts failed: %+v", res.Content)
+		}
+		var out searchOut
+		raw, err := json.Marshal(res.StructuredContent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	first := page(t, map[string]any{
+		"sort": "verified_at", "prefixes": []string{run}, "limit": 1,
+	})
+	if len(first.Hits) != 1 || first.Cursor == "" {
+		t.Fatalf("a page of one out of three: %d hits, cursor %q", len(first.Hits), first.Cursor)
+	}
+	next := page(t, map[string]any{
+		"sort": "verified_at", "prefixes": []string{run}, "limit": 1, "cursor": first.Cursor,
+	})
+	if len(next.Hits) != 1 {
+		t.Fatalf("the cursor did not resume the feed: %d hits", len(next.Hits))
+	}
+	if next.Hits[0].ID == first.Hits[0].ID {
+		t.Errorf("the second page repeats the first: %s", next.Hits[0].ID)
+	}
+
+	// And the tool that ranks does not list. The refusal comes from
+	// schema validation rather than from the handler, which is what the
+	// split bought: the agent is told before the call costs anything.
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "search_concepts", Arguments: map[string]any{"sort": "verified_at"},
+	})
+	if err == nil && !res.IsError {
+		t.Fatal("search_concepts accepted a listing call")
+	}
+	said := ""
+	if err != nil {
+		said = err.Error()
+	} else {
+		for _, c := range res.Content {
+			if tc, ok := c.(*mcp.TextContent); ok {
+				said += tc.Text
+			}
+		}
+	}
+	if !strings.Contains(said, "sort") {
+		t.Errorf("the refusal does not name the argument that does not belong: %q", said)
+	}
+}

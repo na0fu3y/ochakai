@@ -222,22 +222,43 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"contents count too, and a hit is always the owning concept. Rejected concepts are " +
 			"excluded unless you pass rejected=true — ask for them to check whether a proposal " +
 			"was already turned down.\n" +
-			"Exactly one of query / sort. A sort lists instead of searching, pages with cursor, " +
-			"and scores 0:\n" +
+			"Ranking, so it ends at limit and has no page two: a search that needs more is one " +
+			"that needs narrowing. To walk a whole feed instead, use list_concepts.",
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
+		page, err := svc.SearchOrList(ctx, in.Query, "", "", in.filter(), in.Limit)
+		if err != nil {
+			return nil, searchOut{}, err
+		}
+		return nil, searchOut{Hits: page.Hits, Cursor: page.Cursor}, nil
+	}))
+
+	// The other half of the same wire operation, as its own tool: a
+	// listing is not a search (design doc 0068 §2), and one schema could
+	// not say so — query was required unless sort was set, cursor was
+	// refused unless it was, and limit meant two different things either
+	// way. None of that is expressible in JSON Schema, so it lived in
+	// prose the agent had to obey unaided.
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "list_concepts",
+		Annotations: readOnly,
+		Description: "Walk a review feed in full, oldest work first. Scores nothing and ranks " +
+			"nothing: pass the cursor from the last page to continue, and no cursor back means " +
+			"the end.\n" +
 			"- verified_at: by verification age, oldest first — stale verified knowledge.\n" +
 			"- usage: by how often the concept was read — the draft review feed.\n" +
 			"- failed: reported wrong via report_outcome, worst first — the re-verification feed.\n" +
 			"- stale_after: past the author's declared expiry, most overdue first — verifying " +
 			"alone does not clear this feed, because the date is the writer's declaration and " +
 			"only an edit changes it.\n" +
-			"A search is bounded by limit and has no page two.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
-		f := store.Filter{
-			Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses),
-			Tags: in.Tags, Source: in.Source, Prefixes: in.Prefixes,
-			Trust: domain.ToTrusts(in.Trusts), Rejected: in.Rejected,
+			"Omit sort with source set to list what derives from that material instead.",
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in listIn) (*mcp.CallToolResult, searchOut, error) {
+		f := in.filter()
+		if in.Sort == "" && f.Source == "" {
+			return nil, searchOut{}, service.Invalidf(
+				"list_concepts needs sort (%s) or source; to search by text, use search_concepts",
+				strings.Join(domain.ListSorts, ", "))
 		}
-		page, err := svc.SearchOrList(ctx, in.Query, in.Sort, in.Cursor, f, in.Limit)
+		page, err := svc.SearchOrList(ctx, "", in.Sort, in.Cursor, f, in.Limit)
 		if err != nil {
 			return nil, searchOut{}, err
 		}
@@ -468,21 +489,42 @@ func parseKnowledgeURI(uri string) (id string, ok bool) {
 // The jsonschema tags spell out the numeric contracts (defaults, maxima,
 // out-of-range fallback) that api/openapi.yaml and the CLI help already
 // document — MCP agents only see the tool schema.
-type searchIn struct {
-	// Query drives the search. Optional in the schema because sort mode
-	// rejects it — exactly one of query / sort must be set (the service
-	// rejects an empty search, the handler rejects the combination).
-	Query    string   `json:"query,omitempty" jsonschema:"search text; required unless sort is set"`
+// filters are the six every read tool takes, in one embedded struct
+// rather than repeated per tool: they are the same question everywhere,
+// and a schema written twice is a schema that starts differing.
+type filters struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trusts"`
 	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); several are OR-ed, omit to not ask. Independent of status"`
-	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to list only concepts a human turned down — how you check whether a proposal was already rejected. Omit and they stay out"`
+	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to ask only for concepts a human turned down — how you check whether a proposal was already rejected. Omit and they stay out"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — \"this material changed, what derives from it?\". A filter: it combines with query or sort"`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/); several are OR-ed. A filter: it combines with query or sort"`
-	Sort     string   `json:"sort,omitempty" jsonschema:"omit to search; verified_at | usage | failed | stale_after to list instead (the description says what each feed is). Mutually exclusive with query"`
-	Limit    int      `json:"limit,omitempty" jsonschema:"max results: searching default 10, max 50; with sort default 100, max 1000 (out-of-range falls back to the default)"`
-	Cursor   string   `json:"cursor,omitempty" jsonschema:"resume a listing: pass back the cursor the last page returned, with the same sort and filters. Listings only — a search refuses it"`
+	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — \"this material changed, what derives from it?\""`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/); several are OR-ed"`
+}
+
+func (f filters) filter() store.Filter {
+	return store.Filter{
+		Types: domain.ToTypes(f.Types), Statuses: domain.ToStatuses(f.Statuses),
+		Tags: f.Tags, Source: f.Source, Prefixes: f.Prefixes,
+		Trust: domain.ToTrusts(f.Trusts), Rejected: f.Rejected,
+	}
+}
+
+type searchIn struct {
+	Query string `json:"query" jsonschema:"the text to search for"`
+	filters
+	Limit int `json:"limit,omitempty" jsonschema:"max results: default 10, max 50 (out-of-range falls back to the default)"`
+}
+
+// listIn is the same filters with a feed and a position instead of a
+// query. sort is not required in the schema, because a source lookup is
+// a listing with no feed to name; the handler says so when neither is
+// there.
+type listIn struct {
+	Sort string `json:"sort,omitempty" jsonschema:"which feed: verified_at | usage | failed | stale_after (the description says what each is)"`
+	filters
+	Limit  int    `json:"limit,omitempty" jsonschema:"max results per page: default 100, max 1000 (out-of-range falls back to the default)"`
+	Cursor string `json:"cursor,omitempty" jsonschema:"resume: pass back the cursor the last page returned, with the same sort and filters"`
 }
 
 type searchOut struct {

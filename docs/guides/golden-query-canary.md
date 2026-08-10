@@ -45,8 +45,9 @@ hit は concept を手渡すのではなく名指すだけである: 順位付�
 
 素の REST なら
 `GET /api/v1/search?type=Attested%20Computation&trust=human-reviewed&sort=verified_at&limit=100`。
-MCP 経由では `search_concepts` に `sort: "verified_at"` を渡せば同じ
-フィードが返る。`sort=verified_at` は検証時刻の古い順に並び、未検証の
+MCP 経由では `list_concepts` に `sort: "verified_at"` を渡せば同じ
+フィードが返る(`search_concepts` は検索専用である — 設計ドキュメント
+[0096](../design/0096-a-listing-is-not-a-search-here-either.md))。`sort=verified_at` は検証時刻の古い順に並び、未検証の
 concept は最後に来る。「90 日間再検証されていない検証済みクエリ」が
 カナリア実行の出発点である。CI で OKF export をチェックアウトする
 (`ochakai export`、または `Accept: application/gzip` を付けた
@@ -97,7 +98,7 @@ ochakai は関与しない。
   失敗が積み上がった検証済み concept を優先して再検証できる。
   **`sort=failed` の再検証フィード**(`ochakai list failed --trust
   human-reviewed`、REST: `GET /api/v1/search?sort=failed`、MCP:
-  `search_concepts` に `sort: "failed"`)は、間違いだと報告された
+  `list_concepts` に `sort: "failed"`)は、間違いだと報告された
   回数が多い順に並べる。時間にもとづく `sort=verified_at` を補う、
   証拠にもとづく入口である(設計ドキュメント 0069 §2.1)。
 

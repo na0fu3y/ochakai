@@ -31,37 +31,63 @@ func connect(t *testing.T) *mcp.ClientSession {
 	return cs
 }
 
-// TestSearchQueryNotRequired pins the search_concepts input schema:
-// query must stay optional so sort="verified_at" calls can omit it
-// (the handler rejects the combination of both).
-func TestSearchQueryNotRequired(t *testing.T) {
+// TestTheSchemaSaysWhichToolTakesWhat pins what the split bought
+// (design doc 0096): the rules that were prose in one schema are the
+// shape of two. search_concepts requires a query and knows nothing about
+// sort or cursor, so a listing call sent to it is refused by schema
+// validation before any handler runs — and list_concepts has no query to
+// combine with a feed.
+func TestTheSchemaSaysWhichToolTakesWhat(t *testing.T) {
 	cs := connect(t)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
+	want := map[string]struct {
+		required []string
+		absent   []string
+	}{
+		"search_concepts": {required: []string{"query"}, absent: []string{"sort", "cursor"}},
+		"list_concepts":   {absent: []string{"query"}},
+	}
 	for _, tool := range res.Tools {
-		if tool.Name != "search_concepts" {
+		w, ok := want[tool.Name]
+		if !ok {
 			continue
 		}
+		delete(want, tool.Name)
 		raw, err := json.Marshal(tool.InputSchema)
 		if err != nil {
-			t.Fatalf("marshal schema: %v", err)
+			t.Fatalf("marshal %s schema: %v", tool.Name, err)
 		}
 		var schema struct {
-			Required []string `json:"required"`
+			Required   []string                   `json:"required"`
+			Properties map[string]json.RawMessage `json:"properties"`
 		}
 		if err := json.Unmarshal(raw, &schema); err != nil {
-			t.Fatalf("unmarshal schema: %v", err)
+			t.Fatalf("unmarshal %s schema: %v", tool.Name, err)
 		}
-		for _, r := range schema.Required {
-			if r == "query" {
-				t.Errorf("search_concepts schema requires %q; it must stay optional for sort mode", r)
+		for _, r := range w.required {
+			if !slices.Contains(schema.Required, r) {
+				t.Errorf("%s does not require %q, so the constraint is prose again", tool.Name, r)
 			}
 		}
-		return
+		for _, a := range w.absent {
+			if _, ok := schema.Properties[a]; ok {
+				t.Errorf("%s still takes %q; that is the other tool's argument", tool.Name, a)
+			}
+		}
+		// The filters are the half that is deliberately on both, and the
+		// bytes the split cost (docs/surface.md, MCP-BYTES).
+		for _, f := range []string{"types", "statuses", "trusts", "tags", "source", "prefixes"} {
+			if _, ok := schema.Properties[f]; !ok {
+				t.Errorf("%s lost the %q filter; both halves take the same filters", tool.Name, f)
+			}
+		}
 	}
-	t.Fatal("search_concepts tool not found")
+	for name := range want {
+		t.Errorf("tool %s not found", name)
+	}
 }
 
 // TestLimitContractsInSchema pins that the tool schemas document the
@@ -73,8 +99,11 @@ func TestLimitContractsInSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
+	// One tool, one pair of numbers: the two contracts used to share a
+	// description, which is the sentence design doc 0096 split apart.
 	want := map[string][]string{
-		"search_concepts": {"default 10", "max 50", "default 100", "max 1000"},
+		"search_concepts": {"default 10", "max 50"},
+		"list_concepts":   {"default 100", "max 1000"},
 		"get_context":     {"default 5", "max 20"},
 	}
 	for _, tool := range res.Tools {
@@ -161,6 +190,7 @@ func TestFMIsNotOnTheToolSchemas(t *testing.T) {
 func TestArrayFiltersAreNamedInThePlural(t *testing.T) {
 	want := map[string][]string{
 		"search_concepts": {"prefixes", "statuses", "tags", "trusts", "types"},
+		"list_concepts":   {"prefixes", "statuses", "tags", "trusts", "types"},
 		"get_context":     {"prefixes", "statuses", "tags", "trusts", "types"},
 	}
 	cs := connect(t)
@@ -210,28 +240,31 @@ func TestArrayFiltersAreNamedInThePlural(t *testing.T) {
 	}
 }
 
-// TestSearchSortValidation mirrors the CLI and REST rules: a search query
-// combined with a sort mode is an error (not silently ignored), an
-// unknown sort is rejected — for verified_at, usage, and failed — and
-// omitting both query and sort is a tool error, not a Postgres 500.
-func TestSearchSortValidation(t *testing.T) {
+// TestSortValidation mirrors the CLI and REST rules: an unknown sort is
+// rejected rather than guessed at, an empty search is a tool error and
+// not a Postgres 500, and a listing with neither a feed nor a reverse
+// lookup says which of the two it needed.
+//
+// The combination that used to be checked here — a query beside a sort —
+// cannot be expressed any more: the tools that take them are different
+// tools (design doc 0096), and the schema refuses it a step earlier.
+func TestSortValidation(t *testing.T) {
 	cs := connect(t)
 	cases := []struct {
 		name       string
+		tool       string
 		args       map[string]any
 		wantSubstr string
 	}{
-		{"verified_at with query", map[string]any{"sort": "verified_at", "query": "revenue"}, "cannot be combined"},
-		{"usage with query", map[string]any{"sort": "usage", "query": "revenue"}, "cannot be combined"},
-		{"failed with query", map[string]any{"sort": "failed", "query": "revenue"}, "cannot be combined"},
-		{"invalid sort", map[string]any{"sort": "created_at"}, "invalid sort"},
-		{"neither query nor sort", map[string]any{}, "needs a query"},
-		{"whitespace query", map[string]any{"query": " \t"}, "needs a query"},
+		{"invalid sort", "list_concepts", map[string]any{"sort": "created_at"}, "invalid sort"},
+		{"neither feed nor source", "list_concepts", map[string]any{}, "needs sort"},
+		{"empty query", "search_concepts", map[string]any{"query": ""}, "needs a query"},
+		{"whitespace query", "search_concepts", map[string]any{"query": " \t"}, "needs a query"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
-				Name: "search_concepts", Arguments: c.args,
+				Name: c.tool, Arguments: c.args,
 			})
 			if err != nil {
 				t.Fatalf("CallTool: %v", err)
@@ -635,18 +668,19 @@ func TestRequestActorFallsBackToContext(t *testing.T) {
 	}
 }
 
-// Both lookups design doc 0037 adds ride on search_concepts rather than
-// on new tools — tool count is a budget (0015 §2). An argument an agent
-// cannot see is an argument it will not use, so the schema has to carry
-// both, and the descriptions have to say what they match.
-func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
+// Both lookups design doc 0037 adds ride on list_concepts rather than on
+// tools of their own — tool count is a budget (0015 §2), and 0096 spent
+// one of it on the split and nothing else. An argument an agent cannot
+// see is an argument it will not use, so the schema has to carry both,
+// and the descriptions have to say what they match.
+func TestListToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
 	cs := connect(t)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
 	for _, tool := range res.Tools {
-		if tool.Name != "search_concepts" {
+		if tool.Name != "list_concepts" {
 			continue
 		}
 		raw, err := json.Marshal(tool.InputSchema)
@@ -663,7 +697,7 @@ func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
 		}
 		src, ok := schema.Properties["source"]
 		if !ok {
-			t.Fatal("search_concepts has no source argument")
+			t.Fatal("list_concepts has no source argument")
 		}
 		if !strings.Contains(src.Description, "sources[].resource") {
 			t.Errorf("the source argument does not say what it matches: %q", src.Description)
@@ -678,7 +712,7 @@ func TestSearchToolOffersTheStaleFeedAndSourceLookup(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("search_concepts is gone")
+	t.Fatal("list_concepts is gone")
 }
 
 // The listing modes live in one list so no surface can offer a value
@@ -835,14 +869,16 @@ func TestOneWriteFace(t *testing.T) {
 			t.Errorf("%s is back; the write face is put_concept", gone)
 		}
 	}
-	// The six the surface carries. delete_concept and get_concept_usage
+	// The seven the surface carries. delete_concept and get_concept_usage
 	// were the last two of the eight, and design doc 0076 took them off:
 	// deleting knowledge is a ruling, and this surface withholds even the
 	// reversible rulings; usage totals are what a curator reads, while the
-	// trust tier an agent acts on already rides on every hit.
+	// trust tier an agent acts on already rides on every hit. The seventh
+	// is list_concepts, which 0096 split off search_concepts — the only
+	// tool this surface has added since, and it bought no capability.
 	want := []string{
-		"search_concepts", "get_context", "get_concept", "put_concept", "report_outcome",
-		"get_file",
+		"search_concepts", "list_concepts", "get_context", "get_concept", "put_concept",
+		"report_outcome", "get_file",
 	}
 	for _, w := range want {
 		if !names[w] {

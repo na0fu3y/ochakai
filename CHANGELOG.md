@@ -368,6 +368,28 @@ last entry.
 
 ### Changed
 
+- **BREAKING (MCP): `list_concepts` splits off `search_concepts`, which
+  no longer takes `sort` or `cursor`.** A call that passed either is now
+  refused — by schema validation, before any handler runs, which is the
+  point. One tool held two capabilities and one schema could not say so:
+  `query` was required unless `sort` was set, `cursor` was refused unless
+  it was, and `limit` meant 10/50 one way and 100/1000 the other. None of
+  that is expressible in JSON Schema, so all of it lived in prose an
+  agent had to obey unaided, and getting it wrong cost a turn to
+  discover. Each tool now states its own rules in its own shape: search
+  takes a query and ranks, list takes a feed and pages.
+
+  **No capability is added, and the price is stated rather than
+  absorbed.** The seven filters are on both tools, so the resident bytes
+  every connected agent holds go 11,829 → 13,433 (+13.6%) and
+  `MCP-BYTES` rises 12,000 → 13,500 — the first time that ceiling has
+  moved, which is what it exists to make visible. There is no grace
+  window: a retired *name* is forwarded for one release (design doc
+  0088), and what changed here is arguments
+  ([#530](https://github.com/na0fu3y/ochakai/issues/530),
+  [#539](https://github.com/na0fu3y/ochakai/issues/539), design doc
+  0096).
+
 - **`go install` works again on a toolchain that is not the newest
   patch.** `go.mod` named `go 1.26.5`, and a `go` directive naming a
   patch makes that patch a *requirement*: a CI pinned with

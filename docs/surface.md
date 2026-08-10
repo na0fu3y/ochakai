@@ -76,8 +76,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - REST: 11
 - PARAM: 19
 - HEADER: 13
-- MCP: 6
-- MCP-BYTES: 12000
+- MCP: 7
+- MCP-BYTES: 13500
 - MCP-BYTES-SLACK: 500
 - CLI: 25
 - FLAG: 29
@@ -294,11 +294,12 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 - `Ochakai-Unchanged`
 - `X-Content-Type-Options`
 
-## MCP (6)
+## MCP (7)
 
 - `get_concept`
 - `get_context`
 - `get_file`
+- `list_concepts`
 - `put_concept`
 - `report_outcome`
 - `search_concepts`
@@ -337,8 +338,8 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 上限は `MCP-BYTES`。数えるのは実セッションの `tools/list` が返すバイト
 (名前・説明・入力スキーマ)と instructions の和で、16,704 → 11,733 が
 最初の削減、能力もツールも落ちていない。残る大きい二つは意図したもの
-である — `domain.TypesGuide()` の 1,319 バイトと、`search_concepts` と
-`get_context` が同じフィルタの語を別々のスキーマに持つぶん。
+である — `domain.TypesGuide()` の 1,319 バイトと、読みのツールが同じ
+フィルタの語をそれぞれのスキーマに持つぶん。
 
 8 本のまま、もう一度。PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
 (design doc [0064](design/0064-rest-stops-at-api-v1.md)) が
@@ -356,6 +357,16 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 **OKF も動かない**: SPEC §5.3 の trust は `verified` から導出される段で
 あって frontmatter のキーではなく、応答が運ぶ `trust`(段は一つなので
 単数)も三つの段の綴りもそのままである。
+
+6 → 7 は [0096](design/0096-a-listing-is-not-a-search-here-either.md) で、
+`search_concepts` から `list_concepts` を割った。**能力は一つも増えて
+いない** — 割ったのは、一つのスキーマが「`query` は `sort` が無いとき
+必須」「`cursor` は一覧だけ」「`limit` の既定は二通り」を散文でしか
+言えなかったからで、いまはどちらのツールも自分の規則を形で言う。
+**代金は隠せる場所が無い**: フィルタ七つが二重になり、常駐は
+11,829 → 13,433 バイト、`MCP-BYTES` は 12,000 → 13,500 に上がった。
+この面で天井が上がったのは初めてで、`MCP-BYTES` はそれを言うために
+在る。
 
 ## CLI (25)
 
