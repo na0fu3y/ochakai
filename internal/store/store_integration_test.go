@@ -728,7 +728,7 @@ func TestIntegrationMove(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.PutAttachment(ctx, "it-move-src/metric", "chart.png", "image/png", "", []byte("png"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, "it-move-src/metric/chart.png", "image/png", []byte("png"), actor); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.UpsertEmbedding(ctx, "it-move-src/metric", "test-model", []float32{1, 0, 0, 0}, false); err != nil {
@@ -846,8 +846,8 @@ func TestIntegrationMove(t *testing.T) {
 
 	// Leave no live attachment behind: its bytes exist only in this
 	// test's fake blob store, and export scans every live attachment.
-	if err := s.DeleteAttachment(ctx, "it-move-dst/metric", "chart.png", actor); err != nil {
-		t.Fatalf("cleanup DeleteAttachment: %v", err)
+	if err := s.DeleteFile(ctx, "it-move-dst/metric/chart.png", actor); err != nil {
+		t.Fatalf("cleanup DeleteFile: %v", err)
 	}
 }
 
@@ -955,8 +955,8 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	}
 }
 
-// Attachments (design doc 0008): content-addressed blobs, replace-by-name,
-// revisions on attach/detach, and disappearance with the soft-deleted entry.
+// Attachments (design doc 0008): content-addressed blobs, replace-by-path,
+// and disappearance from the entry's listing with the soft-deleted entry.
 func TestIntegrationAttachments(t *testing.T) {
 	dbURL := testdb.URL(t)
 	lockLiveAttachments(t, dbURL)
@@ -1002,26 +1002,27 @@ func TestIntegrationAttachments(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	path := k.ID + "/weekly.png"
 	png := append([]byte("\x89PNG\r\n\x1a\n"), []byte("fake image bytes")...)
-	att, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png, actor)
+	att, _, err := s.PutFile(ctx, path, "image/png", png, actor)
 	if err != nil {
-		t.Fatalf("PutAttachment: %v", err)
+		t.Fatalf("PutFile: %v", err)
 	}
 	if att.Size != int64(len(png)) || att.SHA256 == "" {
 		t.Errorf("attachment metadata wrong: %+v", att)
 	}
 
-	got, data, err := s.GetAttachment(ctx, k.ID, "weekly.png")
+	got, data, err := s.GetFile(ctx, path)
 	if err != nil {
-		t.Fatalf("GetAttachment: %v", err)
+		t.Fatalf("GetFile: %v", err)
 	}
 	if string(data) != string(png) || got.MediaType != "image/png" {
 		t.Errorf("bytes did not round-trip: %+v", got)
 	}
 
-	// Replace by name: same entry, same name, new bytes.
+	// Replace by path: same entry, same path, new bytes.
 	png2 := append([]byte("\x89PNG\r\n\x1a\n"), []byte("updated bytes")...)
-	if _, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png2, actor); err != nil {
+	if _, _, err := s.PutFile(ctx, path, "image/png", png2, actor); err != nil {
 		t.Fatal(err)
 	}
 	list, err := s.ListAttachments(ctx, k.ID)
@@ -1043,38 +1044,24 @@ func TestIntegrationAttachments(t *testing.T) {
 		t.Errorf("blob count = %d, want 2", blobs)
 	}
 
-	// Attach/detach are revisions on the entry.
-	if err := s.DeleteAttachment(ctx, k.ID, "weekly.png", actor); err != nil {
-		t.Fatalf("DeleteAttachment: %v", err)
+	if err := s.DeleteFile(ctx, path, actor); err != nil {
+		t.Fatalf("DeleteFile: %v", err)
 	}
-	var changes []string
-	rows, err := s.pool.Query(ctx,
-		`SELECT change FROM knowledge_revision WHERE id=$1 ORDER BY rev`, k.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			t.Fatal(err)
-		}
-		changes = append(changes, c)
-	}
-	want := []string{"create", "add_file", "add_file", "remove_file"}
-	if len(changes) != len(want) {
-		t.Fatalf("revisions = %v, want %v", changes, want)
+	if list, err := s.ListAttachments(ctx, k.ID); err != nil || len(list) != 0 {
+		t.Errorf("attachments after delete = %+v, %v, want none", list, err)
 	}
 
-	// Attachments of soft-deleted entries are unreachable.
-	if _, err := s.PutAttachment(ctx, k.ID, "weekly.png", "image/png", "", png, actor); err != nil {
+	// Attachments of soft-deleted entries drop out of the entry's listing,
+	// even though the file object itself is untouched (0046 §3.3: it is
+	// the entry's namespace that stops claiming it).
+	if _, _, err := s.PutFile(ctx, path, "image/png", png, actor); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SoftDelete(ctx, k.ID, actor, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.GetAttachment(ctx, k.ID, "weekly.png"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("attachment of a deleted entry = %v, want ErrNotFound", err)
+	if list, err := s.ListAttachments(ctx, k.ID); err != nil || len(list) != 0 {
+		t.Errorf("attachments of a deleted entry = %+v, %v, want none", list, err)
 	}
 }
 
@@ -1237,7 +1224,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 		}
 	}
 
-	if _, err := s.PutAttachment(ctx, id, "seeds.txt", "text/plain", "", []byte("x"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, id+"/seeds.txt", "text/plain", []byte("x"), actor); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(searchText(id), "seeds.txt") {
@@ -1255,7 +1242,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 		t.Errorf("move dropped the attachment name from search_text: %q", after)
 	}
 
-	if err := s.DeleteAttachment(ctx, moved, "seeds.txt", actor); err != nil {
+	if err := s.DeleteFile(ctx, moved+"/seeds.txt", actor); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(searchText(moved), "seeds.txt") {
@@ -3066,11 +3053,10 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PutAttachment(ctx, id, "chart.png", "image/png", "", []byte("png"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, id+"/chart.png", "image/png", []byte("png"), actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PutAttachment(ctx, id, "orders.csv", "text/plain",
-		base+"/seeds/orders.csv", []byte("a,b\n"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, base+"/seeds/orders.csv", "text/plain", []byte("a,b\n"), actor); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3130,7 +3116,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 	}
 
 	// Detaching takes the object with it, and the entry stops naming it.
-	if err := s.DeleteAttachment(ctx, id, "orders.csv", actor); err != nil {
+	if err := s.DeleteFile(ctx, base+"/seeds/orders.csv", actor); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.pool.QueryRow(ctx,
@@ -3290,7 +3276,7 @@ func TestIntegrationAFileReportsItsPath(t *testing.T) {
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PutAttachment(ctx, id, "chart.png", "image/png", "", []byte("png"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, id+"/chart.png", "image/png", []byte("png"), actor); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.PutFile(ctx, base+"/seeds/orders.csv", "text/plain", []byte("a,b\n"), actor); err != nil {

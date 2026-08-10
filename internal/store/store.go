@@ -596,19 +596,6 @@ func (s *Store) GetTombstone(ctx context.Context, id string) (*domain.Knowledge,
 	return s.getOne(ctx, id, true)
 }
 
-// ListLinkingToDocs returns live entries whose links point at id, most
-// recently updated first, with their documents. It is the context pack's
-// reverse edge: a pack delivers its companions as documents, and a
-// companion read without one would come back rendered while the entries
-// beside it came back as written (design doc 0046 §2.2).
-//
-// The reverse lookup a caller can ask for is the LinksTo filter instead
-// — a row there is a projection, and the document would be paid for and
-// dropped.
-func (s *Store) ListLinkingToDocs(ctx context.Context, id string, limit int) ([]domain.Knowledge, error) {
-	return s.listLinkingTo(ctx, id, limit, knowledgeSelectDoc, scanKnowledgeDoc)
-}
-
 // StatementCount reports how many times a statement has taken a
 // connection from the pool since the store opened — one per query, and
 // one per transaction however many statements it runs.
@@ -650,9 +637,17 @@ func (s *Store) GetManyDocs(ctx context.Context, ids []string) (map[string]*doma
 	return out, nil
 }
 
-// LinkersByTargetDocs answers ListLinkingToDocs for several ids at once,
-// grouped by the id linked at and each group ordered and capped exactly
-// as the single-id form is.
+// LinkersByTargetDocs returns, for several ids at once, the live entries
+// whose links point at each one, most recently updated first, with their
+// documents — the context pack's reverse edge: a pack delivers its
+// companions as documents, and a companion read without one would come
+// back rendered while the entries beside it came back as written (design
+// doc 0046 §2.2). Grouped by the id linked at, each group ordered and
+// capped as a single-id lookup would be.
+//
+// The reverse lookup a caller can ask for directly is the LinksTo filter
+// instead — a row there is a projection, and the document would be paid
+// for and dropped.
 //
 // The lateral join is what makes it the same answer rather than a
 // cheaper approximation: a union ordered globally would let one id's
@@ -701,21 +696,6 @@ func scanKnowledgeDocForTarget(row pgx.CollectableRow) (targetedKnowledge, error
 		return t, err
 	}
 	return t, finish()
-}
-
-func (s *Store) listLinkingTo(ctx context.Context, id string, limit int, cols string,
-	scan func(pgx.CollectableRow) (domain.Knowledge, error),
-) ([]domain.Knowledge, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+cols+` FROM object
-		 WHERE deleted_at IS NULL AND links @> $1
-		 ORDER BY updated_at DESC LIMIT $2`,
-		fmt.Sprintf(`[{"target": %q}]`, id),
-		limit)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scan)
 }
 
 // Create inserts a new entry. A live entry with the same id is
@@ -1090,8 +1070,8 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, i
 // single call erases history, and the entry stays recoverable (Create
 // revives it) right up until someone deliberately asks for it to be gone.
 //
-// Attachment bytes are not touched here, as DeleteAttachment does not
-// touch them: blobs are content-addressed and shared between entries, so
+// Attachment bytes are not touched here, as DeleteFile does not touch
+// them: blobs are content-addressed and shared between entries, so
 // reclaiming them cannot be a side effect of one purge. SweepBlobs
 // (sweep.go) is the global answer, and the service runs it after this
 // commit — the bytes' erasure is part of what a purge promises (design

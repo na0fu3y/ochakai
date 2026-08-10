@@ -27,13 +27,13 @@ import (
 // the file bytes in the bucket forever.
 
 // blobLockID keys the advisory lock the sweep and the file writers
-// share. The race it closes: PutFile and PutAttachment upload bytes
-// create-only and read "already there" as success, so a sweep running
-// between that upload and the commit of the row referencing it would
-// erase bytes a row is about to name. Writers therefore hold the lock
-// shared (they can run beside each other) for the span from upload to
-// commit, and the sweep holds it exclusive. The value is arbitrary and
-// only has to be one thing in one place.
+// share. The race it closes: PutFile uploads bytes create-only and
+// reads "already there" as success, so a sweep running between that
+// upload and the commit of the row referencing it would erase bytes a
+// row is about to name. Writers therefore hold the lock shared (they
+// can run beside each other) for the span from upload to commit, and
+// the sweep holds it exclusive. The value is arbitrary and only has to
+// be one thing in one place.
 const blobLockID int64 = 0xb10b // "blob", squinting
 
 // lockBlobsShared marks tx as a writer the sweep must not run beside.

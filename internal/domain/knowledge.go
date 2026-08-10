@@ -444,8 +444,6 @@ func ValidOutcome(o string) bool {
 // ruling behind at all.
 var Rulings = []string{"verified", "rejected", "withdrawn"}
 
-func ValidRuling(r string) bool { return slices.Contains(Rulings, r) }
-
 // Changes are the values a revision's Change carries — what the product
 // calls each kind of write in an entry's history. They are the verb form
 // of what happened; a ruling posted as "withdrawn" is recorded here as
@@ -688,7 +686,9 @@ type Link struct {
 
 // DisplayText returns how the link should read: its anchor text when the
 // body gave one, else the target's last segment — the same "filename is
-// the name" fallback titles use (design doc 0022).
+// the name" fallback titles use (design doc 0022). No surface calls this
+// yet; it exists so a derived link is never rendered as nothing (see the
+// fuzz invariant in fuzz_test.go).
 func (l Link) DisplayText() string {
 	if l.Text != "" {
 		return l.Text
