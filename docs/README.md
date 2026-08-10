@@ -27,8 +27,9 @@ otherwise have to hunt for. Not a translation; a way in.
   AI アナリスト製品に内蔵された検証済みクエリストア、MCP サーバー付きの
   markdown vault。ochakai が劣る場面と、そのとき何を選ぶべきかも含む。
 - [互換性とサポート](compatibility.md) — REST は `/api/v1` で凍結済み。
-  MCP・CLI・保存形式はまだ 0.x のままで不安定、非推奨化の猶予期間も無く、
-  サポートされるのは最新リリースのみ。ochakai の上に何かを組む前に読む。
+  MCP・CLI・保存形式はまだ 0.x のままで不安定、名前の猶予期間は一リリース
+  だけ、サポートされるのは最新リリースのみ。ochakai の上に何かを組む前に
+  読む。
 - [ROADMAP](../ROADMAP.md) — いま取り組んでいること、そして意図して
   断っていること。
 - [CHANGELOG](../CHANGELOG.md) — リリース間で何が変わったか。
@@ -47,7 +48,7 @@ otherwise have to hunt for. Not a translation; a way in.
   `ochakai <command> -h` をそのまま出力したもので、両者が食い違えば
   テストが落ちる。バイナリを持つ前から読め、持った後も古びない。
 - [MCP クライアントを繋ぐ](guides/mcp-clients.md) — エージェントに見える
-  六つのツール、そしてクライアントごとの URL か `mcp-stdio` ブリッジ、
+  七つのツール、そしてクライアントごとの URL か `mcp-stdio` ブリッジ、
   各クライアントが読む設定ファイル。
 - [最初のカタログを作る](../examples/bigquery-catalog) — BigQuery の
   テーブルを concept として取り込む day-one の手順、それを走らせる job、

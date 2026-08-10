@@ -798,13 +798,13 @@ Two pieces of bookkeeping, both easy to forget:
   take the markers off this page's own outbound links** to pages that are
   already Japanese: between two Japanese pages the mark says nothing, and
   the ones left behind are what a reader learns to stop trusting.
-- **`DOC-LINES` usually needs nothing.** The ceiling moves in hundreds
-  (`DOC-LINES-SLACK: 100`), so most pages land inside the block the
-  manual is already in and the number is not touched — which is what
+- **`DOC-LINES` usually needs nothing.** The ceiling moves in fives of
+  hundreds (`DOC-LINES-SLACK: 500`), so most pages land inside the block
+  the manual is already in and the number is not touched — which is what
   keeps nine translations from all conflicting on one line. Run
-  `scripts/check core`; if it fails, round the ceiling to the next
-  hundred and write the paragraph, because crossing a hundred is the
-  moment the manual actually got bigger.
+  `scripts/check core`; if it fails, round the ceiling to the next five
+  hundred and write the paragraph, because crossing that grid line is
+  the moment the manual actually got bigger.
 
   Expect it to grow rather than shrink where it moves at all. Japanese
   puts no spaces between words, so a line was expected to carry more; a
