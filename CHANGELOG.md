@@ -60,6 +60,122 @@ last entry.
   already sending ([#538](https://github.com/na0fu3y/ochakai/issues/538),
   design doc 0098).
 
+- **The bundled UI drew footnotes as characters, on a bundle it ships
+  with.** `sources[].id` exists so a footnote in a concept's body can
+  cite one of its sources — `docs/architecture.md` says so, and
+  `examples/demo`'s own `metrics/revenue` is written that way — so the
+  first concept most readers open showed `systems.[^rev-policy]` in the
+  prose and the definition line as a stray paragraph. The server
+  recommended a notation its own web UI turned into litter. Footnotes
+  render as footnotes now: a numbered marker, a list at the foot in the
+  order the prose refers to them, and a link back. A reference nothing
+  defines is left as the writer's text, the way an unresolvable link
+  already is, and a definition nothing refers to puts no number in the
+  margin.
+
+  Three more constructs came with it, because a renderer that drops what
+  a writer wrote is the same defect each time: **headings below h3**,
+  **block quotes**, and **nested lists** — which were flattened, so a
+  runbook's sub-steps read as steps.
+
+- **Following a footnote left the concept.** The router treated every
+  hash as a route, so `#fn-…` — an anchor inside the document being read
+  — resolved to no route and landed the reader on the home page. Routes
+  begin `#/`; anything else is the browser's to scroll to
+  ([#536](https://github.com/na0fu3y/ochakai/issues/536)).
+
+- **Deleting a file at a bundle path left its vector behind, still
+  ranking the concept that showed it.** `DELETE` on a bundle path
+  removed the object and its bytes but nothing dropped the embedding, so
+  semantic search went on returning the concept for content that was no
+  longer there — and no surface said why. Replacing the bytes had the
+  narrower version of the same problem: the row was overwritten only if
+  the re-embed that followed the write succeeded, so a provider outage
+  or a media type the model declines left the old vector describing
+  bytes that are gone. Both writes now drop the vector in their own
+  transaction, which is what made the fix a line rather than a lookup:
+  the vector is at the path being written.
+
+- **`ochakai reembed` reported work outstanding forever on a bundle
+  holding one zip file.** Anything not embeddable — an archive, a
+  parquet file, a font, and every image on a text-only embedder — sat in
+  the pending queue permanently, because nothing would ever write it a
+  vector. Every pass ended non-zero saying *"N items still missing; see
+  the server log for why they failed"*, and the server log said nothing,
+  since declining a file the model does not take is deliberately silent.
+  The queue now holds only the media types this deployment's model can
+  be handed.
+
+- **The requirements said `pg_trgm` as though search used it.** It has
+  not since migration 0036 moved the lexical index to a `tsvector`
+  column: a virgin database ends up with the extension installed and
+  zero trigram indexes, because 0001 and 0016 build one and 0036 drops
+  it. So the extension is still required — the schema replays from its
+  first migration and those two need the operator class — but for the
+  replay and for nothing else, and the README, the configuration page
+  and the Cloud Run bootstrap SQL now say which. It read worse after the
+  README started explaining that Japanese search is two-character
+  lexemes: three lines later, `pg_trgm`.
+
+- **The web UI's editor overwrote whatever was saved while it was open.**
+  It PUT the document with no precondition, so two curators on the same
+  concept — or one who left a tab open over lunch — produced one winner
+  and silently lost the other's work. The REST API has had `If-Match`
+  since [0030](docs/design/0030-optimistic-locking.md) and the CLI sends
+  it; this page was the one client that did not — on the surface this
+  product says only a person can operate, losing the one thing an agent
+  cannot redraft. The editor saves against the version it opened at now,
+  and a save that would have overwritten stops with what happened and the
+  text still in the box: the answer is to read what the other person
+  wrote, not to retry. The version is the ETag the read carried, not the
+  content hash rebuilt from the body — the header is the validator, and a
+  page reassembling it would be a second opinion about quoting that
+  nothing checks.
+
+- **Archiving a bundle that holds files, on a deployment with no bucket,
+  answered `internal error`.** The store refuses that archive on purpose
+  — one that silently omitted the files would be a backup missing what it
+  claims to carry — but the sentinel it raises never became a client
+  error, so the one endpoint that exists to *be* a backup answered 500
+  with the reason left in the server's log. It is 501 `unsupported` now,
+  naming `OCHAKAI_GCS_BUCKET`, which is what design doc 0013 says a
+  missing bucket is and what every path through the service already
+  returned. An operator meets this by removing the bucket from a database
+  that has file rows. `?files=false` asks for the concepts alone and
+  still succeeds. No contract change: the address already declared 501
+  ([#546](https://github.com/na0fu3y/ochakai/issues/546)).
+
+- **The web UI read the error sentence to decide what to offer.** The
+  editor decided whether to show *"view the existing concept"* by
+  matching `/already exists/` against the message — the half the
+  compatibility policy says may be reworded in any release, and which
+  the server has since rewritten twice, most recently to name what holds
+  the id and what to do about it. The condition has been a code on the
+  wire since 0.20.0's error envelope; ochakai's own client was the one
+  integrator still not reading it, which is the case that made the code
+  worth having. `api()` now carries `code` up to its callers, and a test
+  reads the page back: every code a branch names has to be one the
+  product can actually say, and the shapes prose-matching returns in fail
+  the build ([#534](https://github.com/na0fu3y/ochakai/issues/534)).
+
+- **A purge now erases the file bytes too.** Purge destroyed every row
+  keyed by a concept's id and left the bytes behind its files in the
+  bucket forever — the store said so in a comment and told the operator
+  to write the sweep themselves. It contradicted what a purge promises
+  ([0031](docs/design/0031-purge.md)) and the first of the eight
+  conditions ([docs/surface.md](docs/surface.md): the asset leaves whole,
+  returns whole, and is deleted on request), which mattered most for
+  exactly the files an erasure request is about. Blobs are
+  content-addressed and shared, so no single delete can reclaim them as
+  its own side effect: the store now answers the global question
+  instead, deleting every blob no object and no attachment references
+  any more, and the service runs that sweep after a purge and after a
+  file delete. Bytes go before the row that names them, so an
+  interrupted sweep finishes on the next run; writers and the sweep
+  share an advisory lock, so bytes uploaded for a row not yet committed
+  are never swept out from under it. No migration, and no new surface —
+  `purge` and `DELETE` mean what they already said.
+
 ### Added
 
 - **A write now says what it did in the body, not only in a header.** The
@@ -472,126 +588,6 @@ last entry.
   to a `toolchain` line, where it is the preference it was meant to be —
   the local setting may decline it, and a toolchain free to fetch still
   uses 1.26.5 ([#535](https://github.com/na0fu3y/ochakai/issues/535)).
-
-### Fixed
-
-- **The bundled UI drew footnotes as characters, on a bundle it ships
-  with.** `sources[].id` exists so a footnote in a concept's body can
-  cite one of its sources — `docs/architecture.md` says so, and
-  `examples/demo`'s own `metrics/revenue` is written that way — so the
-  first concept most readers open showed `systems.[^rev-policy]` in the
-  prose and the definition line as a stray paragraph. The server
-  recommended a notation its own web UI turned into litter. Footnotes
-  render as footnotes now: a numbered marker, a list at the foot in the
-  order the prose refers to them, and a link back. A reference nothing
-  defines is left as the writer's text, the way an unresolvable link
-  already is, and a definition nothing refers to puts no number in the
-  margin.
-
-  Three more constructs came with it, because a renderer that drops what
-  a writer wrote is the same defect each time: **headings below h3**,
-  **block quotes**, and **nested lists** — which were flattened, so a
-  runbook's sub-steps read as steps.
-
-- **Following a footnote left the concept.** The router treated every
-  hash as a route, so `#fn-…` — an anchor inside the document being read
-  — resolved to no route and landed the reader on the home page. Routes
-  begin `#/`; anything else is the browser's to scroll to
-  ([#536](https://github.com/na0fu3y/ochakai/issues/536)).
-
-- **Deleting a file at a bundle path left its vector behind, still
-  ranking the concept that showed it.** `DELETE` on a bundle path
-  removed the object and its bytes but nothing dropped the embedding, so
-  semantic search went on returning the concept for content that was no
-  longer there — and no surface said why. Replacing the bytes had the
-  narrower version of the same problem: the row was overwritten only if
-  the re-embed that followed the write succeeded, so a provider outage
-  or a media type the model declines left the old vector describing
-  bytes that are gone. Both writes now drop the vector in their own
-  transaction, which is what made the fix a line rather than a lookup:
-  the vector is at the path being written.
-
-- **`ochakai reembed` reported work outstanding forever on a bundle
-  holding one zip file.** Anything not embeddable — an archive, a
-  parquet file, a font, and every image on a text-only embedder — sat in
-  the pending queue permanently, because nothing would ever write it a
-  vector. Every pass ended non-zero saying *"N items still missing; see
-  the server log for why they failed"*, and the server log said nothing,
-  since declining a file the model does not take is deliberately silent.
-  The queue now holds only the media types this deployment's model can
-  be handed.
-
-- **The requirements said `pg_trgm` as though search used it.** It has
-  not since migration 0036 moved the lexical index to a `tsvector`
-  column: a virgin database ends up with the extension installed and
-  zero trigram indexes, because 0001 and 0016 build one and 0036 drops
-  it. So the extension is still required — the schema replays from its
-  first migration and those two need the operator class — but for the
-  replay and for nothing else, and the README, the configuration page
-  and the Cloud Run bootstrap SQL now say which. It read worse after the
-  README started explaining that Japanese search is two-character
-  lexemes: three lines later, `pg_trgm`.
-
-- **The web UI's editor overwrote whatever was saved while it was open.**
-  It PUT the document with no precondition, so two curators on the same
-  concept — or one who left a tab open over lunch — produced one winner
-  and silently lost the other's work. The REST API has had `If-Match`
-  since [0030](docs/design/0030-optimistic-locking.md) and the CLI sends
-  it; this page was the one client that did not — on the surface this
-  product says only a person can operate, losing the one thing an agent
-  cannot redraft. The editor saves against the version it opened at now,
-  and a save that would have overwritten stops with what happened and the
-  text still in the box: the answer is to read what the other person
-  wrote, not to retry. The version is the ETag the read carried, not the
-  content hash rebuilt from the body — the header is the validator, and a
-  page reassembling it would be a second opinion about quoting that
-  nothing checks.
-
-- **Archiving a bundle that holds files, on a deployment with no bucket,
-  answered `internal error`.** The store refuses that archive on purpose
-  — one that silently omitted the files would be a backup missing what it
-  claims to carry — but the sentinel it raises never became a client
-  error, so the one endpoint that exists to *be* a backup answered 500
-  with the reason left in the server's log. It is 501 `unsupported` now,
-  naming `OCHAKAI_GCS_BUCKET`, which is what design doc 0013 says a
-  missing bucket is and what every path through the service already
-  returned. An operator meets this by removing the bucket from a database
-  that has file rows. `?files=false` asks for the concepts alone and
-  still succeeds. No contract change: the address already declared 501
-  ([#546](https://github.com/na0fu3y/ochakai/issues/546)).
-
-- **The web UI read the error sentence to decide what to offer.** The
-  editor decided whether to show *"view the existing concept"* by
-  matching `/already exists/` against the message — the half the
-  compatibility policy says may be reworded in any release, and which
-  the server has since rewritten twice, most recently to name what holds
-  the id and what to do about it. The condition has been a code on the
-  wire since 0.20.0's error envelope; ochakai's own client was the one
-  integrator still not reading it, which is the case that made the code
-  worth having. `api()` now carries `code` up to its callers, and a test
-  reads the page back: every code a branch names has to be one the
-  product can actually say, and the shapes prose-matching returns in fail
-  the build ([#534](https://github.com/na0fu3y/ochakai/issues/534)).
-
-- **A purge now erases the file bytes too.** Purge destroyed every row
-  keyed by a concept's id and left the bytes behind its files in the
-  bucket forever — the store said so in a comment and told the operator
-  to write the sweep themselves. It contradicted what a purge promises
-  ([0031](docs/design/0031-purge.md)) and the first of the eight
-  conditions ([docs/surface.md](docs/surface.md): the asset leaves whole,
-  returns whole, and is deleted on request), which mattered most for
-  exactly the files an erasure request is about. Blobs are
-  content-addressed and shared, so no single delete can reclaim them as
-  its own side effect: the store now answers the global question
-  instead, deleting every blob no object and no attachment references
-  any more, and the service runs that sweep after a purge and after a
-  file delete. Bytes go before the row that names them, so an
-  interrupted sweep finishes on the next run; writers and the sweep
-  share an advisory lock, so bytes uploaded for a row not yet committed
-  are never swept out from under it. No migration, and no new surface —
-  `purge` and `DELETE` mean what they already said.
-
-### Changed
 
 - **BREAKING (MCP, REST semantics): `get_context`'s byte budget now
   governs the whole response, `hits` included.** The ranking rode outside
