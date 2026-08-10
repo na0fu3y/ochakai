@@ -280,6 +280,17 @@ last entry.
 
 ### Fixed
 
+- **The requirements said `pg_trgm` as though search used it.** It has
+  not since migration 0036 moved the lexical index to a `tsvector`
+  column: a virgin database ends up with the extension installed and
+  zero trigram indexes, because 0001 and 0016 build one and 0036 drops
+  it. So the extension is still required — the schema replays from its
+  first migration and those two need the operator class — but for the
+  replay and for nothing else, and the README, the configuration page
+  and the Cloud Run bootstrap SQL now say which. It read worse after the
+  README started explaining that Japanese search is two-character
+  lexemes: three lines later, `pg_trgm`.
+
 - **The web UI's editor overwrote whatever was saved while it was open.**
   It PUT the document with no precondition, so two curators on the same
   concept — or one who left a tab open over lunch — produced one winner

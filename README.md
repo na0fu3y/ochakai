@@ -279,8 +279,13 @@ ochakai loses, and says who should pick something else.
   keeping a non-GCP path alive meant keeping a second authentication path
   alive with it, and that is the one thing secret-zero cannot afford.
   What is portable is the knowledge, not the runtime.
-- **PostgreSQL 17 with `pg_trgm`**; `vector` (pgvector) as well where
-  semantic search is on, which on Google Cloud is the default.
+- **PostgreSQL 17, able to install `pg_trgm`**. Nothing queries it — the
+  lexical index has been a `tsvector` column since the two-character
+  windows above replaced trigrams — but the schema replays from its first
+  migration, and two of those build a trigram index that a later one
+  drops. It stays a requirement for that, and for nothing else. `vector`
+  (pgvector) as well where semantic search is on, which on Google Cloud
+  is the default.
 - **No authorization**, as above. Deciding who may reach a deployment is
   Cloud Run IAM's job.
 
