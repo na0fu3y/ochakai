@@ -1,30 +1,35 @@
 ---
 type: Skill
 title: Run a Python computation as a scheduled job
-description: How to execute an Attested Computation with runtime python here — the identity it runs as, the roles it needs, and what a run has to bring back
+description: How to execute an Attested Computation with runtime python here — the identity it runs as, what a run has to bring back, and where that differs between the jobs that name this as their executor
 tags: [python, executor, cloud-run, runbook]
 generated: { by: human:na0fu3y, at: 2026-07-27T09:00:00Z }
 status: draft
 ---
 
 The procedure the `runtime: python` entries in this bundle name as their
-`executor`. There is one so far:
-[sync the BigQuery catalog](/jobs/sync-bigquery-catalog.md).
+`executor`. Two so far, and they diverge everywhere the second one talks
+to nothing:
+[sync the BigQuery catalog](/jobs/sync-bigquery-catalog.md) calls the
+ochakai REST API itself and hands its receipt to an attester;
+[draft golden queries from job history](/jobs/draft-from-query-history.md)
+writes an OKF bundle to stdout for you to pipe into `ochakai import -`, so
+it needs no ID token, no IAM beyond what you already used to run the
+BigQuery query yourself, and its receipt goes to stderr because stdout is
+the bundle.
 
-## Run it
+## Run it (both jobs)
 
-1. Take the file the entry's `computation` names — for the one above,
-   `sync-bigquery-catalog.py`, which travels with it as an attachment —
-   **verbatim**. Do not add a filter, a dataset, or a field. A rewritten
-   script is a different computation.
-2. Pass every entry in `parameters` as the matching `--flag`. `datasets`
-   takes several values; `dry_run` prints the documents instead of writing
-   them, which is how you check a change before it touches the base.
-3. Run the *scheduled* job as a service account: provenance should say a
-   job wrote these entries, because a job did. Running it by hand — day
-   one, a backfill, the dataset you need refreshed this morning — is done
-   as yourself. A person's own ADC cannot mint the ID token a private
-   Cloud Run service wants, so bring one in:
+1. Take the file the entry's `computation` names — it travels with the
+   entry as an attachment — **verbatim**. Do not add a filter, a dataset,
+   or a field. A rewritten script is a different computation.
+2. Pass every entry in `parameters` as the matching `--flag`.
+3. Identity depends on which job. For `sync-bigquery-catalog`: run the
+   *scheduled* job as a service account, so provenance says a job wrote
+   these entries, because a job did. Running it by hand — day one, a
+   backfill, the dataset you need refreshed this morning — is done as
+   yourself; a person's own ADC cannot mint the ID token a private Cloud
+   Run service wants, so bring one in:
 
    ```sh
    export OCHAKAI_ID_TOKEN=$(gcloud auth print-identity-token)
@@ -33,7 +38,14 @@ The procedure the `runtime: python` entries in this bundle name as their
    Provenance then names you, which is true; the `Ochakai-Producer` stamp
    on every write is what lets the next run — anyone's — recognize your
    run's entries as the projection's rather than skip them as a person's.
+
+   For `draft-from-query-history`: there is no identity to bring. It runs
+   entirely on rows you already queried under your own identity, and
+   writes nothing to ochakai itself — that happens afterward, when you
+   pipe its stdout into `ochakai import -`.
 4. Return the receipt (below).
+
+## `sync-bigquery-catalog`
 
 ```sh
 pip install google-cloud-bigquery google-auth requests
@@ -52,7 +64,7 @@ the listing and the read is `missing`, not `failed`, and does not turn
 the night red — deletion is a warehouse's ordinary day, and a schedule
 that cries wolf over it stops being believed.
 
-## What it needs, and what it must not have
+### What it needs, and what it must not have
 
 Everything is IAM. There is no token, no password, and nothing to rotate —
 which is the property to protect when you extend this.
@@ -68,7 +80,7 @@ Two things about the job history: the region has to match where the
 datasets live (`INFORMATION_SCHEMA.JOBS` is regional), and each run is a
 billed query — small, not free.
 
-## The receipt
+### The receipt
 
 Printed to stdout as one JSON object. Progress goes to stderr, so a
 scheduler can capture the receipt on its own. Return **exactly** the fields
@@ -95,13 +107,41 @@ receipt still has to name who ran, because the attester's provenance
 check is about whether the run was the one sanctioned, and entries from
 before the stamp existed are still recognized by account.
 
+## `draft-from-query-history`
+
+```sh
+bq query --format=json --nouse_legacy_sql '...' \
+  | python3 draft-from-query-history.py \
+  | ochakai import -
+```
+
+No dependency beyond the standard library, and nothing to install. It
+never calls BigQuery or ochakai on its own — the rows on stdin are yours
+to fetch, and the bundle on stdout is yours to import.
+
+### The receipt
+
+Printed to **stderr** as one JSON object, not stdout — stdout is the OKF
+bundle itself, and mixing the two would corrupt the tar.gz a scheduler or
+`ochakai import -` reads next. Return exactly the fields the entry's
+`executor.receipt` declares.
+
+| Field | Where it comes from |
+|---|---|
+| `jobs_read` | rows read from stdin |
+| `distinct_queries` | of those, how many distinct fingerprints — `SELECT`s only, comments, literals and whitespace ignored |
+| `drafted` | fingerprints that cleared `--min-runs` and `--min-users` and fit inside `--limit`, and so were written as drafts |
+
 ## Post-conditions
 
-Hand the receipt to the entry's `attester.resource` together with the
-values the run was authorized with. Do not report the catalog as refreshed
-until the attester returns `ok: true`; a verdict that fails names which
-check it was, and the run's own exit code cannot tell you — a run that
-wrote a whole second catalog under the wrong prefix exits 0.
+For a job whose entry declares an `attester`, hand the receipt to
+`attester.resource` together with the values the run was authorized with,
+and do not report the base as refreshed until it returns `ok: true`; a
+verdict that fails names which check it was, and the run's own exit code
+cannot tell you — a run that wrote a whole second catalog under the wrong
+prefix exits 0. `draft-from-query-history` declares no attester — it
+writes nothing to ochakai itself, and its bundle is only knowledge once
+you run `ochakai import -` and rule on the drafts in the review queue.
 
 ## What this is not
 
