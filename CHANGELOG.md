@@ -555,6 +555,32 @@ last entry.
   No migration, no reindex, no reembed: both terms are expressions on rows
   the scan already reads, and the candidate set is unchanged (a Japanese
   keyword scan measured about 4% slower on 5,000 entries).
+- **A compound question now finds the concepts it names.** 「EC事業の
+  アクティブ会員の継続率を計算して」 is the name of nothing, so the rule
+  above never fired for it, and coverage decided instead: the score is the
+  fraction of the query's fragments an entry contains, a weekly memo that
+  co-mentions every term covers them all, and each definition covers only
+  its own third. Measured on a seeded corpus, the pack `get_context`
+  returned for a question chaining three 社内用語 was five meeting memos
+  and none of the three definitions. The name rule now reads the query's
+  *terms* — the maximal runs of letters and digits between the hiragana,
+  so EC事業, アクティブ会員, 継続率 and 計算 fall out of the example with
+  no morphological analyzer — and a concept named by any of them outranks
+  the prose that merely says all the words, in the store's ranking and
+  through fusion both.
+
+  A run counts as a term only when it carries a Han or Katakana
+  character, and that line was measured, not reasoned: scripts written
+  with spaces make every word of a question a run — why, is, down — and
+  a question saying revenue is not a lookup of the concept called
+  revenue. Granting those the lift cost the golden set six points of
+  lexical MRR (0.92 to 0.86), questions losing their answers to the
+  definitions of their own words, so search in spaced scripts is
+  unchanged. The stated cost: a purely latin name (SaaS), an all-digit
+  one (2026), or one with hiragana inside it (売り上げ) is lifted only
+  when the query is the name whole — the reach the rule already had.
+  Same candidate set, no migration; the golden set reads the same
+  lexical 0.92 as before, and fused 0.90 against 0.89.
 - **The write faces now say what each recommended type holds**, one line
   per type, instead of handing over nine spellings and nothing to tell
   them apart: `put_concept`'s description and `ochakai put -h` both render

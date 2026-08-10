@@ -152,6 +152,33 @@ func TestRRFFuseKeepsTheNamedConceptFirst(t *testing.T) {
 	}
 }
 
+// A compound question is the name of nothing, but it names things: the
+// terms between its hiragana. The concepts those terms name must stay
+// ahead of the prose that merely says all the question's words — which
+// places in every list, so rank arithmetic alone would put it first.
+func TestRRFFuseKeepsTermNamedConceptsFirst(t *testing.T) {
+	keizoku := hit("metrics/keizoku", domain.StatusStable)
+	keizoku.Title = "継続率"
+	kaiin := hit("metrics/アクティブ会員", domain.StatusStable) // named by filename
+	report := verifiedHit("reports/monthly")
+	report.Title = "月次レビュー"
+
+	// The report places in all three lists and is verified besides; each
+	// definition surfaces in the lexical list alone.
+	out := rrfFuse("アクティブ会員の継続率を計算して", 10,
+		[]domain.SearchHit{report, keizoku, kaiin},
+		[]domain.SearchHit{report},
+		[]domain.SearchHit{report})
+	if len(out) != 3 || out[2].ID != report.ID {
+		ids := make([]string, len(out))
+		for i, h := range out {
+			ids[i] = h.ID
+		}
+		t.Errorf("fused ranking = %v, want the two term-named definitions ahead of %s",
+			ids, report.ID)
+	}
+}
+
 // RRF reads rank and throws the score away, which is what lets it merge
 // lists whose numbers share no scale — and which is why a fused list
 // arrives full of exact ties: placing second and fifth in the opposite

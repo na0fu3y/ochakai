@@ -116,20 +116,26 @@ const rrfK = 60
 // compare against something.
 const verifiedBoost = 1.0/(rrfK+1) - 1.0/(rrfK+2)
 
-// namedBy reports whether the query is what the concept is called, rather
-// than something it mentions. Either name answers, as in the store's
-// scorer: the title, or the id's last segment (design doc 0022).
+// namedBy reports whether one of names — the query, and the terms of it
+// (store.QueryTerms) — is what the concept is called, rather than
+// something it mentions. Either name answers, as in the store's scorer:
+// the title, or the id's last segment (design doc 0022).
 //
 // The comparison is the store's, repeated here rather than carried: a hit
 // arrives with both fields on it, and a flag would be a new thing to keep
 // in sync across three lists that come from three queries.
-func namedBy(h domain.SearchHit, query string) bool {
-	name := h.ID
-	if i := strings.LastIndexByte(name, '/'); i >= 0 {
-		name = name[i+1:]
+func namedBy(h domain.SearchHit, names []string) bool {
+	seg := h.ID
+	if i := strings.LastIndexByte(seg, '/'); i >= 0 {
+		seg = seg[i+1:]
 	}
-	return strings.EqualFold(domain.Normalize(h.Title), query) ||
-		strings.EqualFold(domain.Normalize(name), query)
+	title, seg := domain.Normalize(h.Title), domain.Normalize(seg)
+	for _, name := range names {
+		if strings.EqualFold(title, name) || strings.EqualFold(seg, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // sameTime compares two optional verification times, absent included.
@@ -142,7 +148,8 @@ func sameTime(a, b *time.Time) bool {
 
 // rrfFuse merges ranked lists with reciprocal rank fusion, adding one rank
 // position for verified concepts so certified knowledge wins the ties it
-// is in, and keeping a concept the query names ahead of the rest.
+// is in, and keeping a concept the query — or a term of it — names ahead
+// of the rest.
 //
 // Fusion is where a name would otherwise be lost. The store ranks an
 // exact name first by a margin no other term can close, but RRF reads
@@ -177,13 +184,14 @@ func rrfFuse(query string, limit int, primary []domain.SearchHit, others ...[]do
 		lexical float64 // the store's score, or zero if this list missed it
 		named   bool
 	}
+	names := append([]string{query}, store.QueryTerms(query)...)
 	byKey := map[string]*entry{}
 	for li, list := range append([][]domain.SearchHit{primary}, others...) {
 		for rank, hit := range list {
 			key := hit.ID
 			e, ok := byKey[key]
 			if !ok {
-				e = &entry{hit: hit, named: namedBy(hit, query)}
+				e = &entry{hit: hit, named: namedBy(hit, names)}
 				byKey[key] = e
 			}
 			if li == 0 {

@@ -239,6 +239,59 @@ func TestQueryFragments(t *testing.T) {
 	}
 }
 
+// A compound question is the name of nothing, but it names things: the
+// terms between the hiragana are what a concept could be called, and the
+// name rule reads them so the definitions a question asks for outrank the
+// prose that merely says all its words.
+func TestQueryTerms(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{"compound japanese question", "EC事業のアクティブ会員の継続率を計算して",
+			[]string{"EC事業", "アクティブ会員", "継続率", "計算"}},
+		{"single term is itself", "売上", []string{"売上"}},
+		// Scripts with spaces make every word of a question a run — and a
+		// question saying revenue is not a lookup of the concept called
+		// revenue, which the golden set measured (six points of MRR). No
+		// content character, no term; the whole-query rule still serves
+		// the exact lookup.
+		{"english questions carry no terms", "why is revenue down?", nil},
+		{"a latin name needs the whole query", "SaaS", nil},
+		{"spaces split like particles", "継続率 アクティブ会員",
+			[]string{"継続率", "アクティブ会員"}},
+		// A year in a question is not a name; a digit inside a word is
+		// part of one.
+		{"all-digit runs are not terms", "2026の売上", []string{"売上"}},
+		{"digits inside a term stay", "3Q売上の内訳", []string{"3Q売上", "内訳"}},
+		// The reach of the extraction, stated as a limit: a name spelled
+		// with hiragana in it is cut at each hiragana and cannot be
+		// extracted whole. Only the whole query names such a concept.
+		{"hiragana-bearing names fall apart", "売り上げの推移",
+			[]string{"売", "上", "推移"}},
+		{"repeated terms collapse", "売上と売上", []string{"売上"}},
+		{"hiragana only", "ください", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := QueryTerms(tc.query)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("QueryTerms(%q) = %q, want %q", tc.query, got, tc.want)
+			}
+		})
+	}
+
+	// The cap that keeps a pasted paragraph from becoming hundreds of
+	// ILIKE probes, as in queryFragments.
+	var long strings.Builder
+	for i := range 100 {
+		fmt.Fprintf(&long, "用語%d ", i)
+	}
+	if got := QueryTerms(long.String()); len(got) != maxQueryFragments {
+		t.Errorf("long query produced %d terms, want the cap of %d", len(got), maxQueryFragments)
+	}
+}
+
 // The HNSW index scan runs before the WHERE clause, so ef_search is a
 // ceiling on what a vector search can return: at pgvector's default of 40
 // a search for 100 rows could not fill its limit even unfiltered.
