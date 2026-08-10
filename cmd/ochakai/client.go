@@ -723,6 +723,20 @@ func cmdStats(ctx context.Context, args []string) error {
 	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
 		st.WindowDays, st.Concepts.Created, st.Review.Verifications,
 		st.Outcomes.Worked, st.Outcomes.Failed)
+	// The trend as one tab-separated row of counts, oldest first. The
+	// CLI is the completeness surface (design doc 0067 §3): the number
+	// is on the wire, so it is printable here, and a row of integers is
+	// what a shell can put through `cut` or a plot. Absent on a base
+	// nobody has ruled on yet, which is what the server sending nothing
+	// means.
+	if len(st.Review.Weekly) > 0 {
+		weeks := make([]string, len(st.Review.Weekly))
+		for i, w := range st.Review.Weekly {
+			weeks[i] = strconv.FormatInt(w.Verifications, 10)
+		}
+		fmt.Printf("verifications_weekly\t%s\t(oldest first, from %s)\n",
+			strings.Join(weeks, " "), st.Review.Weekly[0].From)
+	}
 	// Printed even at zero, for the reason the queue counts are: a number
 	// that appears only when something is wrong cannot be told from one
 	// nobody reported. Zero is what says the rest of these are whole.

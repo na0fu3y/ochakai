@@ -449,6 +449,10 @@ components/schemas/Stats.queues required=true
 components/schemas/Stats.queues/allOf/0 ref=QueueCounts
 components/schemas/Stats.review required=true type=object
 components/schemas/Stats.review.verifications required=true type=integer
+components/schemas/Stats.review.weekly required=false type=array
+components/schemas/Stats.review.weekly[] type=object
+components/schemas/Stats.review.weekly[].from required=true type=string format="date"
+components/schemas/Stats.review.weekly[].verifications required=true type=integer
 components/schemas/Stats.sandbox required=false type=boolean
 components/schemas/Stats.window_days required=true type=integer
 components/schemas/Status type=string enum=["draft" "stable" "deprecated"]

@@ -2882,6 +2882,34 @@ components:
                 answers "how much moved through review last week", which no
                 queue depth can: a queue says what is left, never what went
                 through.
+            weekly:
+              type: array
+              description: >
+                The same flow as a shape: eight buckets of seven days,
+                oldest first, counted back from today rather than as
+                calendar weeks — a calendar week would make the newest
+                bucket a partial one whose dip is the calendar rather
+                than the curator (design doc 0095).
+
+                Verifications and not queue depth, because the ledger
+                records every ruling with its time and **nothing
+                snapshots how deep a queue was last month**. A trend
+                rebuilt from revisions would be a number that looks
+                right and is not.
+
+                Absent on a base nobody has ruled on yet: eight zeroes
+                read as "review stopped", and "review has not started"
+                is a different thing to say. Its window is fixed and
+                does not follow `days`.
+              items:
+                type: object
+                properties:
+                  from:
+                    type: string
+                    format: date
+                    description: The bucket's first day.
+                  verifications: { type: integer }
+                required: [from, verifications]
           required: [verifications]
         outcomes:
           type: object
