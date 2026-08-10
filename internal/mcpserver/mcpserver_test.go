@@ -101,10 +101,15 @@ func TestLimitContractsInSchema(t *testing.T) {
 	}
 	// One tool, one pair of numbers: the two contracts used to share a
 	// description, which is the sentence design doc 0096 split apart.
+	// "out-of-range is an error" pins the actual behavior (design doc
+	// 0064): a prior version of this prose said the opposite — that an
+	// out-of-range limit "falls back to the default" — and nothing here
+	// caught it because the check only looked for the numbers, never the
+	// fallback claim itself (issue #600).
 	want := map[string][]string{
-		"search_concepts": {"default 10", "max 50"},
-		"list_concepts":   {"default 100", "max 1000"},
-		"get_context":     {"default 5", "max 20"},
+		"search_concepts": {"default 10", "max 50", "out-of-range is an error"},
+		"list_concepts":   {"default 100", "max 1000", "out-of-range is an error"},
+		"get_context":     {"default 5", "max 20", "out-of-range is an error"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]
@@ -129,6 +134,10 @@ func TestLimitContractsInSchema(t *testing.T) {
 			if !strings.Contains(desc, s) {
 				t.Errorf("%s limit description %q does not mention %q", tool.Name, desc, s)
 			}
+		}
+		if strings.Contains(desc, "falls back") {
+			t.Errorf("%s limit description %q claims an out-of-range limit falls back to the "+
+				"default; the service refuses it instead (design doc 0064)", tool.Name, desc)
 		}
 	}
 	for name := range want {

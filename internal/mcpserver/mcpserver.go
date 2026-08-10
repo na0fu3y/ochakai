@@ -241,9 +241,9 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list_concepts",
 		Annotations: readOnly,
-		Description: "Walk a review feed in full, oldest work first. Scores nothing and ranks " +
-			"nothing: pass the cursor from the last page to continue, and no cursor back means " +
-			"the end.\n" +
+		Description: "Walk a review feed in full; each feed's own priority order (below). Scores " +
+			"nothing and ranks nothing: pass the cursor from the last page to continue, and no " +
+			"cursor back means the end.\n" +
 			"- verified_at: by verification age, oldest first — stale verified knowledge.\n" +
 			"- usage: by how often the concept was read — the draft review feed.\n" +
 			"- failed: reported wrong via report_outcome, worst first — the re-verification feed.\n" +
@@ -488,11 +488,13 @@ func parseKnowledgeURI(uri string) (id string, ok bool) {
 }
 
 // The jsonschema tags spell out the numeric contracts (defaults, maxima,
-// out-of-range fallback) that api/openapi.yaml and the CLI help already
+// out-of-range refusal) that api/openapi.yaml and the CLI help already
 // document — MCP agents only see the tool schema.
-// filters are the six every read tool takes, in one embedded struct
-// rather than repeated per tool: they are the same question everywhere,
-// and a schema written twice is a schema that starts differing.
+// filters are the seven fields search_concepts and list_concepts both
+// take, in one embedded struct rather than repeated per tool: they are
+// the same question everywhere, and a schema written twice is a schema
+// that starts differing. get_context has its own contextIn instead,
+// without rejected or source.
 type filters struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trusts"`
@@ -514,7 +516,7 @@ func (f filters) filter() store.Filter {
 type searchIn struct {
 	Query string `json:"query" jsonschema:"the text to search for"`
 	filters
-	Limit int `json:"limit,omitempty" jsonschema:"max results: default 10, max 50 (out-of-range falls back to the default)"`
+	Limit int `json:"limit,omitempty" jsonschema:"max results: default 10, max 50 (out-of-range is an error)"`
 }
 
 // listIn is the same filters with a feed and a position instead of a
@@ -524,7 +526,7 @@ type searchIn struct {
 type listIn struct {
 	Sort string `json:"sort,omitempty" jsonschema:"which feed: verified_at | usage | failed | stale_after (the description says what each is)"`
 	filters
-	Limit  int    `json:"limit,omitempty" jsonschema:"max results per page: default 100, max 1000 (out-of-range falls back to the default)"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"max results per page: default 100, max 1000 (out-of-range is an error)"`
 	Cursor string `json:"cursor,omitempty" jsonschema:"resume: pass back the cursor the last page returned, with the same sort and filters"`
 }
 
@@ -551,7 +553,7 @@ type contextIn struct {
 	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed; several are OR-ed, omit to not ask. Independent of status"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree; several are OR-ed. It scopes the search, not the link expansion: a concept in scope still arrives with the term it cites outside"`
-	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x total cap"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range is an error); linked companions share a 2x total cap"`
 	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the whole response — hits, outline and concepts together (default 12000). The ranking and the outline always come back, so what this buys is whole concepts. Raise it when you need them, lower it when context is tight"`
 }
 
