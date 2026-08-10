@@ -134,3 +134,18 @@ jobs:
             dist/*.zip
             dist/*.mcpb
             dist/checksums.txt
+      # Publishing is last, because a published release is immutable
+      # here: GitHub answers 422 to an asset upload against one, and
+      # everything above this line is an addition to what goreleaser
+      # created. v0.21.0 is what that costs when the order is wrong —
+      # the bundle upload failed, and `set -e` took the notes and the
+      # attestations down with it, leaving a bare tag on the Releases
+      # page. goreleaser leaves a draft (`release.draft` in
+      # .goreleaser.yaml); this is the step that makes it a release.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false

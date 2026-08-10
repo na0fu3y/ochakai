@@ -87,6 +87,17 @@ message, so the tag you wrote in step 2 is already on the Releases page —
 which is the real reason to write that message properly rather than
 leaving it for later.
 
+**A published release here is immutable, so the workflow assembles a
+draft and publishes it last.** goreleaser creates the release as a draft
+(`release.draft`), the bundle, the notes and the attestations go on, and
+a final step flips `--draft=false`. Anything that tries to add an asset
+to an already-published release gets HTTP 422 — which is how v0.21.0
+shipped with no bundle, no notes and no archive attestations: the upload
+failed first and `set -e` took the steps behind it down. If you ever see
+that 422 again, the fix is the *order*, not a retry. A release body can
+still be edited after publication (`gh release edit --notes-file`);
+assets cannot.
+
 This is why the trap is upstream: a thin tag message is now a thin
 release page, immediately and publicly. Write for an operator upgrading —
 which migrations run, whether `updated_at` moves (held ETags,
