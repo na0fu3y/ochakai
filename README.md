@@ -177,7 +177,7 @@ you install anything.
 MCP is for the clients that cannot shell out: Claude Desktop, and your
 own services calling ochakai under their own identity. Both take one of
 two forms — a URL, or the `ochakai mcp-stdio` bridge against Cloud Run —
-and see the same six tools. An assistant hosted by a vendor opens the
+and see the same seven tools. An assistant hosted by a vendor opens the
 connection from that vendor's infrastructure rather than from your
 machine, so an IAM-restricted deployment is out of its reach by design:
 [connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).

@@ -51,6 +51,10 @@
       "description": "Search the knowledge base; verified concepts rank higher."
     },
     {
+      "name": "list_concepts",
+      "description": "Walk a review feed in full: stale verifications, drafts by usage, reported failures, passed expiries."
+    },
+    {
       "name": "get_concept",
       "description": "One concept by id, with its body, attributes and links."
     },

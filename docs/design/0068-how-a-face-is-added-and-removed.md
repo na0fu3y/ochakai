@@ -8,7 +8,10 @@ Superseded にし、[0056](0056-one-question-one-command.md) を Superseded に
 **四つが決めたことは何一つ変えない** — 変えるのは、四つの規則とその適用が
 四冊に分かれ、互いの半分ずつを引用し合っていたことだけである(§0)。
 各面が何のためにあるかは同じ統合の片割れである
-[0067](0067-four-faces-and-what-they-decline.md) が持つ
+[0067](0067-four-faces-and-what-they-decline.md) が持つ。
+§1「能力が二つならコマンドも二つ」の MCP への適用と、§2「ワイヤは一本の
+ままである」がその面に及ばないことは
+[0096](0096-a-listing-is-not-a-search-here-either.md) が決める(2026-08-10)
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと

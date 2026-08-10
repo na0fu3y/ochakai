@@ -43,7 +43,8 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 | ツール | 説明 |
 |---|---|
 | `get_context` | データの質問に答える前に呼ぶ一回のコール: 上位ヒットの concept 全文を、双方向に展開したリンクとともに返す |
-| `search_concepts` | 型をまたいだ検索。verified な concept が上位に来る |
+| `search_concepts` | 型をまたいだ検索。verified な concept が上位に来る。順位なので `limit` で終わり、二ページ目は無い |
+| `list_concepts` | レビューのフィードを端まで歩く(`verified_at` / `usage` / `failed` / `stale_after`)。`cursor` で続きを引く。検索ではないので `query` は取らない(設計ドキュメント [0096](../design/0096-a-listing-is-not-a-search-here-either.md)) |
 | `get_concept` | concept を一件、OKF ドキュメントとして、リンクとファイルのメタデータ付きで取得する |
 | `get_file` | concept に添付されたファイルを取得する(ダッシュボードのスクリーンショット、ER 図、seeds ファイルなど) |
 | `put_concept` | 学びを書き戻す — id が空いていれば作成し、埋まっていれば置き換える。変更はすべてリビジョンとして残る |

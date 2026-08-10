@@ -61,11 +61,14 @@ func TestARetiredToolNameIsNotListed(t *testing.T) {
 // The other half: the call works, and the answer says which name to use
 // next time. The arguments here are deliberately invalid — the point is
 // that the call reached search_concepts at all, and the validation error
-// proves it did without needing a database.
+// proves it did without needing a database. Invalid in the handler's
+// eyes rather than the schema's: a blank query satisfies "query is
+// present", so the refusal that comes back is the one only the tool
+// itself can produce.
 func TestARetiredToolNameStillAnswers(t *testing.T) {
 	cs := connectRetiring(t, fixtureRetired)
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: fixtureRetired.Old, Arguments: map[string]any{},
+		Name: fixtureRetired.Old, Arguments: map[string]any{"query": " "},
 	})
 	if err != nil {
 		t.Fatalf("CallTool under the retired name: %v", err)
