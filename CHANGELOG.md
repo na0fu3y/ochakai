@@ -283,6 +283,17 @@ last entry.
   subject is recorded as a process instead. Half a pair, or a pair beside
   `OCHAKAI_MODE=dev` or `public`, is refused at startup. `ENV` 11 → 13.
 
+  **The contract now declares the 401 it was already sending.** Both
+  paths answer it — the Cloud Run posture when no token was forwarded,
+  this one when verification fails — but `api/openapi.yaml` had never
+  said so, and its own prose claimed *"ochakai itself verifies
+  nothing"*, which in-process verification makes false. The 401 is
+  declared on every operation (`components/responses/Unauthorized`,
+  carrying `code: invalid` in the ordinary envelope) and the prose now
+  states both postures — the same retroactive declaration design doc
+  0064 made for the 400 and 413 the server already sent. Nothing a
+  deployment answers changed.
+
 - **One page of the manual is in English** ([docs/en.md](docs/en.md)).
   The manual is Japanese by decision — condition C8 — and the front door
   and the contract are the seven pages that stay English, which left an

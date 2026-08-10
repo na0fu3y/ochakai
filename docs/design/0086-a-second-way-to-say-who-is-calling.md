@@ -93,6 +93,17 @@ Cloud Run が検証したものを読む。
 - **ENV** — 2 語増えて 11 → 13。天井を上げる決定であり、そう言って上げる。
 - **REST / MCP** — ワイヤは変わらない。`Authorization: Bearer` は元から
   読んでおり、変わったのは**その中身を誰が検証したか**だけである。
+  ただし契約は**遡及宣言を一つ**得る: 401。両経路とも元から送っていた —
+  IAM 経路はトークンが転送されなかったとき(`httpauth`)、この記録の
+  経路は検証に落ちたとき — が、`api/openapi.yaml` はこれまで黙っていて、
+  info の散文は「ochakai itself verifies nothing」とまで言っていた。
+  in-process 検証が 401 を*最初の応答*にした以上、両方とも偽になる。
+  [0064](0064-rest-freeze-and-the-long-tail.md) が 400/413 でやったのと
+  同じ扱いで、サーバが既に送っているものを
+  `components/responses/Unauthorized` として全操作に宣言し、散文を
+  二経路の現在形に書き直す。封筒の `code` は `invalid` である —
+  落ちたのはリクエストの資格情報であって、ナレッジ側のどの条件でも
+  ないから([0083](0083-an-error-carries-a-code.md))。
 - **CLI / Web UI** — 変わらない。CLI は Google の ID トークンを自分で
   取るが、他の発行者のトークンをどう取るかは発行者ごとの話であり、
   `Authorization` を持つ普通の HTTP クライアントとして使える。

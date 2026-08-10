@@ -21,6 +21,7 @@ DELETE /api/v1/bundle/{path} query purge required=false type=boolean default=fal
 DELETE /api/v1/bundle/{path} response 204
 DELETE /api/v1/bundle/{path} response 204 header Ochakai-Read-Only ref=ReadOnly
 DELETE /api/v1/bundle/{path} response 400 ref=Error
+DELETE /api/v1/bundle/{path} response 401 ref=Unauthorized
 DELETE /api/v1/bundle/{path} response 403 ref=Forbidden
 DELETE /api/v1/bundle/{path} response 404
 DELETE /api/v1/bundle/{path} response 404 content application/json type=object
@@ -64,6 +65,7 @@ GET /api/v1/bundle/{path} response 304 header Cache-Control ref=CacheControl
 GET /api/v1/bundle/{path} response 304 header ETag ref=ETag
 GET /api/v1/bundle/{path} response 304 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/bundle/{path} response 400 ref=Error
+GET /api/v1/bundle/{path} response 401 ref=Unauthorized
 GET /api/v1/bundle/{path} response 403 ref=Forbidden
 GET /api/v1/bundle/{path} response 404
 GET /api/v1/bundle/{path} response 404 content application/json type=object
@@ -105,6 +107,7 @@ GET /api/v1/context response 200 content application/json.outline required=false
 GET /api/v1/context response 200 content application/json.outline[] ref=ContextOutline
 GET /api/v1/context response 200 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/context response 400 ref=Error
+GET /api/v1/context response 401 ref=Unauthorized
 GET /api/v1/context response 403 ref=Forbidden
 GET /api/v1/context response 405 ref=Error
 GET /api/v1/context response 500 ref=Error
@@ -138,6 +141,7 @@ GET /api/v1/search response 400
 GET /api/v1/search response 400 content application/json type=object
 GET /api/v1/search response 400 content application/json.error required=true type=string
 GET /api/v1/search response 400 header Ochakai-Read-Only ref=ReadOnly
+GET /api/v1/search response 401 ref=Unauthorized
 GET /api/v1/search response 403 ref=Forbidden
 GET /api/v1/search response 405 ref=Error
 GET /api/v1/search response 500 ref=Error
@@ -150,6 +154,7 @@ GET /api/v1/stats response 200
 GET /api/v1/stats response 200 content application/json ref=Stats
 GET /api/v1/stats response 200 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/stats response 400 ref=Error
+GET /api/v1/stats response 401 ref=Unauthorized
 GET /api/v1/stats response 403 ref=Forbidden
 GET /api/v1/stats response 405 ref=Error
 GET /api/v1/stats response 500 ref=Error
@@ -160,6 +165,7 @@ GET /api/v1/usage/{id} response 200
 GET /api/v1/usage/{id} response 200 content application/json ref=Usage
 GET /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/usage/{id} response 400 ref=Error
+GET /api/v1/usage/{id} response 401 ref=Unauthorized
 GET /api/v1/usage/{id} response 403 ref=Forbidden
 GET /api/v1/usage/{id} response 404 ref=Error
 GET /api/v1/usage/{id} response 405 ref=Error
@@ -176,6 +182,7 @@ POST /api/v1/move response 200 content application/json ref=View
 POST /api/v1/move response 200 header ETag ref=ETag
 POST /api/v1/move response 200 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/move response 400 ref=Error
+POST /api/v1/move response 401 ref=Unauthorized
 POST /api/v1/move response 403 ref=Forbidden
 POST /api/v1/move response 404 ref=Error
 POST /api/v1/move response 405 ref=Error
@@ -195,6 +202,7 @@ POST /api/v1/reembed response 200 content application/json.files required=true t
 POST /api/v1/reembed response 200 content application/json.missing required=true type=integer
 POST /api/v1/reembed response 200 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/reembed response 400 ref=Error
+POST /api/v1/reembed response 401 ref=Unauthorized
 POST /api/v1/reembed response 403 ref=Forbidden
 POST /api/v1/reembed response 405 ref=Error
 POST /api/v1/reembed response 500 ref=Error
@@ -215,6 +223,7 @@ POST /api/v1/review/{id} response 400
 POST /api/v1/review/{id} response 400 content application/json type=object
 POST /api/v1/review/{id} response 400 content application/json.error required=true type=string
 POST /api/v1/review/{id} response 400 header Ochakai-Read-Only ref=ReadOnly
+POST /api/v1/review/{id} response 401 ref=Unauthorized
 POST /api/v1/review/{id} response 403 ref=Forbidden
 POST /api/v1/review/{id} response 404 ref=Error
 POST /api/v1/review/{id} response 405 ref=Error
@@ -236,6 +245,7 @@ POST /api/v1/usage/{id} response 200
 POST /api/v1/usage/{id} response 200 content application/json ref=Usage
 POST /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
 POST /api/v1/usage/{id} response 400 ref=Error
+POST /api/v1/usage/{id} response 401 ref=Unauthorized
 POST /api/v1/usage/{id} response 403 ref=Forbidden
 POST /api/v1/usage/{id} response 404 ref=Error
 POST /api/v1/usage/{id} response 405 ref=Error
@@ -270,6 +280,7 @@ PUT /api/v1/bundle/{path} response 201 header ETag ref=ETag
 PUT /api/v1/bundle/{path} response 201 header Ochakai-Note ref=Note
 PUT /api/v1/bundle/{path} response 201 header Ochakai-Read-Only ref=ReadOnly
 PUT /api/v1/bundle/{path} response 400 ref=Error
+PUT /api/v1/bundle/{path} response 401 ref=Unauthorized
 PUT /api/v1/bundle/{path} response 403 ref=Forbidden
 PUT /api/v1/bundle/{path} response 404
 PUT /api/v1/bundle/{path} response 404 content application/json type=object
@@ -319,6 +330,10 @@ components/responses/Forbidden
 components/responses/Forbidden content application/json type=object
 components/responses/Forbidden content application/json.error required=true type=string
 components/responses/Forbidden header Ochakai-Read-Only ref=ReadOnly
+components/responses/Unauthorized
+components/responses/Unauthorized content application/json type=object
+components/responses/Unauthorized content application/json.code required=true type=string enum=["invalid"]
+components/responses/Unauthorized content application/json.error required=true type=string
 components/schemas/Actor type=object
 components/schemas/Actor.kind required=true type=string enum=["human" "process"]
 components/schemas/Actor.name required=true type=string
