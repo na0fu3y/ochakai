@@ -52,7 +52,7 @@ export async function downloadBundle(e) {
   e.preventDefault();
   const res = await fetch(BASE + '/api/v1/bundle/', { headers: { Accept: 'application/gzip' } });
   if (!res.ok) {
-    toast('Export failed: ' + res.status);
+    toast('書き出しに失敗しました: ' + res.status);
     return;
   }
   const url = URL.createObjectURL(await res.blob());

@@ -20,8 +20,9 @@ export function fmtDate(s) {
 // doc 0052).
 export function actorStr(a) {
   if (!a || !a.name) return '';
+  const notes = [a.via ? a.via + ' 経由' : '', a.producer ? a.producer + ' 使用' : ''].filter(Boolean);
   return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name +
-    (a.via ? ' via ' + a.via : '') + (a.producer ? ' using ' + a.producer : '');
+    (notes.length ? '(' + notes.join('・') + ')' : '');
 }
 // The ledgers a read carries beside the document (design doc 0043
 // §§3.2-3.3). Verification is plural and stored oldest-first, so the
@@ -44,9 +45,9 @@ export function daysSince(s) {
 }
 export function fmtAge(days) {
   if (days === null) return '';
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return days + ' days ago';
+  if (days <= 0) return '今日';
+  if (days === 1) return '昨日';
+  return days + ' 日前';
 }
 export function fmtSize(n) {
   if (!n && n !== 0) return '';

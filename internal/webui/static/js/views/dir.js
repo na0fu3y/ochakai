@@ -22,11 +22,11 @@ export async function loadDirIndex(container, prefix, emptyText) {
     const files = (res.files || []).map(fileCard).join('');
     const note = res.truncated
       ? `<div class="truncation-note">この階層の先頭 1000 concept を表示 — これだけ広いディレクトリは
-         better split into subdirectories.</div>` : '';
+         サブディレクトリに分けたほうがよいでしょう。</div>` : '';
     container.innerHTML = (dirs + concepts + files + note) || `<div class="empty">${emptyText}</div>`;
   } catch (e) {
     if (!container.isConnected) return;
-    container.innerHTML = `<div class="error-banner" role="alert">Browse failed: ${esc(e.message)}</div>`;
+    container.innerHTML = `<div class="error-banner" role="alert">一覧を読み込めませんでした: ${esc(e.message)}</div>`;
   }
 }
 
@@ -43,10 +43,10 @@ export function viewDir(rawPrefix) {
       <span class="grow"></span>
       ${clean ? `<a class="btn small" href="#/search/in/${idPath(clean)}"
         title="${esc(prefix)} の下だけを検索">🔍 ここを検索</a>` : ''}
-      <a class="btn small write-only" href="${newHref}" title="Create a concept in ${esc(prefix) || 'the root'}">＋ ここに concept を作る</a>
+      <a class="btn small write-only" href="${newHref}" title="${prefix ? esc(prefix) + ' に' : 'ルートに'} concept を作る">＋ ここに concept を作る</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;
-  loadDirIndex($('#dir-index'), prefix, 'Nothing here — directories exist through the concepts in them.');
+  loadDirIndex($('#dir-index'), prefix, 'ここには何もありません — ディレクトリは、その中の concept があってはじめて存在します。');
 }
 
 export function viewHome() {
@@ -61,9 +61,9 @@ export function viewHome() {
       <a class="btn" id="home-go" href="#/search">検索</a>
     </div>
     <p style="color:var(--muted);font-size:.9rem">
-      <a href="#/review">レビューキュー</a> — verify or reject what agents drafted ·
-      <a href="#/search/reported-wrong">間違いと報告された</a> — verified knowledge that came back wrong ·
-      <a class="write-only" href="#/new">＋ New concept</a> ·
+      <a href="#/review">レビューキュー</a> — エージェントが書いた draft を検証する / 却下する ·
+      <a href="#/search/reported-wrong">間違いと報告された</a> — 検証済みなのに間違いだったナレッジ ·
+      <a class="write-only" href="#/new">＋ concept を作る</a> ·
       <a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出す">OKF を書き出す</a>
     </p>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;

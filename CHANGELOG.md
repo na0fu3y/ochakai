@@ -192,8 +192,8 @@ last entry.
   carries it too**, at `knowledge.plan`, and that surface has no headers
   at all: an agent writing knowledge back had no way to tell a
   replacement from a write that changed nothing without reading the
-  concept again. The bundled web UI stops saying *Saved.* after a write
-  that stored nothing.
+  concept again. The bundled web UI stops saying *保存しました。* after a
+  write that stored nothing.
 
   **The headers stay.** Removing them is not available: design doc 0082
   §2 puts header names inside the frozen address space, so that half is
@@ -696,13 +696,25 @@ last entry.
   reader the product is aimed at was reading a Japanese page about an
   English screen. The pages are translated — the navigation, the forms,
   the banners, the empty states, the feed explanations, the placeholders
-  and the titles — and the page declares `lang="ja"`. **What is left is
-  named rather than implied**: the toast every action answers with, the
-  stat-tile labels on the usage and review views, `load more`, and the
-  editor's two buttons are still English, so the screen a reader meets
-  is Japanese and the screen that answers them is not yet. Finishing
-  that is its own change, because the words an action says back are the
-  ones worth a maintainer's eye rather than a bulk pass.
+  and the titles — and the page declares `lang="ja"`.
+
+  **The words the page says back are translated too**, in a second pass
+  rather than the same bulk one, because a toast is read at the moment
+  somebody is deciding whether their write landed: every action toast
+  and confirmation (saving, verifying, rejecting, moving, deleting,
+  attaching), every failure banner, the stat-tile labels on the usage
+  and review views, `load more`, the editor's two buttons, the
+  provenance line that says who created and confirmed a concept, and
+  the relative dates (今日 / 昨日 / N 日前). With them went two the
+  page was contradicting itself over: the search bar's three filter
+  chips, which said `verification age`, `reported wrong` and `stale`
+  while the feed banner above them told the reader to uncheck
+  検証の古さ, 間違いと報告された and 期限切れ — and the review page's
+  stale toggle, named in Japanese prose and drawn in English. What
+  stays in Latin script is the contract's own vocabulary, because it is
+  what the API answers and what the page filters on: the lifecycle
+  values (`draft`, `stable`, `deprecated`), the trust tiers, the
+  rulings, the OKF type names, and `concept` itself.
 
   Nothing else moved: no
   route, no id, no `data-` marker, no API call, and the tests that pin

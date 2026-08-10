@@ -70,7 +70,7 @@ export async function viewEditor(id, prefix = '') {
           <label class="top" for="e-type">型</label>
           <select id="e-type">${KNOWN_TYPES.map(t =>
             `<option value="${t}"${t === 'Insight' ? ' selected' : ''}>${t}</option>`).join('')}</select>
-          <div class="hint">Sets <code>type:</code> in the document below, with any key that type is refused without.
+          <div class="hint">下のドキュメントの <code>type:</code> を設定します。その型が無いと受け付けられないキーも一緒に入ります。
           ドキュメントを編集するまでは全体が入れ直され、編集した後はその行だけが変わります。
           保存されるのはこのドキュメントです。</div>
         </div>`}
@@ -78,16 +78,16 @@ export async function viewEditor(id, prefix = '') {
       <div class="field">
         <label class="top" for="e-doc">ドキュメント</label>
         <textarea id="e-doc" rows="26" class="mono" spellcheck="false" required>${esc(doc)}</textarea>
-        <div class="hint">OKF frontmatter between <code>---</code> lines, then markdown.
+        <div class="hint"><code>---</code> の行にはさまれた OKF frontmatter、そのあとに markdown。
         他の concept へは、そのパスへの markdown リンクで結ぶ — <code>[revenue](/metrics/revenue.md)</code> —
-        and it becomes a link both ways. ochakai が定義していないキーは書いたまま保たれます。
+        と、両方向のリンクになります。ochakai が定義していないキーは書いたまま保たれます。
         サーバーが持つキー(<code>generated</code>・<code>verified</code>・<code>created_by</code>)は
-        are not yours to set and are ignored if present.</div>
+        あなたが決めるものではないので、書いてあっても無視されます。</div>
       </div>
       <div id="editor-error"></div>
       <div class="toolbar" style="justify-content:flex-end">
         <a class="btn" href="${editing ? '#/k/' + idPath(entryID) : '#/search'}">キャンセル</a>
-        <button class="btn primary write-only" type="submit">${editing ? 'Save' : 'Create'}</button>
+        <button class="btn primary write-only" type="submit">${editing ? '保存' : '作成'}</button>
       </div>
     </form>`;
 
@@ -140,9 +140,10 @@ export async function viewEditor(id, prefix = '') {
       });
       dirty = false;
       // The server says which of the three the write was (design doc
-      // 0097), so the toast can stop guessing: "Saved." after a write
-      // that stored nothing is the one message a curator cannot check.
-      toast(saved && saved.plan === 'unchanged' ? 'No change.' : editing ? 'Saved.' : 'Created.');
+      // 0097), so the toast can stop guessing: "保存しました。" after a
+      // write that stored nothing is the one message a curator cannot
+      // check.
+      toast(saved && saved.plan === 'unchanged' ? '変更はありません。' : editing ? '保存しました。' : '作成しました。');
       refreshTree();
       refreshQueues(); // an edit is what clears the past-expiry queue (design doc 0037 §2.2)
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);
@@ -155,7 +156,7 @@ export async function viewEditor(id, prefix = '') {
       // 412 rather than a 409 because the page writes with If-None-Match
       // and that is a precondition failing (design doc 0083).
       const dupLink = !editing && e.code === 'already_exists'
-        ? ` — <a href="#/k/${idPath(entryId)}">view the existing ${esc(entryId)}</a> (edit it, or pick another ID)`
+        ? ` — <a href="#/k/${idPath(entryId)}">既にある ${esc(entryId)} を開く</a>(それを編集するか、別の ID を選んでください)`
         : '';
       // The precondition failed: somebody else saved while this form was
       // open. Say that rather than showing the server's sentence about
@@ -169,7 +170,7 @@ export async function viewEditor(id, prefix = '') {
           残すべきところを移してから、もう一度この画面を開いてください。</div>`;
         return;
       }
-      errBox.innerHTML = `<div class="error-banner" role="alert">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
+      errBox.innerHTML = `<div class="error-banner" role="alert">${editing ? '保存' : '作成'}に失敗しました: ${esc(e.message)}${dupLink}</div>`;
     }
   });
 }
