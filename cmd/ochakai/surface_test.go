@@ -1048,6 +1048,7 @@ func userDocs(t *testing.T) ([]string, int) {
 	const root = "../.."
 	skipDirs := map[string]bool{
 		".git": true, "node_modules": true, "docs/design": true, "internal": true,
+		"hardware": true, // physical-object designs, not ochakai documentation (docs/surface.md, 数えていないもの)
 	}
 	forChangers := map[string]bool{
 		"CHANGELOG.md": true, "CONTRIBUTING.md": true,
