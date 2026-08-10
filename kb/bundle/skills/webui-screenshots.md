@@ -23,11 +23,14 @@ docs/images/webui-*.png は examples/demo を実際に serve して撮る。
 - **ライトスキームは強制する。** ヘッドレス Chrome の既定はダーク。
   `Emulation.setEmulatedMedia` で明示する。
 - **ロケールは DevTools プロトコルでしか直らない。** entry ページの日付
-  は `toLocaleDateString()` が ICU の既定ロケールを読む。macOS では
-  `--lang=en-US` も `LANG`/`LC_ALL` も効かず、`navigator.language` が
-  en-US を名乗ったまま日付だけ `2026年7月27日` になる。
-  `Emulation.setLocaleOverride` で上書きし、ページ内で
-  `Intl.DateTimeFormat().resolvedOptions().locale` が `en-US` である
+  は `toLocaleDateString()` が ICU の既定ロケールを読む。Web UI は
+  `lang="ja"` なので、日付も `ja-JP` で揃える — 英語ロケールのまま
+  日本語 UI を撮ると、日付だけ英語という食い違いになる。macOS では
+  `--lang=`、`LANG`/`LC_ALL` のどれも効かず、`navigator.language` が
+  指定した値を名乗ったまま日付だけシステムのロケールで描かれる、という
+  食い違いが撮影機のロケール次第で起きる。`Emulation.setLocaleOverride`
+  で `ja-JP` を明示的に上書きし、ページ内で
+  `Intl.DateTimeFormat().resolvedOptions().locale` が `ja-JP` である
   ことを確かめる。
 - **コミット前に全 PNG を読む。** 落ちたバックエンドは整った「502 Bad
   Gateway」カードとして描画され、一瞥ではコンテンツに見える。ダーク・

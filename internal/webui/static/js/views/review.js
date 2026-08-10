@@ -55,9 +55,6 @@ export function viewReview() {
 // came back empty — not a dashboard: what a curator can act on this
 // morning, which is what the queues below are for.
 //
-// Failure to load is silent. Stats are a help, and a review queue that
-// refuses to draw because a tally is unavailable would be worse than one
-// with no tally.
 // sparkline draws the review trend: eight weeks of verifications, oldest
 // first (design doc 0095). Inline SVG rather than a chart library — this
 // is a curation surface and not a BI tool (design doc 0067 §1), and one
@@ -91,7 +88,11 @@ export async function loadLoopStats() {
   const out = $('#loop-stats');
   if (!out) return;
   let s;
-  try { s = await api('/api/v1/stats'); } catch (e) { return; }
+  try { s = await api('/api/v1/stats'); } catch (e) {
+    if (out !== $('#loop-stats')) return;
+    out.innerHTML = `<div class="error-banner" role="alert">loop の数字を読み込めませんでした: ${esc(e.message)}</div>`;
+    return;
+  }
   if (out !== $('#loop-stats')) return;
   const trust = s.concepts?.trust || {};
   const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
