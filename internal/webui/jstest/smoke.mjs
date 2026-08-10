@@ -182,8 +182,21 @@ try {
   // them would spend the full deadline discovering that. Stop, so the
   // error tally — which names the module — is what the log ends on.
   if (!rendered) throw new Error('the first view never rendered; the rest of the walk is skipped');
+  // A directory is `details.node` and a concept is `.tree-entry`; a
+  // corpus may legitimately have none of the second, so asking for both
+  // is what "the tree drew something" means. Asking only for
+  // `.tree-entry` passed on a development database with concepts left at
+  // the root and could never have passed on a fresh import of
+  // examples/demo, where every concept lives in a directory.
   await check('the sidebar tree loads',
-    await waitFor(`${countOf('#tree .tree-entry, #tree .tree-dir')} > 0`), shown);
+    await waitFor(`${countOf('#tree details.node, #tree .tree-entry')} > 0`), shown);
+  // And it is the tree, not the banner it draws when its own fetch fails
+  // — which is caught, so it reaches no console and no other check.
+  // Asked once rather than waited for: the wait above already settled,
+  // and a banner is a state the tree stays in.
+  await check('the tree is a tree, not an error banner',
+    (await evalJS(countOf('#tree .error-banner'))) === 0,
+    () => evalJS(`(document.querySelector('#tree') || {}).textContent || ''`));
 
   await go('#/search');
   // Guarded rather than assumed: on a page that did not finish loading
