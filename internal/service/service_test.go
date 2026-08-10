@@ -567,14 +567,14 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	oneAndARow := one + jsonSize(outlineRow(&big, serializedSize(&big))) + 10
 
 	t.Run("no budget keeps everything", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.View{small, big}, 0)
+		kept, outline := packWithinBudget([]domain.View{small, big}, 0, 0)
 		if len(kept) != 2 || outline != nil {
 			t.Errorf("budget 0 must not truncate: %d kept, %d outlined", len(kept), len(outline))
 		}
 	})
 
 	t.Run("overflow becomes an outline row", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.View{small, big}, oneAndARow)
+		kept, outline := packWithinBudget([]domain.View{small, big}, oneAndARow, 0)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want only the small concept in full, got %d", len(kept))
 		}
@@ -593,7 +593,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// entire budget. A prefix cut would let it starve everything below it;
 	// greedy packing keeps the rest and names the giant.
 	t.Run("an oversized leader does not starve the rest", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.View{big, small}, oneAndARow)
+		kept, outline := packWithinBudget([]domain.View{big, small}, oneAndARow, 0)
 		if len(kept) != 1 || kept[0].ID != small.ID {
 			t.Fatalf("want the small concept delivered behind the giant, got %+v", kept)
 		}
@@ -607,7 +607,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 	// answer, a half-concept is not. Naming everything is also the floor —
 	// a caller cannot raise a budget for concepts it never heard about.
 	t.Run("a budget below one concept outlines everything", func(t *testing.T) {
-		kept, outline := packWithinBudget([]domain.View{small, big}, 1)
+		kept, outline := packWithinBudget([]domain.View{small, big}, 1, 0)
 		if len(kept) != 0 || len(outline) != 2 {
 			t.Errorf("want everything outlined, got %d kept / %d outlined", len(kept), len(outline))
 		}
@@ -630,7 +630,7 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 			wordy[i] = v
 		}
 		const budget = 4000
-		kept, outline := packWithinBudget(wordy, budget)
+		kept, outline := packWithinBudget(wordy, budget, 0)
 		total := 0
 		for i := range kept {
 			total += serializedSize(&kept[i])
@@ -668,6 +668,135 @@ func TestPackWithinBudgetKeepsEntriesWhole(t *testing.T) {
 			Attrs: map[string]any{"spec": strings.Repeat("y", 2000)}})
 		if serializedSize(&withKey) <= serializedSize(&bare)+1000 {
 			t.Error("serializedSize ignores what the frontmatter carries")
+		}
+	})
+}
+
+// The ranking is part of the response, so it is part of what the budget
+// governs (design doc 0093). It used to ride outside: a caller that sized
+// its context window by the number it sent got that number of concepts
+// and outline, plus however many bytes the ranking happened to be.
+func TestTheBudgetGovernsTheRankingToo(t *testing.T) {
+	views := make([]domain.View, 4)
+	for i := range views {
+		k := domain.Knowledge{Type: domain.TypeInsights, ID: fmt.Sprintf("insights/r-%d", i),
+			Title: "r", Description: "d", Status: domain.StatusDraft, Body: strings.Repeat("x", 400)}
+		v, err := okf.ViewOf(&k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		views[i] = v
+	}
+	const budget = 2000
+	free, _ := packWithinBudget(views, budget, 0)
+	reserved, outline := packWithinBudget(views, budget, 1200)
+	if len(reserved) >= len(free) {
+		t.Errorf("a reservation bought nothing: %d concepts with 1200 reserved, %d with none",
+			len(reserved), len(free))
+	}
+	total := 1200
+	for i := range reserved {
+		total += serializedSize(&reserved[i])
+	}
+	for _, row := range outline {
+		total += jsonSize(row)
+	}
+	if total > budget {
+		t.Errorf("response = %d bytes over a budget of %d once the ranking is counted", total, budget)
+	}
+	// A reservation larger than the budget delivers nothing — not
+	// everything, which is how "budget <= 0 means no cap" would have read
+	// it if the subtraction were passed straight through.
+	if kept, out := packWithinBudget(views, 100, 500); len(kept) != 0 || len(out) != len(views) {
+		t.Errorf("a reservation over budget delivered %d concepts and named %d, want 0 and %d",
+			len(kept), len(out), len(views))
+	}
+}
+
+// The best match, when no budget could hold it, comes back as its opening
+// rather than as a name alone: the round trip that costs is the one
+// get_context exists to save (design doc 0093).
+func TestTheTopRowCarriesAnExcerptWhenItCannotBeDelivered(t *testing.T) {
+	// Larger than the budget below on its own, which is the case this is
+	// about: no packing of any kind could have delivered it.
+	body := "定義の段落。" + strings.Repeat("これは本文である。", 400) +
+		"\n\n```sql\nSELECT 1\n```\n"
+	render := func(id, body string) domain.View {
+		k := domain.Knowledge{Type: domain.TypeInsights, ID: id, Title: id,
+			Description: "d", Status: domain.StatusDraft, Body: body}
+		v, err := okf.ViewOf(&k)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	huge := render("insights/huge", body)
+	small := render("insights/small", "短い。")
+	const budget = 6000
+
+	kept, outline := packWithinBudget([]domain.View{huge, small}, budget, 0)
+	if len(outline) == 0 || outline[0].ID != huge.ID {
+		t.Fatalf("want the oversized leader outlined, got %v", outline)
+	}
+	if outline[0].Excerpt == "" {
+		t.Fatal("the top outlined row carries no excerpt")
+	}
+	if len(outline[0].Excerpt) > contextExcerptBytes {
+		t.Errorf("excerpt = %d bytes, over the %d cap", len(outline[0].Excerpt), contextExcerptBytes)
+	}
+	if !strings.HasPrefix(outline[0].Excerpt, "定義の段落。") {
+		t.Errorf("the excerpt is not the opening of the body: %.60q", outline[0].Excerpt)
+	}
+	// The frontmatter is the fields on the row above it; repeating them
+	// would spend the excerpt saying what the caller already has.
+	if strings.Contains(outline[0].Excerpt, "type:") || strings.Contains(outline[0].Excerpt, "---") {
+		t.Errorf("the excerpt carries frontmatter: %.80q", outline[0].Excerpt)
+	}
+	// Design doc 0033 refused truncation because half a query still looks
+	// executable. The cut stops before the fence, so it never is.
+	if strings.Contains(outline[0].Excerpt, "SELECT") || strings.Contains(outline[0].Excerpt, "```") {
+		t.Errorf("the excerpt reaches into a code fence: %.80q", outline[0].Excerpt)
+	}
+	// It is not paid for by starving the rest.
+	if len(kept) == 0 {
+		t.Error("the excerpt took the whole budget; nothing was delivered behind the giant")
+	}
+	// And the whole response still fits.
+	total := 0
+	for i := range kept {
+		total += serializedSize(&kept[i])
+	}
+	for _, row := range outline {
+		total += jsonSize(row)
+	}
+	if total > budget {
+		t.Errorf("response = %d bytes over a budget of %d", total, budget)
+	}
+
+	t.Run("only the top row, and only when it could never fit", func(t *testing.T) {
+		// An excerpt is for the match a caller would otherwise not see at
+		// all, not for every row a budget happened to drop.
+		kept, outline := packWithinBudget([]domain.View{small, huge}, budget, 0)
+		if len(kept) == 0 {
+			t.Fatal("the small concept should have been delivered")
+		}
+		for _, row := range outline {
+			if row.Excerpt != "" {
+				t.Errorf("row %s carries an excerpt though the leader was delivered", row.ID)
+			}
+		}
+	})
+
+	t.Run("a budget too small to spare a quarter gets the name alone", func(t *testing.T) {
+		// An excerpt on a budget of its own order is the starvation
+		// greedy packing exists to prevent.
+		_, outline := packWithinBudget([]domain.View{huge, small}, 2*contextExcerptBytes, 0)
+		if len(outline) == 0 {
+			t.Fatal("want the giant outlined")
+		}
+		if outline[0].Excerpt != "" {
+			t.Errorf("a %d-byte budget spent %d of it on an opening",
+				2*contextExcerptBytes, len(outline[0].Excerpt))
 		}
 	})
 }

@@ -164,7 +164,13 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 		}
 		views = append(views, v)
 	}
-	kept, outline := packWithinBudget(views, req.Budget)
+	// The ranking is counted before the pack is built, because the budget
+	// governs the response and the ranking is part of it (design doc
+	// 0093). It is never trimmed to make room: hits and the outline are
+	// the floor — what the response says exists — and the budget is what
+	// buys whole concepts out of that list.
+	ranks := domain.ContextRanks(hits)
+	kept, outline := packWithinBudget(views, req.Budget, jsonSize(ranks))
 	// Only delivered concepts count as fetched. An outline row names an
 	// concept; it does not hand over the knowledge, so counting it as a use
 	// would inflate the demand signal that drives the review feeds.
@@ -173,15 +179,19 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 		ids[i] = kept[i].ID
 	}
 	s.recordUsage(ctx, domain.EventFetched, ids)
-	return &ContextResult{
-		Hits: domain.ContextRanks(hits), Concepts: kept,
-		Outline: outline,
-	}, nil
+	return &ContextResult{Hits: ranks, Concepts: kept, Outline: outline}, nil
 }
 
 // packWithinBudget splits concepts into the ones that fit within budget
 // serialized bytes and outline rows for the rest, preserving rank order in
 // both. budget <= 0 means no cap.
+//
+// reserved is what the rest of the response already costs — the ranking
+// (design doc 0093). It is subtracted rather than trimmed: the budget
+// governs the whole response, but what it *buys* is whole concepts, and
+// a caller who cannot afford any of them still learns what matched. A
+// reservation larger than the budget therefore delivers nothing rather
+// than everything, which is the one way this could have been read wrong.
 //
 // Concepts are atomic: a concept is delivered whole or not at all. Cutting a
 // body mid-way would be worse than dropping it — half of an attested
@@ -207,10 +217,11 @@ func (s *Service) Context(ctx context.Context, req ContextRequest) (*ContextResu
 // dropping concepts the caller never hears about is worse than a response
 // slightly over budget, and the caller can raise the budget only if it
 // knows there was something there.
-func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domain.ContextOutline) {
+func packWithinBudget(entries []domain.View, budget, reserved int) ([]domain.View, []domain.ContextOutline) {
 	if budget <= 0 {
 		return entries, nil
 	}
+	budget -= reserved
 	sizes := make([]int, len(entries))
 	rows := make([]domain.ContextOutline, len(entries))
 	rowSizes := make([]int, len(entries))
@@ -219,6 +230,20 @@ func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domai
 		sizes[i] = serializedSize(&entries[i])
 		rows[i] = outlineRow(&entries[i], sizes[i])
 		rowSizes[i] = jsonSize(rows[i])
+	}
+	// The best match, when no budget could have delivered it, comes back
+	// as its opening rather than as a name (design doc 0093).
+	//
+	// Only where the budget can afford it without the opening becoming
+	// the response. An excerpt takes bytes from the concepts that would
+	// have arrived whole, and on a budget of its own order that is the
+	// starvation greedy packing exists to prevent — one concept high in
+	// the ranking taking everything below it. So it is spent only where
+	// it can be at most a quarter of the budget, and a budget smaller
+	// than that gets the name alone.
+	if len(entries) > 0 && sizes[0] > budget && budget >= 4*contextExcerptBytes {
+		rows[0].Excerpt = excerptOf(entries[0].Document, contextExcerptBytes)
+		rowSizes[0] = jsonSize(rows[0])
 	}
 	used, outlineBytes := 0, 0
 	for i := range entries {
@@ -266,6 +291,44 @@ func packWithinBudget(entries []domain.View, budget int) ([]domain.View, []domai
 // budget on its own. Enough for a sentence or two; the rest is what the
 // fetch is for.
 const outlineDescriptionBytes = 200
+
+// contextExcerptBytes caps the opening the top row carries when its
+// concept could not be delivered. Enough for the paragraph that says what
+// the concept is, which is what an agent needs to decide whether the
+// round trip is worth making — and no more, because the rest of the
+// budget belongs to concepts that arrive whole.
+const contextExcerptBytes = 900
+
+// excerptOf is the opening of a document's body, cut so that what comes
+// back is prose and nothing else.
+//
+// Design doc 0033 refused to truncate a concept, and the reason it gave
+// was that half of an attested computation's SQL still looks executable.
+// That reason is answered here rather than argued with: the cut stops at
+// the first code fence, so an excerpt never contains part of one. What is
+// left is the writing around the code, which is where a concept says what
+// it is for.
+//
+// The cut also prefers a paragraph boundary, so an excerpt ends where the
+// writer ended a thought instead of mid-sentence.
+func excerptOf(document string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	body := okf.Body(document)
+	if fence := strings.Index(body, "```"); fence >= 0 {
+		body = body[:fence]
+	}
+	body = strings.TrimSpace(body)
+	if len(body) <= max {
+		return body
+	}
+	cut := truncateUTF8(body, max)
+	if para := strings.LastIndex(cut, "\n\n"); para > max/2 {
+		cut = cut[:para]
+	}
+	return strings.TrimSpace(cut)
+}
 
 func outlineRow(v *domain.View, size int) domain.ContextOutline {
 	return domain.ContextOutline{

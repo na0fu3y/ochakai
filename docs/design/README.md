@@ -36,8 +36,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
-| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
+| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂) |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)** |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
@@ -414,6 +414,24 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   `get_concept` に既に載っている。**能力が落ちるのは MCP からだけ**で、
   REST・CLI(`ochakai delete` / `ochakai usage`)・Web UI には一つも
   欠けない。0067 §5.1・§6・§7 を改訂する。
+- [0093 予算は応答全体を縛り、一位は名前だけでは返らない](0093-the-budget-governs-the-whole-response.md)
+  — **Accepted**。0067 §4 の「`hits` はバイト予算の外」を撤回する。理由
+  (本文を持たず件数にも上限がある)はどちらも本当で、それでも足りない —
+  `hits` は最大 40 行・約 5 KB あり、**`budget=12000` と言った呼び出し側が
+  受け取るのは 12,000 + 自分では計算できない量**で、窓を見積もる数として
+  機能しない。同じ議論は `outline` を内側に入れたときに一度通っている。
+  予算は応答全体を縛り、**買うのは丸ごとの concept**、`hits` と `outline` は
+  **床**として常に返る(在ったと知っている呼び出し側しか予算を上げられ
+  ない)。順位は削らない。床が予算を超えるときは concept をゼロ個配る —
+  減算をそのまま渡すと「最も小さい予算が最も大きい応答を返す」になる。
+  既定の `limit` は 5 なので、実際の変化は 12,000 の約 10% である。
+  もう半分は**一位が予算に収まらなかったときの `excerpt`** で、
+  [0033](0033-context-hits-are-a-ranking.md) の「半分の SQL は実行できる
+  ように見える」に**反論せず満たす**: 切るのは文書ではなく本文(frontmatter は
+  行が既に運んでいる)、最初のコードフェンスの手前で止まり、段落境界を
+  優先し、`bytes` と `id` が残りの量と在処を言う。一位だけ、予算の四分の一
+  まで — 抜粋が下の全部を飢えさせるのは greedy packing が防いでいる形
+  そのものだからである。近似重複の除去はしない(§4)。
 
 - [0077 ファイルの住所は一つである](0077-one-address-for-a-file.md)
   — **Accepted**。**CLI がファイルを名指す綴りの現行ドキュメント**。

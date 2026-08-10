@@ -272,7 +272,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		}
 		return nil, contextOut{
 			Hits: res.Hits, Concepts: res.Concepts, Outline: res.Outline,
-			Hint: contextHint(len(res.Outline)),
+			Hint: contextHint(res.Outline),
 		}, nil
 	}))
 
@@ -509,7 +509,7 @@ type contextIn struct {
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree; several are OR-ed. It scopes the search, not the link expansion: a concept in scope still arrives with the term it cites outside"`
 	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range falls back to the default); linked companions share a 2x total cap"`
-	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of knowledge in the response — the concepts plus the outline rows naming the rest, which count against it too (default 12000). \"hits\" carries no body and is outside it. Raise it when you need whole concepts, lower it when context is tight"`
+	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the whole response — hits, outline and concepts together (default 12000). The ranking and the outline always come back, so what this buys is whole concepts. Raise it when you need them, lower it when context is tight"`
 }
 
 type contextOut struct {
@@ -530,14 +530,23 @@ const defaultContextBudget = 12000
 // no shell to hang one on, so the server supplies it — same words for
 // every host, no LLM involved (the MCP server's Instructions field carries
 // the same habit, but hosts are free to drop instructions and many do).
-func contextHint(truncated int) string {
+func contextHint(outline []domain.ContextOutline) string {
 	hint := "After acting on this knowledge, call report_outcome (worked/failed) on the concepts you " +
 		"used — failed reports are how stale verified knowledge gets caught. If this session " +
 		"produced reusable knowledge, write it back with put_concept as a draft; search " +
 		"rejected=true first so you do not re-propose something already turned down."
-	if truncated > 0 {
-		hint += fmt.Sprintf(" %d concepts did not fit the budget and are listed under \"outline\" — "+
-			"fetch any of them by id with get_concept.", truncated)
+	if len(outline) == 0 {
+		return hint
+	}
+	hint += fmt.Sprintf(" %d concepts did not fit the budget and are listed under \"outline\" — "+
+		"fetch any of them by id with get_concept.", len(outline))
+	// Said here rather than in the tool schema, because it is true of one
+	// response rather than of every one: the schema is resident in the
+	// agent's context for the whole conversation, this sentence is not.
+	if outline[0].Excerpt != "" {
+		hint += " The first of them was your best match and was too large for any budget," +
+			" so its row carries an \"excerpt\" of its opening — read that before deciding" +
+			" whether to fetch the rest."
 	}
 	return hint
 }
