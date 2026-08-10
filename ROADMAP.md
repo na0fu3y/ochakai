@@ -57,31 +57,23 @@ if the proposal is concrete.
   paragraph here. The compatibility policy the wire surfaces actually follow
   has since been written down
   ([docs/compatibility.md](docs/compatibility.md), issue #215). The two ways in
-  that were missing for somebody with no shell or no map — an installable
+  that were missing for somebody with no shell or no map were an installable
   bundle for desktop MCP clients (issue #213) and a guided `ochakai tutorial`
-  (issue #212) — were both closed as not planned, and for the same reason:
-  the surface each would add is not what keeps its reader out. A bundle
-  removes the cheapest of the three prerequisites a desktop client needs and
-  leaves `gcloud auth login`; a tutorial command would be a third copy of a
-  walkthrough the quick start and [docs/cli.md](docs/cli.md) already carry.
-  Both issues name the condition for revisiting. None of this is a feature,
-  and it is the work most likely to decide whether anyone else can use this.
+  (issue #212). The bundle shipped: a release now carries
+  `ochakai_X.Y.Z.mcpb`, the same `ochakai mcp-stdio` bridge with Claude
+  Desktop's own config JSON written for it, for macOS and Windows (issue
+  #526). It does not remove `gcloud auth login` — the bundle carries
+  ochakai's binary, not your Google identity — only the step this project
+  could remove, which was finding and writing the JSON by hand. The tutorial
+  stayed closed as not planned: a tutorial command would be a third copy of a
+  walkthrough the quick start and [docs/cli.md](docs/cli.md) already carry,
+  and issue #212 names the condition for revisiting. None of this is a
+  feature, and it is the work most likely to decide whether anyone else can
+  use this.
 
 ## Next
 
-- **Lexical ranking saturates.** The scan this entry used to describe is gone:
-  a trigram index cannot serve a two-character pattern, so Japanese terms are
-  now looked up in one whose entries are the same two-character windows a
-  question is cut into, and latin words stem on the way. Embeddings remain the
-  other half of the answer and stay on by default
-  ([0080](docs/design/0080-search-and-how-a-deployment-embeds.md)). What the
-  index exposed is the score — a fraction reaching 1.0 whenever a concept holds
-  every term, so a short question leaves several tied at the top and the reader
-  gets whichever the scan produced. Term frequency was tried as the tie-break
-  and measured worse. Nothing here promises the next attempt, but the golden
-  query set now says whether one worked.
-
-Beyond that this roadmap is thin, and honestly so. Work has been arriving from
+This roadmap is thin right now, and honestly so. Work has been arriving from
 use and from release reviews rather than from a plan; the open issues are the
 current exception, and no design doc is proposed but unlanded. If something you
 need is missing from this list, that is a reason to say so, not a sign it was
