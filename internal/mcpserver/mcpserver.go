@@ -327,7 +327,8 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		Description: "Write a concept: created if the id is free, replaced if it is taken.\n" +
 			"The document you send is the whole concept — a key you leave out is cleared, so on a " +
 			"replace, get_concept first and send back what you are not changing. Every change is " +
-			"kept as a revision; an identical write does nothing.\n" +
+			"kept as a revision, and the answer's plan says which of created / updated / " +
+			"unchanged this write turned out to be.\n" +
 			"Write status: draft unless you are recording something already agreed. You are " +
 			"recorded as the author and the concept stays unverified until a person confirms it; " +
 			"confirming and rejecting are not on this surface.\n" +
@@ -359,17 +360,17 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			if err != nil {
 				return nil, knowledgeOut{}, err
 			}
-			out, err := view(k, okf.NoteClaim(notes, claimed, k))
+			out, err := view(k, okf.NoteClaim(notes, claimed, k), domain.PlanCreated)
 			return nil, out, err
 		}
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		k, _, err := svc.Update(ctx, write, actor, version)
+		k, changed, err := svc.Update(ctx, write, actor, version)
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		out, err := view(k, okf.NoteClaim(notes, claimed, k))
+		out, err := view(k, okf.NoteClaim(notes, claimed, k), domain.PlanOf(false, changed))
 		return nil, out, err
 	}))
 
@@ -635,12 +636,20 @@ type outcomeIn struct {
 // what the concepts it reads look like, so editing one means returning it
 // changed rather than translating it into a schema and back.
 // view renders one concept as a tool's answer, with any notes the parse
-// produced. Every write path ends the same way, so it is written once.
-func view(k *domain.Knowledge, notes []string) (knowledgeOut, error) {
+// produced and the one word the write turned out to be. Every write path
+// ends the same way, so it is written once.
+//
+// plan rides on the view rather than beside it, which is where REST puts
+// it too — REST's body *is* the view (design doc 0097). An agent that
+// wrote something has no headers to read on this surface, so without it
+// there was no answer to "did that change anything" short of a second
+// call.
+func view(k *domain.Knowledge, notes []string, plan string) (knowledgeOut, error) {
 	v, err := okf.ViewOf(k)
 	if err != nil {
 		return knowledgeOut{}, err
 	}
+	v.Plan = plan
 	return knowledgeOut{Knowledge: v, Notes: notes}, nil
 }
 

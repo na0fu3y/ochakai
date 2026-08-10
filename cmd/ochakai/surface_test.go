@@ -834,6 +834,15 @@ func TestSurfaceDocCountsVocabulary(t *testing.T) {
 	// was all there was. A closed vocabulary a client branches on is a
 	// vocabulary somebody learns.
 	add("error", domain.ErrorCodes...)
+	// What a write turned out to be (design doc 0097). These three were
+	// always taught — the Ochakai-Plan header's enum is in the spec, and
+	// `ochakai import` prints them — but they lived as private constants
+	// in restapi and apiclient, so no count could see them. Moving them
+	// to domain because the response body says them too is what made
+	// them countable, which is the same shape as error codes: prose is
+	// free to rewrite, a value a client branches on is a word somebody
+	// learns.
+	add("plan", domain.Plans...)
 	compareSurface(t, "VOCAB", words)
 }
 

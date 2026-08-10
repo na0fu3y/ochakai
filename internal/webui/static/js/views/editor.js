@@ -139,7 +139,10 @@ export async function viewEditor(id, prefix = '') {
         method: 'PUT', doc: document_, onlyIfAbsent: !editing, ifMatch: version,
       });
       dirty = false;
-      toast(editing ? 'Saved.' : 'Created.');
+      // The server says which of the three the write was (design doc
+      // 0097), so the toast can stop guessing: "Saved." after a write
+      // that stored nothing is the one message a curator cannot check.
+      toast(saved && saved.plan === 'unchanged' ? 'No change.' : editing ? 'Saved.' : 'Created.');
       refreshTree();
       refreshQueues(); // an edit is what clears the past-expiry queue (design doc 0037 §2.2)
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);

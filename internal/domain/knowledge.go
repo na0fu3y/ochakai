@@ -1357,6 +1357,41 @@ type View struct {
 	Summary  Summary  `json:"summary"`
 	Observed Observed `json:"observed"`
 	Files    []File   `json:"files,omitempty"`
+	// Plan is what the write did, on the response to a write: created,
+	// updated, or unchanged. Absent on a read, which did none of them.
+	//
+	// It is one of the three words below rather than a boolean, because
+	// "nothing happened" is one of three answers and not the negation of
+	// the other two.
+	Plan string `json:"plan,omitempty"`
+}
+
+// The three things a write can turn out to have been (design doc 0074
+// §5, carried into the body by 0097).
+// They live here rather than in the surface that first needed them
+// because every surface says them now — a header on REST, a field in the
+// body on REST and MCP, a line on the CLI — and a vocabulary with one
+// home is a vocabulary that cannot drift between them.
+const (
+	PlanCreated   = "created"
+	PlanUpdated   = "updated"
+	PlanUnchanged = "unchanged"
+)
+
+// Plans is the closed set, for the schemas and the surface count.
+var Plans = []string{PlanCreated, PlanUpdated, PlanUnchanged}
+
+// PlanOf names what a write did from what the store answered: whether
+// the id was free, and whether the bytes differed from what was there.
+func PlanOf(created, changed bool) string {
+	switch {
+	case created:
+		return PlanCreated
+	case !changed:
+		return PlanUnchanged
+	default:
+		return PlanUpdated
+	}
 }
 
 // URI is the entry's canonical address, as on Knowledge and Summary.

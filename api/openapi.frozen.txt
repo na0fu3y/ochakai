@@ -497,6 +497,7 @@ components/schemas/View.files required=false type=array
 components/schemas/View.files[] ref=File
 components/schemas/View.id required=true type=string
 components/schemas/View.observed required=true ref=Observed
+components/schemas/View.plan required=false type=string enum=["created" "updated" "unchanged"]
 components/schemas/View.summary required=true ref=Summary
 components/securitySchemes/GoogleIDToken type=http scheme=bearer format=JWT
 security (anonymous)

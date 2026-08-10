@@ -3349,3 +3349,79 @@ func TestRESTIntegrationSearchCarriesTheMatchingPassage(t *testing.T) {
 		t.Errorf("a listing carries snippet %q; there is no query to have matched", snip)
 	}
 }
+
+// TestIntegrationAWriteSaysWhatItDidInTheBody walks the three answers a
+// write can give through the response body (design doc 0097): created,
+// updated, unchanged — plus the dry run, which says what a write would
+// have been, and the read, which says nothing because it did none of
+// them.
+//
+// The headers are asserted beside the body deliberately. They stay
+// (header names are inside the freeze, 0082 §2), so the two have to
+// agree; a body that said "updated" while Ochakai-Unchanged said "true"
+// would be worse than the header alone.
+func TestIntegrationAWriteSaysWhatItDidInTheBody(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "planit")
+	id := typ + "/metrics/revenue"
+	first := docFrom(t, map[string]any{"type": typ, "id": id, "title": "Revenue"})
+	second := docFrom(t, map[string]any{"type": typ, "id": id, "title": "Revenue, net"})
+
+	viewOf := func(t *testing.T, resp *http.Response) domain.View {
+		t.Helper()
+		var v domain.View
+		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return v
+	}
+
+	resp := putDoc(t, srv.URL, id, first, true)
+	v := viewOf(t, resp)
+	resp.Body.Close()
+	if v.Plan != domain.PlanCreated {
+		t.Errorf("first write: plan = %q, want %q", v.Plan, domain.PlanCreated)
+	}
+	resp = putDoc(t, srv.URL, id, second, false)
+	v = viewOf(t, resp)
+	resp.Body.Close()
+	if v.Plan != domain.PlanUpdated {
+		t.Errorf("changed write: plan = %q, want %q", v.Plan, domain.PlanUpdated)
+	}
+	resp = putDoc(t, srv.URL, id, second, false)
+	unchangedHeader := resp.Header.Get("Ochakai-Unchanged")
+	v = viewOf(t, resp)
+	resp.Body.Close()
+	if v.Plan != domain.PlanUnchanged || unchangedHeader != "true" {
+		t.Errorf("identical write: plan = %q, Ochakai-Unchanged = %q",
+			v.Plan, unchangedHeader)
+	}
+
+	// A dry run is the write withheld, so it answers with the word the
+	// write would have been — in both places.
+	req, err := http.NewRequest(http.MethodPut,
+		srv.URL+"/api/v1/bundle/"+id+".md?dry_run=true", bytes.NewReader(first))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "text/markdown")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planHeader := resp.Header.Get("Ochakai-Plan")
+	v = viewOf(t, resp)
+	resp.Body.Close()
+	if v.Plan != domain.PlanUpdated || planHeader != domain.PlanUpdated {
+		t.Errorf("dry run: plan = %q, Ochakai-Plan = %q, want %q both",
+			v.Plan, planHeader, domain.PlanUpdated)
+	}
+
+	// And a read did none of the three, so it says none of them: a field
+	// that appeared on every response would be one nobody could act on.
+	var read domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &read)
+	if read.Plan != "" {
+		t.Errorf("a read carries a plan: %q", read.Plan)
+	}
+}

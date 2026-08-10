@@ -21,6 +21,28 @@ last entry.
 
 ### Added
 
+- **A write now says what it did in the body, not only in a header.** The
+  answer to `PUT /api/v1/bundle/{path}` for a concept carries `plan`:
+  `created`, `updated`, or `unchanged` — the same word `Ochakai-Plan`
+  gives a dry run and `Ochakai-Unchanged` reports after a real write.
+  Absent on a read, which did none of the three. **MCP's `put_concept`
+  carries it too**, at `knowledge.plan`, and that surface has no headers
+  at all: an agent writing knowledge back had no way to tell a
+  replacement from a write that changed nothing without reading the
+  concept again. The bundled web UI stops saying *Saved.* after a write
+  that stored nothing.
+
+  **The headers stay.** Removing them is not available: design doc 0082
+  §2 puts header names inside the frozen address space, so that half is
+  1.0's work — while adding a property to a response-only schema was
+  never what the freeze held. The three words moved to `internal/domain`
+  from the two private copies that had drifted apart in `internal/restapi`
+  and `internal/apiclient`, and that alone moved `VOCAB` from 46 to 49:
+  not new words — `Ochakai-Plan`'s enum is in the frozen contract and
+  `ochakai import` prints all three — but words no count could see
+  ([#539](https://github.com/na0fu3y/ochakai/issues/539), design doc
+  0097).
+
 - **A deployment with authentication off says so on every page.** `GET
   /api/v1/stats` answers `insecure_dev: true` under
   `OCHAKAI_MODE=dev`, and the bundled web UI carries a banner while it

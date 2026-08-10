@@ -2708,7 +2708,9 @@ components:
         an index over it, so where the two could disagree the document is
         right.
 
-        These four are the whole object. It used to declare `created_at`,
+        `id`, `document`, `summary` and `observed` are the whole of a
+        read; `files` and `plan` are there when there is something to
+        say. It used to declare `created_at`,
         `updated_at`, `trust` and `content_changed_at` beside them, none
         of which any release ever sent: the first three are `summary`'s
         and the fourth is `observed.generated.at`. A schema may not
@@ -2741,6 +2743,21 @@ components:
             File metadata (no bytes — fetch them via
             /api/v1/bundle/{path}, which is also where they are written).
             Absent when the concept has none.
+        plan:
+          type: string
+          enum: [created, updated, unchanged]
+          description: >
+            What the write did, on the answer to a write: the id was
+            free, the stored concept was replaced, or the bytes matched
+            what was there and nothing was written. **Absent on a read**,
+            which did none of the three.
+
+            The same word `Ochakai-Plan` carries on a dry run and
+            `Ochakai-Unchanged` reports after a real one. It is here as
+            well because a header is the one part of an answer that
+            `curl` does not print and a generated client does not hand
+            back by default (design doc 0097); the headers stay because
+            header names are inside the freeze (design doc 0082 §2).
     File:
       type: object
       description: >
