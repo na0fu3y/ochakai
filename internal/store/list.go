@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 
@@ -164,6 +165,34 @@ const usageLateral = `
 		WHERE knowledge_id = k.id
 	) u ON true`
 
+// recentLateral counts the same two events again over the raw rows,
+// inside domain.RecentUsageDays, exposing them as r.fetches and r.failed.
+// It is what the two usage feeds order by; the lifetime totals beside it
+// stay, and break the ties.
+//
+// A second pass over a second table, rather than a decaying column. The
+// counters in knowledge_usage only ever grow, so a windowed number cannot
+// be read off them at all — and a stored decay would need something to
+// run on a schedule, which is a moving part this product does not have.
+// knowledge_event already holds the rows with their timestamps, indexed
+// on (knowledge_id, at), which is exactly this range scan.
+//
+// The cost is bounded by the same pruning: events older than the
+// retention are gone, so the table this walks is a bounded window of a
+// curated base's activity rather than its history.
+const recentLateral = `
+	LEFT JOIN LATERAL (
+		SELECT
+			count(*) FILTER (WHERE event = 'fetched') AS fetches,
+			count(*) FILTER (WHERE event = 'failed')  AS failed
+		FROM knowledge_event
+		WHERE knowledge_id = k.id AND at >= now() - $%d::interval
+	) r ON true`
+
+// recentWindow is the lateral's interval argument, in the spelling
+// PostgreSQL reads.
+func recentWindow() string { return strconv.Itoa(domain.RecentUsageDays) + " days" }
+
 // ListByUsage returns filtered entries ordered by demand, most-read
 // first: fetches descending, then oldest-created (created_at ascending)
 // as the tiebreak. This is the draft review feed — the promotion queue at
@@ -187,7 +216,10 @@ const usageLateral = `
 // one the queue is sorted on.
 func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	args = append(args, recentWindow())
+	recent := fmt.Sprintf(recentLateral, len(args))
 	keyset, err := keysetAfter([]orderCol{
+		{expr: "r.fetches", cast: "bigint", desc: true},
 		{expr: "u.fetches", cast: "bigint", desc: true},
 		{expr: "k.created_at", cast: "timestamptz"},
 	}, "k.id", after, &args)
@@ -196,10 +228,11 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit i
 	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
-			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
-		FROM object k`+usageLateral+`
+			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at,
+			r.fetches, r.failed
+		FROM object k`+usageLateral+recent+`
 		WHERE %s%s
-		ORDER BY u.fetches DESC, k.created_at ASC, k.id LIMIT %d`, where, keyset, limit)
+		ORDER BY r.fetches DESC, u.fetches DESC, k.created_at ASC, k.id LIMIT %d`, where, keyset, limit)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -228,7 +261,10 @@ func (s *Store) ListByUsage(ctx context.Context, f Filter, after *After, limit i
 // so the reviewer sees the worked/failed evidence inline; score is 0.
 func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
+	args = append(args, recentWindow())
+	recent := fmt.Sprintf(recentLateral, len(args))
 	keyset, err := keysetAfter([]orderCol{
+		{expr: "r.failed", cast: "bigint", desc: true},
 		{expr: "u.failed", cast: "bigint", desc: true},
 		{expr: "u.worked", cast: "bigint"},
 		{expr: lastVerifiedAt("k"), cast: "timestamptz", null: true},
@@ -238,10 +274,11 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit 
 	}
 	q := fmt.Sprintf(`
 		SELECT `+knowledgeSelectK+`,
-			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at
-		FROM object k`+usageLateral+`
+			u.search_hits, u.fetches, u.worked, u.failed, u.last_used_at,
+			r.fetches, r.failed
+		FROM object k`+usageLateral+recent+`
 		WHERE %s AND `+unansweredFailure("k")+`%[4]s
-		ORDER BY u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
+		ORDER BY r.failed DESC, u.failed DESC, u.worked ASC, %[2]s ASC NULLS LAST, k.id LIMIT %[3]d`,
 		where, lastVerifiedAt("k"), limit, keyset)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -283,12 +320,14 @@ func scanUsageHit(row pgx.CollectableRow) (domain.SearchHit, error) {
 	var u domain.Usage
 	dests, finish := knowledgeDest(&k)
 	if err := row.Scan(append(dests,
-		&u.SearchHits, &u.Fetches, &u.Worked, &u.Failed, &u.LastUsedAt)...); err != nil {
+		&u.SearchHits, &u.Fetches, &u.Worked, &u.Failed, &u.LastUsedAt,
+		&u.Recent.Fetches, &u.Recent.Failed)...); err != nil {
 		return h, err
 	}
 	if err := finish(); err != nil {
 		return h, err
 	}
+	u.Recent.Days = domain.RecentUsageDays
 	h.Summary = domain.SummaryOf(&k)
 	h.Usage = &u
 	return h, nil

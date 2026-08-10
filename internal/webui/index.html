@@ -2258,8 +2258,14 @@ function reviewCard(h) {
   const tags = (h.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
   const who = actorStr(h.created_by);
   const age = daysSince(h.created_at);
+  // The recent count leads, because it is what put this card where it
+  // is: the feeds rank on the window and break ties on the lifetime
+  // total (design doc 0090). Showing only the total made the order look
+  // wrong — a concept read twenty times last year sitting under one read
+  // three times last week.
+  const r = u.recent || {};
   const usageBits = (u.search_hits || u.fetches)
-    ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0}`
+    ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0} (${r.fetches || 0} in ${r.days || 0}d)`
     : 'no usage yet';
   const outcomeBits = (u.worked || u.failed)
     ? `${u.failed ? '⚠️ ' : ''}worked ${u.worked || 0} · failed ${u.failed || 0}`

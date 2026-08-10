@@ -503,6 +503,42 @@ type Usage struct {
 	Worked     int64      `json:"worked"`
 	Failed     int64      `json:"failed"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	// Recent is the same activity inside a fixed recent window, and it is
+	// what the usage and failed feeds are ordered by.
+	Recent RecentUsage `json:"recent"`
+}
+
+// RecentUsageDays is the window the feeds rank inside: how long a read or
+// a failure report goes on counting as *demand* rather than as history.
+//
+// Ninety days, and it is a decision rather than a tuning knob. The
+// counters beside it are lifetime and never decay, so without a window a
+// concept that was hot in a knowledge base's first month outranks
+// everything for as long as the deployment lives, and a queue meant to
+// say "look at this next" answers "look at what you already looked at".
+//
+// It sits well inside the raw events' retention, and has to: the count is
+// taken over knowledge_event, so a window longer than the retention would
+// silently mean "as much as we still have" while reading like a period of
+// time. TestTheRecentWindowFitsInsideRetention holds the two together.
+const RecentUsageDays = 90
+
+// RecentUsage is what happened to a concept lately: the two counts the
+// feeds rank on, and the window they were counted in.
+//
+// The window travels with the numbers rather than being left to the
+// manual. A count whose period is implicit is a count a reader cannot
+// check, and this one changes meaning entirely between "three reads" and
+// "three reads this quarter".
+//
+// Two counts and not four. search_hits is not here because it is not
+// demand — the ranker records one for every id in every result set, so
+// windowing it would only make the ranker's recent output the recent
+// demand. `worked` is not here because nothing ranks on it.
+type RecentUsage struct {
+	Days    int   `json:"days"`
+	Fetches int64 `json:"fetches"`
+	Failed  int64 `json:"failed"`
 }
 
 // Actor identifies who created or verified a knowledge entry.

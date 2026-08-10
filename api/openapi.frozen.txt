@@ -476,6 +476,10 @@ components/schemas/Usage type=object
 components/schemas/Usage.failed required=true type=integer
 components/schemas/Usage.fetches required=true type=integer
 components/schemas/Usage.last_used_at required=false type=string format="date-time"
+components/schemas/Usage.recent required=true type=object
+components/schemas/Usage.recent.days required=true type=integer
+components/schemas/Usage.recent.failed required=true type=integer
+components/schemas/Usage.recent.fetches required=true type=integer
 components/schemas/Usage.search_hits required=true type=integer
 components/schemas/Usage.worked required=true type=integer
 components/schemas/Verification type=object
