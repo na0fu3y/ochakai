@@ -21,6 +21,25 @@ last entry.
 
 ### Added
 
+- **A release now carries `ochakai_X.Y.Z.mcpb`, the one-click install for
+  Claude Desktop.** Connecting a desktop app meant finding a JSON file
+  the app does not show you, writing a `command` that has to be an
+  absolute path because the app inherits no `PATH`, and restarting it —
+  four steps in the manual, and the first one is where people stop. The
+  bundle is the same `ochakai mcp-stdio` bridge with that JSON written
+  for them: open the file, and the app asks for one thing, the server
+  URL, with the public demo already filled in. macOS and Windows, which
+  are the platforms that install a bundle; Linux keeps `go install`, the
+  archives and the image. **It does not remove the gcloud requirement**
+  against Cloud Run — the bundle carries ochakai's binary, not your
+  Google identity — and the manual says so where it used to say no such
+  bundle existed. About 38 MB, because it carries a macOS universal
+  binary and a Windows one; the manifest can vary its command by
+  operating system and not by CPU, so the architecture is settled before
+  packing. Not in `checksums.txt` (goreleaser writes that first) and
+  covered by the build provenance attestation instead
+  ([#526](https://github.com/na0fu3y/ochakai/issues/526)).
+
 - **The README is one staircase, and it says the product is good at
   Japanese.** The quick start ran demo → your own server → an agent, but
   the rungs were unlabelled and production was not one of them, so a

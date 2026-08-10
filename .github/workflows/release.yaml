@@ -85,6 +85,18 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The MCP bundle: one zip a desktop app installs in a click, built
+      # out of the binaries goreleaser just produced. Attached with `gh`
+      # rather than by goreleaser, which has no bundle format and would
+      # need a custom publisher for one file.
+      - name: Pack and attach the MCP bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          scripts/mcpb "$TAG"
+          gh release upload "$TAG" dist/*.mcpb --clobber
       # goreleaser's own changelog generation is disabled (the notes are
       # written by hand), so a release it creates has an empty body and
       # the Releases page shows a bare tag until someone edits it. The
@@ -120,4 +132,5 @@ jobs:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.mcpb
             dist/checksums.txt

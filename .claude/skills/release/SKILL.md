@@ -114,9 +114,13 @@ gh release view vX.Y.Z --json assets -q '.assets[].name'
 gh release view vX.Y.Z --json body -q '.body' | head -5
 ```
 
-Expect **6 archives plus `checksums.txt`**, and a body that is the tag
-message — an empty one means the copy step warned and skipped (a
-lightweight tag, or a message with nothing under its title line). Then,
+Expect **6 archives, `ochakai_X.Y.Z.mcpb`, and `checksums.txt`**, and a
+body that is the tag message — an empty one means the copy step warned
+and skipped (a lightweight tag, or a message with nothing under its title
+line). The bundle is not in `checksums.txt`: goreleaser writes that file
+before `scripts/mcpb` runs, and the bundle's guarantee is the build
+provenance attestation instead
+(`gh attestation verify ochakai_X.Y.Z.mcpb -R na0fu3y/ochakai`). Then,
 in a scratch directory:
 
 ```bash
@@ -124,6 +128,7 @@ shasum -a 256 -c checksums.txt --ignore-missing
 ./ochakai version
 gh attestation verify oci://ghcr.io/na0fu3y/ochakai:X.Y.Z -R na0fu3y/ochakai
 gh attestation verify ochakai_X.Y.Z_linux_amd64.tar.gz -R na0fu3y/ochakai
+gh attestation verify ochakai_X.Y.Z.mcpb -R na0fu3y/ochakai
 curl -s https://proxy.golang.org/github.com/na0fu3y/ochakai/@latest
 ```
 

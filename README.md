@@ -182,6 +182,12 @@ connection from that vendor's infrastructure rather than from your
 machine, so an IAM-restricted deployment is out of its reach by design:
 [connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
 
+**Claude Desktop has a third form: `ochakai_<version>.mcpb` on the
+[releases page](https://github.com/na0fu3y/ochakai/releases).** It is the
+bridge above with the JSON already written — open the file, and the app
+asks for one thing, the server URL, with the public demo filled in. macOS
+and Windows, which are the platforms that install a bundle.
+
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 (Japanese) into your project's CLAUDE.md, or install the
 [hooks](examples/claude-code) (Japanese) to make recall and write-back automatic
