@@ -314,6 +314,30 @@ last entry.
 
 ### Fixed
 
+- **The bundled UI drew footnotes as characters, on a bundle it ships
+  with.** `sources[].id` exists so a footnote in a concept's body can
+  cite one of its sources — `docs/architecture.md` says so, and
+  `examples/demo`'s own `metrics/revenue` is written that way — so the
+  first concept most readers open showed `systems.[^rev-policy]` in the
+  prose and the definition line as a stray paragraph. The server
+  recommended a notation its own web UI turned into litter. Footnotes
+  render as footnotes now: a numbered marker, a list at the foot in the
+  order the prose refers to them, and a link back. A reference nothing
+  defines is left as the writer's text, the way an unresolvable link
+  already is, and a definition nothing refers to puts no number in the
+  margin.
+
+  Three more constructs came with it, because a renderer that drops what
+  a writer wrote is the same defect each time: **headings below h3**,
+  **block quotes**, and **nested lists** — which were flattened, so a
+  runbook's sub-steps read as steps.
+
+- **Following a footnote left the concept.** The router treated every
+  hash as a route, so `#fn-…` — an anchor inside the document being read
+  — resolved to no route and landed the reader on the home page. Routes
+  begin `#/`; anything else is the browser's to scroll to
+  ([#536](https://github.com/na0fu3y/ochakai/issues/536)).
+
 - **Deleting a file at a bundle path left its vector behind, still
   ranking the concept that showed it.** `DELETE` on a bundle path
   removed the object and its bytes but nothing dropped the embedding, so
