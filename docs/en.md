@@ -71,7 +71,7 @@ to look up.
 - `OCHAKAI_URL`
 - `PORT`
 
-**`OCHAKAI_MODE` is the access posture, and there are four.** Unset is
+**`OCHAKAI_MODE` is the access posture, and there are five.** Unset is
 the normal one: private, writable, Cloud Run IAM decides who reaches it.
 `read-only` serves the base and refuses every write. `public` is the
 posture the demo runs in — reachable without a Google account, read-only,
