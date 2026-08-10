@@ -106,7 +106,7 @@ it.
   "a second authentication path" until 2026-08, when
   [0086](docs/design/0086-a-second-way-to-say-who-is-calling.md) found one
   that costs secret-zero nothing: a deployment can name its own OpenID
-  Connect issuer and verify bearer tokens itself, against the issuer's
+  Connect (OIDC) issuer and verify bearer tokens itself, against the issuer's
   published public keys, with nothing to issue or rotate there either. The
   goal was always secret-zero
   ([0065](docs/design/0065-identity-and-provenance.md),

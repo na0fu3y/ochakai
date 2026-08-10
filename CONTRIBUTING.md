@@ -744,8 +744,10 @@ Two decisions worth knowing before proposing features:
 - **No LLM inside, no SQL execution.** ochakai stores and serves
   knowledge; interpretation and execution belong to the client agent
   (0081).
-- **Google Cloud only, secret-zero.** Auth is Cloud Run IAM + Cloud SQL
-  IAM; features must not introduce tokens or passwords (0065, 0003).
+- **Secret-zero.** Auth is Cloud Run IAM + Cloud SQL IAM on Google
+  Cloud, or in-process verification against an OIDC issuer's published
+  keys off it (0086); features must not introduce tokens or passwords
+  (0065, 0003).
 
 ## Translating a manual page
 

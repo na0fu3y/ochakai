@@ -279,7 +279,7 @@ ochakai loses, and says who should pick something else.
 
 - **Google Cloud**, recommended: Cloud Run IAM and Cloud SQL IAM are how
   ochakai holds no secret of its own without any configuration. Off
-  Google Cloud, naming your own OpenID Connect issuer
+  Google Cloud, naming your own OpenID Connect (OIDC) issuer
   ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)) is a
   second, supported authentication path — ochakai verifies the bearer
   token itself against the issuer's published keys, which introduces no

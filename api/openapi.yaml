@@ -467,18 +467,22 @@ paths:
                   summary: q and sort are mutually exclusive
                   value:
                     error: sort=usage lists concepts; it cannot be combined with a search query (q)
+                    code: invalid
                 noQuery:
                   summary: Neither q nor sort was given
                   value:
                     error: search needs a query; use sort=verified_at|usage|failed|stale_after to list concepts without one, or source=URI to list what cites a resource
+                    code: invalid
                 cursorOnSearch:
                   summary: A ranking has no next page
                   value:
                     error: "a search is bounded by limit and has no next page: its ranking is a fused window, not an order to resume from — narrow it with filters, or walk a listing with sort=verified_at|usage|failed|stale_after"
+                    code: invalid
                 cursorFromAnotherListing:
                   summary: The cursor belongs to a different order
                   value:
                     error: cursor belongs to the usage listing; it cannot resume the failed one
+                    code: invalid
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "405": { $ref: "#/components/responses/Error" }
@@ -816,6 +820,7 @@ paths:
                 required: [error, code]
               example:
                 error: "files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0013)"
+                code: unsupported
         "409":
           description: >
             The path was read as a thing it is not. A reserved name was
@@ -849,6 +854,7 @@ paths:
                   index.md is generated from the bundle, not stored in it
                   (design doc 0046 §§3.7-3.8), so there is no subtree here
                   to archive; ask the directory it sits in
+                code: invalid
         "404":
           description: No object at this path.
           headers:
@@ -863,6 +869,7 @@ paths:
                 required: [error, code]
               example:
                 error: no object at this path
+                code: not_found
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     put:
@@ -1056,6 +1063,7 @@ paths:
                 required: [error, code]
               example:
                 error: index.md is generated from the bundle, not stored in it (design doc 0046 §§3.7-3.8)
+                code: invalid
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
     delete:
@@ -1810,10 +1818,12 @@ paths:
                   summary: A ruling outside the vocabulary
                   value:
                     error: 'ruling must be one of verified, rejected, withdrawn, not "approved"'
+                    code: invalid
                 noteOnVerification:
                   summary: A note belongs to a rejection
                   value:
                     error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
+                    code: invalid
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
@@ -1833,6 +1843,7 @@ paths:
                 required: [error, code]
               example:
                 error: knowledge carries no rejection to withdraw
+                code: no_rejection
         "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
@@ -2434,10 +2445,12 @@ components:
               summary: A write against a read-only deployment
               value:
                 error: "this ochakai is read-only: it serves knowledge but does not change it"
+                code: read_only
             notADelegator:
               summary: Ochakai-On-Behalf-Of from a caller not permitted to delegate
               value:
                 error: "auth: Ochakai-On-Behalf-Of: app@example.iam.gserviceaccount.com is not permitted to act on behalf of others (add it to OCHAKAI_DELEGATING_CALLERS)"
+                code: forbidden
   schemas:
     Type:
       type: string
