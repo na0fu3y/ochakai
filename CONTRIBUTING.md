@@ -141,6 +141,28 @@ would have drawn is simply blank. A missing browser or an unreachable UI
 is a skip locally and a failure under `OCHAKAI_SMOKE_REQUIRED=1`, which
 is how CI runs it: a skip there would be a green run that tested nothing.
 
+### Measuring before proposing
+
+`scripts/duplicate-distances.sql` is the shape a measurement takes here:
+read-only SQL, no surface, run against a base somebody actually curates.
+
+```sh
+psql "$OCHAKAI_DATABASE_URL" -f scripts/duplicate-distances.sql
+```
+
+It answers one question — how close the concepts in a base sit to each
+other — because the feature it is upstream of ("return one of the
+near-duplicates, not five") cannot be specified without a number nobody
+can name from an armchair. A histogram with a bump near zero, separated
+from the rest, is a threshold; one smooth slope is the finding that
+there is not one, and that finding is worth as much as the feature.
+
+The pattern generalizes, and it is the order the records follow: the
+count that shows a problem exists ships before the mechanism that
+answers it (design doc 0089 §4). A script like this is not a surface —
+nobody has to learn it, no endpoint answers it — so it is cheap to write
+and cheap to delete once it has been read.
+
 ## Working with Claude Code
 
 The repository checks in a `.claude/settings.json` with **hooks only**.
