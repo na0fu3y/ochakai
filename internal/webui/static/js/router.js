@@ -17,15 +17,22 @@ export let unsaved = null; // () => boolean
 window.addEventListener('beforeunload', e => { if (unsaved && unsaved()) e.preventDefault(); });
 
 export function route() {
+  // Every route this page has begins "#/". A hash that does not is an
+  // anchor within the document being shown — a footnote marker jumping
+  // to the foot of a body, and back — so it is the browser's to handle
+  // and not a navigation at all. Without this the reader who clicked a
+  // footnote landed on the home page, which is worse than the marker
+  // not being a link.
+  const hash = location.hash;
+  if (hash && !hash.startsWith('#/')) return;
   if (unsaved && unsaved() && !confirm('保存していない変更を捨てますか?')) {
     // Put the URL back; replaceState does not re-fire hashchange.
     history.replaceState(null, '', route._current || '#/');
     return;
   }
   unsaved = null;
-  route._current = location.hash || '#/';
-  const hash = location.hash.replace(/^#\/?/, '');
-  const [head, ...rest] = hash.split('/');
+  route._current = hash || '#/';
+  const [head, ...rest] = hash.replace(/^#\/?/, '').split('/');
   document.querySelectorAll('#topnav a').forEach(a => a.classList.remove('active'));
   const mark = r => { const a = document.querySelector(`#topnav a[data-route="${r}"]`); if (a) a.classList.add('active'); };
   if (head === 'k' && rest.length >= 1) {

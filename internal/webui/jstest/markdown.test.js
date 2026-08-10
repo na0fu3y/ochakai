@@ -97,13 +97,75 @@ test('a description draws no bundle links', () => {
   assert.match(descHTML('[x](/metrics/revenue.md)'), /\[x\]\(\/metrics\/revenue\.md\)/);
 });
 
-// What it does not draw. Written down because the page invites authors
-// to write markdown and these are the notations that come back as
-// characters — the renderer's replacement is issue #536's second half,
-// and this is the list it has to satisfy.
+test('headings go to six levels', () => {
+  assert.equal(md('#### 四段目'), '<h4>四段目</h4>');
+  assert.equal(md('###### 六段目'), '<h6>六段目</h6>');
+  // Seven is not a heading in markdown either.
+  assert.doesNotMatch(md('####### 七'), /<h7>|<h6>/);
+});
+
+test('a block quote is a quote', () => {
+  assert.equal(md('> 引用'), '<blockquote><p>引用</p></blockquote>');
+  // Consecutive lines are one quoted paragraph, as they are in prose.
+  assert.equal(md('> 一行目\n> 二行目'), '<blockquote><p>一行目 二行目</p></blockquote>');
+  assert.equal(md('> 引用\n\nあと'), '<blockquote><p>引用</p></blockquote><p>あと</p>');
+  // The quote's own contents are still markdown, and still escaped.
+  assert.match(md('> **強い** <b>'), /<strong>強い<\/strong> &lt;b&gt;/);
+});
+
+test('a nested list is a tree, not two lists in a row', () => {
+  // The child list opens inside the item above it, so the markup says
+  // what the writer said: these steps are under that step.
+  assert.equal(md('- a\n  - b'), '<ul><li>a<ul><li>b</li></ul></li></ul>');
+  assert.equal(md('- a\n  - b\n- c'), '<ul><li>a<ul><li>b</li></ul></li><li>c</li></ul>');
+  assert.equal(md('1. a\n   - b'), '<ol><li>a<ul><li>b</li></ul></li></ol>');
+  // Three deep, and back out in one step.
+  assert.equal(md('- a\n  - b\n    - c\n- d'),
+    '<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li><li>d</li></ul>');
+});
+
+// The notation the product tells writers to use. `sources[].id` exists
+// so a footnote in the body can cite one of the concept's sources, and
+// examples/demo is written that way — so this was the one gap where the
+// server recommended something the bundled UI drew as characters.
+test('a footnote is a footnote', () => {
+  const html = md('主張。[^src]\n\n[^src]: 出典の名前');
+  assert.match(html, /<sup class="fnref"><a id="fnref-src" href="#fn-src">1<\/a><\/sup>/);
+  assert.match(html, /<section class="footnotes"><ol><li id="fn-src">出典の名前/);
+  assert.match(html, /<a class="fnback" href="#fnref-src"/);
+  // The definition line is not also drawn where it stands.
+  assert.doesNotMatch(html, /<p>\[\^src\]/);
+  assert.doesNotMatch(html, /\[\^src\]<\/p>/);
+});
+
+test('footnotes are numbered in the order the prose refers to them', () => {
+  const html = md('一[^b] 二[^a]\n\n[^a]: あ\n[^b]: い');
+  assert.match(html, /href="#fn-b">1</);
+  assert.match(html, /href="#fn-a">2</);
+  assert.match(html, /<li id="fn-b">い .*<li id="fn-a">あ /);
+});
+
+test('a footnote nothing defines stays the writer\'s text', () => {
+  // The same rule the link and image notations follow: what cannot be
+  // resolved is left as it was written, not drawn as a broken marker.
+  assert.equal(md('主張。[^missing]'), '<p>主張。[^missing]</p>');
+  // And a definition nothing refers to puts no number in the margin.
+  assert.equal(md('本文。\n\n[^unused]: 誰も参照しない'), '<p>本文。</p>');
+});
+
+test('a footnote label cannot escape its own anchor', () => {
+  // The label reaches an id and an href, so it is slugified rather than
+  // trusted — the body is somebody else's text.
+  const html = md('x[^a"b]\n\n[^a"b]: 出典');
+  assert.doesNotMatch(html, /id="fn-a"b"/);
+  assert.match(html, /id="fn-a-*b"|id="fn-a-quot-b"/);
+});
+
+// What it still does not draw, so the next person does not have to
+// discover it in a document somebody wrote.
 test('the notations this renderer does not know stay as text', () => {
-  assert.doesNotMatch(md('#### 四段目'), /<h4>/);           // h4 and deeper
-  assert.doesNotMatch(md('> 引用'), /<blockquote>/);         // block quotes
-  assert.doesNotMatch(md('脚注[^1]\n\n[^1]: 注'), /<sup>/);  // footnotes
-  assert.doesNotMatch(md('- a\n  - b'), /<ul><li>a<\/li><ul>/); // nested lists
+  assert.doesNotMatch(md('term\n: definition'), /<dl>/);      // definition lists
+  assert.doesNotMatch(md('- [ ] todo'), /<input/);             // task lists
+  assert.doesNotMatch(md('~~gone~~'), /<del>/);                // strikethrough
+  assert.doesNotMatch(md('---'), /<hr/);                       // thematic breaks
 });

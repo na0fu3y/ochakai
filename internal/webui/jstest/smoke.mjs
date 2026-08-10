@@ -211,6 +211,22 @@ try {
   await check('a concept renders', await waitFor(`${textOf('#view')}.includes('Revenue')`), shown);
   await check('its body renders as markdown', await waitFor(`${countOf('#view .md *')} > 0`), shown);
 
+  // examples/demo's metrics/revenue cites a source with a footnote, which
+  // is the notation `sources[].id` exists for. Two things have to be
+  // true: it is drawn as a footnote, and following the marker stays on
+  // the concept — the router owns "#/" routes, and an in-page anchor is
+  // not one.
+  await check('a footnote is drawn as a footnote',
+    await waitFor(`${countOf('#view .md:not(.desc) .fnref a')} > 0`), shown);
+  await evalJS(`document.querySelector('#view .md:not(.desc) .fnref a').click()`);
+  // Asserted on something only the detail view draws. "the text still
+  // says Revenue" is not that: the home page lists the concept too, so
+  // the first version of this check passed against a build with the
+  // router guard removed.
+  await check('following a footnote marker stays on the concept',
+    await waitFor(`location.hash.startsWith('#fn-')
+      && !!document.querySelector('#view .md:not(.desc) .footnotes')`), shown);
+
   await go('#/review');
   await check('the review queue renders', await waitFor(`${textOf('#view')}.length > 100`), shown);
 

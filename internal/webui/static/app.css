@@ -311,10 +311,35 @@ table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
 .tile .lbl { color: var(--muted); font-size: .82rem; }
 
 /* ---- markdown body ---- */
-.md h1, .md h2, .md h3 { line-height: 1.3; margin: 1.1em 0 .4em; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { line-height: 1.3; margin: 1.1em 0 .4em; }
 .md h1 { font-size: 1.3rem; } .md h2 { font-size: 1.15rem; } .md h3 { font-size: 1rem; }
+/* h4 and below stop growing and start leaning on weight and colour:
+   past the third level a document is showing structure, not shouting. */
+.md h4, .md h5, .md h6 { font-size: .95rem; color: var(--muted); }
 .md p { margin: .5em 0; }
 .md ul, .md ol { margin: .4em 0; padding-left: 1.5em; }
+/* A nested list sits inside its item, so it needs no margin of its own
+   above — the item already provided one. */
+.md li > ul, .md li > ol { margin: .15em 0; }
+.md blockquote {
+  margin: .6em 0; padding: .1em 0 .1em .9em;
+  border-left: 3px solid var(--border); color: var(--muted);
+}
+/* The footnote marker is a link the size of a marker, not of the prose
+   around it, and the foot of the document is set apart from the body it
+   annotates. */
+.md .fnref { font-size: .75em; line-height: 0; }
+.md .fnref a { text-decoration: none; padding: 0 .1em; }
+.md .footnotes {
+  margin-top: 1.4em; padding-top: .6em;
+  border-top: 1px solid var(--border); font-size: .9rem; color: var(--muted);
+}
+.md .footnotes ol { margin: 0; }
+.md .footnotes li { margin: .2em 0; }
+.md .fnback { text-decoration: none; }
+/* The target of a jump gets a moment of colour, so a reader who followed
+   a marker can see where they landed. */
+.md .footnotes li:target, .md .fnref a:target { background: var(--accent-weak); }
 .md img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; display: block; margin: .6rem 0; }
 .md table { border-collapse: collapse; margin: .6em 0; max-width: 100%; }
 .md th, .md td { border: 1px solid var(--border); padding: .35rem .6rem; }
