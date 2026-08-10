@@ -41,7 +41,7 @@ export async function refreshTree() {
     else if (dm) revealInTree(dm[1].split('/').map(decodeURIComponent).join('/').replace(/\/*$/, '/'));
     else markTreeSelection();
   } catch (e) {
-    tree.innerHTML = `<div class="error-banner" role="alert">Tree failed: ${esc(e.message)}</div>`;
+    tree.innerHTML = `<div class="error-banner" role="alert">ツリーを読み込めませんでした: ${esc(e.message)}</div>`;
   }
 }
 $('#tree-refresh').addEventListener('click', refreshTree);
@@ -107,13 +107,13 @@ export function loadNode(d) {
       const body = levelHTML(res, prefix);
       const note = res.truncated
         ? `<div class="truncation-note">この階層の先頭 1000 concept を表示 — これだけ広いディレクトリは
-           better split into subdirectories.</div>` : '';
+           サブディレクトリに分けたほうがよいでしょう。</div>` : '';
       box.innerHTML = (body + note) || '<div class="empty">空です。</div>';
       wireNodes(box);
       markTreeSelection();
     } catch (e) {
       d._load = null; // reopen retries
-      box.innerHTML = `<div class="error-banner" role="alert">Load failed: ${esc(e.message)}</div>`;
+      box.innerHTML = `<div class="error-banner" role="alert">読み込みに失敗しました: ${esc(e.message)}</div>`;
     }
   })();
   return d._load;

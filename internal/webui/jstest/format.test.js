@@ -42,7 +42,9 @@ test('an actor never loses who it was acting through', () => {
   assert.equal(actorStr({ kind: 'human', name: 'a@b' }), '👤 a@b');
   assert.equal(actorStr({ kind: 'process', name: 'sa@p' }), '🤖 sa@p');
   assert.equal(actorStr({ kind: 'process', name: 'sa@p', via: 'a@b', producer: 'claude/1' }),
-    '🤖 sa@p via a@b using claude/1');
+    '🤖 sa@p(a@b 経由・claude/1 使用)');
+  assert.equal(actorStr({ kind: 'process', name: 'sa@p', via: 'a@b' }), '🤖 sa@p(a@b 経由)');
+  assert.equal(actorStr({ kind: 'process', name: 'sa@p', producer: 'claude/1' }), '🤖 sa@p(claude/1 使用)');
   assert.equal(actorStr(null), '');
   assert.equal(actorStr({ kind: 'human' }), '');
 });
@@ -59,9 +61,9 @@ test('trust defaults to unverified, and the newest verification wins', () => {
 
 test('an age reads as a person would say it', () => {
   assert.equal(fmtAge(null), '');
-  assert.equal(fmtAge(0), 'today');
-  assert.equal(fmtAge(1), 'yesterday');
-  assert.equal(fmtAge(9), '9 days ago');
+  assert.equal(fmtAge(0), '今日');
+  assert.equal(fmtAge(1), '昨日');
+  assert.equal(fmtAge(9), '9 日前');
   assert.equal(daysSince(null), null);
   assert.equal(daysSince('not a date'), null);
   assert.equal(daysSince(new Date(Date.now() - 3 * 86400000).toISOString()), 3);

@@ -26,7 +26,7 @@ export async function refreshQueues() {
   const total = waiting ? waiting.drafts + waiting.failed + waiting.stale_after : 0;
   badge.textContent = total;
   badge.hidden = !total;
-  badge.title = total ? `${total} waiting: ${waiting.drafts} drafts, ${waiting.failed} reported wrong, ${waiting.stale_after} past their expiry` : '';
+  badge.title = total ? `${total} 件が待っています: draft ${waiting.drafts}、間違いと報告された ${waiting.failed}、期限切れ ${waiting.stale_after}` : '';
   const strip = $('#queue-strip');
   if (strip) strip.innerHTML = queueStrip();
 }
@@ -38,9 +38,9 @@ export async function refreshQueues() {
 export function queueStrip() {
   if (!waiting) return '';
   return [
-    ['#/review', waiting.drafts, waiting.drafts === 1 ? 'draft' : 'drafts'],
-    ['#/search/reported-wrong', waiting.failed, 'reported wrong'],
-    ['#/search/stale', waiting.stale_after, 'past expiry'],
+    ['#/review', waiting.drafts, 'draft'],
+    ['#/search/reported-wrong', waiting.failed, '間違いと報告された'],
+    ['#/search/stale', waiting.stale_after, '期限切れ'],
   ].map(([href, n, label]) =>
-    `<a class="badge${n ? ' draft' : ''}" href="${href}">${n} ${label}</a>`).join(' ');
+    `<a class="badge${n ? ' draft' : ''}" href="${href}">${label} ${n}</a>`).join(' ');
 }

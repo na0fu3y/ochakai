@@ -30,16 +30,16 @@ export function viewReview() {
     <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に — 検索ヒット数と、
     その draft が実際に検索で浮いた回数で順位が付きます。正しいものは検証し、そうでないものは却下します
     (理由は status_note として残るので、エージェントは同じ提案を繰り返さなくなります)。一度も使われていない
-    draft は下に沈みます。<em>stale</em> を切り替えると、その仕分けができます。</p>
+    draft は下に沈みます。<em>放置されたものだけ</em> を切り替えると、その仕分けができます。</p>
     <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身の二つのキューがある:
     <a href="#/search/reported-wrong">間違いと報告された</a>(失敗の報告に応えていない concept)と、
     <a href="#/search/verification-age">検証の古さ</a>(検証が古い順)です。検証すると、その concept は両方から消えます。
-    A third, <a href="#/search/stale">stale</a>, lists concepts past the expiry their author declared — that one is cleared by
-    editing the concept, not by verifying.</p>
+    三つ目の <a href="#/search/stale">期限切れ</a> は、著者が宣言した期限を過ぎた concept を並べます。
+    こちらは検証ではなく、concept を編集すると片付きます。</p>
     <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
-        stale only (0 hits, ≥ ${STALE_DAYS} days old)</label>
+        放置されたものだけ(ヒット 0 件、${STALE_DAYS} 日以上前)</label>
       <span class="grow"></span>
       <span id="queue-strip" style="display:flex;gap:.35rem">${queueStrip()}</span>
     </div>
@@ -108,28 +108,27 @@ export async function loadLoopStats() {
   const truncated = s.embedding?.enabled ? (s.embedding.truncated ?? 0) : 0;
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
-      <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concepts</div></div>
-      <div class="tile"><div class="num">${confirmed}</div><div class="lbl">confirmed by somebody</div></div>
-      <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">verified in ${s.window_days} days</div></div>
+      <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concept</div></div>
+      <div class="tile"><div class="num">${confirmed}</div><div class="lbl">誰かが確認した</div></div>
+      <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">直近 ${s.window_days} 日の検証</div></div>
       <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
-        <div class="lbl">searches that found nothing</div></div>
+        <div class="lbl">何も見つからなかった検索</div></div>
       <div class="tile"><div class="num">${s.outcomes?.concepts_reported ?? 0}/${s.outcomes?.concepts_used ?? 0}</div>
-        <div class="lbl">used concepts reported back on</div></div>
+        <div class="lbl">使われた concept のうち結果が返ってきたもの</div></div>
     </div>` + sparkline(s.review?.weekly) + (dropped ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
-      ${dropped} observation${dropped === 1 ? '' : 's'} were recorded and then lost in these
-      ${s.window_days} days, so the numbers above undercount by at least that much. Usage is
-      buffered in memory and written in batches; an instance that went away took what it was
-      holding with it.</p>` : '') + (truncated ? `
+      この ${s.window_days} 日で、記録されたあと失われた観測が ${dropped} 件あります。
+      上の数字は、少なくともその分だけ実際より少なく出ています。利用状況はメモリに溜めて
+      まとめて書き出しているので、居なくなったインスタンスは抱えていた分を持っていきます。</p>` : '') + (truncated ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
       ${truncated} 件の concept が、埋め込みモデルの入力窓に収まらず<strong>前半だけ</strong>
       ベクトル検索に載っています(全 ${s.embedding.vectors} 件中)。後半に書かれていることでは
       見つかりません — 語句そのものが含まれていれば字句検索は当てます。長すぎる concept を
       分けるか、より広い窓のモデルに移すかのどちらかです。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
-      <summary style="cursor:pointer;color:var(--muted)">Asked for, not found — what to write next</summary>
-      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日の検索
-      that returned nothing, most-asked first. Not a queue anything empties: it stops appearing when the answer exists.</p>
+      <summary style="cursor:pointer;color:var(--muted)">訊かれたのに無かったもの — 次に書くこと</summary>
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、
+      よく訊かれた順に。誰かが片付けるキューではありません: 答えが存在すれば、そのまま出なくなります。</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
         <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}
@@ -170,8 +169,8 @@ export async function runReview(append = false) {
     }
     out.innerHTML = list.map(reviewCard).join('')
       + (review.cursor
-        ? `<div class="truncation-note">Showing ${list.length} drafts ·
-             <a href="#" id="review-more">load more</a></div>`
+        ? `<div class="truncation-note">${list.length} 件の draft を表示 ·
+             <a href="#" id="review-more">もっと読み込む</a></div>`
         : '');
     $('#review-more')?.addEventListener('click', e => { e.preventDefault(); runReview(true); });
     wireReviewActions(out);
@@ -193,14 +192,14 @@ export function reviewCard(h) {
   // three times last week.
   const r = u.recent || {};
   const usageBits = (u.search_hits || u.fetches)
-    ? `🔍 ${u.search_hits || 0} hits · fetched ${u.fetches || 0} (${r.fetches || 0} in ${r.days || 0}d)`
-    : 'no usage yet';
+    ? `🔍 ヒット ${u.search_hits || 0} · 取得 ${u.fetches || 0}(直近 ${r.days || 0} 日で ${r.fetches || 0})`
+    : 'まだ使われていません';
   const outcomeBits = (u.worked || u.failed)
-    ? `${u.failed ? '⚠️ ' : ''}worked ${u.worked || 0} · failed ${u.failed || 0}`
+    ? `${u.failed ? '⚠️ ' : ''}うまくいった ${u.worked || 0} · 失敗 ${u.failed || 0}`
     : '';
   const meta = [
     who ? esc(who) : '',
-    age !== null ? 'created ' + esc(fmtAge(age)) : '',
+    age !== null ? '作成 ' + esc(fmtAge(age)) : '',
     usageBits,
     outcomeBits,
   ].filter(Boolean).join(' · ');
@@ -209,7 +208,7 @@ export function reviewCard(h) {
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
       <span class="badge draft">draft</span>
-      ${isStaleDraft(h) ? '<span class="badge" title="検索ヒット 0 で動きもない — 落とす候補">🕸️ stale</span>' : ''}
+      ${isStaleDraft(h) ? '<span class="badge" title="検索ヒット 0 で動きもない — 落とす候補">🕸️ 放置</span>' : ''}
       ${tags}
       <span class="actions write-only" style="margin-left:auto;display:flex;gap:.45rem">
         <button class="btn small primary" data-act="verify">✓ 検証</button>
@@ -232,15 +231,15 @@ export function wireReviewActions(container) {
     try {
       if (btn.dataset.act === 'verify') {
         await verifyEntry(id);
-        toast('Verified.');
+        toast('検証しました。');
       } else {
         const note = prompt('なぜ受け入れないのか?(裁定として残るので、エージェントは同じ提案を繰り返さなくなる)', '');
         if (note === null) return;
         await rejectEntry(id, note);
-        toast('Rejected.');
+        toast('却下しました。');
       }
       refreshTree(); // the tree shows status badges (and hides rejected)
       runReview();
-    } catch (e) { toast('Failed: ' + e.message); }
+    } catch (e) { toast('失敗しました: ' + e.message); }
   }));
 }

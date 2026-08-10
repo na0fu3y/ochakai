@@ -17,7 +17,7 @@ export async function moveEntry(from, to) {
   if (!to || to === from) return false;
   try {
     const moved = await api('/api/v1/move', { method: 'POST', body: { from, to } });
-    toast(`Moved to ${moved.id}.`);
+    toast(`${moved.id} へ移動しました。`);
     refreshTree();
     // If the moved entry is on screen, follow it to its new address.
     const m = location.hash.match(/^#\/(?:k|edit)\/(.+)$/);
@@ -26,7 +26,7 @@ export async function moveEntry(from, to) {
     }
     return true;
   } catch (e) {
-    toast('Move failed: ' + e.message);
+    toast('移動に失敗しました: ' + e.message);
     return false;
   }
 }
@@ -88,7 +88,7 @@ export async function moveEntry(from, to) {
     dragId = null;
     const to = prefix + from.split('/').pop();
     if (to === from) return; // dropped on its own directory
-    if (confirm(`Move ${from} → ${to}?\nこの concept を指している参照は書き換えられ、履歴も付いていきます。`)) {
+    if (confirm(`${from} → ${to} へ移動しますか?\nこの concept を指している参照は書き換えられ、履歴も付いていきます。`)) {
       moveEntry(from, to);
     }
   });

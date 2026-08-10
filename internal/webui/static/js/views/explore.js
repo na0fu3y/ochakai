@@ -78,11 +78,11 @@ export function viewExplore() {
                value="${esc(explore.prefix)}" style="width:8rem">
         <span class="fb-sep"></span>
         <label class="chip" title="検証が古い順 — 検証済みクエリを再確認するためのカナリア"><input
-          type="checkbox" id="f-age" aria-label="検証の古さのフィード" ${explore.ageFeed ? 'checked' : ''}>verification age</label>
+          type="checkbox" id="f-age" aria-label="検証の古さのフィード" ${explore.ageFeed ? 'checked' : ''}>検証の古さ</label>
         <label class="chip" title="間違いと報告され(report_outcome failed)、その後検証されていない concept — 再検証のフィード"><input
-          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>reported wrong</label>
+          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>間違いと報告された</label>
         <label class="chip" title="著者が宣言した stale_after を過ぎたもの — 検証ではなく、concept を編集すると消える"><input
-          type="checkbox" id="f-expired" aria-label="期限切れのフィード" ${explore.expiredFeed ? 'checked' : ''}>stale</label>
+          type="checkbox" id="f-expired" aria-label="期限切れのフィード" ${explore.expiredFeed ? 'checked' : ''}>期限切れ</label>
       </div>
     </details>
     <div id="results"><div class="empty">…</div></div>
@@ -141,8 +141,8 @@ export async function runSearch(append = false) {
   const p = new URLSearchParams();
   const isFeed = explore.ageFeed || explore.failedFeed || explore.expiredFeed || !!explore.source;
   // The query as the server and the messages below see it: a box holding
-  // only spaces is no query, and saying `ナレッジが見つかりません for “  ”`
-  // describes something the user did not ask.
+  // only spaces is no query, and saying `「  」に一致するナレッジが
+  // 見つかりません` describes something the user did not ask.
   const q = explore.q.trim();
   // source is a filter, not a mode: it rides along with whatever the
   // chain below picks (design doc 0037 §2.3).
@@ -181,8 +181,8 @@ export async function runSearch(append = false) {
   // screens, where an empty result would otherwise look like an empty
   // knowledge base.
   const scopeNote = explore.prefix
-    ? `<div class="truncation-note">Scoped to <code>/${esc(explore.prefix)}</code> and everything under it ·
-         <a href="#" id="scope-clear">search everywhere</a></div>`
+    ? `<div class="truncation-note"><code>/${esc(explore.prefix)}</code> とその下だけに絞っています ·
+         <a href="#" id="scope-clear">全体を検索する</a></div>`
     : '';
   const wireScope = () => $('#scope-clear')?.addEventListener('click', e => {
     e.preventDefault();
@@ -199,7 +199,7 @@ export async function runSearch(append = false) {
     const hits = explore.loaded = explore.loaded.concat(page.hits || []);
     explore.cursor = page.cursor || '';
     if (!hits.length) {
-      out.innerHTML = scopeNote + `<div class="empty">ナレッジが見つかりません${q ? ' for “' + esc(q) + '”' : ''}.</div>`;
+      out.innerHTML = scopeNote + `<div class="empty">${q ? '「' + esc(q) + '」に一致する' : ''}ナレッジが見つかりません。</div>`;
       wireScope();
       return;
     }
@@ -220,23 +220,23 @@ export async function runSearch(append = false) {
       html = `<div class="truncation-note">まだ検索がありません — よく検索される concept から並べています。</div>` + html;
     }
     if (weak.length) {
-      html += `<details class="weak-matches"><summary>${weak.length} weak match${weak.length > 1 ? 'es' : ''} —
-        barely related, probably noise</summary>${weak.map(hitCard).join('')}</details>`;
+      html += `<details class="weak-matches"><summary>弱い一致 ${weak.length} 件 —
+        ほとんど関係がなく、おそらくノイズです</summary>${weak.map(hitCard).join('')}</details>`;
     }
     if (explore.cursor) {
-      html += `<div class="truncation-note">Showing ${hits.length} concepts ·
-           <a href="#" id="feed-more">load more</a></div>`;
+      html += `<div class="truncation-note">${hits.length} 件の concept を表示 ·
+           <a href="#" id="feed-more">もっと読み込む</a></div>`;
     } else if (!isFeed && hits.length >= limit) {
       // A search does not page: 50 is the whole contract, and the way on
       // is a narrower question rather than a next page (0050 §2.2).
       html += `<div class="truncation-note">先頭 ${limit} ${q ? '件の一致' : '件の concept'} を表示
-           (server cap) — narrow with filters or a more specific query.</div>`;
+           (サーバー側の上限)— 絞り込みか、より具体的な問いで狭めてください。</div>`;
     }
     out.innerHTML = scopeNote + html;
     wireScope();
     $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
-    out.innerHTML = `<div class="error-banner" role="alert">Search failed: ${esc(e.message)}</div>`;
+    out.innerHTML = `<div class="error-banner" role="alert">検索に失敗しました: ${esc(e.message)}</div>`;
   }
 }

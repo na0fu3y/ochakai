@@ -48,12 +48,11 @@ export function hitCard(h) {
 
 export function dirCard(prefix, d) {
   const href = dirHash(prefix + d.name);
-  const noun = d.count === 1 ? 'concept' : 'concepts';
   return `<article class="card" data-href="${href}">
     <div class="head">
       <span class="type-ico">📁</span>
       <a class="title mono" href="${href}">${esc(d.name)}/</a>
-      <span class="count">${d.count} ${noun}</span>
+      <span class="count">concept ${d.count} 件</span>
     </div>
   </article>`;
 }
