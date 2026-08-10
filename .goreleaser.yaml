@@ -101,6 +101,17 @@ release:
   # the tag already exists — drafted by hand, or by GitHub's generated
   # notes — attach to it and leave its body alone.
   mode: keep-existing
+  # Leave it a draft; the workflow publishes it as its last step, once
+  # the MCP bundle, the notes and the provenance are all on it.
+  #
+  # A published release in this repository is immutable: GitHub answers
+  # HTTP 422 to an asset upload against one. The workflow used to
+  # publish here and add the rest afterwards, which worked until
+  # immutability was on — then v0.21.0 shipped without its bundle,
+  # without its notes and without archive attestations, because the
+  # upload failed and `set -e` took the three steps behind it down too.
+  # A draft accepts assets, so the order is: assemble, then publish.
+  draft: true
 
 # Homebrew is off until the maintainer opts in: publishing a formula
 # needs a second repository (na0fu3y/homebrew-tap) and a PAT, because

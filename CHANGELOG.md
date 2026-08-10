@@ -19,6 +19,22 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A release assembles as a draft and is published last, so the MCP
+  bundle actually ships with it.** A published release in this
+  repository is immutable — GitHub answers `422 Cannot upload assets to
+  an immutable release` — and the workflow was adding the bundle, the
+  notes and the archive attestations *after* goreleaser had published.
+  **v0.21.0 is what that cost**: no `ochakai_0.21.0.mcpb`, no build
+  provenance on its archives, and a bare tag where the notes should have
+  been, because the upload failed and `set -e` took the two steps behind
+  it down. The notes were restored by hand (a body can still be edited
+  after publication; assets cannot), and v0.21.0's checksums, image and
+  binaries are unaffected — `checksums.txt` verifies and the binary
+  prints its own version. goreleaser now leaves a draft, and a final
+  step flips it to published once everything is attached.
+
 ## [0.21.0] - 2026-08-11
 
 ### Fixed
